@@ -1,9 +1,5 @@
-// Package deployment provides DRBD resource management using dispatch
-// for SSH-based operations without drbd-agent.
-//
-// Architecture:
-//   - dispatch: config distribution + command execution
-//   - drbd-reactor: continues to run on nodes for HA/failover
+// Package deployment handles the execution of commands on storage nodes
+// using the dispatch SSH library.
 package deployment
 
 import (

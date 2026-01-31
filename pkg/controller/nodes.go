@@ -79,12 +79,9 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 		Hostname: hostname,
 		State:    NodeStateOnline,
 		LastSeen: time.Now(),
-		Version:  "1.0.0",
+		Version:  "1.0.0", // TODO: detect version from node environment
 		Capacity: make(map[string]interface{}),
 	}
-
-	// Save to in-memory cache
-	nm.nodes[address] = nodeInfo
 
 	// Update controller's hosts list if not already present
 	nm.controller.hostsLock.Lock()

@@ -17,7 +17,7 @@ sds-cli (client) --> sds-controller (gRPC) --> deployment --> dispatch --> SSH -
 
 **Key Design:**
 
-- **No drbd-agent dependency**: Uses `dispatch` library for SSH-based operations instead of a separate agent service
+- **SSH-Based Execution**: Uses `dispatch` library for SSH-based operations directly on storage nodes.
 - **drbd-reactor integration**: Creates promoter configs for automatic failover
 - **Gateway pattern**: Gateways are DRBD resources + drbd-reactor configs that export storage via NFS/iSCSI/NVMe-oF
 
