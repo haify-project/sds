@@ -174,6 +174,12 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 		timeout = options.timeout
 	}
 
+	// Debug: log before calling dispatch
+	c.logger.Debug("deployment.Exec called",
+		zap.Strings("hosts", hosts),
+		zap.String("cmd", cmd),
+		zap.Duration("timeout", timeout))
+
 	result, err := c.dispatch.Exec(ctx, hosts, cmd,
 		dispatch.WithParallel(parallel),
 		dispatch.WithTimeout(timeout),
@@ -188,6 +194,11 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 	}
 
 	for host, r := range result.Hosts {
+		c.logger.Debug("deployment.Exec result",
+			zap.String("host", host),
+			zap.Bool("success", r.Success),
+			zap.Int("output_len", len(r.Output)),
+			zap.String("output", string(r.Output)))
 		execResult.Hosts[host] = &HostResult{
 			Host:    host,
 			Output:  string(r.Output),
