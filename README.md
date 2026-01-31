@@ -2,6 +2,8 @@
 
 Based on DRBD & LINSTOR concepts, a lightweight Software Defined Storage controller written in Go.
 
+English | [简体中文](README_cn.md)
+
 ## Architecture
 
 SDS adopts a controller-less agent architecture for storage nodes. The controller communicates with storage nodes via SSH (using the `dispatch` library) to execute commands (`drbdadm`, `lvm`, `zfs`, etc.) and manage configurations.
@@ -9,16 +11,16 @@ SDS adopts a controller-less agent architecture for storage nodes. The controlle
 ```mermaid
 graph TD
     CLI[sds-cli] -->|gRPC| CTRL[sds-controller]
-    
+
     subgraph Controller Host
     CTRL
     DB[(BoltDB)]
     end
-    
+
     CTRL -->|SSH / Dispatch| Node1[Storage Node 1]
     CTRL -->|SSH / Dispatch| Node2[Storage Node 2]
     CTRL -->|SSH / Dispatch| Node3[Storage Node 3]
-    
+
     subgraph Storage Node
     Node1
     LVM[LVM / ZFS]
@@ -29,21 +31,21 @@ graph TD
 
 ## Features
 
-*   **Storage Management**:
-    *   **LVM**: Volume Group (VG) and Logical Volume (LV) management.
-    *   **ZFS**: ZPool and Zvol management.
-*   **DRBD Resource Management**:
-    *   Automated resource creation and configuration distribution.
-    *   Support for advanced DRBD options (e.g., `on-no-quorum`, `c-plan-ahead`).
-*   **High Availability (HA)**:
-    *   Integration with `drbd-reactor` for automatic service failover.
-    *   Support for Virtual IP (VIP) and systemd service management.
-*   **Gateways**:
-    *   **iSCSI**: LIO-based iSCSI target management with HA.
-    *   **NFS**: NFSv4 export management with HA.
-    *   **NVMe-oF**: NVMe over Fabrics target management.
-*   **Snapshots**:
-    *   Support for both LVM and ZFS snapshots.
+- **Storage Management**:
+  - **LVM**: Volume Group (VG) and Logical Volume (LV) management.
+  - **ZFS**: ZPool and Zvol management.
+- **DRBD Resource Management**:
+  - Automated resource creation and configuration distribution.
+  - Support for advanced DRBD options (e.g., `on-no-quorum`, `c-plan-ahead`).
+- **High Availability (HA)**:
+  - Integration with `drbd-reactor` for automatic service failover.
+  - Support for Virtual IP (VIP) and systemd service management.
+- **Gateways**:
+  - **iSCSI**: LIO-based iSCSI target management with HA.
+  - **NFS**: NFSv4 export management with HA.
+  - **NVMe-oF**: NVMe over Fabrics target management.
+- **Snapshots**:
+  - Support for both LVM and ZFS snapshots.
 
 ## Project Structure
 
@@ -69,18 +71,20 @@ sds/
 
 ### Prerequisites
 
-*   **Controller Node**: Go 1.22+, `make`, `protoc`.
-*   **Storage Nodes**:
-    *   Linux (Ubuntu/Debian/RHEL).
-    *   SSH access from Controller (root user recommended for management).
-    *   **LVM2** installed (for LVM pools).
-    *   **ZFS** installed (for ZFS pools, e.g., `zfsutils-linux`).
-    *   **DRBD 9** kernel module and `drbd-utils` installed.
-    *   **drbd-reactor** installed (for HA/Gateway features).
+- **Controller Node**: Go 1.22+, `make`, `protoc`.
+- **Storage Nodes**:
+  - Linux (Ubuntu/Debian/RHEL).
+  - SSH access from Controller (root user recommended for management).
+  - **LVM2** installed (for LVM pools).
+  - **ZFS** installed (for ZFS pools, e.g., `zfsutils-linux`).
+  - **DRBD 9** kernel module and **drbd-utils** installed.
+  - **drbd-reactor** installed (for HA/Gateway features).
+  - **resource-agents-extra** installed (for VIP and service management).
 
 ### Installation
 
 1.  **Build**:
+
     ```bash
     make build
     ```

@@ -30,18 +30,20 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
-          go build -o dist/sds-controller-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/controller
-          go build -o dist/sds-cli-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/cli
+          VERSION=${GITHUB_REF#refs/tags/}
+          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-controller ./cmd/controller
+          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-cli ./cmd/cli
+          chmod +x dist/sds-controller dist/sds-cli
 
-      - name: Create checksums
+      - name: Create archive
         run: |
           cd dist
-          sha256sum * > checksums-${{ matrix.goos }}-${{ matrix.goarch }}.txt
+          tar -czf sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz sds-controller sds-cli
+          sha256sum sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz > sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/sds-controller-${{ matrix.goos }}-${{ matrix.goarch }}
-            dist/sds-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-            dist/checksums-${{ matrix.goos }}-${{ matrix.goarch }}.txt
+            dist/sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            dist/sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
