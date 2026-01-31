@@ -142,8 +142,9 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	}
 
 	// 1. Create storage volumes on all nodes (LVM or ZFS)
-	if storageType == "zfs" {
+	if storageType == "zfs" || storageType == "zfs-thin" {
 		// Create ZFS zvol on all nodes
+		// For zfs-thin, ZFSCreateThinDataset handles sparse creation (which is default for ZVOLs created with -s)
 		for i, nodeIP := range nodeIPs {
 			zvolPath := fmt.Sprintf("%s/%s", pool, volumeName)
 			result, err := rm.deployment.ZFSCreateThinDataset(ctx, []string{nodeIP}, pool, volumeName, fmt.Sprintf("%dG", sizeGB))
@@ -160,6 +161,23 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 			rm.controller.logger.Info("Created ZFS zvol",
 				zap.String("zvol", zvolPath),
 				zap.String("node", nodes[i]))
+		}
+	} else if storageType == "lvm-thin" {
+		// Create LVM Thin LV
+		// Convention: Thin Pool name is pool + "_thin"
+		thinPoolName := pool + "_thin"
+		for i, nodeIP := range nodeIPs {
+			result, err := rm.deployment.LVCreateThinVolume(ctx, []string{nodeIP}, pool, thinPoolName, volumeName, fmt.Sprintf("%dG", sizeGB))
+			if err != nil {
+				return fmt.Errorf("failed to create Thin LV on %s: %w", nodes[i], err)
+			}
+			if !result.AllSuccess() {
+				for host, hres := range result.Hosts {
+					if !hres.Success {
+						return fmt.Errorf("Thin LV creation failed on %s: %s", host, hres.Output)
+					}
+				}
+			}
 		}
 	} else {
 		// Create LVM LV on all nodes (default)
@@ -347,7 +365,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 
 	// Use ZFS device path or LVM device path based on storage type
 	var diskPath string
-	if storageType == "zfs" {
+	if storageType == "zfs" || storageType == "zfs-thin" {
 		diskPath = fmt.Sprintf("/dev/zvol/%s/%s", pool, volumeName)
 	} else {
 		diskPath = fmt.Sprintf("/dev/%s/%s", pool, volumeName)

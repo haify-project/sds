@@ -131,11 +131,17 @@ sds-cli node list
 ### 2. Storage Pool Management
 
 ```bash
-# Create LVM pool
-sds-cli pool create --name data-pool --type vg --node orange1 --devices /dev/sdb
+# Create LVM pool (VG)
+sds-cli pool create --name data-pool --type lvm --node orange1 --devices /dev/sdb
+
+# Create LVM Thin pool
+sds-cli pool create --name thin-pool --type lvm-thin --node orange1 --devices /dev/sdc
 
 # Create ZFS pool
-sds-cli storage pool create-zfs --name tank --node orange1 --devices /dev/sdc
+sds-cli pool create --name tank --type zfs --node orange1 --devices /dev/sdd
+
+# Create ZFS Thin pool (sparse)
+sds-cli pool create --name tank-thin --type zfs-thin --node orange1 --devices /dev/sde
 ```
 
 ### 3. Resource Management

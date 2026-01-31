@@ -84,13 +84,23 @@ func poolCreate() *cobra.Command {
 			var failedNodes []string
 			for _, n := range nodes {
 				var err error
-				if poolType == "zfs" {
-					// For ZFS, 'disks' are vdevs, and we default thin to false for now
-					// TODO: Add --thin flag if needed
-					err = sdsClient.CreateZFSPool(ctx, name, n, diskList, false)
-				} else {
-					// Default to LVM (vg or thin_pool)
-					err = sdsClient.CreatePool(ctx, name, poolType, n, diskList, util.BytesToGiB(sizeBytes))
+				switch poolType {
+				case "zfs", "zfs-thin":
+					thin := (poolType == "zfs-thin")
+					// For ZFS, 'disks' are vdevs
+					err = sdsClient.CreateZFSPool(ctx, name, n, diskList, thin)
+				case "vg", "lvm", "lvm-thin", "thin_pool":
+					// normalize type for backend if needed, but backend supports "vg" and "thin_pool"
+					// map lvm -> vg, lvm-thin -> thin_pool
+					backendType := poolType
+					if poolType == "lvm" {
+						backendType = "vg"
+					} else if poolType == "lvm-thin" {
+						backendType = "thin_pool"
+					}
+					err = sdsClient.CreatePool(ctx, name, backendType, n, diskList, util.BytesToGiB(sizeBytes))
+				default:
+					err = fmt.Errorf("unsupported pool type: %s", poolType)
 				}
 
 				if err != nil {
@@ -98,12 +108,12 @@ func poolCreate() *cobra.Command {
 					continue
 				}
 				successCount++
-				if poolType == "zfs" {
-					fmt.Printf("ZFS Pool '%s' created successfully on node '%s'\n", name, n)
+				if strings.HasPrefix(poolType, "zfs") {
+					fmt.Printf("ZFS Pool '%s' created successfully on node '%s' (type: %s)\n", name, n, poolType)
 				} else if sizeBytes > 0 {
-					fmt.Printf("Pool '%s' created successfully on node '%s' (size: %s)\n", name, n, util.FormatBytes(sizeBytes))
+					fmt.Printf("Pool '%s' created successfully on node '%s' (type: %s, size: %s)\n", name, n, poolType, util.FormatBytes(sizeBytes))
 				} else {
-					fmt.Printf("Pool '%s' created successfully on node '%s'\n", name, n)
+					fmt.Printf("Pool '%s' created successfully on node '%s' (type: %s)\n", name, n, poolType)
 				}
 			}
 
@@ -122,7 +132,7 @@ func poolCreate() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Pool name")
-	cmd.Flags().StringVar(&poolType, "type", "", "Pool type (vg, thin_pool)")
+	cmd.Flags().StringVar(&poolType, "type", "", "Pool type (lvm, lvm-thin, zfs, zfs-thin)")
 	cmd.Flags().StringVar(&node, "node", "", "Node where to create the pool")
 	cmd.Flags().StringVar(&disks, "disks", "", "Comma-separated list of disks")
 	cmd.Flags().StringVar(&size, "size", "", "Pool size (e.g., 10G, 10GB, 10GiB, 1T, 1TB)")

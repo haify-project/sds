@@ -538,6 +538,20 @@ func (c *Client) LVCreate(ctx context.Context, hosts []string, vgName, lvName, s
 	return c.Exec(ctx, hosts, cmd)
 }
 
+// LVCreateThinPool creates a thin pool logical volume
+func (c *Client) LVCreateThinPool(ctx context.Context, hosts []string, vgName, poolName, size string) (*ExecResult, error) {
+	// lvcreate -L <size> -T <vg>/<pool>
+	cmd := fmt.Sprintf("sudo lvcreate -y -L %s -T %s/%s", size, vgName, poolName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVCreateThinVolume creates a thin logical volume
+func (c *Client) LVCreateThinVolume(ctx context.Context, hosts []string, vgName, poolName, lvName, size string) (*ExecResult, error) {
+	// lvcreate -V <size> -T <vg>/<pool> -n <name>
+	cmd := fmt.Sprintf("sudo lvcreate -y -V %s -T %s/%s -n %s", size, vgName, poolName, lvName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
 // LVRemove removes logical volumes
 func (c *Client) LVRemove(ctx context.Context, hosts []string, lvPath string) (*ExecResult, error) {
 	cmd := fmt.Sprintf("sudo lvremove -f %s", lvPath)
@@ -550,6 +564,33 @@ func (c *Client) LVCreateSnapshot(ctx context.Context, hosts []string, vgName, l
 	// Create snapshot volume
 	cmd := fmt.Sprintf("sudo lvcreate -y -L %s -s -n %s %s", size, snapshotName, lvPath)
 	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVCreateThinSnapshot creates a snapshot of a thin logical volume
+func (c *Client) LVCreateThinSnapshot(ctx context.Context, hosts []string, vgName, lvName, snapshotName string) (*ExecResult, error) {
+	// Thin snapshots don't need size, they use the thin pool
+	cmd := fmt.Sprintf("sudo lvcreate -s -n %s %s/%s", snapshotName, vgName, lvName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVIsThin checks if a logical volume is thin provisioned
+func (c *Client) LVIsThin(ctx context.Context, host, vgName, lvName string) (bool, error) {
+	// lvs -o segtype --noheadings
+	cmd := fmt.Sprintf("sudo lvs -o segtype --noheadings %s/%s", vgName, lvName)
+	result, err := c.Exec(ctx, []string{host}, cmd)
+	if err != nil {
+		return false, err
+	}
+	
+	for _, r := range result.Hosts {
+		if r.Success {
+			segType := strings.TrimSpace(r.Output)
+			if segType == "thin" {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // LVRemoveSnapshot removes a snapshot volume

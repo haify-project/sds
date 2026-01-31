@@ -1002,9 +1002,9 @@ func (c *SDSClient) CloneZFSSnapshot(ctx context.Context, snapshot, clonePath, n
 // ==================== LVM SNAPSHOT OPERATIONS ====================
 
 // CreateLvmSnapshot creates an LVM snapshot
-func (c *SDSClient) CreateLvmSnapshot(ctx context.Context, resource, lvName, snapshotName, node, size string) error {
+func (c *SDSClient) CreateLvmSnapshot(ctx context.Context, pool, lvName, snapshotName, node, size string) error {
 	req := &sdspb.CreateLvmSnapshotRequest{
-		Resource:       resource,
+		Resource:       pool, // Mapped to VG Name
 		LvName:         lvName,
 		SnapshotName:   snapshotName,
 		Node:           node,
@@ -1024,9 +1024,9 @@ func (c *SDSClient) CreateLvmSnapshot(ctx context.Context, resource, lvName, sna
 }
 
 // DeleteLvmSnapshot deletes an LVM snapshot
-func (c *SDSClient) DeleteLvmSnapshot(ctx context.Context, lvName, snapshotName, node string) error {
+func (c *SDSClient) DeleteLvmSnapshot(ctx context.Context, pool, snapshotName, node string) error {
 	req := &sdspb.DeleteLvmSnapshotRequest{
-		LvName:         lvName,
+		LvName:         pool, // Mapped to VG Name
 		SnapshotName:   snapshotName,
 		Node:           node,
 	}
@@ -1043,10 +1043,10 @@ func (c *SDSClient) DeleteLvmSnapshot(ctx context.Context, lvName, snapshotName,
 	return nil
 }
 
-// ListLvmSnapshots lists LVM snapshots for a volume
-func (c *SDSClient) ListLvmSnapshots(ctx context.Context, lvName, node string) ([]*sdspb.SnapshotInfo, error) {
+// ListLvmSnapshots lists LVM snapshots for a pool (VG)
+func (c *SDSClient) ListLvmSnapshots(ctx context.Context, pool, node string) ([]*sdspb.SnapshotInfo, error) {
 	req := &sdspb.ListLvmSnapshotsRequest{
-		LvName: lvName,
+		LvName: pool, // Mapped to VG Name
 		Node:   node,
 	}
 
@@ -1063,9 +1063,9 @@ func (c *SDSClient) ListLvmSnapshots(ctx context.Context, lvName, node string) (
 }
 
 // RestoreLvmSnapshot restores an LVM snapshot
-func (c *SDSClient) RestoreLvmSnapshot(ctx context.Context, lvName, snapshotName, node string) error {
+func (c *SDSClient) RestoreLvmSnapshot(ctx context.Context, pool, snapshotName, node string) error {
 	req := &sdspb.RestoreLvmSnapshotRequest{
-		LvName:         lvName,
+		LvName:         pool, // Mapped to VG Name
 		SnapshotName:   snapshotName,
 		Node:           node,
 	}

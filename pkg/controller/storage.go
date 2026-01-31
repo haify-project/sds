@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"go.uber.org/zap"
+	"github.com/liliang-cn/sds/pkg/deployment"
 )
 
 // PoolInfo represents pool information
@@ -72,6 +73,29 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 		return fmt.Errorf("failed to create pool: %v", result.FailedHosts())
 	}
 
+	// If type is thin_pool, create a thin pool LV
+	if poolType == "thin_pool" {
+		// Use 95% of VG size for thin pool to leave metadata space
+		// Since we don't know exact size here easily without querying, we might use the passed sizeGB if > 0
+		// or default to 95%FREE if sizeGB is 0 (which implies full disk).
+		// For now, let's assume sizeGB is passed or use "95%FREE" syntax if deployment supports it.
+		// deployment.LVCreateThinPool takes a size string.
+		
+		thinPoolName := name + "_thin"
+		thinSize := "95%FREE"
+		if sizeGB > 0 {
+			thinSize = fmt.Sprintf("%dG", sizeGB)
+		}
+
+		tpResult, err := sm.controller.deployment.LVCreateThinPool(ctx, []string{address}, name, thinPoolName, thinSize)
+		if err != nil {
+			return fmt.Errorf("failed to create thin pool: %w", err)
+		}
+		if !tpResult.AllSuccess() {
+			return fmt.Errorf("failed to create thin pool: %v", tpResult.FailedHosts())
+		}
+	}
+
 	sm.controller.logger.Info("Pool created successfully",
 		zap.String("name", name),
 		zap.String("node", node))
@@ -115,7 +139,7 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 	return nil, fmt.Errorf("pool not found: %s", poolName)
 }
 
-// ListPools lists all pools across all nodes
+// ListPools lists all pools across all nodes (LVM and ZFS)
 func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 	var pools []*PoolInfo
 	// Use map to deduplicate by normalized node name
@@ -126,50 +150,57 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 		return pools, nil
 	}
 
+	// 1. Get LVM pools
 	result, err := sm.controller.deployment.Exec(ctx, hosts, "sudo vgs --noheadings --units b --separator '|' -o vg_name,vg_size,vg_free")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pools: %w", err)
-	}
-
-	for host, r := range result.Hosts {
-		if r.Success {
-			// Normalize host: use hostname if available, otherwise use the host as-is
-			normalizedHost := sm.controller.NormalizeHost(host)
-			if normalizedHost == "" {
-				normalizedHost = host
-			}
-
-			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" {
-					continue
+		// Log error but continue to try ZFS
+		sm.controller.logger.Warn("Failed to list LVM pools", zap.Error(err))
+	} else {
+		for host, r := range result.Hosts {
+			if r.Success {
+				normalizedHost := sm.controller.NormalizeHost(host)
+				if normalizedHost == "" {
+					normalizedHost = host
 				}
-				fields := strings.Split(line, "|")
-				if len(fields) >= 3 {
-					vgName := strings.TrimSpace(fields[0])
-					// Create unique key for deduplication
-					key := normalizedHost + "/" + vgName
-					if seen[key] {
+
+				lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line == "" {
 						continue
 					}
-					seen[key] = true
+					fields := strings.Split(line, "|")
+					if len(fields) >= 3 {
+						vgName := strings.TrimSpace(fields[0])
+						key := normalizedHost + "/lvm/" + vgName
+						if seen[key] {
+							continue
+						}
+						seen[key] = true
 
-					// Parse size, remove 'B' suffix if present
-					totalSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[1], "B"))
-					freeSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[2], "B"))
-					totalSize, _ := strconv.ParseUint(totalSizeStr, 10, 64)
-					freeSize, _ := strconv.ParseUint(freeSizeStr, 10, 64)
-					pools = append(pools, &PoolInfo{
-						Name:    vgName,
-						Type:    "vg",
-						Node:    normalizedHost,
-						TotalGB: totalSize / 1024 / 1024 / 1024,
-						FreeGB:  freeSize / 1024 / 1024 / 1024,
-					})
+						totalSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[1], "B"))
+						freeSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[2], "B"))
+						totalSize, _ := strconv.ParseUint(totalSizeStr, 10, 64)
+						freeSize, _ := strconv.ParseUint(freeSizeStr, 10, 64)
+						pools = append(pools, &PoolInfo{
+							Name:    vgName,
+							Type:    "vg",
+							Node:    normalizedHost,
+							TotalGB: totalSize / 1024 / 1024 / 1024,
+							FreeGB:  freeSize / 1024 / 1024 / 1024,
+						})
+					}
 				}
 			}
 		}
+	}
+
+	// 2. Get ZFS pools
+	zfsPools, err := sm.ListZFSpools(ctx)
+	if err != nil {
+		sm.controller.logger.Warn("Failed to list ZFS pools", zap.Error(err))
+	} else {
+		pools = append(pools, zfsPools...)
 	}
 
 	return pools, nil
@@ -452,14 +483,26 @@ func (sm *StorageManager) ZFSSnapshot(ctx context.Context, dataset, snapshotName
 
 // ZFSListSnapshots lists ZFS snapshots for a dataset
 func (sm *StorageManager) ZFSListSnapshots(ctx context.Context, dataset, node string) ([]*SnapshotInfo, error) {
-	result, err := sm.controller.deployment.ZFSListSnapshots(ctx, []string{node}, dataset)
+	// Resolve node name to address
+	address := sm.controller.ResolveHost(node)
+
+	sm.controller.logger.Info("Listing ZFS snapshots",
+		zap.String("dataset", dataset),
+		zap.String("node", node),
+		zap.String("address", address))
+
+	result, err := sm.controller.deployment.ZFSListSnapshots(ctx, []string{address}, dataset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ZFS snapshots: %w", err)
 	}
 
 	var snapshots []*SnapshotInfo
-	for _, r := range result.Hosts {
+	for host, r := range result.Hosts {
 		if r.Success {
+			sm.controller.logger.Info("ZFS snapshot list output",
+				zap.String("host", host),
+				zap.String("output", r.Output))
+
 			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
 			for _, line := range lines {
 				if line == "" {
@@ -479,6 +522,10 @@ func (sm *StorageManager) ZFSListSnapshots(ctx context.Context, dataset, node st
 					}
 				}
 			}
+		} else {
+			sm.controller.logger.Warn("Failed to list ZFS snapshots on host",
+				zap.String("host", host),
+				zap.String("error", r.Output))
 		}
 	}
 
@@ -544,17 +591,34 @@ func (sm *StorageManager) ZFSCloneSnapshot(ctx context.Context, snapshot, cloneP
 // ==================== LVM SNAPSHOT OPERATIONS ====================
 
 // CreateLvmSnapshot creates an LVM snapshot
-func (sm *StorageManager) CreateLvmSnapshot(ctx context.Context, resource, lvName, snapshotName, node, size string) error {
+func (sm *StorageManager) CreateLvmSnapshot(ctx context.Context, vgName, lvName, snapshotName, node, size string) error {
 	sm.controller.logger.Info("Creating LVM snapshot",
-		zap.String("resource", resource),
+		zap.String("vg_name", vgName),
 		zap.String("lv_name", lvName),
 		zap.String("snapshot", snapshotName),
 		zap.String("node", node),
 		zap.String("size", size))
 
-	// Use resource name as VG name (default pool)
-	vgName := resource
-	result, err := sm.controller.deployment.LVCreateSnapshot(ctx, []string{node}, vgName, lvName, snapshotName, size)
+	// Resolve node address
+	address := sm.controller.ResolveHost(node)
+
+	// Check if LV is thin
+	isThin, err := sm.controller.deployment.LVIsThin(ctx, address, vgName, lvName)
+	if err != nil {
+		sm.controller.logger.Warn("Failed to check if LV is thin", zap.Error(err))
+		// Fallback to standard snapshot if check fails (safest default?) or error?
+		// Default to standard
+	}
+
+	var result *deployment.ExecResult
+	if isThin {
+		sm.controller.logger.Info("Creating Thin Snapshot", zap.String("origin", lvName))
+		result, err = sm.controller.deployment.LVCreateThinSnapshot(ctx, []string{address}, vgName, lvName, snapshotName)
+	} else {
+		sm.controller.logger.Info("Creating Standard Snapshot", zap.String("origin", lvName))
+		result, err = sm.controller.deployment.LVCreateSnapshot(ctx, []string{address}, vgName, lvName, snapshotName, size)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create LVM snapshot: %w", err)
 	}
@@ -568,7 +632,10 @@ func (sm *StorageManager) CreateLvmSnapshot(ctx context.Context, resource, lvNam
 
 // ListLvmSnapshots lists LVM snapshots for a volume
 func (sm *StorageManager) ListLvmSnapshots(ctx context.Context, vgName, node string) ([]*SnapshotInfo, error) {
-	result, err := sm.controller.deployment.LVListSnapshots(ctx, []string{node}, vgName)
+	// Resolve node address
+	address := sm.controller.ResolveHost(node)
+
+	result, err := sm.controller.deployment.LVListSnapshots(ctx, []string{address}, vgName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list LVM snapshots: %w", err)
 	}
@@ -585,7 +652,7 @@ func (sm *StorageManager) ListLvmSnapshots(ctx context.Context, vgName, node str
 				if len(fields) >= 2 {
 					snapshots = append(snapshots, &SnapshotInfo{
 						Name:   fields[0],
-						Volume: vgName,
+						Volume: vgName, // Using VG name as volume context
 						SizeGB: 0, // LVM list output needs parsing for size
 					})
 				}
@@ -603,7 +670,10 @@ func (sm *StorageManager) DeleteLvmSnapshot(ctx context.Context, vgName, snapsho
 		zap.String("snapshot", snapshotName),
 		zap.String("node", node))
 
-	result, err := sm.controller.deployment.LVRemoveSnapshot(ctx, []string{node}, vgName, snapshotName)
+	// Resolve node address
+	address := sm.controller.ResolveHost(node)
+
+	result, err := sm.controller.deployment.LVRemoveSnapshot(ctx, []string{address}, vgName, snapshotName)
 	if err != nil {
 		return fmt.Errorf("failed to delete LVM snapshot: %w", err)
 	}
@@ -622,7 +692,10 @@ func (sm *StorageManager) RestoreLvmSnapshot(ctx context.Context, vgName, snapsh
 		zap.String("snapshot", snapshotName),
 		zap.String("node", node))
 
-	result, err := sm.controller.deployment.LVMergeSnapshot(ctx, []string{node}, vgName, snapshotName)
+	// Resolve node address
+	address := sm.controller.ResolveHost(node)
+
+	result, err := sm.controller.deployment.LVMergeSnapshot(ctx, []string{address}, vgName, snapshotName)
 	if err != nil {
 		return fmt.Errorf("failed to restore LVM snapshot: %w", err)
 	}
