@@ -10,7 +10,8 @@ import (
 // Config represents the application configuration
 type Config struct {
 	Server    ServerConfig    `mapstructure:"server"`
-	DrbdAgent DrbdAgentConfig `mapstructure:"drbd_agent"`
+	Dispatch  DispatchConfig  `mapstructure:"dispatch"`
+	Database  DatabaseConfig  `mapstructure:"database"`
 	TLS       TLSConfig       `mapstructure:"tls"`
 	Log       LogConfig       `mapstructure:"log"`
 	Storage   StorageConfig   `mapstructure:"storage"`
@@ -22,10 +23,16 @@ type ServerConfig struct {
 	Port          int    `mapstructure:"port"`
 }
 
-// DrbdAgentConfig represents drbd-agent configuration
-type DrbdAgentConfig struct {
-	Endpoints []string `mapstructure:"endpoints"`
-	Timeout   int      `mapstructure:"timeout"` // in seconds
+// DispatchConfig represents dispatch configuration
+type DispatchConfig struct {
+	ConfigPath string `mapstructure:"config_path"` // Path to dispatch config (~/.dispatch/config.toml)
+	Parallel   int    `mapstructure:"parallel"`    // Default parallelism for operations
+	Hosts      []string `mapstructure:"hosts"`     // Default hosts for operations
+}
+
+// DatabaseConfig represents database configuration
+type DatabaseConfig struct {
+	Path string `mapstructure:"path"` // Database file path (default: /var/lib/sds/sds.db)
 }
 
 // TLSConfig represents TLS configuration
@@ -90,13 +97,14 @@ func (c *Config) Validate() error {
 		c.Server.ListenAddress = "0.0.0.0"
 	}
 	if c.Server.Port == 0 {
-		c.Server.Port = 3373
+		c.Server.Port = 3374
 	}
-	if len(c.DrbdAgent.Endpoints) == 0 {
-		return fmt.Errorf("at least one drbd-agent endpoint is required")
+	if c.Dispatch.ConfigPath == "" {
+		// Use default dispatch config path
+		c.Dispatch.ConfigPath = ""
 	}
-	if c.DrbdAgent.Timeout == 0 {
-		c.DrbdAgent.Timeout = 30
+	if c.Dispatch.Parallel == 0 {
+		c.Dispatch.Parallel = 10
 	}
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
@@ -106,8 +114,9 @@ func (c *Config) Validate() error {
 
 func setDefaults() {
 	viper.SetDefault("server.listen_address", "0.0.0.0")
-	viper.SetDefault("server.port", 3373)
-	viper.SetDefault("drbd_agent.timeout", 30)
+	viper.SetDefault("server.port", 3374)
+	viper.SetDefault("dispatch.parallel", 10)
+	viper.SetDefault("database.path", "/var/lib/sds/sds.db")
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
@@ -119,7 +128,8 @@ func setDefaults() {
 func (c *Config) Save(path string) error {
 	config := viper.New()
 	config.Set("server", c.Server)
-	config.Set("drbd_agent", c.DrbdAgent)
+	config.Set("dispatch", c.Dispatch)
+	config.Set("database", c.Database)
 	config.Set("tls", c.TLS)
 	config.Set("log", c.Log)
 	config.Set("storage", c.Storage)

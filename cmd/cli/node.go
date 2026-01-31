@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	v1 "github.com/liliang-cn/sds/api/proto/v1"
@@ -50,12 +51,17 @@ func nodeList() *cobra.Command {
 
 			// Print nodes in table format
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "ADDRESS\tHOSTNAME\tSTATE\tVERSION")
+			fmt.Fprintln(w, "NAME\tADDRESS\tSTATE\tVERSION")
 
 			for _, node := range nodes {
+				// Strip port from address for display
+				displayAddr := node.Address
+				if idx := strings.LastIndex(node.Address, ":"); idx != -1 {
+					displayAddr = node.Address[:idx]
+				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-					node.Address,
-					node.Hostname,
+					node.Name,
+					displayAddr,
 					node.State,
 					node.Version)
 			}
@@ -120,14 +126,18 @@ func nodeGet() *cobra.Command {
 }
 
 func nodeRegister() *cobra.Command {
+	var name string
 	var address string
 
 	cmd := &cobra.Command{
-		Use:   "register",
-		Short: "Force register a node (emergency use only)",
+		Use:   "register --name <name> --address <ip>",
+		Short: "Register a storage node",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if name == "" {
+				return fmt.Errorf("--name is required")
+			}
 			if address == "" {
-				return fmt.Errorf("node address is required")
+				return fmt.Errorf("--address is required")
 			}
 
 			ctx := cmd.Context()
@@ -140,24 +150,23 @@ func nodeRegister() *cobra.Command {
 			defer sdsClient.Close()
 
 			// Register node
-			node, err := sdsClient.RegisterNode(ctx, address)
+			node, err := sdsClient.RegisterNode(ctx, name, address)
 			if err != nil {
 				return fmt.Errorf("failed to register node: %w", err)
 			}
 
-			if node != nil {
-				fmt.Printf("✓ Node registered successfully\n")
-				fmt.Printf("  Address:  %s\n", node.Address)
-				fmt.Printf("  Hostname: %s\n", node.Hostname)
-				fmt.Printf("  State:    %s\n", node.State)
-			}
+			fmt.Printf("✓ Node registered successfully\n")
+			fmt.Printf("  Name:    %s\n", node.Name)
+			fmt.Printf("  Address: %s\n", node.Address)
 
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&address, "address", "", "Node address (IP:PORT)")
+	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., orange1)")
+	cmd.Flags().StringVar(&address, "address", "", "Node IP address (e.g., 192.168.1.10)")
 
+	cmd.MarkFlagRequired("name")
 	cmd.MarkFlagRequired("address")
 
 	return cmd

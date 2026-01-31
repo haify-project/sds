@@ -3,12 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
 	"go.uber.org/zap"
-	pb "github.com/liliang-cn/drbd-agent/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/client"
 )
 
 // SnapshotInfo represents snapshot information
@@ -22,7 +21,6 @@ type SnapshotInfo struct {
 // SnapshotManager manages volume snapshots
 type SnapshotManager struct {
 	controller *Controller
-	agents     map[string]*client.AgentClient
 	mu         sync.RWMutex
 }
 
@@ -30,27 +28,11 @@ type SnapshotManager struct {
 func NewSnapshotManager(ctrl *Controller) *SnapshotManager {
 	return &SnapshotManager{
 		controller: ctrl,
-		agents:     make(map[string]*client.AgentClient),
 	}
-}
-
-// AddAgent adds an agent connection
-func (sm *SnapshotManager) AddAgent(node string, agent *client.AgentClient) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.agents[node] = agent
 }
 
 // CreateSnapshot creates a snapshot
 func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotName, node string) error {
-	sm.mu.RLock()
-	agent := sm.agents[node]
-	sm.mu.RUnlock()
-
-	if agent == nil {
-		return fmt.Errorf("node not found: %s", node)
-	}
-
 	sm.controller.logger.Info("Creating snapshot",
 		zap.String("volume", volume),
 		zap.String("snapshot", snapshotName),
@@ -60,18 +42,15 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotN
 	vg, lv := parseVolumePath(volume)
 	originPath := fmt.Sprintf("/dev/%s/%s", vg, lv)
 
-	req := &pb.LVSnapshotCreateRequest{
-		OriginLvPath: originPath,
-		SnapshotName: snapshotName,
-	}
-
-	resp, err := agent.LVSnapshotCreate(ctx, req)
+	// Create snapshot using lvcreate
+	cmd := fmt.Sprintf("sudo lvcreate -s -n %s %s", snapshotName, originPath)
+	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %w", err)
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to create snapshot: %s", resp.Message)
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to create snapshot: %v", result.FailedHosts())
 	}
 
 	sm.controller.logger.Info("Snapshot created successfully",
@@ -83,14 +62,6 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotN
 
 // DeleteSnapshot deletes a snapshot
 func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotName, node string) error {
-	sm.mu.RLock()
-	agent := sm.agents[node]
-	sm.mu.RUnlock()
-
-	if agent == nil {
-		return fmt.Errorf("node not found: %s", node)
-	}
-
 	sm.controller.logger.Info("Deleting snapshot",
 		zap.String("volume", volume),
 		zap.String("snapshot", snapshotName),
@@ -100,18 +71,15 @@ func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotN
 	vg, _ := parseVolumePath(volume)
 	snapshotPath := fmt.Sprintf("/dev/%s/%s", vg, snapshotName)
 
-	req := &pb.LVRemoveRequest{
-		LvPath: snapshotPath,
-		Force:  false,
-	}
-
-	resp, err := agent.LVRemove(ctx, req)
+	// Remove snapshot
+	cmd := fmt.Sprintf("sudo lvremove -f %s", snapshotPath)
+	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to delete snapshot: %w", err)
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to delete snapshot: %s", resp.Message)
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to delete snapshot: %v", result.FailedHosts())
 	}
 
 	sm.controller.logger.Info("Snapshot deleted successfully",
@@ -122,39 +90,46 @@ func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotN
 
 // ListSnapshots lists snapshots for a volume
 func (sm *SnapshotManager) ListSnapshots(ctx context.Context, volume, node string) ([]*SnapshotInfo, error) {
-	sm.mu.RLock()
-	agent := sm.agents[node]
-	sm.mu.RUnlock()
-
-	if agent == nil {
-		return nil, fmt.Errorf("node not found: %s", node)
-	}
-
 	// Parse volume path
 	vg, lv := parseVolumePath(volume)
 
-	req := &pb.LVListSnapshotsRequest{
-		VgName:      vg,
-		OriginLvName: lv,
-	}
-
-	resp, err := agent.LVListSnapshots(ctx, req)
+	// List snapshots using lvs
+	cmd := fmt.Sprintf("sudo lvs --noheadings --separator '|' -o lv_name,lv_size,origin %s", vg)
+	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list snapshots: %w", err)
 	}
 
-	if !resp.Success {
-		return nil, fmt.Errorf("failed to list snapshots: %s", resp.Message)
+	if !result.AllSuccess() {
+		return nil, fmt.Errorf("failed to list snapshots: %v", result.FailedHosts())
 	}
 
 	var snapshots []*SnapshotInfo
-	for _, snapInfo := range resp.Snapshots {
-		snapshots = append(snapshots, &SnapshotInfo{
-			Name:      snapInfo.LvName,
-			Volume:    volume,
-			SizeGB:    snapInfo.LvSize / 1024 / 1024 / 1024,
-			CreatedAt: "", // In production, parse from LV attrs or call lvs with -o time format
-		})
+	for _, r := range result.Hosts {
+		if r.Success {
+			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+			for _, line := range lines {
+				fields := strings.Split(line, "|")
+				if len(fields) >= 3 {
+					lvName := strings.TrimSpace(fields[0])
+					origin := strings.TrimSpace(fields[2])
+					// Check if this is a snapshot of the requested LV
+					if origin == lv {
+						sizeStr := strings.TrimSpace(fields[1])
+						// Parse size (e.g., "4.00g" or "4.00G")
+						sizeStr = strings.TrimSuffix(sizeStr, "g")
+						sizeStr = strings.TrimSuffix(sizeStr, "G")
+						sizeFloat, _ := strconv.ParseFloat(sizeStr, 64)
+						snapshots = append(snapshots, &SnapshotInfo{
+							Name:      lvName,
+							Volume:    volume,
+							SizeGB:    uint64(sizeFloat),
+							CreatedAt: "",
+						})
+					}
+				}
+			}
+		}
 	}
 
 	return snapshots, nil
@@ -162,37 +137,26 @@ func (sm *SnapshotManager) ListSnapshots(ctx context.Context, volume, node strin
 
 // RestoreSnapshot restores a snapshot
 func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshotName, node string) error {
-	sm.mu.RLock()
-	agent := sm.agents[node]
-	sm.mu.RUnlock()
-
-	if agent == nil {
-		return fmt.Errorf("node not found: %s", node)
-	}
-
 	sm.controller.logger.Info("Restoring snapshot",
 		zap.String("volume", volume),
 		zap.String("snapshot", snapshotName),
 		zap.String("node", node))
 
 	// Parse volume path and build paths
-	vg, lv := parseVolumePath(volume)
-	originPath := fmt.Sprintf("/dev/%s/%s", vg, lv)
+	vg, _ := parseVolumePath(volume)
 	snapshotPath := fmt.Sprintf("/dev/%s/%s", vg, snapshotName)
 
-	req := &pb.LVSnapshotRestoreRequest{
-		OriginLvPath:   originPath,
-		SnapshotLvPath: snapshotPath,
-		Force:          false,
-	}
-
-	resp, err := agent.LVSnapshotRestore(ctx, req)
+	// Merge snapshot back into origin
+	// First, unmount if mounted (caller should handle this)
+	// Then use lvconvert --merge
+	cmd := fmt.Sprintf("sudo lvconvert --merge %s", snapshotPath)
+	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to restore snapshot: %s", resp.Message)
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to restore snapshot: %v", result.FailedHosts())
 	}
 
 	sm.controller.logger.Info("Snapshot restored successfully",
@@ -207,10 +171,4 @@ func parseVolumePath(volume string) (vg, lv string) {
 		return parts[0], parts[1]
 	}
 	return "", volume
-}
-
-func isSnapshotLV(lvName, originalLV string) bool {
-	// Check if this LV is a snapshot of the original LV
-	// Snapshots typically have names like "lv0_snap1" or similar
-	return strings.Contains(lvName, "_snap") || strings.Contains(lvName, originalLV+"_")
 }

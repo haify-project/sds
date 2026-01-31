@@ -33,6 +33,8 @@ service SDSController {
   rpc CreateFilesystem(CreateFilesystemRequest) returns (CreateFilesystemResponse);
   rpc MountResource(MountResourceRequest) returns (MountResourceResponse);
   rpc UnmountResource(UnmountResourceRequest) returns (UnmountResourceResponse);
+  rpc MakeHa(MakeHaRequest) returns (MakeHaResponse);
+  rpc EvictHa(EvictHaRequest) returns (EvictHaResponse);
 
   // Snapshot operations
   rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
@@ -117,6 +119,7 @@ message PoolInfo {
 // Node messages
 message RegisterNodeRequest {
   string address = 1;
+  string name = 2;
 }
 
 message RegisterNodeResponse {
@@ -153,11 +156,12 @@ message ListNodesResponse {
 }
 
 message NodeInfo {
-  string address = 1;
-  string hostname = 2;
-  string state = 3;
-  int64 last_seen = 4;
-  string version = 5;
+  string name = 1;
+  string address = 2;
+  string hostname = 3;
+  string state = 4;
+  int64 last_seen = 5;
+  string version = 6;
 }
 
 // Resource messages
@@ -301,6 +305,29 @@ message UnmountResourceResponse {
   string message = 2;
 }
 
+message MakeHaRequest {
+  string resource = 1;
+  repeated string services = 2;      // systemd services to start/stop
+  string mount_point = 3;            // optional mount point
+  string fstype = 4;                 // filesystem type (if mount_point specified)
+  string vip = 5;                    // optional virtual IP (CIDR, e.g., "192.168.1.100/24")
+}
+
+message MakeHaResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;            // path to generated promoter config
+}
+
+message EvictHaRequest {
+  string resource = 1;
+}
+
+message EvictHaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
 message ResourceInfo {
   string name = 1;
   uint32 port = 2;
@@ -308,6 +335,7 @@ message ResourceInfo {
   repeated string nodes = 4;
   string role = 5;
   repeated VolumeInfo volumes = 6;
+  map<string, NodeResourceState> node_states = 7;
 }
 
 message ResourceStatus {
@@ -315,6 +343,7 @@ message ResourceStatus {
   string role = 2;
   repeated string nodes = 3;
   map<string, NodeResourceState> node_states = 4;
+  repeated VolumeInfo volumes = 5;
 }
 
 message NodeResourceState {

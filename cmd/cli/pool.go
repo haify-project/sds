@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -63,6 +64,12 @@ func poolCreate() *cobra.Command {
 				}
 			}
 
+			// Parse comma-separated nodes
+			nodes := strings.Split(node, ",")
+			for i := range nodes {
+				nodes[i] = strings.TrimSpace(nodes[i])
+			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -72,15 +79,32 @@ func poolCreate() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			err = sdsClient.CreatePool(ctx, name, poolType, node, diskList, util.BytesToGiB(sizeBytes))
-			if err != nil {
-				return fmt.Errorf("failed to create pool: %w", err)
+			// Create pool on each node
+			successCount := 0
+			var failedNodes []string
+			for _, n := range nodes {
+				err := sdsClient.CreatePool(ctx, name, poolType, n, diskList, util.BytesToGiB(sizeBytes))
+				if err != nil {
+					failedNodes = append(failedNodes, fmt.Sprintf("%s: %v", n, err))
+					continue
+				}
+				successCount++
+				if sizeBytes > 0 {
+					fmt.Printf("Pool '%s' created successfully on node '%s' (size: %s)\n", name, n, util.FormatBytes(sizeBytes))
+				} else {
+					fmt.Printf("Pool '%s' created successfully on node '%s'\n", name, n)
+				}
 			}
 
-			if sizeBytes > 0 {
-				fmt.Printf("Pool '%s' created successfully on node '%s' (size: %s)\n", name, node, util.FormatBytes(sizeBytes))
-			} else {
-				fmt.Printf("Pool '%s' created successfully on node '%s'\n", name, node)
+			if len(failedNodes) > 0 {
+				fmt.Fprintf(os.Stderr, "\nFailed to create pool on %d node(s):\n", len(failedNodes))
+				for _, fail := range failedNodes {
+					fmt.Fprintf(os.Stderr, "  - %s\n", fail)
+				}
+			}
+
+			if successCount == 0 {
+				return fmt.Errorf("failed to create pool on any node")
 			}
 			return nil
 		},

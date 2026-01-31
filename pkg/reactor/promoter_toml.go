@@ -158,3 +158,68 @@ func formatNFSClients(clients []NFSClient) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// StartAction represents a single start action in promoter config
+type StartAction struct {
+	Type string // "systemd", "ocf", etc.
+	Name string // Action name
+	Args map[string]string
+}
+
+// GenerateGenericPromoterConfig generates a generic drbd-reactor promoter TOML config
+// This is used for simple HA setups with systemd services and OCF resources
+func GenerateGenericPromoterConfig(resourceName string, units []string, ocfResources []map[string]string) string {
+	var startActions []string
+
+	// Add systemd units
+	for _, unit := range units {
+		startActions = append(startActions, fmt.Sprintf(`  "%s"`, unit))
+	}
+
+	// Add OCF resources
+	for _, ocf := range ocfResources {
+		// Extract OCF parameters
+		provider, ok := ocf["provider"]
+		if !ok {
+			provider = "heartbeat"
+		}
+		agent, ok := ocf["agent"]
+		if !ok {
+			continue
+		}
+		actionName, ok := ocf["name"]
+		if !ok {
+			actionName = agent
+		}
+
+		// Build OCF action string
+		var parts []string
+		for k, v := range ocf {
+			if k != "provider" && k != "agent" && k != "name" {
+				parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+			}
+		}
+
+		var ocfStr string
+		if len(parts) > 0 {
+			ocfStr = fmt.Sprintf(`  "ocf:%s:%s %s %s"`, provider, agent, actionName, strings.Join(parts, " "))
+		} else {
+			ocfStr = fmt.Sprintf(`  "ocf:%s:%s %s"`, provider, agent, actionName)
+		}
+		startActions = append(startActions, ocfStr)
+	}
+
+	// Generate TOML config snippet for drbd-reactor promoter
+	// Format: [[promoter]] followed by [promoter.resources.<id>]
+	toml := fmt.Sprintf(`[[promoter]]
+[promoter.resources.%s]
+runner = "systemd"
+start = [
+%s
+]
+on-drbd-demote-failure = "reboot"
+
+`, resourceName, strings.Join(startActions, ",\n"))
+
+	return toml
+}

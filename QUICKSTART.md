@@ -96,7 +96,7 @@ sds-cli systemd restart drbd-reactor
 ```toml
 [server]
 listen_address = "0.0.0.0"
-port = 3373
+port = 3374
 
 [drbd_agent]
 endpoints = [
@@ -131,7 +131,7 @@ make run-cli -- pool list
 
 ### Controller API (gRPC)
 
-Controller 在端口 3373 提供 gRPC 服务：
+Controller 在端口 3374 提供 gRPC 服务：
 
 - 健康检查
 - 存储池管理
@@ -140,30 +140,30 @@ Controller 在端口 3373 提供 gRPC 服务：
 
 ### CLI 命令参考
 
-| 命令 | 说明 |
-|------|------|
-| `sds-cli status` | 显示状态 |
-| `sds-cli pool list` | 列出存储池 |
-| `sds-cli pool create` | 创建存储池 |
-| `sds-cli volume list` | 列出卷 |
-| `sds-cli volume create` | 创建卷 |
-| `sds-cli volume delete` | 删除卷 |
-| `sds-cli drbd list` | 列出 DRBD 资源 |
-| `sds-cli drbd up` | 启动 DRBD 资源 |
-| `sds-cli drbd primary` | 提升为主节点 |
-| `sds-cli systemd start` | 启动服务 |
+| 命令                    | 说明           |
+| ----------------------- | -------------- |
+| `sds-cli status`        | 显示状态       |
+| `sds-cli pool list`     | 列出存储池     |
+| `sds-cli pool create`   | 创建存储池     |
+| `sds-cli volume list`   | 列出卷         |
+| `sds-cli volume create` | 创建卷         |
+| `sds-cli volume delete` | 删除卷         |
+| `sds-cli drbd list`     | 列出 DRBD 资源 |
+| `sds-cli drbd up`       | 启动 DRBD 资源 |
+| `sds-cli drbd primary`  | 提升为主节点   |
+| `sds-cli systemd start` | 启动服务       |
 
 ## 与 Rust 版 ha-sds 的对比
 
-| 特性 | Rust 版 ha-sds | Go 版 sds |
-|------|---------------|-----------|
-| 语言 | Rust | Go |
-| gRPC | drbd-agent (Rust) | drbd-agent (Go) ✅ |
-| CLI | sds-cli | sds-cli ✅ |
-| Controller | sds-server | sds-controller ✅ |
-| 功能 | 完整 | 完整 ✅ |
-| 部署 | 复杂 | 简单 ✅ |
-| 依赖管理 | Cargo | Go modules ✅ |
+| 特性       | Rust 版 ha-sds    | Go 版 sds          |
+| ---------- | ----------------- | ------------------ |
+| 语言       | Rust              | Go                 |
+| gRPC       | drbd-agent (Rust) | drbd-agent (Go) ✅ |
+| CLI        | sds-cli           | sds-cli ✅         |
+| Controller | sds-server        | sds-controller ✅  |
+| 功能       | 完整              | 完整 ✅            |
+| 部署       | 复杂              | 简单 ✅            |
+| 依赖管理   | Cargo             | Go modules ✅      |
 
 ## 下一步
 

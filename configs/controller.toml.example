@@ -2,16 +2,23 @@
 
 [server]
 listen_address = "0.0.0.0"
-port = 3373
+port = 3374
 
-[drbd_agent]
-# drbd-agent endpoints (multiple nodes)
-endpoints = [
-    "localhost:50051",
-    # "node1.example.com:50051",
-    # "node2.example.com:50051",
+[dispatch]
+# Path to dispatch config file
+config_path = "/liliang/.dispatch/config.toml"
+# Parallel execution limit for operations
+parallel = 10
+# Storage nodes
+hosts = [
+    "orange1",
+    "orange2",
+    "orange3"
 ]
-timeout = 30  # seconds
+
+[database]
+# Database file path (default: /var/lib/sds/sds.db)
+path = "/var/lib/sds/sds.db"
 
 [tls]
 enabled = false

@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	sizeRegex = regexp.MustCompile(`^(\d+(?:\.\d+)?)\s*([KMGTPE]?i?B?)$`)
+	sizeRegex = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)\s*([KMGTPE]?(?:i)?B?)$`)
 )
 
 // ParseSize parses a size string with various units (B, KB, KiB, MB, MiB, etc.)
@@ -23,7 +23,7 @@ var (
 //   - PB, PiB: petabytes (1000^5 or 1024^5)
 //   - EB, EiB: exabytes (1000^6 or 1024^6)
 func ParseSize(sizeStr string) (uint64, error) {
-	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
+	sizeStr = strings.TrimSpace(sizeStr)
 
 	// Handle pure number as bytes
 	if sizeStr == "" {
@@ -46,39 +46,39 @@ func ParseSize(sizeStr string) (uint64, error) {
 		return 0, fmt.Errorf("invalid number: %s", matches[1])
 	}
 
-	unit := matches[2]
+	unit := strings.ToUpper(matches[2])
 
 	// Determine multiplier based on unit
 	var multiplier float64
-	switch {
-	case unit == "B":
+	switch unit {
+	case "B":
 		multiplier = 1
-	case unit == "KB":
+	case "KB":
 		multiplier = 1000
-	case unit == "KIB":
+	case "KIB":
 		multiplier = 1024
-	case unit == "MB":
+	case "MB":
 		multiplier = 1000 * 1000
-	case unit == "MIB":
+	case "MIB":
 		multiplier = 1024 * 1024
-	case unit == "GB":
+	case "GB":
 		multiplier = 1000 * 1000 * 1000
-	case unit == "GIB":
+	case "GIB":
 		multiplier = 1024 * 1024 * 1024
-	case unit == "TB":
+	case "TB":
 		multiplier = 1000 * 1000 * 1000 * 1000
-	case unit == "TIB":
+	case "TIB":
 		multiplier = 1024 * 1024 * 1024 * 1024
-	case unit == "PB":
+	case "PB":
 		multiplier = 1000 * 1000 * 1000 * 1000 * 1000
-	case unit == "PIB":
+	case "PIB":
 		multiplier = 1024 * 1024 * 1024 * 1024 * 1024
-	case unit == "EB":
+	case "EB":
 		multiplier = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
-	case unit == "EIB":
+	case "EIB":
 		multiplier = 1024 * 1024 * 1024 * 1024 * 1024 * 1024
 	default:
-		return 0, fmt.Errorf("unknown unit: %s", unit)
+		return 0, fmt.Errorf("unknown unit: %s", matches[2])
 	}
 
 	bytes := uint64(value * multiplier)

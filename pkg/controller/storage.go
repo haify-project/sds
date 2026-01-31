@@ -3,17 +3,26 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
-	pb "github.com/liliang-cn/drbd-agent/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/client"
 )
+
+// PoolInfo represents pool information
+type PoolInfo struct {
+	Name    string   `json:"name"`
+	Type    string   `json:"type"`
+	Node    string   `json:"node"`
+	TotalGB uint64   `json:"total_gb"`
+	FreeGB  uint64   `json:"free_gb"`
+	Devices []string `json:"devices"`
+}
 
 // StorageManager manages all storage operations
 type StorageManager struct {
 	controller *Controller
-	agents     map[string]*client.AgentClient
 	mu         sync.RWMutex
 }
 
@@ -21,49 +30,38 @@ type StorageManager struct {
 func NewStorageManager(ctrl *Controller) *StorageManager {
 	return &StorageManager{
 		controller: ctrl,
-		agents:     make(map[string]*client.AgentClient),
 	}
-}
-
-// AddAgent adds an agent connection
-func (sm *StorageManager) AddAgent(node string, agent *client.AgentClient) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.agents[node] = agent
-	sm.controller.logger.Info("Agent added", zap.String("node", node))
 }
 
 // ==================== POOL OPERATIONS ====================
 
 // CreatePool creates a storage pool
 func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64) error {
-	// Use controller's agents map (shared with NodeManager)
-	sm.controller.agentsLock.RLock()
-	agent := sm.controller.agents[node]
-	sm.controller.agentsLock.RUnlock()
-
-	if agent == nil {
-		return fmt.Errorf("node not found: %s", node)
-	}
-
 	sm.controller.logger.Info("Creating pool",
 		zap.String("name", name),
 		zap.String("type", poolType),
 		zap.String("node", node),
 		zap.Strings("disks", disks))
 
-	req := &pb.VGCreateRequest{
-		VgName:         name,
-		PhysicalVolumes: disks,
+	// Create PVs first
+	for _, disk := range disks {
+		result, err := sm.controller.deployment.PVCreate(ctx, []string{node}, disk)
+		if err != nil {
+			return fmt.Errorf("failed to create PV on %s: %w", disk, err)
+		}
+		if !result.AllSuccess() {
+			return fmt.Errorf("PV creation failed on %s for disk %s: %v", node, disk, result.FailedHosts())
+		}
 	}
 
-	resp, err := agent.VGCreate(ctx, req)
+	// Create VG
+	result, err := sm.controller.deployment.VGCreate(ctx, []string{node}, name, disks)
 	if err != nil {
 		return fmt.Errorf("failed to create pool: %w", err)
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to create pool: %s", resp.Message)
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to create pool: %v", result.FailedHosts())
 	}
 
 	sm.controller.logger.Info("Pool created successfully",
@@ -75,36 +73,34 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 
 // GetPool gets pool information
 func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*PoolInfo, error) {
-	sm.controller.agentsLock.RLock()
-	agent := sm.controller.agents[node]
-	sm.controller.agentsLock.RUnlock()
-
-	if agent == nil {
-		return nil, fmt.Errorf("node not found: %s", node)
-	}
-
-	req := &pb.VGSRequest{}
-
-	resp, err := agent.VGS(ctx, req)
+	result, err := sm.controller.deployment.Exec(ctx, []string{node}, "sudo vgs --noheadings --units b --separator '|' -o vg_name,vg_size,vg_free")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pool: %w", err)
 	}
 
-	if !resp.Success {
-		return nil, fmt.Errorf("failed to get pool: %s", resp.Message)
+	if !result.AllSuccess() {
+		return nil, fmt.Errorf("failed to get pool: %v", result.FailedHosts())
 	}
 
-	// Find the requested pool
-	for _, vg := range resp.Vgs {
-		if vg.VgName == poolName {
-			return &PoolInfo{
-				Name:     vg.VgName,
-				Type:     "vg",
-				Node:     node,
-				TotalGB:  vg.VgSize / 1024 / 1024 / 1024,
-				FreeGB:   vg.VgFree / 1024 / 1024 / 1024,
-				Devices:  []string{}, // In production, call PVDisplay to get actual PV names
-			}, nil
+	// Parse VGS output
+	for _, r := range result.Hosts {
+		if r.Success {
+			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+			for _, line := range lines {
+				fields := strings.Split(line, "|")
+				if len(fields) >= 4 && strings.TrimSpace(fields[0]) == poolName {
+					totalSize, _ := strconv.ParseUint(strings.TrimSpace(fields[1]), 10, 64)
+					freeSize, _ := strconv.ParseUint(strings.TrimSpace(fields[2]), 10, 64)
+					return &PoolInfo{
+						Name:    poolName,
+						Type:    "vg",
+						Node:    node,
+						TotalGB: totalSize / 1024 / 1024 / 1024,
+						FreeGB:  freeSize / 1024 / 1024 / 1024,
+						Devices: []string{},
+					}, nil
+				}
+			}
 		}
 	}
 
@@ -115,35 +111,41 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 	var pools []*PoolInfo
 
-	sm.controller.agentsLock.RLock()
-	defer sm.controller.agentsLock.RUnlock()
+	hosts := sm.controller.GetHosts()
+	if len(hosts) == 0 {
+		return pools, nil
+	}
 
-	for node, agent := range sm.controller.agents {
-		req := &pb.VGSRequest{}
+	result, err := sm.controller.deployment.Exec(ctx, hosts, "sudo vgs --noheadings --units b --separator '|' -o vg_name,vg_size,vg_free")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pools: %w", err)
+	}
 
-		resp, err := agent.VGS(ctx, req)
-		if err != nil {
-			sm.controller.logger.Warn("Failed to list pools",
-				zap.String("node", node),
-				zap.Error(err))
-			continue
-		}
-
-		if !resp.Success {
-			sm.controller.logger.Warn("Failed to list pools",
-				zap.String("node", node),
-				zap.String("error", resp.Message))
-			continue
-		}
-
-		for _, vg := range resp.Vgs {
-			pools = append(pools, &PoolInfo{
-				Name:    vg.VgName,
-				Type:    "vg",
-				Node:    node,
-				TotalGB: vg.VgSize / 1024 / 1024 / 1024,
-				FreeGB:  vg.VgFree / 1024 / 1024 / 1024,
-			})
+	for host, r := range result.Hosts {
+		if r.Success {
+			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				fields := strings.Split(line, "|")
+				if len(fields) >= 3 {
+					vgName := strings.TrimSpace(fields[0])
+					// Parse size, remove 'B' suffix if present
+					totalSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[1], "B"))
+					freeSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[2], "B"))
+					totalSize, _ := strconv.ParseUint(totalSizeStr, 10, 64)
+					freeSize, _ := strconv.ParseUint(freeSizeStr, 10, 64)
+					pools = append(pools, &PoolInfo{
+						Name:    vgName,
+						Type:    "vg",
+						Node:    host,
+						TotalGB: totalSize / 1024 / 1024 / 1024,
+						FreeGB:  freeSize / 1024 / 1024 / 1024,
+					})
+				}
+			}
 		}
 	}
 
@@ -152,26 +154,24 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 
 // AddDiskToPool adds a disk to a pool
 func (sm *StorageManager) AddDiskToPool(ctx context.Context, pool, disk, node string) error {
-	sm.controller.agentsLock.RLock()
-	agent := sm.controller.agents[node]
-	sm.controller.agentsLock.RUnlock()
-
-	if agent == nil {
-		return fmt.Errorf("node not found: %s", node)
+	// Create PV first
+	result, err := sm.controller.deployment.PVCreate(ctx, []string{node}, disk)
+	if err != nil {
+		return fmt.Errorf("failed to create PV: %w", err)
+	}
+	if !result.AllSuccess() {
+		return fmt.Errorf("PV creation failed: %v", result.FailedHosts())
 	}
 
-	req := &pb.VGExtendRequest{
-		VgName:         pool,
-		PhysicalVolumes: []string{disk},
-	}
-
-	resp, err := agent.VGExtend(ctx, req)
+	// Extend VG
+	cmd := fmt.Sprintf("sudo vgextend %s %s", pool, disk)
+	result, err = sm.controller.deployment.Exec(ctx, []string{node}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to add disk: %w", err)
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to add disk: %s", resp.Message)
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to add disk: %v", result.FailedHosts())
 	}
 
 	sm.controller.logger.Info("Disk added to pool",
@@ -184,31 +184,19 @@ func (sm *StorageManager) AddDiskToPool(ctx context.Context, pool, disk, node st
 
 // DeletePool deletes a storage pool
 func (sm *StorageManager) DeletePool(ctx context.Context, name, node string) error {
-	sm.controller.agentsLock.RLock()
-	agent := sm.controller.agents[node]
-	sm.controller.agentsLock.RUnlock()
-
-	if agent == nil {
-		return fmt.Errorf("node not found: %s", node)
-	}
-
 	sm.controller.logger.Info("Deleting pool",
 		zap.String("name", name),
 		zap.String("node", node))
 
 	// Remove VG using LVM
-	req := &pb.VGRemoveRequest{
-		VgName: name,
-		Force:  true,
-	}
-
-	resp, err := agent.VGRemove(ctx, req)
+	cmd := fmt.Sprintf("sudo vgremove -f %s", name)
+	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to delete pool: %w", err)
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to delete pool: %s", resp.Message)
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to delete pool: %v", result.FailedHosts())
 	}
 
 	sm.controller.logger.Info("Pool deleted successfully",

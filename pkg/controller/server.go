@@ -3,52 +3,35 @@ package controller
 import (
 	"context"
 
-	"go.uber.org/zap"
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/client"
+	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/liliang-cn/sds/pkg/gateway"
+	"go.uber.org/zap"
 )
 
 // Server implements the SDS controller gRPC service
 type Server struct {
 	sdspb.UnimplementedSDSControllerServer
-	controller *Controller
-	storage    *StorageManager
-	resources  *ResourceManager
-	snapshots  *SnapshotManager
-	gateways   *GatewayManager
-	nodes      *NodeManager
+	ctrl      *Controller
+	logger    *zap.Logger
+	storage   *StorageManager
+	resources *ResourceManager
+	snapshots *SnapshotManager
+	nodes     *NodeManager
+	gateway   *gateway.Manager
 }
 
 // NewServer creates a new gRPC server
 func NewServer(ctrl *Controller) *Server {
 	return &Server{
-		controller: ctrl,
-		storage:    ctrl.storage,
-		resources:  ctrl.resources,
-		snapshots:  ctrl.snapshots,
-		gateways:   ctrl.gateways,
-		nodes:      ctrl.nodes,
+		ctrl:      ctrl,
+		logger:    ctrl.logger,
+		storage:   ctrl.storage,
+		resources: ctrl.resources,
+		snapshots: ctrl.snapshots,
+		nodes:     ctrl.nodes,
+		gateway:   ctrl.gateway,
 	}
-}
-
-// RegisterAgents registers agents with all managers
-func (s *Server) RegisterAgents(node string, agent interface{}) {
-	// Type assertion for agent client
-	agentClient, ok := agent.(*client.AgentClient)
-	if !ok {
-		s.controller.logger.Warn("Invalid agent type",
-			zap.String("node", node))
-		return
-	}
-
-	// Register with all managers
-	s.storage.AddAgent(node, agentClient)
-	s.resources.AddAgent(node, agentClient)
-	s.snapshots.AddAgent(node, agentClient)
-	s.nodes.AddAgent(node, agentClient)
-
-	s.controller.logger.Info("Agent registered with all managers",
-		zap.String("node", node))
 }
 
 // ==================== POOL OPERATIONS ====================
@@ -148,7 +131,7 @@ func (s *Server) AddDiskToPool(ctx context.Context, req *sdspb.AddDiskToPoolRequ
 // ==================== NODE OPERATIONS ====================
 
 func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeRequest) (*sdspb.RegisterNodeResponse, error) {
-	node, err := s.nodes.RegisterNode(ctx, req.Address)
+	node, err := s.nodes.RegisterNode(ctx, req.Name, req.Address)
 	if err != nil {
 		return &sdspb.RegisterNodeResponse{
 			Success: false,
@@ -159,6 +142,7 @@ func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeReques
 		Success: true,
 		Message: "Node registered successfully",
 		Node: &sdspb.NodeInfo{
+			Name:     node.Name,
 			Address:  node.Address,
 			Hostname: node.Hostname,
 			State:    string(node.State),
@@ -194,6 +178,7 @@ func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb
 		Success: true,
 		Message: "Node found",
 		Node: &sdspb.NodeInfo{
+			Name:     node.Name,
 			Address:  node.Address,
 			Hostname: node.Hostname,
 			State:    string(node.State),
@@ -215,6 +200,7 @@ func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*s
 	var pbNodes []*sdspb.NodeInfo
 	for _, n := range nodes {
 		pbNodes = append(pbNodes, &sdspb.NodeInfo{
+			Name:     n.Name,
 			Address:  n.Address,
 			Hostname: n.Hostname,
 			State:    string(n.State),
@@ -247,7 +233,7 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 }
 
 func (s *Server) DeleteResource(ctx context.Context, req *sdspb.DeleteResourceRequest) (*sdspb.DeleteResourceResponse, error) {
-	err := s.resources.DeleteResource(ctx, req.Name)
+	err := s.resources.DeleteResource(ctx, req.Name, true)
 	if err != nil {
 		return &sdspb.DeleteResourceResponse{
 			Success: false,
@@ -278,16 +264,26 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 		})
 	}
 
+	// Build node states map
+	nodeStates := make(map[string]*sdspb.NodeResourceState)
+	for node, state := range resource.NodeStates {
+		nodeStates[node] = &sdspb.NodeResourceState{
+			Role:      state.Role,
+			DiskState: state.DiskState,
+		}
+	}
+
 	return &sdspb.GetResourceResponse{
 		Success: true,
 		Message: "Resource found",
 		Resource: &sdspb.ResourceInfo{
-			Name:     resource.Name,
-			Port:     resource.Port,
-			Protocol: resource.Protocol,
-			Nodes:    resource.Nodes,
-			Role:     resource.Role,
-			Volumes:  pbVolumes,
+			Name:        resource.Name,
+			Port:        resource.Port,
+			Protocol:    resource.Protocol,
+			Nodes:       resource.Nodes,
+			Role:        resource.Role,
+			Volumes:     pbVolumes,
+			NodeStates:  nodeStates,
 		},
 	}, nil
 }
@@ -343,8 +339,7 @@ func (s *Server) AddVolume(ctx context.Context, req *sdspb.AddVolumeRequest) (*s
 }
 
 func (s *Server) RemoveVolume(ctx context.Context, req *sdspb.RemoveVolumeRequest) (*sdspb.RemoveVolumeResponse, error) {
-	// Note: node field needs to be determined from context or added to proto
-	err := s.resources.RemoveVolume(ctx, req.Resource, req.VolumeId, "")
+	err := s.resources.RemoveVolume(ctx, req.Resource, req.VolumeId)
 	if err != nil {
 		return &sdspb.RemoveVolumeResponse{
 			Success: false,
@@ -358,8 +353,7 @@ func (s *Server) RemoveVolume(ctx context.Context, req *sdspb.RemoveVolumeReques
 }
 
 func (s *Server) ResizeVolume(ctx context.Context, req *sdspb.ResizeVolumeRequest) (*sdspb.ResizeVolumeResponse, error) {
-	// Note: node field needs to be determined from context or added to proto
-	err := s.resources.ResizeVolume(ctx, req.Resource, req.VolumeId, "", req.SizeGb)
+	err := s.resources.ResizeVolume(ctx, req.Resource, req.VolumeId, uint64(req.SizeGb))
 	if err != nil {
 		return &sdspb.ResizeVolumeResponse{
 			Success: false,
@@ -382,12 +376,28 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		}, nil
 	}
 
-	// Convert to status format
+	// Convert to status format with detailed node states
 	status := &sdspb.ResourceStatus{
 		Name:     resource.Name,
 		Role:     resource.Role,
 		Nodes:    resource.Nodes,
 		NodeStates: make(map[string]*sdspb.NodeResourceState),
+	}
+
+	// Convert node states from endpoint key to hostname key
+	for endpoint, nodeState := range resource.NodeStates {
+		// Get hostname for this endpoint
+		nodeInfo, err := s.nodes.GetNode(ctx, endpoint)
+		hostname := endpoint
+		if err == nil && nodeInfo.Hostname != "" {
+			hostname = nodeInfo.Hostname
+		}
+
+		status.NodeStates[hostname] = &sdspb.NodeResourceState{
+			Role:             nodeState.Role,
+			DiskState:        nodeState.DiskState,
+			ReplicationState: nodeState.Replication,
+		}
 	}
 
 	return &sdspb.ResourceStatusResponse{
@@ -428,17 +438,7 @@ func (s *Server) SetSecondary(ctx context.Context, req *sdspb.SetSecondaryReques
 func (s *Server) CreateFilesystem(ctx context.Context, req *sdspb.CreateFilesystemRequest) (*sdspb.CreateFilesystemResponse, error) {
 	// CreateFilesystem is implemented as part of Mount operation
 	// This is a convenience wrapper that only creates filesystem
-	// Note: node needs to be determined - using first available node for now
-	nodes, err := s.nodes.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return &sdspb.CreateFilesystemResponse{
-			Success: false,
-			Message: "No nodes available",
-		}, nil
-	}
-	node := nodes[0].Address
-
-	err = s.resources.CreateFilesystemOnly(ctx, req.Resource, req.VolumeId, node, req.Fstype)
+	err := s.resources.CreateFilesystemOnly(ctx, req.Resource, req.VolumeId, req.Fstype)
 	if err != nil {
 		return &sdspb.CreateFilesystemResponse{
 			Success: false,
@@ -452,7 +452,7 @@ func (s *Server) CreateFilesystem(ctx context.Context, req *sdspb.CreateFilesyst
 }
 
 func (s *Server) MountResource(ctx context.Context, req *sdspb.MountResourceRequest) (*sdspb.MountResourceResponse, error) {
-	err := s.resources.Mount(ctx, req.Resource, req.VolumeId, req.Path, req.Node, req.Fstype)
+	err := s.resources.Mount(ctx, req.Resource, req.Path, req.VolumeId, req.Fstype)
 	if err != nil {
 		return &sdspb.MountResourceResponse{
 			Success: false,
@@ -466,7 +466,7 @@ func (s *Server) MountResource(ctx context.Context, req *sdspb.MountResourceRequ
 }
 
 func (s *Server) UnmountResource(ctx context.Context, req *sdspb.UnmountResourceRequest) (*sdspb.UnmountResourceResponse, error) {
-	err := s.resources.Unmount(ctx, req.Resource, req.VolumeId, req.Node)
+	err := s.resources.Unmount(ctx, req.Resource, req.Node)
 	if err != nil {
 		return &sdspb.UnmountResourceResponse{
 			Success: false,
@@ -476,6 +476,35 @@ func (s *Server) UnmountResource(ctx context.Context, req *sdspb.UnmountResource
 	return &sdspb.UnmountResourceResponse{
 		Success: true,
 		Message: "Resource unmounted successfully",
+	}, nil
+}
+
+func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.MakeHaResponse, error) {
+	configPath, err := s.resources.MakeHa(ctx, req.Resource, req.Services, req.MountPoint, req.Fstype, req.Vip)
+	if err != nil {
+		return &sdspb.MakeHaResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.MakeHaResponse{
+		Success: true,
+		Message: "HA configuration created successfully",
+		ConfigPath: configPath,
+	}, nil
+}
+
+func (s *Server) EvictHa(ctx context.Context, req *sdspb.EvictHaRequest) (*sdspb.EvictHaResponse, error) {
+	err := s.resources.EvictHa(ctx, req.Resource)
+	if err != nil {
+		return &sdspb.EvictHaResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.EvictHaResponse{
+		Success: true,
+		Message: "HA resource evicted successfully",
 	}, nil
 }
 
@@ -552,46 +581,121 @@ func (s *Server) ListSnapshots(ctx context.Context, req *sdspb.ListSnapshotsRequ
 // ==================== GATEWAY OPERATIONS ====================
 
 func (s *Server) CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGatewayRequest) (*sdspb.CreateNFSGatewayResponse, error) {
-	resp, err := s.gateways.CreateNFSGateway(ctx, req)
+	nfsMgr := gateway.NewNFSManager(s.gateway)
+	resp, err := nfsMgr.CreateNFSGateway(ctx, req)
 	if err != nil {
-		return &sdspb.CreateNFSGatewayResponse{
-			Success: false,
-			Message: err.Error(),
-		}, nil
+		return resp, err
 	}
+
+	// Generate gateway name from resource
+	gwName := req.Resource + "-nfs"
+
+	// Save to database
+	if s.ctrl.db != nil {
+		gw := &database.Gateway{
+			Name:     gwName,
+			Resource: req.Resource,
+			Type:     database.GatewayTypeNFS,
+			Config: map[string]interface{}{
+				"service_ip":    req.ServiceIp,
+				"export_path":   req.ExportPath,
+				"allowed_ips":   req.AllowedIps,
+				"fs_type":       req.FsType,
+				"options":       req.Options,
+			},
+			Status: "created",
+		}
+		if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
+			s.ctrl.logger.Error("Failed to save gateway to database", zap.Error(err))
+		}
+	}
+
 	return resp, nil
 }
 
 func (s *Server) CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISCSIGatewayRequest) (*sdspb.CreateISCSIGatewayResponse, error) {
-	resp, err := s.gateways.CreateISCSIGateway(ctx, req)
+	iscsiMgr := gateway.NewISCSIManager(s.gateway)
+	resp, err := iscsiMgr.CreateISCSIGateway(ctx, req)
 	if err != nil {
-		return &sdspb.CreateISCSIGatewayResponse{
-			Success: false,
-			Message: err.Error(),
-		}, nil
+		return resp, err
 	}
+
+	// Generate gateway name from resource
+	gwName := req.Resource + "-iscsi"
+
+	// Save to database
+	if s.ctrl.db != nil {
+		gw := &database.Gateway{
+			Name:     gwName,
+			Resource: req.Resource,
+			Type:     database.GatewayTypeISCSI,
+			Config: map[string]interface{}{
+				"service_ip":         req.ServiceIp,
+				"iqn":                req.Iqn,
+				"allowed_initiators":  req.AllowedInitiators,
+				"username":           req.Username,
+				"password":           req.Password,
+				"implementation":     req.Implementation,
+				"options":            req.Options,
+			},
+			Status: "created",
+		}
+		if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
+			s.ctrl.logger.Error("Failed to save gateway to database", zap.Error(err))
+		}
+	}
+
 	return resp, nil
 }
 
 func (s *Server) CreateNVMeGateway(ctx context.Context, req *sdspb.CreateNVMeGatewayRequest) (*sdspb.CreateNVMeGatewayResponse, error) {
-	resp, err := s.gateways.CreateNVMeGateway(ctx, req)
+	nvmeMgr := gateway.NewNVMeManager(s.gateway)
+	resp, err := nvmeMgr.CreateNVMeGateway(ctx, req)
 	if err != nil {
-		return &sdspb.CreateNVMeGatewayResponse{
-			Success: false,
-			Message: err.Error(),
-		}, nil
+		return resp, err
 	}
+
+	// Generate gateway name from resource
+	gwName := req.Resource + "-nvme"
+
+	// Save to database
+	if s.ctrl.db != nil {
+		gw := &database.Gateway{
+			Name:     gwName,
+			Resource: req.Resource,
+			Type:     database.GatewayTypeNVMEOF,
+			Config: map[string]interface{}{
+				"service_ip":      req.ServiceIp,
+				"nqn":             req.Nqn,
+				"transport_type":  req.TransportType,
+				"options":         req.Options,
+			},
+			Status: "created",
+		}
+		if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
+			s.ctrl.logger.Error("Failed to save gateway to database", zap.Error(err))
+		}
+	}
+
 	return resp, nil
 }
 
 func (s *Server) DeleteGateway(ctx context.Context, req *sdspb.DeleteGatewayRequest) (*sdspb.DeleteGatewayResponse, error) {
-	err := s.gateways.DeleteGateway(ctx, req.Id)
+	err := s.gateway.DeleteGateway(ctx, req.Id)
 	if err != nil {
 		return &sdspb.DeleteGatewayResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
+
+	// Delete from database
+	if s.ctrl.db != nil {
+		if err := s.ctrl.db.DeleteGateway(ctx, req.Id); err != nil {
+			s.ctrl.logger.Error("Failed to delete gateway from database", zap.Error(err))
+		}
+	}
+
 	return &sdspb.DeleteGatewayResponse{
 		Success: true,
 		Message: "Gateway deleted successfully",
@@ -599,7 +703,7 @@ func (s *Server) DeleteGateway(ctx context.Context, req *sdspb.DeleteGatewayRequ
 }
 
 func (s *Server) GetGateway(ctx context.Context, req *sdspb.GetGatewayRequest) (*sdspb.GetGatewayResponse, error) {
-	gw, err := s.gateways.GetGateway(ctx, req.Id)
+	gw, err := s.gateway.GetGateway(ctx, req.Id)
 	if err != nil {
 		return &sdspb.GetGatewayResponse{
 			Success: false,
@@ -619,7 +723,7 @@ func (s *Server) GetGateway(ctx context.Context, req *sdspb.GetGatewayRequest) (
 }
 
 func (s *Server) ListGateways(ctx context.Context, req *sdspb.ListGatewaysRequest) (*sdspb.ListGatewaysResponse, error) {
-	gateways, err := s.gateways.ListGateways(ctx)
+	gateways, err := s.gateway.ListGateways(ctx)
 	if err != nil {
 		return &sdspb.ListGatewaysResponse{
 			Success: false,
@@ -645,7 +749,7 @@ func (s *Server) ListGateways(ctx context.Context, req *sdspb.ListGatewaysReques
 }
 
 func (s *Server) StartGateway(ctx context.Context, req *sdspb.StartGatewayRequest) (*sdspb.StartGatewayResponse, error) {
-	err := s.gateways.StartGateway(ctx, req.Id)
+	err := s.gateway.StartGateway(ctx, req.Id)
 	if err != nil {
 		return &sdspb.StartGatewayResponse{
 			Success: false,
@@ -659,7 +763,7 @@ func (s *Server) StartGateway(ctx context.Context, req *sdspb.StartGatewayReques
 }
 
 func (s *Server) StopGateway(ctx context.Context, req *sdspb.StopGatewayRequest) (*sdspb.StopGatewayResponse, error) {
-	err := s.gateways.StopGateway(ctx, req.Id)
+	err := s.gateway.StopGateway(ctx, req.Id)
 	if err != nil {
 		return &sdspb.StopGatewayResponse{
 			Success: false,

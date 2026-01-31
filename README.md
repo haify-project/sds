@@ -117,7 +117,7 @@ Controller configuration: `/etc/sds/controller.toml`
 
 ```toml
 [server]
-listen_address = "0.0.0.0:3373"
+listen_address = "0.0.0.0:3374"
 
 [drbd_agent]
 # drbd-agent endpoints for each node

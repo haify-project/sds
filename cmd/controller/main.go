@@ -42,7 +42,10 @@ func main() {
 		zap.String("config", *configPath))
 
 	// Create controller
-	ctrl := controller.New(cfg, logger)
+	ctrl, err := controller.New(cfg, logger)
+	if err != nil {
+		logger.Fatal("Failed to create controller", zap.Error(err))
+	}
 
 	// Start controller
 	if err := ctrl.Start(); err != nil {

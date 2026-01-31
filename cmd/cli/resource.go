@@ -1,12 +1,26 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/liliang-cn/sds/pkg/client"
+	"github.com/liliang-cn/sds/pkg/util"
 	"github.com/spf13/cobra"
 )
+
+// formatSize formats a size in GB to human-readable string
+func formatSize(sizeGB uint64) string {
+	if sizeGB == 0 {
+		return "0 GB"
+	}
+	if sizeGB < 1 {
+		return "< 1 GB"
+	}
+	return fmt.Sprintf("%d GB", sizeGB)
+}
 
 func resourceCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -21,11 +35,9 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceAddVolume())
 	cmd.AddCommand(resourceRemoveVolume())
 	cmd.AddCommand(resourceResizeVolume())
-	cmd.AddCommand(resourceStatus())
 	cmd.AddCommand(resourcePrimary())
+	cmd.AddCommand(resourceSecondary())
 	cmd.AddCommand(resourceFs())
-	cmd.AddCommand(resourceMount())
-	cmd.AddCommand(resourceUnmount())
 
 	return cmd
 }
@@ -36,7 +48,6 @@ func resourceCreate() *cobra.Command {
 	var nodes string
 	var pool string
 	var protocol string
-	var replicas uint32
 	var size string
 
 	cmd := &cobra.Command{
@@ -49,78 +60,72 @@ func resourceCreate() *cobra.Command {
 				return fmt.Errorf("resource name is required")
 			}
 			if port == 0 {
-				return fmt.Errorf("DRBD port is required")
+				return fmt.Errorf("DRBD port is required (use --port)")
 			}
 			if size == "" {
-				return fmt.Errorf("size is required")
+				return fmt.Errorf("size is required (use --size)")
 			}
 
 			var nodeList []string
 			if nodes != "" {
 				nodeList = strings.Split(nodes, ",")
+			} else {
+				return fmt.Errorf("nodes are required (use --nodes)")
 			}
 
-			// Default pool name
 			if pool == "" {
 				pool = "data-pool"
 			}
 
-			// Parse size to GB
-			var sizeGB uint32
-			_, err := fmt.Sscanf(size, "%d", &sizeGB)
+			if protocol == "" {
+				protocol = "C"
+			}
+
+			sizeBytes, err := util.ParseSize(size)
 			if err != nil {
-				// Try with suffix
-				if strings.HasSuffix(size, "G") || strings.HasSuffix(size, "GB") || strings.HasSuffix(size, "GiB") {
-					fmt.Sscanf(size, "%d", &sizeGB)
-				} else if strings.HasSuffix(size, "T") || strings.HasSuffix(size, "TB") {
-					var tmp uint32
-					fmt.Sscanf(size, "%d", &tmp)
-					sizeGB = tmp * 1024
-				}
+				return fmt.Errorf("invalid size format: %s: %w", size, err)
+			}
+			sizeGiB := util.BytesToGiB(sizeBytes)
+			if sizeGiB == 0 {
+				return fmt.Errorf("size too small (minimum 1 GiB)")
 			}
 
-			if sizeGB == 0 {
-				return fmt.Errorf("invalid size format: %s", size)
-			}
-
-			// Create SDS client
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Create resource with pool
-			err = sdsClient.CreateResourceWithPool(ctx, name, port, nodeList, protocol, sizeGB, pool)
+			err = sdsClient.CreateResourceWithPool(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool)
 			if err != nil {
 				return fmt.Errorf("failed to create resource: %w", err)
 			}
 
-			fmt.Printf("✓ Resource created successfully\n")
+			fmt.Printf("Resource created successfully\n")
 			fmt.Printf("  Name:     %s\n", name)
 			fmt.Printf("  Port:     %d\n", port)
 			fmt.Printf("  Pool:     %s\n", pool)
 			fmt.Printf("  Nodes:    %v\n", nodeList)
 			fmt.Printf("  Protocol: %s\n", protocol)
-			fmt.Printf("  Size:     %d GB\n", sizeGB)
+			fmt.Printf("  Size:     %d GiB (%s)\n", sizeGiB, util.FormatBytes(sizeBytes))
 			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. Check resource status: sds-cli resource status %s\n", name)
-			fmt.Printf("  2. Set primary node: sds-cli resource primary %s <node>\n", name)
+			fmt.Printf("  1. sds-cli resource get %s\n", name)
+			fmt.Printf("  2. sds-cli resource primary %s <node>\n", name)
 
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&name, "name", "", "Resource name")
-	cmd.Flags().Uint32Var(&port, "port", 0, "DRBD port")
-	cmd.Flags().StringVar(&nodes, "nodes", "", "Node names (comma-separated)")
+	cmd.Flags().StringVar(&name, "name", "", "Resource name (required)")
+	cmd.Flags().Uint32Var(&port, "port", 0, "DRBD port (required)")
+	cmd.Flags().StringVar(&nodes, "nodes", "", "Node names (comma-separated, required)")
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: data-pool)")
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")
-	cmd.Flags().Uint32Var(&replicas, "replicas", 2, "Number of replicas")
-	cmd.Flags().StringVar(&size, "size", "", "Minimum free space")
+	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required)")
 
 	cmd.MarkFlagRequired("name")
 	cmd.MarkFlagRequired("port")
+	cmd.MarkFlagRequired("nodes")
 	cmd.MarkFlagRequired("size")
 
 	return cmd
@@ -128,23 +133,22 @@ func resourceCreate() *cobra.Command {
 
 func resourceGet() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get",
+		Use:   "get <name>",
 		Short: "Get resource details",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("resource name is required")
-			}
 			name := args[0]
 
-			// Create SDS client
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Get resource
-			resource, err := sdsClient.GetResource(cmd.Context(), name)
+			resource, err := sdsClient.GetResource(ctx, name)
 			if err != nil {
 				return fmt.Errorf("failed to get resource: %w", err)
 			}
@@ -152,11 +156,23 @@ func resourceGet() *cobra.Command {
 			fmt.Printf("Resource: %s\n", resource.Name)
 			fmt.Printf("  Port:     %d\n", resource.Port)
 			fmt.Printf("  Protocol: %s\n", resource.Protocol)
-			fmt.Printf("  Role:     %s\n", resource.Role)
-			fmt.Printf("  Nodes:    %v\n", resource.Nodes)
-			fmt.Printf("  Volumes:\n")
-			for _, vol := range resource.Volumes {
-				fmt.Printf("    Volume %d: %s (%d GB)\n", vol.VolumeId, vol.Device, vol.SizeGb)
+			fmt.Printf("  Nodes:\n")
+			for _, node := range resource.Nodes {
+				state := "Unknown"
+				diskState := ""
+				if ns, ok := resource.NodeStates[node]; ok {
+					state = ns.Role
+					if ns.DiskState != "" {
+						diskState = fmt.Sprintf(", disk: %s", ns.DiskState)
+					}
+				}
+				fmt.Printf("    %s: %s%s\n", node, state, diskState)
+			}
+			if len(resource.Volumes) > 0 {
+				fmt.Printf("  Volumes:\n")
+				for _, vol := range resource.Volumes {
+					fmt.Printf("    Volume %d: %s (%s)\n", vol.VolumeId, vol.Device, formatSize(vol.SizeGb))
+				}
 			}
 
 			return nil
@@ -168,29 +184,27 @@ func resourceGet() *cobra.Command {
 
 func resourceDelete() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete",
+		Use:   "delete <name>",
 		Short: "Delete a resource",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("resource name is required")
-			}
 			name := args[0]
 
-			// Create SDS client
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Delete resource
-			err = sdsClient.DeleteResource(cmd.Context(), name)
+			err = sdsClient.DeleteResource(ctx, name)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource: %w", err)
 			}
 
-			fmt.Printf("✓ Resource %s deleted successfully\n", name)
-
+			fmt.Printf("Resource '%s' deleted successfully\n", name)
 			return nil
 		},
 	}
@@ -203,15 +217,16 @@ func resourceList() *cobra.Command {
 		Use:   "list",
 		Short: "List all resources",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Create SDS client
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// List resources
-			resources, err := sdsClient.ListResources(cmd.Context())
+			resources, err := sdsClient.ListResources(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list resources: %w", err)
 			}
@@ -221,14 +236,8 @@ func resourceList() *cobra.Command {
 				return nil
 			}
 
-			fmt.Printf("Found %d resource(s):\n", len(resources))
 			for _, r := range resources {
-				fmt.Printf("  - %s (port: %d, protocol: %s, role: %s)\n", r.Name, r.Port, r.Protocol, r.Role)
-				fmt.Printf("    Nodes: %v\n", r.Nodes)
-				fmt.Printf("    Volumes:\n")
-				for _, vol := range r.Volumes {
-					fmt.Printf("      Volume %d: %s (%d GB)\n", vol.VolumeId, vol.Device, vol.SizeGb)
-				}
+				fmt.Printf("%s (port=%d, protocol=%s, nodes=%v)\n", r.Name, r.Port, r.Protocol, r.Nodes)
 			}
 
 			return nil
@@ -239,448 +248,263 @@ func resourceList() *cobra.Command {
 }
 
 func resourceAddVolume() *cobra.Command {
-	var resource string
+	var name string
 	var volume string
 	var pool string
 	var size string
 
 	cmd := &cobra.Command{
-		Use:   "add-volume",
-		Short: "Add volume to resource",
+		Use:   "add-volume <resource>",
+		Short: "Add a volume to resource",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if resource == "" {
-				return fmt.Errorf("resource name is required")
-			}
+			resource := args[0]
+
 			if volume == "" {
-				return fmt.Errorf("volume name is required")
-			}
-			if pool == "" {
-				return fmt.Errorf("pool name is required")
+				return fmt.Errorf("volume name is required (--volume)")
 			}
 			if size == "" {
-				return fmt.Errorf("size is required")
+				return fmt.Errorf("size is required (--size)")
+			}
+			if pool == "" {
+				return fmt.Errorf("pool is required (--pool)")
 			}
 
-			// Parse size to GB
-			var sizeGB uint32
-			_, err := fmt.Sscanf(size, "%d", &sizeGB)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sizeBytes, err := util.ParseSize(size)
 			if err != nil {
-				// Try with suffix
-				if strings.HasSuffix(size, "G") || strings.HasSuffix(size, "GB") || strings.HasSuffix(size, "GiB") {
-					fmt.Sscanf(size, "%d", &sizeGB)
-				} else if strings.HasSuffix(size, "T") || strings.HasSuffix(size, "TB") {
-					var tmp uint32
-					fmt.Sscanf(size, "%d", &tmp)
-					sizeGB = tmp * 1024
-				}
+				return fmt.Errorf("invalid size format: %s: %w", size, err)
+			}
+			sizeGiB := util.BytesToGiB(sizeBytes)
+			if sizeGiB == 0 {
+				return fmt.Errorf("size too small (minimum 1 GiB)")
 			}
 
-			if sizeGB == 0 {
-				return fmt.Errorf("invalid size format: %s", size)
-			}
-
-			// Create SDS client
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Add volume
-			err = sdsClient.AddVolume(cmd.Context(), resource, volume, pool, sizeGB)
+			err = sdsClient.AddVolume(ctx, resource, volume, pool, uint32(sizeGiB))
 			if err != nil {
 				return fmt.Errorf("failed to add volume: %w", err)
 			}
 
-			fmt.Printf("✓ Volume %s added to resource %s successfully\n", volume, resource)
-
+			fmt.Printf("Volume '%s' added to '%s' (size: %s)\n", volume, resource, util.FormatBytes(sizeBytes))
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&resource, "resource", "", "Resource name")
-	cmd.Flags().StringVar(&volume, "volume", "", "Volume name")
-	cmd.Flags().StringVar(&pool, "pool", "", "Pool name")
-	cmd.Flags().StringVar(&size, "size", "", "Volume size")
+	cmd.Flags().StringVar(&name, "name", "", "Volume name (required)")
+	cmd.Flags().StringVar(&volume, "volume", "", "Volume name (required)")
+	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool (required)")
+	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, required)")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("volume")
-	cmd.MarkFlagRequired("pool")
-	cmd.MarkFlagRequired("size")
+	// For compatibility, map --name to --volume
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		if name != "" && volume == "" {
+			volume = name
+		}
+		return nil
+	}
 
 	return cmd
 }
 
 func resourceRemoveVolume() *cobra.Command {
-	var resource string
-	var volumeID uint32
 	var node string
 
 	cmd := &cobra.Command{
-		Use:   "remove-volume",
-		Short: "Remove volume from resource",
+		Use:   "remove-volume <resource> <volume-id>",
+		Short: "Remove a volume from resource",
+		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if resource == "" {
-				return fmt.Errorf("resource name is required")
-			}
-			if volumeID == 0 {
-				return fmt.Errorf("volume ID is required")
-			}
-			if node == "" {
-				return fmt.Errorf("node is required")
+			resource := args[0]
+			var volumeID uint32
+			_, err := fmt.Sscanf(args[1], "%d", &volumeID)
+			if err != nil {
+				return fmt.Errorf("invalid volume ID: %s", args[1])
 			}
 
-			// Create SDS client
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Remove volume
-			err = sdsClient.RemoveVolume(cmd.Context(), resource, volumeID, node)
+			err = sdsClient.RemoveVolume(ctx, resource, volumeID, node)
 			if err != nil {
 				return fmt.Errorf("failed to remove volume: %w", err)
 			}
 
-			fmt.Printf("✓ Volume %d removed from resource %s successfully\n", volumeID, resource)
-
+			fmt.Printf("Volume %d removed from '%s'\n", volumeID, resource)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&resource, "resource", "", "Resource name")
-	cmd.Flags().Uint32Var(&volumeID, "volume-id", 0, "Volume ID")
-	cmd.Flags().StringVar(&node, "node", "", "Node name")
-
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("volume-id")
-	cmd.MarkFlagRequired("node")
+	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
 
 	return cmd
 }
 
 func resourceResizeVolume() *cobra.Command {
-	var resource string
-	var volumeID uint32
-	var size string
 	var node string
+	var size string
 
 	cmd := &cobra.Command{
-		Use:   "resize-volume",
-		Short: "Resize volume in resource",
+		Use:   "resize-volume <resource> <volume-id> <size>",
+		Short: "Resize a volume",
+		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if resource == "" {
-				return fmt.Errorf("resource name is required")
-			}
-			if volumeID == 0 {
-				return fmt.Errorf("volume ID is required")
-			}
-			if size == "" {
-				return fmt.Errorf("size is required")
-			}
-			if node == "" {
-				return fmt.Errorf("node is required")
-			}
-
-			// Parse size to GB
-			var sizeGB uint32
-			_, err := fmt.Sscanf(size, "%d", &sizeGB)
+			resource := args[0]
+			var volumeID uint32
+			_, err := fmt.Sscanf(args[1], "%d", &volumeID)
 			if err != nil {
-				// Try with suffix
-				if strings.HasSuffix(size, "G") || strings.HasSuffix(size, "GB") || strings.HasSuffix(size, "GiB") {
-					fmt.Sscanf(size, "%d", &sizeGB)
-				} else if strings.HasSuffix(size, "T") || strings.HasSuffix(size, "TB") {
-					var tmp uint32
-					fmt.Sscanf(size, "%d", &tmp)
-					sizeGB = tmp * 1024
-				}
+				return fmt.Errorf("invalid volume ID: %s", args[1])
+			}
+			size = args[2]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sizeBytes, err := util.ParseSize(size)
+			if err != nil {
+				return fmt.Errorf("invalid size format: %s: %w", size, err)
+			}
+			sizeGiB := util.BytesToGiB(sizeBytes)
+			if sizeGiB == 0 {
+				return fmt.Errorf("size too small (minimum 1 GiB)")
 			}
 
-			if sizeGB == 0 {
-				return fmt.Errorf("invalid size format: %s", size)
-			}
-
-			// Create SDS client
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Resize volume
-			err = sdsClient.ResizeVolume(cmd.Context(), resource, volumeID, node, sizeGB)
+			err = sdsClient.ResizeVolume(ctx, resource, volumeID, node, uint32(sizeGiB))
 			if err != nil {
 				return fmt.Errorf("failed to resize volume: %w", err)
 			}
 
-			fmt.Printf("✓ Volume %d in resource %s resized to %d GB successfully\n", volumeID, resource, sizeGB)
-
+			fmt.Printf("Volume %d resized to %s\n", volumeID, util.FormatBytes(sizeBytes))
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&resource, "resource", "", "Resource name")
-	cmd.Flags().Uint32Var(&volumeID, "volume-id", 0, "Volume ID")
-	cmd.Flags().StringVar(&size, "size", "", "New size")
-	cmd.Flags().StringVar(&node, "node", "", "Node name")
-
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("volume-id")
-	cmd.MarkFlagRequired("size")
-	cmd.MarkFlagRequired("node")
-
-	return cmd
-}
-
-func resourceStatus() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Get DRBD status for a resource",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("resource name is required")
-			}
-			name := args[0]
-
-			// Create SDS client
-			sdsClient, err := client.NewSDSClient(controllerAddr)
-			if err != nil {
-				return fmt.Errorf("failed to connect to controller: %w", err)
-			}
-			defer sdsClient.Close()
-
-			// Get resource status
-			status, err := sdsClient.ResourceStatus(cmd.Context(), name)
-			if err != nil {
-				return fmt.Errorf("failed to get resource status: %w", err)
-			}
-
-			fmt.Printf("Resource Status: %s\n", status.Name)
-			fmt.Printf("  Role:  %s\n", status.Role)
-			fmt.Printf("  Nodes: %v\n", status.Nodes)
-			if len(status.NodeStates) > 0 {
-				fmt.Printf("  Node States:\n")
-				for node, state := range status.NodeStates {
-					fmt.Printf("    %s:\n", node)
-					fmt.Printf("      Role: %s\n", state.Role)
-					fmt.Printf("      Disk: %s\n", state.DiskState)
-					fmt.Printf("      Replication: %s\n", state.ReplicationState)
-				}
-			}
-
-			return nil
-		},
-	}
+	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
 
 	return cmd
 }
 
 func resourcePrimary() *cobra.Command {
-	var resource string
-	var node string
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "primary",
-		Short: "Set a node as Primary for the resource",
+		Use:   "primary <resource> <node>",
+		Short: "Set resource primary on node",
+		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if resource == "" {
-				return fmt.Errorf("resource name is required")
-			}
-			if node == "" {
-				return fmt.Errorf("node name is required")
-			}
+			resource := args[0]
+			node := args[1]
 
-			// Create SDS client
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Set primary
-			err = sdsClient.SetPrimary(cmd.Context(), resource, node, force)
+			err = sdsClient.SetPrimary(ctx, resource, node, force)
 			if err != nil {
 				return fmt.Errorf("failed to set primary: %w", err)
 			}
 
-			fmt.Printf("✓ Node %s set as Primary for resource %s successfully\n", node, resource)
-
+			fmt.Printf("Resource '%s' primary set to '%s'\n", resource, node)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&resource, "resource", "", "Resource name")
-	cmd.Flags().StringVar(&node, "node", "", "Node name")
-	cmd.Flags().BoolVar(&force, "force", false, "Force primary")
+	cmd.Flags().BoolVar(&force, "force", false, "Force promotion")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("node")
+	return cmd
+}
+
+func resourceSecondary() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "secondary <resource> <node>",
+		Short: "Set resource secondary on node",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			node := args[1]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.SetSecondary(ctx, resource, node)
+			if err != nil {
+				return fmt.Errorf("failed to set secondary: %w", err)
+			}
+
+			fmt.Printf("Resource '%s' set to secondary on '%s'\n", resource, node)
+			return nil
+		},
+	}
 
 	return cmd
 }
 
 func resourceFs() *cobra.Command {
-	var resource string
-	var volume uint32
-	var fstype string
 	var node string
 
 	cmd := &cobra.Command{
-		Use:   "fs",
-		Short: "Create filesystem on DRBD device",
+		Use:   "fs <resource> <volume-id> <fstype>",
+		Short: "Create filesystem on volume",
+		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if resource == "" {
-				return fmt.Errorf("resource name is required")
+			resource := args[0]
+			var volumeID uint32
+			_, err := fmt.Sscanf(args[1], "%d", &volumeID)
+			if err != nil {
+				return fmt.Errorf("invalid volume ID: %s", args[1])
 			}
-			if volume == 0 {
-				return fmt.Errorf("volume ID is required")
-			}
-			if fstype == "" {
-				return fmt.Errorf("filesystem type is required")
-			}
-			if node == "" {
-				return fmt.Errorf("node name is required")
-			}
+			fstype := args[2]
 
-			// Create SDS client
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
 			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer sdsClient.Close()
 
-			// Create filesystem
-			err = sdsClient.CreateFilesystem(cmd.Context(), resource, volume, node, fstype)
+			err = sdsClient.CreateFilesystem(ctx, resource, volumeID, node, fstype)
 			if err != nil {
 				return fmt.Errorf("failed to create filesystem: %w", err)
 			}
 
-			fmt.Printf("✓ Filesystem %s created on resource %s volume %d (node=%s)\n", fstype, resource, volume, node)
-
+			fmt.Printf("Filesystem '%s' created on volume %d\n", fstype, volumeID)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&resource, "resource", "", "Resource name")
-	cmd.Flags().Uint32Var(&volume, "volume", 0, "Volume ID")
-	cmd.Flags().StringVar(&fstype, "fstype", "", "Filesystem type")
-	cmd.Flags().StringVar(&node, "node", "", "Node name")
-
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("volume")
-	cmd.MarkFlagRequired("fstype")
-	cmd.MarkFlagRequired("node")
-
-	return cmd
-}
-
-func resourceMount() *cobra.Command {
-	var resource string
-	var volume uint32
-	var path string
-	var node string
-	var fstype string
-
-	cmd := &cobra.Command{
-		Use:   "mount",
-		Short: "Mount DRBD device",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if resource == "" {
-				return fmt.Errorf("resource name is required")
-			}
-			if volume == 0 {
-				return fmt.Errorf("volume ID is required")
-			}
-			if path == "" {
-				return fmt.Errorf("mount point is required")
-			}
-			if node == "" {
-				return fmt.Errorf("node name is required")
-			}
-
-			// Create SDS client
-			sdsClient, err := client.NewSDSClient(controllerAddr)
-			if err != nil {
-				return fmt.Errorf("failed to connect to controller: %w", err)
-			}
-			defer sdsClient.Close()
-
-			// Mount resource
-			err = sdsClient.MountResource(cmd.Context(), resource, volume, path, node, fstype)
-			if err != nil {
-				return fmt.Errorf("failed to mount resource: %w", err)
-			}
-
-			fmt.Printf("✓ Resource %s volume %d mounted to %s (node=%s)\n", resource, volume, path, node)
-			if fstype != "" {
-				fmt.Printf("  Filesystem: %s\n", fstype)
-			}
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&resource, "resource", "", "Resource name")
-	cmd.Flags().Uint32Var(&volume, "volume", 0, "Volume ID")
-	cmd.Flags().StringVar(&path, "path", "", "Mount point")
-	cmd.Flags().StringVar(&node, "node", "", "Node name")
-	cmd.Flags().StringVar(&fstype, "fstype", "", "Filesystem type (optional, creates filesystem if specified)")
-
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("volume")
-	cmd.MarkFlagRequired("path")
-	cmd.MarkFlagRequired("node")
-
-	return cmd
-}
-
-func resourceUnmount() *cobra.Command {
-	var resource string
-	var volume uint32
-	var node string
-
-	cmd := &cobra.Command{
-		Use:   "unmount",
-		Short: "Unmount DRBD device",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if resource == "" {
-				return fmt.Errorf("resource name is required")
-			}
-			if volume == 0 {
-				return fmt.Errorf("volume ID is required")
-			}
-			if node == "" {
-				return fmt.Errorf("node name is required")
-			}
-
-			// Create SDS client
-			sdsClient, err := client.NewSDSClient(controllerAddr)
-			if err != nil {
-				return fmt.Errorf("failed to connect to controller: %w", err)
-			}
-			defer sdsClient.Close()
-
-			// Unmount resource
-			err = sdsClient.UnmountResource(cmd.Context(), resource, volume, node)
-			if err != nil {
-				return fmt.Errorf("failed to unmount resource: %w", err)
-			}
-
-			fmt.Printf("✓ Resource %s volume %d unmounted successfully (node=%s)\n", resource, volume, node)
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&resource, "resource", "", "Resource name")
-	cmd.Flags().Uint32Var(&volume, "volume", 0, "Volume ID")
-	cmd.Flags().StringVar(&node, "node", "", "Node name")
-
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("volume")
-	cmd.MarkFlagRequired("node")
+	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
 
 	return cmd
 }

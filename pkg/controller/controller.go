@@ -13,18 +13,22 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"go.uber.org/zap"
 
-	pb "github.com/liliang-cn/drbd-agent/api/proto/v1"
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/liliang-cn/sds/pkg/config"
+	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/liliang-cn/sds/pkg/gateway"
 )
 
 // Controller represents the SDS controller
 type Controller struct {
 	config     *config.Config
 	logger     *zap.Logger
-	agents     map[string]*client.AgentClient
-	agentsLock sync.RWMutex
+	db         *database.DB
+	deployment *deployment.Client
+	hosts      []string
+	hostsMap   map[string]string // hostname -> address mapping
+	hostsLock  sync.RWMutex
 	server     *grpc.Server
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -32,18 +36,41 @@ type Controller struct {
 	storage   *StorageManager
 	resources *ResourceManager
 	snapshots *SnapshotManager
-	gateways  *GatewayManager
 	nodes     *NodeManager
+	gateway   *gateway.Manager
 }
 
 // New creates a new controller
-func New(cfg *config.Config, logger *zap.Logger) *Controller {
+func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Open database
+	db, err := database.Open(&database.Config{Path: cfg.Database.Path}, logger)
+	if err != nil {
+		logger.Warn("Failed to open database, continuing without persistence", zap.Error(err))
+		db = nil
+	}
+
+	// Create deployment client
+	deploymentClient, err := deployment.New(&deployment.Config{
+		DispatchConfig: cfg.Dispatch.ConfigPath,
+		Parallel:       cfg.Dispatch.Parallel,
+	}, logger)
+	if err != nil {
+		cancel()
+		if db != nil {
+			db.Close()
+		}
+		return nil, fmt.Errorf("failed to create deployment client: %w", err)
+	}
 
 	ctrl := &Controller{
 		config:     cfg,
 		logger:     logger,
-		agents:     make(map[string]*client.AgentClient),
+		db:         db,
+		deployment: deploymentClient,
+		hosts:      cfg.Dispatch.Hosts,
+		hostsMap:   make(map[string]string),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
@@ -52,32 +79,69 @@ func New(cfg *config.Config, logger *zap.Logger) *Controller {
 	ctrl.storage = NewStorageManager(ctrl)
 	ctrl.resources = NewResourceManager(ctrl)
 	ctrl.snapshots = NewSnapshotManager(ctrl)
-	ctrl.gateways = NewGatewayManager(ctrl)
 	ctrl.nodes = NewNodeManager(ctrl)
 
-	return ctrl
+	// Initialize gateway with adapters
+	gwResourceManager := NewGatewayResourceManager(ctrl.resources)
+	gwDeploymentClient := NewGatewayDeploymentClient(deploymentClient)
+	ctrl.gateway = gateway.New(gwResourceManager, gwDeploymentClient, logger, cfg.Dispatch.Hosts)
+
+	// Initialize hosts mapping
+	ctrl.initHostsMapping()
+
+	// Load data from database
+	if db != nil {
+		if err := ctrl.loadFromDatabase(ctx); err != nil {
+			logger.Warn("Failed to load data from database", zap.Error(err))
+		}
+	}
+
+	return ctrl, nil
+}
+
+// initHostsMapping initializes hostname to address mapping
+func (c *Controller) initHostsMapping() {
+	// Get hostnames from all hosts
+	if len(c.hosts) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for _, host := range c.hosts {
+		result, err := c.deployment.Exec(ctx, []string{host}, "hostname")
+		if err == nil && result.AllSuccess() {
+			for h, r := range result.Hosts {
+				if r.Success && r.Output != "" {
+					hostname := r.Output
+					c.hostsMap[hostname] = h
+					c.logger.Debug("Host mapping",
+						zap.String("hostname", hostname),
+						zap.String("address", h))
+				}
+			}
+		}
+	}
 }
 
 // Start starts the controller
 func (c *Controller) Start() error {
 	c.logger.Info("Starting SDS controller")
 
-	// Connect to drbd-agent endpoints
-	if err := c.connectToAgents(); err != nil {
-		return fmt.Errorf("failed to connect to agents: %w", err)
-	}
+	// Initialize deployment client with hosts
+	c.resources.SetDeployment(c.deployment)
+	c.resources.SetHosts(c.hosts)
 
 	// Start gRPC server
 	if err := c.startGRPCServer(); err != nil {
 		return fmt.Errorf("failed to start gRPC server: %w", err)
 	}
 
-	// Start health monitoring
-	go c.monitorAgents()
-
 	c.logger.Info("SDS controller started",
 		zap.String("address", c.config.Server.ListenAddress),
-		zap.Int("port", c.config.Server.Port))
+		zap.Int("port", c.config.Server.Port),
+		zap.Strings("hosts", c.hosts))
 
 	return nil
 }
@@ -93,43 +157,7 @@ func (c *Controller) Stop() {
 		c.server.GracefulStop()
 	}
 
-	// Close agent connections
-	c.agentsLock.Lock()
-	for addr, agent := range c.agents {
-		c.logger.Debug("Closing agent connection", zap.String("address", addr))
-		agent.Close()
-	}
-	c.agents = make(map[string]*client.AgentClient)
-	c.agentsLock.Unlock()
-
 	c.logger.Info("SDS controller stopped")
-}
-
-// connectToAgents connects to all drbd-agent endpoints
-func (c *Controller) connectToAgents() error {
-	c.logger.Info("Connecting to drbd-agent endpoints")
-
-	for _, endpoint := range c.config.DrbdAgent.Endpoints {
-		client, err := client.NewAgentClient(endpoint)
-		if err != nil {
-			c.logger.Error("Failed to connect to drbd-agent",
-				zap.String("endpoint", endpoint),
-				zap.Error(err))
-			continue
-		}
-
-		c.agentsLock.Lock()
-		c.agents[endpoint] = client
-		c.agentsLock.Unlock()
-
-		c.logger.Info("Connected to drbd-agent", zap.String("endpoint", endpoint))
-	}
-
-	if len(c.agents) == 0 {
-		return fmt.Errorf("failed to connect to any drbd-agent")
-	}
-
-	return nil
 }
 
 // startGRPCServer starts the gRPC server
@@ -151,13 +179,6 @@ func (c *Controller) startGRPCServer() error {
 	sdsServer := NewServer(c)
 	sdspb.RegisterSDSControllerServer(c.server, sdsServer)
 
-	// Register all connected agents with managers
-	c.agentsLock.Lock()
-	for endpoint, agent := range c.agents {
-		sdsServer.RegisterAgents(endpoint, agent)
-	}
-	c.agentsLock.Unlock()
-
 	c.logger.Info("Registered SDS controller service")
 
 	go func() {
@@ -170,67 +191,188 @@ func (c *Controller) startGRPCServer() error {
 	return nil
 }
 
-// monitorAgents monitors agent health
-func (c *Controller) monitorAgents() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-ticker.C:
-			c.checkAgentHealth()
-		}
-	}
+// GetHosts returns the list of hosts
+func (c *Controller) GetHosts() []string {
+	return c.hosts
 }
 
-// checkAgentHealth checks health of all agents
-func (c *Controller) checkAgentHealth() {
-	c.agentsLock.RLock()
-	endpoints := make([]string, 0, len(c.agents))
-	for endpoint := range c.agents {
-		endpoints = append(endpoints, endpoint)
-	}
-	c.agentsLock.RUnlock()
-
-	for _, endpoint := range endpoints {
-		ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
-		_, err := c.agents[endpoint].HealthCheck(ctx, &pb.HealthCheckRequest{})
-		cancel()
-
-		if err != nil {
-			c.logger.Warn("Agent health check failed",
-				zap.String("endpoint", endpoint),
-				zap.Error(err))
-
-			// Try to reconnect
-			c.reconnectAgent(endpoint)
-		} else {
-			c.logger.Debug("Agent healthy", zap.String("endpoint", endpoint))
-		}
-	}
+// GetDeployment returns the deployment client
+func (c *Controller) GetDeployment() *deployment.Client {
+	return c.deployment
 }
 
-// reconnectAgent reconnects to an agent
-func (c *Controller) reconnectAgent(endpoint string) {
-	c.logger.Info("Reconnecting to agent", zap.String("endpoint", endpoint))
+// ResolveHost resolves a hostname to an address
+func (c *Controller) ResolveHost(hostOrAddr string) string {
+	c.hostsLock.RLock()
+	defer c.hostsLock.RUnlock()
 
-	client, err := client.NewAgentClient(endpoint)
+	// If it's already an address, return as is
+	for _, addr := range c.hosts {
+		if addr == hostOrAddr {
+			return hostOrAddr
+		}
+	}
+
+	// Try to resolve hostname to address
+	if addr, ok := c.hostsMap[hostOrAddr]; ok {
+		return addr
+	}
+
+	// Return as-is (might be a hostname that SSH can resolve)
+	return hostOrAddr
+}
+
+// ==================== Gateway Adapter ====================
+
+// GatewayResourceManager adapts ResourceManager to gateway.ResourceManager interface
+type GatewayResourceManager struct {
+	rm *ResourceManager
+}
+
+// NewGatewayResourceManager creates a new gateway resource manager adapter
+func NewGatewayResourceManager(rm *ResourceManager) gateway.ResourceManager {
+	return &GatewayResourceManager{rm: rm}
+}
+
+func (a *GatewayResourceManager) GetResource(ctx context.Context, name string) (*gateway.ResourceInfo, error) {
+	info, err := a.rm.GetResource(ctx, name)
 	if err != nil {
-		c.logger.Error("Failed to reconnect to agent",
-			zap.String("endpoint", endpoint),
-			zap.Error(err))
-		return
+		return nil, err
 	}
 
-	c.agentsLock.Lock()
-	oldClient := c.agents[endpoint]
-	if oldClient != nil {
-		oldClient.Close()
+	// Convert controller.ResourceInfo to gateway.ResourceInfo
+	gwVolumes := make([]*gateway.ResourceVolumeInfo, len(info.Volumes))
+	for i, v := range info.Volumes {
+		gwVolumes[i] = &gateway.ResourceVolumeInfo{
+			VolumeID: v.VolumeID,
+			Device:   v.Device,
+			SizeGB:   v.SizeGB,
+		}
 	}
-	c.agents[endpoint] = client
-	c.agentsLock.Unlock()
 
-	c.logger.Info("Reconnected to agent", zap.String("endpoint", endpoint))
+	gwNodeStates := make(map[string]*gateway.ResourceNodeState)
+	for k, v := range info.NodeStates {
+		gwNodeStates[k] = &gateway.ResourceNodeState{
+			Role:        v.Role,
+			DiskState:   v.DiskState,
+			Replication: v.Replication,
+		}
+	}
+
+	return &gateway.ResourceInfo{
+		Name:       info.Name,
+		Port:       info.Port,
+		Protocol:   info.Protocol,
+		Nodes:      info.Nodes,
+		Role:       info.Role,
+		Volumes:    gwVolumes,
+		NodeStates: gwNodeStates,
+	}, nil
+}
+
+func (a *GatewayResourceManager) SetPrimary(ctx context.Context, resource, node string, force bool) error {
+	return a.rm.SetPrimary(ctx, resource, node, force)
+}
+
+// GatewayDeploymentClient adapts deployment.Client to gateway.DeploymentClient interface
+type GatewayDeploymentClient struct {
+	dc *deployment.Client
+}
+
+// NewGatewayDeploymentClient creates a new gateway deployment client adapter
+func NewGatewayDeploymentClient(dc *deployment.Client) gateway.DeploymentClient {
+	return &GatewayDeploymentClient{dc: dc}
+}
+
+func (a *GatewayDeploymentClient) DistributeConfig(ctx context.Context, hosts []string, content, remotePath string) error {
+	_, err := a.dc.DistributeConfig(ctx, hosts, content, remotePath)
+	return err
+}
+
+func (a *GatewayDeploymentClient) Exec(ctx context.Context, hosts []string, cmd string) error {
+	_, err := a.dc.Exec(ctx, hosts, cmd)
+	return err
+}
+
+// ==================== DATABASE ====================
+
+// loadFromDatabase loads nodes and gateways from database
+func (c *Controller) loadFromDatabase(ctx context.Context) error {
+	// Load nodes
+	dbNodes, err := c.db.ListNodes(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load nodes: %w", err)
+	}
+
+	for _, dbNode := range dbNodes {
+		c.nodes.mu.Lock()
+		c.nodes.nodes[dbNode.Address] = &NodeInfo{
+			Name:     dbNode.Name,
+			Address:  dbNode.Address,
+			Hostname: dbNode.Hostname,
+			State:    NodeState(dbNode.State),
+			LastSeen: dbNode.LastSeen,
+			Version:  dbNode.Version,
+			Capacity: make(map[string]interface{}),
+		}
+		c.nodes.mu.Unlock()
+
+		// Build hostname -> IP address mapping for DRBD config
+		if dbNode.Hostname != "" && dbNode.Address != "" {
+			c.hostsLock.Lock()
+			c.hostsMap[dbNode.Hostname] = dbNode.Address
+			c.hostsLock.Unlock()
+		}
+		// Also map name -> IP if different from hostname
+		if dbNode.Name != "" && dbNode.Name != dbNode.Hostname && dbNode.Address != "" {
+			c.hostsLock.Lock()
+			c.hostsMap[dbNode.Name] = dbNode.Address
+			c.hostsLock.Unlock()
+		}
+
+		c.logger.Debug("Loaded node from database",
+			zap.String("name", dbNode.Name),
+			zap.String("address", dbNode.Address))
+	}
+
+	// Load gateways
+	dbGateways, err := c.db.ListGateways(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load gateways: %w", err)
+	}
+
+	for _, dbGateway := range dbGateways {
+		c.logger.Debug("Loaded gateway from database",
+			zap.String("name", dbGateway.Name),
+			zap.String("type", string(dbGateway.Type)),
+			zap.String("resource", dbGateway.Resource))
+	}
+
+	c.logger.Info("Loaded data from database",
+		zap.Int("nodes", len(dbNodes)),
+		zap.Int("gateways", len(dbGateways)))
+
+	return nil
+}
+
+// Close closes the controller and its resources
+func (c *Controller) Close() error {
+	c.logger.Info("Closing controller")
+
+	// Stop gRPC server
+	if c.server != nil {
+		c.server.GracefulStop()
+	}
+
+	// Close database
+	if c.db != nil {
+		if err := c.db.Close(); err != nil {
+			c.logger.Error("Failed to close database", zap.Error(err))
+		}
+	}
+
+	// Cancel context
+	c.cancel()
+
+	return nil
 }

@@ -130,8 +130,9 @@ func (c *SDSClient) AddDiskToPool(ctx context.Context, pool, disk, node string) 
 // ==================== NODE OPERATIONS ====================
 
 // RegisterNode registers a new node
-func (c *SDSClient) RegisterNode(ctx context.Context, address string) (*sdspb.NodeInfo, error) {
+func (c *SDSClient) RegisterNode(ctx context.Context, name, address string) (*sdspb.NodeInfo, error) {
 	req := &sdspb.RegisterNodeRequest{
+		Name:    name,
 		Address: address,
 	}
 
@@ -413,6 +414,46 @@ func (c *SDSClient) UnmountResource(ctx context.Context, resource string, volume
 	}
 
 	resp, err := c.client.UnmountResource(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf(resp.Message)
+	}
+
+	return nil
+}
+
+// MakeHa creates a drbd-reactor promoter config for HA failover
+func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string) (string, error) {
+	req := &sdspb.MakeHaRequest{
+		Resource:   resource,
+		Services:   services,
+		MountPoint: mountPoint,
+		Fstype:     fsType,
+		Vip:        vip,
+	}
+
+	resp, err := c.client.MakeHa(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	if !resp.Success {
+		return "", fmt.Errorf(resp.Message)
+	}
+
+	return resp.ConfigPath, nil
+}
+
+// EvictHa evicts an HA resource from the active node
+func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
+	req := &sdspb.EvictHaRequest{
+		Resource: resource,
+	}
+
+	resp, err := c.client.EvictHa(ctx, req)
 	if err != nil {
 		return err
 	}

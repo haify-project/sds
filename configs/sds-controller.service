@@ -6,18 +6,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
 WorkingDirectory=/opt/sds
 ExecStart=/opt/sds/bin/sds-controller --config /etc/sds/controller.toml
 Restart=on-failure
 RestartSec=5s
-
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/log/sds
 
 # Logging
 StandardOutput=journal

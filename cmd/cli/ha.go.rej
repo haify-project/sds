@@ -1,0 +1,25 @@
+*** /dev/null
+--- /dev/null
+***************
+*** 261,270
+- 	// Parse mount unit (e.g., "var-lib-sds.mount")
+- 		if strings.Contains(line, ".mount") {
+- 			mountUnit := strings.TrimSpace(line)
+- 			mountUnit = strings.TrimPrefix(mountUnit, "\"")
+- 			mountUnit = strings.TrimSuffix(mountUnit, "\",")
+- 			mountUnit = strings.TrimSuffix(mountUnit, "\"")
+- 			mountUnit = strings.TrimSuffix(mountUnit, ".mount")
+- 			// Convert mount unit back to path
+- 			cfg.MountPoint = "/" + strings.ReplaceAll(mountUnit, "-", "/")
+- 		}
+--- 261,270 -----
++ 	// Parse mount unit (e.g., "var-lib-sds.mount")
++ 		if strings.Contains(line, ".mount") {
++ 			mountUnit := strings.TrimSpace(line)
++ 			mountUnit = strings.TrimPrefix(mountUnit, "\"")
++ 			mountUnit = strings.TrimSuffix(mountUnit, "\",")
++ 			mountUnit = strings.TrimSuffix(mountUnit, "\"")
++ 			mountUnit = strings.TrimSuffix(mountUnit, ".mount")
++ 			// Convert mount unit back to path
++ 			cfg.MountPoint = "/" + strings.ReplaceAll(mountUnit, "-", "/")
++ 		}

@@ -3,12 +3,12 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/liliang-cn/sds/pkg/database"
 	"go.uber.org/zap"
-	pb "github.com/liliang-cn/drbd-agent/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/client"
 )
 
 // NodeState represents the state of a node
@@ -22,6 +22,7 @@ const (
 
 // NodeInfo represents node information
 type NodeInfo struct {
+	Name       string                 `json:"name"`
 	Address    string                 `json:"address"`
 	Hostname   string                 `json:"hostname"`
 	State      NodeState              `json:"state"`
@@ -33,7 +34,6 @@ type NodeInfo struct {
 // NodeManager manages cluster nodes
 type NodeManager struct {
 	controller *Controller
-	agents     map[string]*client.AgentClient
 	mu         sync.RWMutex
 	nodes      map[string]*NodeInfo
 }
@@ -42,65 +42,83 @@ type NodeManager struct {
 func NewNodeManager(ctrl *Controller) *NodeManager {
 	return &NodeManager{
 		controller: ctrl,
-		agents:     make(map[string]*client.AgentClient),
 		nodes:      make(map[string]*NodeInfo),
 	}
 }
 
-// AddAgent adds an agent connection
-func (nm *NodeManager) AddAgent(node string, agent *client.AgentClient) {
-	nm.mu.Lock()
-	defer nm.mu.Unlock()
-
-	nm.agents[node] = agent
-
-	// Initialize node info if not exists
-	if nm.nodes[node] == nil {
-		nm.nodes[node] = &NodeInfo{
-			Address: node,
-			State:   NodeStateOnline,
-		}
-	}
-
-	nm.nodes[node].State = NodeStateOnline
-	nm.nodes[node].LastSeen = time.Now()
-}
-
 // RegisterNode registers a new node
-func (nm *NodeManager) RegisterNode(ctx context.Context, address string) (*NodeInfo, error) {
+func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (*NodeInfo, error) {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
 
-	nm.controller.logger.Info("Registering node", zap.String("address", address))
+	nm.controller.logger.Info("Registering node", zap.String("name", name), zap.String("address", address))
 
-	// Connect to node
-	agent, err := client.NewAgentClient(address)
+	// Check node health by executing hostname command
+	result, err := nm.controller.deployment.Exec(ctx, []string{address}, "hostname")
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to node: %w", err)
 	}
 
-	// Check node health
-	_, err = agent.HealthCheck(ctx, &pb.HealthCheckRequest{})
-	if err != nil {
-		agent.Close()
-		return nil, fmt.Errorf("health check failed: %w", err)
+	if !result.AllSuccess() {
+		return nil, fmt.Errorf("health check failed for node: %s", address)
+	}
+
+	// Get hostname
+	hostname := name // fallback to provided name
+	for _, r := range result.Hosts {
+		if r.Success && r.Output != "" {
+			hostname = strings.TrimSpace(r.Output)
+			break
+		}
 	}
 
 	// Create node info
 	nodeInfo := &NodeInfo{
+		Name:     name,
 		Address:  address,
-		Hostname: address, // In production, get via ExecCommand("hostname")
+		Hostname: hostname,
 		State:    NodeStateOnline,
 		LastSeen: time.Now(),
-		Version:  "1.0.0", // In production, get from build info or agent version endpoint
+		Version:  "1.0.0",
 		Capacity: make(map[string]interface{}),
 	}
 
-	nm.agents[address] = agent
+	// Save to in-memory cache
 	nm.nodes[address] = nodeInfo
 
+	// Update controller's hosts list if not already present
+	nm.controller.hostsLock.Lock()
+	found := false
+	for _, h := range nm.controller.hosts {
+		if h == address {
+			found = true
+			break
+		}
+	}
+	if !found {
+		nm.controller.hosts = append(nm.controller.hosts, address)
+	}
+	nm.controller.hostsLock.Unlock()
+
+	// Save to database
+	if nm.controller.db != nil {
+		dbNode := &database.Node{
+			Name:     nodeInfo.Name,
+			Address:  nodeInfo.Address,
+			Hostname: nodeInfo.Hostname,
+			State:    string(nodeInfo.State),
+			LastSeen: nodeInfo.LastSeen,
+			Version:  nodeInfo.Version,
+		}
+		if err := nm.controller.db.SaveNode(ctx, dbNode); err != nil {
+			nm.controller.logger.Error("Failed to save node to database", zap.Error(err))
+		}
+	}
+
 	nm.controller.logger.Info("Node registered successfully",
-		zap.String("address", address))
+		zap.String("name", name),
+		zap.String("address", address),
+		zap.String("hostname", hostname))
 
 	return nodeInfo, nil
 }
@@ -112,15 +130,16 @@ func (nm *NodeManager) UnregisterNode(ctx context.Context, address string) error
 
 	nm.controller.logger.Info("Unregistering node", zap.String("address", address))
 
-	// Close agent connection
-	if agent := nm.agents[address]; agent != nil {
-		agent.Close()
-		delete(nm.agents, address)
-	}
-
 	// Mark node as offline
 	if node := nm.nodes[address]; node != nil {
 		node.State = NodeStateOffline
+	}
+
+	// Delete from database
+	if nm.controller.db != nil {
+		if err := nm.controller.db.DeleteNode(ctx, address); err != nil {
+			nm.controller.logger.Error("Failed to delete node from database", zap.Error(err))
+		}
 	}
 
 	return nil
@@ -155,36 +174,60 @@ func (nm *NodeManager) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
 // GetNodeStatus gets detailed node status
 func (nm *NodeManager) GetNodeStatus(ctx context.Context, address string) (map[string]interface{}, error) {
 	nm.mu.RLock()
-	agent := nm.agents[address]
 	node := nm.nodes[address]
 	nm.mu.RUnlock()
 
-	if agent == nil {
+	if node == nil {
 		return nil, fmt.Errorf("node not found: %s", address)
 	}
 
 	// Get DRBD status
-	statusResp, err := agent.Status(ctx, &pb.StatusRequest{})
+	drbdResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "sudo drbdadm status")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get status: %w", err)
+		return nil, fmt.Errorf("failed to get DRBD status: %w", err)
 	}
 
 	// Get VG info
-	vgsResp, err := agent.VGS(ctx, &pb.VGSRequest{})
+	vgResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "sudo vgs --noheadings -o vg_name")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VG info: %w", err)
 	}
 
+	resourceCount := 0
+	if drbdResult.AllSuccess() {
+		// Count resources by counting lines
+		for _, r := range drbdResult.Hosts {
+			if r.Success {
+				lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+				resourceCount = len(lines)
+			}
+		}
+	}
+
+	poolCount := 0
+	if vgResult.AllSuccess() {
+		for _, r := range vgResult.Hosts {
+			if r.Success {
+				lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+				for _, line := range lines {
+					if strings.TrimSpace(line) != "" {
+						poolCount++
+					}
+				}
+			}
+		}
+	}
+
 	status := map[string]interface{}{
-		"address":    address,
-		"state":      node.State,
-		"last_seen":  node.LastSeen,
-		"version":    node.Version,
+		"address":   address,
+		"state":     node.State,
+		"last_seen": node.LastSeen,
+		"version":   node.Version,
 		"drbd": map[string]interface{}{
-			"resources": len(statusResp.Resources),
+			"resources": resourceCount,
 		},
 		"storage": map[string]interface{}{
-			"pools": len(vgsResp.Vgs),
+			"pools": poolCount,
 		},
 	}
 
@@ -194,55 +237,38 @@ func (nm *NodeManager) GetNodeStatus(ctx context.Context, address string) (map[s
 // CheckNodeHealth checks health of a specific node
 func (nm *NodeManager) CheckNodeHealth(ctx context.Context, address string) error {
 	nm.mu.RLock()
-	agent := nm.agents[address]
+	node := nm.nodes[address]
 	nm.mu.RUnlock()
 
-	if agent == nil {
+	if node == nil {
 		return fmt.Errorf("node not found: %s", address)
 	}
 
-	_, err := agent.HealthCheck(ctx, &pb.HealthCheckRequest{})
+	result, err := nm.controller.deployment.Exec(ctx, []string{address}, "echo ok")
 	if err != nil {
 		nm.mu.Lock()
-		if node := nm.nodes[address]; node != nil {
-			node.State = NodeStateOffline
+		if n := nm.nodes[address]; n != nil {
+			n.State = NodeStateOffline
 		}
 		nm.mu.Unlock()
 		return fmt.Errorf("health check failed: %w", err)
 	}
 
+	if !result.AllSuccess() {
+		nm.mu.Lock()
+		if n := nm.nodes[address]; n != nil {
+			n.State = NodeStateOffline
+		}
+		nm.mu.Unlock()
+		return fmt.Errorf("health check failed")
+	}
+
 	nm.mu.Lock()
-	if node := nm.nodes[address]; node != nil {
-		node.State = NodeStateOnline
-		node.LastSeen = time.Now()
+	if n := nm.nodes[address]; n != nil {
+		n.State = NodeStateOnline
+		n.LastSeen = time.Now()
 	}
 	nm.mu.Unlock()
 
 	return nil
-}
-
-// GetAgent returns the agent client for a node
-func (nm *NodeManager) GetAgent(address string) (*client.AgentClient, error) {
-	nm.mu.RLock()
-	defer nm.mu.RUnlock()
-
-	agent := nm.agents[address]
-	if agent == nil {
-		return nil, fmt.Errorf("node not found: %s", address)
-	}
-
-	return agent, nil
-}
-
-// GetAllAgents returns all agent clients
-func (nm *NodeManager) GetAllAgents() map[string]*client.AgentClient {
-	nm.mu.RLock()
-	defer nm.mu.RUnlock()
-
-	agents := make(map[string]*client.AgentClient, len(nm.agents))
-	for k, v := range nm.agents {
-		agents[k] = v
-	}
-
-	return agents
 }
