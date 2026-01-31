@@ -21,6 +21,7 @@ func haCommand() *cobra.Command {
 	cmd.AddCommand(haCreate())
 	cmd.AddCommand(haDelete())
 	cmd.AddCommand(haList())
+	cmd.AddCommand(haGet())
 	cmd.AddCommand(haStatus())
 	cmd.AddCommand(haEvict())
 
@@ -94,13 +95,23 @@ func haDelete() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
 
-			// For now, we need to remove the config file directly
-			// In the future, this could be a proper RPC call
-			configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
-			fmt.Printf("To delete HA config, remove the following file on all nodes:\n")
-			fmt.Printf("  %s\n", configPath)
-			fmt.Printf("Then reload drbd-reactor:\n")
-			fmt.Printf("  systemctl reload drbd-reactor\n")
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.DeleteHa(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to delete HA config: %w", err)
+			}
+
+			fmt.Printf("HA configuration deleted successfully\n")
+			fmt.Printf("  Resource: %s\n", resource)
+			fmt.Printf("\nConfiguration removed from all nodes and drbd-reactor reloaded\n")
 
 			return nil
 		},
@@ -116,6 +127,12 @@ func haEvict() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
+
+			// Show current active node before eviction
+			activeNode := getActiveNode(resource)
+			if activeNode != "" {
+				fmt.Printf("Current active node: %s\n", activeNode)
+			}
 
 			// Use longer timeout for evict operation
 			// drbd-reactorctl evict waits for failover to complete (up to 60s)
@@ -133,9 +150,16 @@ func haEvict() *cobra.Command {
 				return fmt.Errorf("failed to evict HA resource: %w", err)
 			}
 
+			// Get new active node after failover
+			newActiveNode := getActiveNode(resource)
+
 			fmt.Printf("HA resource evicted successfully\n")
 			fmt.Printf("  Resource: %s\n", resource)
-			fmt.Printf("  The resource should fail over to another node\n")
+			if newActiveNode != "" && newActiveNode != activeNode {
+				fmt.Printf("  New active node: %s\n", newActiveNode)
+			} else if newActiveNode != "" {
+				fmt.Printf("  Active node: %s\n", newActiveNode)
+			}
 
 			return nil
 		},
@@ -149,35 +173,96 @@ func haList() *cobra.Command {
 		Use:   "list",
 		Short: "List all HA configurations",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			configDir := "/etc/drbd-reactor.d"
-			configFiles, err := listHAConfigs(configDir)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			configs, err := sdsClient.ListHa(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list HA configs: %w", err)
 			}
 
-			if len(configFiles) == 0 {
+			if len(configs) == 0 {
 				fmt.Println("No HA configurations found")
 				return nil
 			}
 
-			fmt.Printf("HA Configurations (%d):\n", len(configFiles))
-			for _, cfg := range configFiles {
+			fmt.Printf("HA Configurations (%d):\n", len(configs))
+			for _, cfg := range configs {
+				activeNode := getActiveNode(cfg.Resource)
+				nodes := getNodesFromDRBD(cfg.Resource)
+
 				fmt.Printf("  - %s\n", cfg.Resource)
-				if cfg.ActiveNode != "" {
-					fmt.Printf("      Active: %s\n", cfg.ActiveNode)
+				if activeNode != "" {
+					fmt.Printf("      Active: %s\n", activeNode)
 				}
-				if len(cfg.Nodes) > 0 {
-					fmt.Printf("      Nodes: %v\n", cfg.Nodes)
+				if len(nodes) > 0 {
+					fmt.Printf("      Nodes: %v\n", nodes)
 				}
 				if cfg.MountPoint != "" {
-					fmt.Printf("      Mount: %s (%s)\n", cfg.MountPoint, cfg.FSType)
+					fmt.Printf("      Mount: %s (%s)\n", cfg.MountPoint, cfg.FsType)
 				}
 				if len(cfg.Services) > 0 {
 					fmt.Printf("      Services: %v\n", cfg.Services)
 				}
-				if cfg.VIP != "" {
-					fmt.Printf("      VIP: %s\n", cfg.VIP)
+				if cfg.Vip != "" {
+					fmt.Printf("      VIP: %s\n", cfg.Vip)
 				}
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func haGet() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get <resource>",
+		Short: "Get HA configuration for a resource",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			config, err := sdsClient.GetHa(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to get HA config: %w", err)
+			}
+
+			// Get active node and nodes from DRBD status
+			activeNode := getActiveNode(resource)
+			nodes := getNodesFromDRBD(resource)
+
+			fmt.Printf("HA Configuration: %s\n", resource)
+			if activeNode != "" {
+				fmt.Printf("  Active:   %s\n", activeNode)
+			}
+			if config.MountPoint != "" {
+				fmt.Printf("  Mount:    %s (%s)\n", config.MountPoint, config.FsType)
+			}
+			if len(config.Services) > 0 {
+				fmt.Printf("  Services: %v\n", config.Services)
+			}
+			if config.Vip != "" {
+				fmt.Printf("  VIP:      %s\n", config.Vip)
+			}
+			if len(nodes) > 0 {
+				fmt.Printf("  Nodes:    %v\n", nodes)
 			}
 
 			return nil
@@ -229,128 +314,6 @@ func haStatus() *cobra.Command {
 	}
 
 	return cmd
-}
-
-// HAConfig represents a parsed HA configuration
-type HAConfig struct {
-	Resource   string
-	MountPoint string
-	FSType     string
-	Services   []string
-	VIP        string
-	Nodes      []string
-	ActiveNode string
-}
-
-// listHAConfigs lists all HA configurations in the directory
-func listHAConfigs(configDir string) ([]*HAConfig, error) {
-	var configs []*HAConfig
-
-	files, err := os.ReadDir(configDir)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, file := range files {
-		if !strings.HasPrefix(file.Name(), "sds-ha-") || !strings.HasSuffix(file.Name(), ".toml") {
-			continue
-		}
-
-		configPath := fmt.Sprintf("%s/%s", configDir, file.Name())
-		cfg, err := readHAConfig(configPath)
-		if err != nil {
-			continue
-		}
-		// Get active node and nodes from DRBD status
-		cfg.ActiveNode = getActiveNode(cfg.Resource)
-		cfg.Nodes = getNodesFromDRBD(cfg.Resource)
-		configs = append(configs, cfg)
-	}
-
-	return configs, nil
-}
-
-// readHAConfig reads and parses an HA configuration file
-func readHAConfig(configPath string) (*HAConfig, error) {
-	content, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg := &HAConfig{
-		FSType: "ext4", // default
-	}
-
-	lines := strings.Split(string(content), "\n")
-
-	// Extract resource name from filename
-	parts := strings.Split(configPath, "/")
-	lastPart := parts[len(parts)-1]
-	cfg.Resource = strings.TrimPrefix(lastPart, "sds-ha-")
-	cfg.Resource = strings.TrimSuffix(cfg.Resource, ".toml")
-
-	// Parse TOML content
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		// Parse mount unit (e.g., "var-lib-sds.mount")
-		if strings.Contains(line, ".mount") {
-			mountUnit := strings.TrimSpace(line)
-			// Remove leading quote
-			mountUnit = strings.TrimPrefix(mountUnit, "\"")
-			// Remove trailing comma and quote
-			mountUnit = strings.TrimSuffix(mountUnit, "\",")
-			mountUnit = strings.TrimSuffix(mountUnit, ",")
-			mountUnit = strings.TrimSuffix(mountUnit, "\"")
-			// Remove .mount suffix
-			mountUnit = strings.TrimSuffix(mountUnit, ".mount")
-			mountUnit = strings.TrimSpace(mountUnit)
-			// Convert mount unit back to path
-			if mountUnit != "" {
-				cfg.MountPoint = "/" + strings.ReplaceAll(mountUnit, "-", "/")
-			}
-		}
-
-		// Parse service
-		if strings.Contains(line, ".service") {
-			svc := strings.TrimSpace(line)
-			// Remove leading quote
-			svc = strings.TrimPrefix(svc, "\"")
-			// Remove trailing comma and quote
-			svc = strings.TrimSuffix(svc, "\",")
-			svc = strings.TrimSuffix(svc, ",")
-			svc = strings.TrimSuffix(svc, "\"")
-			svc = strings.TrimSpace(svc)
-			if svc != "" {
-				cfg.Services = append(cfg.Services, svc)
-			}
-		}
-
-		// Parse VIP from OCF IPaddr2 line
-		if strings.Contains(line, "ocf:heartbeat:IPaddr2") {
-			// Format: "ocf:heartbeat:IPaddr2 vip_ha_res ip=192.168.123.70 cidr_netmask=24"
-			cleanLine := strings.TrimPrefix(strings.TrimSpace(line), "\"")
-			cleanLine = strings.TrimSuffix(cleanLine, "\",")
-			cleanLine = strings.TrimSuffix(cleanLine, ",")
-			cleanLine = strings.TrimSuffix(cleanLine, "\"")
-			// Extract ip=X value
-			parts := strings.Fields(cleanLine)
-			for _, part := range parts {
-				if strings.HasPrefix(part, "ip=") {
-					cfg.VIP = strings.TrimPrefix(part, "ip=")
-					// Find cidr_netmask and append
-				}
-				if strings.HasPrefix(part, "cidr_netmask=") {
-					cidr := strings.TrimPrefix(part, "cidr_netmask=")
-					if cfg.VIP != "" {
-						cfg.VIP = cfg.VIP + "/" + cidr
-					}
-				}
-			}
-		}
-	}
-
-	return cfg, nil
 }
 
 // getActiveNode gets the active (primary) node for a DRBD resource
@@ -466,4 +429,119 @@ func getNodesFromDRBD(resource string) []string {
 	}
 
 	return nodes
+}
+
+// HAConfig represents a parsed HA configuration
+type HAConfig struct {
+	Resource   string
+	MountPoint string
+	FSType     string
+	Services   []string
+	VIP        string
+	Nodes      []string
+	ActiveNode string
+}
+
+// listHAConfigs lists all HA configurations in the directory
+func listHAConfigs(configDir string) ([]*HAConfig, error) {
+	var configs []*HAConfig
+
+	files, err := os.ReadDir(configDir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range files {
+		if !strings.HasPrefix(file.Name(), "sds-ha-") || !strings.HasSuffix(file.Name(), ".toml") {
+			continue
+		}
+
+		configPath := fmt.Sprintf("%s/%s", configDir, file.Name())
+		cfg, err := readHAConfig(configPath)
+		if err != nil {
+			continue
+		}
+		configs = append(configs, cfg)
+	}
+
+	return configs, nil
+}
+
+// readHAConfig reads and parses an HA configuration file
+func readHAConfig(configPath string) (*HAConfig, error) {
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &HAConfig{
+		FSType: "ext4", // default
+	}
+
+	lines := strings.Split(string(content), "\n")
+
+	// Extract resource name from filename
+	parts := strings.Split(configPath, "/")
+	lastPart := parts[len(parts)-1]
+	cfg.Resource = strings.TrimPrefix(lastPart, "sds-ha-")
+	cfg.Resource = strings.TrimSuffix(cfg.Resource, ".toml")
+
+	// Parse TOML content
+	inResourceBlock := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Check for resource block
+		if strings.HasPrefix(line, "[promoter.resources.") {
+			inResourceBlock = true
+			continue
+		}
+		if inResourceBlock && strings.HasPrefix(line, "]") {
+			inResourceBlock = false
+			continue
+		}
+
+		// Parse start array
+		if strings.HasPrefix(line, "start = [") {
+			// Multi-line start array
+			continue
+		}
+
+		// Parse mount unit (e.g., "var-lib-sds.mount")
+		if strings.Contains(line, ".mount") {
+			mountUnit := strings.TrimSpace(line)
+			mountUnit = strings.TrimPrefix(mountUnit, `"`)
+			mountUnit = strings.TrimSuffix(mountUnit, `"`)
+			mountUnit = strings.TrimSuffix(mountUnit, ",")
+			cfg.MountPoint = mountUnit
+			// Convert mount unit back to path
+			cfg.MountPoint = strings.ReplaceAll(mountUnit, "-", "/")
+		}
+
+		// Parse service
+		if strings.Contains(line, ".service") {
+			svc := strings.TrimSpace(line)
+			svc = strings.TrimPrefix(svc, `"`)
+			svc = strings.TrimSuffix(svc, `",`)
+			svc = strings.TrimSuffix(svc, `"`)
+			cfg.Services = append(cfg.Services, svc)
+		}
+
+		// Parse preferred-nodes
+		if strings.HasPrefix(line, "preferred-nodes = [") {
+			nodesStr := strings.TrimPrefix(line, "preferred-nodes = [")
+			nodesStr = strings.TrimSuffix(nodesStr, "]")
+			nodes := strings.Split(nodesStr, ",")
+			for _, node := range nodes {
+				node = strings.TrimSpace(node)
+				node = strings.TrimPrefix(node, `"`)
+				node = strings.TrimSuffix(node, `"`)
+				if node != "" {
+					cfg.Nodes = append(cfg.Nodes, node)
+				}
+			}
+		}
+	}
+
+	return cfg, nil
 }
