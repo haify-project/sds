@@ -862,10 +862,10 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 		}
 	}
 
-	rm.controller.logger.Info("Exited local check block, checking remote hosts")
+	rm.controller.logger.Info("Checking remote hosts",
+		zap.Strings("hosts", hosts),
+		zap.String("local_hostname", localHostname))
 
-	// Fallback: use direct SSH instead of dispatch to check remote hosts
-	// This avoids issues with dispatch library's output capture
 	for _, host := range hosts {
 		// Skip if this is the local host
 		if host == localHostname {
@@ -878,17 +878,23 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 			zap.String("host", host),
 			zap.String("resource", resource))
 
-		// Use direct SSH command
-		cmd := exec.Command("ssh", host, "drbdsetup", "status", resource)
-		output, err := cmd.Output()
+		// Get DRBD role - check if this host is Primary
+		// Use direct SSH instead of dispatch due to output capture bug
+		checkCmd := exec.Command("ssh", host, "drbdsetup", "status", resource)
+		output, err := checkCmd.Output()
 		if err != nil {
-			rm.controller.logger.Debug("SSH check failed",
+			rm.controller.logger.Debug("Failed to check remote DRBD status",
 				zap.String("host", host),
 				zap.Error(err))
 			continue
 		}
 
-		if strings.Contains(string(output), "role:Primary") {
+		outputStr := string(output)
+		rm.controller.logger.Debug("SSH DRBD status",
+			zap.String("host", host),
+			zap.String("output", outputStr))
+
+		if strings.Contains(outputStr, "role:Primary") {
 			rm.controller.logger.Info("Found active node via SSH",
 				zap.String("host", host))
 			return host, nil
