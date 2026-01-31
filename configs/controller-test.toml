@@ -5,8 +5,8 @@ listen_address = "0.0.0.0"
 port = 3374
 
 [dispatch]
-# Path to dispatch config file
-config_path = "/root/.dispatch/config.toml"
+# Path to dispatch config file (optional, empty = use ~/.ssh/config)
+config_path = ""
 # Parallel execution limit for operations
 parallel = 10
 # Storage nodes

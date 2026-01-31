@@ -115,6 +115,7 @@ func (c *Config) Validate() error {
 func setDefaults() {
 	viper.SetDefault("server.listen_address", "0.0.0.0")
 	viper.SetDefault("server.port", 3374)
+	viper.SetDefault("dispatch.config_path", "") // Empty means use ~/.ssh/config only
 	viper.SetDefault("dispatch.parallel", 10)
 	viper.SetDefault("database.path", "/var/lib/sds/sds.db")
 	viper.SetDefault("tls.enabled", false)
