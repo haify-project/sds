@@ -61,7 +61,7 @@ sds/
 │   ├── pool/             # Pool operations
 │   ├── snapshot/         # Snapshot operations
 │   └── gateway/          # Gateway operations
-├── proto/api/v1/         # gRPC proto definitions
+├── api/proto/v1/         # gRPC proto definitions
 ├── configs/              # Configuration files
 ├── scripts/              # Deployment and utility scripts
 └── go.mod

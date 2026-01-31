@@ -1,4 +1,4 @@
-.PHONY: build test clean install-controller install-cli run-controller run-cli
+.PHONY: build test clean install-controller install-cli run-controller run-cli proto
 
 # Build binaries
 build:
@@ -44,7 +44,7 @@ run-cli:
 # Generate proto files
 proto:
 	@echo "Generating proto files..."
-	@# Will be implemented when proto files are added
+	./scripts/generate-proto.sh
 
 # Format code
 fmt:

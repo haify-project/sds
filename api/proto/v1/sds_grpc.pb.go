@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v3.21.12
-// source: sds.proto
+// source: api/proto/v1/sds.proto
 
 package v1
 
@@ -2189,5 +2189,5 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "sds.proto",
+	Metadata: "api/proto/v1/sds.proto",
 }
