@@ -828,13 +828,16 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 		zap.String("resource", resource),
 		zap.Int("hosts_count", len(hosts)))
 
+	var localHostname string
+
 	// First, check local node using os/exec (not dispatch)
 	// Get local hostname
 	hostnameBytes, err := exec.Command("hostname").Output()
 	if err != nil {
 		rm.controller.logger.Warn("Failed to get local hostname", zap.Error(err))
+		localHostname = ""
 	} else {
-		localHostname := strings.TrimSpace(string(hostnameBytes))
+		localHostname = strings.TrimSpace(string(hostnameBytes))
 		rm.controller.logger.Info("Local hostname", zap.String("hostname", localHostname))
 
 		// Check if local node is Primary
@@ -855,37 +858,40 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 					zap.String("hostname", localHostname))
 				return localHostname, nil
 			}
+			rm.controller.logger.Info("Local node is not Primary, checking remote hosts")
 		}
 	}
 
-	// If not found locally, check remote hosts via dispatch
+	rm.controller.logger.Info("Exited local check block, checking remote hosts")
+
+	// Fallback: use direct SSH instead of dispatch to check remote hosts
+	// This avoids issues with dispatch library's output capture
 	for _, host := range hosts {
 		// Skip if this is the local host
-		hostnameBytes, _ := exec.Command("hostname").Output()
-		localHostname := strings.TrimSpace(string(hostnameBytes))
 		if host == localHostname {
+			rm.controller.logger.Info("Skipping local host",
+				zap.String("host", host))
 			continue
 		}
 
-		// Get DRBD role - check if this host is Primary
-		cmd := fmt.Sprintf("sudo drbdsetup status %s 2>/dev/null | head -1", resource)
-		result, err := rm.deployment.Exec(ctx, []string{host}, cmd)
+		rm.controller.logger.Info("Checking remote host via direct SSH",
+			zap.String("host", host),
+			zap.String("resource", resource))
+
+		// Use direct SSH command
+		cmd := exec.Command("ssh", host, "drbdsetup", "status", resource)
+		output, err := cmd.Output()
 		if err != nil {
-			rm.controller.logger.Debug("Failed to check DRBD status",
+			rm.controller.logger.Debug("SSH check failed",
 				zap.String("host", host),
 				zap.Error(err))
 			continue
 		}
 
-		// Check if output contains "role:Primary"
-		if result != nil && len(result.Hosts) > 0 {
-			for hostName, hr := range result.Hosts {
-				if hr.Success && strings.Contains(hr.Output, "role:Primary") {
-					rm.controller.logger.Info("Found active node",
-						zap.String("host", hostName))
-					return hostName, nil
-				}
-			}
+		if strings.Contains(string(output), "role:Primary") {
+			rm.controller.logger.Info("Found active node via SSH",
+				zap.String("host", host))
+			return host, nil
 		}
 	}
 
