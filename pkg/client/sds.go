@@ -465,6 +465,58 @@ func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
 	return nil
 }
 
+// DeleteHa deletes an HA configuration
+func (c *SDSClient) DeleteHa(ctx context.Context, resource string) error {
+	req := &sdspb.DeleteHaRequest{
+		Resource: resource,
+	}
+
+	resp, err := c.client.DeleteHa(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf(resp.Message)
+	}
+
+	return nil
+}
+
+// GetHa gets an HA configuration
+func (c *SDSClient) GetHa(ctx context.Context, resource string) (*sdspb.HaConfigInfo, error) {
+	req := &sdspb.GetHaRequest{
+		Resource: resource,
+	}
+
+	resp, err := c.client.GetHa(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf(resp.Message)
+	}
+
+	return resp.Config, nil
+}
+
+// ListHa lists all HA configurations
+func (c *SDSClient) ListHa(ctx context.Context) ([]*sdspb.HaConfigInfo, error) {
+	req := &sdspb.ListHaRequest{}
+
+	resp, err := c.client.ListHa(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf(resp.Message)
+	}
+
+	return resp.Configs, nil
+}
+
 // ==================== SNAPSHOT OPERATIONS ====================
 
 // CreateSnapshot creates a snapshot

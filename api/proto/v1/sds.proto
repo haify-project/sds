@@ -35,6 +35,9 @@ service SDSController {
   rpc UnmountResource(UnmountResourceRequest) returns (UnmountResourceResponse);
   rpc MakeHa(MakeHaRequest) returns (MakeHaResponse);
   rpc EvictHa(EvictHaRequest) returns (EvictHaResponse);
+  rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse);
+  rpc GetHa(GetHaRequest) returns (GetHaResponse);
+  rpc ListHa(ListHaRequest) returns (ListHaResponse);
 
   // Snapshot operations
   rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
@@ -513,3 +516,39 @@ message GatewayInfo {
   string path = 8;
   map<string, string> options = 9;
 }
+
+message DeleteHaRequest {
+  string resource = 1;
+}
+
+message DeleteHaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetHaRequest {
+  string resource = 1;
+}
+
+message GetHaResponse {
+  bool success = 1;
+  string message = 2;
+  HaConfigInfo config = 3;
+}
+
+message ListHaRequest {}
+
+message ListHaResponse {
+  bool success = 1;
+  string message = 2;
+  repeated HaConfigInfo configs = 3;
+}
+
+message HaConfigInfo {
+  string resource = 1;
+  string vip = 2;
+  string mount_point = 3;
+  string fs_type = 4;
+  repeated string services = 5;
+}
+

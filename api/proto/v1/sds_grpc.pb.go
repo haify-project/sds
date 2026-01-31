@@ -43,6 +43,9 @@ const (
 	SDSController_UnmountResource_FullMethodName    = "/v1.SDSController/UnmountResource"
 	SDSController_MakeHa_FullMethodName             = "/v1.SDSController/MakeHa"
 	SDSController_EvictHa_FullMethodName            = "/v1.SDSController/EvictHa"
+	SDSController_DeleteHa_FullMethodName           = "/v1.SDSController/DeleteHa"
+	SDSController_GetHa_FullMethodName              = "/v1.SDSController/GetHa"
+	SDSController_ListHa_FullMethodName             = "/v1.SDSController/ListHa"
 	SDSController_CreateSnapshot_FullMethodName     = "/v1.SDSController/CreateSnapshot"
 	SDSController_DeleteSnapshot_FullMethodName     = "/v1.SDSController/DeleteSnapshot"
 	SDSController_RestoreSnapshot_FullMethodName    = "/v1.SDSController/RestoreSnapshot"
@@ -90,6 +93,9 @@ type SDSControllerClient interface {
 	UnmountResource(ctx context.Context, in *UnmountResourceRequest, opts ...grpc.CallOption) (*UnmountResourceResponse, error)
 	MakeHa(ctx context.Context, in *MakeHaRequest, opts ...grpc.CallOption) (*MakeHaResponse, error)
 	EvictHa(ctx context.Context, in *EvictHaRequest, opts ...grpc.CallOption) (*EvictHaResponse, error)
+	DeleteHa(ctx context.Context, in *DeleteHaRequest, opts ...grpc.CallOption) (*DeleteHaResponse, error)
+	GetHa(ctx context.Context, in *GetHaRequest, opts ...grpc.CallOption) (*GetHaResponse, error)
+	ListHa(ctx context.Context, in *ListHaRequest, opts ...grpc.CallOption) (*ListHaResponse, error)
 	// Snapshot operations
 	CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (*CreateSnapshotResponse, error)
 	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
@@ -354,6 +360,36 @@ func (c *sDSControllerClient) EvictHa(ctx context.Context, in *EvictHaRequest, o
 	return out, nil
 }
 
+func (c *sDSControllerClient) DeleteHa(ctx context.Context, in *DeleteHaRequest, opts ...grpc.CallOption) (*DeleteHaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteHaResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetHa(ctx context.Context, in *GetHaRequest, opts ...grpc.CallOption) (*GetHaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHaResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListHa(ctx context.Context, in *ListHaRequest, opts ...grpc.CallOption) (*ListHaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHaResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (*CreateSnapshotResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateSnapshotResponse)
@@ -507,6 +543,9 @@ type SDSControllerServer interface {
 	UnmountResource(context.Context, *UnmountResourceRequest) (*UnmountResourceResponse, error)
 	MakeHa(context.Context, *MakeHaRequest) (*MakeHaResponse, error)
 	EvictHa(context.Context, *EvictHaRequest) (*EvictHaResponse, error)
+	DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error)
+	GetHa(context.Context, *GetHaRequest) (*GetHaResponse, error)
+	ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error)
 	// Snapshot operations
 	CreateSnapshot(context.Context, *CreateSnapshotRequest) (*CreateSnapshotResponse, error)
 	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
@@ -602,6 +641,15 @@ func (UnimplementedSDSControllerServer) MakeHa(context.Context, *MakeHaRequest) 
 }
 func (UnimplementedSDSControllerServer) EvictHa(context.Context, *EvictHaRequest) (*EvictHaResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EvictHa not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteHa not implemented")
+}
+func (UnimplementedSDSControllerServer) GetHa(context.Context, *GetHaRequest) (*GetHaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHa not implemented")
+}
+func (UnimplementedSDSControllerServer) ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHa not implemented")
 }
 func (UnimplementedSDSControllerServer) CreateSnapshot(context.Context, *CreateSnapshotRequest) (*CreateSnapshotResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSnapshot not implemented")
@@ -1092,6 +1140,60 @@ func _SDSController_EvictHa_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_DeleteHa_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteHaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteHa(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteHa_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteHa(ctx, req.(*DeleteHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetHa_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetHa(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetHa_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetHa(ctx, req.(*GetHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListHa_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListHa(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListHa_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListHa(ctx, req.(*ListHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_CreateSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateSnapshotRequest)
 	if err := dec(in); err != nil {
@@ -1410,6 +1512,18 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EvictHa",
 			Handler:    _SDSController_EvictHa_Handler,
+		},
+		{
+			MethodName: "DeleteHa",
+			Handler:    _SDSController_DeleteHa_Handler,
+		},
+		{
+			MethodName: "GetHa",
+			Handler:    _SDSController_GetHa_Handler,
+		},
+		{
+			MethodName: "ListHa",
+			Handler:    _SDSController_ListHa_Handler,
 		},
 		{
 			MethodName: "CreateSnapshot",

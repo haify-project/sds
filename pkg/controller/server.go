@@ -508,6 +508,69 @@ func (s *Server) EvictHa(ctx context.Context, req *sdspb.EvictHaRequest) (*sdspb
 	}, nil
 }
 
+func (s *Server) DeleteHa(ctx context.Context, req *sdspb.DeleteHaRequest) (*sdspb.DeleteHaResponse, error) {
+	err := s.resources.RemoveHa(ctx, req.Resource)
+	if err != nil {
+		return &sdspb.DeleteHaResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.DeleteHaResponse{
+		Success: true,
+		Message: "HA configuration deleted successfully",
+	}, nil
+}
+
+func (s *Server) GetHa(ctx context.Context, req *sdspb.GetHaRequest) (*sdspb.GetHaResponse, error) {
+	haCfg, err := s.resources.GetHaConfig(ctx, req.Resource)
+	if err != nil {
+		return &sdspb.GetHaResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &sdspb.GetHaResponse{
+		Success: true,
+		Message: "HA configuration found",
+		Config: &sdspb.HaConfigInfo{
+			Resource:   haCfg.Resource,
+			Vip:        haCfg.VIP,
+			MountPoint: haCfg.MountPoint,
+			FsType:     haCfg.FsType,
+			Services:   haCfg.Services,
+		},
+	}, nil
+}
+
+func (s *Server) ListHa(ctx context.Context, req *sdspb.ListHaRequest) (*sdspb.ListHaResponse, error) {
+	haConfigs, err := s.resources.ListHaConfigs(ctx)
+	if err != nil {
+		return &sdspb.ListHaResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
+	var pbConfigs []*sdspb.HaConfigInfo
+	for _, cfg := range haConfigs {
+		pbConfigs = append(pbConfigs, &sdspb.HaConfigInfo{
+			Resource:   cfg.Resource,
+			Vip:        cfg.VIP,
+			MountPoint: cfg.MountPoint,
+			FsType:     cfg.FsType,
+			Services:   cfg.Services,
+		})
+	}
+
+	return &sdspb.ListHaResponse{
+		Success: true,
+		Message: "HA configurations listed successfully",
+		Configs: pbConfigs,
+	}, nil
+}
+
 // ==================== SNAPSHOT OPERATIONS ====================
 
 func (s *Server) CreateSnapshot(ctx context.Context, req *sdspb.CreateSnapshotRequest) (*sdspb.CreateSnapshotResponse, error) {

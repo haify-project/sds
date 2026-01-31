@@ -145,6 +145,19 @@ func (nm *NodeManager) UnregisterNode(ctx context.Context, address string) error
 	return nil
 }
 
+// GetNodeAddressByName gets node address by node name
+func (nm *NodeManager) GetNodeAddressByName(name string) string {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+
+	for addr, node := range nm.nodes {
+		if node.Name == name {
+			return addr
+		}
+	}
+	return ""
+}
+
 // GetNode gets node information
 func (nm *NodeManager) GetNode(ctx context.Context, address string) (*NodeInfo, error) {
 	nm.mu.RLock()

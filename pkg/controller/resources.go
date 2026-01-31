@@ -68,18 +68,28 @@ func (rm *ResourceManager) SetDeployment(client *deployment.Client) {
 func (rm *ResourceManager) SetHosts(hosts []string) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
-	rm.hosts = hosts
-	// Build hostMap for IP/hostname resolution
+	
+	// Clean hosts list and build map
+	var cleanHosts []string
 	rm.hostMap = make(map[string]string)
+	
 	for _, host := range hosts {
 		// Try to resolve hostname to IP
 		parts := strings.Split(host, ":")
 		if len(parts) > 1 {
-			rm.hostMap[parts[0]] = parts[0]
+			// Format: "hostname:ip"
+			hostname := parts[0]
+			ip := parts[1]
+			
+			rm.hostMap[hostname] = ip
+			cleanHosts = append(cleanHosts, ip)
 		} else {
+			// Format: "hostname"
 			rm.hostMap[host] = host
+			cleanHosts = append(cleanHosts, host)
 		}
 	}
+	rm.hosts = cleanHosts
 }
 
 // GetHosts returns the list of hosts
@@ -131,8 +141,18 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	// 2. Generate DRBD config
 	drbdConfig := rm.generateDrbdConfig(name, port, nodes, protocol, pool, lvName)
 
+	// Convert node names to IP addresses for deployment
+	nodeIPs := make([]string, len(nodes))
+	for i, node := range nodes {
+		ip := rm.controller.nodes.GetNodeAddressByName(node)
+		if ip == "" {
+			ip = node // fallback to node name
+		}
+		nodeIPs[i] = ip
+	}
+
 	// 3. Distribute config to all nodes
-	configResult, err := rm.deployment.DistributeConfig(ctx, nodes, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
+	configResult, err := rm.deployment.DistributeConfig(ctx, nodeIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
 	if err != nil {
 		return fmt.Errorf("failed to distribute config: %w", err)
 	}
@@ -141,7 +161,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	}
 
 	// 4. Create metadata on all nodes
-	mdResult, err := rm.deployment.DRBDCreateMD(ctx, nodes, name)
+	mdResult, err := rm.deployment.DRBDCreateMD(ctx, nodeIPs, name)
 	if err != nil {
 		return fmt.Errorf("failed to create metadata: %w", err)
 	}
@@ -150,7 +170,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	}
 
 	// 5. Bring up resource on all nodes
-	upResult, err := rm.deployment.DRBDUp(ctx, nodes, name)
+	upResult, err := rm.deployment.DRBDUp(ctx, nodeIPs, name)
 	if err != nil {
 		return fmt.Errorf("failed to bring up resource: %w", err)
 	}
@@ -207,12 +227,17 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 	// Generate on sections for each node
 	var hostnames []string
 	for i, node := range nodes {
-		// Get IP address from controller's hostsMap
-		rm.controller.hostsLock.RLock()
-		ip := rm.controller.hostsMap[node]
-		rm.controller.hostsLock.RUnlock()
+		// Get IP address from NodeManager by node name
+		ip := rm.controller.nodes.GetNodeAddressByName(node)
 
-		// Fallback to node name if not in map
+		// Fallback: try direct lookup in hostMap
+		if ip == "" {
+			rm.mu.RLock()
+			ip = rm.hostMap[node]
+			rm.mu.RUnlock()
+		}
+
+		// Final fallback to node name if still not found
 		if ip == "" {
 			ip = node
 		}
@@ -648,6 +673,20 @@ func (rm *ResourceManager) Unmount(ctx context.Context, resource, mountPoint str
 	return fmt.Errorf("Unmount not yet implemented")
 }
 
+// generateSystemdMountUnit generates a systemd mount unit content
+func (rm *ResourceManager) generateSystemdMountUnit(resource, mountPoint, fsType string) string {
+	device := fmt.Sprintf("/dev/drbd/by-res/%s/0", resource)
+	return fmt.Sprintf(`[Unit]
+Description=Mount for %s
+[Mount]
+What=%s
+Where=%s
+Type=%s
+[Install]
+WantedBy=multi-user.target
+`, resource, device, mountPoint, fsType)
+}
+
 // MakeHa creates a drbd-reactor promoter config for HA failover
 func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string) (string, error) {
 	rm.controller.logger.Info("Making resource HA",
@@ -690,7 +729,8 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 	if len(services) > 0 {
 		for _, svc := range services {
 			// Check if service unit file exists on all nodes
-			checkCmd := fmt.Sprintf("systemctl list-unit-files | grep '^%s.service' || systemctl list-unit-files | grep '^%s$'", svc, svc)
+			// Use grep -w for exact word match
+			checkCmd := fmt.Sprintf("systemctl list-unit-files | grep -w '%s'", svc)
 			result, err := rm.deployment.Exec(ctx, nodes, checkCmd)
 			if err != nil {
 				return "", fmt.Errorf("failed to check service %s on nodes: %w", svc, err)
@@ -709,6 +749,66 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 
 			rm.controller.logger.Info("Service validated on all nodes",
 				zap.String("service", svc))
+		}
+
+		// Stop and disable services on all nodes before HA takeover
+		rm.controller.logger.Info("Stopping and disabling services on all nodes for HA takeover",
+			zap.Strings("services", services))
+
+		for _, svc := range services {
+			// Stop service
+			stopCmd := fmt.Sprintf("systemctl stop %s", svc)
+			if _, err := rm.deployment.Exec(ctx, nodes, stopCmd); err != nil {
+				rm.controller.logger.Warn("Failed to stop service", zap.String("service", svc), zap.Error(err))
+			}
+
+			// Disable service
+			disableCmd := fmt.Sprintf("systemctl disable %s", svc)
+			if _, err := rm.deployment.Exec(ctx, nodes, disableCmd); err != nil {
+				rm.controller.logger.Warn("Failed to disable service", zap.String("service", svc), zap.Error(err))
+			}
+		}
+
+		// Migrate existing data to /tmp before HA takeover
+		if mountPoint != "" {
+			rm.controller.logger.Info("Backing up existing data before HA takeover",
+				zap.String("mount_point", mountPoint))
+
+			backupDir := fmt.Sprintf("/tmp/ha_backup_%s", strings.ReplaceAll(mountPoint, "/", "_"))
+
+			// Use rsync or cp -a to backup all files including hidden ones and subdirectories
+			backupCmd := fmt.Sprintf("if [ -d \"%s\" ]; then mkdir -p %s && rsync -a %s/ %s/ 2>/dev/null || cp -a %s/. %s/. 2>/dev/null; fi",
+				mountPoint, backupDir, mountPoint, backupDir, mountPoint, backupDir)
+
+			if _, err := rm.deployment.Exec(ctx, nodes, backupCmd); err != nil {
+				rm.controller.logger.Warn("Failed to backup data (continuing anyway)",
+					zap.String("mount_point", mountPoint),
+					zap.Error(err))
+			} else {
+				rm.controller.logger.Info("Data backup completed",
+					zap.String("backup_dir", backupDir))
+			}
+		}
+	}
+
+	// Handle mount unit creation
+	if mountPoint != "" {
+		mountUnitName := strings.TrimPrefix(mountPoint, "/")
+		mountUnitName = strings.ReplaceAll(mountUnitName, "/", "-")
+		mountUnitName = fmt.Sprintf("%s.mount", mountUnitName)
+
+		mountContent := rm.generateSystemdMountUnit(resource, mountPoint, fsType)
+		mountPath := fmt.Sprintf("/etc/systemd/system/%s", mountUnitName)
+
+		rm.controller.logger.Info("Distributing mount unit", zap.String("path", mountPath))
+
+		if _, err := rm.deployment.DistributeConfig(ctx, hosts, mountContent, mountPath); err != nil {
+			return "", fmt.Errorf("failed to distribute mount unit: %w", err)
+		}
+
+		// Reload systemd to pick up new unit
+		if _, err := rm.deployment.Exec(ctx, hosts, "systemctl daemon-reload"); err != nil {
+			rm.controller.logger.Warn("Failed to reload systemd", zap.Error(err))
 		}
 	}
 
@@ -731,7 +831,81 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		rm.controller.logger.Warn("Failed to reload drbd-reactor", zap.Error(err))
 	}
 
+	// Restore backed up data after drbd-reactor takes over
+	if mountPoint != "" {
+		rm.controller.logger.Info("Restoring backed up data after HA takeover",
+			zap.String("mount_point", mountPoint))
+
+		backupDir := fmt.Sprintf("/tmp/ha_backup_%s", strings.ReplaceAll(mountPoint, "/", "_"))
+
+		// Find the active (primary) node for restoration
+		activeNode, err := rm.findActiveNode(ctx, resource, hosts)
+		if err != nil {
+			rm.controller.logger.Warn("Failed to find active node for data restore",
+				zap.Error(err))
+		} else {
+			rm.controller.logger.Info("Restoring data on active node",
+				zap.String("active_node", activeNode),
+				zap.String("backup_dir", backupDir))
+
+			// Restore data preserving original permissions with rsync/cp -a
+			// Backup is kept at /tmp/ha_backup_* for manual recovery if needed
+			restoreCmd := fmt.Sprintf(
+				"if [ -d \"%s\" ] && [ \"$(ls -A %s 2>/dev/null)\" ]; then "+
+					"mkdir -p %s && "+
+					"rsync -a %s/ %s/ 2>/dev/null || cp -a %s/. %s/. && "+
+					"echo 'Data restored successfully. Backup retained at %s for manual recovery if needed.'; "+
+					"else echo 'No backup found or backup is empty'; fi",
+				backupDir, backupDir, mountPoint, backupDir, mountPoint, mountPoint, backupDir)
+
+			result, err := rm.deployment.Exec(ctx, []string{activeNode}, restoreCmd)
+			if err != nil {
+				rm.controller.logger.Warn("Failed to restore data",
+					zap.String("active_node", activeNode),
+					zap.Error(err))
+			} else {
+				for host, hr := range result.Hosts {
+					if hr.Output != "" {
+						rm.controller.logger.Info("Restore result",
+							zap.String("node", host),
+							zap.String("output", hr.Output))
+					}
+				}
+			}
+		}
+	}
+
+	// Save HA config to database
+	if rm.controller.db != nil {
+		haCfg := &database.HaConfig{
+			Resource:   resource,
+			VIP:        vip,
+			MountPoint: mountPoint,
+			FsType:     fsType,
+			Services:   services,
+		}
+		if err := rm.controller.db.SaveHaConfig(ctx, haCfg); err != nil {
+			rm.controller.logger.Warn("Failed to save HA config to database", zap.Error(err))
+		}
+	}
+
 	return configPath, nil
+}
+
+// ListHaConfigs lists all HA configurations from database
+func (rm *ResourceManager) ListHaConfigs(ctx context.Context) ([]*database.HaConfig, error) {
+	if rm.controller.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	return rm.controller.db.ListHaConfigs(ctx)
+}
+
+// GetHaConfig gets an HA configuration from database
+func (rm *ResourceManager) GetHaConfig(ctx context.Context, resource string) (*database.HaConfig, error) {
+	if rm.controller.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	return rm.controller.db.GetHaConfig(ctx, resource)
 }
 
 // EvictHa evicts the HA resource from the active node
@@ -888,24 +1062,136 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 			continue
 		}
 
-		// Check if output contains "role:Primary"
+		// Parse DRBD status output to find the Primary node
 		if result != nil && len(result.Hosts) > 0 {
 			for _, hr := range result.Hosts {
+				if !hr.Success {
+					continue
+				}
 				output := string(hr.Output)
 				rm.controller.logger.Debug("Host result",
 					zap.String("host", host),
 					zap.Bool("success", hr.Success),
 					zap.String("output", output))
-				if hr.Success && strings.Contains(output, "role:Primary") {
-					rm.controller.logger.Info("Found active node",
-						zap.String("host", host))
-					return host, nil
+
+				// Parse DRBD status to find which node is Primary
+				// Output format:
+				//   resource_name role:Secondary
+				//     nodename1 role:Primary
+				//     nodename2 role:Secondary
+				lines := strings.Split(output, "\n")
+				rm.controller.logger.Debug("Parsing DRBD status",
+					zap.String("host", host),
+					zap.Int("line_count", len(lines)))
+				for i, line := range lines {
+					trimmed := strings.TrimSpace(line)
+					rm.controller.logger.Debug("Checking DRBD line",
+						zap.String("host", host),
+						zap.Int("line_index", i),
+						zap.String("line", trimmed))
+					// Check if this line defines a node's role
+					// Format: "nodename role:Role" or "resource role:Role"
+					if strings.Contains(trimmed, " role:Primary") {
+						parts := strings.SplitN(trimmed, " ", 2)
+						rm.controller.logger.Debug("Split result",
+							zap.Int("parts_count", len(parts)),
+							zap.String("part0", parts[0]),
+							zap.String("part1", parts[1]))
+						if len(parts) >= 2 && strings.HasPrefix(parts[1], "role:Primary") {
+							primaryNode := strings.TrimSpace(parts[0])
+							rm.controller.logger.Info("Found Primary node",
+								zap.String("primary_node", primaryNode),
+								zap.String("original_line", trimmed))
+
+							// Get IP/hostname for the primary node
+							primaryHost := rm.getNodeHost(primaryNode)
+							if primaryHost != "" {
+								rm.controller.logger.Info("Resolved primary node to host",
+									zap.String("node", primaryNode),
+									zap.String("host", primaryHost))
+								return primaryHost, nil
+							}
+							// If not found in hosts map, return the node name directly
+							rm.controller.logger.Info("Using node name directly",
+								zap.String("node", primaryNode))
+							return primaryNode, nil
+						}
+					}
 				}
 			}
 		}
 	}
 
 	return "", fmt.Errorf("no active (Primary) node found for resource %s", resource)
+}
+
+// getNodeHost gets the host address for a node name
+// hosts format is "nodename:ip" or just "nodename"
+func (rm *ResourceManager) getNodeHost(nodeName string) string {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	for _, host := range rm.hosts {
+		// Check if host matches nodename:ip format
+		if strings.Contains(host, ":") {
+			parts := strings.SplitN(host, ":", 2)
+			if parts[0] == nodeName {
+				return host
+			}
+		} else if host == nodeName {
+			return host
+		}
+	}
+	return ""
+}
+
+// RemoveHa removes HA configuration for a resource
+func (rm *ResourceManager) RemoveHa(ctx context.Context, resource string) error {
+	rm.controller.logger.Info("Removing HA configuration", zap.String("resource", resource))
+
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+
+	rm.mu.RLock()
+	hosts := rm.hosts
+	rm.mu.RUnlock()
+
+	// Get HA config to know what to clean up
+	haCfg, err := rm.controller.db.GetHaConfig(ctx, resource)
+	if err != nil {
+		return fmt.Errorf("failed to get HA config: %w", err)
+	}
+
+	// 1. Delete promoter config
+	configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
+	if err := rm.deployment.DeleteConfig(ctx, hosts, configPath); err != nil {
+		rm.controller.logger.Warn("Failed to delete promoter config", zap.Error(err))
+	}
+
+	// 2. Delete mount unit if it exists
+	if haCfg.MountPoint != "" {
+		mountUnitName := strings.TrimPrefix(haCfg.MountPoint, "/")
+		mountUnitName = strings.ReplaceAll(mountUnitName, "/", "-")
+		mountUnitName = fmt.Sprintf("%s.mount", mountUnitName)
+		mountPath := fmt.Sprintf("/etc/systemd/system/%s", mountUnitName)
+
+		if err := rm.deployment.DeleteConfig(ctx, hosts, mountPath); err != nil {
+			rm.controller.logger.Warn("Failed to delete mount unit", zap.Error(err))
+		}
+	}
+
+	// 3. Reload daemons
+	if _, err := rm.deployment.Exec(ctx, hosts, "systemctl daemon-reload && systemctl reload drbd-reactor"); err != nil {
+		rm.controller.logger.Warn("Failed to reload daemons", zap.Error(err))
+	}
+
+	// 4. Remove from database
+	if err := rm.controller.db.DeleteHaConfig(ctx, resource); err != nil {
+		return fmt.Errorf("failed to delete HA config from database: %w", err)
+	}
+
+	return nil
 }
 
 // generatePromoterConfig generates drbd-reactor promoter TOML config
@@ -925,18 +1211,15 @@ func (rm *ResourceManager) generatePromoterConfig(resource string, nodes, servic
 
 	// Add VIP if specified
 	if vip != "" {
-		// Parse CIDR to get IP and netmask
-		ip := vip
-		cidr := "32"
-		if strings.Contains(vip, "/") {
-			parts := strings.Split(vip, "/")
-			ip = parts[0]
-			cidr = parts[1]
+		// Use service-ip systemd unit
+		// Format: service-ip@<IP>-<MASK>.service (replace / with -)
+		vipParam := strings.ReplaceAll(vip, "/", "-")
+		if !strings.Contains(vipParam, "-") {
+			vipParam = vipParam + "-32"
 		}
-
-		// OCF agent as single-line string (like gateway format)
-		vipOCF := fmt.Sprintf("\"ocf:heartbeat:IPaddr2 vip_%s ip=%s cidr_netmask=%s\"", resource, ip, cidr)
-		startActions = append(startActions, vipOCF)
+		
+		serviceIPUnit := fmt.Sprintf("\"service-ip@%s.service\"", vipParam)
+		startActions = append(startActions, serviceIPUnit)
 	}
 
 	// Add systemd services

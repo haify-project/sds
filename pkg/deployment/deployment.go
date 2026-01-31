@@ -97,8 +97,17 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 		return nil, fmt.Errorf("copy failed: %w", err)
 	}
 
+	c.logger.Debug("Copy result", zap.Strings("hosts", hosts), zap.Int("result_count", len(result.Hosts)))
+	for h, res := range result.Hosts {
+		errMsg := ""
+		if res.Error != nil {
+			errMsg = res.Error.Error()
+		}
+		c.logger.Debug("Copy host result", zap.String("host", h), zap.Bool("success", res.Success), zap.String("error", errMsg))
+	}
+
 	// Then, move with sudo to final location
-	moveResult, err := c.Exec(ctx, hosts, fmt.Sprintf("sudo mkdir -p %s && sudo mv %s %s", filepath.Dir(remotePath), tempRemotePath, remotePath))
+	moveResult, err := c.Exec(ctx, hosts, fmt.Sprintf("sudo mkdir -p %s && sudo mv -f %s %s", filepath.Dir(remotePath), tempRemotePath, remotePath))
 	if err != nil {
 		return nil, fmt.Errorf("sudo move failed: %w", err)
 	}
@@ -113,6 +122,8 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 	for _, host := range hosts {
 		copyOK := result.Hosts[host] != nil && result.Hosts[host].Success
 		moveOK := moveResult.Hosts[host] != nil && moveResult.Hosts[host].Success
+
+		c.logger.Debug("Config distribution", zap.String("host", host), zap.Bool("copy_ok", copyOK), zap.Bool("move_ok", moveOK))
 
 		var combinedErr error
 		if !copyOK {
