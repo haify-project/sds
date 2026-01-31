@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v3.21.12
-// source: api/proto/v1/sds.proto
+// source: sds.proto
 
 package v1
 
@@ -58,6 +58,22 @@ const (
 	SDSController_ListGateways_FullMethodName       = "/v1.SDSController/ListGateways"
 	SDSController_StartGateway_FullMethodName       = "/v1.SDSController/StartGateway"
 	SDSController_StopGateway_FullMethodName        = "/v1.SDSController/StopGateway"
+	SDSController_CreateZFSPool_FullMethodName      = "/v1.SDSController/CreateZFSPool"
+	SDSController_DeleteZFSPool_FullMethodName      = "/v1.SDSController/DeleteZFSPool"
+	SDSController_ListZFSpools_FullMethodName       = "/v1.SDSController/ListZFSpools"
+	SDSController_CreateZFSDataset_FullMethodName   = "/v1.SDSController/CreateZFSDataset"
+	SDSController_CreateZFSVolume_FullMethodName    = "/v1.SDSController/CreateZFSVolume"
+	SDSController_ResizeZFSVolume_FullMethodName    = "/v1.SDSController/ResizeZFSVolume"
+	SDSController_DeleteZFSDataset_FullMethodName   = "/v1.SDSController/DeleteZFSDataset"
+	SDSController_CreateZFSSnapshot_FullMethodName  = "/v1.SDSController/CreateZFSSnapshot"
+	SDSController_DeleteZFSSnapshot_FullMethodName  = "/v1.SDSController/DeleteZFSSnapshot"
+	SDSController_ListZFSSnapshots_FullMethodName   = "/v1.SDSController/ListZFSSnapshots"
+	SDSController_RestoreZFSSnapshot_FullMethodName = "/v1.SDSController/RestoreZFSSnapshot"
+	SDSController_CloneZFSSnapshot_FullMethodName   = "/v1.SDSController/CloneZFSSnapshot"
+	SDSController_CreateLvmSnapshot_FullMethodName  = "/v1.SDSController/CreateLvmSnapshot"
+	SDSController_DeleteLvmSnapshot_FullMethodName  = "/v1.SDSController/DeleteLvmSnapshot"
+	SDSController_ListLvmSnapshots_FullMethodName   = "/v1.SDSController/ListLvmSnapshots"
+	SDSController_RestoreLvmSnapshot_FullMethodName = "/v1.SDSController/RestoreLvmSnapshot"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -110,6 +126,25 @@ type SDSControllerClient interface {
 	ListGateways(ctx context.Context, in *ListGatewaysRequest, opts ...grpc.CallOption) (*ListGatewaysResponse, error)
 	StartGateway(ctx context.Context, in *StartGatewayRequest, opts ...grpc.CallOption) (*StartGatewayResponse, error)
 	StopGateway(ctx context.Context, in *StopGatewayRequest, opts ...grpc.CallOption) (*StopGatewayResponse, error)
+	// ZFS operations
+	CreateZFSPool(ctx context.Context, in *CreateZFSPoolRequest, opts ...grpc.CallOption) (*CreateZFSPoolResponse, error)
+	DeleteZFSPool(ctx context.Context, in *DeleteZFSPoolRequest, opts ...grpc.CallOption) (*DeleteZFSPoolResponse, error)
+	ListZFSpools(ctx context.Context, in *ListZFSPoolsRequest, opts ...grpc.CallOption) (*ListZFSPoolsResponse, error)
+	CreateZFSDataset(ctx context.Context, in *CreateZFSDatasetRequest, opts ...grpc.CallOption) (*CreateZFSDatasetResponse, error)
+	CreateZFSVolume(ctx context.Context, in *CreateZFSVolumeRequest, opts ...grpc.CallOption) (*CreateZFSVolumeResponse, error)
+	ResizeZFSVolume(ctx context.Context, in *ResizeZFSVolumeRequest, opts ...grpc.CallOption) (*ResizeZFSVolumeResponse, error)
+	DeleteZFSDataset(ctx context.Context, in *DeleteZFSDatasetRequest, opts ...grpc.CallOption) (*DeleteZFSDatasetResponse, error)
+	// ZFS Snapshot operations
+	CreateZFSSnapshot(ctx context.Context, in *CreateZFSSnapshotRequest, opts ...grpc.CallOption) (*CreateZFSSnapshotResponse, error)
+	DeleteZFSSnapshot(ctx context.Context, in *DeleteZFSSnapshotRequest, opts ...grpc.CallOption) (*DeleteZFSSnapshotResponse, error)
+	ListZFSSnapshots(ctx context.Context, in *ListZFSSnapshotsRequest, opts ...grpc.CallOption) (*ListZFSSnapshotsResponse, error)
+	RestoreZFSSnapshot(ctx context.Context, in *RestoreZFSSnapshotRequest, opts ...grpc.CallOption) (*RestoreZFSSnapshotResponse, error)
+	CloneZFSSnapshot(ctx context.Context, in *CloneZFSSnapshotRequest, opts ...grpc.CallOption) (*CloneZFSSnapshotResponse, error)
+	// LVM Snapshot operations
+	CreateLvmSnapshot(ctx context.Context, in *CreateLvmSnapshotRequest, opts ...grpc.CallOption) (*CreateLvmSnapshotResponse, error)
+	DeleteLvmSnapshot(ctx context.Context, in *DeleteLvmSnapshotRequest, opts ...grpc.CallOption) (*DeleteLvmSnapshotResponse, error)
+	ListLvmSnapshots(ctx context.Context, in *ListLvmSnapshotsRequest, opts ...grpc.CallOption) (*ListLvmSnapshotsResponse, error)
+	RestoreLvmSnapshot(ctx context.Context, in *RestoreLvmSnapshotRequest, opts ...grpc.CallOption) (*RestoreLvmSnapshotResponse, error)
 }
 
 type sDSControllerClient struct {
@@ -510,6 +545,166 @@ func (c *sDSControllerClient) StopGateway(ctx context.Context, in *StopGatewayRe
 	return out, nil
 }
 
+func (c *sDSControllerClient) CreateZFSPool(ctx context.Context, in *CreateZFSPoolRequest, opts ...grpc.CallOption) (*CreateZFSPoolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateZFSPoolResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateZFSPool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteZFSPool(ctx context.Context, in *DeleteZFSPoolRequest, opts ...grpc.CallOption) (*DeleteZFSPoolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteZFSPoolResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteZFSPool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListZFSpools(ctx context.Context, in *ListZFSPoolsRequest, opts ...grpc.CallOption) (*ListZFSPoolsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListZFSPoolsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListZFSpools_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateZFSDataset(ctx context.Context, in *CreateZFSDatasetRequest, opts ...grpc.CallOption) (*CreateZFSDatasetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateZFSDatasetResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateZFSDataset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateZFSVolume(ctx context.Context, in *CreateZFSVolumeRequest, opts ...grpc.CallOption) (*CreateZFSVolumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateZFSVolumeResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateZFSVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ResizeZFSVolume(ctx context.Context, in *ResizeZFSVolumeRequest, opts ...grpc.CallOption) (*ResizeZFSVolumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResizeZFSVolumeResponse)
+	err := c.cc.Invoke(ctx, SDSController_ResizeZFSVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteZFSDataset(ctx context.Context, in *DeleteZFSDatasetRequest, opts ...grpc.CallOption) (*DeleteZFSDatasetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteZFSDatasetResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteZFSDataset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateZFSSnapshot(ctx context.Context, in *CreateZFSSnapshotRequest, opts ...grpc.CallOption) (*CreateZFSSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateZFSSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateZFSSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteZFSSnapshot(ctx context.Context, in *DeleteZFSSnapshotRequest, opts ...grpc.CallOption) (*DeleteZFSSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteZFSSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteZFSSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListZFSSnapshots(ctx context.Context, in *ListZFSSnapshotsRequest, opts ...grpc.CallOption) (*ListZFSSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListZFSSnapshotsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListZFSSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RestoreZFSSnapshot(ctx context.Context, in *RestoreZFSSnapshotRequest, opts ...grpc.CallOption) (*RestoreZFSSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreZFSSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_RestoreZFSSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CloneZFSSnapshot(ctx context.Context, in *CloneZFSSnapshotRequest, opts ...grpc.CallOption) (*CloneZFSSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CloneZFSSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_CloneZFSSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateLvmSnapshot(ctx context.Context, in *CreateLvmSnapshotRequest, opts ...grpc.CallOption) (*CreateLvmSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateLvmSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateLvmSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteLvmSnapshot(ctx context.Context, in *DeleteLvmSnapshotRequest, opts ...grpc.CallOption) (*DeleteLvmSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteLvmSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteLvmSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListLvmSnapshots(ctx context.Context, in *ListLvmSnapshotsRequest, opts ...grpc.CallOption) (*ListLvmSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListLvmSnapshotsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListLvmSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RestoreLvmSnapshot(ctx context.Context, in *RestoreLvmSnapshotRequest, opts ...grpc.CallOption) (*RestoreLvmSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreLvmSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_RestoreLvmSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SDSControllerServer is the server API for SDSController service.
 // All implementations must embed UnimplementedSDSControllerServer
 // for forward compatibility.
@@ -560,6 +755,25 @@ type SDSControllerServer interface {
 	ListGateways(context.Context, *ListGatewaysRequest) (*ListGatewaysResponse, error)
 	StartGateway(context.Context, *StartGatewayRequest) (*StartGatewayResponse, error)
 	StopGateway(context.Context, *StopGatewayRequest) (*StopGatewayResponse, error)
+	// ZFS operations
+	CreateZFSPool(context.Context, *CreateZFSPoolRequest) (*CreateZFSPoolResponse, error)
+	DeleteZFSPool(context.Context, *DeleteZFSPoolRequest) (*DeleteZFSPoolResponse, error)
+	ListZFSpools(context.Context, *ListZFSPoolsRequest) (*ListZFSPoolsResponse, error)
+	CreateZFSDataset(context.Context, *CreateZFSDatasetRequest) (*CreateZFSDatasetResponse, error)
+	CreateZFSVolume(context.Context, *CreateZFSVolumeRequest) (*CreateZFSVolumeResponse, error)
+	ResizeZFSVolume(context.Context, *ResizeZFSVolumeRequest) (*ResizeZFSVolumeResponse, error)
+	DeleteZFSDataset(context.Context, *DeleteZFSDatasetRequest) (*DeleteZFSDatasetResponse, error)
+	// ZFS Snapshot operations
+	CreateZFSSnapshot(context.Context, *CreateZFSSnapshotRequest) (*CreateZFSSnapshotResponse, error)
+	DeleteZFSSnapshot(context.Context, *DeleteZFSSnapshotRequest) (*DeleteZFSSnapshotResponse, error)
+	ListZFSSnapshots(context.Context, *ListZFSSnapshotsRequest) (*ListZFSSnapshotsResponse, error)
+	RestoreZFSSnapshot(context.Context, *RestoreZFSSnapshotRequest) (*RestoreZFSSnapshotResponse, error)
+	CloneZFSSnapshot(context.Context, *CloneZFSSnapshotRequest) (*CloneZFSSnapshotResponse, error)
+	// LVM Snapshot operations
+	CreateLvmSnapshot(context.Context, *CreateLvmSnapshotRequest) (*CreateLvmSnapshotResponse, error)
+	DeleteLvmSnapshot(context.Context, *DeleteLvmSnapshotRequest) (*DeleteLvmSnapshotResponse, error)
+	ListLvmSnapshots(context.Context, *ListLvmSnapshotsRequest) (*ListLvmSnapshotsResponse, error)
+	RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error)
 	mustEmbedUnimplementedSDSControllerServer()
 }
 
@@ -686,6 +900,54 @@ func (UnimplementedSDSControllerServer) StartGateway(context.Context, *StartGate
 }
 func (UnimplementedSDSControllerServer) StopGateway(context.Context, *StopGatewayRequest) (*StopGatewayResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopGateway not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateZFSPool(context.Context, *CreateZFSPoolRequest) (*CreateZFSPoolResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateZFSPool not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteZFSPool(context.Context, *DeleteZFSPoolRequest) (*DeleteZFSPoolResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteZFSPool not implemented")
+}
+func (UnimplementedSDSControllerServer) ListZFSpools(context.Context, *ListZFSPoolsRequest) (*ListZFSPoolsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListZFSpools not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateZFSDataset(context.Context, *CreateZFSDatasetRequest) (*CreateZFSDatasetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateZFSDataset not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateZFSVolume(context.Context, *CreateZFSVolumeRequest) (*CreateZFSVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateZFSVolume not implemented")
+}
+func (UnimplementedSDSControllerServer) ResizeZFSVolume(context.Context, *ResizeZFSVolumeRequest) (*ResizeZFSVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResizeZFSVolume not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteZFSDataset(context.Context, *DeleteZFSDatasetRequest) (*DeleteZFSDatasetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteZFSDataset not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateZFSSnapshot(context.Context, *CreateZFSSnapshotRequest) (*CreateZFSSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateZFSSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteZFSSnapshot(context.Context, *DeleteZFSSnapshotRequest) (*DeleteZFSSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteZFSSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) ListZFSSnapshots(context.Context, *ListZFSSnapshotsRequest) (*ListZFSSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListZFSSnapshots not implemented")
+}
+func (UnimplementedSDSControllerServer) RestoreZFSSnapshot(context.Context, *RestoreZFSSnapshotRequest) (*RestoreZFSSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreZFSSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) CloneZFSSnapshot(context.Context, *CloneZFSSnapshotRequest) (*CloneZFSSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CloneZFSSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateLvmSnapshot(context.Context, *CreateLvmSnapshotRequest) (*CreateLvmSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateLvmSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteLvmSnapshot(context.Context, *DeleteLvmSnapshotRequest) (*DeleteLvmSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteLvmSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) ListLvmSnapshots(context.Context, *ListLvmSnapshotsRequest) (*ListLvmSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLvmSnapshots not implemented")
+}
+func (UnimplementedSDSControllerServer) RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreLvmSnapshot not implemented")
 }
 func (UnimplementedSDSControllerServer) mustEmbedUnimplementedSDSControllerServer() {}
 func (UnimplementedSDSControllerServer) testEmbeddedByValue()                       {}
@@ -1410,6 +1672,294 @@ func _SDSController_StopGateway_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_CreateZFSPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateZFSPoolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateZFSPool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateZFSPool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateZFSPool(ctx, req.(*CreateZFSPoolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteZFSPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteZFSPoolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteZFSPool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteZFSPool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteZFSPool(ctx, req.(*DeleteZFSPoolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListZFSpools_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListZFSPoolsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListZFSpools(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListZFSpools_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListZFSpools(ctx, req.(*ListZFSPoolsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateZFSDataset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateZFSDatasetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateZFSDataset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateZFSDataset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateZFSDataset(ctx, req.(*CreateZFSDatasetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateZFSVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateZFSVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateZFSVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateZFSVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateZFSVolume(ctx, req.(*CreateZFSVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ResizeZFSVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResizeZFSVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ResizeZFSVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ResizeZFSVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ResizeZFSVolume(ctx, req.(*ResizeZFSVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteZFSDataset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteZFSDatasetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteZFSDataset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteZFSDataset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteZFSDataset(ctx, req.(*DeleteZFSDatasetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateZFSSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateZFSSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateZFSSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateZFSSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateZFSSnapshot(ctx, req.(*CreateZFSSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteZFSSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteZFSSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteZFSSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteZFSSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteZFSSnapshot(ctx, req.(*DeleteZFSSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListZFSSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListZFSSnapshotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListZFSSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListZFSSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListZFSSnapshots(ctx, req.(*ListZFSSnapshotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RestoreZFSSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreZFSSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RestoreZFSSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RestoreZFSSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RestoreZFSSnapshot(ctx, req.(*RestoreZFSSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CloneZFSSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CloneZFSSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CloneZFSSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CloneZFSSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CloneZFSSnapshot(ctx, req.(*CloneZFSSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateLvmSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateLvmSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateLvmSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateLvmSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateLvmSnapshot(ctx, req.(*CreateLvmSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteLvmSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteLvmSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteLvmSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteLvmSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteLvmSnapshot(ctx, req.(*DeleteLvmSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListLvmSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLvmSnapshotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListLvmSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListLvmSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListLvmSnapshots(ctx, req.(*ListLvmSnapshotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RestoreLvmSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreLvmSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RestoreLvmSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RestoreLvmSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RestoreLvmSnapshot(ctx, req.(*RestoreLvmSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SDSController_ServiceDesc is the grpc.ServiceDesc for SDSController service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1573,7 +2123,71 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "StopGateway",
 			Handler:    _SDSController_StopGateway_Handler,
 		},
+		{
+			MethodName: "CreateZFSPool",
+			Handler:    _SDSController_CreateZFSPool_Handler,
+		},
+		{
+			MethodName: "DeleteZFSPool",
+			Handler:    _SDSController_DeleteZFSPool_Handler,
+		},
+		{
+			MethodName: "ListZFSpools",
+			Handler:    _SDSController_ListZFSpools_Handler,
+		},
+		{
+			MethodName: "CreateZFSDataset",
+			Handler:    _SDSController_CreateZFSDataset_Handler,
+		},
+		{
+			MethodName: "CreateZFSVolume",
+			Handler:    _SDSController_CreateZFSVolume_Handler,
+		},
+		{
+			MethodName: "ResizeZFSVolume",
+			Handler:    _SDSController_ResizeZFSVolume_Handler,
+		},
+		{
+			MethodName: "DeleteZFSDataset",
+			Handler:    _SDSController_DeleteZFSDataset_Handler,
+		},
+		{
+			MethodName: "CreateZFSSnapshot",
+			Handler:    _SDSController_CreateZFSSnapshot_Handler,
+		},
+		{
+			MethodName: "DeleteZFSSnapshot",
+			Handler:    _SDSController_DeleteZFSSnapshot_Handler,
+		},
+		{
+			MethodName: "ListZFSSnapshots",
+			Handler:    _SDSController_ListZFSSnapshots_Handler,
+		},
+		{
+			MethodName: "RestoreZFSSnapshot",
+			Handler:    _SDSController_RestoreZFSSnapshot_Handler,
+		},
+		{
+			MethodName: "CloneZFSSnapshot",
+			Handler:    _SDSController_CloneZFSSnapshot_Handler,
+		},
+		{
+			MethodName: "CreateLvmSnapshot",
+			Handler:    _SDSController_CreateLvmSnapshot_Handler,
+		},
+		{
+			MethodName: "DeleteLvmSnapshot",
+			Handler:    _SDSController_DeleteLvmSnapshot_Handler,
+		},
+		{
+			MethodName: "ListLvmSnapshots",
+			Handler:    _SDSController_ListLvmSnapshots_Handler,
+		},
+		{
+			MethodName: "RestoreLvmSnapshot",
+			Handler:    _SDSController_RestoreLvmSnapshot_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "api/proto/v1/sds.proto",
+	Metadata: "sds.proto",
 }

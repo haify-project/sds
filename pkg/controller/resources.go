@@ -101,7 +101,7 @@ func (rm *ResourceManager) GetHosts() []string {
 }
 
 // CreateResource creates a DRBD resource across multiple nodes
-func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, drbdOptions map[string]string) error {
+func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, storageType string, drbdOptions map[string]string) error {
 	rm.controller.logger.Info("Creating DRBD resource",
 		zap.String("name", name),
 		zap.Uint32("port", port),
@@ -109,6 +109,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		zap.String("protocol", protocol),
 		zap.Uint32("size_gb", sizeGB),
 		zap.String("pool", pool),
+		zap.String("storage_type", storageType),
 		zap.Any("options", drbdOptions))
 
 	if rm.deployment == nil {
@@ -119,11 +120,16 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		pool = "data-pool"
 	}
 
+	if storageType == "" {
+		storageType = "lvm"
+	}
+
 	if protocol == "" {
 		protocol = "C"
 	}
 
-	lvName := fmt.Sprintf("%s_data", name)
+	// For both LVM and ZFS, we use a consistent volume name
+	volumeName := fmt.Sprintf("%s_data", name)
 
 	// Convert node names to IP addresses for deployment
 	nodeIPs := make([]string, len(nodes))
@@ -135,23 +141,45 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		nodeIPs[i] = ip
 	}
 
-	// 1. Create LVs on all nodes
-	for i, nodeIP := range nodeIPs {
-		result, err := rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, lvName, fmt.Sprintf("%dG", sizeGB))
-		if err != nil {
-			return fmt.Errorf("failed to create LV on %s: %w", nodes[i], err)
+	// 1. Create storage volumes on all nodes (LVM or ZFS)
+	if storageType == "zfs" {
+		// Create ZFS zvol on all nodes
+		for i, nodeIP := range nodeIPs {
+			zvolPath := fmt.Sprintf("%s/%s", pool, volumeName)
+			result, err := rm.deployment.ZFSCreateThinDataset(ctx, []string{nodeIP}, pool, volumeName, fmt.Sprintf("%dG", sizeGB))
+			if err != nil {
+				return fmt.Errorf("failed to create ZFS zvol on %s: %w", nodes[i], err)
+			}
+			if !result.AllSuccess() {
+				for host, hres := range result.Hosts {
+					if !hres.Success {
+						return fmt.Errorf("ZFS zvol creation failed on %s: %s", host, hres.Output)
+					}
+				}
+			}
+			rm.controller.logger.Info("Created ZFS zvol",
+				zap.String("zvol", zvolPath),
+				zap.String("node", nodes[i]))
 		}
-		if !result.AllSuccess() {
-			for host, hres := range result.Hosts {
-				if !hres.Success {
-					return fmt.Errorf("LV creation failed on %s: %s", host, hres.Output)
+	} else {
+		// Create LVM LV on all nodes (default)
+		for i, nodeIP := range nodeIPs {
+			result, err := rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, volumeName, fmt.Sprintf("%dG", sizeGB))
+			if err != nil {
+				return fmt.Errorf("failed to create LV on %s: %w", nodes[i], err)
+			}
+			if !result.AllSuccess() {
+				for host, hres := range result.Hosts {
+					if !hres.Success {
+						return fmt.Errorf("LV creation failed on %s: %s", host, hres.Output)
+					}
 				}
 			}
 		}
 	}
 
 	// 2. Generate DRBD config
-	drbdConfig := rm.generateDrbdConfig(name, port, nodes, protocol, pool, lvName, drbdOptions)
+	drbdConfig := rm.generateDrbdConfig(name, port, nodes, protocol, pool, volumeName, storageType, drbdOptions)
 
 	// 3. Distribute config to all nodes
 	configResult, err := rm.deployment.DistributeConfig(ctx, nodeIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
@@ -206,7 +234,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 }
 
 // generateDrbdConfig generates a DRBD resource configuration file
-func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []string, protocol, pool, lvName string, options map[string]string) string {
+func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []string, protocol, pool, volumeName, storageType string, options map[string]string) string {
 	var config strings.Builder
 
 	// Organize options by section -> key -> value
@@ -316,7 +344,15 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 	// Generate volume 0 block
 	config.WriteString("\n    volume 0 {\n")
 	config.WriteString(fmt.Sprintf("        device    minor %d;\n", port-7000))
-	config.WriteString(fmt.Sprintf("        disk      /dev/%s/%s;\n", pool, lvName))
+
+	// Use ZFS device path or LVM device path based on storage type
+	var diskPath string
+	if storageType == "zfs" {
+		diskPath = fmt.Sprintf("/dev/zvol/%s/%s", pool, volumeName)
+	} else {
+		diskPath = fmt.Sprintf("/dev/%s/%s", pool, volumeName)
+	}
+	config.WriteString(fmt.Sprintf("        disk      %s;\n", diskPath))
 	config.WriteString("        meta-disk internal;\n")
 	
 	// Inject disk options here
@@ -562,10 +598,11 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	newMinor := maxMinor + 1
 
 	// Generate volume block for new volume
+	// Note: AddVolume currently only supports LVM
 	volumeBlock := fmt.Sprintf("    volume %d {\n        device    minor %d;\n        disk      /dev/%s/%s;\n        meta-disk internal;\n    }",
 		newVolNum, newMinor, pool, volume)
 
-	// Create LVs on all nodeAddresses
+	// Create LVs on all nodes
 	for _, host := range hosts {
 		_, err := rm.deployment.LVCreate(ctx, []string{host}, pool, volume, fmt.Sprintf("%dG", sizeGB))
 		if err != nil {

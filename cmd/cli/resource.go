@@ -43,6 +43,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceUnmount())
 	cmd.AddCommand(resourcePromote())
 	cmd.AddCommand(resourceDemote())
+	cmd.AddCommand(resourceSnapshot())
 
 	return cmd
 }
@@ -52,6 +53,7 @@ func resourceCreate() *cobra.Command {
 	var port uint32
 	var nodes string
 	var pool string
+	var storageType string
 	var protocol string
 	var size string
 	var drbdOptions map[string]string
@@ -83,6 +85,10 @@ func resourceCreate() *cobra.Command {
 				pool = "data-pool"
 			}
 
+			if storageType == "" {
+				storageType = "lvm"
+			}
+
 			if protocol == "" {
 				protocol = "C"
 			}
@@ -102,20 +108,25 @@ func resourceCreate() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			err = sdsClient.CreateResourceWithPool(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, drbdOptions)
+			if storageType == "zfs" {
+				err = sdsClient.CreateZFSResource(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, drbdOptions)
+			} else {
+				err = sdsClient.CreateResourceWithPool(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, drbdOptions)
+			}
 			if err != nil {
 				return fmt.Errorf("failed to create resource: %w", err)
 			}
 
 			fmt.Printf("Resource created successfully\n")
-			fmt.Printf("  Name:     %s\n", name)
-			fmt.Printf("  Port:     %d\n", port)
-			fmt.Printf("  Pool:     %s\n", pool)
-			fmt.Printf("  Nodes:    %v\n", nodeList)
-			fmt.Printf("  Protocol: %s\n", protocol)
-			fmt.Printf("  Size:     %d GiB (%s)\n", sizeGiB, util.FormatBytes(sizeBytes))
+			fmt.Printf("  Name:        %s\n", name)
+			fmt.Printf("  Port:        %d\n", port)
+			fmt.Printf("  Storage:     %s\n", storageType)
+			fmt.Printf("  Pool:        %s\n", pool)
+			fmt.Printf("  Nodes:       %v\n", nodeList)
+			fmt.Printf("  Protocol:    %s\n", protocol)
+			fmt.Printf("  Size:        %d GiB (%s)\n", sizeGiB, util.FormatBytes(sizeBytes))
 			if len(drbdOptions) > 0 {
-				fmt.Printf("  Options:  %v\n", drbdOptions)
+				fmt.Printf("  Options:     %v\n", drbdOptions)
 			}
 			fmt.Printf("\nNext steps:\n")
 			fmt.Printf("  1. sds-cli resource get %s\n", name)
@@ -129,6 +140,7 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().Uint32Var(&port, "port", 0, "DRBD port (required)")
 	cmd.Flags().StringVar(&nodes, "nodes", "", "Node names (comma-separated, required)")
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: data-pool)")
+	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")
 	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required)")
 	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
@@ -706,6 +718,229 @@ func resourceDemote() *cobra.Command {
 			return nil
 		},
 	}
+
+	return cmd
+}
+
+// resourceSnapshot manages snapshots for DRBD resources
+func resourceSnapshot() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "snapshot",
+		Short: "Snapshot management for DRBD resources",
+	}
+
+	cmd.AddCommand(resourceSnapshotCreate())
+	cmd.AddCommand(resourceSnapshotList())
+	cmd.AddCommand(resourceSnapshotRestore())
+
+	return cmd
+}
+
+func resourceSnapshotCreate() *cobra.Command {
+	var resource string
+	var snapshotName string
+	var node string
+	var size string
+	var storageType string
+
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a snapshot of DRBD resource",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if resource == "" {
+				return fmt.Errorf("resource name is required")
+			}
+			if snapshotName == "" {
+				return fmt.Errorf("snapshot name is required")
+			}
+			if node == "" {
+				return fmt.Errorf("node is required")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if storageType == "zfs" {
+				// ZFS snapshot: pool/resource_data@snapshot
+				dataset := fmt.Sprintf("%s_data", resource)
+				err = sdsClient.CreateZFSSnapshot(ctx, dataset, snapshotName, node)
+				if err != nil {
+					return fmt.Errorf("failed to create ZFS snapshot: %w", err)
+				}
+				fmt.Printf("ZFS snapshot '%s' created for resource '%s' on node '%s'\n", snapshotName, resource, node)
+			} else {
+				// LVM snapshot (default)
+				if size == "" {
+					size = "1G"
+				}
+				lvName := fmt.Sprintf("%s_data", resource)
+				err = sdsClient.CreateLvmSnapshot(ctx, resource, lvName, snapshotName, node, size)
+				if err != nil {
+					return fmt.Errorf("failed to create LVM snapshot: %w", err)
+				}
+				fmt.Printf("LVM snapshot '%s' created for resource '%s' on node '%s'\n", snapshotName, resource, node)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
+	cmd.Flags().StringVar(&snapshotName, "name", "", "Snapshot name")
+	cmd.Flags().StringVar(&node, "node", "", "Node where resource exists")
+	cmd.Flags().StringVar(&size, "size", "1G", "Snapshot size for LVM (e.g., 1G)")
+	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
+
+	cmd.MarkFlagRequired("resource")
+	cmd.MarkFlagRequired("name")
+	cmd.MarkFlagRequired("node")
+
+	return cmd
+}
+
+func resourceSnapshotList() *cobra.Command {
+	var resource string
+	var node string
+	var storageType string
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List snapshots for DRBD resource",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if resource == "" {
+				return fmt.Errorf("resource name is required")
+			}
+			if node == "" {
+				return fmt.Errorf("node is required")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if storageType == "zfs" {
+				// ZFS snapshots
+				dataset := fmt.Sprintf("%s_data", resource)
+				snapshots, err := sdsClient.ListZFSSnapshots(ctx, dataset, node)
+				if err != nil {
+					return fmt.Errorf("failed to list ZFS snapshots: %w", err)
+				}
+
+				if len(snapshots) == 0 {
+					fmt.Printf("No ZFS snapshots found for resource '%s'\n", resource)
+					return nil
+				}
+
+				fmt.Printf("ZFS snapshots for resource '%s':\n", resource)
+				for _, snap := range snapshots {
+					fmt.Printf("  - %s (created: %s)\n", snap.Name, snap.CreatedAt)
+				}
+			} else {
+				// LVM snapshots
+				lvName := fmt.Sprintf("%s_data", resource)
+				snapshots, err := sdsClient.ListLvmSnapshots(ctx, lvName, node)
+				if err != nil {
+					return fmt.Errorf("failed to list LVM snapshots: %w", err)
+				}
+
+				if len(snapshots) == 0 {
+					fmt.Printf("No LVM snapshots found for resource '%s'\n", resource)
+					return nil
+				}
+
+				fmt.Printf("LVM snapshots for resource '%s':\n", resource)
+				fmt.Println("  Name                    Size")
+				fmt.Println("  ----------------------- ----")
+				for _, snap := range snapshots {
+					fmt.Printf("  %-23s %d GB\n", snap.Name, snap.SizeGb)
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
+	cmd.Flags().StringVar(&node, "node", "", "Node where resource exists")
+	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
+
+	cmd.MarkFlagRequired("resource")
+	cmd.MarkFlagRequired("node")
+
+	return cmd
+}
+
+func resourceSnapshotRestore() *cobra.Command {
+	var resource string
+	var snapshotName string
+	var node string
+	var storageType string
+
+	cmd := &cobra.Command{
+		Use:   "restore",
+		Short: "Restore DRBD resource from snapshot",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if resource == "" {
+				return fmt.Errorf("resource name is required")
+			}
+			if snapshotName == "" {
+				return fmt.Errorf("snapshot name is required")
+			}
+			if node == "" {
+				return fmt.Errorf("node is required")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if storageType == "zfs" {
+				// ZFS rollback
+				dataset := fmt.Sprintf("%s_data", resource)
+				err = sdsClient.RestoreZFSSnapshot(ctx, dataset, snapshotName, node)
+				if err != nil {
+					return fmt.Errorf("failed to restore ZFS snapshot: %w", err)
+				}
+				fmt.Printf("ZFS snapshot '%s' restored for resource '%s' on node '%s'\n", snapshotName, resource, node)
+			} else {
+				// LVM snapshot restore (merge)
+				lvName := fmt.Sprintf("%s_data", resource)
+				err = sdsClient.RestoreLvmSnapshot(ctx, lvName, snapshotName, node)
+				if err != nil {
+					return fmt.Errorf("failed to restore LVM snapshot: %w", err)
+				}
+				fmt.Printf("LVM snapshot '%s' restored for resource '%s' on node '%s'\n", snapshotName, resource, node)
+				fmt.Println("Note: The snapshot has been merged back into the original volume.")
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
+	cmd.Flags().StringVar(&snapshotName, "name", "", "Snapshot name")
+	cmd.Flags().StringVar(&node, "node", "", "Node where resource exists")
+	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
+
+	cmd.MarkFlagRequired("resource")
+	cmd.MarkFlagRequired("name")
+	cmd.MarkFlagRequired("node")
 
 	return cmd
 }

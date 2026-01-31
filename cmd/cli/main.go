@@ -22,7 +22,6 @@ func main() {
 	rootCmd.AddCommand(poolCommand())
 	rootCmd.AddCommand(nodeCommand())
 	rootCmd.AddCommand(resourceCommand())
-	rootCmd.AddCommand(snapshotCommand())
 	rootCmd.AddCommand(haCommand())
 	rootCmd.AddCommand(gatewayCommand())
 

@@ -54,6 +54,28 @@ service SDSController {
   rpc ListGateways(ListGatewaysRequest) returns (ListGatewaysResponse);
   rpc StartGateway(StartGatewayRequest) returns (StartGatewayResponse);
   rpc StopGateway(StopGatewayRequest) returns (StopGatewayResponse);
+
+  // ZFS operations
+  rpc CreateZFSPool(CreateZFSPoolRequest) returns (CreateZFSPoolResponse);
+  rpc DeleteZFSPool(DeleteZFSPoolRequest) returns (DeleteZFSPoolResponse);
+  rpc ListZFSpools(ListZFSPoolsRequest) returns (ListZFSPoolsResponse);
+  rpc CreateZFSDataset(CreateZFSDatasetRequest) returns (CreateZFSDatasetResponse);
+  rpc CreateZFSVolume(CreateZFSVolumeRequest) returns (CreateZFSVolumeResponse);
+  rpc ResizeZFSVolume(ResizeZFSVolumeRequest) returns (ResizeZFSVolumeResponse);
+  rpc DeleteZFSDataset(DeleteZFSDatasetRequest) returns (DeleteZFSDatasetResponse);
+
+  // ZFS Snapshot operations
+  rpc CreateZFSSnapshot(CreateZFSSnapshotRequest) returns (CreateZFSSnapshotResponse);
+  rpc DeleteZFSSnapshot(DeleteZFSSnapshotRequest) returns (DeleteZFSSnapshotResponse);
+  rpc ListZFSSnapshots(ListZFSSnapshotsRequest) returns (ListZFSSnapshotsResponse);
+  rpc RestoreZFSSnapshot(RestoreZFSSnapshotRequest) returns (RestoreZFSSnapshotResponse);
+  rpc CloneZFSSnapshot(CloneZFSSnapshotRequest) returns (CloneZFSSnapshotResponse);
+
+  // LVM Snapshot operations
+  rpc CreateLvmSnapshot(CreateLvmSnapshotRequest) returns (CreateLvmSnapshotResponse);
+  rpc DeleteLvmSnapshot(DeleteLvmSnapshotRequest) returns (DeleteLvmSnapshotResponse);
+  rpc ListLvmSnapshots(ListLvmSnapshotsRequest) returns (ListLvmSnapshotsResponse);
+  rpc RestoreLvmSnapshot(RestoreLvmSnapshotRequest) returns (RestoreLvmSnapshotResponse);
 }
 
 // Pool messages
@@ -117,6 +139,183 @@ message PoolInfo {
   uint64 total_gb = 4;
   uint64 free_gb = 5;
   repeated string devices = 6;
+  bool thin = 7;
+  string compression = 8;
+}
+
+// ZFS messages
+message CreateZFSPoolRequest {
+  string name = 1;
+  string node = 2;
+  repeated string vdevs = 3;
+  bool thin = 4;
+}
+
+message CreateZFSPoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteZFSPoolRequest {
+  string name = 1;
+  string node = 2;
+}
+
+message DeleteZFSPoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListZFSPoolsRequest {}
+
+message ListZFSPoolsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PoolInfo pools = 3;
+}
+
+message CreateZFSDatasetRequest {
+  string dataset_path = 1;
+  string node = 2;
+}
+
+message CreateZFSDatasetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateZFSVolumeRequest {
+  string pool_name = 1;
+  string volume_name = 2;
+  string size = 3;
+  string node = 4;
+}
+
+message CreateZFSVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResizeZFSVolumeRequest {
+  string volume_path = 1;
+  string new_size = 2;
+  string node = 3;
+}
+
+message ResizeZFSVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteZFSDatasetRequest {
+  string dataset_path = 1;
+  string node = 2;
+}
+
+message DeleteZFSDatasetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateZFSSnapshotRequest {
+  string dataset = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message CreateZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteZFSSnapshotRequest {
+  string snapshot = 1;
+  string node = 2;
+}
+
+message DeleteZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListZFSSnapshotsRequest {
+  string dataset = 1;
+  string node = 2;
+}
+
+message ListZFSSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SnapshotInfo snapshots = 3;
+}
+
+message RestoreZFSSnapshotRequest {
+  string dataset = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message RestoreZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CloneZFSSnapshotRequest {
+  string snapshot = 1;
+  string clone_path = 2;
+  string node = 3;
+}
+
+message CloneZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// LVM Snapshot messages
+message CreateLvmSnapshotRequest {
+  string resource = 1;
+  string lv_name = 2;
+  string snapshot_name = 3;
+  string node = 4;
+  string size = 5;  // e.g., "1G"
+}
+
+message CreateLvmSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteLvmSnapshotRequest {
+  string lv_name = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message DeleteLvmSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListLvmSnapshotsRequest {
+  string lv_name = 1;
+  string node = 2;
+}
+
+message ListLvmSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SnapshotInfo snapshots = 3;
+}
+
+message RestoreLvmSnapshotRequest {
+  string lv_name = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message RestoreLvmSnapshotResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 // Node messages
@@ -175,7 +374,8 @@ message CreateResourceRequest {
   string protocol = 4;
   uint32 size_gb = 5;
   string pool = 6;
-  map<string, string> drbd_options = 7;
+  string storage_type = 7;  // "lvm" or "zfs"
+  map<string, string> drbd_options = 8;
 }
 
 message CreateResourceResponse {

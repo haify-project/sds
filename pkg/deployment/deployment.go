@@ -449,6 +449,106 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 	return execResult, nil
 }
 
+// ============ ZFS Operations ============
+
+// ZFSCreatePool creates a ZFS pool
+func (c *Client) ZFSCreatePool(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...ZFSOption) (*ExecResult, error) {
+	options := &zfsOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	cmd := fmt.Sprintf("sudo zpool create %s %s", poolName, strings.Join(vdevs, " "))
+	if options.thin {
+		cmd = fmt.Sprintf("sudo zpool create -o thinpool=%s %s %s", poolName+"/data", poolName, strings.Join(vdevs, " "))
+	}
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSDestroyPool destroys a ZFS pool
+func (c *Client) ZFSDestroyPool(ctx context.Context, hosts []string, poolName string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zpool destroy -f %s", poolName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSListPools lists ZFS pools
+func (c *Client) ZFSListPools(ctx context.Context, hosts []string) (*ExecResult, error) {
+	cmd := "sudo zpool list -Hp -o name,size,free,alloc,cap"
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSGetPool gets ZFS pool status
+func (c *Client) ZFSGetPool(ctx context.Context, hosts []string, poolName string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zpool status %s", poolName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSCreateDataset creates a ZFS dataset
+func (c *Client) ZFSCreateDataset(ctx context.Context, hosts []string, datasetName string, opts ...ZFSOption) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs create %s", datasetName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSCreateThinDataset creates a thin-provisioned ZFS dataset (zvol)
+func (c *Client) ZFSCreateThinDataset(ctx context.Context, hosts []string, poolName, datasetName, size string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs create -s -V %s -o volmode=geom %s/%s", size, poolName, datasetName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSDestroyDataset destroys a ZFS dataset
+func (c *Client) ZFSDestroyDataset(ctx context.Context, hosts []string, datasetName string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs destroy -f %s", datasetName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSSnapshot creates a ZFS snapshot
+func (c *Client) ZFSSnapshot(ctx context.Context, hosts []string, dataset, snapshotName string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs snapshot %s@%s", dataset, snapshotName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSRollback rolls back to a ZFS snapshot
+func (c *Client) ZFSRollback(ctx context.Context, hosts []string, dataset, snapshotName string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs rollback -r %s@%s", dataset, snapshotName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSClone creates a clone from a snapshot
+func (c *Client) ZFSClone(ctx context.Context, hosts []string, snapshot, clonePath string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs clone %s %s", snapshot, clonePath)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSListSnapshots lists ZFS snapshots for a dataset
+func (c *Client) ZFSListSnapshots(ctx context.Context, hosts []string, dataset string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs list -t snapshot -o name,used,refer,creation -H %s", dataset)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSDestroySnapshot destroys a ZFS snapshot
+func (c *Client) ZFSDestroySnapshot(ctx context.Context, hosts []string, snapshot string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs destroy -r %s", snapshot)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSSetQuota sets a quota on a ZFS dataset
+func (c *Client) ZFSSetQuota(ctx context.Context, hosts []string, dataset, quota string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs set quota=%s %s", quota, dataset)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSSetReservation sets a reservation on a ZFS dataset
+func (c *Client) ZFSSetReservation(ctx context.Context, hosts []string, dataset, reservation string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs set reservation=%s %s", reservation, dataset)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// ZFSResizeVolume resizes a ZFS volume
+func (c *Client) ZFSResizeVolume(ctx context.Context, hosts []string, volumePath, newSize string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo zfs set volsize=%s %s", newSize, volumePath)
+	return c.Exec(ctx, hosts, cmd)
+}
+
 // ============ LVM Operations ============
 
 // PVCreate creates physical volumes
@@ -472,6 +572,34 @@ func (c *Client) LVCreate(ctx context.Context, hosts []string, vgName, lvName, s
 // LVRemove removes logical volumes
 func (c *Client) LVRemove(ctx context.Context, hosts []string, lvPath string) (*ExecResult, error) {
 	cmd := fmt.Sprintf("sudo lvremove -f %s", lvPath)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVCreateSnapshot creates a snapshot of a logical volume
+func (c *Client) LVCreateSnapshot(ctx context.Context, hosts []string, vgName, lvName, snapshotName, size string) (*ExecResult, error) {
+	lvPath := fmt.Sprintf("%s/%s", vgName, lvName)
+	// Create snapshot volume
+	cmd := fmt.Sprintf("sudo lvcreate -y -L %s -s -n %s %s", size, snapshotName, lvPath)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVRemoveSnapshot removes a snapshot volume
+func (c *Client) LVRemoveSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*ExecResult, error) {
+	snapPath := fmt.Sprintf("%s/%s", vgName, snapshotName)
+	cmd := fmt.Sprintf("sudo lvremove -f %s", snapPath)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVListSnapshots lists snapshots for a volume group
+func (c *Client) LVListSnapshots(ctx context.Context, hosts []string, vgName string) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo lvs -S lv_role=snapshot VG/LV -o lv_name,lv_size,lv_time --noheadings --separator=' ' %s", vgName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVMergeSnapshot merges a snapshot back into its origin volume
+func (c *Client) LVMergeSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*ExecResult, error) {
+	snapPath := fmt.Sprintf("%s/%s", vgName, snapshotName)
+	cmd := fmt.Sprintf("sudo lvconvert --merge %s", snapPath)
 	return c.Exec(ctx, hosts, cmd)
 }
 
@@ -675,5 +803,35 @@ type lvmOptions struct {
 func WithLVMForce(force bool) LVMOption {
 	return func(o *lvmOptions) {
 		o.force = force
+	}
+}
+
+// ZFSOption configures ZFS operations
+type ZFSOption func(*zfsOptions)
+
+type zfsOptions struct {
+	thin       bool
+	compression bool
+	dedup      bool
+}
+
+// WithZFSThin enables thin provisioning for ZFS
+func WithZFSThin(thin bool) ZFSOption {
+	return func(o *zfsOptions) {
+		o.thin = thin
+	}
+}
+
+// WithZFSCompression enables compression for ZFS
+func WithZFSCompression(compression bool) ZFSOption {
+	return func(o *zfsOptions) {
+		o.compression = compression
+	}
+}
+
+// WithZFSDedup enables dedup for ZFS
+func WithZFSDedup(dedup bool) ZFSOption {
+	return func(o *zfsOptions) {
+		o.dedup = dedup
 	}
 }

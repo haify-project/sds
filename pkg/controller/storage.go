@@ -12,12 +12,14 @@ import (
 
 // PoolInfo represents pool information
 type PoolInfo struct {
-	Name    string   `json:"name"`
-	Type    string   `json:"type"`
-	Node    string   `json:"node"`
-	TotalGB uint64   `json:"total_gb"`
-	FreeGB  uint64   `json:"free_gb"`
-	Devices []string `json:"devices"`
+	Name       string   `json:"name"`
+	Type       string   `json:"type"` // "vg" or "zfs"
+	Node       string   `json:"node"`
+	TotalGB    uint64   `json:"total_gb"`
+	FreeGB     uint64   `json:"free_gb"`
+	Devices    []string `json:"devices"`
+	Thin       bool     `json:"thin"`
+	Compression string  `json:"compression,omitempty"`
 }
 
 // StorageManager manages all storage operations
@@ -223,6 +225,430 @@ func (sm *StorageManager) DeletePool(ctx context.Context, name, node string) err
 	sm.controller.logger.Info("Pool deleted successfully",
 		zap.String("name", name),
 		zap.String("node", node))
+
+	return nil
+}
+
+// ==================== ZFS POOL OPERATIONS ====================
+
+// CreateZFSPool creates a ZFS storage pool
+func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, vdevs []string, thin bool) error {
+	sm.controller.logger.Info("Creating ZFS pool",
+		zap.String("name", name),
+		zap.String("node", node),
+		zap.Strings("vdevs", vdevs),
+		zap.Bool("thin", thin))
+
+	// Convert node name to address
+	address := sm.controller.nodes.GetNodeAddressByName(node)
+	if address == "" {
+		address = node
+	}
+
+	// Create ZFS pool
+	result, err := sm.controller.deployment.ZFSCreatePool(ctx, []string{address}, name, vdevs)
+	if err != nil {
+		return fmt.Errorf("failed to create ZFS pool: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to create ZFS pool: %v", result.FailedHosts())
+	}
+
+	sm.controller.logger.Info("ZFS pool created successfully",
+		zap.String("name", name),
+		zap.String("node", node))
+
+	return nil
+}
+
+// GetZFSPool gets ZFS pool information
+func (sm *StorageManager) GetZFSPool(ctx context.Context, poolName, node string) (*PoolInfo, error) {
+	result, err := sm.controller.deployment.Exec(ctx, []string{node},
+		fmt.Sprintf("sudo zpool list -Hp -o name,size,free,cap %s", poolName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ZFS pool: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return nil, fmt.Errorf("failed to get ZFS pool: %v", result.FailedHosts())
+	}
+
+	for _, r := range result.Hosts {
+		if r.Success && r.Output != "" {
+			fields := strings.Fields(r.Output)
+			if len(fields) >= 4 {
+				totalSize, _ := strconv.ParseUint(fields[1], 10, 64)
+				freeSize, _ := strconv.ParseUint(fields[2], 10, 64)
+				return &PoolInfo{
+					Name:    poolName,
+					Type:    "zfs",
+					Node:    node,
+					TotalGB: totalSize / 1024 / 1024 / 1024,
+					FreeGB:  freeSize / 1024 / 1024 / 1024,
+					Devices: []string{},
+				}, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("ZFS pool not found: %s", poolName)
+}
+
+// ListZFSpools lists all ZFS pools across all nodes
+func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error) {
+	var pools []*PoolInfo
+	seen := make(map[string]bool)
+
+	hosts := sm.controller.GetHosts()
+	if len(hosts) == 0 {
+		return pools, nil
+	}
+
+	result, err := sm.controller.deployment.ZFSListPools(ctx, hosts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ZFS pools: %w", err)
+	}
+
+	for host, r := range result.Hosts {
+		if r.Success {
+			normalizedHost := sm.controller.NormalizeHost(host)
+			if normalizedHost == "" {
+				normalizedHost = host
+			}
+
+			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				fields := strings.Fields(line)
+				if len(fields) >= 4 {
+					poolName := fields[0]
+					key := normalizedHost + "/" + poolName
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
+
+					totalSize, _ := strconv.ParseUint(fields[1], 10, 64)
+					freeSize, _ := strconv.ParseUint(fields[2], 10, 64)
+					pools = append(pools, &PoolInfo{
+						Name:    poolName,
+						Type:    "zfs",
+						Node:    normalizedHost,
+						TotalGB: totalSize / 1024 / 1024 / 1024,
+						FreeGB:  freeSize / 1024 / 1024 / 1024,
+					})
+				}
+			}
+		}
+	}
+
+	return pools, nil
+}
+
+// DeleteZFSPool deletes a ZFS storage pool
+func (sm *StorageManager) DeleteZFSPool(ctx context.Context, name, node string) error {
+	sm.controller.logger.Info("Deleting ZFS pool",
+		zap.String("name", name),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSDestroyPool(ctx, []string{node}, name)
+	if err != nil {
+		return fmt.Errorf("failed to delete ZFS pool: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to delete ZFS pool: %v", result.FailedHosts())
+	}
+
+	sm.controller.logger.Info("ZFS pool deleted successfully",
+		zap.String("name", name),
+		zap.String("node", node))
+
+	return nil
+}
+
+// CreateZFSDataset creates a ZFS dataset
+func (sm *StorageManager) CreateZFSDataset(ctx context.Context, datasetPath, node string) error {
+	sm.controller.logger.Info("Creating ZFS dataset",
+		zap.String("dataset", datasetPath),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSCreateDataset(ctx, []string{node}, datasetPath)
+	if err != nil {
+		return fmt.Errorf("failed to create ZFS dataset: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to create ZFS dataset: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// ZFSDeleteDataset destroys a ZFS dataset or volume
+func (sm *StorageManager) ZFSDeleteDataset(ctx context.Context, datasetPath, node string) error {
+	sm.controller.logger.Info("Deleting ZFS dataset",
+		zap.String("dataset", datasetPath),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSDestroyDataset(ctx, []string{node}, datasetPath)
+	if err != nil {
+		return fmt.Errorf("failed to delete ZFS dataset: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to delete ZFS dataset: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// CreateZFSThinVolume creates a thin-provisioned ZFS volume
+func (sm *StorageManager) CreateZFSThinVolume(ctx context.Context, poolName, volumeName, size, node string) error {
+	sm.controller.logger.Info("Creating ZFS thin volume",
+		zap.String("pool", poolName),
+		zap.String("volume", volumeName),
+		zap.String("size", size),
+		zap.String("node", node))
+
+	volumePath := fmt.Sprintf("%s/%s", poolName, volumeName)
+	result, err := sm.controller.deployment.ZFSCreateThinDataset(ctx, []string{node}, poolName, volumeName, size)
+	if err != nil {
+		return fmt.Errorf("failed to create ZFS thin volume: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to create ZFS thin volume: %v", result.FailedHosts())
+	}
+
+	// Set quota for thin provisioning
+	_, _ = sm.controller.deployment.ZFSSetQuota(ctx, []string{node}, volumePath, size)
+
+	return nil
+}
+
+// ZFSSnapshot creates a ZFS snapshot
+func (sm *StorageManager) ZFSSnapshot(ctx context.Context, dataset, snapshotName, node string) error {
+	sm.controller.logger.Info("Creating ZFS snapshot",
+		zap.String("dataset", dataset),
+		zap.String("snapshot", snapshotName),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSSnapshot(ctx, []string{node}, dataset, snapshotName)
+	if err != nil {
+		return fmt.Errorf("failed to create ZFS snapshot: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to create ZFS snapshot: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// ZFSListSnapshots lists ZFS snapshots for a dataset
+func (sm *StorageManager) ZFSListSnapshots(ctx context.Context, dataset, node string) ([]*SnapshotInfo, error) {
+	result, err := sm.controller.deployment.ZFSListSnapshots(ctx, []string{node}, dataset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ZFS snapshots: %w", err)
+	}
+
+	var snapshots []*SnapshotInfo
+	for _, r := range result.Hosts {
+		if r.Success {
+			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+			for _, line := range lines {
+				if line == "" {
+					continue
+				}
+				fields := strings.Fields(line)
+				if len(fields) >= 3 {
+					// Format: dataset@snapshot used refer creation
+					fullName := fields[0]
+					parts := strings.SplitN(fullName, "@", 2)
+					if len(parts) == 2 {
+						snapshots = append(snapshots, &SnapshotInfo{
+							Name:      parts[1],
+							Volume:    parts[0],
+							CreatedAt: fields[3],
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return snapshots, nil
+}
+
+// ZFSDeleteSnapshot deletes a ZFS snapshot
+func (sm *StorageManager) ZFSDeleteSnapshot(ctx context.Context, snapshot, node string) error {
+	sm.controller.logger.Info("Deleting ZFS snapshot",
+		zap.String("snapshot", snapshot),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSDestroySnapshot(ctx, []string{node}, snapshot)
+	if err != nil {
+		return fmt.Errorf("failed to delete ZFS snapshot: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to delete ZFS snapshot: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// ZFSRestoreSnapshot restores a ZFS snapshot (rollback)
+func (sm *StorageManager) ZFSRestoreSnapshot(ctx context.Context, dataset, snapshotName, node string) error {
+	sm.controller.logger.Info("Restoring ZFS snapshot",
+		zap.String("dataset", dataset),
+		zap.String("snapshot", snapshotName),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSRollback(ctx, []string{node}, dataset, snapshotName)
+	if err != nil {
+		return fmt.Errorf("failed to restore ZFS snapshot: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to restore ZFS snapshot: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// ZFSCloneSnapshot creates a clone from a ZFS snapshot
+func (sm *StorageManager) ZFSCloneSnapshot(ctx context.Context, snapshot, clonePath, node string) error {
+	sm.controller.logger.Info("Cloning ZFS snapshot",
+		zap.String("snapshot", snapshot),
+		zap.String("clone", clonePath),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSClone(ctx, []string{node}, snapshot, clonePath)
+	if err != nil {
+		return fmt.Errorf("failed to clone ZFS snapshot: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to clone ZFS snapshot: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// ==================== LVM SNAPSHOT OPERATIONS ====================
+
+// CreateLvmSnapshot creates an LVM snapshot
+func (sm *StorageManager) CreateLvmSnapshot(ctx context.Context, resource, lvName, snapshotName, node, size string) error {
+	sm.controller.logger.Info("Creating LVM snapshot",
+		zap.String("resource", resource),
+		zap.String("lv_name", lvName),
+		zap.String("snapshot", snapshotName),
+		zap.String("node", node),
+		zap.String("size", size))
+
+	// Use resource name as VG name (default pool)
+	vgName := resource
+	result, err := sm.controller.deployment.LVCreateSnapshot(ctx, []string{node}, vgName, lvName, snapshotName, size)
+	if err != nil {
+		return fmt.Errorf("failed to create LVM snapshot: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to create LVM snapshot: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// ListLvmSnapshots lists LVM snapshots for a volume
+func (sm *StorageManager) ListLvmSnapshots(ctx context.Context, vgName, node string) ([]*SnapshotInfo, error) {
+	result, err := sm.controller.deployment.LVListSnapshots(ctx, []string{node}, vgName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list LVM snapshots: %w", err)
+	}
+
+	var snapshots []*SnapshotInfo
+	for _, r := range result.Hosts {
+		if r.Success {
+			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
+			for _, line := range lines {
+				if line == "" {
+					continue
+				}
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					snapshots = append(snapshots, &SnapshotInfo{
+						Name:   fields[0],
+						Volume: vgName,
+						SizeGB: 0, // LVM list output needs parsing for size
+					})
+				}
+			}
+		}
+	}
+
+	return snapshots, nil
+}
+
+// DeleteLvmSnapshot deletes an LVM snapshot
+func (sm *StorageManager) DeleteLvmSnapshot(ctx context.Context, vgName, snapshotName, node string) error {
+	sm.controller.logger.Info("Deleting LVM snapshot",
+		zap.String("vg_name", vgName),
+		zap.String("snapshot", snapshotName),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.LVRemoveSnapshot(ctx, []string{node}, vgName, snapshotName)
+	if err != nil {
+		return fmt.Errorf("failed to delete LVM snapshot: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to delete LVM snapshot: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// RestoreLvmSnapshot restores an LVM snapshot (merges it back to the origin)
+func (sm *StorageManager) RestoreLvmSnapshot(ctx context.Context, vgName, snapshotName, node string) error {
+	sm.controller.logger.Info("Restoring LVM snapshot",
+		zap.String("vg_name", vgName),
+		zap.String("snapshot", snapshotName),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.LVMergeSnapshot(ctx, []string{node}, vgName, snapshotName)
+	if err != nil {
+		return fmt.Errorf("failed to restore LVM snapshot: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to restore LVM snapshot: %v", result.FailedHosts())
+	}
+
+	return nil
+}
+
+// ZFSResizeVolume resizes a ZFS volume
+func (sm *StorageManager) ZFSResizeVolume(ctx context.Context, volumePath, newSize, node string) error {
+	sm.controller.logger.Info("Resizing ZFS volume",
+		zap.String("volume", volumePath),
+		zap.String("size", newSize),
+		zap.String("node", node))
+
+	result, err := sm.controller.deployment.ZFSResizeVolume(ctx, []string{node}, volumePath, newSize)
+	if err != nil {
+		return fmt.Errorf("failed to resize ZFS volume: %w", err)
+	}
+
+	if !result.AllSuccess() {
+		return fmt.Errorf("failed to resize ZFS volume: %v", result.FailedHosts())
+	}
 
 	return nil
 }
