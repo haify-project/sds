@@ -1,0 +1,32 @@
+# SDS Controller Configuration for Test Environment (mango/lemon/melon)
+
+[server]
+listen_address = "0.0.0.0"
+port = 3374
+
+[dispatch]
+# Path to dispatch config file
+config_path = "/root/.dispatch/config.toml"
+# Parallel execution limit for operations
+parallel = 10
+# Storage nodes
+hosts = [
+    "mango",
+    "lemon",
+    "melon"
+]
+
+[database]
+# Database file path (default: /var/lib/sds/sds.db)
+path = "/var/lib/sds/sds.db"
+
+[tls]
+enabled = false
+
+[log]
+level = "debug"  # debug, info, warn, error
+format = "text"  # json or text
+
+[storage]
+default_pool_type = "vg"
+default_snapshot_suffix = "_snap"
