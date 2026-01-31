@@ -54,6 +54,7 @@ func resourceCreate() *cobra.Command {
 	var pool string
 	var protocol string
 	var size string
+	var drbdOptions map[string]string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -101,7 +102,7 @@ func resourceCreate() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			err = sdsClient.CreateResourceWithPool(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool)
+			err = sdsClient.CreateResourceWithPool(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, drbdOptions)
 			if err != nil {
 				return fmt.Errorf("failed to create resource: %w", err)
 			}
@@ -113,6 +114,9 @@ func resourceCreate() *cobra.Command {
 			fmt.Printf("  Nodes:    %v\n", nodeList)
 			fmt.Printf("  Protocol: %s\n", protocol)
 			fmt.Printf("  Size:     %d GiB (%s)\n", sizeGiB, util.FormatBytes(sizeBytes))
+			if len(drbdOptions) > 0 {
+				fmt.Printf("  Options:  %v\n", drbdOptions)
+			}
 			fmt.Printf("\nNext steps:\n")
 			fmt.Printf("  1. sds-cli resource get %s\n", name)
 			fmt.Printf("  2. sds-cli resource primary %s <node>\n", name)
@@ -127,6 +131,7 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: data-pool)")
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")
 	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required)")
+	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
 
 	cmd.MarkFlagRequired("name")
 	cmd.MarkFlagRequired("port")

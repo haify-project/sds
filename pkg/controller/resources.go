@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -100,14 +101,15 @@ func (rm *ResourceManager) GetHosts() []string {
 }
 
 // CreateResource creates a DRBD resource across multiple nodes
-func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string) error {
+func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, drbdOptions map[string]string) error {
 	rm.controller.logger.Info("Creating DRBD resource",
 		zap.String("name", name),
 		zap.Uint32("port", port),
 		zap.Strings("nodes", nodes),
 		zap.String("protocol", protocol),
 		zap.Uint32("size_gb", sizeGB),
-		zap.String("pool", pool))
+		zap.String("pool", pool),
+		zap.Any("options", drbdOptions))
 
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
@@ -149,7 +151,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	}
 
 	// 2. Generate DRBD config
-	drbdConfig := rm.generateDrbdConfig(name, port, nodes, protocol, pool, lvName)
+	drbdConfig := rm.generateDrbdConfig(name, port, nodes, protocol, pool, lvName, drbdOptions)
 
 	// 3. Distribute config to all nodes
 	configResult, err := rm.deployment.DistributeConfig(ctx, nodeIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
@@ -204,29 +206,133 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 }
 
 // generateDrbdConfig generates a DRBD resource configuration file
-func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []string, protocol, pool, lvName string) string {
+func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []string, protocol, pool, lvName string, options map[string]string) string {
 	var config strings.Builder
 
-	config.WriteString(fmt.Sprintf("resource %s {\n", name))
-	config.WriteString("    options {\n")
-	config.WriteString("        auto-promote no;\n")
-	config.WriteString("        quorum majority;\n")
-	config.WriteString("        on-no-quorum io-error;\n")
-	config.WriteString("        on-no-data-accessible io-error;\n")
-	config.WriteString("        on-suspended-primary-outdated force-secondary;\n")
-	config.WriteString("    }\n\n")
-	config.WriteString(fmt.Sprintf("    protocol %s;\n", protocol))
+	// Organize options by section -> key -> value
+	sections := make(map[string]map[string]string)
 
-	// Net options for handling conflicts
-	config.WriteString("    net {\n")
-	config.WriteString("        rr-conflict retry-connect;\n")
-	config.WriteString("    }\n")
+	// Helper to set option
+	setOption := func(section, key, value string) {
+		if sections[section] == nil {
+			sections[section] = make(map[string]string)
+		}
+		sections[section][key] = value
+	}
+
+	// Add defaults
+	setOption("options", "auto-promote", "no")
+	setOption("options", "quorum", "majority")
+	setOption("options", "on-no-quorum", "io-error")
+	setOption("options", "on-no-data-accessible", "io-error")
+	setOption("options", "on-suspended-primary-outdated", "force-secondary")
+	
+	setOption("net", "rr-conflict", "retry-connect")
+
+	// Process user options
+	for k, v := range options {
+		parts := strings.SplitN(k, "/", 2)
+		if len(parts) == 2 {
+			// section/key format (e.g. disk/on-io-error)
+			section := strings.ToLower(parts[0])
+			key := parts[1]
+			setOption(section, key, v)
+		} else {
+			// default to options section
+			setOption("options", k, v)
+		}
+	}
+
+	config.WriteString(fmt.Sprintf("resource %s {\n", name))
+
+	// Write configuration sections
+	knownSections := []string{"options", "net", "startup", "handlers"} // disk handled separately inside volume
+	processed := make(map[string]bool)
+
+	for _, s := range knownSections {
+		opts, ok := sections[s]
+		
+		// Always write net section to include protocol
+		if s == "net" {
+			config.WriteString("\n    net {\n")
+			config.WriteString(fmt.Sprintf("        protocol %s;\n", protocol))
+			if ok {
+				var keys []string
+				for k := range opts {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
+					config.WriteString(fmt.Sprintf("        %s %s;\n", k, opts[k]))
+				}
+			}
+			config.WriteString("    }\n")
+			processed[s] = true
+			continue
+		}
+
+		if ok && len(opts) > 0 {
+			config.WriteString(fmt.Sprintf("\n    %s {\n", s))
+			
+			// Sort keys for deterministic output
+			var keys []string
+			for k := range opts {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			
+			for _, k := range keys {
+				config.WriteString(fmt.Sprintf("        %s %s;\n", k, opts[k]))
+			}
+			config.WriteString("    }\n")
+			processed[s] = true
+		}
+	}
+
+	// Write any other custom sections (excluding disk which is handled in volume)
+	var customSections []string
+	for s := range sections {
+		if !processed[s] && s != "disk" {
+			customSections = append(customSections, s)
+		}
+	}
+	sort.Strings(customSections)
+	
+	for _, s := range customSections {
+		// Generic write
+		opts := sections[s]
+		config.WriteString(fmt.Sprintf("\n    %s {\n", s))
+		var keys []string
+		for k := range opts {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			config.WriteString(fmt.Sprintf("        %s %s;\n", k, opts[k]))
+		}
+		config.WriteString("    }\n")
+	}
 
 	// Generate volume 0 block
 	config.WriteString("\n    volume 0 {\n")
 	config.WriteString(fmt.Sprintf("        device    minor %d;\n", port-7000))
 	config.WriteString(fmt.Sprintf("        disk      /dev/%s/%s;\n", pool, lvName))
 	config.WriteString("        meta-disk internal;\n")
+	
+	// Inject disk options here
+	if diskOpts, ok := sections["disk"]; ok && len(diskOpts) > 0 {
+		config.WriteString("        disk {\n")
+		var keys []string
+		for k := range diskOpts {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			config.WriteString(fmt.Sprintf("            %s %s;\n", k, diskOpts[k]))
+		}
+		config.WriteString("        }\n")
+	}
+	
 	config.WriteString("    }\n")
 
 	// Generate on sections for each node

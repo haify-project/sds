@@ -204,19 +204,20 @@ func (c *SDSClient) UnregisterNode(ctx context.Context, address string) error {
 // ==================== RESOURCE OPERATIONS ====================
 
 // CreateResource creates a DRBD resource
-func (c *SDSClient) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32) error {
-	return c.CreateResourceWithPool(ctx, name, port, nodes, protocol, sizeGB, "")
+func (c *SDSClient) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, drbdOptions map[string]string) error {
+	return c.CreateResourceWithPool(ctx, name, port, nodes, protocol, sizeGB, "", drbdOptions)
 }
 
 // CreateResourceWithPool creates a DRBD resource with specified pool
-func (c *SDSClient) CreateResourceWithPool(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string) error {
+func (c *SDSClient) CreateResourceWithPool(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, drbdOptions map[string]string) error {
 	req := &sdspb.CreateResourceRequest{
-		Name:     name,
-		Port:     port,
-		Nodes:    nodes,
-		Protocol: protocol,
-		SizeGb:   sizeGB,
-		Pool:     pool,
+		Name:        name,
+		Port:        port,
+		Nodes:       nodes,
+		Protocol:    protocol,
+		SizeGb:      sizeGB,
+		Pool:        pool,
+		DrbdOptions: drbdOptions,
 	}
 
 	resp, err := c.client.CreateResource(ctx, req)

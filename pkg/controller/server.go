@@ -219,7 +219,7 @@ func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*s
 // ==================== RESOURCE OPERATIONS ====================
 
 func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRequest) (*sdspb.CreateResourceResponse, error) {
-	err := s.resources.CreateResource(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool)
+	err := s.resources.CreateResource(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool, req.DrbdOptions)
 	if err != nil {
 		return &sdspb.CreateResourceResponse{
 			Success: false,

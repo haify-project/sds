@@ -175,6 +175,7 @@ message CreateResourceRequest {
   string protocol = 4;
   uint32 size_gb = 5;
   string pool = 6;
+  map<string, string> drbd_options = 7;
 }
 
 message CreateResourceResponse {
