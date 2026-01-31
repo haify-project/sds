@@ -1,0 +1,28 @@
+# SDS Controller Configuration
+
+[server]
+listen_address = "0.0.0.0"
+port = 3373
+
+[drbd_agent]
+# drbd-agent endpoints (multiple nodes)
+endpoints = [
+    "localhost:50051",
+    # "node1.example.com:50051",
+    # "node2.example.com:50051",
+]
+timeout = 30  # seconds
+
+[tls]
+enabled = false
+# ca_cert = "/etc/sds/certs/ca.crt"
+# client_cert = "/etc/sds/certs/client.crt"
+# client_key = "/etc/sds/certs/client.key"
+
+[log]
+level = "info"  # debug, info, warn, error
+format = "json"  # json or text
+
+[storage]
+default_pool_type = "vg"
+default_snapshot_suffix = "_snap"

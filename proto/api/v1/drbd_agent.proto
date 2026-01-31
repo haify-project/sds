@@ -1,0 +1,189 @@
+syntax = "proto3";
+
+package drbd.agent.v1;
+
+option go_package = "github.com/liliang-cn/drbd-agent/api/proto/v1;pb";
+
+// Import shared types
+import "api/proto/v1/common.proto";
+
+// ============================================================================
+// DRBD Agent Main Service
+// Configuration management, monitoring, events, and health checks
+// ============================================================================
+
+service DRBDAgent {
+  // =================================================================
+  // DRBD Resource Configuration Management
+  // =================================================================
+
+  rpc WriteResourceConfig(WriteResourceConfigRequest) returns (WriteResourceConfigResponse);
+  rpc ReadResourceConfig(ReadResourceConfigRequest) returns (ReadResourceConfigResponse);
+  rpc DeleteResourceConfig(DeleteResourceConfigRequest) returns (DeleteResourceConfigResponse);
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
+
+  // =================================================================
+  // Monitoring and Health
+  // =================================================================
+
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // =================================================================
+  // Event Streaming (CRITICAL for HA systems)
+  // =================================================================
+
+  rpc SubscribeEvents(SubscribeEventsRequest) returns (stream DrbdEvent);
+  rpc WatchResources(WatchResourcesRequest) returns (stream ResourceStateUpdate);
+
+  // =================================================================
+  // Command Execution
+  // =================================================================
+
+  rpc ExecCommand(ExecCommandRequest) returns (ExecCommandResponse);
+}
+
+// ============================================================================
+// DRBD Resource Configuration Messages
+// ============================================================================
+
+message WriteResourceConfigRequest {
+  string resource_name = 1;
+  string config_content = 2;  // DRBD resource configuration file content
+  string config_path = 3;     // Full path (optional, defaults to /etc/drbd.d/<resource>.res)
+  bool validate = 4;          // Validate with drbdadm --dry-run before writing
+  bool backup = 5;            // Backup existing config before overwriting
+}
+
+message WriteResourceConfigResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;     // Actual path where config was written
+  string backup_path = 4;     // Path to backup if backup=true
+  repeated string validation_errors = 5;  // Validation errors if any
+}
+
+message ReadResourceConfigRequest {
+  string resource_name = 1;
+  string config_path = 2;     // Full path (optional, defaults to /etc/drbd.d/<resource>.res)
+}
+
+message ReadResourceConfigResponse {
+  bool success = 1;
+  string message = 2;
+  string config_content = 3;
+  string config_path = 4;
+}
+
+message DeleteResourceConfigRequest {
+  string resource_name = 1;
+  string config_path = 2;     // Full path (optional)
+  bool backup = 3;            // Backup before deleting
+}
+
+message DeleteResourceConfigResponse {
+  bool success = 1;
+  string message = 2;
+  string backup_path = 3;     // Path to backup if backup=true
+}
+
+message ListResourcesRequest {
+  string config_dir = 1;      // Path to scan (optional, defaults to /etc/drbd.d/)
+  bool include_disabled = 2;  // Include disabled resources (files ending in .disabled)
+}
+
+message ListResourcesResponse {
+  repeated ResourceInfo resources = 1;
+}
+
+message ResourceInfo {
+  string name = 1;
+  string config_path = 2;
+  bool is_enabled = 3;        // Not disabled
+  int64 size_bytes = 4;       // File size
+  int64 modified_time = 5;    // Unix timestamp
+  repeated string volumes = 6; // Volume devices
+}
+
+// ============================================================================
+// Health Check Messages
+// ============================================================================
+
+message HealthCheckRequest {
+  bool check_drbd_module = 1;
+  bool check_config = 2;
+  bool check_resources = 3;
+}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string message = 2;
+  repeated HealthCheckItem checks = 3;
+}
+
+message HealthCheckItem {
+  string name = 1;            // "drbd_module", "config", "resources"
+  bool passed = 2;
+  string message = 3;
+  int32 duration_ms = 4;      // Check duration
+}
+
+// ============================================================================
+// Event Streaming Messages
+// ============================================================================
+
+message SubscribeEventsRequest {
+  // Filter which events to receive
+  repeated string resources = 1;           // Specific resources (empty = all)
+  repeated string event_types = 2;         // Event types to filter (empty = all)
+  bool include_initial_state = 3;          // Send current state on subscribe
+  int64 from_sequence = 4;                 // Resume from event sequence number (for replay)
+  bool enable_replay = 5;                  // Enable event replay from buffer
+}
+
+message DrbdEvent {
+  int64 sequence = 1;           // Event sequence number
+  int64 timestamp = 2;          // Unix timestamp (nanoseconds)
+  string resource = 3;          // Resource name
+  string event_type = 4;        // "role_change", "connection_state", etc.
+  map<string, string> data = 5; // Event-specific data
+}
+
+message WatchResourcesRequest {
+  repeated string resources = 1;            // Resources to watch (empty = all)
+  bool send_initial = 2;                    // Send current state immediately
+  int32 heartbeat_interval_seconds = 3;     // Heartbeat interval
+}
+
+message ResourceStateUpdate {
+  int64 sequence = 1;
+  int64 timestamp = 2;
+  string resource = 3;
+  ResourceStatus state = 4;
+  bool is_heartbeat = 5;
+}
+
+// ============================================================================
+// Command Execution Messages
+// ============================================================================
+
+message ExecCommandRequest {
+  string command = 1;                  // Command to execute
+  repeated string args = 2;            // Command arguments
+  string working_dir = 3;              // Working directory (optional)
+  map<string, string> env_vars = 4;    // Environment variables (optional)
+  string stdin = 5;                    // Standard input (optional)
+  int32 timeout_seconds = 6;           // Timeout in seconds (0 = no timeout)
+  bool capture_output = 7;             // Capture stdout/stderr (default: true)
+  string user = 8;                     // Run as specific user (requires root)
+  string shell = 9;                    // Shell interpreter (e.g., "/bin/bash", "/bin/sh")
+}
+
+message ExecCommandResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+  string stdout = 4;                   // Standard output
+  string stderr = 5;                   // Standard error
+  int64 duration_ms = 6;               // Command execution duration in milliseconds
+  bool timed_out = 7;                  // Whether command timed out
+}

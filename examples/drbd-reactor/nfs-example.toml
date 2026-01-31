@@ -1,0 +1,59 @@
+# SDS NFS Gateway Configuration Example
+# File: /etc/drbd-reactor.d/sds-nfs-nfs-data.toml
+#
+# This is an example configuration for an NFS gateway using drbd-reactor.
+# Replace the placeholders with your actual values.
+#
+# Resource: nfs-data
+#   - Volume 0: Cluster private (ext4, /var/lib/sds/nfs-data-cluster-private)
+#   - Volume 1: Data export 1 (ext4, /srv/gateway-exports/nfs-data/data)
+#   - Volume 2: Data export 2 (ext4, /srv/gateway-exports/nfs-data/backup)
+# Service IP: 192.168.1.200/24
+# Export Base Path: /srv/gateway-exports/nfs-data
+
+[promoter]
+  [[promoter.resources.nfs-data]]
+    runner = "systemd"
+    stop-services-on-exit = true
+    on-drbd-demote-failure = "reboot-immediate"
+    target-as = "BindsTo"
+
+    start = [
+      # 1. Block NFS port (2049) on all nodes before starting
+      "ocf:heartbeat:portblock portblock ip=192.168.1.200 portno=2049 action=block protocol=tcp",
+
+      # 2. Cluster Private Volume
+      # Stores NFS server state, RPC information, etc.
+      "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd0 directory=/var/lib/sds/nfs-data-cluster-private fstype=ext4 run_fsck=no",
+
+      # 3. Mount filesystems for actual data volumes
+      "ocf:heartbeat:Filesystem fs_1 device=/dev/drbd1 directory=/srv/gateway-exports/nfs-data/data fstype=ext4 run_fsck=no",
+      "ocf:heartbeat:Filesystem fs_2 device=/dev/drbd2 directory=/srv/gateway-exports/nfs-data/backup fstype=ext4 run_fsck=no",
+
+      # 4. Bring up service IP (virtual IP that floats between nodes)
+      "ocf:heartbeat:IPaddr2 service_ip ip=192.168.1.200 cidr_netmask=24",
+
+      # 5. Start NFS server
+      # - nfs_ip: Service IP address
+      # - nfs_shared_infodir: Directory for NFS state synchronization
+      # - nfs_server_scope: NFS server scope (usually the service IP)
+      "ocf:heartbeat:nfsserver nfsserver nfs_ip=192.168.1.200 nfs_shared_infodir=/var/lib/sds/nfs-data-cluster-private/nfs nfs_server_scope=192.168.1.200",
+
+      # 6. Export filesystems
+      # - directory: Export path
+      # - fsid: File system ID (must be unique per export, UUID format)
+      # - clientspec: Client specification (CIDR or IP/netmask)
+      # - options: NFS export options
+      #
+      # Export 1: Allow read-write access from local network
+      "ocf:heartbeat:exportfs export_1_0 directory=/srv/gateway-exports/nfs-data/data fsid=12345678-1234-1234-1234-123456789abc clientspec=192.168.1.0/24 options=rw,sync,no_root_squash",
+
+      # Export 2: Allow read-only access from anywhere
+      "ocf:heartbeat:exportfs export_2_0 directory=/srv/gateway-exports/nfs-data/backup fsid=87654321-4321-4321-4321-cba987654321 clientspec=0.0.0.0/0.0.0.0 options=ro,all_squash,anonuid=0,anongid=0",
+
+      # 7. Unblock NFS port (only on the active/primary node)
+      "ocf:heartbeat:portblock portunblock ip=192.168.1.200 portno=2049 action=unblock protocol=tcp tickle_dir=/var/lib/sds/nfs-data-cluster-private",
+    ]
+
+  [promoter.metadata]
+    linstor-gateway-schema-version = 1

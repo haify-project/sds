@@ -1,0 +1,486 @@
+syntax = "proto3";
+
+package v1;
+
+option go_package = "github.com/liliang-cn/sds/api/proto/v1";
+
+// SDS Controller Service
+service SDSController {
+  // Pool operations
+  rpc CreatePool(CreatePoolRequest) returns (CreatePoolResponse);
+  rpc DeletePool(DeletePoolRequest) returns (DeletePoolResponse);
+  rpc GetPool(GetPoolRequest) returns (GetPoolResponse);
+  rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse);
+  rpc AddDiskToPool(AddDiskToPoolRequest) returns (AddDiskToPoolResponse);
+
+  // Node operations
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+  rpc UnregisterNode(UnregisterNodeRequest) returns (UnregisterNodeResponse);
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+
+  // Resource operations
+  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse);
+  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse);
+  rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
+  rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse);
+  rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse);
+  rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse);
+  rpc ResourceStatus(ResourceStatusRequest) returns (ResourceStatusResponse);
+  rpc SetPrimary(SetPrimaryRequest) returns (SetPrimaryResponse);
+  rpc SetSecondary(SetSecondaryRequest) returns (SetSecondaryResponse);
+  rpc CreateFilesystem(CreateFilesystemRequest) returns (CreateFilesystemResponse);
+  rpc MountResource(MountResourceRequest) returns (MountResourceResponse);
+  rpc UnmountResource(UnmountResourceRequest) returns (UnmountResourceResponse);
+
+  // Snapshot operations
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
+  rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse);
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (RestoreSnapshotResponse);
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+
+  // Gateway operations
+  rpc CreateNFSGateway(CreateNFSGatewayRequest) returns (CreateNFSGatewayResponse);
+  rpc CreateISCSIGateway(CreateISCSIGatewayRequest) returns (CreateISCSIGatewayResponse);
+  rpc CreateNVMeGateway(CreateNVMeGatewayRequest) returns (CreateNVMeGatewayResponse);
+  rpc DeleteGateway(DeleteGatewayRequest) returns (DeleteGatewayResponse);
+  rpc GetGateway(GetGatewayRequest) returns (GetGatewayResponse);
+  rpc ListGateways(ListGatewaysRequest) returns (ListGatewaysResponse);
+  rpc StartGateway(StartGatewayRequest) returns (StartGatewayResponse);
+  rpc StopGateway(StopGatewayRequest) returns (StopGatewayResponse);
+}
+
+// Pool messages
+message CreatePoolRequest {
+  string name = 1;
+  string type = 2;
+  string node = 3;
+  repeated string disks = 4;
+  uint64 size_gb = 5;
+}
+
+message CreatePoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeletePoolRequest {
+  string name = 1;
+  string node = 2;
+}
+
+message DeletePoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetPoolRequest {
+  string name = 1;
+  string node = 2;
+}
+
+message GetPoolResponse {
+  bool success = 1;
+  string message = 2;
+  PoolInfo pool = 3;
+}
+
+message ListPoolsRequest {}
+
+message ListPoolsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PoolInfo pools = 3;
+}
+
+message AddDiskToPoolRequest {
+  string pool = 1;
+  string disk = 2;
+  string node = 3;
+}
+
+message AddDiskToPoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PoolInfo {
+  string name = 1;
+  string type = 2;
+  string node = 3;
+  uint64 total_gb = 4;
+  uint64 free_gb = 5;
+  repeated string devices = 6;
+}
+
+// Node messages
+message RegisterNodeRequest {
+  string address = 1;
+}
+
+message RegisterNodeResponse {
+  bool success = 1;
+  string message = 2;
+  NodeInfo node = 3;
+}
+
+message UnregisterNodeRequest {
+  string address = 1;
+}
+
+message UnregisterNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetNodeRequest {
+  string address = 1;
+}
+
+message GetNodeResponse {
+  bool success = 1;
+  string message = 2;
+  NodeInfo node = 3;
+}
+
+message ListNodesRequest {}
+
+message ListNodesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NodeInfo nodes = 3;
+}
+
+message NodeInfo {
+  string address = 1;
+  string hostname = 2;
+  string state = 3;
+  int64 last_seen = 4;
+  string version = 5;
+}
+
+// Resource messages
+message CreateResourceRequest {
+  string name = 1;
+  uint32 port = 2;
+  repeated string nodes = 3;
+  string protocol = 4;
+  uint32 size_gb = 5;
+  string pool = 6;
+}
+
+message CreateResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteResourceRequest {
+  string name = 1;
+}
+
+message DeleteResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetResourceRequest {
+  string name = 1;
+}
+
+message GetResourceResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceInfo resource = 3;
+}
+
+message ListResourcesRequest {}
+
+message ListResourcesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ResourceInfo resources = 3;
+}
+
+message AddVolumeRequest {
+  string resource = 1;
+  string volume = 2;
+  string pool = 3;
+  uint32 size_gb = 4;
+}
+
+message AddVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveVolumeRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+}
+
+message RemoveVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResizeVolumeRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  uint32 size_gb = 3;
+}
+
+message ResizeVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResourceStatusRequest {
+  string name = 1;
+}
+
+message ResourceStatusResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceStatus status = 3;
+}
+
+message SetPrimaryRequest {
+  string resource = 1;
+  string node = 2;
+  bool force = 3;
+}
+
+message SetPrimaryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SetSecondaryRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message SetSecondaryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateFilesystemRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  string fstype = 3;
+}
+
+message CreateFilesystemResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message MountResourceRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  string path = 3;
+  string node = 4;
+  string fstype = 5;
+}
+
+message MountResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UnmountResourceRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  string node = 3;
+}
+
+message UnmountResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResourceInfo {
+  string name = 1;
+  uint32 port = 2;
+  string protocol = 3;
+  repeated string nodes = 4;
+  string role = 5;
+  repeated VolumeInfo volumes = 6;
+}
+
+message ResourceStatus {
+  string name = 1;
+  string role = 2;
+  repeated string nodes = 3;
+  map<string, NodeResourceState> node_states = 4;
+}
+
+message NodeResourceState {
+  string role = 1;
+  string disk_state = 2;
+  string replication_state = 3;
+}
+
+message VolumeInfo {
+  uint32 volume_id = 1;
+  string device = 2;
+  uint64 size_gb = 3;
+}
+
+// Snapshot messages
+message CreateSnapshotRequest {
+  string volume = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message CreateSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteSnapshotRequest {
+  string volume = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message DeleteSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RestoreSnapshotRequest {
+  string volume = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message RestoreSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListSnapshotsRequest {
+  string volume = 1;
+  string node = 2;
+}
+
+message ListSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SnapshotInfo snapshots = 3;
+}
+
+message SnapshotInfo {
+  string name = 1;
+  string volume = 2;
+  uint64 size_gb = 3;
+  string created_at = 4;
+}
+
+// Gateway messages
+message CreateNFSGatewayRequest {
+  string resource = 1;           // DRBD resource name
+  string service_ip = 2;         // Service IP (e.g., "192.168.1.200/24")
+  string export_path = 3;        // Base export path (e.g., "/data")
+  repeated string allowed_ips = 4; // Allowed client IPs (e.g., ["192.168.1.0/24"])
+  string fs_type = 5;            // Filesystem type (ext4, xfs)
+  map<string, string> options = 6; // Additional options
+}
+
+message CreateNFSGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;        // Path to generated config file
+}
+
+message CreateISCSIGatewayRequest {
+  string resource = 1;           // DRBD resource name
+  string service_ip = 2;         // Service IP (e.g., "192.168.1.100/24")
+  string iqn = 3;                // iSCSI Qualified Name
+  repeated string allowed_initiators = 4; // Allowed initiator IQNs
+  string username = 5;           // CHAP username (optional)
+  string password = 6;           // CHAP password (optional)
+  string implementation = 7;     // iSCSI implementation (lio, tgt, iet)
+  map<string, string> options = 8; // Additional options
+}
+
+message CreateISCSIGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;        // Path to generated config file
+}
+
+message CreateNVMeGatewayRequest {
+  string resource = 1;           // DRBD resource name
+  string service_ip = 2;         // Service IP (e.g., "192.168.1.150/24")
+  string nqn = 3;                // NVMe Qualified Name
+  string transport_type = 4;     // Transport type (tcp, rdma)
+  map<string, string> options = 5; // Additional options
+}
+
+message CreateNVMeGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;        // Path to generated config file
+}
+
+message DeleteGatewayRequest {
+  string id = 1;
+}
+
+message DeleteGatewayResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetGatewayRequest {
+  string id = 1;
+}
+
+message GetGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  GatewayInfo gateway = 3;
+}
+
+message ListGatewaysRequest {}
+
+message ListGatewaysResponse {
+  bool success = 1;
+  string message = 2;
+  repeated GatewayInfo gateways = 3;
+}
+
+message StartGatewayRequest {
+  string id = 1;
+}
+
+message StartGatewayResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message StopGatewayRequest {
+  string id = 1;
+}
+
+message StopGatewayResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GatewayInfo {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  string state = 4;
+  string node = 5;
+  string resource = 6;
+  uint32 volume_id = 7;
+  string path = 8;
+  map<string, string> options = 9;
+}

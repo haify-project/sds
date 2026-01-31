@@ -1,0 +1,54 @@
+# SDS iSCSI Gateway Configuration Example
+# File: /etc/drbd-reactor.d/sds-iscsi-r0.toml
+#
+# This is an example configuration for an iSCSI gateway using drbd-reactor.
+# Replace the placeholders with your actual values.
+#
+# Resource: r0
+#   - Volume 0: Cluster private (ext4, /var/lib/sds/r0-cluster-private)
+#   - Volume 1: Data LUN 1 (/dev/drbd1, 10GB)
+#   - Volume 2: Data LUN 2 (/dev/drbd2, 20GB)
+# Service IP: 192.168.1.100/24
+# IQN: iqn.2024-01.com.example:storage.r0
+# iSCSI Implementation: LIO (Linux SCSI Target)
+
+[promoter]
+  [[promoter.resources.r0]]
+    runner = "systemd"
+    stop-services-on-exit = true
+    on-drbd-demote-failure = "reboot-immediate"
+    target-as = "Requires"
+
+    start = [
+      # 1. Cluster Private Volume
+      # Stores cluster state, tickle files for portblock, etc.
+      "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd0 directory=/var/lib/sds/r0-cluster-private fstype=ext4 run_fsck=no",
+
+      # 2. Block iSCSI port (3260) on all nodes before starting
+      "ocf:heartbeat:portblock pblock0 ip=192.168.1.100 portno=3260 action=block protocol=tcp",
+
+      # 3. Bring up service IP (virtual IP that floats between nodes)
+      "ocf:heartbeat:IPaddr2 service_ip0 ip=192.168.1.100 cidr_netmask=24",
+
+      # 4. Configure iSCSI Target
+      # - iqn: iSCSI Qualified Name
+      # - portals: IP:port combinations
+      # - incoming_username/password: CHAP authentication (optional, empty = no auth)
+      # - allowed_initiators: space-separated list of allowed initiator IQNs (empty = allow all)
+      # - implementation: lio (recommended), tgt, iet, or scst
+      "ocf:heartbeat:iSCSITarget target iqn=iqn.2024-01.com.example:storage.r0 portals=192.168.1.100:3260 incoming_username= incoming_password= allowed_initiators= implementation=lio",
+
+      # 5. Export LUNs (Logical Units)
+      # - lun: LUN number (should match DRBD volume number)
+      # - path: DRBD device path
+      # - product_id: SCSI product ID (first 8 bytes used by VMware for LUN identification)
+      # - scsi_sn: SCSI serial number (MD5 hash of IQN + volume number, first 8 chars)
+      "ocf:heartbeat:iSCSILogicalUnit lu1 target_iqn=iqn.2024-01.com.example:storage.r0 lun=1 path=/dev/drbd1 product_id=a1b2c3d4 scsi_sn=a1b2c3d4",
+      "ocf:heartbeat:iSCSILogicalUnit lu2 target_iqn=iqn.2024-01.com.example:storage.r0 lun=2 path=/dev/drbd2 product_id=e5f6g7h8 scsi_sn=e5f6g7h8",
+
+      # 6. Unblock iSCSI port (only on the active/primary node)
+      "ocf:heartbeat:portblock portunblock0 ip=192.168.1.100 portno=3260 action=unblock protocol=tcp tickle_dir=/var/lib/sds/r0-cluster-private",
+    ]
+
+  [promoter.metadata]
+    linstor-gateway-schema-version = 1

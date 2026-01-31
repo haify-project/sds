@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package drbd.agent.v1;
+
+option go_package = "github.com/liliang-cn/drbd-agent/api/proto/v1;pb";
+
+// ============================================================================
+// Block Device Service
+// Manages block devices, partitions, and filesystems
+// ============================================================================
+
+service BlockDev {
+  // List block devices with information
+  rpc BlockDevLSBlk(BlockDevLSBlkRequest) returns (BlockDevLSBlkResponse);
+
+  // Mount a filesystem
+  rpc BlockDevMount(BlockDevMountRequest) returns (BlockDevMountResponse);
+
+  // Unmount a filesystem
+  rpc BlockDevUmount(BlockDevUmountRequest) returns (BlockDevUmountResponse);
+
+  // Wipe filesystem signatures from a device
+  rpc BlockDevWipeFs(BlockDevWipeFsRequest) returns (BlockDevWipeFsResponse);
+
+  // Get block device attributes (UUID, filesystem type, etc.)
+  rpc BlockDevBlkID(BlockDevBlkIDRequest) returns (BlockDevBlkIDResponse);
+
+  // Create a filesystem on a block device
+  rpc BlockDevMkFs(BlockDevMkFsRequest) returns (BlockDevMkFsResponse);
+
+  // Re-read partition table
+  rpc BlockDevPartProbe(BlockDevPartProbeRequest) returns (BlockDevPartProbeResponse);
+}
+
+// ============================================================================
+// Block Device Messages
+// ============================================================================
+
+message BlockDevLSBlkRequest {
+  string device = 1;                    // Specific device (e.g., "/dev/sda"), empty for all
+  bool bytes = 2;                       // Print sizes in bytes rather than human-readable
+  repeated string output_fields = 3;     // Output fields (e.g., ["NAME", "SIZE", "TYPE", "MOUNTPOINT"])
+  repeated string paths = 4;             // Filter by path
+  string fs_type = 5;                   // Filter by filesystem type
+}
+
+message BlockDevLSBlkResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BlockDeviceInfo devices = 3;
+}
+
+message BlockDevMountRequest {
+  string source = 1;                    // Source device
+  string target = 2;                    // Mount point directory
+  string fstype = 3;                    // Filesystem type (e.g., "ext4", "xfs")
+  repeated string options = 4;          // Mount options (e.g., ["ro", "noatime"])
+  bool fake = 5;                        // Fake mount (dry run)
+  bool bind = 6;                        // Bind mount
+  bool readonly = 7;                    // Read-only mount
+}
+
+message BlockDevMountResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message BlockDevUmountRequest {
+  string target = 1;                    // Mount point or device
+  bool force = 2;                       // Force unmount
+  bool lazy = 3;                        // Lazy unmount (disconnect immediately)
+  bool recursive = 4;                   // Recursive unmount
+}
+
+message BlockDevUmountResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message BlockDevWipeFsRequest {
+  string device = 1;                    // Device path (e.g., "/dev/sda1")
+  bool all = 2;                         // Wipe all magic strings
+  repeated string offsets = 3;          // Specific offsets to wipe
+  bool force = 4;                       // Force wipe
+  bool no_headings = 5;                 // Don't print headings
+}
+
+message BlockDevWipeFsResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+  repeated string wiped_signatures = 4; // Signatures that were wiped
+}
+
+message BlockDevBlkIDRequest {
+  string device = 1;                    // Specific device, empty for all
+  string output_format = 2;             // Output format ("value", "export", "json")
+  repeated string tags = 3;             // Specific tags to show (e.g., ["UUID", "TYPE"])
+}
+
+message BlockDevBlkIDResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BlockDevIDInfo devices = 3;
+}
+
+message BlockDevMkFsRequest {
+  string device = 1;                    // Device path
+  string fstype = 2;                    // Filesystem type (e.g., "ext4", "xfs", "btrfs")
+  repeated string options = 3;          // Additional options for mkfs
+  string label = 4;                     // Filesystem label
+  string uuid = 5;                      // Specific UUID (for some filesystems)
+  uint64 blocks = 6;                    // Filesystem size in blocks
+  bool force = 7;                       // Force creation
+}
+
+message BlockDevMkFsResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message BlockDevPartProbeRequest {
+  string device = 1;                    // Device path (e.g., "/dev/sda")
+  bool summary = 2;                     // Show a summary of partitions
+}
+
+message BlockDevPartProbeResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+  repeated string partitions = 4;      // Detected partitions
+}
+
+// ============================================================================
+// Block Device Data Types
+// ============================================================================
+
+message BlockDeviceInfo {
+  string name = 1;                      // Device name (e.g., "sda", "sda1")
+  string path = 2;                      // Device path (e.g., "/dev/sda")
+  string maj_min = 3;                   // Major:minor numbers
+  string size = 4;                      // Human-readable size
+  uint64 size_bytes = 5;                // Size in bytes
+  string type = 6;                      // Device type (disk, part, lvm, etc.)
+  string mountpoint = 7;                // Mount point (if mounted)
+  string rota = 8;                      // Rotational (0/1)
+  string ro = 9;                        // Read-only (0/1)
+  string model = 10;                    // Device model (for disks)
+  string serial = 11;                   // Serial number
+  string fstype = 12;                   // Filesystem type
+  string uuid = 13;                     // Device UUID
+  string label = 14;                    // Filesystem label
+  string parent_name = 15;              // Parent device name
+  repeated string children = 16;        // Child partition names
+}
+
+message BlockDevIDInfo {
+  string device = 1;                    // Device path
+  string uuid = 2;                      // Filesystem UUID
+  string fstype = 3;                    // Filesystem type
+  string label = 4;                     // Filesystem label
+  string type = 5;                      // Device type
+}

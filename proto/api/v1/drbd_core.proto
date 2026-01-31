@@ -1,0 +1,1031 @@
+syntax = "proto3";
+
+package drbd.agent.v1;
+
+option go_package = "github.com/liliang-cn/drbd-agent/api/proto/v1;pb";
+
+// Import shared types
+import "api/proto/v1/common.proto";
+
+// ============================================================================
+// DRBD Core Service
+// Core DRBD operations (40+ methods)
+// ============================================================================
+
+service DRBDCore {
+  rpc Up(UpRequest) returns (UpResponse);
+
+  rpc Down(DownRequest) returns (DownResponse);
+
+  rpc Primary(PrimaryRequest) returns (PrimaryResponse);
+
+  rpc Secondary(SecondaryRequest) returns (SecondaryResponse);
+
+  rpc Status(StatusRequest) returns (StatusResponse);
+
+  rpc Role(RoleRequest) returns (RoleResponse);
+
+  rpc CState(CStateRequest) returns (CStateResponse);
+
+  rpc DState(DStateRequest) returns (DStateResponse);
+
+  rpc ShowGI(ShowGIRequest) returns (ShowGIResponse);
+
+  rpc CreateMD(CreateMDRequest) returns (CreateMDResponse);
+
+  rpc Adjust(AdjustRequest) returns (AdjustResponse);
+
+  rpc AdjustWithProgress(AdjustWithProgressRequest) returns (AdjustWithProgressResponse);
+
+  rpc Dump(DumpRequest) returns (DumpResponse);
+
+  rpc DumpXML(DumpXMLRequest) returns (DumpXMLResponse);
+
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+
+  rpc WaitConnect(WaitConnectRequest) returns (WaitConnectResponse);
+
+  rpc WaitSync(WaitSyncRequest) returns (WaitSyncResponse);
+
+  rpc WaitConInt(WaitConIntRequest) returns (WaitConIntResponse);
+
+  rpc NewPath(NewPathRequest) returns (NewPathResponse);
+
+  rpc DelPath(DelPathRequest) returns (DelPathResponse);
+
+  rpc NewPeer(NewPeerRequest) returns (NewPeerResponse);
+
+  rpc DelPeer(DelPeerRequest) returns (DelPeerResponse);
+
+  rpc DumpMD(DumpMDRequest) returns (DumpMDResponse);
+
+  rpc GetGI(GetGIRequest) returns (GetGIResponse);
+
+  rpc Verify(VerifyRequest) returns (VerifyResponse);
+
+  rpc StartVerify(StartVerifyRequest) returns (StartVerifyResponse);  // Async
+
+  rpc RepairMD(RepairMDRequest) returns (RepairMDResponse);
+
+  rpc WipeMD(WipeMDRequest) returns (WipeMDResponse);
+
+  rpc ForgetPeer(ForgetPeerRequest) returns (ForgetPeerResponse);
+
+  rpc Resize(ResizeRequest) returns (ResizeResponse);
+
+  rpc Attach(AttachRequest) returns (AttachResponse);
+
+  rpc Detach(DetachRequest) returns (DetachResponse);
+
+  rpc PauseSync(PauseSyncRequest) returns (PauseSyncResponse);
+
+  rpc ResumeSync(ResumeSyncRequest) returns (ResumeSyncResponse);
+
+  rpc Invalidate(InvalidateRequest) returns (InvalidateResponse);
+
+  rpc InvalidateRemote(InvalidateRemoteRequest) returns (InvalidateRemoteResponse);
+
+  rpc Outdate(OutdateRequest) returns (OutdateResponse);
+
+  rpc NetOptions(NetOptionsRequest) returns (NetOptionsResponse);
+
+  rpc DiskOptions(DiskOptionsRequest) returns (DiskOptionsResponse);
+
+  rpc PeerDeviceOptions(PeerDeviceOptionsRequest) returns (PeerDeviceOptionsResponse);
+
+  rpc ResourceOptions(ResourceOptionsRequest) returns (ResourceOptionsResponse);
+
+  rpc ApplyAL(ApplyALRequest) returns (ApplyALResponse);
+
+  rpc HiddenCommands(HiddenCommandsRequest) returns (HiddenCommandsResponse);
+
+  rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse);
+
+  rpc GetResourceVolumes(GetResourceVolumesRequest) returns (GetResourceVolumesResponse);
+
+}
+message UpRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+  bool dry_run = 3;
+
+  bool discard_my_data = 4;
+
+}
+
+message UpResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message DownRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+}
+
+message DownResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message PrimaryRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+  bool overwrite_peer = 3;
+
+}
+
+message PrimaryResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message SecondaryRequest {
+
+  repeated string resources = 1;
+
+}
+
+message SecondaryResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message StatusRequest {
+
+  repeated string resources = 1;  // Empty means all resources
+
+}
+
+message StatusResponse {
+
+  repeated ResourceStatus resources = 1;
+
+}
+
+message RoleRequest {
+
+  repeated string resources = 1;
+
+}
+
+message RoleResponse {
+
+  map<string, RoleInfo> roles = 1;  // resource name -> role info
+
+}
+
+message RoleInfo {
+
+  string role = 1;         // "Primary" or "Secondary"
+
+  bool force = 2;
+
+}
+
+message CStateRequest {
+
+  repeated string resources = 1;
+
+}
+
+message CStateResponse {
+
+  map<string, ConnectionState> connection_states = 1;  // resource -> state
+
+}
+
+message ConnectionState {
+
+  string state = 1;  // "StandAlone", "Disconnecting", "Unconnected", "Timeout", "BrokenPipe", "NetworkFailure", "ProtocolError", "Teardown", "Connected", "Connecting", "WFConnection", "WFReportParams", "TearDown", "Connected"
+
+}
+
+message DStateRequest {
+
+  repeated string resources = 1;
+
+}
+
+message DStateResponse {
+
+  map<string, DiskState> disk_states = 1;  // resource -> state
+
+}
+
+message ShowGIRequest {
+
+  repeated string resources = 1;
+
+}
+
+message ShowGIResponse {
+
+  map<string, GenerationInfoFull> gi_info = 1;  // resource -> GI info
+
+}
+
+message GenerationInfoFull {
+
+  string current_uuid = 1;
+
+  repeated string history_uuids = 2;
+
+  int32 current_generation = 3;
+
+  int32 history_generations = 4;
+
+}
+
+message DiskState {
+
+  string state = 1;  // "Diskless", "Attaching", "Failed", "Negotiating", "Inconsistent", "Outdated", "UpToDate", "Consistent"
+
+}
+
+message CreateMDRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+  int32 peers = 3;  // Number of peers (for --max-peers)
+
+}
+
+message CreateMDResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message AdjustRequest {
+
+  repeated string resources = 1;
+
+  bool skip_net = 2;
+
+  bool skip_disk = 3;
+
+  bool dry_run = 4;
+
+}
+
+message AdjustResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message DumpRequest {
+
+  repeated string resources = 1;
+
+  bool include_hidden = 2;
+
+}
+
+message DumpResponse {
+
+  string config = 1;  // DRBD configuration in text format
+
+  bool success = 2;
+
+}
+
+message ConnectRequest {
+
+  repeated string resources = 1;
+
+  bool discard_my_data = 2;
+
+}
+
+message ConnectResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message DisconnectRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+}
+
+message DisconnectResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message WaitConnectRequest {
+
+  repeated string resources = 1;
+
+  int32 timeout_seconds = 2;  // 0 = wait indefinitely
+
+}
+
+message WaitConnectResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+  bool timed_out = 4;
+
+}
+
+message WaitSyncRequest {
+
+  repeated string resources = 1;
+
+  int32 timeout_seconds = 2;  // 0 = wait indefinitely
+
+}
+
+message WaitSyncResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+  bool timed_out = 4;
+
+}
+
+message DumpMDRequest {
+
+  repeated string resources = 1;
+
+  bool include_all = 2;
+
+}
+
+message DumpMDResponse {
+
+  string metadata = 1;  // Metadata dump in text format
+
+  bool success = 2;
+
+}
+
+message GetGIRequest {
+
+  repeated string resources = 1;
+
+}
+
+message GetGIResponse {
+
+  map<string, GenerationInfo> gi_info = 1;  // resource -> GI info
+
+}
+
+message GenerationInfo {
+
+  string current_uuid = 1;
+
+  string history = 2;
+
+}
+
+message VerifyRequest {
+
+  repeated string resources = 1;
+
+}
+
+message VerifyResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  map<string, VerifyResult> results = 3;  // resource -> verify result
+
+}
+
+message VerifyResult {
+
+  bool verified = 1;
+
+  string details = 2;
+
+}
+
+message ResizeRequest {
+
+  repeated string resources = 1;
+
+  bool size_all = 2;
+
+  int64 size_bytes = 3;  // New size (0 = use current device size)
+
+  bool assume_peer_has_space = 4;
+
+}
+
+message ResizeResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+  map<string, uint64> new_sizes = 4;  // resource -> new size in bytes
+
+}
+
+message AttachRequest {
+
+  repeated string resources = 1;
+
+}
+
+message AttachResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message DetachRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+}
+
+message DetachResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message OutdateRequest {
+
+  repeated string resources = 1;
+
+}
+
+message OutdateResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message PauseSyncRequest {
+
+  repeated string resources = 1;
+
+}
+
+message PauseSyncResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message ResumeSyncRequest {
+
+  repeated string resources = 1;
+
+}
+
+message ResumeSyncResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message AdjustWithProgressRequest {
+
+  repeated string resources = 1;
+
+  bool skip_net = 2;
+
+  bool skip_disk = 3;
+
+  bool dry_run = 4;
+
+}
+
+message AdjustWithProgressResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+  string progress_output = 4;  // Progress information
+
+}
+
+message DumpXMLRequest {
+
+  repeated string resources = 1;
+
+  bool include_hidden = 2;
+
+}
+
+message DumpXMLResponse {
+
+  string xml_config = 1;  // DRBD configuration in XML format
+
+  bool success = 2;
+
+}
+
+message WaitConIntRequest {
+
+  repeated string resources = 1;
+
+  int32 timeout_seconds = 2;  // 0 = wait indefinitely
+
+  int32 wfc_timeout = 3;  // Wait for connection timeout
+
+}
+
+message WaitConIntResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+  bool timed_out = 4;
+
+  bool connected = 5;
+
+}
+
+message NewPathRequest {
+
+  string resource = 1;
+
+  int32 peer_node_id = 2;
+
+  string path_address = 3;
+
+  int32 path_port = 4;
+
+  string protocol = 5;  // "A", "B", or "C"
+
+}
+
+message NewPathResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+}
+
+message DelPathRequest {
+
+  string resource = 1;
+
+  int32 peer_node_id = 2;
+
+  string path_address = 3;
+
+  int32 path_port = 4;
+
+}
+
+message DelPathResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+}
+
+message NewPeerRequest {
+
+  string resource = 1;
+
+  int32 peer_node_id = 2;
+
+  string peer_address = 3;
+
+  int32 peer_port = 4;
+
+  string node_name = 5;
+
+}
+
+message NewPeerResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+}
+
+message DelPeerRequest {
+
+  string resource = 1;
+
+  int32 peer_node_id = 2;
+
+}
+
+message DelPeerResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+}
+
+message RepairMDRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+}
+
+message RepairMDResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message WipeMDRequest {
+
+  repeated string resources = 1;
+
+  bool force = 2;
+
+}
+
+message WipeMDResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message ForgetPeerRequest {
+
+  repeated string resources = 1;
+
+  int32 peer_node_id = 2;
+
+}
+
+message ForgetPeerResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message InvalidateRequest {
+
+  repeated string resources = 1;
+
+}
+
+message InvalidateResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message InvalidateRemoteRequest {
+
+  repeated string resources = 1;
+
+}
+
+message InvalidateRemoteResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message NetOptionsRequest {
+
+  string resource = 1;
+
+  int32 peer_node_id = 2;
+
+  string options = 3;  // Space-separated key=value pairs
+
+}
+
+message NetOptionsResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+  string current_options = 4;
+
+}
+
+message DiskOptionsRequest {
+
+  string resource = 1;
+
+  int32 volume_number = 2;
+
+  string options = 3;  // Space-separated key=value pairs
+
+}
+
+message DiskOptionsResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+  string current_options = 4;
+
+}
+
+message PeerDeviceOptionsRequest {
+
+  string resource = 1;
+
+  int32 peer_node_id = 2;
+
+  int32 volume_number = 3;
+
+  string options = 4;  // Space-separated key=value pairs
+
+}
+
+message PeerDeviceOptionsResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+  string current_options = 4;
+
+}
+
+message ResourceOptionsRequest {
+
+  string resource = 1;
+
+  string options = 2;  // Space-separated key=value pairs
+
+}
+
+message ResourceOptionsResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  ResourceResult result = 3;
+
+  string current_options = 4;
+
+}
+
+message ApplyALRequest {
+
+  repeated string resources = 1;
+
+  string al_extents = 2;  // Activity log extents
+
+}
+
+message ApplyALResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated ResourceResult results = 3;
+
+}
+
+message HiddenCommandsRequest {
+
+  string command = 1;  // Name of hidden command to execute
+
+  repeated string args = 2;  // Command arguments
+
+}
+
+message HiddenCommandsResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  string output = 3;  // Command output
+
+  string error = 4;   // Command error output
+
+  int32 exit_code = 5;
+
+}
+
+message StartVerifyRequest {
+
+  repeated string resources = 1;
+
+}
+
+message StartVerifyResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  string operation_id = 3;    // Operation ID to track via events
+
+  repeated string started_resources = 4;
+
+}
+
+message GetResourceVolumesRequest {
+
+  string resource = 1;  // DRBD resource name
+
+}
+
+message GetResourceVolumesResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  repeated VolumeInfo volumes = 3;
+
+  string config_path = 4;
+
+}
+
+message VolumeInfo {
+
+  int32 volume_number = 1;  // Volume number (0, 1, 2, ...)
+
+  int32 device_minor = 2;   // Device minor number
+
+  string disk = 3;          // Disk path
+
+  string meta_disk = 4;     // Meta-disk path (e.g., "internal" or "/dev/vg0/meta")
+
+  bool has_metadata = 5;    // Whether metadata exists for this volume
+
+}
+
+message AddVolumeRequest {
+
+  string resource = 1;           // DRBD resource name
+
+  int32 volume_number = 2;       // Volume number (0, 1, 2, ...)
+
+  int32 device_minor = 3;        // Device minor number
+
+  string disk = 4;               // Disk path (e.g., /dev/vg0/lv1)
+
+  string meta_disk = 5;          // Meta-disk path (e.g., "internal" or "/dev/vg0/meta")
+
+  map<string, string> node_disk = 6;  // Optional node-specific disk overrides (node_name -> disk_path)
+
+  bool create_metadata = 7;      // Automatically create metadata for the new volume
+
+  bool adjust_resource = 8;      // Automatically run drbdadm adjust after adding volume
+
+  bool backup_config = 9;        // Backup config file before modifying
+
+}
+
+message AddVolumeResponse {
+
+  bool success = 1;
+
+  string message = 2;
+
+  string resource = 3;           // DRBD resource name
+
+  int32 volume_number = 4;       // Added volume number
+
+  string config_path = 5;        // Path to config file
+
+  string backup_path = 6;        // Path to backup file (if backed up)
+
+  string device_path = 7;        // Path to DRBD device (e.g., /dev/drbd1)
+
+}

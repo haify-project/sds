@@ -1,0 +1,21 @@
+server:
+  listen_address: "0.0.0.0"
+  port: 3373
+
+drbd_agent:
+  endpoints:
+    - "orange1:50051"
+    - "orange2:50051"
+    - "orange3:50051"
+  timeout: 30
+
+tls:
+  enabled: false
+
+log:
+  level: "info"
+  format: "json"
+
+storage:
+  default_pool_type: "vg"
+  default_snapshot_suffix: "_snap"

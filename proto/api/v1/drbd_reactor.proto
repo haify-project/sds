@@ -1,0 +1,328 @@
+syntax = "proto3";
+
+package drbd.agent.v1;
+
+option go_package = "github.com/liliang-cn/drbd-agent/api/proto/v1;pb";
+
+// Import shared types
+import "api/proto/v1/common.proto";
+
+// ============================================================================
+// DRBD-Reactor Service
+// Manages drbd-reactor daemon, plugins, and configurations
+// ============================================================================
+
+service DRBDReactor {
+  // =================================================================
+  // Reactor configuration file CRUD
+  // =================================================================
+  
+  rpc WriteReactorConfig(WriteReactorConfigRequest) returns (WriteReactorConfigResponse);
+  rpc ReadReactorConfig(ReadReactorConfigRequest) returns (ReadReactorConfigResponse);
+  rpc DeleteReactorConfig(DeleteReactorConfigRequest) returns (DeleteReactorConfigResponse);
+  rpc ListReactorConfigs(ListReactorConfigsRequest) returns (ListReactorConfigsResponse);
+
+  // =================================================================
+  // Plugin configuration management (legacy - maps to CRUD operations)
+  // =================================================================
+  
+  rpc ReactorCat(ReactorCatRequest) returns (ReactorCatResponse);
+  rpc ReactorEdit(ReactorEditRequest) returns (ReactorEditResponse);
+  rpc ReactorLs(ReactorLsRequest) returns (ReactorLsResponse);
+  rpc ReactorRm(ReactorRmRequest) returns (ReactorRmResponse);
+
+  // =================================================================
+  // Plugin control
+  // =================================================================
+  
+  rpc ReactorEnable(ReactorEnableRequest) returns (ReactorEnableResponse);
+  rpc ReactorDisable(ReactorDisableRequest) returns (ReactorDisableResponse);
+  rpc ReactorRestart(ReactorRestartRequest) returns (ReactorRestartResponse);
+
+  // =================================================================
+  // Plugin status and information
+  // =================================================================
+  
+  rpc ReactorStatus(ReactorStatusRequest) returns (ReactorStatusResponse);
+  rpc ReactorListPlugins(ReactorListPluginsRequest) returns (ReactorListPluginsResponse);
+  rpc ReactorGetActiveNode(ReactorGetActiveNodeRequest) returns (ReactorGetActiveNodeResponse);
+
+  // =================================================================
+  // Promoter operations
+  // =================================================================
+  
+  rpc PromoterEvict(PromoterEvictRequest) returns (PromoterEvictResponse);
+  rpc PromoterStartUntil(PromoterStartUntilRequest) returns (PromoterStartUntilResponse);
+
+  // =================================================================
+  // Reactor daemon control
+  // =================================================================
+  
+  rpc ReactorDaemonStatus(ReactorDaemonStatusRequest) returns (ReactorDaemonStatusResponse);
+  rpc ReactorDaemonReload(ReactorDaemonReloadRequest) returns (ReactorDaemonReloadResponse);
+}
+
+// ============================================================================
+// Reactor Configuration Messages
+// ============================================================================
+
+message WriteReactorConfigRequest {
+  string plugin_id = 1;          // Plugin name/id (e.g., "my-promoter")
+  string config_content = 2;     // TOML configuration content
+  string config_path = 3;        // Full path (optional, defaults to /etc/drbd-reactor.d/<plugin_id>.toml)
+  bool validate = 4;             // Validate TOML syntax before writing
+  bool backup = 5;               // Backup existing config before overwriting
+  bool reload_daemon = 6;        // Automatically reload daemon after write
+  bool force = 7;                // Force write even if conflicts are detected (use with caution)
+  bool check_conflicts = 8;      // Check for resource conflicts with other plugins (default: true)
+}
+message WriteReactorConfigResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string config_path = 4;        // Actual path where config was written
+  string backup_path = 5;        // Path to backup if backup=true
+  repeated string validation_errors = 6;  // TOML validation errors if any
+  bool daemon_reloaded = 7;      // True if daemon was reloaded
+  repeated ConfigConflict conflicts = 8;  // Detected conflicts (if check_conflicts=true)
+  AuditLog audit_info = 9;       // Audit metadata for this operation
+}
+message ReadReactorConfigRequest {
+  string plugin_id = 1;          // Plugin name/id to read
+  string config_path = 2;        // Full path (optional, defaults to /etc/drbd-reactor.d/<plugin_id>.toml)
+}
+message ReadReactorConfigResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string config_content = 4;     // TOML configuration content
+  string config_path = 5;
+  int64 size_bytes = 6;          // File size
+  int64 modified_time = 7;       // Unix timestamp
+}
+message DeleteReactorConfigRequest {
+  string plugin_id = 1;          // Plugin name/id to delete
+  string config_path = 2;        // Full path (optional)
+  bool backup = 3;               // Backup before deleting
+  bool reload_daemon = 4;        // Automatically reload daemon after delete
+}
+message DeleteReactorConfigResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string backup_path = 4;        // Path to backup if backup=true
+  bool daemon_reloaded = 5;      // True if daemon was reloaded
+}
+message ListReactorConfigsRequest {
+  string config_dir = 1;         // Path to scan (optional, defaults to /etc/drbd-reactor.d/)
+  bool include_disabled = 2;     // Include disabled plugins (files ending in .disabled)
+}
+message ListReactorConfigsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ReactorConfigInfo configs = 3;
+}
+message ReactorConfigInfo {
+  string plugin_id = 1;
+  string plugin_type = 2;        // "promoter", "sm", etc. (detected from config)
+  string config_path = 3;
+  bool is_enabled = 4;           // Not disabled
+  int64 size_bytes = 5;          // File size
+  int64 modified_time = 6;       // Unix timestamp
+  repeated string resources = 7;  // Resources managed by this plugin (if detected)
+}
+message PluginInfo {
+  string plugin_id = 1;
+  string plugin_type = 2;        // "promoter", "sm", etc.
+  bool is_enabled = 3;
+  bool is_active = 4;
+  string state = 5;              // Plugin state
+}
+message ReactorCatRequest {
+  string plugin_id = 1;  // Plugin name/id to view
+}
+message ReactorCatResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string config_content = 4;  // TOML configuration content
+  string config_path = 5;     // Full path to config file
+}
+message ReactorEditRequest {
+  string plugin_id = 1;          // Plugin name/id
+  string config_content = 2;     // TOML configuration content
+  bool validate = 3;             // Validate before applying
+  bool backup = 4;               // Backup existing config
+}
+message ReactorEditResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string config_path = 4;        // Path where config was written
+  string backup_path = 5;        // Path to backup if backup=true
+  repeated string validation_errors = 6;
+}
+message ReactorLsRequest {
+  bool show_disabled = 1;  // Show disabled plugins
+}
+message ReactorLsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PluginInfo plugins = 3;
+}
+message ReactorRmRequest {
+  string plugin_id = 1;
+  bool backup = 2;  // Backup before removing
+}
+message ReactorRmResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string backup_path = 4;  // Path to backup if backup=true
+}
+message ReactorEnableRequest {
+  string plugin_id = 1;
+}
+message ReactorEnableResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string config_path = 4;
+}
+message ReactorDisableRequest {
+  string plugin_id = 1;
+}
+message ReactorDisableResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+  string disabled_path = 4;  // Path where disabled config was moved
+}
+message ReactorRestartRequest {
+  string plugin_id = 1;
+}
+message ReactorRestartResponse {
+  bool success = 1;
+  string message = 2;
+  string plugin_id = 3;
+}
+message ReactorStatusRequest {
+  string plugin_id = 1;
+  bool verbose = 2;  // Include detailed state
+}
+message ReactorStatusResponse {
+  bool success = 1;
+  string message = 2;
+  PluginStatus status = 3;
+  string output = 4;  // Full status output from drbd-reactorctl
+}
+message PluginStatus {
+  string plugin_id = 1;
+  string plugin_type = 2;  // "promoter", "sm", etc.
+  bool is_enabled = 3;
+  bool is_active = 4;
+  string state = 5;  // Plugin-specific state
+  repeated ResourcePluginState resources = 6;
+  int64 last_updated = 7;  // Unix timestamp
+  bool is_builtin = 8;  // True for plugins that don't manage DRBD resources (e.g., prometheus)
+}
+message ResourcePluginState {
+  string resource = 1;
+  string state = 2;  // State specific to plugin type
+  map<string, string> attributes = 3;  // Additional state info
+}
+message ReactorListPluginsRequest {
+  bool include_disabled = 1;
+  bool include_inactive = 2;
+}
+message ReactorListPluginsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PluginStatus plugins = 3;
+}
+message PromoterEvictRequest {
+  repeated string configs = 1;  // Config files to evict (e.g., "linstor-gateway-iscsi-iscsi2.toml")
+  bool force = 2;               // Override checks
+  bool keep_masked = 3;         // Keep target units masked
+  bool unmask = 4;              // Unmask targets (clear previous keep-masked)
+  int32 delay = 5;              // Seconds to wait for peer takeover (default: 20)
+}
+message PromoterEvictResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string configs = 3;        // Config files that were evicted
+  string eviction_state = 4;          // Overall eviction state
+}
+message PromoterStartUntilRequest {
+  string resource = 1;
+  string plugin_id = 2;      // Optional promoter plugin
+  string condition = 3;      // Condition to stop (e.g., timeout, event)
+  int32 timeout_seconds = 4; // Optional timeout
+}
+message PromoterStartUntilResponse {
+  bool success = 1;
+  string message = 2;
+  string resource = 3;
+  string operation_id = 4;  // ID to track operation
+}
+message ReactorDaemonStatusRequest {
+  bool include_plugins = 1;  // Include plugin status
+  bool include_resources = 2;  // Include resource states
+}
+message ReactorDaemonStatusResponse {
+  bool success = 1;
+  string message = 2;
+  DaemonStatus status = 3;
+}
+message DaemonStatus {
+  bool is_running = 1;
+  string version = 2;
+  int64 pid = 3;
+  int64 uptime_seconds = 4;
+  string config_path = 5;
+  repeated PluginStatus active_plugins = 6;
+  repeated string monitored_resources = 7;
+  map<string, string> metrics = 8;  // Daemon metrics
+}
+message ReactorDaemonReloadRequest {
+  bool force = 1;           // Force reload even if no changes detected
+  bool wait_for_completion = 2;  // Wait for reload to complete before returning
+  int32 timeout_seconds = 3;     // Max wait time (0 = wait indefinitely)
+}
+message ReactorDaemonReloadResponse {
+  bool success = 1;
+  string message = 2;
+  bool reloaded = 3;
+  repeated string loaded_plugins = 4;
+  repeated string failed_plugins = 5;
+  string reload_time = 6;     // Timestamp when reload completed
+  bool reload_in_progress = 7; // True if another reload was already in progress
+  AuditLog audit_info = 8;    // Audit metadata for this operation
+}
+
+// ============================================================================
+// Active Node Query Messages
+// ============================================================================
+
+message ReactorGetActiveNodeRequest {
+  string plugin_id = 1;        // Plugin ID (e.g., "linstor_controller")
+}
+
+message ReactorGetActiveNodeResponse {
+  bool success = 1;
+  string message = 2;
+  ActiveNodeInfo info = 3;
+}
+
+message ActiveNodeInfo {
+  string plugin_id = 1;        // Plugin ID
+  string resource = 2;         // DRBD resource name (for promoter plugins)
+  string active_node = 3;      // Node name where the resource is Primary
+  string current_role = 4;     // Role on this node ("Primary" or "Secondary")
+  repeated NodeRole all_nodes = 5;  // List of all nodes and their roles
+}
+
+message NodeRole {
+  string node_name = 1;        // Node name
+  string role = 2;             // "Primary" or "Secondary"
+}

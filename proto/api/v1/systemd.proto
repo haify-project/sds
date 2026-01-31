@@ -1,0 +1,277 @@
+syntax = "proto3";
+
+package drbd.agent.v1;
+
+option go_package = "github.com/liliang-cn/drbd-agent/api/proto/v1;pb";
+
+// ============================================================================
+// systemd Service
+// Manages systemd units, services, and the system/service manager
+// ============================================================================
+
+service Systemd {
+  // =================================================================
+  // Service lifecycle operations
+  // =================================================================
+
+  // Start a systemd service
+  rpc SystemdServiceStart(SystemdServiceStartRequest) returns (SystemdServiceStartResponse);
+
+  // Stop a systemd service
+  rpc SystemdServiceStop(SystemdServiceStopRequest) returns (SystemdServiceStopResponse);
+
+  // Restart a systemd service
+  rpc SystemdServiceRestart(SystemdServiceRestartRequest) returns (SystemdServiceRestartResponse);
+
+  // Reload a systemd service (SIGHUP)
+  rpc SystemdServiceReload(SystemdServiceReloadRequest) returns (SystemdServiceReloadResponse);
+
+  // Enable a service to start at boot
+  rpc SystemdServiceEnable(SystemdServiceEnableRequest) returns (SystemdServiceEnableResponse);
+
+  // Disable a service from starting at boot
+  rpc SystemdServiceDisable(SystemdServiceDisableRequest) returns (SystemdServiceDisableResponse);
+
+  // Get service status
+  rpc SystemdServiceStatus(SystemdServiceStatusRequest) returns (SystemdServiceStatusResponse);
+
+  // Mask a service (make it unstartable)
+  rpc SystemdServiceMask(SystemdServiceMaskRequest) returns (SystemdServiceMaskResponse);
+
+  // Unmask a service (make it startable again)
+  rpc SystemdServiceUnmask(SystemdServiceUnmaskRequest) returns (SystemdServiceUnmaskResponse);
+
+  // Reset failed state
+  rpc SystemdServiceResetFailed(SystemdServiceResetFailedRequest) returns (SystemdServiceResetFailedResponse);
+
+  // =================================================================
+  // Service file operations
+  // =================================================================
+
+  // Create a new systemd service file
+  rpc SystemdCreateService(SystemdCreateServiceRequest) returns (SystemdCreateServiceResponse);
+
+  // Delete a systemd service file
+  rpc SystemdDeleteService(SystemdDeleteServiceRequest) returns (SystemdDeleteServiceResponse);
+
+  // Read a systemd service file
+  rpc SystemdReadService(SystemdReadServiceRequest) returns (SystemdReadServiceResponse);
+
+  // List systemd service files
+  rpc SystemdListServices(SystemdListServicesRequest) returns (SystemdListServicesResponse);
+
+  // =================================================================
+  // Daemon operations
+  // =================================================================
+
+  // Reload systemd daemon (reread configs)
+  rpc SystemdDaemonReload(SystemdDaemonReloadRequest) returns (SystemdDaemonReloadResponse);
+
+  // List all systemd units
+  rpc SystemdListUnits(SystemdListUnitsRequest) returns (SystemdListUnitsResponse);
+}
+
+// ============================================================================
+// Service Lifecycle Messages
+// ============================================================================
+
+message SystemdServiceStartRequest {
+  string service_name = 1;        // Service unit name (e.g., "cron.service")
+}
+
+message SystemdServiceStartResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceStopRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdServiceStopResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceRestartRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdServiceRestartResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceReloadRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdServiceReloadResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceEnableRequest {
+  string service_name = 1;        // Service unit name
+  bool now = 2;                   // Also start the service immediately
+}
+
+message SystemdServiceEnableResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceDisableRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdServiceDisableResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceStatusRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdServiceStatusResponse {
+  bool success = 1;
+  string message = 2;
+  SystemdServiceInfo service = 3;
+}
+
+message SystemdServiceMaskRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdServiceMaskResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceUnmaskRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdServiceUnmaskResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdServiceResetFailedRequest {
+  string service_name = 1;        // Service unit name (empty for all failed services)
+}
+
+message SystemdServiceResetFailedResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+// ============================================================================
+// Service File Messages
+// ============================================================================
+
+message SystemdCreateServiceRequest {
+  string service_name = 1;        // Service unit name (e.g., "myapp.service")
+  string content = 2;             // Service file content (full systemd unit file)
+  bool reload = 3;                // Reload daemon after creating
+}
+
+message SystemdCreateServiceResponse {
+  bool success = 1;
+  string message = 2;
+  string file_path = 3;           // Path where service file was created
+}
+
+message SystemdDeleteServiceRequest {
+  string service_name = 1;        // Service unit name
+  bool reload = 2;                // Reload daemon after deleting
+}
+
+message SystemdDeleteServiceResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdReadServiceRequest {
+  string service_name = 1;        // Service unit name
+}
+
+message SystemdReadServiceResponse {
+  bool success = 1;
+  string message = 2;
+  string file_path = 3;           // Full path to service file
+  string content = 4;             // Service file content
+}
+
+message SystemdListServicesRequest {
+  string pattern = 1;             // Filter by pattern (e.g., "drbd-*")
+  bool enabled_only = 2;          // Show only enabled services
+}
+
+message SystemdListServicesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string services = 3;   // List of service names
+}
+
+// ============================================================================
+// Daemon Messages
+// ============================================================================
+
+message SystemdDaemonReloadRequest {
+  // No parameters needed
+}
+
+message SystemdDaemonReloadResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+}
+
+message SystemdListUnitsRequest {
+  string pattern = 1;             // Filter by pattern (e.g., "drbd-*")
+  string state = 2;               // Filter by state (e.g., "running", "failed")
+  bool all = 3;                   // List all units (including unloaded)
+}
+
+message SystemdListUnitsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SystemdUnitInfo units = 3;
+}
+
+// ============================================================================
+// systemd Data Types
+// ============================================================================
+
+message SystemdServiceInfo {
+  string service_name = 1;        // Service unit name
+  string load_state = 2;          // Loaded state
+  string active_state = 3;        // Active state (e.g., "active", "inactive", "failed")
+  string sub_state = 4;           // Sub state (e.g., "running", "dead", "exited")
+  string description = 5;         // Service description
+  bool enabled = 6;               // Whether enabled at boot
+  int32 main_pid = 7;             // Main PID (0 if not running)
+  string memory = 8;              // Memory usage
+}
+
+message SystemdUnitInfo {
+  string unit_name = 1;           // Unit name
+  string load_state = 2;          // Loaded state
+  string active_state = 3;        // Active state
+  string sub_state = 4;           // Sub state
+  string description = 5;         // Unit description
+  string job_type = 6;            // Job type (if queued)
+  uint32 job_id = 7;              // Job ID (if queued)
+}

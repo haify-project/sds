@@ -1,0 +1,59 @@
+# SDS NVMe-oF Gateway Configuration Example
+# File: /etc/drbd-reactor.d/sds-nvmeof-database.toml
+#
+# This is an example configuration for an NVMe-oF gateway using drbd-reactor.
+# Replace the placeholders with your actual values.
+#
+# Subsystem: nqn.2024-01.com.example:subsystem.database
+#   - Volume 0: Cluster private (ext4, /var/lib/sds/nvme-cluster-private)
+#   - Volume 1: Namespace 1 (/dev/drbd1, 100GB)
+#   - Volume 2: Namespace 2 (/dev/drbd2, 200GB)
+# Service IP: 192.168.1.150/24
+# Default NVMe-oF Port: 4420
+
+[promoter]
+  [[promoter.resources.nqn.2024-01.com.example:subsystem.database]]
+    runner = "systemd"
+    stop-services-on-exit = true
+    on-drbd-demote-failure = "reboot-immediate"
+    target-as = "Requires"
+
+    start = [
+      # 1. Block NVMe-oF port (4420) on all nodes before starting
+      "ocf:heartbeat:portblock portblock ip=192.168.1.150 portno=4420 action=block protocol=tcp",
+
+      # 2. Cluster Private Volume
+      # Stores NVMe-oF state and configuration
+      "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd0 directory=/var/lib/sds/nvme-cluster-private fstype=ext4 run_fsck=no",
+
+      # 3. Bring up service IP (virtual IP that floats between nodes)
+      "ocf:heartbeat:IPaddr2 service_ip ip=192.168.1.150 cidr_netmask=24",
+
+      # 4. Create NVMe subsystem
+      # - nqn: NVMe Qualified Name
+      #   Format: nqn.<year>-<month>.<domain-reversed>:<unique-id>
+      #   Example: nqn.2024-01.com.example:subsystem.database
+      # - serial: Subsystem serial number (first 8 bytes of SHA256 hash of NQN)
+      "ocf:heartbeat:nvmet-subsystem subsys nqn=nqn.2024-01.com.example:subsystem.database serial=a1b2c3d4e5f6g7h8",
+
+      # 5. Create namespaces (volumes)
+      # - nqn: Subsystem NQN this namespace belongs to
+      # - namespace_id: Namespace ID (should match DRBD volume number)
+      # - backing_path: DRBD device path
+      # - uuid: Unique identifier for the namespace (UUID format)
+      # - nguid: Namespace GUID (same as UUID for simplicity)
+      "ocf:heartbeat:nvmet-namespace ns_1 nqn=nqn.2024-01.com.example:subsystem.database namespace_id=1 backing_path=/dev/drbd1 uuid=11111111-2222-3333-4444-555555555555 nguid=11111111-2222-3333-4444-555555555555",
+      "ocf:heartbeat:nvmet-namespace ns_2 nqn=nqn.2024-01.com.example:subsystem.database namespace_id=2 backing_path=/dev/drbd2 uuid=66666666-7777-8888-9999-aaaaaaaaaaaa nguid=66666666-7777-8888-9999-aaaaaaaaaaaa",
+
+      # 6. Create NVMe port (listener)
+      # - nqns: Subsystem NQN to listen for
+      # - addr: Listen address (service IP)
+      # - type: Transport type (tcp or rdma)
+      "ocf:heartbeat:nvmet-port port nqns=nqn.2024-01.com.example:subsystem.database addr=192.168.1.150 type=tcp",
+
+      # 7. Unblock NVMe-oF port (only on the active/primary node)
+      "ocf:heartbeat:portblock portunblock ip=192.168.1.150 portno=4420 action=unblock protocol=tcp tickle_dir=/var/lib/sds/nvme-cluster-private",
+    ]
+
+  [promoter.metadata]
+    linstor-gateway-schema-version = 1
