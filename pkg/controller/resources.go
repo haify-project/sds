@@ -123,11 +123,21 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 
 	lvName := fmt.Sprintf("%s_data", name)
 
+	// Convert node names to IP addresses for deployment
+	nodeIPs := make([]string, len(nodes))
+	for i, node := range nodes {
+		ip := rm.controller.nodes.GetNodeAddressByName(node)
+		if ip == "" {
+			ip = node // fallback to node name
+		}
+		nodeIPs[i] = ip
+	}
+
 	// 1. Create LVs on all nodes
-	for _, node := range nodes {
-		result, err := rm.deployment.LVCreate(ctx, []string{node}, pool, lvName, fmt.Sprintf("%dG", sizeGB))
+	for i, nodeIP := range nodeIPs {
+		result, err := rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, lvName, fmt.Sprintf("%dG", sizeGB))
 		if err != nil {
-			return fmt.Errorf("failed to create LV on %s: %w", node, err)
+			return fmt.Errorf("failed to create LV on %s: %w", nodes[i], err)
 		}
 		if !result.AllSuccess() {
 			for host, hres := range result.Hosts {
@@ -140,16 +150,6 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 
 	// 2. Generate DRBD config
 	drbdConfig := rm.generateDrbdConfig(name, port, nodes, protocol, pool, lvName)
-
-	// Convert node names to IP addresses for deployment
-	nodeIPs := make([]string, len(nodes))
-	for i, node := range nodes {
-		ip := rm.controller.nodes.GetNodeAddressByName(node)
-		if ip == "" {
-			ip = node // fallback to node name
-		}
-		nodeIPs[i] = ip
-	}
 
 	// 3. Distribute config to all nodes
 	configResult, err := rm.deployment.DistributeConfig(ctx, nodeIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
@@ -191,6 +191,11 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 			rm.controller.logger.Warn("Failed to save resource to database", zap.Error(err))
 		}
 	}
+
+	// 7. Update hosts for this resource
+	rm.mu.Lock()
+	rm.hosts = nodeIPs
+	rm.mu.Unlock()
 
 	rm.controller.logger.Info("DRBD resource created successfully",
 		zap.String("name", name))
@@ -285,16 +290,16 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		return nil, fmt.Errorf("resource not found: %s", name)
 	}
 
-	// Parse nodes from comma-separated string
-	var nodes []string
+	// Parse nodeAddresses from comma-separated string
+	var nodeAddresses []string
 	if dbRes.Nodes != "" {
-		nodes = strings.Split(dbRes.Nodes, ",")
+		nodeAddresses = strings.Split(dbRes.Nodes, ",")
 	}
 
 	rm.controller.logger.Debug("GetResource",
 		zap.String("name", name),
 		zap.String("dbRes.Nodes", dbRes.Nodes),
-		zap.Strings("parsed_nodes", nodes))
+		zap.Strings("parsed_nodeAddresses", nodeAddresses))
 
 	// Query live DRBD status from first available host
 	result, err := rm.deployment.DRBDStatus(ctx, []string{hosts[0]}, name)
@@ -323,7 +328,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 				}
 
 				// Parse node states from status output
-				nodeStates = parseNodeStatesFromStatus(r.Output, nodes)
+				nodeStates = parseNodeStatesFromStatus(r.Output, nodeAddresses)
 
 				rm.controller.logger.Debug("Parsed node states",
 					zap.Int("count", len(nodeStates)))
@@ -337,7 +342,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		Name:       dbRes.Name,
 		Port:       uint32(dbRes.Port),
 		Protocol:   dbRes.Protocol,
-		Nodes:      nodes,
+		Nodes:      nodeAddresses,
 		Role:       localRole, // Local node's role
 		Volumes:    volumes,
 		NodeStates: nodeStates,
@@ -360,17 +365,17 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 
 	var resources []*ResourceInfo
 	for _, dbRes := range dbResources {
-		// Parse nodes from comma-separated string
-		var nodes []string
+		// Parse nodeAddresses from comma-separated string
+		var nodeAddresses []string
 		if dbRes.Nodes != "" {
-			nodes = strings.Split(dbRes.Nodes, ",")
+			nodeAddresses = strings.Split(dbRes.Nodes, ",")
 		}
 
 		resources = append(resources, &ResourceInfo{
 			Name:     dbRes.Name,
 			Port:     uint32(dbRes.Port),
 			Protocol: dbRes.Protocol,
-			Nodes:    nodes,
+			Nodes:    nodeAddresses,
 			Role:     "Unknown", // Will be updated by GetResource if needed
 			Volumes:  []*ResourceVolumeInfo{},
 			NodeStates: make(map[string]*ResourceNodeState),
@@ -454,7 +459,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	volumeBlock := fmt.Sprintf("    volume %d {\n        device    minor %d;\n        disk      /dev/%s/%s;\n        meta-disk internal;\n    }",
 		newVolNum, newMinor, pool, volume)
 
-	// Create LVs on all nodes
+	// Create LVs on all nodeAddresses
 	for _, host := range hosts {
 		_, err := rm.deployment.LVCreate(ctx, []string{host}, pool, volume, fmt.Sprintf("%dG", sizeGB))
 		if err != nil {
@@ -462,7 +467,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		}
 	}
 
-	// Add volume block to config on all nodes
+	// Add volume block to config on all nodeAddresses
 	for _, host := range hosts {
 		updateCmd := fmt.Sprintf("sed -i '/^}/i %s' /etc/drbd.d/%s.res", volumeBlock, resource)
 		_, err := rm.deployment.Exec(ctx, []string{host}, updateCmd)
@@ -502,7 +507,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	return nil
 }
 
-// DeleteResource deletes a DRBD resource from all nodes
+// DeleteResource deletes a DRBD resource from all nodeAddresses
 func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, force bool) error {
 	rm.controller.logger.Info("Deleting DRBD resource",
 		zap.String("name", name),
@@ -516,7 +521,7 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 	hosts := rm.hosts
 	rm.mu.RUnlock()
 
-	// 1. Down resource on all nodes
+	// 1. Down resource on all nodeAddresses
 	downResult, err := rm.deployment.DRBDDown(ctx, hosts, name)
 	if err != nil {
 		return fmt.Errorf("failed to bring down resource: %w", err)
@@ -526,7 +531,7 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		return fmt.Errorf("resource down failed on hosts: %v", downResult.FailedHosts())
 	}
 
-	// 2. Delete config file from all nodes
+	// 2. Delete config file from all nodeAddresses
 	err = rm.deployment.DeleteConfig(ctx, hosts, fmt.Sprintf("/etc/drbd.d/%s.res", name))
 	if err != nil {
 		return fmt.Errorf("failed to delete config: %w", err)
@@ -657,7 +662,7 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 		return fmt.Errorf("deployment client not set")
 	}
 
-	// Resize LV on all nodes first
+	// Resize LV on all nodeAddresses first
 	// Then call drbdadm resize
 
 	return fmt.Errorf("ResizeVolume not yet implemented")
@@ -709,7 +714,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		return "", fmt.Errorf("no hosts configured")
 	}
 
-	// Get resource info to find nodes
+	// Get resource info to find nodeAddresses
 	dbResource, err := rm.controller.db.GetResource(ctx, resource)
 	if err != nil {
 		return "", fmt.Errorf("failed to get resource from database: %w", err)
@@ -719,9 +724,94 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		return "", fmt.Errorf("resource not found: %s", resource)
 	}
 
-	nodes := strings.Split(dbResource.Nodes, ",")
-	if len(nodes) == 0 {
+	nodeNames := strings.Split(dbResource.Nodes, ",")
+	if len(nodeNames) == 0 {
 		return "", fmt.Errorf("no nodes found for resource")
+	}
+
+	// Convert node names to addresses for deployment
+	nodeAddresses := make([]string, len(nodeNames))
+	for i, nodeName := range nodeNames {
+		addr := rm.controller.nodes.GetNodeAddressByName(nodeName)
+		if addr == "" {
+			return "", fmt.Errorf("failed to resolve address for node: %s", nodeName)
+		}
+		nodeAddresses[i] = addr
+	}
+
+	// Step 1: Check DRBD status and ensure resource is up
+	rm.controller.logger.Info("Checking DRBD resource status",
+		zap.String("resource", resource),
+		zap.Strings("nodes", nodeAddresses))
+
+	// First, ensure resource is up on all nodes
+	rm.controller.logger.Info("Bringing up DRBD resource on all nodes")
+	_, err = rm.deployment.Exec(ctx, nodeAddresses, "sudo drbdadm up "+resource)
+	if err != nil {
+		rm.controller.logger.Warn("Failed to bring up resource (continuing anyway)", zap.Error(err))
+	}
+	// Continue anyway - resource might already be up
+
+	statusResult, err := rm.deployment.Exec(ctx, nodeAddresses, "sudo drbdadm status "+resource)
+	if err != nil {
+		return "", fmt.Errorf("failed to check DRBD status: %w", err)
+	}
+
+	// Check if any node is Primary, if not, set first node as Primary
+	hasPrimary := false
+	for _, r := range statusResult.Hosts {
+		if r.Success && strings.Contains(string(r.Output), "role:Primary") {
+			hasPrimary = true
+			rm.controller.logger.Info("Found existing Primary node",
+				zap.String("host", r.Host))
+			break
+		}
+	}
+
+	if !hasPrimary {
+		rm.controller.logger.Info("No Primary node found, setting first node as Primary",
+			zap.String("node", nodeNames[0]),
+			zap.String("address", nodeAddresses[0]))
+		if err := rm.SetPrimary(ctx, resource, nodeAddresses[0], true); err != nil {
+			return "", fmt.Errorf("failed to set Primary: %w", err)
+		}
+		rm.controller.logger.Info("Primary set successfully",
+			zap.String("node", nodeNames[0]))
+	}
+
+	// Step 2: Create filesystem if mount point and fs type are specified
+	if mountPoint != "" && fsType != "" {
+		rm.controller.logger.Info("Creating filesystem",
+			zap.String("resource", resource),
+			zap.String("fstype", fsType),
+			zap.String("volume", "0"))
+
+		// Check if filesystem already exists by checking if device can be read
+		drbdDevice := fmt.Sprintf("/dev/drbd/by-res/%s/0", resource)
+		checkFsCmd := fmt.Sprintf("sudo blkid -o value -s TYPE %s 2>/dev/null || echo 'none'", drbdDevice)
+		checkResult, err := rm.deployment.Exec(ctx, []string{nodeAddresses[0]}, checkFsCmd)
+
+		needsFs := true
+		if err == nil {
+			for _, r := range checkResult.Hosts {
+				if r.Success {
+					fsTypeFound := strings.TrimSpace(string(r.Output))
+					if fsTypeFound != "none" && fsTypeFound != "" {
+						rm.controller.logger.Info("Filesystem already exists",
+							zap.String("existing_fstype", fsTypeFound))
+						needsFs = false
+						break
+					}
+				}
+			}
+		}
+
+		if needsFs {
+			if err := rm.CreateFilesystemOnly(ctx, resource, 0, fsType); err != nil {
+				return "", fmt.Errorf("failed to create filesystem: %w", err)
+			}
+			rm.controller.logger.Info("Filesystem created successfully")
+		}
 	}
 
 	// Validate that all services exist on all nodes
@@ -729,16 +819,18 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 	if len(services) > 0 {
 		for _, svc := range services {
 			// Check if service unit file exists on all nodes
-			// Use grep -w for exact word match
-			checkCmd := fmt.Sprintf("systemctl list-unit-files | grep -w '%s'", svc)
-			result, err := rm.deployment.Exec(ctx, nodes, checkCmd)
+			// Use systemctl show to check LoadState - "loaded" means unit file exists
+			checkCmd := fmt.Sprintf("systemctl show %s -p LoadState 2>/dev/null || echo 'not-found'", svc)
+			result, err := rm.deployment.Exec(ctx, nodeAddresses, checkCmd)
 			if err != nil {
 				return "", fmt.Errorf("failed to check service %s on nodes: %w", svc, err)
 			}
 
 			var missingNodes []string
 			for node, hr := range result.Hosts {
-				if !hr.Success || hr.Output == "" {
+				output := strings.TrimSpace(hr.Output)
+				// Service exists if LoadState is "loaded"
+				if !strings.Contains(output, "LoadState=loaded") {
 					missingNodes = append(missingNodes, node)
 				}
 			}
@@ -758,13 +850,13 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		for _, svc := range services {
 			// Stop service
 			stopCmd := fmt.Sprintf("systemctl stop %s", svc)
-			if _, err := rm.deployment.Exec(ctx, nodes, stopCmd); err != nil {
+			if _, err := rm.deployment.Exec(ctx, nodeAddresses, stopCmd); err != nil {
 				rm.controller.logger.Warn("Failed to stop service", zap.String("service", svc), zap.Error(err))
 			}
 
 			// Disable service
 			disableCmd := fmt.Sprintf("systemctl disable %s", svc)
-			if _, err := rm.deployment.Exec(ctx, nodes, disableCmd); err != nil {
+			if _, err := rm.deployment.Exec(ctx, nodeAddresses, disableCmd); err != nil {
 				rm.controller.logger.Warn("Failed to disable service", zap.String("service", svc), zap.Error(err))
 			}
 		}
@@ -780,7 +872,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 			backupCmd := fmt.Sprintf("if [ -d \"%s\" ]; then mkdir -p %s && rsync -a %s/ %s/ 2>/dev/null || cp -a %s/. %s/. 2>/dev/null; fi",
 				mountPoint, backupDir, mountPoint, backupDir, mountPoint, backupDir)
 
-			if _, err := rm.deployment.Exec(ctx, nodes, backupCmd); err != nil {
+			if _, err := rm.deployment.Exec(ctx, nodeAddresses, backupCmd); err != nil {
 				rm.controller.logger.Warn("Failed to backup data (continuing anyway)",
 					zap.String("mount_point", mountPoint),
 					zap.Error(err))
@@ -814,7 +906,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 
 	// Generate drbd-reactor promoter config
 	configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
-	configContent := rm.generatePromoterConfig(resource, nodes, services, mountPoint, fsType, vip)
+	configContent := rm.generatePromoterConfig(resource, nodeAddresses, services, mountPoint, fsType, vip)
 
 	rm.controller.logger.Debug("Generated promoter config",
 		zap.String("config", configContent))
@@ -1195,7 +1287,7 @@ func (rm *ResourceManager) RemoveHa(ctx context.Context, resource string) error 
 }
 
 // generatePromoterConfig generates drbd-reactor promoter TOML config
-func (rm *ResourceManager) generatePromoterConfig(resource string, nodes, services []string, mountPoint, fsType, vip string) string {
+func (rm *ResourceManager) generatePromoterConfig(resource string, nodeAddresses, services []string, mountPoint, fsType, vip string) string {
 	var startActions []string
 
 	// Add mount unit if mount point specified
@@ -1267,7 +1359,12 @@ func (rm *ResourceManager) CreateFilesystemOnly(ctx context.Context, resource st
 	drbdDevice := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, volumeID)
 
 	// Create filesystem on the first node (should be Primary)
-	mkfsCmd := fmt.Sprintf("sudo mkfs.%s -F %s", fsType, drbdDevice)
+	// Note: xfs uses -f (lowercase), ext4 uses -F (uppercase)
+	forceFlag := "-F"
+	if fsType == "xfs" {
+		forceFlag = "-f"
+	}
+	mkfsCmd := fmt.Sprintf("sudo mkfs.%s %s %s", fsType, forceFlag, drbdDevice)
 	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, mkfsCmd)
 	if err != nil {
 		return fmt.Errorf("failed to create filesystem: %w", err)
@@ -1316,7 +1413,7 @@ func parseRoleFromStatus(output string) string {
 //     disk:UpToDate open:no
 //   orange2 role:Secondary
 //     peer-disk:UpToDate
-func parseNodeStatesFromStatus(output string, nodes []string) map[string]*ResourceNodeState {
+func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string]*ResourceNodeState {
 	nodeStates := make(map[string]*ResourceNodeState)
 	lines := strings.Split(output, "\n")
 
@@ -1351,14 +1448,14 @@ func parseNodeStatesFromStatus(output string, nodes []string) map[string]*Resour
 	}
 
 	// Set local node state (first node in list)
-	if len(nodes) > 0 {
-		nodeStates[nodes[0]] = &ResourceNodeState{
+	if len(nodeAddresses) > 0 {
+		nodeStates[nodeAddresses[0]] = &ResourceNodeState{
 			Role:      localRole,
 			DiskState: localDiskState,
 		}
 	}
 
-	// Parse peer nodes: "  orange2 role:Secondary"
+	// Parse peer nodeAddresses: "  orange2 role:Secondary"
 	currentNode := ""
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -1368,8 +1465,8 @@ func parseNodeStatesFromStatus(output string, nodes []string) map[string]*Resour
 		// This matches "orange2 role:Secondary" pattern
 		if len(parts) >= 2 && strings.HasPrefix(parts[1], "role:") {
 			// Find which node this is
-			for _, node := range nodes {
-				if node == nodes[0] {
+			for _, node := range nodeAddresses {
+				if node == nodeAddresses[0] {
 					continue // Skip local node
 				}
 				if parts[0] == node {

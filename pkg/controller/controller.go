@@ -55,6 +55,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	deploymentClient, err := deployment.New(&deployment.Config{
 		DispatchConfig: cfg.Dispatch.ConfigPath,
 		Parallel:       cfg.Dispatch.Parallel,
+		SSHUser:        cfg.Dispatch.SSHUser,
+		SSHKeyPath:     cfg.Dispatch.SSHKeyPath,
 	}, logger)
 	if err != nil {
 		cancel()
@@ -125,9 +127,42 @@ func (c *Controller) initHostsMapping() {
 	}
 }
 
+// loadHostsFromDatabase loads hosts from registered nodes in database
+func (c *Controller) loadHostsFromDatabase(ctx context.Context) error {
+	nodes, err := c.nodes.ListNodes(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(nodes) == 0 {
+		return fmt.Errorf("no nodes found in database")
+	}
+
+	var hosts []string
+	for _, node := range nodes {
+		hosts = append(hosts, node.Name)
+	}
+
+	c.hosts = hosts
+	c.logger.Info("Loaded hosts from database", zap.Strings("hosts", hosts))
+	return nil
+}
+
 // Start starts the controller
 func (c *Controller) Start() error {
 	c.logger.Info("Starting SDS controller")
+
+	// Load hosts from registered nodes in database
+	if c.db != nil {
+		if err := c.loadHostsFromDatabase(context.Background()); err != nil {
+			c.logger.Warn("Failed to load hosts from database, using config", zap.Error(err))
+		}
+	}
+
+	// Fallback to config hosts if no nodes in database
+	if len(c.hosts) == 0 {
+		c.hosts = c.config.Dispatch.Hosts
+	}
 
 	// Initialize deployment client with hosts
 	c.resources.SetDeployment(c.deployment)
@@ -220,6 +255,30 @@ func (c *Controller) ResolveHost(hostOrAddr string) string {
 
 	// Return as-is (might be a hostname that SSH can resolve)
 	return hostOrAddr
+}
+
+// NormalizeHost converts an address to hostname if available
+// Used for display purposes to avoid showing duplicates
+func (c *Controller) NormalizeHost(addrOrHost string) string {
+	c.hostsLock.RLock()
+	defer c.hostsLock.RUnlock()
+
+	// If it's already in hosts list, return as is (prefer hostnames over IPs)
+	for _, host := range c.hosts {
+		if host == addrOrHost {
+			return host
+		}
+	}
+
+	// Reverse lookup: check if this address maps to a hostname
+	for hostname, addr := range c.hostsMap {
+		if addr == addrOrHost {
+			return hostname
+		}
+	}
+
+	// Return as-is
+	return addrOrHost
 }
 
 // ==================== Gateway Adapter ====================

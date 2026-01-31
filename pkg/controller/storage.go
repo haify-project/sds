@@ -43,9 +43,15 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 		zap.String("node", node),
 		zap.Strings("disks", disks))
 
+	// Convert node name to address
+	address := sm.controller.nodes.GetNodeAddressByName(node)
+	if address == "" {
+		return fmt.Errorf("node not found: %s", node)
+	}
+
 	// Create PVs first
 	for _, disk := range disks {
-		result, err := sm.controller.deployment.PVCreate(ctx, []string{node}, disk)
+		result, err := sm.controller.deployment.PVCreate(ctx, []string{address}, disk)
 		if err != nil {
 			return fmt.Errorf("failed to create PV on %s: %w", disk, err)
 		}
@@ -55,7 +61,7 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 	}
 
 	// Create VG
-	result, err := sm.controller.deployment.VGCreate(ctx, []string{node}, name, disks)
+	result, err := sm.controller.deployment.VGCreate(ctx, []string{address}, name, disks)
 	if err != nil {
 		return fmt.Errorf("failed to create pool: %w", err)
 	}
@@ -110,6 +116,8 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 // ListPools lists all pools across all nodes
 func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 	var pools []*PoolInfo
+	// Use map to deduplicate by normalized node name
+	seen := make(map[string]bool)
 
 	hosts := sm.controller.GetHosts()
 	if len(hosts) == 0 {
@@ -123,6 +131,12 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 
 	for host, r := range result.Hosts {
 		if r.Success {
+			// Normalize host: use hostname if available, otherwise use the host as-is
+			normalizedHost := sm.controller.NormalizeHost(host)
+			if normalizedHost == "" {
+				normalizedHost = host
+			}
+
 			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
@@ -132,6 +146,13 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 				fields := strings.Split(line, "|")
 				if len(fields) >= 3 {
 					vgName := strings.TrimSpace(fields[0])
+					// Create unique key for deduplication
+					key := normalizedHost + "/" + vgName
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
+
 					// Parse size, remove 'B' suffix if present
 					totalSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[1], "B"))
 					freeSizeStr := strings.TrimSpace(strings.TrimSuffix(fields[2], "B"))
@@ -140,7 +161,7 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 					pools = append(pools, &PoolInfo{
 						Name:    vgName,
 						Type:    "vg",
-						Node:    host,
+						Node:    normalizedHost,
 						TotalGB: totalSize / 1024 / 1024 / 1024,
 						FreeGB:  freeSize / 1024 / 1024 / 1024,
 					})

@@ -28,6 +28,8 @@ type DispatchConfig struct {
 	ConfigPath string `mapstructure:"config_path"` // Path to dispatch config (~/.dispatch/config.toml)
 	Parallel   int    `mapstructure:"parallel"`    // Default parallelism for operations
 	Hosts      []string `mapstructure:"hosts"`     // Default hosts for operations
+	SSHUser    string `mapstructure:"ssh_user"`    // Default SSH user
+	SSHKeyPath string `mapstructure:"ssh_key_path"` // Default SSH private key path
 }
 
 // DatabaseConfig represents database configuration

@@ -8,8 +8,11 @@ package deployment
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,6 +20,45 @@ import (
 	"github.com/liliang-cn/dispatch/pkg/dispatch"
 	"go.uber.org/zap"
 )
+
+// getLocalIPs returns all local IP addresses
+func getLocalIPs() []string {
+	var ips []string
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return ips
+	}
+
+	for _, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil && !ip.IsLoopback() {
+				ips = append(ips, ip.String())
+			}
+		}
+	}
+	return ips
+}
+
+// isLocalIP checks if an IP address is local
+func isLocalIP(host string, localAddrs []string) bool {
+	for _, localIP := range localAddrs {
+		if host == localIP {
+			return true
+		}
+	}
+	return false
+}
 
 // Client handles DRBD resource management via dispatch
 type Client struct {
@@ -31,6 +73,10 @@ type Config struct {
 	DispatchConfig string
 	// Parallel is the default parallelism for operations
 	Parallel int
+	// SSHUser is the default SSH user
+	SSHUser string
+	// SSHKeyPath is the default SSH private key path
+	SSHKeyPath string
 }
 
 // New creates a new deployment Client
@@ -42,9 +88,17 @@ func New(cfg *Config, logger *zap.Logger) (*Client, error) {
 		cfg.Parallel = 10
 	}
 
-	client, err := dispatch.New(&dispatch.Config{
+	dispatchCfg := &dispatch.Config{
 		ConfigPath: cfg.DispatchConfig,
-	})
+	}
+	if cfg.SSHUser != "" || cfg.SSHKeyPath != "" {
+		dispatchCfg.SSH = &dispatch.SSHConfig{
+			User:    cfg.SSHUser,
+			KeyPath: cfg.SSHKeyPath,
+		}
+	}
+
+	client, err := dispatch.New(dispatchCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dispatch client: %w", err)
 	}
@@ -65,90 +119,164 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 		opt(options)
 	}
 
-	// Create temp file
-	tempFile, err := os.CreateTemp("", "sds-config-*")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer os.Remove(tempFile.Name())
-
-	if _, err := tempFile.WriteString(content); err != nil {
-		tempFile.Close()
-		return nil, fmt.Errorf("failed to write config: %w", err)
-	}
-	tempFile.Close()
-
 	c.logger.Info("Distributing config",
 		zap.Strings("hosts", hosts),
 		zap.String("path", remotePath))
 
-	// First, copy to /tmp/ on all nodes
-	tempRemotePath := "/tmp/" + filepath.Base(remotePath) + ".tmp"
+	localTempFile := "/tmp/" + filepath.Base(remotePath) + ".tmp"
 
-	copyOpts := []dispatch.CopyOption{
-		dispatch.WithCopyMode(0644),
-	}
-	if options.backup {
-		copyOpts = append(copyOpts, dispatch.WithBackup(true))
-	}
-
-	result, err := c.dispatch.Copy(ctx, hosts, tempFile.Name(), tempRemotePath, copyOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("copy failed: %w", err)
-	}
-
-	c.logger.Debug("Copy result", zap.Strings("hosts", hosts), zap.Int("result_count", len(result.Hosts)))
-	for h, res := range result.Hosts {
-		errMsg := ""
-		if res.Error != nil {
-			errMsg = res.Error.Error()
-		}
-		c.logger.Debug("Copy host result", zap.String("host", h), zap.Bool("success", res.Success), zap.String("error", errMsg))
-	}
-
-	// Then, move with sudo to final location
-	moveResult, err := c.Exec(ctx, hosts, fmt.Sprintf("sudo mkdir -p %s && sudo mv -f %s %s", filepath.Dir(remotePath), tempRemotePath, remotePath))
-	if err != nil {
-		return nil, fmt.Errorf("sudo move failed: %w", err)
-	}
-
-	// Combine results
 	configResult := &ConfigResult{
 		Path:    remotePath,
 		Success: true,
 		Hosts:   make(map[string]*HostResult),
 	}
 
+	// Separate local and remote hosts
+	var localHosts []string
+	var remoteHosts []string
+	localAddrs := getLocalIPs()
 	for _, host := range hosts {
-		copyOK := result.Hosts[host] != nil && result.Hosts[host].Success
-		moveOK := moveResult.Hosts[host] != nil && moveResult.Hosts[host].Success
-
-		c.logger.Debug("Config distribution", zap.String("host", host), zap.Bool("copy_ok", copyOK), zap.Bool("move_ok", moveOK))
-
-		var combinedErr error
-		if !copyOK {
-			if result.Hosts[host] != nil && result.Hosts[host].Error != nil {
-				combinedErr = result.Hosts[host].Error
-			} else {
-				combinedErr = fmt.Errorf("copy failed")
-			}
+		if isLocalIP(host, localAddrs) {
+			localHosts = append(localHosts, host)
+		} else {
+			remoteHosts = append(remoteHosts, host)
 		}
-		if !moveOK && combinedErr == nil {
-			if moveResult.Hosts[host] != nil && moveResult.Hosts[host].Error != nil {
-				combinedErr = moveResult.Hosts[host].Error
-			} else {
-				combinedErr = fmt.Errorf("move failed")
+	}
+
+	// Handle local hosts - write directly
+	for _, host := range localHosts {
+		// Write to temp path
+		if err := os.WriteFile(localTempFile, []byte(content), 0644); err != nil {
+			c.logger.Error("Failed to write local config", zap.String("host", host), zap.Error(err))
+			configResult.Hosts[host] = &HostResult{
+				Host:    host,
+				Success: false,
+				Error:   err,
 			}
+			configResult.Success = false
+			continue
+		}
+
+		// Create directory and move to final location using local exec
+		mkdirCmd := exec.Command("sudo", "mkdir", "-p", filepath.Dir(remotePath))
+		if err := mkdirCmd.Run(); err != nil {
+			c.logger.Error("Failed to create directory", zap.String("host", host), zap.Error(err))
+			configResult.Hosts[host] = &HostResult{
+				Host:    host,
+				Success: false,
+				Error:   err,
+			}
+			configResult.Success = false
+			os.Remove(localTempFile)
+			continue
+		}
+
+		mvCmd := exec.Command("sudo", "mv", "-f", localTempFile, remotePath)
+		if err := mvCmd.Run(); err != nil {
+			c.logger.Error("Failed to move local config", zap.String("host", host), zap.Error(err))
+			configResult.Hosts[host] = &HostResult{
+				Host:    host,
+				Success: false,
+				Error:   err,
+			}
+			configResult.Success = false
+			os.Remove(localTempFile)
+			continue
 		}
 
 		configResult.Hosts[host] = &HostResult{
 			Host:    host,
-			Success: copyOK && moveOK,
-			Error:   combinedErr,
+			Success: true,
 		}
-		if !configResult.Hosts[host].Success {
-			configResult.Success = false
+		c.logger.Debug("Local config distributed", zap.String("host", host))
+	}
+
+	// Handle remote hosts - use dispatch.Copy
+	if len(remoteHosts) > 0 {
+		c.logger.Debug("Copying to remote hosts", zap.Strings("remote_hosts", remoteHosts))
+		// For remote hosts, use cat + ssh + sudo tee to handle privileged paths
+		for _, host := range remoteHosts {
+			// First create directory
+			mkdirCmd := fmt.Sprintf("sudo mkdir -p %s", filepath.Dir(remotePath))
+			mkdirResult, err := c.Exec(ctx, []string{host}, mkdirCmd)
+			if err != nil {
+				c.logger.Error("Failed to create directory", zap.String("host", host), zap.Error(err))
+				configResult.Hosts[host] = &HostResult{
+					Host:    host,
+					Success: false,
+					Error:   err,
+				}
+				configResult.Success = false
+				continue
+			}
+			if !mkdirResult.AllSuccess() {
+				configResult.Hosts[host] = &HostResult{
+					Host:    host,
+					Success: false,
+					Error:   fmt.Errorf("mkdir failed"),
+				}
+				configResult.Success = false
+				continue
+			}
+
+			// Use cat | ssh | sudo tee to copy file with root permissions
+			// Write content to temp file first
+			if err := os.WriteFile(localTempFile, []byte(content), 0644); err != nil {
+				c.logger.Error("Failed to write temp file", zap.Error(err))
+				configResult.Hosts[host] = &HostResult{
+					Host:    host,
+					Success: false,
+					Error:   err,
+				}
+				configResult.Success = false
+				continue
+			}
+
+			// Copy using ssh with sudo tee (direct execution via dispatch)
+			// First read file content
+			fileContent, err := os.ReadFile(localTempFile)
+			if err != nil {
+				c.logger.Error("Failed to read temp file", zap.Error(err))
+				configResult.Hosts[host] = &HostResult{
+					Host:    host,
+					Success: false,
+					Error:   err,
+				}
+				configResult.Success = false
+				continue
+			}
+
+			// Use base64 encoding to safely transfer content
+			encodedContent := fmt.Sprintf("echo %s | base64 -d | sudo tee %s > /dev/null",
+				fmt.Sprintf("%q", base64.StdEncoding.EncodeToString(fileContent)), remotePath)
+			copyResult, err := c.Exec(ctx, []string{host}, encodedContent)
+			if err != nil {
+				c.logger.Error("Failed to copy config", zap.String("host", host), zap.Error(err))
+				configResult.Hosts[host] = &HostResult{
+					Host:    host,
+					Success: false,
+					Error:   err,
+				}
+				configResult.Success = false
+				continue
+			}
+			if !copyResult.AllSuccess() {
+				configResult.Hosts[host] = &HostResult{
+					Host:    host,
+					Success: false,
+					Error:   fmt.Errorf("copy failed"),
+				}
+				configResult.Success = false
+				continue
+			}
+
+			configResult.Hosts[host] = &HostResult{
+				Host:    host,
+				Success: true,
+			}
+			c.logger.Debug("Remote config distributed", zap.String("host", host))
 		}
+		os.Remove(localTempFile)
 	}
 
 	// Run post-command if specified
@@ -157,6 +285,47 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 	}
 
 	return configResult, nil
+}
+
+// isLocalHost checks if a host is the local machine
+func isLocalHost(host string) bool {
+	hostname, _ := os.Hostname()
+
+	// Check if host matches local hostname
+	if host == hostname || host == "localhost" || host == "127.0.0.1" {
+		return true
+	}
+
+	// Check if host matches any local IP address
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+
+		if ip != nil && ip.String() == host {
+			return true
+		}
+	}
+
+	return false
+}
+
+// availableHostKeys returns the keys from the copy result hosts map for debugging
+func availableHostKeys(hosts map[string]*dispatch.CopyHostResult) []string {
+	var keys []string
+	for k := range hosts {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // DeleteConfig removes a config file from all nodes
@@ -185,20 +354,77 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 		timeout = options.timeout
 	}
 
-	// Debug: log before calling dispatch
 	c.logger.Debug("deployment.Exec called",
 		zap.Strings("hosts", hosts),
 		zap.String("cmd", cmd),
 		zap.Duration("timeout", timeout))
 
-	result, err := c.dispatch.Exec(ctx, hosts, cmd,
-		dispatch.WithParallel(parallel),
-		dispatch.WithTimeout(timeout),
-	)
-
-	if err != nil {
-		return nil, err
+	// Separate local and remote hosts
+	var localHosts []string
+	var remoteHosts []string
+	localAddrs := getLocalIPs()
+	for _, host := range hosts {
+		if isLocalIP(host, localAddrs) {
+			localHosts = append(localHosts, host)
+		} else {
+			remoteHosts = append(remoteHosts, host)
+		}
 	}
+
+	c.logger.Debug("Host classification",
+		zap.Strings("local", localHosts),
+		zap.Strings("remote", remoteHosts))
+
+	// Initialize result
+	result := &dispatch.ExecResult{
+		Hosts: make(map[string]*dispatch.HostResult),
+	}
+
+	// Execute on local hosts using os/exec
+	for _, host := range localHosts {
+		start := time.Now()
+		output, err := exec.CommandContext(ctx, "sh", "-c", cmd).CombinedOutput()
+		end := time.Now()
+		exitCode := 0
+		var errorMsg error = nil
+		if err != nil {
+			errorMsg = err
+			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() >= 0 {
+				exitCode = exitErr.ExitCode()
+			} else {
+				exitCode = 1
+			}
+		}
+		result.Hosts[host] = &dispatch.HostResult{
+			Host:     host,
+			Output:   output,
+			StartTime: start,
+			EndTime:   end,
+			Duration: end.Sub(start),
+			ExitCode: exitCode,
+			ErrorMsg: errorMsg,
+			Success:  exitCode == 0 && errorMsg == nil,
+		}
+	}
+
+	// Execute on remote hosts using dispatch
+	if len(remoteHosts) > 0 {
+		dispatchResult, dispatchErr := c.dispatch.Exec(ctx, remoteHosts, cmd,
+			dispatch.WithParallel(parallel),
+			dispatch.WithTimeout(timeout),
+		)
+		if dispatchErr != nil {
+			c.logger.Warn("Remote dispatch.Exec failed", zap.Error(dispatchErr))
+			return nil, dispatchErr
+		}
+		for host, r := range dispatchResult.Hosts {
+			result.Hosts[host] = r
+		}
+	}
+
+	c.logger.Debug("deployment.Exec completed",
+		zap.Int("result_hosts_count", len(result.Hosts)),
+		zap.Strings("requested_hosts", hosts))
 
 	execResult := &ExecResult{
 		Hosts: make(map[string]*HostResult),
@@ -208,6 +434,8 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 		c.logger.Debug("deployment.Exec result",
 			zap.String("host", host),
 			zap.Bool("success", r.Success),
+			zap.Int("exit_code", r.ExitCode),
+			zap.String("error_msg", fmt.Sprintf("%v", r.ErrorMsg)),
 			zap.Int("output_len", len(r.Output)),
 			zap.String("output", string(r.Output)))
 		execResult.Hosts[host] = &HostResult{
@@ -261,15 +489,16 @@ func (c *Client) DRBDDown(ctx context.Context, hosts []string, resource string) 
 
 // DRBDPrimary sets resource to Primary
 func (c *Client) DRBDPrimary(ctx context.Context, host, resource string, force bool) (*HostResult, error) {
-	cmd := fmt.Sprintf("sudo drbdadm primary %s", resource)
-	if force {
-		cmd += " --force"
-	}
+	cmd := fmt.Sprintf("sudo drbdadm primary --force %s", resource)
 	result, err := c.Exec(ctx, []string{host}, cmd)
 	if err != nil {
 		return nil, err
 	}
-	return result.Hosts[host], nil
+	// Find result - the returned host key may differ (IP vs hostname)
+	for _, r := range result.Hosts {
+		return r, nil
+	}
+	return nil, fmt.Errorf("no result returned for host %s", host)
 }
 
 // DRBDSecondary sets resource to Secondary
@@ -278,12 +507,16 @@ func (c *Client) DRBDSecondary(ctx context.Context, host, resource string) (*Hos
 	if err != nil {
 		return nil, err
 	}
-	return result.Hosts[host], nil
+	// Find result - the returned host key may differ (IP vs hostname)
+	for _, r := range result.Hosts {
+		return r, nil
+	}
+	return nil, fmt.Errorf("no result returned for host %s", host)
 }
 
 // DRBDCreateMD creates DRBD metadata
 func (c *Client) DRBDCreateMD(ctx context.Context, hosts []string, resource string) (*ExecResult, error) {
-	return c.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm create-md %s", resource))
+	return c.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm create-md --force %s", resource))
 }
 
 // DRBDAdjust adjusts DRBD configuration
