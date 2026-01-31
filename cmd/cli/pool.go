@@ -134,13 +134,30 @@ func poolDelete() *cobra.Command {
 				return fmt.Errorf("node is required")
 			}
 
-			fmt.Printf("Delete pool '%s' on node '%s' - not yet implemented\n", name, node)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.DeletePool(ctx, name, node)
+			if err != nil {
+				return fmt.Errorf("failed to delete pool: %w", err)
+			}
+
+			fmt.Printf("Pool '%s' deleted successfully on node '%s'\n", name, node)
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Pool name")
 	cmd.Flags().StringVar(&node, "node", "", "Node where the pool exists")
+
+	cmd.MarkFlagRequired("name")
+	cmd.MarkFlagRequired("node")
 
 	return cmd
 }

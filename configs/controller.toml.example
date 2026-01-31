@@ -11,6 +11,10 @@ port = 3374
 config_path = ""
 # Parallel execution limit for operations
 parallel = 10
+# Default SSH user
+ssh_user = "root"
+# Default SSH private key path
+ssh_key_path = "/root/.ssh/id_rsa"
 # Storage nodes (for node name resolution)
 hosts = [
     "orange1",

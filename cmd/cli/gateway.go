@@ -21,6 +21,8 @@ func gatewayCommand() *cobra.Command {
 	cmd.AddCommand(gatewayNVMe())
 	cmd.AddCommand(gatewayList())
 	cmd.AddCommand(gatewayDelete())
+	cmd.AddCommand(gatewayStart())
+	cmd.AddCommand(gatewayStop())
 
 	return cmd
 }
@@ -503,6 +505,82 @@ func gatewayDelete() *cobra.Command {
 			fmt.Printf("\nNote: Configuration files have been removed from all nodes\n")
 			fmt.Printf("      You may need to reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
 
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
+	cmd.MarkFlagRequired("resource")
+
+	return cmd
+}
+
+func gatewayStart() *cobra.Command {
+	var resource string
+
+	cmd := &cobra.Command{
+		Use:   "start --resource <name>",
+		Short: "Start a gateway (activate resources and services)",
+		Long: `Start a gateway by promoting the DRBD resource and starting all services.
+This is typically handled automatically by drbd-reactor.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+
+			if resource == "" {
+				return fmt.Errorf("--resource is required")
+			}
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.StartGateway(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to start gateway: %w", err)
+			}
+
+			fmt.Printf("✓ Gateway started successfully\n")
+			fmt.Printf("  Resource: %s\n", resource)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
+	cmd.MarkFlagRequired("resource")
+
+	return cmd
+}
+
+func gatewayStop() *cobra.Command {
+	var resource string
+
+	cmd := &cobra.Command{
+		Use:   "stop --resource <name>",
+		Short: "Stop a gateway (demote resources and stop services)",
+		Long: `Stop a gateway by demoting the DRBD resource and stopping all services.
+This is typically handled automatically by drbd-reactor.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+
+			if resource == "" {
+				return fmt.Errorf("--resource is required")
+			}
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.StopGateway(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to stop gateway: %w", err)
+			}
+
+			fmt.Printf("✓ Gateway stopped successfully\n")
+			fmt.Printf("  Resource: %s\n", resource)
 			return nil
 		},
 	}

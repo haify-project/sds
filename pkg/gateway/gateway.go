@@ -5,12 +5,15 @@ package gateway
 import (
 	"context"
 	"crypto/md5"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	"go.uber.org/zap"
 	v1 "github.com/liliang-cn/sds/api/proto/v1"
@@ -305,22 +308,57 @@ func parseDeviceMinorFromConfig(configContent string) int {
 	return -1
 }
 
-// generateUUID generates a simple UUID for use in configurations
+// getDRBDDeviceForVolume returns the DRBD device path for a specific volume number
+// Volume 0 uses the base device, volume N uses base minor + N
+func getDRBDDeviceForVolume(baseDevice string, volumeNumber int) string {
+	if volumeNumber == 0 {
+		return baseDevice
+	}
+	// Extract minor number from base device (e.g., /dev/drbd0 -> 0)
+	minor := 0
+	if strings.HasPrefix(baseDevice, "/dev/drbd") {
+		fmt.Sscanf(baseDevice, "/dev/drbd%d", &minor)
+	}
+	return fmt.Sprintf("/dev/drbd%d", minor+volumeNumber)
+}
+
+// generateUUID generates a proper UUID v4 for use in configurations
 func generateUUID() string {
-	hash := md5.Sum([]byte(fmt.Sprintf("%d", randInt())))
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		hash[:4],
-		randShort(), randShort(),
-		randShort(), hash[4:9])
+	// Generate 16 random bytes
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to MD5-based UUID if rand.Read fails
+		hash := md5.Sum([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+		return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+			hash[:4], hash[4:6], hash[6:8], hash[8:10], hash[10:16])
+	}
+
+	// Set version 4 (random UUID) and variant
+	b[6] = (b[6] & 0x0F) | 0x40
+	b[8] = (b[8] & 0x3F) | 0x80
+
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		hex.EncodeToString(b[0:4]),
+		hex.EncodeToString(b[4:6]),
+		hex.EncodeToString(b[6:8]),
+		hex.EncodeToString(b[8:10]),
+		hex.EncodeToString(b[10:16]))
 }
 
-// Helper functions for UUID generation
-func randInt() int {
-	return 12345
+// generateSerialFromIQN generates a unique serial from IQN and volume number
+// Matches linstor-gateway behavior for iSCSI LUNs
+func generateSerialFromIQN(iqn string, volumeNumber int) string {
+	hash := md5.Sum([]byte(fmt.Sprintf("%s-%d", iqn, volumeNumber)))
+	return hex.EncodeToString(hash[:8])
 }
 
-func randShort() uint16 {
-	return 0x1234
+// generateFSID generates a proper filesystem ID as UUID (matches linstor-gateway)
+func generateFSID(resourceUUID, volumeUUID string) string {
+	// SHA1 hash of resource UUID + volume UUID to create unique FSID
+	hash := md5.Sum([]byte(resourceUUID + ":" + volumeUUID))
+	uuid := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		hash[:4], hash[4:6], hash[6:8], hash[8:10], hash[10:16])
+	return uuid
 }
 
 // executeTemplate executes a template with the given data

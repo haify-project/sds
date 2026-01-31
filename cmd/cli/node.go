@@ -20,6 +20,7 @@ func nodeCommand() *cobra.Command {
 	cmd.AddCommand(nodeList())
 	cmd.AddCommand(nodeGet())
 	cmd.AddCommand(nodeRegister())
+	cmd.AddCommand(nodeUnregister())
 
 	return cmd
 }
@@ -167,6 +168,45 @@ func nodeRegister() *cobra.Command {
 	cmd.Flags().StringVar(&address, "address", "", "Node IP address (e.g., 192.168.1.10)")
 
 	cmd.MarkFlagRequired("name")
+	cmd.MarkFlagRequired("address")
+
+	return cmd
+}
+
+func nodeUnregister() *cobra.Command {
+	var address string
+
+	cmd := &cobra.Command{
+		Use:   "unregister --address <ip>",
+		Short: "Unregister a storage node",
+		Long: `Unregister a storage node from the cluster.
+This removes the node from the database but does not affect the node itself.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if address == "" {
+				return fmt.Errorf("--address is required")
+			}
+
+			ctx := cmd.Context()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.UnregisterNode(ctx, address)
+			if err != nil {
+				return fmt.Errorf("failed to unregister node: %w", err)
+			}
+
+			fmt.Printf("✓ Node unregistered successfully\n")
+			fmt.Printf("  Address: %s\n", address)
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&address, "address", "", "Node address (IP:port)")
 	cmd.MarkFlagRequired("address")
 
 	return cmd

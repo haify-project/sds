@@ -127,6 +127,25 @@ func (c *SDSClient) AddDiskToPool(ctx context.Context, pool, disk, node string) 
 	return nil
 }
 
+// DeletePool deletes a storage pool
+func (c *SDSClient) DeletePool(ctx context.Context, pool, node string) error {
+	req := &sdspb.DeletePoolRequest{
+		Name: pool,
+		Node: node,
+	}
+
+	resp, err := c.client.DeletePool(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf(resp.Message)
+	}
+
+	return nil
+}
+
 // ==================== NODE OPERATIONS ====================
 
 // RegisterNode registers a new node
@@ -162,6 +181,24 @@ func (c *SDSClient) ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error) {
 	}
 
 	return resp.Nodes, nil
+}
+
+// UnregisterNode unregisters a node
+func (c *SDSClient) UnregisterNode(ctx context.Context, address string) error {
+	req := &sdspb.UnregisterNodeRequest{
+		Address: address,
+	}
+
+	resp, err := c.client.UnregisterNode(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf(resp.Message)
+	}
+
+	return nil
 }
 
 // ==================== RESOURCE OPERATIONS ====================
@@ -576,6 +613,26 @@ func (c *SDSClient) ListSnapshots(ctx context.Context, volume, node string) ([]*
 	}
 
 	return resp.Snapshots, nil
+}
+
+// RestoreSnapshot restores a snapshot to its source volume
+func (c *SDSClient) RestoreSnapshot(ctx context.Context, volume, snapshotName, node string) error {
+	req := &sdspb.RestoreSnapshotRequest{
+		Volume:       volume,
+		SnapshotName: snapshotName,
+		Node:         node,
+	}
+
+	resp, err := c.client.RestoreSnapshot(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf(resp.Message)
+	}
+
+	return nil
 }
 
 // ==================== GATEWAY OPERATIONS ====================

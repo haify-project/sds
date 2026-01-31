@@ -452,7 +452,7 @@ func (s *Server) CreateFilesystem(ctx context.Context, req *sdspb.CreateFilesyst
 }
 
 func (s *Server) MountResource(ctx context.Context, req *sdspb.MountResourceRequest) (*sdspb.MountResourceResponse, error) {
-	err := s.resources.Mount(ctx, req.Resource, req.Path, req.VolumeId, req.Fstype)
+	err := s.resources.Mount(ctx, req.Resource, req.Path, req.VolumeId, req.Node, req.Fstype)
 	if err != nil {
 		return &sdspb.MountResourceResponse{
 			Success: false,
@@ -466,7 +466,7 @@ func (s *Server) MountResource(ctx context.Context, req *sdspb.MountResourceRequ
 }
 
 func (s *Server) UnmountResource(ctx context.Context, req *sdspb.UnmountResourceRequest) (*sdspb.UnmountResourceResponse, error) {
-	err := s.resources.Unmount(ctx, req.Resource, req.Node)
+	err := s.resources.Unmount(ctx, req.Resource, req.VolumeId, req.Node)
 	if err != nil {
 		return &sdspb.UnmountResourceResponse{
 			Success: false,

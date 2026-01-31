@@ -92,13 +92,24 @@ func haDelete() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
 
-			// For now, we need to remove the config file directly
-			// In the future, this could be a proper RPC call
-			configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
-			fmt.Printf("To delete HA config, remove the following file on all nodes:\n")
-			fmt.Printf("  %s\n", configPath)
-			fmt.Printf("Then reload drbd-reactor:\n")
-			fmt.Printf("  systemctl reload drbd-reactor\n")
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.DeleteHa(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to delete HA config: %w", err)
+			}
+
+			fmt.Printf("HA configuration deleted successfully\n")
+			fmt.Printf("  Resource: %s\n", resource)
+			fmt.Printf("\nNote: Configuration files have been removed from all nodes\n")
+			fmt.Printf("      You may need to reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
 
 			return nil
 		},

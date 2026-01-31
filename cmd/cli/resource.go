@@ -38,6 +38,11 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourcePrimary())
 	cmd.AddCommand(resourceSecondary())
 	cmd.AddCommand(resourceFs())
+	cmd.AddCommand(resourceStatus())
+	cmd.AddCommand(resourceMount())
+	cmd.AddCommand(resourceUnmount())
+	cmd.AddCommand(resourcePromote())
+	cmd.AddCommand(resourceDemote())
 
 	return cmd
 }
@@ -505,6 +510,197 @@ func resourceFs() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
+
+	return cmd
+}
+
+func resourceStatus() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "status <resource>",
+		Short: "Show detailed resource status",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			status, err := sdsClient.ResourceStatus(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to get resource status: %w", err)
+			}
+
+			fmt.Printf("Resource Status: %s\n", status.GetName())
+			fmt.Printf("  Role:  %s\n", status.GetRole())
+			fmt.Printf("  Nodes: %v\n", status.GetNodes())
+
+			volumes := status.GetVolumes()
+			if len(volumes) > 0 {
+				fmt.Printf("\n  Volumes:\n")
+				for _, vol := range volumes {
+					fmt.Printf("    %d: %s (%d GB)\n",
+						vol.GetVolumeId(), vol.GetDevice(), vol.GetSizeGb())
+				}
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func resourceMount() *cobra.Command {
+	var node string
+	var fstype string
+
+	cmd := &cobra.Command{
+		Use:   "mount <resource> <volume-id> <mount-path>",
+		Short: "Mount a DRBD volume",
+		Args:  cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			var volumeID uint32
+			_, err := fmt.Sscanf(args[1], "%d", &volumeID)
+			if err != nil {
+				return fmt.Errorf("invalid volume ID: %s", args[1])
+			}
+			mountPath := args[2]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.MountResource(ctx, resource, volumeID, mountPath, node, fstype)
+			if err != nil {
+				return fmt.Errorf("failed to mount resource: %w", err)
+			}
+
+			fmt.Printf("Resource '%s' volume %d mounted at %s\n", resource, volumeID, mountPath)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
+	cmd.Flags().StringVar(&fstype, "fstype", "ext4", "Filesystem type")
+	cmd.MarkFlagRequired("node")
+
+	return cmd
+}
+
+func resourceUnmount() *cobra.Command {
+	var node string
+
+	cmd := &cobra.Command{
+		Use:   "unmount <resource> <volume-id>",
+		Short: "Unmount a DRBD volume",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			var volumeID uint32
+			_, err := fmt.Sscanf(args[1], "%d", &volumeID)
+			if err != nil {
+				return fmt.Errorf("invalid volume ID: %s", args[1])
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.UnmountResource(ctx, resource, volumeID, node)
+			if err != nil {
+				return fmt.Errorf("failed to unmount resource: %w", err)
+			}
+
+			fmt.Printf("Resource '%s' volume %d unmounted\n", resource, volumeID)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
+	cmd.MarkFlagRequired("node")
+
+	return cmd
+}
+
+func resourcePromote() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "promote <resource> <node>",
+		Short: "Promote DRBD resource to primary",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			node := args[1]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.SetPrimary(ctx, resource, node, force)
+			if err != nil {
+				return fmt.Errorf("failed to promote resource: %w", err)
+			}
+
+			fmt.Printf("Resource '%s' promoted on '%s'\n", resource, node)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&force, "force", false, "Force promotion")
+
+	return cmd
+}
+
+func resourceDemote() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "demote <resource> <node>",
+		Short: "Demote DRBD resource to secondary",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			node := args[1]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			err = sdsClient.SetSecondary(ctx, resource, node)
+			if err != nil {
+				return fmt.Errorf("failed to demote resource: %w", err)
+			}
+
+			fmt.Printf("Resource '%s' demoted on '%s'\n", resource, node)
+			return nil
+		},
+	}
 
 	return cmd
 }

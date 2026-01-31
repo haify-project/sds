@@ -55,27 +55,27 @@ func ParseSize(sizeStr string) (uint64, error) {
 		multiplier = 1
 	case "KB":
 		multiplier = 1000
-	case "KIB":
+	case "K", "KIB":
 		multiplier = 1024
 	case "MB":
 		multiplier = 1000 * 1000
-	case "MIB":
+	case "M", "MIB":
 		multiplier = 1024 * 1024
 	case "GB":
 		multiplier = 1000 * 1000 * 1000
-	case "GIB":
+	case "G", "GIB":
 		multiplier = 1024 * 1024 * 1024
 	case "TB":
 		multiplier = 1000 * 1000 * 1000 * 1000
-	case "TIB":
+	case "T", "TIB":
 		multiplier = 1024 * 1024 * 1024 * 1024
 	case "PB":
 		multiplier = 1000 * 1000 * 1000 * 1000 * 1000
-	case "PIB":
+	case "P", "PIB":
 		multiplier = 1024 * 1024 * 1024 * 1024 * 1024
 	case "EB":
 		multiplier = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
-	case "EIB":
+	case "E", "EIB":
 		multiplier = 1024 * 1024 * 1024 * 1024 * 1024 * 1024
 	default:
 		return 0, fmt.Errorf("unknown unit: %s", matches[2])

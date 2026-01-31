@@ -27,8 +27,11 @@ sds-cli (client) --> sds-controller (gRPC) --> deployment --> dispatch --> SSH -
 # Build binaries
 make build
 
-# Run tests
+# Run all tests
 make test
+
+# Run single test
+go test -v ./pkg/gateway -run TestNFSGateway
 
 # Format code
 make fmt
@@ -68,10 +71,10 @@ ssh orange1 "sudo systemctl stop sds-controller && \
 
 ```bash
 # List services
-grpcurl -plaintext orange1:50051 list
+grpcurl -plaintext orange1:3374 list
 
 # Call gRPC methods
-grpcurl -plaintext orange1:50051 v1.SDSController/ListPools
+grpcurl -plaintext orange1:3374 v1.SDSController/ListPools
 ```
 
 ### Test with sds-cli (on server)
@@ -113,7 +116,7 @@ default_pool_type = "vg"
 default_snapshot_suffix = "_snap"
 ```
 
-**Default port: 3374** (changed from 3374)
+**Default port: 3374**
 
 ## Package Structure
 
@@ -124,6 +127,8 @@ default_snapshot_suffix = "_snap"
 | `pkg/deployment` | Wrapper around dispatch for SSH-based operations                                       |
 | `pkg/config`     | Configuration loading with viper                                                       |
 | `pkg/client`     | gRPC client for sds-cli                                                                |
+| `pkg/database`   | BBolt-based persistent storage for gateways                                            |
+| `pkg/reactor`    | drbd-reactor promoter config generation                                                |
 | `cmd/controller` | Controller main entry point                                                            |
 | `cmd/cli`        | CLI tool commands                                                                      |
 | `api/proto/v1`   | gRPC protocol definitions                                                              |

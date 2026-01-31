@@ -669,13 +669,64 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 }
 
 // Mount mounts a DRBD device
-func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint string, volumeID uint32, fsType string) error {
-	return fmt.Errorf("Mount not yet implemented")
+func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint string, volumeID uint32, node, fsType string) error {
+	rm.controller.logger.Info("Mounting resource",
+		zap.String("resource", resource),
+		zap.String("mount_point", mountPoint),
+		zap.Uint32("volume_id", volumeID),
+		zap.String("node", node),
+		zap.String("fstype", fsType))
+
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+
+	drbdDevice := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, volumeID)
+
+	// Create mount point
+	mkdirCmd := fmt.Sprintf("sudo mkdir -p %s", mountPoint)
+	_, err := rm.deployment.Exec(ctx, []string{node}, mkdirCmd)
+	if err != nil {
+		return fmt.Errorf("failed to create mount point: %w", err)
+	}
+
+	// Mount
+	mountCmd := fmt.Sprintf("sudo mount %s %s", drbdDevice, mountPoint)
+	result, err := rm.deployment.Exec(ctx, []string{node}, mountCmd)
+	if err != nil {
+		return fmt.Errorf("failed to mount: %w", err)
+	}
+	if !result.AllSuccess() {
+		return fmt.Errorf("mount failed on %s: %v", node, result.FailedHosts())
+	}
+
+	return nil
 }
 
 // Unmount unmounts a DRBD device
-func (rm *ResourceManager) Unmount(ctx context.Context, resource, mountPoint string) error {
-	return fmt.Errorf("Unmount not yet implemented")
+func (rm *ResourceManager) Unmount(ctx context.Context, resource string, volumeID uint32, node string) error {
+	rm.controller.logger.Info("Unmounting resource",
+		zap.String("resource", resource),
+		zap.Uint32("volume_id", volumeID),
+		zap.String("node", node))
+
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+
+	// Unmount by device path is safer if we know volume ID
+	drbdDevice := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, volumeID)
+
+	umountCmd := fmt.Sprintf("sudo umount %s", drbdDevice)
+	result, err := rm.deployment.Exec(ctx, []string{node}, umountCmd)
+	if err != nil {
+		return fmt.Errorf("failed to unmount: %w", err)
+	}
+	if !result.AllSuccess() {
+		return fmt.Errorf("unmount failed on %s: %v", node, result.FailedHosts())
+	}
+
+	return nil
 }
 
 // generateSystemdMountUnit generates a systemd mount unit content
