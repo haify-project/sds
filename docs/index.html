@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -34,58 +35,106 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
-    
+
     <!-- GSAP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/TextPlugin.min.js"></script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; overflow-x: hidden; }
-        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .glow-text { text-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
-        .grid-bg { 
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glow-text {
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+
+        .grid-bg {
             background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
             background-size: 40px 40px;
         }
-        .cursor-blink { animation: blink 1s step-end infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        .cursor-blink {
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0;
+            }
+        }
     </style>
 </head>
+
 <body x-data="app()" :class="lang === 'zh' ? 'lang-zh' : 'lang-en'">
 
     <!-- Background Effects -->
     <div class="fixed inset-0 z-[-1] grid-bg opacity-30 pointer-events-none"></div>
-    <div class="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-sds-blue rounded-full blur-[120px] opacity-10 animate-pulse-slow"></div>
-    <div class="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-sds-orange rounded-full blur-[120px] opacity-10 animate-pulse-slow" style="animation-delay: 2s;"></div>
+    <div
+        class="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-sds-blue rounded-full blur-[120px] opacity-10 animate-pulse-slow">
+    </div>
+    <div class="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-sds-orange rounded-full blur-[120px] opacity-10 animate-pulse-slow"
+        style="animation-delay: 2s;"></div>
 
     <!--Navbar -->
     <nav class="fixed top-0 w-full z-50 glass border-b border-white/5">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <div class="flex-shrink-0 flex items-center gap-2 cursor-pointer" @click="window.scrollTo(0,0)">
-                    <div class="w-8 h-8 bg-gradient-to-br from-sds-orange to-red-600 rounded-lg flex items-center justify-center font-mono font-bold text-white">S</div>
+                    <div
+                        class="w-8 h-8 bg-gradient-to-br from-sds-orange to-red-600 rounded-lg flex items-center justify-center font-mono font-bold text-white">
+                        S</div>
                     <span class="font-bold text-xl tracking-tight">SDS</span>
                 </div>
                 <div class="hidden md:block">
                     <div class="ml-10 flex items-baseline space-x-8">
-                        <a href="#features" class="hover:text-sds-blue transition-colors px-3 py-2 rounded-md text-sm font-medium" x-text="t.nav.features"></a>
-                        <a href="#cli" class="hover:text-sds-blue transition-colors px-3 py-2 rounded-md text-sm font-medium" x-text="t.nav.cli"></a>
-                        <a href="#arch" class="hover:text-sds-blue transition-colors px-3 py-2 rounded-md text-sm font-medium" x-text="t.nav.arch"></a>
+                        <a href="#features"
+                            class="hover:text-sds-blue transition-colors px-3 py-2 rounded-md text-sm font-medium"
+                            x-text="t.nav.features"></a>
+                        <a href="#cli"
+                            class="hover:text-sds-blue transition-colors px-3 py-2 rounded-md text-sm font-medium"
+                            x-text="t.nav.cli"></a>
+                        <a href="#arch"
+                            class="hover:text-sds-blue transition-colors px-3 py-2 rounded-md text-sm font-medium"
+                            x-text="t.nav.arch"></a>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
-                    <button @click="toggleLang()" class="px-3 py-1 rounded border border-white/20 hover:bg-white/10 text-xs font-mono transition-all">
-                        <span :class="lang === 'en' ? 'text-sds-blue font-bold' : 'text-gray-400'">EN</span> / 
+                    <button @click="toggleLang()"
+                        class="px-3 py-1 rounded border border-white/20 hover:bg-white/10 text-xs font-mono transition-all">
+                        <span :class="lang === 'en' ? 'text-sds-blue font-bold' : 'text-gray-400'">EN</span> /
                         <span :class="lang === 'zh' ? 'text-sds-orange font-bold' : 'text-gray-400'">中文</span>
                     </button>
-                    <a href="https://github.com/liliang-cn/sds" target="_blank" class="text-gray-400 hover:text-white transition-colors">
-                        <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></svg>
+                    <a href="https://github.com/liliang-cn/sds" target="_blank"
+                        class="text-gray-400 hover:text-white transition-colors">
+                        <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path fill-rule="evenodd"
+                                d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                                clip-rule="evenodd">
+                        </svg>
                     </a>
                 </div>
             </div>
@@ -97,20 +146,30 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center gap-12">
             <!-- Left: Text -->
             <div class="w-full md:w-1/2 z-10 text-center md:text-left hero-text opacity-0">
-                <div class="inline-block px-3 py-1 mb-4 rounded-full bg-sds-blue/10 border border-sds-blue/30 text-sds-blue text-xs font-mono font-bold tracking-wider">
+                <div
+                    class="inline-block px-3 py-1 mb-4 rounded-full bg-sds-blue/10 border border-sds-blue/30 text-sds-blue text-xs font-mono font-bold tracking-wider">
                     v1.0.0 RELEASED
                 </div>
                 <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
-                    <span class="block text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400" x-text="t.hero.title1"></span>
-                    <span class="block text-transparent bg-clip-text bg-gradient-to-r from-sds-orange to-red-500" x-text="t.hero.title2"></span>
+                    <span class="block text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400"
+                        x-text="t.hero.title1"></span>
+                    <span class="block text-transparent bg-clip-text bg-gradient-to-r from-sds-orange to-red-500"
+                        x-text="t.hero.title2"></span>
                 </h1>
                 <p class="text-xl text-gray-400 mb-8 max-w-lg mx-auto md:mx-0" x-text="t.hero.subtitle"></p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                    <a href="#cli" class="px-8 py-4 bg-sds-blue hover:bg-blue-600 text-white font-bold rounded-lg transition-all shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 group">
+                    <a href="#cli"
+                        class="px-8 py-4 bg-sds-blue hover:bg-blue-600 text-white font-bold rounded-lg transition-all shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 group">
                         <span x-text="t.hero.cta"></span>
-                        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
                     </a>
-                    <a href="https://github.com/liliang-cn/sds" class="px-8 py-4 glass hover:bg-white/10 text-white font-semibold rounded-lg transition-all border border-white/10" x-text="t.hero.github"></a>
+                    <a href="https://github.com/liliang-cn/sds"
+                        class="px-8 py-4 glass hover:bg-white/10 text-white font-semibold rounded-lg transition-all border border-white/10"
+                        x-text="t.hero.github"></a>
                 </div>
             </div>
 
@@ -120,31 +179,41 @@
                 <div class="absolute inset-0 flex items-center justify-center">
                     <div class="relative w-64 h-64">
                         <!-- Central Core -->
-                        <div class="absolute inset-0 bg-gradient-to-br from-sds-surface to-black border border-sds-blue/50 rounded-xl shadow-[0_0_50px_rgba(59,130,246,0.3)] transform rotate-y-12 rotate-x-12 z-10 flex items-center justify-center text-4xl font-black text-white/20 select-none">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-br from-sds-surface to-black border border-sds-blue/50 rounded-xl shadow-[0_0_50px_rgba(59,130,246,0.3)] transform rotate-y-12 rotate-x-12 z-10 flex items-center justify-center text-4xl font-black text-white/20 select-none">
                             SDS
                         </div>
                         <!-- Floating Nodes -->
-                        <div class="node-block absolute -top-12 -right-12 w-24 h-24 glass rounded-lg border-sds-orange/50 shadow-lg flex flex-col items-center justify-center">
+                        <div
+                            class="node-block absolute -top-12 -right-12 w-24 h-24 glass rounded-lg border-sds-orange/50 shadow-lg flex flex-col items-center justify-center">
                             <div class="w-2 h-2 bg-green-500 rounded-full mb-2 shadow-[0_0_10px_#22c55e]"></div>
                             <span class="text-xs font-mono text-gray-400">orange1</span>
                         </div>
-                        <div class="node-block absolute top-1/2 -left-20 w-24 h-24 glass rounded-lg border-sds-orange/50 shadow-lg flex flex-col items-center justify-center">
+                        <div
+                            class="node-block absolute top-1/2 -left-20 w-24 h-24 glass rounded-lg border-sds-orange/50 shadow-lg flex flex-col items-center justify-center">
                             <div class="w-2 h-2 bg-green-500 rounded-full mb-2 shadow-[0_0_10px_#22c55e]"></div>
                             <span class="text-xs font-mono text-gray-400">orange2</span>
                         </div>
-                        <div class="node-block absolute -bottom-8 -right-4 w-24 h-24 glass rounded-lg border-sds-blue/50 shadow-lg flex flex-col items-center justify-center">
+                        <div
+                            class="node-block absolute -bottom-8 -right-4 w-24 h-24 glass rounded-lg border-sds-blue/50 shadow-lg flex flex-col items-center justify-center">
                             <div class="w-2 h-2 bg-green-500 rounded-full mb-2 shadow-[0_0_10px_#22c55e]"></div>
                             <span class="text-xs font-mono text-gray-400">orange3</span>
                         </div>
-                        
+
                         <!-- Data Particles -->
-                        <div class="particle absolute top-1/2 left-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_10px_white]"></div>
-                        <div class="particle absolute top-1/2 left-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_10px_white]"></div>
-                        <div class="particle absolute top-1/2 left-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_10px_white]"></div>
+                        <div
+                            class="particle absolute top-1/2 left-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_10px_white]">
+                        </div>
+                        <div
+                            class="particle absolute top-1/2 left-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_10px_white]">
+                        </div>
+                        <div
+                            class="particle absolute top-1/2 left-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_10px_white]">
+                        </div>
                     </div>
                 </div>
             </div>
-        </section>
+    </section>
 
     <!-- CLI Demo Section -->
     <section id="cli" class="py-24 relative">
@@ -155,7 +224,8 @@
             </div>
 
             <!-- Terminal Window -->
-            <div class="w-full max-w-4xl mx-auto rounded-lg overflow-hidden shadow-2xl border border-gray-700 bg-[#1e1e1e] transform hover:scale-[1.01] transition-transform duration-500 terminal-trigger">
+            <div
+                class="w-full max-w-4xl mx-auto rounded-lg overflow-hidden shadow-2xl border border-gray-700 bg-[#1e1e1e] transform hover:scale-[1.01] transition-transform duration-500 terminal-trigger">
                 <div class="flex items-center px-4 py-2 bg-[#2d2d2d] border-b border-gray-700">
                     <div class="flex space-x-2">
                         <div class="w-3 h-3 rounded-full bg-red-500"></div>
@@ -176,57 +246,87 @@
     <section id="features" class="py-24 bg-black/20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h2 class="text-3xl md:text-4xl font-bold mb-16 text-center" x-text="t.features.title"></h2>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <!-- Feature 1 -->
-                <div class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-sds-orange group feature-card">
-                    <div class="w-12 h-12 bg-sds-orange/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-6 h-6 text-sds-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                <div
+                    class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-sds-orange group feature-card">
+                    <div
+                        class="w-12 h-12 bg-sds-orange/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <svg class="w-6 h-6 text-sds-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
                     </div>
                     <h3 class="text-xl font-bold mb-3" x-text="t.features.cards[0].title"></h3>
                     <p class="text-gray-400 text-sm leading-relaxed" x-text="t.features.cards[0].desc"></p>
                 </div>
 
                 <!-- Feature 2 -->
-                <div class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-sds-blue group feature-card">
-                    <div class="w-12 h-12 bg-sds-blue/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-6 h-6 text-sds-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div
+                    class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-sds-blue group feature-card">
+                    <div
+                        class="w-12 h-12 bg-sds-blue/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <svg class="w-6 h-6 text-sds-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                     </div>
                     <h3 class="text-xl font-bold mb-3" x-text="t.features.cards[1].title"></h3>
                     <p class="text-gray-400 text-sm leading-relaxed" x-text="t.features.cards[1].desc"></p>
                 </div>
 
                 <!-- Feature 3 -->
-                <div class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-purple-500 group feature-card">
-                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-6 h-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                <div
+                    class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-purple-500 group feature-card">
+                    <div
+                        class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <svg class="w-6 h-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
                     </div>
                     <h3 class="text-xl font-bold mb-3" x-text="t.features.cards[2].title"></h3>
                     <p class="text-gray-400 text-sm leading-relaxed" x-text="t.features.cards[2].desc"></p>
                 </div>
 
                 <!-- Feature 4 -->
-                <div class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-emerald-500 group feature-card">
-                    <div class="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+                <div
+                    class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-emerald-500 group feature-card">
+                    <div
+                        class="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <svg class="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                        </svg>
                     </div>
                     <h3 class="text-xl font-bold mb-3" x-text="t.features.cards[3].title"></h3>
                     <p class="text-gray-400 text-sm leading-relaxed" x-text="t.features.cards[3].desc"></p>
                 </div>
 
                 <!-- Feature 5 -->
-                <div class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-pink-500 group feature-card">
-                    <div class="w-12 h-12 bg-pink-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-6 h-6 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                <div
+                    class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-pink-500 group feature-card">
+                    <div
+                        class="w-12 h-12 bg-pink-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <svg class="w-6 h-6 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
                     </div>
                     <h3 class="text-xl font-bold mb-3" x-text="t.features.cards[4].title"></h3>
                     <p class="text-gray-400 text-sm leading-relaxed" x-text="t.features.cards[4].desc"></p>
                 </div>
 
                 <!-- Feature 6 -->
-                <div class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-yellow-500 group feature-card">
-                    <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-6 h-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"/></svg>
+                <div
+                    class="glass p-8 rounded-xl hover:bg-white/5 transition-colors border-t-2 border-transparent hover:border-yellow-500 group feature-card">
+                    <div
+                        class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <svg class="w-6 h-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+                        </svg>
                     </div>
                     <h3 class="text-xl font-bold mb-3" x-text="t.features.cards[5].title"></h3>
                     <p class="text-gray-400 text-sm leading-relaxed" x-text="t.features.cards[5].desc"></p>
@@ -243,21 +343,24 @@
                     <h2 class="text-3xl md:text-4xl font-bold mb-6" x-text="t.arch.title"></h2>
                     <div class="space-y-6">
                         <div class="flex items-start gap-4">
-                            <div class="mt-1 w-2 h-2 rounded-full bg-sds-orange flex-shrink-0 shadow-[0_0_10px_orange]"></div>
+                            <div class="mt-1 w-2 h-2 rounded-full bg-sds-orange flex-shrink-0 shadow-[0_0_10px_orange]">
+                            </div>
                             <div>
                                 <h4 class="text-lg font-bold mb-1" x-text="t.arch.points[0].t"></h4>
                                 <p class="text-gray-400 text-sm" x-text="t.arch.points[0].d"></p>
                             </div>
                         </div>
                         <div class="flex items-start gap-4">
-                            <div class="mt-1 w-2 h-2 rounded-full bg-sds-blue flex-shrink-0 shadow-[0_0_10px_blue]"></div>
+                            <div class="mt-1 w-2 h-2 rounded-full bg-sds-blue flex-shrink-0 shadow-[0_0_10px_blue]">
+                            </div>
                             <div>
                                 <h4 class="text-lg font-bold mb-1" x-text="t.arch.points[1].t"></h4>
                                 <p class="text-gray-400 text-sm" x-text="t.arch.points[1].d"></p>
                             </div>
                         </div>
                         <div class="flex items-start gap-4">
-                            <div class="mt-1 w-2 h-2 rounded-full bg-purple-500 flex-shrink-0 shadow-[0_0_10px_purple]"></div>
+                            <div class="mt-1 w-2 h-2 rounded-full bg-purple-500 flex-shrink-0 shadow-[0_0_10px_purple]">
+                            </div>
                             <div>
                                 <h4 class="text-lg font-bold mb-1" x-text="t.arch.points[2].t"></h4>
                                 <p class="text-gray-400 text-sm" x-text="t.arch.points[2].d"></p>
@@ -265,32 +368,42 @@
                         </div>
                     </div>
                 </div>
-                <div class="w-full md:w-1/2 relative h-[300px] glass rounded-xl border border-white/5 flex items-center justify-center">
+                <div
+                    class="w-full md:w-1/2 relative h-[300px] glass rounded-xl border border-white/5 flex items-center justify-center">
                     <!-- Simple CSS/SVG Architecture -->
                     <svg class="w-full h-full" viewBox="0 0 400 300">
                         <!-- Controller -->
                         <g transform="translate(150, 20)">
-                            <rect x="0" y="0" width="100" height="60" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="2" />
-                            <text x="50" y="35" text-anchor="middle" fill="white" font-size="14" font-family="monospace">sds-ctl</text>
+                            <rect x="0" y="0" width="100" height="60" rx="8" fill="#1e293b" stroke="#3b82f6"
+                                stroke-width="2" />
+                            <text x="50" y="35" text-anchor="middle" fill="white" font-size="14"
+                                font-family="monospace">sds-ctl</text>
                         </g>
                         <!-- Lines -->
-                        <path d="M200 80 L100 150" stroke="rgba(255,255,255,0.2)" stroke-width="2" stroke-dasharray="5 5" class="animate-flow" />
-                        <path d="M200 80 L300 150" stroke="rgba(255,255,255,0.2)" stroke-width="2" stroke-dasharray="5 5" class="animate-flow" />
+                        <path d="M200 80 L100 150" stroke="rgba(255,255,255,0.2)" stroke-width="2"
+                            stroke-dasharray="5 5" class="animate-flow" />
+                        <path d="M200 80 L300 150" stroke="rgba(255,255,255,0.2)" stroke-width="2"
+                            stroke-dasharray="5 5" class="animate-flow" />
                         <!-- Nodes -->
                         <g transform="translate(50, 150)">
-                            <rect x="0" y="0" width="100" height="80" rx="8" fill="#1e293b" stroke="#f97316" stroke-width="2" />
-                            <text x="50" y="30" text-anchor="middle" fill="white" font-size="12" font-family="monospace">Node 1</text>
+                            <rect x="0" y="0" width="100" height="80" rx="8" fill="#1e293b" stroke="#f97316"
+                                stroke-width="2" />
+                            <text x="50" y="30" text-anchor="middle" fill="white" font-size="12"
+                                font-family="monospace">Node 1</text>
                             <rect x="10" y="45" width="80" height="25" rx="4" fill="#f97316" fill-opacity="0.2" />
                             <text x="50" y="62" text-anchor="middle" fill="#f97316" font-size="10">DRBD / LVM</text>
                         </g>
                         <g transform="translate(250, 150)">
-                            <rect x="0" y="0" width="100" height="80" rx="8" fill="#1e293b" stroke="#f97316" stroke-width="2" />
-                            <text x="50" y="30" text-anchor="middle" fill="white" font-size="12" font-family="monospace">Node 2</text>
+                            <rect x="0" y="0" width="100" height="80" rx="8" fill="#1e293b" stroke="#f97316"
+                                stroke-width="2" />
+                            <text x="50" y="30" text-anchor="middle" fill="white" font-size="12"
+                                font-family="monospace">Node 2</text>
                             <rect x="10" y="45" width="80" height="25" rx="4" fill="#f97316" fill-opacity="0.2" />
                             <text x="50" y="62" text-anchor="middle" fill="#f97316" font-size="10">DRBD / ZFS</text>
                         </g>
                         <!-- Sync -->
-                        <path d="M150 190 L250 190" stroke="#f97316" stroke-width="2" marker-end="url(#arrow)" class="animate-pulse" />
+                        <path d="M150 190 L250 190" stroke="#f97316" stroke-width="2" marker-end="url(#arrow)"
+                            class="animate-pulse" />
                     </svg>
                 </div>
             </div>
@@ -371,7 +484,7 @@
                         arch: {
                             title: '系统架构',
                             points: [
-                                { t: '中央控制器', d: '基于 Go 的 gRPC 服务，管理状态和编排。' },
+                                { t: '中央控制器', d: '基于 Go 的 gRPC 服务，管理状态 and 编排。' },
                                 { t: 'SSH 分发', d: '无需持久化 Agent，直接在节点执行指令。' },
                                 { t: '标准 Linux', d: '利用标准工具链 (lsblk, lvm, zfs, drbdadm)。' }
                             ]
@@ -381,97 +494,80 @@
                 get t() { return this.translations[this.lang]; },
                 toggleLang() {
                     this.lang = this.lang === 'en' ? 'zh' : 'en';
-                    // Re-run typewriter if visible
                     this.runTypewriter();
                 },
                 init() {
-                    // GSAP Animations
                     gsap.registerPlugin(ScrollTrigger, TextPlugin);
-                    
-                    // Hero Fade In
                     gsap.to(".hero-text", { opacity: 1, y: 0, duration: 1, delay: 0.5, ease: "power3.out" });
                     gsap.to(".hero-vis", { opacity: 1, x: 0, duration: 1, delay: 0.8, ease: "power3.out" });
-
-                    // Floating Nodes
-                    gsap.to(".node-block", { 
-                        y: "random(-10, 10)", 
-                        x: "random(-5, 5)", 
-                        rotation: "random(-5, 5)",
-                        duration: "random(2, 4)", 
-                        repeat: -1, 
-                        yoyo: true, 
-                        ease: "sine.inOut" 
-                    });
-
-                    // Feature Cards Stagger
+                    gsap.to(".node-block", { y: "random(-10, 10)", x: "random(-5, 5)", rotation: "random(-5, 5)", duration: "random(2, 4)", repeat: -1, yoyo: true, ease: "sine.inOut" });
                     gsap.from(".feature-card", {
                         scrollTrigger: { trigger: "#features", start: "top 80%" },
                         y: 50, opacity: 0, duration: 0.8, stagger: 0.1, ease: "back.out(1.7)"
                     });
-
-                    // Particles Movement
                     const particles = document.querySelectorAll('.particle');
                     particles.forEach((p, i) => {
-                        const targets = [
-                            {x: 80, y: -60}, // orange1
-                            {x: -80, y: 0},  // orange2
-                            {x: 100, y: 100} // orange3
-                        ];
-                        gsap.to(p, {
-                            x: targets[i].x,
-                            y: targets[i].y,
-                            duration: 1.5,
-                            repeat: -1,
-                            yoyo: true,
-                            ease: "power1.inOut",
-                            delay: i * 0.2
-                        });
+                        const targets = [{ x: 80, y: -60 }, { x: -80, y: 0 }, { x: 100, y: 100 }];
+                        gsap.to(p, { x: targets[i].x, y: targets[i].y, duration: 1.5, repeat: -1, yoyo: true, ease: "power1.inOut", delay: i * 0.2 });
                     });
-
-                    // Initial Typewriter
                     this.runTypewriter();
                 },
                 runTypewriter() {
                     const term = document.getElementById('terminal-content');
                     if (!term) return;
-                    
-                    const tl = gsap.timeline({ repeat: -1, repeatDelay: 5 });
+                    if (this.typeTl) {
+                        this.typeTl.kill();
+                    }
+                    if (this.typeDelay) {
+                        this.typeDelay.kill();
+                    }
                     term.innerHTML = '';
-                    
                     const commands = [
-                        { cmd: 'sds-cli node list', out: `
-NAME      ADDRESS          STATE
-orange1   192.168.123.214  Online
-orange2   192.168.123.215  Online
-orange3   192.168.123.216  Online` },
-                        { cmd: 'sds-cli pool create --name data --type zfs-thin', out: `
-ZFS Pool 'data' created successfully on orange1
-ZFS Pool 'data' created successfully on orange2
-ZFS Pool 'data' created successfully on orange3` },
-                        { cmd: 'sds-cli resource create --name db1 --size 10G', out: `
-Resource created successfully
-  Name:     db1
-  Size:     10 GiB
-  Nodes:    [orange1 orange2]
-  Protocol: C` }
+                        { cmd: 'sds-cli node list', out: '\nNAME      ADDRESS          STATE\norange1   192.168.123.214  Online\norange2   192.168.123.215  Online\norange3   192.168.123.216  Online' },
+                        { cmd: 'sds-cli pool create --name data --type zfs-thin', out: '\nZFS Pool \'data\' created successfully on orange1\nZFS Pool \'data\' created successfully on orange2\nZFS Pool \'data\' created successfully on orange3' },
+                        { cmd: 'sds-cli resource create --name db1 --size 10G', out: '\nResource created successfully\n  Name:     db1\n  Size:     10 GiB\n  Nodes:    [orange1 orange2]\n  Protocol: C' }
                     ];
+                    let index = 0;
+                    const runStep = () => {
+                        if (index >= commands.length) {
+                            this.typeDelay = gsap.delayedCall(5, () => {
+                                term.innerHTML = '';
+                                index = 0;
+                                runStep();
+                            });
+                            return;
+                        }
 
-                    commands.forEach(step => {
-                        tl.to(term, { 
-                            duration: 1, 
-                            text: { value: "<span class=\"text-sds-blue\">➜</span> ${step.cmd}", newClass: "inline-block" },
-                            ease: "none"
-                        })
-                        .to(term, { 
-                            duration: 0.1, 
+                        const step = commands[index];
+                        const line = document.createElement('div');
+                        line.className = 'command-line';
+                        line.innerHTML = '<span class="text-sds-blue">➜</span> <span class="cmd-text"></span>';
+                        term.appendChild(line);
+
+                        const cmdSpan = line.querySelector('.cmd-text');
+                        this.typeTl = gsap.to(cmdSpan, {
+                            duration: 1,
+                            text: step.cmd,
+                            ease: 'none',
                             onComplete: () => {
-                                term.innerHTML += `<br/><div class=\"text-gray-400 my-2\">${step.out.trim().replace(/\n/g, '<br/>')}</div><br/>`;
-                            } 
-                        }, "+=0.5")
-                    });
+                                const out = document.createElement('div');
+                                out.className = 'text-gray-400 my-2';
+                                out.innerHTML = step.out.trim().replace(/\n/g, '<br/>');
+                                term.appendChild(out);
+                                term.appendChild(document.createElement('br'));
+                                this.typeDelay = gsap.delayedCall(0.5, () => {
+                                    index += 1;
+                                    runStep();
+                                });
+                            }
+                        });
+                    };
+
+                    runStep();
                 }
             }))
         });
     </script>
 </body>
+
 </html>
