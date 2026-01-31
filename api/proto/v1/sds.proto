@@ -478,6 +478,7 @@ message CreateFilesystemRequest {
   string resource = 1;
   uint32 volume_id = 2;
   string fstype = 3;
+  string node = 4;
 }
 
 message CreateFilesystemResponse {

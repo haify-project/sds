@@ -52,12 +52,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	}
 
 	// Create deployment client
-	deploymentClient, err := deployment.New(&deployment.Config{
-		DispatchConfig: cfg.Dispatch.ConfigPath,
-		Parallel:       cfg.Dispatch.Parallel,
-		SSHUser:        cfg.Dispatch.SSHUser,
-		SSHKeyPath:     cfg.Dispatch.SSHKeyPath,
-	}, logger)
+	deploymentClient, err := deployment.New(logger)
 	if err != nil {
 		cancel()
 		if db != nil {
@@ -71,7 +66,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 		logger:     logger,
 		db:         db,
 		deployment: deploymentClient,
-		hosts:      cfg.Dispatch.Hosts,
+		hosts:      []string{},
 		hostsMap:   make(map[string]string),
 		ctx:        ctx,
 		cancel:     cancel,
@@ -86,7 +81,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	// Initialize gateway with adapters
 	gwResourceManager := NewGatewayResourceManager(ctrl.resources)
 	gwDeploymentClient := NewGatewayDeploymentClient(deploymentClient)
-	ctrl.gateway = gateway.New(gwResourceManager, gwDeploymentClient, logger, cfg.Dispatch.Hosts)
+	ctrl.gateway = gateway.New(gwResourceManager, gwDeploymentClient, logger, []string{})
 
 	// Initialize hosts mapping
 	ctrl.initHostsMapping()
@@ -140,7 +135,7 @@ func (c *Controller) loadHostsFromDatabase(ctx context.Context) error {
 
 	var hosts []string
 	for _, node := range nodes {
-		hosts = append(hosts, node.Name)
+		hosts = append(hosts, node.Address)
 	}
 
 	c.hosts = hosts
@@ -155,13 +150,8 @@ func (c *Controller) Start() error {
 	// Load hosts from registered nodes in database
 	if c.db != nil {
 		if err := c.loadHostsFromDatabase(context.Background()); err != nil {
-			c.logger.Warn("Failed to load hosts from database, using config", zap.Error(err))
+			c.logger.Warn("Failed to load hosts from database", zap.Error(err))
 		}
-	}
-
-	// Fallback to config hosts if no nodes in database
-	if len(c.hosts) == 0 {
-		c.hosts = c.config.Dispatch.Hosts
 	}
 
 	// Initialize deployment client with hosts
@@ -241,16 +231,16 @@ func (c *Controller) ResolveHost(hostOrAddr string) string {
 	c.hostsLock.RLock()
 	defer c.hostsLock.RUnlock()
 
-	// If it's already an address, return as is
+	// Try to resolve hostname to address first
+	if addr, ok := c.hostsMap[hostOrAddr]; ok {
+		return addr
+	}
+
+	// If it's already an address in our hosts list, return as is
 	for _, addr := range c.hosts {
 		if addr == hostOrAddr {
 			return hostOrAddr
 		}
-	}
-
-	// Try to resolve hostname to address
-	if addr, ok := c.hostsMap[hostOrAddr]; ok {
-		return addr
 	}
 
 	// Return as-is (might be a hostname that SSH can resolve)

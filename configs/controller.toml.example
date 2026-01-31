@@ -4,43 +4,6 @@
 listen_address = "0.0.0.0"
 port = 3374
 
-[dispatch]
-# Path to dispatch config file (optional)
-# If empty, dispatch will use ~/.ssh/config for SSH connections
-# This is recommended - just configure ~/.ssh/config with your host entries
-config_path = ""
-# Parallel execution limit for operations
-parallel = 10
-# Default SSH user
-ssh_user = "root"
-# Default SSH private key path
-ssh_key_path = "/root/.ssh/id_rsa"
-# Storage nodes (for node name resolution)
-hosts = [
-    "orange1",
-    "orange2",
-    "orange3"
-]
-
-# Example ~/.ssh/config format:
-# Host orange1 192.168.123.214
-#     HostName 192.168.123.214
-#     User root
-#     IdentityFile ~/.ssh/id_rsa
-#     StrictHostKeyChecking no
-#
-# Host orange2 192.168.123.215
-#     HostName 192.168.123.215
-#     User root
-#     IdentityFile ~/.ssh/id_rsa
-#     StrictHostKeyChecking no
-#
-# Host orange3 192.168.123.216
-#     HostName 192.168.123.216
-#     User root
-#     IdentityFile ~/.ssh/id_rsa
-#     StrictHostKeyChecking no
-
 [database]
 # Database file path (default: /var/lib/sds/sds.db)
 path = "/var/lib/sds/sds.db"

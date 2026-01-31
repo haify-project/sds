@@ -83,13 +83,24 @@ func poolCreate() *cobra.Command {
 			successCount := 0
 			var failedNodes []string
 			for _, n := range nodes {
-				err := sdsClient.CreatePool(ctx, name, poolType, n, diskList, util.BytesToGiB(sizeBytes))
+				var err error
+				if poolType == "zfs" {
+					// For ZFS, 'disks' are vdevs, and we default thin to false for now
+					// TODO: Add --thin flag if needed
+					err = sdsClient.CreateZFSPool(ctx, name, n, diskList, false)
+				} else {
+					// Default to LVM (vg or thin_pool)
+					err = sdsClient.CreatePool(ctx, name, poolType, n, diskList, util.BytesToGiB(sizeBytes))
+				}
+
 				if err != nil {
 					failedNodes = append(failedNodes, fmt.Sprintf("%s: %v", n, err))
 					continue
 				}
 				successCount++
-				if sizeBytes > 0 {
+				if poolType == "zfs" {
+					fmt.Printf("ZFS Pool '%s' created successfully on node '%s'\n", name, n)
+				} else if sizeBytes > 0 {
 					fmt.Printf("Pool '%s' created successfully on node '%s' (size: %s)\n", name, n, util.FormatBytes(sizeBytes))
 				} else {
 					fmt.Printf("Pool '%s' created successfully on node '%s'\n", name, n)

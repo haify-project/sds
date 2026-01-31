@@ -83,6 +83,9 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 		Capacity: make(map[string]interface{}),
 	}
 
+	// Save to in-memory cache
+	nm.nodes[address] = nodeInfo
+
 	// Update controller's hosts list if not already present
 	nm.controller.hostsLock.Lock()
 	found := false
@@ -94,6 +97,11 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 	}
 	if !found {
 		nm.controller.hosts = append(nm.controller.hosts, address)
+	}
+	// Update hostsMap for resolution
+	nm.controller.hostsMap[name] = address
+	if hostname != "" {
+		nm.controller.hostsMap[hostname] = address
 	}
 	nm.controller.hostsLock.Unlock()
 

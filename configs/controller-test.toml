@@ -1,31 +1,11 @@
-# SDS Controller Configuration for Test Environment (mango/lemon/melon)
+# SDS Controller Test Configuration
 
 [server]
-listen_address = "0.0.0.0"
+listen_address = "127.0.0.1"
 port = 3374
 
-[dispatch]
-# Path to dispatch config file (optional, empty = use ~/.ssh/config)
-config_path = ""
-# Parallel execution limit for operations
-parallel = 10
-# Storage nodes
-hosts = [
-    "mango",
-    "lemon",
-    "melon"
-]
-
 [database]
-# Database file path (default: /var/lib/sds/sds.db)
-path = "/var/lib/sds/sds.db"
-
-[tls]
-enabled = false
-
-[log]
-level = "debug"  # debug, info, warn, error
-format = "text"  # json or text
+path = "sds-test.db"
 
 [storage]
 default_pool_type = "vg"

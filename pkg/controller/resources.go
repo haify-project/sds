@@ -691,22 +691,26 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 
 // SetPrimary sets a resource to Primary on the specified node
 func (rm *ResourceManager) SetPrimary(ctx context.Context, resource, node string, force bool) error {
+	// Resolve node name to address
+	address := rm.controller.ResolveHost(node)
+
 	rm.controller.logger.Info("Setting resource primary",
 		zap.String("resource", resource),
 		zap.String("node", node),
+		zap.String("address", address),
 		zap.Bool("force", force))
 
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
 
-	result, err := rm.deployment.DRBDPrimary(ctx, node, resource, force)
+	result, err := rm.deployment.DRBDPrimary(ctx, address, resource, force)
 	if err != nil {
 		return fmt.Errorf("failed to set primary: %w", err)
 	}
 
 	if !result.Success {
-		return fmt.Errorf("failed to set primary on %s", node)
+		return fmt.Errorf("failed to set primary on %s: %s", node, result.Output)
 	}
 
 	return nil
@@ -813,11 +817,15 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 
 // Mount mounts a DRBD device
 func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint string, volumeID uint32, node, fsType string) error {
+	// Resolve node to address
+	address := rm.controller.ResolveHost(node)
+
 	rm.controller.logger.Info("Mounting resource",
 		zap.String("resource", resource),
 		zap.String("mount_point", mountPoint),
 		zap.Uint32("volume_id", volumeID),
 		zap.String("node", node),
+		zap.String("address", address),
 		zap.String("fstype", fsType))
 
 	if rm.deployment == nil {
@@ -828,14 +836,14 @@ func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint strin
 
 	// Create mount point
 	mkdirCmd := fmt.Sprintf("sudo mkdir -p %s", mountPoint)
-	_, err := rm.deployment.Exec(ctx, []string{node}, mkdirCmd)
+	_, err := rm.deployment.Exec(ctx, []string{address}, mkdirCmd)
 	if err != nil {
 		return fmt.Errorf("failed to create mount point: %w", err)
 	}
 
 	// Mount
 	mountCmd := fmt.Sprintf("sudo mount %s %s", drbdDevice, mountPoint)
-	result, err := rm.deployment.Exec(ctx, []string{node}, mountCmd)
+	result, err := rm.deployment.Exec(ctx, []string{address}, mountCmd)
 	if err != nil {
 		return fmt.Errorf("failed to mount: %w", err)
 	}
@@ -848,10 +856,14 @@ func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint strin
 
 // Unmount unmounts a DRBD device
 func (rm *ResourceManager) Unmount(ctx context.Context, resource string, volumeID uint32, node string) error {
+	// Resolve node to address
+	address := rm.controller.ResolveHost(node)
+
 	rm.controller.logger.Info("Unmounting resource",
 		zap.String("resource", resource),
 		zap.Uint32("volume_id", volumeID),
-		zap.String("node", node))
+		zap.String("node", node),
+		zap.String("address", address))
 
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
@@ -861,7 +873,7 @@ func (rm *ResourceManager) Unmount(ctx context.Context, resource string, volumeI
 	drbdDevice := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, volumeID)
 
 	umountCmd := fmt.Sprintf("sudo umount %s", drbdDevice)
-	result, err := rm.deployment.Exec(ctx, []string{node}, umountCmd)
+	result, err := rm.deployment.Exec(ctx, []string{address}, umountCmd)
 	if err != nil {
 		return fmt.Errorf("failed to unmount: %w", err)
 	}
@@ -1001,7 +1013,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		}
 
 		if needsFs {
-			if err := rm.CreateFilesystemOnly(ctx, resource, 0, fsType); err != nil {
+			if err := rm.CreateFilesystemOnly(ctx, resource, 0, fsType, nodeAddresses[0]); err != nil {
 				return "", fmt.Errorf("failed to create filesystem: %w", err)
 			}
 			rm.controller.logger.Info("Filesystem created successfully")
@@ -1531,35 +1543,32 @@ on-drbd-demote-failure = "reboot"
 }
 
 // CreateFilesystemOnly creates a filesystem on a DRBD device
-func (rm *ResourceManager) CreateFilesystemOnly(ctx context.Context, resource string, volumeID uint32, fsType string) error {
+func (rm *ResourceManager) CreateFilesystemOnly(ctx context.Context, resource string, volumeID uint32, fsType string, node string) error {
+	// Resolve node to address
+	address := rm.controller.ResolveHost(node)
+
 	rm.controller.logger.Info("Creating filesystem",
 		zap.String("resource", resource),
 		zap.Uint32("volume_id", volumeID),
-		zap.String("fstype", fsType))
+		zap.String("fstype", fsType),
+		zap.String("node", node),
+		zap.String("address", address))
 
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
 
-	rm.mu.RLock()
-	hosts := rm.hosts
-	rm.mu.RUnlock()
-
-	if len(hosts) == 0 {
-		return fmt.Errorf("no hosts configured")
-	}
-
 	// Determine DRBD device path
 	drbdDevice := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, volumeID)
 
-	// Create filesystem on the first node (should be Primary)
+	// Create filesystem on the specified node (should be Primary)
 	// Note: xfs uses -f (lowercase), ext4 uses -F (uppercase)
 	forceFlag := "-F"
 	if fsType == "xfs" {
 		forceFlag = "-f"
 	}
 	mkfsCmd := fmt.Sprintf("sudo mkfs.%s %s %s", fsType, forceFlag, drbdDevice)
-	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, mkfsCmd)
+	result, err := rm.deployment.Exec(ctx, []string{address}, mkfsCmd)
 	if err != nil {
 		return fmt.Errorf("failed to create filesystem: %w", err)
 	}
@@ -1568,17 +1577,12 @@ func (rm *ResourceManager) CreateFilesystemOnly(ctx context.Context, resource st
 		var errMsg string
 		for host, h := range result.Hosts {
 			if !h.Success {
-				errMsg = fmt.Sprintf("%s: %s", host, h.Error)
+				errMsg = fmt.Sprintf("%s: %s", host, h.Output)
 				break
 			}
 		}
 		return fmt.Errorf("filesystem creation failed: %s", errMsg)
 	}
-
-	rm.controller.logger.Info("Filesystem created successfully",
-		zap.String("resource", resource),
-		zap.String("device", drbdDevice),
-		zap.String("fstype", fsType))
 
 	return nil
 }

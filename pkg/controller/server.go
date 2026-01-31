@@ -438,7 +438,7 @@ func (s *Server) SetSecondary(ctx context.Context, req *sdspb.SetSecondaryReques
 func (s *Server) CreateFilesystem(ctx context.Context, req *sdspb.CreateFilesystemRequest) (*sdspb.CreateFilesystemResponse, error) {
 	// CreateFilesystem is implemented as part of Mount operation
 	// This is a convenience wrapper that only creates filesystem
-	err := s.resources.CreateFilesystemOnly(ctx, req.Resource, req.VolumeId, req.Fstype)
+	err := s.resources.CreateFilesystemOnly(ctx, req.Resource, req.VolumeId, req.Fstype, req.Node)
 	if err != nil {
 		return &sdspb.CreateFilesystemResponse{
 			Success: false,

@@ -418,6 +418,7 @@ func (c *SDSClient) CreateFilesystem(ctx context.Context, resource string, volum
 		Resource: resource,
 		VolumeId: volumeID,
 		Fstype:   fstype,
+		Node:     node,
 	}
 
 	resp, err := c.client.CreateFilesystem(ctx, req)

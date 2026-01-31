@@ -63,38 +63,11 @@ type Client struct {
 	parallel int
 }
 
-// Config creates a new Client
-type Config struct {
-	// DispatchConfig is the path to dispatch config (~/.dispatch/config.toml)
-	DispatchConfig string
-	// Parallel is the default parallelism for operations
-	Parallel int
-	// SSHUser is the default SSH user
-	SSHUser string
-	// SSHKeyPath is the default SSH private key path
-	SSHKeyPath string
-}
-
 // New creates a new deployment Client
-func New(cfg *Config, logger *zap.Logger) (*Client, error) {
-	if cfg == nil {
-		cfg = &Config{}
-	}
-	if cfg.Parallel == 0 {
-		cfg.Parallel = 10
-	}
-
-	dispatchCfg := &dispatch.Config{
-		ConfigPath: cfg.DispatchConfig,
-	}
-	if cfg.SSHUser != "" || cfg.SSHKeyPath != "" {
-		dispatchCfg.SSH = &dispatch.SSHConfig{
-			User:    cfg.SSHUser,
-			KeyPath: cfg.SSHKeyPath,
-		}
-	}
-
-	client, err := dispatch.New(dispatchCfg)
+func New(logger *zap.Logger) (*Client, error) {
+	// Create dispatch client with default config
+	// It will automatically look for ~/.dispatch/config.toml
+	client, err := dispatch.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dispatch client: %w", err)
 	}
@@ -102,7 +75,7 @@ func New(cfg *Config, logger *zap.Logger) (*Client, error) {
 	return &Client{
 		dispatch: client,
 		logger:   logger,
-		parallel: cfg.Parallel,
+		parallel: 10, // Default parallelism
 	}, nil
 }
 
@@ -454,9 +427,9 @@ func (c *Client) ZFSCreatePool(ctx context.Context, hosts []string, poolName str
 		opt(options)
 	}
 
-	cmd := fmt.Sprintf("sudo zpool create %s %s", poolName, strings.Join(vdevs, " "))
+	cmd := fmt.Sprintf("sudo zpool create -f %s %s", poolName, strings.Join(vdevs, " "))
 	if options.thin {
-		cmd = fmt.Sprintf("sudo zpool create -o thinpool=%s %s %s", poolName+"/data", poolName, strings.Join(vdevs, " "))
+		cmd = fmt.Sprintf("sudo zpool create -f -o thinpool=%s %s %s", poolName+"/data", poolName, strings.Join(vdevs, " "))
 	}
 	return c.Exec(ctx, hosts, cmd)
 }
@@ -487,7 +460,7 @@ func (c *Client) ZFSCreateDataset(ctx context.Context, hosts []string, datasetNa
 
 // ZFSCreateThinDataset creates a thin-provisioned ZFS dataset (zvol)
 func (c *Client) ZFSCreateThinDataset(ctx context.Context, hosts []string, poolName, datasetName, size string) (*ExecResult, error) {
-	cmd := fmt.Sprintf("sudo zfs create -s -V %s -o volmode=geom %s/%s", size, poolName, datasetName)
+	cmd := fmt.Sprintf("sudo zfs create -s -V %s %s/%s", size, poolName, datasetName)
 	return c.Exec(ctx, hosts, cmd)
 }
 

@@ -27,15 +27,18 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 # Parse args
+CLI_ONLY=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --hosts) HOSTS="$2"; shift 2 ;;
         --build) BUILD=true; shift ;;
+        --cli-only) CLI_ONLY=true; shift ;;
         -h|--help)
-            echo "Usage: $0 [--hosts HOST1,HOST2] [--build]"
+            echo "Usage: $0 [--hosts HOST1,HOST2] [--build] [--cli-only]"
             echo ""
             echo "  --hosts HOSTS    Comma-separated hosts (default: $HOSTS)"
             echo "  --build          Build before deploying"
+            echo "  --cli-only       Only deploy the CLI binary"
             exit 0
             ;;
         *) HOSTS="$1"; shift ;;
@@ -43,53 +46,66 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Build
-log_step "Building binaries..."
-make build 2>&1 | tail -3
+if [ "$BUILD" = true ]; then
+    log_step "Building binaries..."
+    make build 2>&1 | tail -3
+fi
 
 log_info "=========================================="
-log_info "Deploying to: $HOSTS"
+log_info "Deploying to: $HOSTS (CLI_ONLY: $CLI_ONLY)"
 log_info "=========================================="
 
 for host in ${HOSTS//,/ }; do
     log_step "Setting up $host..."
 
     # Create directories
-    ssh "$host" "sudo mkdir -p /etc/sds /opt/sds/bin /var/log/sds /var/lib/sds" 2>/dev/null
+    if [ "$CLI_ONLY" = false ]; then
+        ssh "$host" "sudo mkdir -p /etc/sds /opt/sds/bin /var/log/sds /var/lib/sds" 2>/dev/null
+    fi
 
     # Copy binaries
-    scp "$CONTROLLER_BINARY" "$host:/tmp/sds-controller" 2>/dev/null
+    if [ "$CLI_ONLY" = false ]; then
+        scp "$CONTROLLER_BINARY" "$host:/tmp/sds-controller" 2>/dev/null
+        ssh "$host" "sudo mv /tmp/sds-controller $REMOTE_CONTROLLER && sudo chmod +x $REMOTE_CONTROLLER" 2>/dev/null
+    fi
+    
     scp "$CLI_BINARY" "$host:/tmp/sds-cli" 2>/dev/null
-    ssh "$host" "sudo mv /tmp/sds-controller $REMOTE_CONTROLLER && sudo chmod +x $REMOTE_CONTROLLER && sudo mv /tmp/sds-cli $REMOTE_CLI && sudo chmod +x $REMOTE_CLI" 2>/dev/null
+    ssh "$host" "sudo mv /tmp/sds-cli $REMOTE_CLI && sudo chmod +x $REMOTE_CLI" 2>/dev/null
 
-    # Copy service file (always update to include DB path changes)
-    if [ -f "$SERVICE_FILE" ]; then
-        scp "$SERVICE_FILE" "$host:/tmp/sds-controller.service" 2>/dev/null
-        ssh "$host" "sudo mv /tmp/sds-controller.service $REMOTE_SERVICE && sudo systemctl daemon-reload" 2>/dev/null
-    fi
-
-    # Copy config if not exists
-    if [ -f "$CONFIG_FILE" ]; then
-        if ! ssh "$host" "test -f $REMOTE_CONFIG" 2>/dev/null; then
-            scp "$CONFIG_FILE" "$host:/tmp/controller.toml" 2>/dev/null
-            ssh "$host" "sudo mv /tmp/controller.toml $REMOTE_CONFIG" 2>/dev/null
+    # Service and Config setup
+    if [ "$CLI_ONLY" = false ]; then
+        # Copy service file (always update to include DB path changes)
+        if [ -f "$SERVICE_FILE" ]; then
+            scp "$SERVICE_FILE" "$host:/tmp/sds-controller.service" 2>/dev/null
+            ssh "$host" "sudo mv /tmp/sds-controller.service $REMOTE_SERVICE && sudo systemctl daemon-reload" 2>/dev/null
         fi
-    fi
 
-    # Enable and restart service
-    ssh "$host" "sudo systemctl enable sds-controller.service && sudo systemctl restart sds-controller.service" 2>/dev/null
+        # Copy config if not exists
+        if [ -f "$CONFIG_FILE" ]; then
+            if ! ssh "$host" "test -f $REMOTE_CONFIG" 2>/dev/null; then
+                scp "$CONFIG_FILE" "$host:/tmp/controller.toml" 2>/dev/null
+                ssh "$host" "sudo mv /tmp/controller.toml $REMOTE_CONFIG" 2>/dev/null
+            fi
+        fi
+
+        # Enable and restart service
+        ssh "$host" "sudo systemctl enable sds-controller.service && sudo systemctl restart sds-controller.service" 2>/dev/null
+    fi
 done
 
 sleep 2
 
 # Show status
-log_info "=========================================="
-log_info "Service Status:"
-log_info "=========================================="
-for host in ${HOSTS//,/ }; do
-    echo "[$host]"
-    ssh "$host" "sudo systemctl status sds-controller.service --no-pager" 2>/dev/null | head -n 10
-    echo ""
-done
+if [ "$CLI_ONLY" = false ]; then
+    log_info "=========================================="
+    log_info "Service Status:"
+    log_info "=========================================="
+    for host in ${HOSTS//,/ }; do
+        echo "[$host]"
+        ssh "$host" "sudo systemctl status sds-controller.service --no-pager" 2>/dev/null | head -n 10
+        echo ""
+    done
+fi
 
 log_info "✓ Deployment completed!"
 log_info ""

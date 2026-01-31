@@ -4055,6 +4055,7 @@ type CreateFilesystemRequest struct {
 	Resource      string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
 	VolumeId      uint32                 `protobuf:"varint,2,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
 	Fstype        string                 `protobuf:"bytes,3,opt,name=fstype,proto3" json:"fstype,omitempty"`
+	Node          string                 `protobuf:"bytes,4,opt,name=node,proto3" json:"node,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4106,6 +4107,13 @@ func (x *CreateFilesystemRequest) GetVolumeId() uint32 {
 func (x *CreateFilesystemRequest) GetFstype() string {
 	if x != nil {
 		return x.Fstype
+	}
+	return ""
+}
+
+func (x *CreateFilesystemRequest) GetNode() string {
+	if x != nil {
+		return x.Node
 	}
 	return ""
 }
@@ -7109,11 +7117,12 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04node\x18\x02 \x01(\tR\x04node\"J\n" +
 	"\x14SetSecondaryResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"j\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"~\n" +
 	"\x17CreateFilesystemRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x1b\n" +
 	"\tvolume_id\x18\x02 \x01(\rR\bvolumeId\x12\x16\n" +
-	"\x06fstype\x18\x03 \x01(\tR\x06fstype\"N\n" +
+	"\x06fstype\x18\x03 \x01(\tR\x06fstype\x12\x12\n" +
+	"\x04node\x18\x04 \x01(\tR\x04node\"N\n" +
 	"\x18CreateFilesystemResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x8f\x01\n" +
