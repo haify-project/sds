@@ -380,20 +380,29 @@ func (nm *NodeManager) HealthCheck(ctx context.Context, address string) (*NodeHe
 
 // parseVersion extracts version string from command output
 func parseVersion(output string) string {
-	// Look for version patterns like "v1.2.3", "1.2.3", "DRBD 9.2.3"
+	// Look for version patterns like "v1.2.3", "1.2.3", "DRBDADM_VERSION=9.33.0"
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "DRBD") {
-			parts := strings.Fields(line)
+		// Try DRBDADM_VERSION= format first
+		if strings.Contains(line, "DRBDADM_VERSION=") {
+			parts := strings.Split(line, "=")
 			if len(parts) >= 2 {
-				return parts[1]
+				return strings.TrimSpace(parts[1])
 			}
 		}
+		if strings.Contains(line, "DRBD_KERNEL_VERSION=") {
+			parts := strings.Split(line, "=")
+			if len(parts) >= 2 {
+				return strings.TrimSpace(parts[1])
+			}
+		}
+		// Generic pattern: v1.2.3, 1.2.3, DRBD 9.2.3
 		if strings.HasPrefix(line, "v") || strings.Contains(line, ".") {
 			parts := strings.Fields(line)
 			for _, p := range parts {
-				if strings.HasPrefix(p, "v") || (strings.Count(p, ".") >= 1) {
+				p = strings.TrimSuffix(p, "\\")
+				if strings.HasPrefix(p, "v") || (strings.Count(p, ".") >= 1 && !strings.Contains(p, "GIT-hash")) {
 					return strings.TrimPrefix(p, "v")
 				}
 			}
