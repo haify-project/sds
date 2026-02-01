@@ -290,3 +290,114 @@ func (nm *NodeManager) CheckNodeHealth(ctx context.Context, address string) erro
 
 	return nil
 }
+
+// NodeHealthInfo represents the health status of a node
+type NodeHealthInfo struct {
+	DrbdInstalled           bool     `json:"drbd_installed"`
+	DrbdVersion             string   `json:"drbd_version"`
+	DrbdReactorInstalled    bool     `json:"drbd_reactor_installed"`
+	DrbdReactorVersion      string   `json:"drbd_reactor_version"`
+	DrbdReactorRunning      bool     `json:"drbd_reactor_running"`
+	ResourceAgentsInstalled bool     `json:"resource_agents_installed"`
+	AvailableAgents         []string `json:"available_agents"`
+}
+
+// HealthCheck performs a comprehensive health check on a node
+func (nm *NodeManager) HealthCheck(ctx context.Context, address string) (*NodeHealthInfo, error) {
+	info := &NodeHealthInfo{
+		AvailableAgents: make([]string, 0),
+	}
+
+	// Check DRBD installation
+	drbdResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "drbdadm --version 2>/dev/null || echo 'not found'")
+	if err == nil && drbdResult.AllSuccess() {
+		for _, r := range drbdResult.Hosts {
+			if r.Success && r.Output != "" {
+				output := strings.TrimSpace(r.Output)
+				if !strings.Contains(output, "not found") && !strings.Contains(output, "command not found") {
+					info.DrbdInstalled = true
+					info.DrbdVersion = parseVersion(output)
+					break
+				}
+			}
+		}
+	}
+
+	// Check drbd-reactor installation
+	reactorResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "drbd-reactor --version 2>/dev/null || echo 'not found'")
+	if err == nil && reactorResult.AllSuccess() {
+		for _, r := range reactorResult.Hosts {
+			if r.Success && r.Output != "" {
+				output := strings.TrimSpace(r.Output)
+				if !strings.Contains(output, "not found") && !strings.Contains(output, "command not found") {
+					info.DrbdReactorInstalled = true
+					info.DrbdReactorVersion = parseVersion(output)
+					break
+				}
+			}
+		}
+	}
+
+	// Check drbd-reactor service status
+	if info.DrbdReactorInstalled {
+		serviceResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "systemctl is-active drbd-reactor")
+		if err == nil && serviceResult.AllSuccess() {
+			for _, r := range serviceResult.Hosts {
+				if r.Success && strings.TrimSpace(r.Output) == "active" {
+					info.DrbdReactorRunning = true
+					break
+				}
+			}
+		}
+	}
+
+	// Check resource-agents-extra (OCF agents)
+	agentsResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "ls /usr/lib/ocf/resource.d/heartbeat/ 2>/dev/null || echo 'not found'")
+	if err == nil && agentsResult.AllSuccess() {
+		agents := make([]string, 0)
+		for _, r := range agentsResult.Hosts {
+			if r.Success && r.Output != "" {
+				output := strings.TrimSpace(r.Output)
+				if !strings.Contains(output, "not found") {
+					info.ResourceAgentsInstalled = true
+					// List common OCF agents
+					lines := strings.Split(output, "\n")
+					for _, line := range lines {
+						agent := strings.TrimSpace(line)
+						if agent != "" {
+							agents = append(agents, agent)
+						}
+					}
+					break
+				}
+			}
+		}
+		info.AvailableAgents = agents
+	}
+
+	return info, nil
+}
+
+// parseVersion extracts version string from command output
+func parseVersion(output string) string {
+	// Look for version patterns like "v1.2.3", "1.2.3", "DRBD 9.2.3"
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "DRBD") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				return parts[1]
+			}
+		}
+		if strings.HasPrefix(line, "v") || strings.Contains(line, ".") {
+			parts := strings.Fields(line)
+			for _, p := range parts {
+				if strings.HasPrefix(p, "v") || (strings.Count(p, ".") >= 1) {
+					return strings.TrimPrefix(p, "v")
+				}
+			}
+		}
+	}
+	return "unknown"
+}

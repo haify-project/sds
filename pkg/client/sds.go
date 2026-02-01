@@ -201,6 +201,43 @@ func (c *SDSClient) UnregisterNode(ctx context.Context, address string) error {
 	return nil
 }
 
+// HealthCheck performs a health check on a node
+func (c *SDSClient) HealthCheck(ctx context.Context, node string) (*NodeHealthInfo, error) {
+	req := &sdspb.HealthCheckRequest{
+		Node: node,
+	}
+
+	resp, err := c.client.HealthCheck(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf(resp.Message)
+	}
+
+	return &NodeHealthInfo{
+		DrbdInstalled:           resp.Health.DrbdInstalled,
+		DrbdVersion:             resp.Health.DrbdVersion,
+		DrbdReactorInstalled:    resp.Health.DrbdReactorInstalled,
+		DrbdReactorVersion:      resp.Health.DrbdReactorVersion,
+		DrbdReactorRunning:      resp.Health.DrbdReactorRunning,
+		ResourceAgentsInstalled: resp.Health.ResourceAgentsInstalled,
+		AvailableAgents:         resp.Health.AvailableAgents,
+	}, nil
+}
+
+// NodeHealthInfo represents the health status of a node
+type NodeHealthInfo struct {
+	DrbdInstalled           bool     `json:"drbd_installed"`
+	DrbdVersion             string   `json:"drbd_version"`
+	DrbdReactorInstalled    bool     `json:"drbd_reactor_installed"`
+	DrbdReactorVersion      string   `json:"drbd_reactor_version"`
+	DrbdReactorRunning      bool     `json:"drbd_reactor_running"`
+	ResourceAgentsInstalled bool     `json:"resource_agents_installed"`
+	AvailableAgents         []string `json:"available_agents"`
+}
+
 // ==================== RESOURCE OPERATIONS ====================
 
 // CreateResource creates a DRBD resource with LVM backend (default)

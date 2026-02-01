@@ -28,6 +28,7 @@ const (
 	SDSController_UnregisterNode_FullMethodName     = "/v1.SDSController/UnregisterNode"
 	SDSController_GetNode_FullMethodName            = "/v1.SDSController/GetNode"
 	SDSController_ListNodes_FullMethodName          = "/v1.SDSController/ListNodes"
+	SDSController_HealthCheck_FullMethodName        = "/v1.SDSController/HealthCheck"
 	SDSController_CreateResource_FullMethodName     = "/v1.SDSController/CreateResource"
 	SDSController_DeleteResource_FullMethodName     = "/v1.SDSController/DeleteResource"
 	SDSController_GetResource_FullMethodName        = "/v1.SDSController/GetResource"
@@ -93,6 +94,7 @@ type SDSControllerClient interface {
 	UnregisterNode(ctx context.Context, in *UnregisterNodeRequest, opts ...grpc.CallOption) (*UnregisterNodeResponse, error)
 	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
+	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
 	// Resource operations
 	CreateResource(ctx context.Context, in *CreateResourceRequest, opts ...grpc.CallOption) (*CreateResourceResponse, error)
 	DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error)
@@ -239,6 +241,16 @@ func (c *sDSControllerClient) ListNodes(ctx context.Context, in *ListNodesReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListNodesResponse)
 	err := c.cc.Invoke(ctx, SDSController_ListNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HealthCheckResponse)
+	err := c.cc.Invoke(ctx, SDSController_HealthCheck_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -722,6 +734,7 @@ type SDSControllerServer interface {
 	UnregisterNode(context.Context, *UnregisterNodeRequest) (*UnregisterNodeResponse, error)
 	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
+	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
 	// Resource operations
 	CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error)
 	DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error)
@@ -810,6 +823,9 @@ func (UnimplementedSDSControllerServer) GetNode(context.Context, *GetNodeRequest
 }
 func (UnimplementedSDSControllerServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
+}
+func (UnimplementedSDSControllerServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method HealthCheck not implemented")
 }
 func (UnimplementedSDSControllerServer) CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateResource not implemented")
@@ -1128,6 +1144,24 @@ func _SDSController_ListNodes_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).ListNodes(ctx, req.(*ListNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_HealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).HealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_HealthCheck_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).HealthCheck(ctx, req.(*HealthCheckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2002,6 +2036,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListNodes",
 			Handler:    _SDSController_ListNodes_Handler,
+		},
+		{
+			MethodName: "HealthCheck",
+			Handler:    _SDSController_HealthCheck_Handler,
 		},
 		{
 			MethodName: "CreateResource",

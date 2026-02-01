@@ -216,6 +216,30 @@ func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*s
 	}, nil
 }
 
+func (s *Server) HealthCheck(ctx context.Context, req *sdspb.HealthCheckRequest) (*sdspb.HealthCheckResponse, error) {
+	health, err := s.nodes.HealthCheck(ctx, req.Node)
+	if err != nil {
+		return &sdspb.HealthCheckResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &sdspb.HealthCheckResponse{
+		Success: true,
+		Message: "Health check completed",
+		Health: &sdspb.NodeHealthInfo{
+			DrbdInstalled:            health.DrbdInstalled,
+			DrbdVersion:              health.DrbdVersion,
+			DrbdReactorInstalled:     health.DrbdReactorInstalled,
+			DrbdReactorVersion:       health.DrbdReactorVersion,
+			DrbdReactorRunning:       health.DrbdReactorRunning,
+			ResourceAgentsInstalled:  health.ResourceAgentsInstalled,
+			AvailableAgents:          health.AvailableAgents,
+		},
+	}, nil
+}
+
 // ==================== RESOURCE OPERATIONS ====================
 
 func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRequest) (*sdspb.CreateResourceResponse, error) {

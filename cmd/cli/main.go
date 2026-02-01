@@ -24,6 +24,7 @@ func main() {
 	rootCmd.AddCommand(resourceCommand())
 	rootCmd.AddCommand(haCommand())
 	rootCmd.AddCommand(gatewayCommand())
+	rootCmd.AddCommand(healthCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

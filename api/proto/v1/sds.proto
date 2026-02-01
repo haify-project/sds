@@ -18,6 +18,7 @@ service SDSController {
   rpc UnregisterNode(UnregisterNodeRequest) returns (UnregisterNodeResponse);
   rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 
   // Resource operations
   rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse);
@@ -364,6 +365,27 @@ message NodeInfo {
   string state = 4;
   int64 last_seen = 5;
   string version = 6;
+}
+
+// Health check messages
+message HealthCheckRequest {
+  string node = 1;
+}
+
+message HealthCheckResponse {
+  bool success = 1;
+  string message = 2;
+  NodeHealthInfo health = 3;
+}
+
+message NodeHealthInfo {
+  bool drbd_installed = 1;
+  string drbd_version = 2;
+  bool drbd_reactor_installed = 3;
+  string drbd_reactor_version = 4;
+  bool drbd_reactor_running = 5;
+  bool resource_agents_installed = 6;
+  repeated string available_agents = 7;
 }
 
 // Resource messages
