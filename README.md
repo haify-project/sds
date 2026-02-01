@@ -136,16 +136,16 @@ sds-cli node list
 
 ```bash
 # Create LVM pool (VG)
-sds-cli pool create --name data-pool --type lvm --node orange1 --devices /dev/sdb
+sds-cli pool create --name data-pool --type lvm --nodes orange1 --devices /dev/sdb
 
 # Create LVM Thin pool
-sds-cli pool create --name thin-pool --type lvm-thin --node orange1 --devices /dev/sdc
+sds-cli pool create --name thin-pool --type lvm-thin --nodes orange1 --devices /dev/sdc
 
 # Create ZFS pool
-sds-cli pool create --name tank --type zfs --node orange1 --devices /dev/sdd
+sds-cli pool create --name tank --type zfs --nodes orange1 --devices /dev/sdd
 
 # Create ZFS Thin pool (sparse)
-sds-cli pool create --name tank-thin --type zfs-thin --node orange1 --devices /dev/sde
+sds-cli pool create --name tank-thin --type zfs-thin --nodes orange1 --devices /dev/sde
 ```
 
 ### 3. Resource Management

@@ -30,8 +30,8 @@ func poolCommand() *cobra.Command {
 func poolCreate() *cobra.Command {
 	var name string
 	var poolType string
-	var node string
-	var disks string
+	var nodes string
+	var devices string
 	var size string
 
 	cmd := &cobra.Command{
@@ -44,14 +44,14 @@ func poolCreate() *cobra.Command {
 			if poolType == "" {
 				poolType = "vg"
 			}
-			if node == "" {
-				return fmt.Errorf("node is required")
+			if nodes == "" {
+				return fmt.Errorf("nodes is required")
 			}
-			if disks == "" {
-				return fmt.Errorf("disks is required (comma-separated)")
+			if devices == "" {
+				return fmt.Errorf("devices is required (comma-separated)")
 			}
 
-			diskList := strings.Split(disks, ",")
+			diskList := strings.Split(devices, ",")
 			var sizeBytes uint64 = 0
 			if size != "" {
 				var err error
@@ -65,9 +65,9 @@ func poolCreate() *cobra.Command {
 			}
 
 			// Parse comma-separated nodes
-			nodes := strings.Split(node, ",")
-			for i := range nodes {
-				nodes[i] = strings.TrimSpace(nodes[i])
+			nodeList := strings.Split(nodes, ",")
+			for i := range nodeList {
+				nodeList[i] = strings.TrimSpace(nodeList[i])
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -82,7 +82,7 @@ func poolCreate() *cobra.Command {
 			// Create pool on each node
 			successCount := 0
 			var failedNodes []string
-			for _, n := range nodes {
+			for _, n := range nodeList {
 				var err error
 				switch poolType {
 				case "zfs", "zfs-thin":
@@ -133,8 +133,8 @@ func poolCreate() *cobra.Command {
 
 	cmd.Flags().StringVar(&name, "name", "", "Pool name")
 	cmd.Flags().StringVar(&poolType, "type", "", "Pool type (lvm, lvm-thin, zfs, zfs-thin)")
-	cmd.Flags().StringVar(&node, "node", "", "Node where to create the pool")
-	cmd.Flags().StringVar(&disks, "disks", "", "Comma-separated list of disks")
+	cmd.Flags().StringVar(&nodes, "nodes", "", "Comma-separated nodes where to create the pool")
+	cmd.Flags().StringVar(&devices, "devices", "", "Comma-separated list of devices")
 	cmd.Flags().StringVar(&size, "size", "", "Pool size (e.g., 10G, 10GB, 10GiB, 1T, 1TB)")
 
 	return cmd

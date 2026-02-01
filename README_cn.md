@@ -136,16 +136,16 @@ sds-cli node list
 
 ```bash
 # 创建 LVM 池（VG）
-sds-cli pool create --name data-pool --type lvm --node orange1 --devices /dev/sdb
+sds-cli pool create --name data-pool --type lvm --nodes orange1 --devices /dev/sdb
 
 # 创建 LVM Thin 池
-sds-cli pool create --name thin-pool --type lvm-thin --node orange1 --devices /dev/sdc
+sds-cli pool create --name thin-pool --type lvm-thin --nodes orange1 --devices /dev/sdc
 
 # 创建 ZFS 池
-sds-cli pool create --name tank --type zfs --node orange1 --devices /dev/sdd
+sds-cli pool create --name tank --type zfs --nodes orange1 --devices /dev/sdd
 
 # 创建 ZFS Thin 池（稀疏卷）
-sds-cli pool create --name tank-thin --type zfs-thin --node orange1 --devices /dev/sde
+sds-cli pool create --name tank-thin --type zfs-thin --nodes orange1 --devices /dev/sde
 ```
 
 ### 3. 资源管理
