@@ -11,10 +11,6 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goos: [linux]
-        goarch: [amd64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,8 +22,8 @@ jobs:
 
       - name: Build binaries
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+          GOOS: linux
+          GOARCH: amd64
         run: |
           mkdir -p dist
           VERSION=${GITHUB_REF#refs/tags/}
@@ -38,12 +34,12 @@ jobs:
       - name: Create archive
         run: |
           cd dist
-          tar -czf sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz sds-controller sds-cli
-          sha256sum sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz > sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+          tar -czf sds-linux-amd64.tar.gz sds-controller sds-cli
+          sha256sum sds-linux-amd64.tar.gz > sds-linux-amd64.tar.gz.sha256
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-            dist/sds-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+            dist/sds-linux-amd64.tar.gz
+            dist/sds-linux-amd64.tar.gz.sha256
