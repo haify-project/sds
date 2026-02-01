@@ -268,21 +268,27 @@ func poolList() *cobra.Command {
 
 func poolAddDisk() *cobra.Command {
 	var pool string
-	var disk string
-	var node string
+	var devices string
+	var nodes string
 
 	cmd := &cobra.Command{
-		Use:   "add-disk",
-		Short: "Add a disk to a pool",
+		Use:   "add",
+		Short: "Add devices to a pool",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if pool == "" {
 				return fmt.Errorf("pool name is required")
 			}
-			if disk == "" {
-				return fmt.Errorf("disk is required")
+			if devices == "" {
+				return fmt.Errorf("devices is required")
 			}
-			if node == "" {
-				return fmt.Errorf("node is required")
+			if nodes == "" {
+				return fmt.Errorf("nodes is required")
+			}
+
+			deviceList := strings.Split(devices, ",")
+			nodeList := strings.Split(nodes, ",")
+			for i := range nodeList {
+				nodeList[i] = strings.TrimSpace(nodeList[i])
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -294,19 +300,38 @@ func poolAddDisk() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			err = sdsClient.AddDiskToPool(ctx, pool, disk, node)
-			if err != nil {
-				return fmt.Errorf("failed to add disk: %w", err)
+			successCount := 0
+			var failedOps []string
+
+			for _, node := range nodeList {
+				for _, device := range deviceList {
+					err = sdsClient.AddDiskToPool(ctx, pool, strings.TrimSpace(device), node)
+					if err != nil {
+						failedOps = append(failedOps, fmt.Sprintf("%s@%s: %v", device, node, err))
+						continue
+					}
+					successCount++
+					fmt.Printf("Device '%s' added to pool '%s' on node '%s'\n", device, pool, node)
+				}
 			}
 
-			fmt.Printf("Disk '%s' added to pool '%s'\n", disk, pool)
+			if len(failedOps) > 0 {
+				fmt.Fprintf(os.Stderr, "\nFailed to add %d device(s):\n", len(failedOps))
+				for _, fail := range failedOps {
+					fmt.Fprintf(os.Stderr, "  - %s\n", fail)
+				}
+			}
+
+			if successCount == 0 {
+				return fmt.Errorf("failed to add any devices")
+			}
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&pool, "pool", "", "Pool name")
-	cmd.Flags().StringVar(&disk, "disk", "", "Disk device (e.g., /dev/sdb)")
-	cmd.Flags().StringVar(&node, "node", "", "Node where the pool exists")
+	cmd.Flags().StringVar(&devices, "devices", "", "Comma-separated devices to add")
+	cmd.Flags().StringVar(&nodes, "nodes", "", "Comma-separated nodes")
 
 	return cmd
 }
