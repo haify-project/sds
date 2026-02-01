@@ -14,6 +14,7 @@ type Config struct {
 	TLS       TLSConfig       `mapstructure:"tls"`
 	Log       LogConfig       `mapstructure:"log"`
 	Storage   StorageConfig   `mapstructure:"storage"`
+	Metrics   MetricsConfig   `mapstructure:"metrics"`
 }
 
 // ServerConfig represents server configuration
@@ -45,6 +46,13 @@ type LogConfig struct {
 type StorageConfig struct {
 	DefaultPoolType     string `mapstructure:"default_pool_type"`
 	DefaultSnapshotSuffix string `mapstructure:"default_snapshot_suffix"`
+}
+
+// MetricsConfig represents metrics configuration
+type MetricsConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	ListenAddress string `mapstructure:"listen_address"`
+	Port          int    `mapstructure:"port"`
 }
 
 // Load loads configuration from file
@@ -106,6 +114,9 @@ func setDefaults() {
 	viper.SetDefault("log.format", "json")
 	viper.SetDefault("storage.default_pool_type", "vg")
 	viper.SetDefault("storage.default_snapshot_suffix", "_snap")
+	viper.SetDefault("metrics.enabled", true)
+	viper.SetDefault("metrics.listen_address", "0.0.0.0")
+	viper.SetDefault("metrics.port", 9433)
 }
 
 // Save saves configuration to file
@@ -116,6 +127,7 @@ func (c *Config) Save(path string) error {
 	config.Set("tls", c.TLS)
 	config.Set("log", c.Log)
 	config.Set("storage", c.Storage)
+	config.Set("metrics", c.Metrics)
 
 	return config.WriteConfigAs(path)
 }

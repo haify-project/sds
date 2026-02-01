@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/liliang-cn/sds/pkg/gateway"
+	"github.com/liliang-cn/sds/pkg/metrics"
 )
 
 // Controller represents the SDS controller
@@ -32,6 +34,9 @@ type Controller struct {
 	server     *grpc.Server
 	ctx        context.Context
 	cancel     context.CancelFunc
+	// Metrics
+	metrics       *metrics.Metrics
+	metricsServer *http.Server
 	// Managers
 	storage   *StorageManager
 	resources *ResourceManager
@@ -82,6 +87,19 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	gwResourceManager := NewGatewayResourceManager(ctrl.resources)
 	gwDeploymentClient := NewGatewayDeploymentClient(deploymentClient)
 	ctrl.gateway = gateway.New(gwResourceManager, gwDeploymentClient, logger, []string{})
+
+	// Initialize metrics
+	if cfg.Metrics.Enabled {
+		metricsInstance, err := metrics.New(logger)
+		if err != nil {
+			cancel()
+			if db != nil {
+				db.Close()
+			}
+			return nil, fmt.Errorf("failed to initialize metrics: %w", err)
+		}
+		ctrl.metrics = metricsInstance
+	}
 
 	// Initialize hosts mapping
 	ctrl.initHostsMapping()
@@ -158,6 +176,13 @@ func (c *Controller) Start() error {
 	c.resources.SetDeployment(c.deployment)
 	c.resources.SetHosts(c.hosts)
 
+	// Start metrics server if enabled
+	if c.config.Metrics.Enabled && c.metrics != nil {
+		if err := c.startMetricsServer(); err != nil {
+			return fmt.Errorf("failed to start metrics server: %w", err)
+		}
+	}
+
 	// Start gRPC server
 	if err := c.startGRPCServer(); err != nil {
 		return fmt.Errorf("failed to start gRPC server: %w", err)
@@ -177,6 +202,15 @@ func (c *Controller) Stop() {
 
 	c.cancel()
 
+	// Stop metrics server
+	if c.metricsServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := c.metricsServer.Shutdown(ctx); err != nil {
+			c.logger.Error("Failed to shutdown metrics server", zap.Error(err))
+		}
+	}
+
 	// Stop gRPC server
 	if c.server != nil {
 		c.server.GracefulStop()
@@ -193,7 +227,14 @@ func (c *Controller) startGRPCServer() error {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
-	c.server = grpc.NewServer()
+	// Create server with metrics interceptor if enabled
+	var opts []grpc.ServerOption
+	if c.metrics != nil {
+		opts = append(opts, grpc.ChainUnaryInterceptor(
+			c.metrics.UnaryServerInterceptor(),
+		))
+	}
+	c.server = grpc.NewServer(opts...)
 
 	// Register health service
 	healthServer := health.NewServer()
@@ -216,6 +257,24 @@ func (c *Controller) startGRPCServer() error {
 	return nil
 }
 
+// startMetricsServer starts the Prometheus metrics HTTP server
+func (c *Controller) startMetricsServer() error {
+	addr := fmt.Sprintf("%s:%d", c.config.Metrics.ListenAddress, c.config.Metrics.Port)
+	c.metricsServer = &http.Server{
+		Addr:    addr,
+		Handler: c.metrics.Handler(),
+	}
+
+	go func() {
+		c.logger.Info("Metrics server listening", zap.String("address", addr))
+		if err := c.metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			c.logger.Error("Metrics server error", zap.Error(err))
+		}
+	}()
+
+	return nil
+}
+
 // GetHosts returns the list of hosts
 func (c *Controller) GetHosts() []string {
 	return c.hosts
@@ -224,6 +283,11 @@ func (c *Controller) GetHosts() []string {
 // GetDeployment returns the deployment client
 func (c *Controller) GetDeployment() *deployment.Client {
 	return c.deployment
+}
+
+// GetMetrics returns the metrics instance
+func (c *Controller) GetMetrics() *metrics.Metrics {
+	return c.metrics
 }
 
 // ResolveHost resolves a hostname to an address

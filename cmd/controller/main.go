@@ -39,7 +39,9 @@ func main() {
 
 	logger.Info("Starting SDS controller",
 		zap.String("version", version),
-		zap.String("config", *configPath))
+		zap.String("config", *configPath),
+		zap.Bool("metrics_enabled", cfg.Metrics.Enabled),
+		zap.String("metrics_address", fmt.Sprintf("%s:%d", cfg.Metrics.ListenAddress, cfg.Metrics.Port)))
 
 	// Create controller
 	ctrl, err := controller.New(cfg, logger)
