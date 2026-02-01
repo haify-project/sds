@@ -115,11 +115,19 @@ type CreateGatewayRequest interface {
 
 // ==================== Common Operations ====================
 
-// ListGateways lists all configured gateways by scanning drbd-reactor config directory
+// ListGateways lists all storage gateways (NFS, iSCSI, NVMe-oF) by scanning drbd-reactor config directory
+// HA/service gateways are filtered out from this list
 func (m *Manager) ListGateways(ctx context.Context) ([]*GatewayInfo, error) {
 	files, err := os.ReadDir(DrbdReactorConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config directory: %w", err)
+	}
+
+	// Storage gateway types only (exclude HA and service types)
+	storageTypes := map[string]bool{
+		"nfs":    true,
+		"iscsi":  true,
+		"nvmeof": true,
 	}
 
 	var gateways []*GatewayInfo
@@ -135,12 +143,15 @@ func (m *Manager) ListGateways(ctx context.Context) ([]*GatewayInfo, error) {
 				gwType := typeParts[0]
 				resource := typeParts[1]
 
-				gateways = append(gateways, &GatewayInfo{
-					ID:       resource,
-					Name:     resource,
-					Type:     gwType,
-					Resource: resource,
-				})
+				// Only include storage gateway types
+				if storageTypes[gwType] {
+					gateways = append(gateways, &GatewayInfo{
+						ID:       resource,
+						Name:     resource,
+						Type:     gwType,
+						Resource: resource,
+					})
+				}
 			}
 		}
 	}

@@ -105,6 +105,9 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 	}
 	nm.controller.hostsLock.Unlock()
 
+	// Add hosts entry to all existing nodes for new node
+	nm.addHostsEntry(ctx, address, hostname)
+
 	// Save to database
 	if nm.controller.db != nil {
 		dbNode := &database.Node{
@@ -303,13 +306,29 @@ type NodeHealthInfo struct {
 }
 
 // HealthCheck performs a comprehensive health check on a node
-func (nm *NodeManager) HealthCheck(ctx context.Context, address string) (*NodeHealthInfo, error) {
+func (nm *NodeManager) HealthCheck(ctx context.Context, nodeName string) (*NodeHealthInfo, error) {
 	info := &NodeHealthInfo{
 		AvailableAgents: make([]string, 0),
 	}
 
+	// Get node info to find hostname for SSH
+	var sshTarget string
+	nm.mu.RLock()
+	for _, node := range nm.nodes {
+		if node.Name == nodeName {
+			sshTarget = node.Hostname // Use hostname for SSH
+			break
+		}
+	}
+	nm.mu.RUnlock()
+
+	if sshTarget == "" {
+		// Fallback to node name if not found
+		sshTarget = nodeName
+	}
+
 	// Check DRBD installation
-	drbdResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "drbdadm --version 2>/dev/null || echo 'not found'")
+	drbdResult, err := nm.controller.deployment.Exec(ctx, []string{sshTarget}, "drbdadm --version 2>/dev/null || echo 'not found'")
 	if err == nil && drbdResult.AllSuccess() {
 		for _, r := range drbdResult.Hosts {
 			if r.Success && r.Output != "" {
@@ -324,7 +343,7 @@ func (nm *NodeManager) HealthCheck(ctx context.Context, address string) (*NodeHe
 	}
 
 	// Check drbd-reactor installation
-	reactorResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "drbd-reactor --version 2>/dev/null || echo 'not found'")
+	reactorResult, err := nm.controller.deployment.Exec(ctx, []string{sshTarget}, "drbd-reactor --version 2>/dev/null || echo 'not found'")
 	if err == nil && reactorResult.AllSuccess() {
 		for _, r := range reactorResult.Hosts {
 			if r.Success && r.Output != "" {
@@ -340,7 +359,7 @@ func (nm *NodeManager) HealthCheck(ctx context.Context, address string) (*NodeHe
 
 	// Check drbd-reactor service status
 	if info.DrbdReactorInstalled {
-		serviceResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "systemctl is-active drbd-reactor")
+		serviceResult, err := nm.controller.deployment.Exec(ctx, []string{sshTarget}, "systemctl is-active drbd-reactor")
 		if err == nil && serviceResult.AllSuccess() {
 			for _, r := range serviceResult.Hosts {
 				if r.Success && strings.TrimSpace(r.Output) == "active" {
@@ -352,19 +371,22 @@ func (nm *NodeManager) HealthCheck(ctx context.Context, address string) (*NodeHe
 	}
 
 	// Check resource-agents-extra (OCF agents)
-	agentsResult, err := nm.controller.deployment.Exec(ctx, []string{address}, "ls /usr/lib/ocf/resource.d/heartbeat/ 2>/dev/null || echo 'not found'")
+	// Recursively find all executable OCF resource agents
+	agentsResult, err := nm.controller.deployment.Exec(ctx, []string{sshTarget}, "find /usr/lib/ocf/resource.d -type f -executable -exec basename {} \\; 2>/dev/null | sort -u")
 	if err == nil && agentsResult.AllSuccess() {
 		agents := make([]string, 0)
+		seen := make(map[string]bool)
 		for _, r := range agentsResult.Hosts {
 			if r.Success && r.Output != "" {
 				output := strings.TrimSpace(r.Output)
-				if !strings.Contains(output, "not found") {
+				if !strings.Contains(output, "not found") && output != "" {
 					info.ResourceAgentsInstalled = true
-					// List common OCF agents
 					lines := strings.Split(output, "\n")
 					for _, line := range lines {
 						agent := strings.TrimSpace(line)
-						if agent != "" {
+						// Filter out helper scripts and common non-agents
+						if agent != "" && !seen[agent] && !strings.HasSuffix(agent, ".sh") && !strings.HasPrefix(agent, ".") {
+							seen[agent] = true
 							agents = append(agents, agent)
 						}
 					}
@@ -409,4 +431,48 @@ func parseVersion(output string) string {
 		}
 	}
 	return "unknown"
+}
+
+// addHostsEntry adds the new node's hostname and IP to /etc/hosts on all existing nodes
+func (nm *NodeManager) addHostsEntry(ctx context.Context, ip, hostname string) {
+	if hostname == "" || hostname == ip {
+		return
+	}
+
+	// Prepare hosts entry
+	hostsEntry := fmt.Sprintf("%s\t%s", ip, hostname)
+
+	// Get list of all existing nodes (excluding the new one)
+	nm.mu.RLock()
+	var existingNodes []string
+	for _, node := range nm.nodes {
+		if node.Hostname != hostname && node.Hostname != "" {
+			existingNodes = append(existingNodes, node.Hostname)
+		}
+	}
+	nm.mu.RUnlock()
+
+	if len(existingNodes) == 0 {
+		return
+	}
+
+	// Add to each existing node's /etc/hosts
+	hostsCmd := fmt.Sprintf(
+		"grep -q '%s' /etc/hosts || echo '%s' | sudo tee -a /etc/hosts > /dev/null",
+		hostsEntry, hostsEntry,
+	)
+
+	result, err := nm.controller.deployment.Exec(ctx, existingNodes, hostsCmd)
+	if err != nil {
+		nm.controller.logger.Warn("Failed to add hosts entry", zap.Error(err))
+		return
+	}
+
+	for nodeHost, r := range result.Hosts {
+		if !r.Success {
+			nm.controller.logger.Warn("Failed to add hosts entry",
+				zap.String("node", nodeHost),
+				zap.String("output", r.Output))
+		}
+	}
 }

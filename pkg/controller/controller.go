@@ -3,6 +3,7 @@ package controller
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/keepalive"
 	"go.uber.org/zap"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
@@ -39,6 +41,8 @@ type Controller struct {
 	// Metrics
 	metrics       *metrics.Metrics
 	metricsServer *http.Server
+	// UI
+	uiServer *UIServer
 	// Managers
 	storage   *StorageManager
 	resources *ResourceManager
@@ -190,6 +194,16 @@ func (c *Controller) Start() error {
 		return fmt.Errorf("failed to start gRPC server: %w", err)
 	}
 
+	// Start UI server
+	uiServer, err := NewUIServer(c.logger, c.config.Server.ListenAddress, 3376)
+	if err != nil {
+		return fmt.Errorf("failed to create UI server: %w", err)
+	}
+	c.uiServer = uiServer
+	if err := c.uiServer.Start(); err != nil {
+		return fmt.Errorf("failed to start UI server: %w", err)
+	}
+
 	c.logger.Info("SDS controller started",
 		zap.String("address", c.config.Server.ListenAddress),
 		zap.Int("port", c.config.Server.Port),
@@ -216,6 +230,11 @@ func (c *Controller) Stop() {
 	// Stop gRPC server
 	if c.server != nil {
 		c.server.GracefulStop()
+	}
+
+	// Stop UI server
+	if c.uiServer != nil {
+		c.uiServer.Shutdown()
 	}
 
 	c.logger.Info("SDS controller stopped")
@@ -258,13 +277,15 @@ func (c *Controller) startGRPCServer() error {
 		}
 	}()
 
-	// Start HTTP REST API gateway on port 8080 (or gRPC port + 1)
-	restPort := 8080
+	// Start HTTP REST API gateway on port 3375
+	restPort := 3375
 	restAddr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, restPort)
 	restLis, err := net.Listen("tcp", restAddr)
 	if err != nil {
 		return fmt.Errorf("failed to listen for REST: %w", err)
 	}
+	// Wrap listener to reject HTTP/2 connections
+	restLis = &http1OnlyListener{Listener: restLis}
 
 	// Create and register gRPC-Gateway
 	gatewayMux := runtime.NewServeMux(
@@ -275,6 +296,12 @@ func (c *Controller) startGRPCServer() error {
 
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4*1024*1024)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                10 * time.Second,
+			Timeout:             time.Second,
+			PermitWithoutStream: true,
+		}),
 	}
 
 	// Register gateway handler pointing to local gRPC server
@@ -282,10 +309,15 @@ func (c *Controller) startGRPCServer() error {
 		return fmt.Errorf("failed to register gateway handler: %w", err)
 	}
 
-	// Create HTTP server for gateway
+	// Wrap with CORS handler
+	corsHandler := corsMiddleware(gatewayMux)
+
+	// Create HTTP server for gateway (disable HTTP/2 for REST API)
 	gatewayServer := &http.Server{
-		Handler:           gatewayMux,
+		Handler:           corsHandler,
 		ReadHeaderTimeout: 5 * time.Second,
+		// Disable HTTP/2 to avoid protocol mismatch with browsers
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
 	go func() {
@@ -301,6 +333,67 @@ func (c *Controller) startGRPCServer() error {
 
 	return nil
 }
+
+// corsMiddleware adds CORS headers and forces HTTP/1.1
+func corsMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Force HTTP/1.1 response
+		w.Header().Set("Connection", "close")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
+
+		// Reject HTTP/2 upgrade attempts
+		if r.Header.Get("Upgrade") == "h2c" || r.ProtoMajor == 2 {
+			w.Header().Set("Connection", "close")
+			w.WriteHeader(http.StatusHTTPVersionNotSupported)
+			w.Write([]byte("HTTP/2 not supported, use HTTP/1.1"))
+			return
+		}
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+// http1OnlyListener wraps a listener to reject HTTP/2 client preface
+type http1OnlyListener struct {
+	net.Listener
+}
+
+func (l *http1OnlyListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return conn, err
+	}
+	return &http1OnlyConn{Conn: conn}, nil
+}
+
+type http1OnlyConn struct {
+	net.Conn
+	firstByte bool
+}
+
+func (c *http1OnlyConn) Read(b []byte) (int, error) {
+	n, err := c.Conn.Read(b)
+	if n > 0 && !c.firstByte {
+		c.firstByte = true
+		// HTTP/2 client preface starts with "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+		// The magic bytes are 0x505249202a20485454502f322e300d0a0d0a534d0d0a0d0a
+		// First byte is 'P' (0x50) for PRI, or we can check for the connection preface
+		if len(b) > 0 && b[0] == 0x50 { // 'P' from "PRI"
+			c.Conn.Close()
+			return 0, net.ErrClosed
+		}
+	}
+	return n, err
+}
+
 
 // startMetricsServer starts the Prometheus metrics HTTP server
 func (c *Controller) startMetricsServer() error {

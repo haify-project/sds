@@ -1,11 +1,15 @@
-.PHONY: build test clean install-controller install-cli run-controller run-cli proto
+.PHONY: build test clean install-controller install-cli run-controller run-cli proto web-ui web-ui-dev web-ui-build
 
 # Build binaries
-build:
+build: web-ui-build
+	@echo "Preparing UI for embedding..."
+	@rm -rf ui/dist
+	@cp -r web-ui/dist ui/
 	@echo "Building sds-controller..."
 	go build -o bin/sds-controller ./cmd/controller
 	@echo "Building sds-cli..."
 	go build -o bin/sds-cli ./cmd/cli
+	@rm -rf ui/dist
 
 # Run tests
 test:
@@ -59,3 +63,16 @@ lint:
 deps:
 	go mod download
 	go mod tidy
+
+# Web UI
+web-ui-dev:
+	cd web-ui && npm run dev
+
+web-ui-build:
+	cd web-ui && npm run build
+
+web-ui-install: web-ui-build
+	@echo "Installing web-ui..."
+	sudo mkdir -p /opt/sds/www
+	sudo cp -r web-ui/dist/* /opt/sds/www/
+	@echo "Web UI installed to /opt/sds/www/"

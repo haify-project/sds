@@ -40,6 +40,11 @@ func NewStorageManager(ctrl *Controller) *StorageManager {
 
 // CreatePool creates a storage pool
 func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64) error {
+	// Add sds_ prefix if not already present
+	if !strings.HasPrefix(name, "sds_") {
+		name = "sds_" + name
+	}
+
 	sm.controller.logger.Info("Creating pool",
 		zap.String("name", name),
 		zap.String("type", poolType),
@@ -172,6 +177,10 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 					fields := strings.Split(line, "|")
 					if len(fields) >= 3 {
 						vgName := strings.TrimSpace(fields[0])
+						// Only show SDS-managed pools (with sds_ prefix)
+						if !strings.HasPrefix(vgName, "sds_") {
+							continue
+						}
 						key := normalizedHost + "/lvm/" + vgName
 						if seen[key] {
 							continue
@@ -264,6 +273,11 @@ func (sm *StorageManager) DeletePool(ctx context.Context, name, node string) err
 
 // CreateZFSPool creates a ZFS storage pool
 func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, vdevs []string, thin bool) error {
+	// Add sds_ prefix if not already present
+	if !strings.HasPrefix(name, "sds_") {
+		name = "sds_" + name
+	}
+
 	sm.controller.logger.Info("Creating ZFS pool",
 		zap.String("name", name),
 		zap.String("node", node),
@@ -357,6 +371,10 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 				fields := strings.Fields(line)
 				if len(fields) >= 4 {
 					poolName := fields[0]
+					// Only show SDS-managed pools (with sds_ prefix)
+					if !strings.HasPrefix(poolName, "sds_") {
+						continue
+					}
 					key := normalizedHost + "/" + poolName
 					if seen[key] {
 						continue
