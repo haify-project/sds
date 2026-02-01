@@ -9,7 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"go.uber.org/zap"
@@ -219,15 +221,16 @@ func (c *Controller) Stop() {
 	c.logger.Info("SDS controller stopped")
 }
 
-// startGRPCServer starts the gRPC server
+// startGRPCServer starts the gRPC server with gRPC-Gateway on separate ports
 func (c *Controller) startGRPCServer() error {
-	addr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, c.config.Server.Port)
-	lis, err := net.Listen("tcp", addr)
+	// Start gRPC server on the configured port
+	grpcAddr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, c.config.Server.Port)
+	grpcLis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
+		return fmt.Errorf("failed to listen for gRPC: %w", err)
 	}
 
-	// Create server with metrics interceptor if enabled
+	// Create gRPC server
 	var opts []grpc.ServerOption
 	if c.metrics != nil {
 		opts = append(opts, grpc.ChainUnaryInterceptor(
@@ -247,12 +250,54 @@ func (c *Controller) startGRPCServer() error {
 
 	c.logger.Info("Registered SDS controller service")
 
+	// Start gRPC server
 	go func() {
-		c.logger.Info("gRPC server listening", zap.String("address", addr))
-		if err := c.server.Serve(lis); err != nil {
+		c.logger.Info("gRPC server listening", zap.String("address", grpcAddr))
+		if err := c.server.Serve(grpcLis); err != nil {
 			c.logger.Error("gRPC server error", zap.Error(err))
 		}
 	}()
+
+	// Start HTTP REST API gateway on port 8080 (or gRPC port + 1)
+	restPort := 8080
+	restAddr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, restPort)
+	restLis, err := net.Listen("tcp", restAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen for REST: %w", err)
+	}
+
+	// Create and register gRPC-Gateway
+	gatewayMux := runtime.NewServeMux(
+		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
+			return key, true
+		}),
+	)
+
+	dialOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	// Register gateway handler pointing to local gRPC server
+	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(context.Background(), gatewayMux, grpcAddr, dialOpts); err != nil {
+		return fmt.Errorf("failed to register gateway handler: %w", err)
+	}
+
+	// Create HTTP server for gateway
+	gatewayServer := &http.Server{
+		Handler:           gatewayMux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		c.logger.Info("HTTP REST API gateway listening", zap.String("address", restAddr))
+		if err := gatewayServer.Serve(restLis); err != nil && err != http.ErrServerClosed {
+			c.logger.Error("HTTP gateway server error", zap.Error(err))
+		}
+	}()
+
+	c.logger.Info("Server listening",
+		zap.String("grpc", grpcAddr),
+		zap.String("rest", restAddr))
 
 	return nil
 }

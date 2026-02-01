@@ -4,79 +4,191 @@ package v1;
 
 option go_package = "./;v1";
 
+import "google/api/annotations.proto";
+
 // SDS Controller Service
 service SDSController {
   // Pool operations
-  rpc CreatePool(CreatePoolRequest) returns (CreatePoolResponse);
-  rpc DeletePool(DeletePoolRequest) returns (DeletePoolResponse);
-  rpc GetPool(GetPoolRequest) returns (GetPoolResponse);
-  rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse);
-  rpc AddDiskToPool(AddDiskToPoolRequest) returns (AddDiskToPoolResponse);
+  rpc CreatePool(CreatePoolRequest) returns (CreatePoolResponse) {
+    option (google.api.http) = { post: "/v1/pools"; body: "*"; };
+  }
+  rpc DeletePool(DeletePoolRequest) returns (DeletePoolResponse) {
+    option (google.api.http) = { delete: "/v1/pools/{name}"; };
+  }
+  rpc GetPool(GetPoolRequest) returns (GetPoolResponse) {
+    option (google.api.http) = { get: "/v1/pools/{name}"; };
+  }
+  rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse) {
+    option (google.api.http) = { get: "/v1/pools"; };
+  }
+  rpc AddDiskToPool(AddDiskToPoolRequest) returns (AddDiskToPoolResponse) {
+    option (google.api.http) = { post: "/v1/pools/{pool}/disks"; body: "*"; };
+  }
 
   // Node operations
-  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
-  rpc UnregisterNode(UnregisterNodeRequest) returns (UnregisterNodeResponse);
-  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
-  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
-  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes"; body: "*"; };
+  }
+  rpc UnregisterNode(UnregisterNodeRequest) returns (UnregisterNodeResponse) {
+    option (google.api.http) = { delete: "/v1/nodes/{address}"; };
+  }
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {
+    option (google.api.http) = { get: "/v1/nodes/{address}"; };
+  }
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse) {
+    option (google.api.http) = { get: "/v1/nodes"; };
+  }
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {
+    option (google.api.http) = { get: "/v1/nodes/{node}/health"; };
+  }
 
   // Resource operations
-  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse);
-  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse);
-  rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
-  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
-  rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse);
-  rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse);
-  rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse);
-  rpc ResourceStatus(ResourceStatusRequest) returns (ResourceStatusResponse);
-  rpc SetPrimary(SetPrimaryRequest) returns (SetPrimaryResponse);
-  rpc SetSecondary(SetSecondaryRequest) returns (SetSecondaryResponse);
-  rpc CreateFilesystem(CreateFilesystemRequest) returns (CreateFilesystemResponse);
-  rpc MountResource(MountResourceRequest) returns (MountResourceResponse);
-  rpc UnmountResource(UnmountResourceRequest) returns (UnmountResourceResponse);
-  rpc MakeHa(MakeHaRequest) returns (MakeHaResponse);
-  rpc EvictHa(EvictHaRequest) returns (EvictHaResponse);
-  rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse);
-  rpc GetHa(GetHaRequest) returns (GetHaResponse);
-  rpc ListHa(ListHaRequest) returns (ListHaResponse);
+  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources"; body: "*"; };
+  }
+  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{name}"; };
+  }
+  rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {
+    option (google.api.http) = { get: "/v1/resources/{name}"; };
+  }
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {
+    option (google.api.http) = { get: "/v1/resources"; };
+  }
+  rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes"; body: "*"; };
+  }
+  rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/volumes/{volume_id}"; };
+  }
+  rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse) {
+    option (google.api.http) = { patch: "/v1/resources/{resource}/volumes/{volume_id}"; body: "*"; };
+  }
+  rpc ResourceStatus(ResourceStatusRequest) returns (ResourceStatusResponse) {
+    option (google.api.http) = { get: "/v1/resources/{name}/status"; };
+  }
+  rpc SetPrimary(SetPrimaryRequest) returns (SetPrimaryResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/primary"; body: "*"; };
+  }
+  rpc SetSecondary(SetSecondaryRequest) returns (SetSecondaryResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/secondary"; body: "*"; };
+  }
+  rpc CreateFilesystem(CreateFilesystemRequest) returns (CreateFilesystemResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/filesystem"; body: "*"; };
+  }
+  rpc MountResource(MountResourceRequest) returns (MountResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/mount"; body: "*"; };
+  }
+  rpc UnmountResource(UnmountResourceRequest) returns (UnmountResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/unmount"; body: "*"; };
+  }
+  rpc MakeHa(MakeHaRequest) returns (MakeHaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha"; body: "*"; };
+  }
+  rpc EvictHa(EvictHaRequest) returns (EvictHaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha/evict"; body: "*"; };
+  }
+  rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/ha"; };
+  }
+  rpc GetHa(GetHaRequest) returns (GetHaResponse) {
+    option (google.api.http) = { get: "/v1/resources/{resource}/ha"; };
+  }
+  rpc ListHa(ListHaRequest) returns (ListHaResponse) {
+    option (google.api.http) = { get: "/v1/ha"; };
+  }
 
   // Snapshot operations
-  rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
-  rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse);
-  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (RestoreSnapshotResponse);
-  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/volumes/{volume}/snapshots"; body: "*"; };
+  }
+  rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse) {
+    option (google.api.http) = { delete: "/v1/volumes/{volume}/snapshots/{snapshot_name}"; };
+  }
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (RestoreSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/volumes/{volume}/snapshots/{snapshot_name}/restore"; body: "*"; };
+  }
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse) {
+    option (google.api.http) = { get: "/v1/volumes/{volume}/snapshots"; };
+  }
 
   // Gateway operations
-  rpc CreateNFSGateway(CreateNFSGatewayRequest) returns (CreateNFSGatewayResponse);
-  rpc CreateISCSIGateway(CreateISCSIGatewayRequest) returns (CreateISCSIGatewayResponse);
-  rpc CreateNVMeGateway(CreateNVMeGatewayRequest) returns (CreateNVMeGatewayResponse);
-  rpc DeleteGateway(DeleteGatewayRequest) returns (DeleteGatewayResponse);
-  rpc GetGateway(GetGatewayRequest) returns (GetGatewayResponse);
-  rpc ListGateways(ListGatewaysRequest) returns (ListGatewaysResponse);
-  rpc StartGateway(StartGatewayRequest) returns (StartGatewayResponse);
-  rpc StopGateway(StopGatewayRequest) returns (StopGatewayResponse);
+  rpc CreateNFSGateway(CreateNFSGatewayRequest) returns (CreateNFSGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs"; body: "*"; };
+  }
+  rpc CreateISCSIGateway(CreateISCSIGatewayRequest) returns (CreateISCSIGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi"; body: "*"; };
+  }
+  rpc CreateNVMeGateway(CreateNVMeGatewayRequest) returns (CreateNVMeGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme"; body: "*"; };
+  }
+  rpc DeleteGateway(DeleteGatewayRequest) returns (DeleteGatewayResponse) {
+    option (google.api.http) = { delete: "/v1/gateways/{id}"; };
+  }
+  rpc GetGateway(GetGatewayRequest) returns (GetGatewayResponse) {
+    option (google.api.http) = { get: "/v1/gateways/{id}"; };
+  }
+  rpc ListGateways(ListGatewaysRequest) returns (ListGatewaysResponse) {
+    option (google.api.http) = { get: "/v1/gateways"; };
+  }
+  rpc StartGateway(StartGatewayRequest) returns (StartGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/{id}/start"; body: "*"; };
+  }
+  rpc StopGateway(StopGatewayRequest) returns (StopGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/{id}/stop"; body: "*"; };
+  }
 
   // ZFS operations
-  rpc CreateZFSPool(CreateZFSPoolRequest) returns (CreateZFSPoolResponse);
-  rpc DeleteZFSPool(DeleteZFSPoolRequest) returns (DeleteZFSPoolResponse);
+  rpc CreateZFSPool(CreateZFSPoolRequest) returns (CreateZFSPoolResponse) {
+    option (google.api.http) = { post: "/v1/zfs/pools"; body: "*"; };
+  }
+  rpc DeleteZFSPool(DeleteZFSPoolRequest) returns (DeleteZFSPoolResponse) {
+    option (google.api.http) = { delete: "/v1/zfs/pools/{name}"; };
+  }
   rpc ListZFSpools(ListZFSPoolsRequest) returns (ListZFSPoolsResponse);
-  rpc CreateZFSDataset(CreateZFSDatasetRequest) returns (CreateZFSDatasetResponse);
-  rpc CreateZFSVolume(CreateZFSVolumeRequest) returns (CreateZFSVolumeResponse);
-  rpc ResizeZFSVolume(ResizeZFSVolumeRequest) returns (ResizeZFSVolumeResponse);
-  rpc DeleteZFSDataset(DeleteZFSDatasetRequest) returns (DeleteZFSDatasetResponse);
+  rpc CreateZFSDataset(CreateZFSDatasetRequest) returns (CreateZFSDatasetResponse) {
+    option (google.api.http) = { post: "/v1/zfs/datasets"; body: "*"; };
+  }
+  rpc CreateZFSVolume(CreateZFSVolumeRequest) returns (CreateZFSVolumeResponse) {
+    option (google.api.http) = { post: "/v1/zfs/volumes"; body: "*"; };
+  }
+  rpc ResizeZFSVolume(ResizeZFSVolumeRequest) returns (ResizeZFSVolumeResponse) {
+    option (google.api.http) = { patch: "/v1/zfs/volumes/{volume_path}"; body: "*"; };
+  }
+  rpc DeleteZFSDataset(DeleteZFSDatasetRequest) returns (DeleteZFSDatasetResponse) {
+    option (google.api.http) = { delete: "/v1/zfs/datasets/{dataset_path}"; };
+  }
 
   // ZFS Snapshot operations
-  rpc CreateZFSSnapshot(CreateZFSSnapshotRequest) returns (CreateZFSSnapshotResponse);
-  rpc DeleteZFSSnapshot(DeleteZFSSnapshotRequest) returns (DeleteZFSSnapshotResponse);
-  rpc ListZFSSnapshots(ListZFSSnapshotsRequest) returns (ListZFSSnapshotsResponse);
-  rpc RestoreZFSSnapshot(RestoreZFSSnapshotRequest) returns (RestoreZFSSnapshotResponse);
-  rpc CloneZFSSnapshot(CloneZFSSnapshotRequest) returns (CloneZFSSnapshotResponse);
+  rpc CreateZFSSnapshot(CreateZFSSnapshotRequest) returns (CreateZFSSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/zfs/datasets/{dataset}/snapshots"; body: "*"; };
+  }
+  rpc DeleteZFSSnapshot(DeleteZFSSnapshotRequest) returns (DeleteZFSSnapshotResponse) {
+    option (google.api.http) = { delete: "/v1/zfs/snapshots/{snapshot}"; };
+  }
+  rpc ListZFSSnapshots(ListZFSSnapshotsRequest) returns (ListZFSSnapshotsResponse) {
+    option (google.api.http) = { get: "/v1/zfs/datasets/{dataset}/snapshots"; };
+  }
+  rpc RestoreZFSSnapshot(RestoreZFSSnapshotRequest) returns (RestoreZFSSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/zfs/datasets/{dataset}/snapshots/{snapshot_name}/restore"; body: "*"; };
+  }
+  rpc CloneZFSSnapshot(CloneZFSSnapshotRequest) returns (CloneZFSSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/zfs/snapshots/{snapshot}/clone"; body: "*"; };
+  }
 
   // LVM Snapshot operations
-  rpc CreateLvmSnapshot(CreateLvmSnapshotRequest) returns (CreateLvmSnapshotResponse);
-  rpc DeleteLvmSnapshot(DeleteLvmSnapshotRequest) returns (DeleteLvmSnapshotResponse);
-  rpc ListLvmSnapshots(ListLvmSnapshotsRequest) returns (ListLvmSnapshotsResponse);
-  rpc RestoreLvmSnapshot(RestoreLvmSnapshotRequest) returns (RestoreLvmSnapshotResponse);
+  rpc CreateLvmSnapshot(CreateLvmSnapshotRequest) returns (CreateLvmSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/lvm/volumes/{lv_name}/snapshots"; body: "*"; };
+  }
+  rpc DeleteLvmSnapshot(DeleteLvmSnapshotRequest) returns (DeleteLvmSnapshotResponse) {
+    option (google.api.http) = { delete: "/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}"; };
+  }
+  rpc ListLvmSnapshots(ListLvmSnapshotsRequest) returns (ListLvmSnapshotsResponse) {
+    option (google.api.http) = { get: "/v1/lvm/volumes/{lv_name}/snapshots"; };
+  }
+  rpc RestoreLvmSnapshot(RestoreLvmSnapshotRequest) returns (RestoreLvmSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}/restore"; body: "*"; };
+  }
 }
 
 // Pool messages

@@ -1172,7 +1172,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 					"rsync -a %s/ %s/ 2>/dev/null || cp -a %s/. %s/. && "+
 					"echo 'Data restored successfully. Backup retained at %s for manual recovery if needed.'; "+
 					"else echo 'No backup found or backup is empty'; fi",
-				backupDir, backupDir, mountPoint, backupDir, mountPoint, mountPoint, backupDir)
+				backupDir, backupDir, mountPoint, backupDir, mountPoint, mountPoint, backupDir, backupDir)
 
 			result, err := rm.deployment.Exec(ctx, []string{activeNode}, restoreCmd)
 			if err != nil {

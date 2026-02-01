@@ -7,6 +7,7 @@
 package v1
 
 import (
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -7057,7 +7058,7 @@ var File_api_proto_v1_sds_proto protoreflect.FileDescriptor
 
 const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\n" +
-	"\x16api/proto/v1/sds.proto\x12\x02v1\"~\n" +
+	"\x16api/proto/v1/sds.proto\x12\x02v1\x1a\x1cgoogle/api/annotations.proto\"~\n" +
 	"\x11CreatePoolRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
@@ -7548,68 +7549,68 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\vmount_point\x18\x03 \x01(\tR\n" +
 	"mountPoint\x12\x17\n" +
 	"\afs_type\x18\x04 \x01(\tR\x06fsType\x12\x1a\n" +
-	"\bservices\x18\x05 \x03(\tR\bservices2\xbb\x1e\n" +
-	"\rSDSController\x12;\n" +
+	"\bservices\x18\x05 \x03(\tR\bservices2\xa4/\n" +
+	"\rSDSController\x12Q\n" +
 	"\n" +
-	"CreatePool\x12\x15.v1.CreatePoolRequest\x1a\x16.v1.CreatePoolResponse\x12;\n" +
+	"CreatePool\x12\x15.v1.CreatePoolRequest\x1a\x16.v1.CreatePoolResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/pools\x12U\n" +
 	"\n" +
-	"DeletePool\x12\x15.v1.DeletePoolRequest\x1a\x16.v1.DeletePoolResponse\x122\n" +
-	"\aGetPool\x12\x12.v1.GetPoolRequest\x1a\x13.v1.GetPoolResponse\x128\n" +
-	"\tListPools\x12\x14.v1.ListPoolsRequest\x1a\x15.v1.ListPoolsResponse\x12D\n" +
-	"\rAddDiskToPool\x12\x18.v1.AddDiskToPoolRequest\x1a\x19.v1.AddDiskToPoolResponse\x12A\n" +
-	"\fRegisterNode\x12\x17.v1.RegisterNodeRequest\x1a\x18.v1.RegisterNodeResponse\x12G\n" +
-	"\x0eUnregisterNode\x12\x19.v1.UnregisterNodeRequest\x1a\x1a.v1.UnregisterNodeResponse\x122\n" +
-	"\aGetNode\x12\x12.v1.GetNodeRequest\x1a\x13.v1.GetNodeResponse\x128\n" +
-	"\tListNodes\x12\x14.v1.ListNodesRequest\x1a\x15.v1.ListNodesResponse\x12>\n" +
-	"\vHealthCheck\x12\x16.v1.HealthCheckRequest\x1a\x17.v1.HealthCheckResponse\x12G\n" +
-	"\x0eCreateResource\x12\x19.v1.CreateResourceRequest\x1a\x1a.v1.CreateResourceResponse\x12G\n" +
-	"\x0eDeleteResource\x12\x19.v1.DeleteResourceRequest\x1a\x1a.v1.DeleteResourceResponse\x12>\n" +
-	"\vGetResource\x12\x16.v1.GetResourceRequest\x1a\x17.v1.GetResourceResponse\x12D\n" +
-	"\rListResources\x12\x18.v1.ListResourcesRequest\x1a\x19.v1.ListResourcesResponse\x128\n" +
-	"\tAddVolume\x12\x14.v1.AddVolumeRequest\x1a\x15.v1.AddVolumeResponse\x12A\n" +
-	"\fRemoveVolume\x12\x17.v1.RemoveVolumeRequest\x1a\x18.v1.RemoveVolumeResponse\x12A\n" +
-	"\fResizeVolume\x12\x17.v1.ResizeVolumeRequest\x1a\x18.v1.ResizeVolumeResponse\x12G\n" +
-	"\x0eResourceStatus\x12\x19.v1.ResourceStatusRequest\x1a\x1a.v1.ResourceStatusResponse\x12;\n" +
+	"DeletePool\x12\x15.v1.DeletePoolRequest\x1a\x16.v1.DeletePoolResponse\"\x18\x82\xd3\xe4\x93\x02\x12*\x10/v1/pools/{name}\x12L\n" +
+	"\aGetPool\x12\x12.v1.GetPoolRequest\x1a\x13.v1.GetPoolResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/pools/{name}\x12K\n" +
+	"\tListPools\x12\x14.v1.ListPoolsRequest\x1a\x15.v1.ListPoolsResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/pools\x12g\n" +
+	"\rAddDiskToPool\x12\x18.v1.AddDiskToPoolRequest\x1a\x19.v1.AddDiskToPoolResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/pools/{pool}/disks\x12W\n" +
+	"\fRegisterNode\x12\x17.v1.RegisterNodeRequest\x1a\x18.v1.RegisterNodeResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/nodes\x12d\n" +
+	"\x0eUnregisterNode\x12\x19.v1.UnregisterNodeRequest\x1a\x1a.v1.UnregisterNodeResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/v1/nodes/{address}\x12O\n" +
+	"\aGetNode\x12\x12.v1.GetNodeRequest\x1a\x13.v1.GetNodeResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/nodes/{address}\x12K\n" +
+	"\tListNodes\x12\x14.v1.ListNodesRequest\x1a\x15.v1.ListNodesResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/nodes\x12_\n" +
+	"\vHealthCheck\x12\x16.v1.HealthCheckRequest\x1a\x17.v1.HealthCheckResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/nodes/{node}/health\x12a\n" +
+	"\x0eCreateResource\x12\x19.v1.CreateResourceRequest\x1a\x1a.v1.CreateResourceResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/resources\x12e\n" +
+	"\x0eDeleteResource\x12\x19.v1.DeleteResourceRequest\x1a\x1a.v1.DeleteResourceResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/v1/resources/{name}\x12\\\n" +
+	"\vGetResource\x12\x16.v1.GetResourceRequest\x1a\x17.v1.GetResourceResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/resources/{name}\x12[\n" +
+	"\rListResources\x12\x18.v1.ListResourcesRequest\x1a\x19.v1.ListResourcesResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/resources\x12e\n" +
+	"\tAddVolume\x12\x14.v1.AddVolumeRequest\x1a\x15.v1.AddVolumeResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\" /v1/resources/{resource}/volumes\x12w\n" +
+	"\fRemoveVolume\x12\x17.v1.RemoveVolumeRequest\x1a\x18.v1.RemoveVolumeResponse\"4\x82\xd3\xe4\x93\x02.*,/v1/resources/{resource}/volumes/{volume_id}\x12z\n" +
+	"\fResizeVolume\x12\x17.v1.ResizeVolumeRequest\x1a\x18.v1.ResizeVolumeResponse\"7\x82\xd3\xe4\x93\x021:\x01*2,/v1/resources/{resource}/volumes/{volume_id}\x12l\n" +
+	"\x0eResourceStatus\x12\x19.v1.ResourceStatusRequest\x1a\x1a.v1.ResourceStatusResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/resources/{name}/status\x12h\n" +
 	"\n" +
-	"SetPrimary\x12\x15.v1.SetPrimaryRequest\x1a\x16.v1.SetPrimaryResponse\x12A\n" +
-	"\fSetSecondary\x12\x17.v1.SetSecondaryRequest\x1a\x18.v1.SetSecondaryResponse\x12M\n" +
-	"\x10CreateFilesystem\x12\x1b.v1.CreateFilesystemRequest\x1a\x1c.v1.CreateFilesystemResponse\x12D\n" +
-	"\rMountResource\x12\x18.v1.MountResourceRequest\x1a\x19.v1.MountResourceResponse\x12J\n" +
-	"\x0fUnmountResource\x12\x1a.v1.UnmountResourceRequest\x1a\x1b.v1.UnmountResourceResponse\x12/\n" +
-	"\x06MakeHa\x12\x11.v1.MakeHaRequest\x1a\x12.v1.MakeHaResponse\x122\n" +
-	"\aEvictHa\x12\x12.v1.EvictHaRequest\x1a\x13.v1.EvictHaResponse\x125\n" +
-	"\bDeleteHa\x12\x13.v1.DeleteHaRequest\x1a\x14.v1.DeleteHaResponse\x12,\n" +
-	"\x05GetHa\x12\x10.v1.GetHaRequest\x1a\x11.v1.GetHaResponse\x12/\n" +
-	"\x06ListHa\x12\x11.v1.ListHaRequest\x1a\x12.v1.ListHaResponse\x12G\n" +
-	"\x0eCreateSnapshot\x12\x19.v1.CreateSnapshotRequest\x1a\x1a.v1.CreateSnapshotResponse\x12G\n" +
-	"\x0eDeleteSnapshot\x12\x19.v1.DeleteSnapshotRequest\x1a\x1a.v1.DeleteSnapshotResponse\x12J\n" +
-	"\x0fRestoreSnapshot\x12\x1a.v1.RestoreSnapshotRequest\x1a\x1b.v1.RestoreSnapshotResponse\x12D\n" +
-	"\rListSnapshots\x12\x18.v1.ListSnapshotsRequest\x1a\x19.v1.ListSnapshotsResponse\x12M\n" +
-	"\x10CreateNFSGateway\x12\x1b.v1.CreateNFSGatewayRequest\x1a\x1c.v1.CreateNFSGatewayResponse\x12S\n" +
-	"\x12CreateISCSIGateway\x12\x1d.v1.CreateISCSIGatewayRequest\x1a\x1e.v1.CreateISCSIGatewayResponse\x12P\n" +
-	"\x11CreateNVMeGateway\x12\x1c.v1.CreateNVMeGatewayRequest\x1a\x1d.v1.CreateNVMeGatewayResponse\x12D\n" +
-	"\rDeleteGateway\x12\x18.v1.DeleteGatewayRequest\x1a\x19.v1.DeleteGatewayResponse\x12;\n" +
+	"SetPrimary\x12\x15.v1.SetPrimaryRequest\x1a\x16.v1.SetPrimaryResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\" /v1/resources/{resource}/primary\x12p\n" +
+	"\fSetSecondary\x12\x17.v1.SetSecondaryRequest\x1a\x18.v1.SetSecondaryResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/resources/{resource}/secondary\x12\x91\x01\n" +
+	"\x10CreateFilesystem\x12\x1b.v1.CreateFilesystemRequest\x1a\x1c.v1.CreateFilesystemResponse\"B\x82\xd3\xe4\x93\x02<:\x01*\"7/v1/resources/{resource}/volumes/{volume_id}/filesystem\x12\x83\x01\n" +
+	"\rMountResource\x12\x18.v1.MountResourceRequest\x1a\x19.v1.MountResourceResponse\"=\x82\xd3\xe4\x93\x027:\x01*\"2/v1/resources/{resource}/volumes/{volume_id}/mount\x12\x8b\x01\n" +
+	"\x0fUnmountResource\x12\x1a.v1.UnmountResourceRequest\x1a\x1b.v1.UnmountResourceResponse\"?\x82\xd3\xe4\x93\x029:\x01*\"4/v1/resources/{resource}/volumes/{volume_id}/unmount\x12W\n" +
+	"\x06MakeHa\x12\x11.v1.MakeHaRequest\x1a\x12.v1.MakeHaResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/resources/{resource}/ha\x12`\n" +
+	"\aEvictHa\x12\x12.v1.EvictHaRequest\x1a\x13.v1.EvictHaResponse\",\x82\xd3\xe4\x93\x02&:\x01*\"!/v1/resources/{resource}/ha/evict\x12Z\n" +
+	"\bDeleteHa\x12\x13.v1.DeleteHaRequest\x1a\x14.v1.DeleteHaResponse\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/v1/resources/{resource}/ha\x12Q\n" +
+	"\x05GetHa\x12\x10.v1.GetHaRequest\x1a\x11.v1.GetHaResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/resources/{resource}/ha\x12?\n" +
+	"\x06ListHa\x12\x11.v1.ListHaRequest\x1a\x12.v1.ListHaResponse\"\x0e\x82\xd3\xe4\x93\x02\b\x12\x06/v1/ha\x12r\n" +
+	"\x0eCreateSnapshot\x12\x19.v1.CreateSnapshotRequest\x1a\x1a.v1.CreateSnapshotResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/v1/volumes/{volume}/snapshots\x12\x7f\n" +
+	"\x0eDeleteSnapshot\x12\x19.v1.DeleteSnapshotRequest\x1a\x1a.v1.DeleteSnapshotResponse\"6\x82\xd3\xe4\x93\x020*./v1/volumes/{volume}/snapshots/{snapshot_name}\x12\x8d\x01\n" +
+	"\x0fRestoreSnapshot\x12\x1a.v1.RestoreSnapshotRequest\x1a\x1b.v1.RestoreSnapshotResponse\"A\x82\xd3\xe4\x93\x02;:\x01*\"6/v1/volumes/{volume}/snapshots/{snapshot_name}/restore\x12l\n" +
+	"\rListSnapshots\x12\x18.v1.ListSnapshotsRequest\x1a\x19.v1.ListSnapshotsResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/volumes/{volume}/snapshots\x12j\n" +
+	"\x10CreateNFSGateway\x12\x1b.v1.CreateNFSGatewayRequest\x1a\x1c.v1.CreateNFSGatewayResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/gateways/nfs\x12r\n" +
+	"\x12CreateISCSIGateway\x12\x1d.v1.CreateISCSIGatewayRequest\x1a\x1e.v1.CreateISCSIGatewayResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/gateways/iscsi\x12n\n" +
+	"\x11CreateNVMeGateway\x12\x1c.v1.CreateNVMeGatewayRequest\x1a\x1d.v1.CreateNVMeGatewayResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/v1/gateways/nvme\x12_\n" +
+	"\rDeleteGateway\x12\x18.v1.DeleteGatewayRequest\x1a\x19.v1.DeleteGatewayResponse\"\x19\x82\xd3\xe4\x93\x02\x13*\x11/v1/gateways/{id}\x12V\n" +
 	"\n" +
-	"GetGateway\x12\x15.v1.GetGatewayRequest\x1a\x16.v1.GetGatewayResponse\x12A\n" +
-	"\fListGateways\x12\x17.v1.ListGatewaysRequest\x1a\x18.v1.ListGatewaysResponse\x12A\n" +
-	"\fStartGateway\x12\x17.v1.StartGatewayRequest\x1a\x18.v1.StartGatewayResponse\x12>\n" +
-	"\vStopGateway\x12\x16.v1.StopGatewayRequest\x1a\x17.v1.StopGatewayResponse\x12D\n" +
-	"\rCreateZFSPool\x12\x18.v1.CreateZFSPoolRequest\x1a\x19.v1.CreateZFSPoolResponse\x12D\n" +
-	"\rDeleteZFSPool\x12\x18.v1.DeleteZFSPoolRequest\x1a\x19.v1.DeleteZFSPoolResponse\x12A\n" +
-	"\fListZFSpools\x12\x17.v1.ListZFSPoolsRequest\x1a\x18.v1.ListZFSPoolsResponse\x12M\n" +
-	"\x10CreateZFSDataset\x12\x1b.v1.CreateZFSDatasetRequest\x1a\x1c.v1.CreateZFSDatasetResponse\x12J\n" +
-	"\x0fCreateZFSVolume\x12\x1a.v1.CreateZFSVolumeRequest\x1a\x1b.v1.CreateZFSVolumeResponse\x12J\n" +
-	"\x0fResizeZFSVolume\x12\x1a.v1.ResizeZFSVolumeRequest\x1a\x1b.v1.ResizeZFSVolumeResponse\x12M\n" +
-	"\x10DeleteZFSDataset\x12\x1b.v1.DeleteZFSDatasetRequest\x1a\x1c.v1.DeleteZFSDatasetResponse\x12P\n" +
-	"\x11CreateZFSSnapshot\x12\x1c.v1.CreateZFSSnapshotRequest\x1a\x1d.v1.CreateZFSSnapshotResponse\x12P\n" +
-	"\x11DeleteZFSSnapshot\x12\x1c.v1.DeleteZFSSnapshotRequest\x1a\x1d.v1.DeleteZFSSnapshotResponse\x12M\n" +
-	"\x10ListZFSSnapshots\x12\x1b.v1.ListZFSSnapshotsRequest\x1a\x1c.v1.ListZFSSnapshotsResponse\x12S\n" +
-	"\x12RestoreZFSSnapshot\x12\x1d.v1.RestoreZFSSnapshotRequest\x1a\x1e.v1.RestoreZFSSnapshotResponse\x12M\n" +
-	"\x10CloneZFSSnapshot\x12\x1b.v1.CloneZFSSnapshotRequest\x1a\x1c.v1.CloneZFSSnapshotResponse\x12P\n" +
-	"\x11CreateLvmSnapshot\x12\x1c.v1.CreateLvmSnapshotRequest\x1a\x1d.v1.CreateLvmSnapshotResponse\x12P\n" +
-	"\x11DeleteLvmSnapshot\x12\x1c.v1.DeleteLvmSnapshotRequest\x1a\x1d.v1.DeleteLvmSnapshotResponse\x12M\n" +
-	"\x10ListLvmSnapshots\x12\x1b.v1.ListLvmSnapshotsRequest\x1a\x1c.v1.ListLvmSnapshotsResponse\x12S\n" +
-	"\x12RestoreLvmSnapshot\x12\x1d.v1.RestoreLvmSnapshotRequest\x1a\x1e.v1.RestoreLvmSnapshotResponseB\aZ\x05./;v1b\x06proto3"
+	"GetGateway\x12\x15.v1.GetGatewayRequest\x1a\x16.v1.GetGatewayResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/gateways/{id}\x12W\n" +
+	"\fListGateways\x12\x17.v1.ListGatewaysRequest\x1a\x18.v1.ListGatewaysResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/gateways\x12e\n" +
+	"\fStartGateway\x12\x17.v1.StartGatewayRequest\x1a\x18.v1.StartGatewayResponse\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/v1/gateways/{id}/start\x12a\n" +
+	"\vStopGateway\x12\x16.v1.StopGatewayRequest\x1a\x17.v1.StopGatewayResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/gateways/{id}/stop\x12^\n" +
+	"\rCreateZFSPool\x12\x18.v1.CreateZFSPoolRequest\x1a\x19.v1.CreateZFSPoolResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/zfs/pools\x12b\n" +
+	"\rDeleteZFSPool\x12\x18.v1.DeleteZFSPoolRequest\x1a\x19.v1.DeleteZFSPoolResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/v1/zfs/pools/{name}\x12A\n" +
+	"\fListZFSpools\x12\x17.v1.ListZFSPoolsRequest\x1a\x18.v1.ListZFSPoolsResponse\x12j\n" +
+	"\x10CreateZFSDataset\x12\x1b.v1.CreateZFSDatasetRequest\x1a\x1c.v1.CreateZFSDatasetResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/zfs/datasets\x12f\n" +
+	"\x0fCreateZFSVolume\x12\x1a.v1.CreateZFSVolumeRequest\x1a\x1b.v1.CreateZFSVolumeResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/zfs/volumes\x12t\n" +
+	"\x0fResizeZFSVolume\x12\x1a.v1.ResizeZFSVolumeRequest\x1a\x1b.v1.ResizeZFSVolumeResponse\"(\x82\xd3\xe4\x93\x02\":\x01*2\x1d/v1/zfs/volumes/{volume_path}\x12v\n" +
+	"\x10DeleteZFSDataset\x12\x1b.v1.DeleteZFSDatasetRequest\x1a\x1c.v1.DeleteZFSDatasetResponse\"'\x82\xd3\xe4\x93\x02!*\x1f/v1/zfs/datasets/{dataset_path}\x12\x81\x01\n" +
+	"\x11CreateZFSSnapshot\x12\x1c.v1.CreateZFSSnapshotRequest\x1a\x1d.v1.CreateZFSSnapshotResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/v1/zfs/datasets/{dataset}/snapshots\x12v\n" +
+	"\x11DeleteZFSSnapshot\x12\x1c.v1.DeleteZFSSnapshotRequest\x1a\x1d.v1.DeleteZFSSnapshotResponse\"$\x82\xd3\xe4\x93\x02\x1e*\x1c/v1/zfs/snapshots/{snapshot}\x12{\n" +
+	"\x10ListZFSSnapshots\x12\x1b.v1.ListZFSSnapshotsRequest\x1a\x1c.v1.ListZFSSnapshotsResponse\",\x82\xd3\xe4\x93\x02&\x12$/v1/zfs/datasets/{dataset}/snapshots\x12\x9c\x01\n" +
+	"\x12RestoreZFSSnapshot\x12\x1d.v1.RestoreZFSSnapshotRequest\x1a\x1e.v1.RestoreZFSSnapshotResponse\"G\x82\xd3\xe4\x93\x02A:\x01*\"</v1/zfs/datasets/{dataset}/snapshots/{snapshot_name}/restore\x12|\n" +
+	"\x10CloneZFSSnapshot\x12\x1b.v1.CloneZFSSnapshotRequest\x1a\x1c.v1.CloneZFSSnapshotResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/zfs/snapshots/{snapshot}/clone\x12\x80\x01\n" +
+	"\x11CreateLvmSnapshot\x12\x1c.v1.CreateLvmSnapshotRequest\x1a\x1d.v1.CreateLvmSnapshotResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/v1/lvm/volumes/{lv_name}/snapshots\x12\x8d\x01\n" +
+	"\x11DeleteLvmSnapshot\x12\x1c.v1.DeleteLvmSnapshotRequest\x1a\x1d.v1.DeleteLvmSnapshotResponse\";\x82\xd3\xe4\x93\x025*3/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}\x12z\n" +
+	"\x10ListLvmSnapshots\x12\x1b.v1.ListLvmSnapshotsRequest\x1a\x1c.v1.ListLvmSnapshotsResponse\"+\x82\xd3\xe4\x93\x02%\x12#/v1/lvm/volumes/{lv_name}/snapshots\x12\x9b\x01\n" +
+	"\x12RestoreLvmSnapshot\x12\x1d.v1.RestoreLvmSnapshotRequest\x1a\x1e.v1.RestoreLvmSnapshotResponse\"F\x82\xd3\xe4\x93\x02@:\x01*\";/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}/restoreB\aZ\x05./;v1b\x06proto3"
 
 var (
 	file_api_proto_v1_sds_proto_rawDescOnce sync.Once
