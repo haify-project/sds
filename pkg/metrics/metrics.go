@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -47,12 +48,6 @@ type Metrics struct {
 
 	// Up gauge indicates the instance is available (always 1)
 	up prometheus.Gauge
-
-	// Go runtime metrics
-	goRuntimeMetrics *prometheus.CounterVec
-
-	// Process metrics
-	processMetrics *prometheus.GaugeVec
 
 	mu sync.Mutex
 }
@@ -165,8 +160,8 @@ func New(logger *zap.Logger) (*Metrics, error) {
 	m.up.Set(1)
 
 	// Register Go and process collectors with the custom registry
-	m.registry.MustRegister(prometheus.NewGoCollector())
-	m.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	m.registry.MustRegister(collectors.NewGoCollector())
+	m.registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	logger.Info("Prometheus metrics initialized")
 	return m, nil

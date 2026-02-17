@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"net"
@@ -106,7 +107,7 @@ func (s *UIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		contentType = "image/svg+xml"
 	}
 	w.Header().Set("Content-Type", contentType)
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // Start starts the UI server in a goroutine
@@ -127,7 +128,7 @@ func (s *UIServer) Start() error {
 }
 
 // Shutdown stops the UI server
-func (s *UIServer) Shutdown() error {
+func (s *UIServer) Shutdown(ctx context.Context) error {
 	s.logger.Info("Stopping UI server")
-	return s.server.Close()
+	return s.server.Shutdown(ctx)
 }

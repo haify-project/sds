@@ -167,8 +167,8 @@ func nodeRegister() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., orange1)")
 	cmd.Flags().StringVar(&address, "address", "", "Node IP address (e.g., 192.168.1.10)")
 
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("address")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("address")
 
 	return cmd
 }
@@ -207,7 +207,7 @@ This removes the node from the database but does not affect the node itself.`,
 	}
 
 	cmd.Flags().StringVar(&address, "address", "", "Node address (IP:port)")
-	cmd.MarkFlagRequired("address")
+	_ = cmd.MarkFlagRequired("address")
 
 	return cmd
 }

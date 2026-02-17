@@ -142,10 +142,10 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required)")
 	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
 
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("port")
-	cmd.MarkFlagRequired("nodes")
-	cmd.MarkFlagRequired("size")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("port")
+	_ = cmd.MarkFlagRequired("nodes")
+	_ = cmd.MarkFlagRequired("size")
 
 	return cmd
 }
@@ -608,7 +608,7 @@ func resourceMount() *cobra.Command {
 
 	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
 	cmd.Flags().StringVar(&fstype, "fstype", "ext4", "Filesystem type")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -648,7 +648,7 @@ func resourceUnmount() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -800,9 +800,9 @@ func resourceSnapshotDelete() *cobra.Command {
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
 	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -874,9 +874,9 @@ func resourceSnapshotCreate() *cobra.Command {
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
 	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -957,8 +957,8 @@ func resourceSnapshotList() *cobra.Command {
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
 	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -1025,9 +1025,9 @@ func resourceSnapshotRestore() *cobra.Command {
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
 	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }

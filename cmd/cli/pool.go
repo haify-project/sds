@@ -177,8 +177,8 @@ func poolDelete() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Pool name")
 	cmd.Flags().StringVar(&node, "node", "", "Node where the pool exists")
 
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }

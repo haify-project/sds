@@ -10,9 +10,8 @@ import (
 
 // TableModel represents the table UI model
 type TableModel struct {
-	table  table.Model
-	ready  bool
-	quit   bool
+	table table.Model
+	quit  bool
 }
 
 // TableOption is a function that configures the table

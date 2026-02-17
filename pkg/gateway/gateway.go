@@ -172,7 +172,9 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 		// 1. Stop drbd-reactor services for this gateway
 		escapedID := strings.ReplaceAll(id, "-", "\\x2d")
 		stopCmd := fmt.Sprintf("systemctl stop drbd-services@%s.target 2>/dev/null || true", escapedID)
-		m.deployment.Exec(ctx, []string{host}, stopCmd)
+		if err := m.deployment.Exec(ctx, []string{host}, stopCmd); err != nil {
+			m.logger.Warn("Failed to stop gateway services", zap.String("host", host), zap.Error(err))
+		}
 
 		// 2. Delete reactor config files (all types: nfs, iscsi, nvmeof)
 		configFiles := []string{
@@ -184,11 +186,15 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 		for _, configFile := range configFiles {
 			configPath := filepath.Join(DrbdReactorConfigDir, configFile)
 			rmCmd := fmt.Sprintf("sudo rm -f %s", configPath)
-			m.deployment.Exec(ctx, []string{host}, rmCmd)
+			if err := m.deployment.Exec(ctx, []string{host}, rmCmd); err != nil {
+				m.logger.Warn("Failed to remove config file", zap.String("host", host), zap.String("file", configPath), zap.Error(err))
+			}
 		}
 
 		// 3. Reload drbd-reactor to pick up changes
-		m.deployment.Exec(ctx, []string{host}, "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor")
+		if err := m.deployment.Exec(ctx, []string{host}, "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor"); err != nil {
+			m.logger.Warn("Failed to reload drbd-reactor", zap.String("host", host), zap.Error(err))
+		}
 	}
 
 	m.logger.Info("Gateway deleted successfully", zap.String("id", id))
@@ -298,7 +304,9 @@ func parseDeviceMinorFromConfig(configContent string) int {
 			if inVolumeBlock && deviceMinor != "" {
 				// Found it
 				var minor int
-				fmt.Sscanf(deviceMinor, "%d", &minor)
+				if _, err := fmt.Sscanf(deviceMinor, "%d", &minor); err != nil {
+					return -1
+				}
 				return minor
 			}
 			inVolumeBlock = false
@@ -328,7 +336,10 @@ func getDRBDDeviceForVolume(baseDevice string, volumeNumber int) string {
 	// Extract minor number from base device (e.g., /dev/drbd0 -> 0)
 	minor := 0
 	if strings.HasPrefix(baseDevice, "/dev/drbd") {
-		fmt.Sscanf(baseDevice, "/dev/drbd%d", &minor)
+		if _, err := fmt.Sscanf(baseDevice, "/dev/drbd%d", &minor); err != nil {
+			// If parsing fails, return the base device
+			return baseDevice
+		}
 	}
 	return fmt.Sprintf("/dev/drbd%d", minor+volumeNumber)
 }

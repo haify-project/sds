@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"go.uber.org/zap"
 )
@@ -21,7 +20,6 @@ type SnapshotInfo struct {
 // SnapshotManager manages volume snapshots
 type SnapshotManager struct {
 	controller *Controller
-	mu         sync.RWMutex
 }
 
 // NewSnapshotManager creates a new snapshot manager

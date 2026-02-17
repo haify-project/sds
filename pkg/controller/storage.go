@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"go.uber.org/zap"
 	"github.com/liliang-cn/sds/pkg/deployment"
@@ -26,7 +25,6 @@ type PoolInfo struct {
 // StorageManager manages all storage operations
 type StorageManager struct {
 	controller *Controller
-	mu         sync.RWMutex
 }
 
 // NewStorageManager creates a new storage manager

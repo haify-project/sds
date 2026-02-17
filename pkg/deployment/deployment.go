@@ -288,15 +288,6 @@ func isLocalHost(host string) bool {
 	return false
 }
 
-// availableHostKeys returns the keys from the copy result hosts map for debugging
-func availableHostKeys(hosts map[string]*dispatch.CopyHostResult) []string {
-	var keys []string
-	for k := range hosts {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 // DeleteConfig removes a config file from all nodes
 func (c *Client) DeleteConfig(ctx context.Context, hosts []string, remotePath string) error {
 	c.logger.Info("Deleting config", zap.String("path", remotePath))

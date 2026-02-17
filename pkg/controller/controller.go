@@ -234,7 +234,11 @@ func (c *Controller) Stop() {
 
 	// Stop UI server
 	if c.uiServer != nil {
-		c.uiServer.Shutdown()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := c.uiServer.Shutdown(ctx); err != nil {
+			c.logger.Error("Failed to shutdown UI server", zap.Error(err))
+		}
 	}
 
 	c.logger.Info("SDS controller stopped")
@@ -348,7 +352,7 @@ func corsMiddleware(h http.Handler) http.Handler {
 		if r.Header.Get("Upgrade") == "h2c" || r.ProtoMajor == 2 {
 			w.Header().Set("Connection", "close")
 			w.WriteHeader(http.StatusHTTPVersionNotSupported)
-			w.Write([]byte("HTTP/2 not supported, use HTTP/1.1"))
+			_, _ = w.Write([]byte("HTTP/2 not supported, use HTTP/1.1"))
 			return
 		}
 

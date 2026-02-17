@@ -412,7 +412,9 @@ func parsePortal(portal string) (string, int, error) {
 
 	port := 3260 // default iSCSI port
 	if portStr != "" {
-		fmt.Sscanf(portStr, "%d", &port)
+		if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+			return "", 0, fmt.Errorf("invalid port number: %s", portStr)
+		}
 	}
 
 	return host, port, nil

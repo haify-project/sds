@@ -15,9 +15,7 @@ import (
 
 // GatewayServer wraps the gRPC-Gateway HTTP server
 type GatewayServer struct {
-	server     *http.Server
 	grpcAddr   string
-	httpAddr   string
 	port       int
 	grpcServer *grpc.Server
 	logger     *zap.Logger

@@ -111,9 +111,9 @@ func iscsiCreate() *cobra.Command {
 	cmd.Flags().StringVar(&password, "password", "", "CHAP password")
 	cmd.Flags().StringVar(&implementation, "implementation", "lio", "iSCSI implementation (lio, tgt, iet)")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("iqn")
-	cmd.MarkFlagRequired("service-ip")
+	_ = cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("iqn")
+	_ = cmd.MarkFlagRequired("service-ip")
 
 	return cmd
 }
@@ -247,9 +247,9 @@ func nfsCreate() *cobra.Command {
 	cmd.Flags().StringSliceVar(&allowedIPs, "allowed-ips", []string{}, "Allowed client IPs (e.g., 192.168.1.0/24)")
 	cmd.Flags().StringVar(&fsType, "fs-type", "ext4", "Filesystem type (ext4, xfs)")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("service-ip")
-	cmd.MarkFlagRequired("export-path")
+	_ = cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("service-ip")
+	_ = cmd.MarkFlagRequired("export-path")
 
 	return cmd
 }
@@ -379,9 +379,9 @@ func nvmeCreate() *cobra.Command {
 	cmd.Flags().StringVar(&serviceIP, "service-ip", "", "Service IP (e.g., 192.168.1.150/24)")
 	cmd.Flags().StringVar(&transportType, "transport", "tcp", "Transport type (tcp, rdma)")
 
-	cmd.MarkFlagRequired("resource")
-	cmd.MarkFlagRequired("nqn")
-	cmd.MarkFlagRequired("service-ip")
+	_ = cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("nqn")
+	_ = cmd.MarkFlagRequired("service-ip")
 
 	return cmd
 }
@@ -510,7 +510,7 @@ func gatewayDelete() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
-	cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("resource")
 
 	return cmd
 }
@@ -548,7 +548,7 @@ This is typically handled automatically by drbd-reactor.`,
 	}
 
 	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
-	cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("resource")
 
 	return cmd
 }
@@ -586,7 +586,7 @@ This is typically handled automatically by drbd-reactor.`,
 	}
 
 	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
-	cmd.MarkFlagRequired("resource")
+	_ = cmd.MarkFlagRequired("resource")
 
 	return cmd
 }

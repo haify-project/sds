@@ -4,7 +4,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"time"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"google.golang.org/grpc"
@@ -20,12 +19,8 @@ type SDSClient struct {
 
 // NewSDSClient creates a new SDS controller client
 func NewSDSClient(addr string) (*SDSClient, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, addr,
+	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to SDS controller at %s: %w", addr, err)
@@ -66,7 +61,7 @@ func (c *SDSClient) CreatePool(ctx context.Context, name, poolType, node string,
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -85,7 +80,7 @@ func (c *SDSClient) GetPool(ctx context.Context, name, node string) (*sdspb.Pool
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Pool, nil
@@ -101,7 +96,7 @@ func (c *SDSClient) ListPools(ctx context.Context) ([]*sdspb.PoolInfo, error) {
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Pools, nil
@@ -121,7 +116,7 @@ func (c *SDSClient) AddDiskToPool(ctx context.Context, pool, disk, node string) 
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -140,7 +135,7 @@ func (c *SDSClient) DeletePool(ctx context.Context, pool, node string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -161,7 +156,7 @@ func (c *SDSClient) RegisterNode(ctx context.Context, name, address string) (*sd
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Node, nil
@@ -177,7 +172,7 @@ func (c *SDSClient) ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error) {
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Nodes, nil
@@ -195,7 +190,7 @@ func (c *SDSClient) UnregisterNode(ctx context.Context, address string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -213,7 +208,7 @@ func (c *SDSClient) HealthCheck(ctx context.Context, node string) (*NodeHealthIn
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return &NodeHealthInfo{
@@ -269,7 +264,7 @@ func (c *SDSClient) CreateResourceWithPoolAndType(ctx context.Context, name stri
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -292,7 +287,7 @@ func (c *SDSClient) GetResource(ctx context.Context, name string) (*sdspb.Resour
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Resource, nil
@@ -308,7 +303,7 @@ func (c *SDSClient) ListResources(ctx context.Context) ([]*sdspb.ResourceInfo, e
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Resources, nil
@@ -328,7 +323,7 @@ func (c *SDSClient) SetPrimary(ctx context.Context, resource, node string, force
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -346,7 +341,7 @@ func (c *SDSClient) DeleteResource(ctx context.Context, name string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -367,7 +362,7 @@ func (c *SDSClient) AddVolume(ctx context.Context, resource, volume, pool string
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -386,7 +381,7 @@ func (c *SDSClient) RemoveVolume(ctx context.Context, resource string, volumeID 
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -406,7 +401,7 @@ func (c *SDSClient) ResizeVolume(ctx context.Context, resource string, volumeID 
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -424,7 +419,7 @@ func (c *SDSClient) ResourceStatus(ctx context.Context, name string) (*sdspb.Res
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Status, nil
@@ -443,7 +438,7 @@ func (c *SDSClient) SetSecondary(ctx context.Context, resource, node string) err
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -464,7 +459,7 @@ func (c *SDSClient) CreateFilesystem(ctx context.Context, resource string, volum
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -486,7 +481,7 @@ func (c *SDSClient) MountResource(ctx context.Context, resource string, volumeID
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -506,7 +501,7 @@ func (c *SDSClient) UnmountResource(ctx context.Context, resource string, volume
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -528,7 +523,7 @@ func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []stri
 	}
 
 	if !resp.Success {
-		return "", fmt.Errorf(resp.Message)
+		return "", fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.ConfigPath, nil
@@ -546,7 +541,7 @@ func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -564,7 +559,7 @@ func (c *SDSClient) DeleteHa(ctx context.Context, resource string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -582,7 +577,7 @@ func (c *SDSClient) GetHa(ctx context.Context, resource string) (*sdspb.HaConfig
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Config, nil
@@ -598,7 +593,7 @@ func (c *SDSClient) ListHa(ctx context.Context) ([]*sdspb.HaConfigInfo, error) {
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Configs, nil
@@ -620,7 +615,7 @@ func (c *SDSClient) CreateSnapshot(ctx context.Context, volume, snapshotName, no
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -640,7 +635,7 @@ func (c *SDSClient) DeleteSnapshot(ctx context.Context, volume, snapshotName, no
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -659,7 +654,7 @@ func (c *SDSClient) ListSnapshots(ctx context.Context, volume, node string) ([]*
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Snapshots, nil
@@ -679,7 +674,7 @@ func (c *SDSClient) RestoreSnapshot(ctx context.Context, volume, snapshotName, n
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -695,7 +690,7 @@ func (c *SDSClient) CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGa
 	}
 
 	if !resp.Success {
-		return resp, fmt.Errorf(resp.Message)
+		return resp, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp, nil
@@ -709,7 +704,7 @@ func (c *SDSClient) CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISC
 	}
 
 	if !resp.Success {
-		return resp, fmt.Errorf(resp.Message)
+		return resp, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp, nil
@@ -723,7 +718,7 @@ func (c *SDSClient) CreateNVMeGateway(ctx context.Context, req *sdspb.CreateNVMe
 	}
 
 	if !resp.Success {
-		return resp, fmt.Errorf(resp.Message)
+		return resp, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp, nil
@@ -739,7 +734,7 @@ func (c *SDSClient) ListGateways(ctx context.Context) ([]*sdspb.GatewayInfo, err
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Gateways, nil
@@ -757,7 +752,7 @@ func (c *SDSClient) StartGateway(ctx context.Context, id string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -775,7 +770,7 @@ func (c *SDSClient) StopGateway(ctx context.Context, id string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -793,7 +788,7 @@ func (c *SDSClient) DeleteGateway(ctx context.Context, id string) error {
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -816,7 +811,7 @@ func (c *SDSClient) CreateZFSPool(ctx context.Context, name, node string, vdevs 
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -835,7 +830,7 @@ func (c *SDSClient) DeleteZFSPool(ctx context.Context, name, node string) error 
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -851,7 +846,7 @@ func (c *SDSClient) ListZFSpools(ctx context.Context) ([]*sdspb.PoolInfo, error)
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Pools, nil
@@ -870,7 +865,7 @@ func (c *SDSClient) CreateZFSDataset(ctx context.Context, datasetPath, node stri
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -889,7 +884,7 @@ func (c *SDSClient) DeleteZFSDataset(ctx context.Context, datasetPath, node stri
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -910,7 +905,7 @@ func (c *SDSClient) CreateZFSVolume(ctx context.Context, poolName, volumeName, s
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -930,7 +925,7 @@ func (c *SDSClient) ResizeZFSVolume(ctx context.Context, volumePath, newSize, no
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -952,7 +947,7 @@ func (c *SDSClient) CreateZFSSnapshot(ctx context.Context, dataset, snapshotName
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -971,7 +966,7 @@ func (c *SDSClient) DeleteZFSSnapshot(ctx context.Context, snapshot, node string
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -990,7 +985,7 @@ func (c *SDSClient) ListZFSSnapshots(ctx context.Context, dataset, node string) 
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Snapshots, nil
@@ -1010,7 +1005,7 @@ func (c *SDSClient) RestoreZFSSnapshot(ctx context.Context, dataset, snapshotNam
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -1030,7 +1025,7 @@ func (c *SDSClient) CloneZFSSnapshot(ctx context.Context, snapshot, clonePath, n
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -1054,7 +1049,7 @@ func (c *SDSClient) CreateLvmSnapshot(ctx context.Context, pool, lvName, snapsho
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -1074,7 +1069,7 @@ func (c *SDSClient) DeleteLvmSnapshot(ctx context.Context, pool, snapshotName, n
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil
@@ -1093,7 +1088,7 @@ func (c *SDSClient) ListLvmSnapshots(ctx context.Context, pool, node string) ([]
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf("%s", resp.Message)
 	}
 
 	return resp.Snapshots, nil
@@ -1113,7 +1108,7 @@ func (c *SDSClient) RestoreLvmSnapshot(ctx context.Context, pool, snapshotName, 
 	}
 
 	if !resp.Success {
-		return fmt.Errorf(resp.Message)
+		return fmt.Errorf("%s", resp.Message)
 	}
 
 	return nil

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -754,49 +753,6 @@ func (rm *ResourceManager) SetSecondary(ctx context.Context, resource, node stri
 	}
 
 	return nil
-}
-
-// parseDrbdConfig parses DRBD config file to get port and protocol
-func (rm *ResourceManager) parseDrbdConfig(ctx context.Context, name, node string) (uint32, string, error) {
-	if rm.deployment == nil {
-		return 0, "", fmt.Errorf("deployment client not set")
-	}
-
-	result, err := rm.deployment.Exec(ctx, []string{node}, fmt.Sprintf("cat /etc/drbd.d/%s.res", name))
-	if err != nil {
-		return 0, "", err
-	}
-
-	var hostResult *deployment.HostResult
-	for _, r := range result.Hosts {
-		hostResult = r
-		break
-	}
-
-	if hostResult == nil || !hostResult.Success {
-		return 0, "", fmt.Errorf("failed to read config")
-	}
-
-	output := hostResult.Output
-
-	// Parse port
-	portRe := regexp.MustCompile(`address\s+[\d.]+:(\d+)`)
-	portMatches := portRe.FindStringSubmatch(output)
-	var port uint32
-	if len(portMatches) > 1 {
-		p, _ := strconv.ParseUint(portMatches[1], 10, 32)
-		port = uint32(p)
-	}
-
-	// Parse protocol
-	protocolRe := regexp.MustCompile(`protocol\s+(\w+)`)
-	protocolMatches := protocolRe.FindStringSubmatch(output)
-	protocol := "C" // default
-	if len(protocolMatches) > 1 {
-		protocol = protocolMatches[1]
-	}
-
-	return port, protocol, nil
 }
 
 // RemoveVolume removes a volume from a DRBD resource
@@ -1752,49 +1708,4 @@ func parseVolumesFromStatus(output string) []volumeInfo {
 	}
 
 	return volumes
-}
-
-func parseResourcesFromStatus(output string) []*ResourceInfo {
-	lines := strings.Split(output, "\n")
-	resources := make(map[string]*ResourceInfo)
-
-	currentResource := ""
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-
-		// Resource line (without role)
-		if !strings.Contains(trimmed, "role:") && !strings.Contains(trimmed, "volume:") &&
-			!strings.HasPrefix(trimmed, "on ") && !strings.HasPrefix(trimmed, "connection-") {
-			// This is likely a resource name
-			currentResource = trimmed
-			if resources[currentResource] == nil {
-				resources[currentResource] = &ResourceInfo{
-					Name:     currentResource,
-					Volumes:  []*ResourceVolumeInfo{},
-					Role:     "Unknown",
-					NodeStates: make(map[string]*ResourceNodeState),
-				}
-			}
-		}
-
-		// Role line
-		if strings.Contains(trimmed, "role:") && currentResource != "" {
-			parts := strings.Fields(trimmed)
-			if len(parts) >= 2 {
-				resources[currentResource].Role = strings.TrimSuffix(parts[1], ",")
-			}
-		}
-	}
-
-	// Convert map to slice
-	result := make([]*ResourceInfo, 0, len(resources))
-	for _, r := range resources {
-		result = append(result, r)
-	}
-
-	return result
 }
