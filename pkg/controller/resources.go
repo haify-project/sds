@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -250,6 +251,81 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	return nil
 }
 
+// resolveToIP resolves a hostname to an IP address. If the input is already
+// an IP address, it returns it unchanged. If resolution fails or returns a
+// loopback address, it tries to find a non-loopback IP from network interfaces.
+func resolveToIP(host string) string {
+	// Check if it's already an IP address
+	if ip := net.ParseIP(host); ip != nil {
+		if !ip.IsLoopback() {
+			return host
+		}
+		// If it's a loopback IP, try to find a real IP
+		return getFirstNonLoopbackIP()
+	}
+
+	// Try to resolve hostname to IP
+	addrs, err := net.LookupHost(host)
+	if err != nil || len(addrs) == 0 {
+		return getFirstNonLoopbackIP()
+	}
+
+	// Prefer non-loopback IPv4 addresses
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+			return addr
+		}
+	}
+
+	// Fall back to first non-loopback address
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip != nil && !ip.IsLoopback() {
+			return addr
+		}
+	}
+
+	// If all resolved addresses are loopback, get IP from interfaces
+	return getFirstNonLoopbackIP()
+}
+
+// getFirstNonLoopbackIP returns the first non-loopback IPv4 address from network interfaces
+func getFirstNonLoopbackIP() string {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "127.0.0.1"
+	}
+
+	for _, iface := range interfaces {
+		// Skip loopback and down interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+				return ip.String()
+			}
+		}
+	}
+
+	return "127.0.0.1"
+}
+
 // generateDrbdConfig generates a DRBD resource configuration file
 func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []string, protocol, pool, volumeName, storageType string, options map[string]string) string {
 	var config strings.Builder
@@ -389,7 +465,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 	config.WriteString("    }\n")
 
 	// Generate on sections for each node
-	var hostnames []string
+	var nodeIPs []string
 	for i, node := range nodes {
 		// Get IP address from NodeManager by node name
 		ip := rm.controller.nodes.GetNodeAddressByName(node)
@@ -406,19 +482,22 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 			ip = node
 		}
 
-		hostnames = append(hostnames, node)
+		// Resolve hostname to IP address if not already an IP
+		ip = resolveToIP(ip)
+
+		nodeIPs = append(nodeIPs, ip)
 		config.WriteString(fmt.Sprintf("\n    on %s {\n", node))
 		config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
 		config.WriteString(fmt.Sprintf("        node-id   %d;\n", i))
 		config.WriteString("    }\n")
 	}
 
-	// Use connection-mesh for DRBD 9
-	if len(hostnames) > 0 {
+	// Use connection-mesh for DRBD 9 (only for multi-node setups, using IP addresses)
+	if len(nodeIPs) > 1 {
 		config.WriteString("\n    connection-mesh {\n")
 		config.WriteString("        hosts")
-		for _, hostname := range hostnames {
-			config.WriteString(fmt.Sprintf(" %s", hostname))
+		for _, ip := range nodeIPs {
+			config.WriteString(fmt.Sprintf(" %s", ip))
 		}
 		config.WriteString(";\n")
 		config.WriteString("    }\n")
