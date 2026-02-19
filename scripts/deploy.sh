@@ -90,6 +90,14 @@ for host in ${HOSTS//,/ }; do
 
         # Enable and restart service
         ssh "$host" "sudo systemctl enable sds-controller.service && sudo systemctl restart sds-controller.service" 2>/dev/null
+
+        # Enable drbd-reactor auto-reload if drbd-reactor is installed
+        if ssh "$host" "command -v drbd-reactor &>/dev/null" 2>/dev/null; then
+            if [ -f "/usr/share/doc/drbd-reactor/examples/drbd-reactor-reload.path" ]; then
+                log_step "Enabling drbd-reactor auto-reload on $host..."
+                ssh "$host" "sudo cp /usr/share/doc/drbd-reactor/examples/drbd-reactor-reload.{path,service} /etc/systemd/system/ 2>/dev/null; sudo systemctl daemon-reload; sudo systemctl enable --now drbd-reactor-reload.path" 2>/dev/null || true
+            fi
+        fi
     fi
 done
 

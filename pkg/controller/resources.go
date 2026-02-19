@@ -492,12 +492,13 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 		config.WriteString("    }\n")
 	}
 
-	// Use connection-mesh for DRBD 9 (only for multi-node setups, using IP addresses)
-	if len(nodeIPs) > 1 {
+	// Add connection-mesh for multi-node DRBD 9
+	// DRBD 9 requires a full mesh of connections between all nodes
+	if len(nodes) > 2 {
 		config.WriteString("\n    connection-mesh {\n")
 		config.WriteString("        hosts")
-		for _, ip := range nodeIPs {
-			config.WriteString(fmt.Sprintf(" %s", ip))
+		for _, node := range nodes {
+			config.WriteString(fmt.Sprintf(" %s", node))
 		}
 		config.WriteString(";\n")
 		config.WriteString("    }\n")
