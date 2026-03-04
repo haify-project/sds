@@ -2,14 +2,49 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/spf13/cobra"
 )
+
+// ReactorStatus represents the status output from drbd-reactorctl status --json
+type ReactorStatus struct {
+	Promoter  []ReactorPromoterStatus `json:"promoter"`
+	Prometheus []ReactorPluginStatus  `json:"prometheus"`
+	Debugger  []ReactorPluginStatus   `json:"debugger"`
+	UMH       []ReactorPluginStatus   `json:"umh"`
+	AgentX    []ReactorPluginStatus   `json:"agentx"`
+}
+
+// ReactorPromoterStatus represents status of a promoter plugin
+type ReactorPromoterStatus struct {
+	DRBDResource string                 `json:"drbd_resource"`
+	Path         string                 `json:"path"`
+	PrimaryOn    string                 `json:"primary_on"`
+	Target       ReactorServiceStatus   `json:"target"`
+	Dependencies []ReactorServiceStatus `json:"dependencies"`
+	Status       string                 `json:"status"`
+}
+
+// ReactorServiceStatus represents status of a systemd service
+type ReactorServiceStatus struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Freezer string `json:"freezer"`
+}
+
+// ReactorPluginStatus represents status of a generic reactor plugin
+type ReactorPluginStatus struct {
+	Path    string `json:"path"`
+	Address string `json:"address,omitempty"`
+	Status  string `json:"status"`
+}
 
 func haCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -134,18 +169,52 @@ func haList() *cobra.Command {
 				return nil
 			}
 
+			// Get reactor status for all promoters
+			reactorStatus, err := getReactorStatus()
+			if err != nil {
+				fmt.Printf("Warning: could not get reactor status: %v\n\n", err)
+				reactorStatus = &ReactorStatus{}
+			}
+
+			// Build a map of resource -> promoter status
+			promoterMap := make(map[string]*ReactorPromoterStatus)
+			for i := range reactorStatus.Promoter {
+				p := &reactorStatus.Promoter[i]
+				promoterMap[p.DRBDResource] = p
+			}
+
 			fmt.Printf("HA Configurations (%d):\n", len(configFiles))
 			for _, cfg := range configFiles {
 				fmt.Printf("  - %s\n", cfg.Resource)
+
+				// Show reactor status if available
+				if promoter, ok := promoterMap[cfg.Resource]; ok {
+					icon := statusIcon(promoter.Status)
+					fmt.Printf("      Status:    %s %s\n", icon, promoter.Status)
+					if promoter.PrimaryOn != "" {
+						fmt.Printf("      Primary:   %s\n", promoter.PrimaryOn)
+					}
+				}
+
 				if cfg.MountPoint != "" {
-					fmt.Printf("      Mount: %s (%s)\n", cfg.MountPoint, cfg.FSType)
+					fmt.Printf("      Mount:     %s (%s)\n", cfg.MountPoint, cfg.FSType)
 				}
 				if len(cfg.Services) > 0 {
-					fmt.Printf("      Services: %v\n", cfg.Services)
+					// Filter out internal services for cleaner display
+					var userServices []string
+					for _, svc := range cfg.Services {
+						if !strings.HasPrefix(svc, "drbd-") && !strings.HasPrefix(svc, "service-ip@") {
+							userServices = append(userServices, svc)
+						}
+					}
+					if len(userServices) > 0 {
+						fmt.Printf("      Services:  %v\n", userServices)
+					}
 				}
 				if cfg.VIP != "" {
-					fmt.Printf("      VIP: %s\n", cfg.VIP)
+					fmt.Printf("      VIP:       %s\n", cfg.VIP)
 				}
+				fmt.Println()
 			}
 
 			return nil
@@ -169,23 +238,54 @@ func haStatus() *cobra.Command {
 				return fmt.Errorf("failed to read HA config: %w", err)
 			}
 
+			// Get reactor status
+			promoter, err := getReactorPromoterStatus(resource)
+
 			fmt.Printf("HA Configuration: %s\n", resource)
-			fmt.Printf("  Config:    %s\n", configPath)
-			if cfg.MountPoint != "" {
-				fmt.Printf("  Mount:     %s (%s)\n", cfg.MountPoint, cfg.FSType)
-				fmt.Printf("  Mount Unit: %s.mount\n", strings.TrimPrefix(strings.ReplaceAll(cfg.MountPoint, "/", "-"), "/"))
+			fmt.Printf("  Config:  %s\n", configPath)
+
+			// Show reactor status
+			if err == nil && promoter != nil {
+				icon := statusIcon(promoter.Status)
+				fmt.Printf("  Status:  %s %s\n", icon, promoter.Status)
+				if promoter.PrimaryOn != "" {
+					fmt.Printf("  Active:  %s\n", promoter.PrimaryOn)
+				}
+			} else {
+				fmt.Printf("  Status:  (unable to get reactor status)\n")
 			}
-			if len(cfg.Services) > 0 {
-				fmt.Printf("  Services:  %v\n", cfg.Services)
+
+			if cfg.MountPoint != "" {
+				fmt.Printf("  Mount:   %s (%s)\n", cfg.MountPoint, cfg.FSType)
 			}
 			if cfg.VIP != "" {
-				fmt.Printf("  VIP:       %s\n", cfg.VIP)
+				fmt.Printf("  VIP:     %s\n", cfg.VIP)
 			}
-			fmt.Printf("  Nodes:     %v\n", cfg.Nodes)
+			if len(cfg.Services) > 0 {
+				// Show user services (filter internal ones)
+				var userServices []string
+				for _, svc := range cfg.Services {
+					if !strings.HasPrefix(svc, "drbd-") && !strings.HasPrefix(svc, "service-ip@") {
+						userServices = append(userServices, svc)
+					}
+				}
+				if len(userServices) > 0 {
+					fmt.Printf("  Services: %v\n", userServices)
+				}
+			}
 
-			// Show drbd-reactor status
-			fmt.Printf("\nChecking drbd-reactor status...\n")
-			fmt.Printf("Run: drbd-reactorctl status sds-ha-%s.toml\n", resource)
+			// Show detailed service status from reactor
+			if promoter != nil {
+				fmt.Printf("\nServices:\n")
+				fmt.Printf("  %s %s\n", statusIcon(promoter.Target.Status), promoter.Target.Name)
+				for i, dep := range promoter.Dependencies {
+					prefix := "├─"
+					if i == len(promoter.Dependencies)-1 {
+						prefix = "└─"
+					}
+					fmt.Printf("    %s %s %s\n", statusIcon(dep.Status), prefix, dep.Name)
+				}
+			}
 
 			return nil
 		},
@@ -306,4 +406,50 @@ func readHAConfig(configPath string) (*HAConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// getReactorStatus gets the reactor status using JSON output
+func getReactorStatus() (*ReactorStatus, error) {
+	cmd := exec.Command("sudo", "drbd-reactorctl", "status", "--json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reactor status: %w", err)
+	}
+
+	var status ReactorStatus
+	if err := json.Unmarshal(output, &status); err != nil {
+		return nil, fmt.Errorf("failed to parse reactor status JSON: %w", err)
+	}
+
+	return &status, nil
+}
+
+// getReactorPromoterStatus gets the promoter status for a specific resource
+func getReactorPromoterStatus(resource string) (*ReactorPromoterStatus, error) {
+	status, err := getReactorStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, promoter := range status.Promoter {
+		if promoter.DRBDResource == resource {
+			return &promoter, nil
+		}
+	}
+
+	return nil, fmt.Errorf("promoter status for resource %s not found", resource)
+}
+
+// statusIcon returns a visual indicator for service status
+func statusIcon(status string) string {
+	switch status {
+	case "active":
+		return "●"
+	case "inactive":
+		return "○"
+	case "failed":
+		return "✗"
+	default:
+		return "?"
+	}
 }
