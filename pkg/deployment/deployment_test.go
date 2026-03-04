@@ -2,6 +2,8 @@ package deployment
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -347,6 +349,38 @@ func (m *MockClient) ZFSResizeVolume(ctx context.Context, hosts []string, volume
 
 func (m *MockClient) ReactorReload(ctx context.Context, hosts []string) (*ExecResult, error) {
 	return &ExecResult{}, nil
+}
+
+func (m *MockClient) ReactorStatusJSON(ctx context.Context, host string) (*ReactorStatus, error) {
+	if m.ExecFunc != nil {
+		result, err := m.ExecFunc(ctx, []string{host}, "sudo drbd-reactorctl status --json")
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range result.Hosts {
+			if r.Success {
+				var status ReactorStatus
+				if err := json.Unmarshal([]byte(r.Output), &status); err != nil {
+					return nil, err
+				}
+				return &status, nil
+			}
+		}
+	}
+	return &ReactorStatus{}, nil
+}
+
+func (m *MockClient) ReactorPromoterStatusByResource(ctx context.Context, host, resource string) (*ReactorPromoterStatus, error) {
+	status, err := m.ReactorStatusJSON(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, promoter := range status.Promoter {
+		if promoter.DRBDResource == resource {
+			return &promoter, nil
+		}
+	}
+	return nil, fmt.Errorf("promoter status for resource %s not found", resource)
 }
 
 func TestMockClientExec(t *testing.T) {

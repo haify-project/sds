@@ -2,12 +2,168 @@ package deployment
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestReactorStatusJSONParsing(t *testing.T) {
+	// Test JSON from drbd-reactorctl status --json
+	jsonInput := `{
+		"promoter": [
+			{
+				"drbd_resource": "ha_mysql",
+				"path": "/etc/drbd-reactor.d/mysql_config.toml",
+				"primary_on": "gui01",
+				"target": {
+					"name": "drbd-services@ha_mysql.target",
+					"status": "active",
+					"freezer": "running"
+				},
+				"dependencies": [
+					{
+						"name": "drbd-promote@ha_mysql.service",
+						"status": "active",
+						"freezer": "running"
+					}
+				],
+				"status": "active"
+			}
+		],
+		"prometheus": [
+			{
+				"path": "/etc/drbd-reactor.d/prometheus.toml",
+				"address": "0.0.0.0:9942",
+				"status": "active"
+			}
+		],
+		"debugger": [],
+		"umh": [],
+		"agentx": []
+	}`
+
+	var status ReactorStatus
+	err := json.Unmarshal([]byte(jsonInput), &status)
+	assert.NoError(t, err)
+
+	assert.Len(t, status.Promoter, 1)
+	assert.Equal(t, "ha_mysql", status.Promoter[0].DRBDResource)
+	assert.Equal(t, "/etc/drbd-reactor.d/mysql_config.toml", status.Promoter[0].Path)
+	assert.Equal(t, "gui01", status.Promoter[0].PrimaryOn)
+	assert.Equal(t, "active", status.Promoter[0].Status)
+	assert.Equal(t, "drbd-services@ha_mysql.target", status.Promoter[0].Target.Name)
+	assert.Equal(t, "active", status.Promoter[0].Target.Status)
+	assert.Len(t, status.Promoter[0].Dependencies, 1)
+	assert.Equal(t, "drbd-promote@ha_mysql.service", status.Promoter[0].Dependencies[0].Name)
+
+	assert.Len(t, status.Prometheus, 1)
+	assert.Equal(t, "/etc/drbd-reactor.d/prometheus.toml", status.Prometheus[0].Path)
+	assert.Equal(t, "0.0.0.0:9942", status.Prometheus[0].Address)
+	assert.Equal(t, "active", status.Prometheus[0].Status)
+}
+
+func TestReactorStatusEmptyPromoter(t *testing.T) {
+	jsonInput := `{
+		"promoter": [],
+		"prometheus": [],
+		"debugger": [],
+		"umh": [],
+		"agentx": []
+	}`
+
+	var status ReactorStatus
+	err := json.Unmarshal([]byte(jsonInput), &status)
+	assert.NoError(t, err)
+	assert.Empty(t, status.Promoter)
+}
+
+func TestReactorPromoterStatusInactive(t *testing.T) {
+	jsonInput := `{
+		"promoter": [
+			{
+				"drbd_resource": "ha_fs2",
+				"path": "/etc/drbd-reactor.d/ha_fs2.toml",
+				"primary_on": "gui03",
+				"target": {
+					"name": "drbd-services@ha_fs2.target",
+					"status": "inactive",
+					"freezer": "running"
+				},
+				"dependencies": [
+					{
+						"name": "drbd-promote@ha_fs2.service",
+						"status": "failed",
+						"freezer": "running"
+					}
+				],
+				"status": "inactive"
+			}
+		]
+	}`
+
+	var status ReactorStatus
+	err := json.Unmarshal([]byte(jsonInput), &status)
+	assert.NoError(t, err)
+
+	assert.Len(t, status.Promoter, 1)
+	assert.Equal(t, "ha_fs2", status.Promoter[0].DRBDResource)
+	assert.Equal(t, "inactive", status.Promoter[0].Status)
+	assert.Equal(t, "failed", status.Promoter[0].Dependencies[0].Status)
+}
+
+func TestReactorPromoterStatusByResource(t *testing.T) {
+	mock := &MockClient{
+		ExecFunc: func(ctx context.Context, hosts []string, cmd string) (*ExecResult, error) {
+			return &ExecResult{
+				Hosts: map[string]*HostResult{
+					"localhost": {
+						Host:    "localhost",
+						Success: true,
+						Output: `{
+							"promoter": [
+								{
+									"drbd_resource": "resource1",
+									"path": "/etc/drbd-reactor.d/resource1.toml",
+									"primary_on": "node1",
+									"target": {"name": "target1", "status": "active", "freezer": "running"},
+									"dependencies": [],
+									"status": "active"
+								},
+								{
+									"drbd_resource": "resource2",
+									"path": "/etc/drbd-reactor.d/resource2.toml",
+									"primary_on": "node2",
+									"target": {"name": "target2", "status": "inactive", "freezer": "running"},
+									"dependencies": [],
+									"status": "inactive"
+								}
+							]
+						}`,
+					},
+				},
+			}, nil
+		},
+	}
+
+	promoter, err := mock.ReactorPromoterStatusByResource(context.Background(), "localhost", "resource1")
+	assert.NoError(t, err)
+	assert.Equal(t, "resource1", promoter.DRBDResource)
+	assert.Equal(t, "node1", promoter.PrimaryOn)
+	assert.Equal(t, "active", promoter.Status)
+
+	promoter, err = mock.ReactorPromoterStatusByResource(context.Background(), "localhost", "resource2")
+	assert.NoError(t, err)
+	assert.Equal(t, "resource2", promoter.DRBDResource)
+	assert.Equal(t, "inactive", promoter.Status)
+
+	// Test non-existent resource
+	_, err = mock.ReactorPromoterStatusByResource(context.Background(), "localhost", "nonexistent")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
 
 func TestExecResultEmptyHosts(t *testing.T) {
 	result := &ExecResult{

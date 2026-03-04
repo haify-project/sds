@@ -8,6 +8,12 @@ port = 3374
 # Database file path (default: /var/lib/sds/sds.db)
 path = "/var/lib/sds/sds.db"
 
+[dispatch]
+# Dispatch configuration for SSH-based operations
+config_path = "/root/.dispatch/config.toml"
+parallel = 10
+hosts = ["orange1", "orange2", "orange3"]
+
 [tls]
 enabled = false
 # ca_cert = "/etc/sds/certs/ca.crt"
@@ -21,3 +27,13 @@ format = "json"  # json or text
 [storage]
 default_pool_type = "vg"
 default_snapshot_suffix = "_snap"
+
+[metrics]
+enabled = true
+listen_address = "0.0.0.0"
+port = 9090
+
+[ui]
+enabled = true
+listen_address = "0.0.0.0"
+port = 8080
