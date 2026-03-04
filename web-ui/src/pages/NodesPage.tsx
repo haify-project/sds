@@ -10,7 +10,8 @@ import {
   MdInfo,
   MdClose,
   MdAdd,
-  MdRefresh
+  MdRefresh,
+  MdDelete
 } from 'react-icons/md';
 
 export function NodesPage() {
@@ -25,6 +26,7 @@ export function NodesPage() {
   const [healthData, setHealthData] = useState<HealthInfo | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [detailsNode, setDetailsNode] = useState<any>(null);
+  const [deletingNode, setDeletingNode] = useState<string | null>(null);
 
   const healthCheckMutation = useMutation({
     mutationFn: (nodeName: string) => api.healthCheck(nodeName),
@@ -38,6 +40,18 @@ export function NodesPage() {
     },
   });
 
+  const unregisterMutation = useMutation({
+    mutationFn: (address: string) => api.unregisterNode(address),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] });
+      setDeletingNode(null);
+    },
+    onError: (error) => {
+      alert(`Failed to unregister node: ${error.message}`);
+      setDeletingNode(null);
+    },
+  });
+
   const handleHealthCheck = (nodeName: string) => {
     setSelectedNode(nodeName);
     healthCheckMutation.mutate(nodeName);
@@ -46,6 +60,13 @@ export function NodesPage() {
   const handleShowDetails = (node: any) => {
     setDetailsNode(node);
     setShowDetailsModal(true);
+  };
+
+  const handleUnregister = (nodeName: string, nodeAddress: string) => {
+    if (confirm(`Are you sure you want to unregister node "${nodeName}"?`)) {
+      setDeletingNode(nodeName);
+      unregisterMutation.mutate(nodeAddress);
+    }
   };
 
   const closeHealthModal = () => {
@@ -77,7 +98,9 @@ export function NodesPage() {
             node={node}
             onHealthCheck={handleHealthCheck}
             onShowDetails={handleShowDetails}
+            onUnregister={handleUnregister}
             isLoading={healthCheckMutation.isPending && selectedNode === node.name}
+            isDeleting={unregisterMutation.isPending && deletingNode === node.name}
           />
         ))}
       </div>
@@ -123,10 +146,12 @@ interface NodeCardProps {
   };
   onHealthCheck: (name: string) => void;
   onShowDetails: (node: any) => void;
+  onUnregister: (nodeName: string, nodeAddress: string) => void;
   isLoading: boolean;
+  isDeleting: boolean;
 }
 
-function NodeCard({ node, onHealthCheck, onShowDetails, isLoading }: NodeCardProps) {
+function NodeCard({ node, onHealthCheck, onShowDetails, onUnregister, isLoading, isDeleting }: NodeCardProps) {
   const isOnline = node.state === 'online';
 
   return (
@@ -196,6 +221,16 @@ function NodeCard({ node, onHealthCheck, onShowDetails, isLoading }: NodeCardPro
           <MdInfo className="h-3 w-3" />
           Details
         </button>
+        <button
+          onClick={() => onUnregister(node.name, node.address)}
+          disabled={isDeleting}
+          className={clsx(
+            'btn btn-danger text-xs flex items-center justify-center gap-1',
+            isDeleting && 'opacity-50 cursor-not-allowed'
+          )}
+        >
+          {isDeleting ? <MdRefresh className="h-3 w-3 animate-spin" /> : <MdDelete className="h-3 w-3" />}
+        </button>
       </div>
     </div>
   );
@@ -234,14 +269,24 @@ interface RegisterNodeFormProps {
 }
 
 function RegisterNodeForm({ onSuccess, onCancel }: RegisterNodeFormProps) {
+  const queryClient = useQueryClient();
   const [nodeName, setNodeName] = useState('');
   const [nodeAddress, setNodeAddress] = useState('');
 
+  const registerMutation = useMutation({
+    mutationFn: (data: { name: string; address: string }) => api.registerNode(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] });
+      onSuccess();
+    },
+    onError: (error) => {
+      alert(`Failed to register node: ${error.message}`);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement registration API call
-    alert(`Register node: ${nodeName} at ${nodeAddress}`);
-    onSuccess();
+    registerMutation.mutate({ name: nodeName, address: nodeAddress });
   };
 
   return (
@@ -268,7 +313,7 @@ function RegisterNodeForm({ onSuccess, onCancel }: RegisterNodeFormProps) {
           value={nodeAddress}
           onChange={(e) => setNodeAddress(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g., 192.168.1.100"
+          placeholder="e.g., 192.168.1.100 or hostname"
           required
         />
       </div>
@@ -276,15 +321,17 @@ function RegisterNodeForm({ onSuccess, onCancel }: RegisterNodeFormProps) {
         <button
           type="button"
           onClick={onCancel}
+          disabled={registerMutation.isPending}
           className="btn btn-secondary flex-1"
         >
           Cancel
         </button>
         <button
           type="submit"
+          disabled={registerMutation.isPending}
           className="btn btn-primary flex-1"
         >
-          Register
+          {registerMutation.isPending ? 'Registering...' : 'Register'}
         </button>
       </div>
     </form>
@@ -388,6 +435,3 @@ function NodeDetails({ node, onClose }: NodeDetailsProps) {
   );
 }
 
-function clsx(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
-}

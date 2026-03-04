@@ -70,6 +70,27 @@ export interface HaConfig {
   services: string[];
 }
 
+export interface ResourceStatus {
+  name: string;
+  role: string;
+  nodes: string[];
+  nodeStates: Record<string, NodeResourceState>;
+  volumes: Volume[];
+}
+
+export interface NodeResourceState {
+  role: string;
+  diskState: string;
+  replicationState: string;
+}
+
+export interface Snapshot {
+  name: string;
+  volume: string;
+  sizeGb: number;
+  createdAt: string;
+}
+
 export interface NodesResponse extends ApiResponse {
   nodes: Node[];
 }
@@ -88,6 +109,10 @@ export interface GatewaysResponse extends ApiResponse {
 
 export interface HaConfigsResponse extends ApiResponse {
   configs: HaConfig[];
+}
+
+export interface SnapshotsResponse extends ApiResponse {
+  snapshots: Snapshot[];
 }
 
 class ApiClient {
@@ -112,22 +137,32 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`API error: ${response.status} ${errorText || response.statusText}`);
     }
 
     return response.json() as Promise<T>;
   }
 
-  // Nodes
+  // ==================== Nodes ====================
   getNodes = () => this.request<NodesResponse>('/nodes');
 
   getNode = (address: string) =>
     this.request<ApiResponse & { node: Node }>(`/nodes/${address}`);
 
+  registerNode = (data: { name: string; address: string }) =>
+    this.request<ApiResponse & { node: Node }>('/nodes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  unregisterNode = (address: string) =>
+    this.request<ApiResponse>(`/nodes/${address}`, { method: 'DELETE' });
+
   healthCheck = (node: string) =>
     this.request<ApiResponse & { health: HealthInfo }>(`/nodes/${node}/health`);
 
-  // Pools
+  // ==================== Pools ====================
   getPools = () => this.request<PoolsResponse>('/pools');
 
   getPool = (name: string) =>
@@ -138,14 +173,15 @@ class ApiClient {
     type: string;
     node: string;
     disks?: string[];
+    sizeGb?: number;
   }) =>
-    this.request<ApiResponse & { pool: Pool }>('/pools', {
+    this.request<ApiResponse>('/pools', {
       method: 'POST',
       body: JSON.stringify(data),
     });
 
-  deletePool = (name: string) =>
-    this.request<ApiResponse>(`/pools/${name}`, { method: 'DELETE' });
+  deletePool = (name: string, node?: string) =>
+    this.request<ApiResponse>(`/pools/${name}${node ? `?node=${node}` : ''}`, { method: 'DELETE' });
 
   addDisk = (pool: string, disk: string, node?: string) =>
     this.request<ApiResponse>(`/pools/${pool}/disks`, {
@@ -153,7 +189,7 @@ class ApiClient {
       body: JSON.stringify({ disk, node }),
     });
 
-  // Resources
+  // ==================== Resources ====================
   getResources = () => this.request<ResourcesResponse>('/resources');
 
   getResource = (name: string) =>
@@ -162,10 +198,13 @@ class ApiClient {
   createResource = (data: {
     name: string;
     port: number;
-    protocol: string;
     nodes: string[];
+    protocol?: string;
+    sizeGb?: number;
+    pool?: string;
+    storageType?: string;
   }) =>
-    this.request<ApiResponse & { resource: Resource }>('/resources', {
+    this.request<ApiResponse>('/resources', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -173,17 +212,158 @@ class ApiClient {
   deleteResource = (name: string) =>
     this.request<ApiResponse>(`/resources/${name}`, { method: 'DELETE' });
 
+  resourceStatus = (name: string) =>
+    this.request<ApiResponse & { status: ResourceStatus }>(`/resources/${name}/status`);
+
   setPrimary = (resource: string, node: string, force = false) =>
     this.request<ApiResponse>(`/resources/${resource}/primary`, {
       method: 'POST',
       body: JSON.stringify({ node, force }),
     });
 
-  // Gateways
+  setSecondary = (resource: string, node: string) =>
+    this.request<ApiResponse>(`/resources/${resource}/secondary`, {
+      method: 'POST',
+      body: JSON.stringify({ node }),
+    });
+
+  // Volume operations
+  addVolume = (resource: string, data: { volume: string; pool: string; sizeGb: number }) =>
+    this.request<ApiResponse>(`/resources/${resource}/volumes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  removeVolume = (resource: string, volumeId: number) =>
+    this.request<ApiResponse>(`/resources/${resource}/volumes/${volumeId}`, { method: 'DELETE' });
+
+  resizeVolume = (resource: string, volumeId: number, sizeGb: number) =>
+    this.request<ApiResponse>(`/resources/${resource}/volumes/${volumeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sizeGb }),
+    });
+
+  // Filesystem operations
+  createFilesystem = (resource: string, volumeId: number, fstype: string, node?: string) =>
+    this.request<ApiResponse>(`/resources/${resource}/volumes/${volumeId}/filesystem`, {
+      method: 'POST',
+      body: JSON.stringify({ fstype, node }),
+    });
+
+  mountResource = (resource: string, volumeId: number, path: string, fstype?: string, node?: string) =>
+    this.request<ApiResponse>(`/resources/${resource}/volumes/${volumeId}/mount`, {
+      method: 'POST',
+      body: JSON.stringify({ path, fstype, node }),
+    });
+
+  unmountResource = (resource: string, volumeId: number, node?: string) =>
+    this.request<ApiResponse>(`/resources/${resource}/volumes/${volumeId}/unmount`, {
+      method: 'POST',
+      body: JSON.stringify({ node }),
+    });
+
+  // ==================== HA ====================
+  getHaConfigs = () => this.request<HaConfigsResponse>('/ha');
+
+  getHaConfig = (resource: string) =>
+    this.request<ApiResponse & { config: HaConfig }>(`/resources/${resource}/ha`);
+
+  makeHa = (resource: string, data: {
+    vip?: string;
+    mountPoint?: string;
+    fstype?: string;
+    services?: string[];
+  }) =>
+    this.request<ApiResponse & { configPath: string }>(`/resources/${resource}/ha`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  deleteHa = (resource: string) =>
+    this.request<ApiResponse>(`/resources/${resource}/ha`, { method: 'DELETE' });
+
+  evictHa = (resource: string) =>
+    this.request<ApiResponse>(`/resources/${resource}/ha/evict`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+  // ==================== Snapshots ====================
+  listSnapshots = (volume: string, node?: string) =>
+    this.request<SnapshotsResponse>(`/volumes/${volume}/snapshots${node ? `?node=${node}` : ''}`);
+
+  createSnapshot = (volume: string, snapshotName: string, node?: string) =>
+    this.request<ApiResponse>(`/volumes/${volume}/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify({ snapshotName, node }),
+    });
+
+  deleteSnapshot = (volume: string, snapshotName: string, node?: string) =>
+    this.request<ApiResponse>(`/volumes/${volume}/snapshots/${snapshotName}${node ? `?node=${node}` : ''}`, { method: 'DELETE' });
+
+  restoreSnapshot = (volume: string, snapshotName: string, node?: string) =>
+    this.request<ApiResponse>(`/volumes/${volume}/snapshots/${snapshotName}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ node }),
+    });
+
+  // ==================== Gateways ====================
   getGateways = () => this.request<GatewaysResponse>('/gateways');
 
-  // HA
-  getHaConfigs = () => this.request<HaConfigsResponse>('/ha');
+  getGateway = (id: string) =>
+    this.request<ApiResponse & { gateway: Gateway }>(`/gateways/${id}`);
+
+  // NFS Gateway
+  createNFSGateway = (data: {
+    resource: string;
+    serviceIp: string;
+    exportPath: string;
+    allowedIps?: string[];
+    fsType?: string;
+    options?: Record<string, string>;
+  }) =>
+    this.request<ApiResponse & { configPath: string }>('/gateways/nfs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  // iSCSI Gateway
+  createISCSIGateway = (data: {
+    resource: string;
+    serviceIp: string;
+    iqn: string;
+    allowedInitiators?: string[];
+    username?: string;
+    password?: string;
+    implementation?: string;
+    options?: Record<string, string>;
+  }) =>
+    this.request<ApiResponse & { configPath: string }>('/gateways/iscsi', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  // NVMe Gateway
+  createNVMeGateway = (data: {
+    resource: string;
+    serviceIp: string;
+    nqn: string;
+    transportType?: string;
+    options?: Record<string, string>;
+  }) =>
+    this.request<ApiResponse & { configPath: string }>('/gateways/nvme', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  deleteGateway = (id: string) =>
+    this.request<ApiResponse>(`/gateways/${id}`, { method: 'DELETE' });
+
+  startGateway = (id: string) =>
+    this.request<ApiResponse>(`/gateways/${id}/start`, { method: 'POST' });
+
+  stopGateway = (id: string) =>
+    this.request<ApiResponse>(`/gateways/${id}/stop`, { method: 'POST' });
 }
 
 export const api = new ApiClient();

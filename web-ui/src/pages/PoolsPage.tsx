@@ -434,6 +434,3 @@ function AddDiskForm({ poolName, isAdding, onSubmit, onCancel }: AddDiskFormProp
   );
 }
 
-function clsx(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
-}
