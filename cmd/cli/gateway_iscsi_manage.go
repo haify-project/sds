@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +27,7 @@ func iscsiLUNAdd() *cobra.Command {
 		Use:   "add --resource <name> --lun <id> --device <path>",
 		Short: "Add a LUN to an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -62,7 +61,7 @@ func iscsiLUNRemove() *cobra.Command {
 		Use:   "remove --resource <name> --lun <id>",
 		Short: "Remove a LUN from an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -93,7 +92,7 @@ func iscsiLUNList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List LUNs on an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -143,7 +142,7 @@ func iscsiInitiatorAdd() *cobra.Command {
 		Use:   "add --resource <name> --iqn <initiator>",
 		Short: "Allow an initiator on an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -174,7 +173,7 @@ func iscsiInitiatorRemove() *cobra.Command {
 		Use:   "remove --resource <name> --iqn <initiator>",
 		Short: "Remove an initiator from an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -205,7 +204,7 @@ func iscsiInitiatorList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List initiators on an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -255,7 +254,7 @@ func iscsiCHAPSet() *cobra.Command {
 		Use:   "set --resource <name> --username <user> --password <pass>",
 		Short: "Set CHAP credentials on an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -289,7 +288,7 @@ func iscsiCHAPGet() *cobra.Command {
 		Use:   "get --resource <name>",
 		Short: "Get CHAP credentials for an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/liliang-cn/sds/pkg/client"
 )
 
 func healthCommand() *cobra.Command {
@@ -20,7 +19,7 @@ func healthCommand() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

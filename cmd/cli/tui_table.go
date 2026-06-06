@@ -201,8 +201,8 @@ func RenderResourceTable(resourceName, role string, nodeStates []NodeStateInfo) 
 
 // NodeStateInfo represents node state for display
 type NodeStateInfo struct {
-	Node            string
-	Role            string
-	DiskState       string
+	Node             string
+	Role             string
+	DiskState        string
 	ReplicationState string
 }

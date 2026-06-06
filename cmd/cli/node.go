@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +31,7 @@ func nodeList() *cobra.Command {
 			ctx := cmd.Context()
 
 			// Create SDS client
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -85,7 +84,7 @@ func nodeGet() *cobra.Command {
 			nodeRef := args[0]
 
 			// Create SDS client
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -128,7 +127,7 @@ func nodeRegister() *cobra.Command {
 			ctx := cmd.Context()
 
 			// Create SDS client
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -172,7 +171,7 @@ This removes the node from the database but does not affect the node itself.`,
 
 			ctx := cmd.Context()
 
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

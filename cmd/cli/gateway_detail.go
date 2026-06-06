@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +19,7 @@ func gatewayGet() *cobra.Command {
 				return fmt.Errorf("--resource is required")
 			}
 
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -66,7 +65,7 @@ func gatewayStatus() *cobra.Command {
 				return fmt.Errorf("--resource is required")
 			}
 
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

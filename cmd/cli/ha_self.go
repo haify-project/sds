@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -57,7 +56,7 @@ so this command's connection drops by design. Track progress with
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -102,7 +101,7 @@ func haSelfStatus() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -155,7 +154,7 @@ connection drops by design.`,
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

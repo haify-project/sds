@@ -9,12 +9,21 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server    ServerConfig    `mapstructure:"server"`
-	Database  DatabaseConfig  `mapstructure:"database"`
-	TLS       TLSConfig       `mapstructure:"tls"`
-	Log       LogConfig       `mapstructure:"log"`
-	Storage   StorageConfig   `mapstructure:"storage"`
-	Metrics   MetricsConfig   `mapstructure:"metrics"`
+	Server   ServerConfig   `mapstructure:"server"`
+	Database DatabaseConfig `mapstructure:"database"`
+	Auth     AuthConfig     `mapstructure:"auth"`
+	TLS      TLSConfig      `mapstructure:"tls"`
+	Log      LogConfig      `mapstructure:"log"`
+	Storage  StorageConfig  `mapstructure:"storage"`
+	Metrics  MetricsConfig  `mapstructure:"metrics"`
+}
+
+// AuthConfig controls API authentication. When enabled, every gRPC and REST
+// request must carry "Authorization: Bearer <token>"; only gRPC health
+// checks stay open for liveness probes.
+type AuthConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Token   string `mapstructure:"token"`
 }
 
 // ServerConfig represents server configuration
@@ -44,7 +53,7 @@ type LogConfig struct {
 
 // StorageConfig represents storage configuration
 type StorageConfig struct {
-	DefaultPoolType     string `mapstructure:"default_pool_type"`
+	DefaultPoolType       string `mapstructure:"default_pool_type"`
 	DefaultSnapshotSuffix string `mapstructure:"default_snapshot_suffix"`
 }
 
@@ -102,6 +111,11 @@ func (c *Config) Validate() error {
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
 	}
+	if c.Auth.Enabled {
+		if len(c.Auth.Token) < 16 {
+			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
+		}
+	}
 	return nil
 }
 
@@ -109,6 +123,7 @@ func setDefaults() {
 	viper.SetDefault("server.listen_address", "0.0.0.0")
 	viper.SetDefault("server.port", 3374)
 	viper.SetDefault("database.path", "/var/lib/sds/sds.db")
+	viper.SetDefault("auth.enabled", false)
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
@@ -124,6 +139,7 @@ func (c *Config) Save(path string) error {
 	config := viper.New()
 	config.Set("server", c.Server)
 	config.Set("database", c.Database)
+	config.Set("auth", c.Auth)
 	config.Set("tls", c.TLS)
 	config.Set("log", c.Log)
 	config.Set("storage", c.Storage)

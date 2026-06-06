@@ -254,12 +254,26 @@ func (c *Controller) startGRPCServer() error {
 		return fmt.Errorf("failed to listen for gRPC: %w", err)
 	}
 
-	// Create gRPC server
-	var opts []grpc.ServerOption
+	// Create gRPC server. Interceptor order matters: metrics first so even
+	// rejected requests are counted, then authentication.
+	var unaryInterceptors []grpc.UnaryServerInterceptor
+	var streamInterceptors []grpc.StreamServerInterceptor
 	if c.metrics != nil {
-		opts = append(opts, grpc.ChainUnaryInterceptor(
-			c.metrics.UnaryServerInterceptor(),
-		))
+		unaryInterceptors = append(unaryInterceptors, c.metrics.UnaryServerInterceptor())
+	}
+	if c.config.Auth.Enabled {
+		unaryInterceptors = append(unaryInterceptors, authUnaryInterceptor(c.config.Auth.Token))
+		streamInterceptors = append(streamInterceptors, authStreamInterceptor(c.config.Auth.Token))
+		c.logger.Info("API authentication enabled (bearer token)")
+	} else {
+		c.logger.Warn("API authentication is DISABLED; enable [auth] in controller.toml for production")
+	}
+	var opts []grpc.ServerOption
+	if len(unaryInterceptors) > 0 {
+		opts = append(opts, grpc.ChainUnaryInterceptor(unaryInterceptors...))
+	}
+	if len(streamInterceptors) > 0 {
+		opts = append(opts, grpc.ChainStreamInterceptor(streamInterceptors...))
 	}
 	c.server = grpc.NewServer(opts...)
 

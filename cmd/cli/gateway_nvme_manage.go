@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +26,7 @@ func nvmeNamespaceAdd() *cobra.Command {
 		Use:   "add --resource <name> --device <path>",
 		Short: "Add a namespace to an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -59,7 +58,7 @@ func nvmeNamespaceRemove() *cobra.Command {
 		Use:   "remove --resource <name> --id <nsid>",
 		Short: "Remove a namespace from an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -90,7 +89,7 @@ func nvmeNamespaceList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List namespaces on an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -140,7 +139,7 @@ func nvmeHostAdd() *cobra.Command {
 		Use:   "add --resource <name> --nqn <host-nqn>",
 		Short: "Allow a host on an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -171,7 +170,7 @@ func nvmeHostRemove() *cobra.Command {
 		Use:   "remove --resource <name> --nqn <host-nqn>",
 		Short: "Remove a host from an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -202,7 +201,7 @@ func nvmeHostList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List hosts allowed on an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := client.NewSDSClient(controllerAddr)
+			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

@@ -18,10 +18,46 @@ type SDSClient struct {
 }
 
 // NewSDSClient creates a new SDS controller client
-func NewSDSClient(addr string) (*SDSClient, error) {
-	conn, err := grpc.NewClient(addr,
+// Option customizes the SDS client connection.
+type Option func(*clientOptions)
+
+type clientOptions struct {
+	token string
+}
+
+// WithToken attaches a static bearer token to every RPC, matching the
+// controller's [auth] configuration.
+func WithToken(token string) Option {
+	return func(o *clientOptions) { o.token = token }
+}
+
+// tokenCredentials implements credentials.PerRPCCredentials for the static
+// bearer-token scheme. The cluster API runs on a trusted management network
+// without transport TLS, so transport security is not required.
+type tokenCredentials struct {
+	token string
+}
+
+func (t tokenCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{"authorization": "Bearer " + t.token}, nil
+}
+
+func (t tokenCredentials) RequireTransportSecurity() bool { return false }
+
+func NewSDSClient(addr string, opts ...Option) (*SDSClient, error) {
+	var options clientOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	}
+	if options.token != "" {
+		dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(tokenCredentials{token: options.token}))
+	}
+
+	conn, err := grpc.NewClient(addr, dialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to SDS controller at %s: %w", addr, err)
 	}

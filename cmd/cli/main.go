@@ -9,6 +9,7 @@ import (
 
 var (
 	controllerAddr string
+	tokenFlag      string
 )
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "Controller address")
+	rootCmd.PersistentFlags().StringVar(&tokenFlag, "token", "", "API token (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
 
 	rootCmd.AddCommand(poolCommand())
 	rootCmd.AddCommand(nodeCommand())

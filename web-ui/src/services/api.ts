@@ -115,6 +115,23 @@ export interface SnapshotsResponse extends ApiResponse {
   snapshots: Snapshot[];
 }
 
+// API token storage for controllers with [auth] enabled. The token is kept
+// in localStorage; on a 401/403 the user is prompted once and the request
+// retried, so no separate login page is needed for this single-admin model.
+const TOKEN_STORAGE_KEY = 'sds_api_token';
+
+export function getApiToken(): string {
+  return localStorage.getItem(TOKEN_STORAGE_KEY) ?? '';
+}
+
+export function setApiToken(token: string): void {
+  if (token) {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -122,19 +139,39 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private authHeaders(): Record<string, string> {
+    const token = getApiToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   private async request<T>(
     endpoint: string,
     options?: RequestInit
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-      mode: 'cors',
-      ...options,
-    });
+    const doFetch = () =>
+      fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.authHeaders(),
+          ...options?.headers,
+        },
+        mode: 'cors',
+        ...options,
+      });
+
+    let response = await doFetch();
+
+    if (response.status === 401 || response.status === 403) {
+      const entered = window.prompt(
+        'SDS API token required (controller has authentication enabled):',
+        getApiToken()
+      );
+      if (entered !== null) {
+        setApiToken(entered.trim());
+        response = await doFetch();
+      }
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
