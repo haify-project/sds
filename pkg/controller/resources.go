@@ -1682,6 +1682,23 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 	// The config name for drbd-reactorctl (without .toml extension)
 	configName := fmt.Sprintf("sds-ha-%s", resource)
 
+	// Evicting the controller's own metadata resource stops this very
+	// process mid-eviction: a synchronous drbd-reactorctl child (local or
+	// SSH session) dies with us and aborts the eviction half-way. Launch it
+	// detached through systemd-run on the active node and return.
+	if resource == SelfHaResource {
+		evictCmd := fmt.Sprintf(
+			"sudo systemd-run --unit=sds-selfha-evict --collect drbd-reactorctl evict %s", configName)
+		if err := rm.execAllSuccess(ctx, []string{rm.controller.ResolveHost(activeNode)}, evictCmd,
+			"failed to launch detached self-eviction"); err != nil {
+			return err
+		}
+		rm.controller.logger.Info("Detached self-eviction launched",
+			zap.String("resource", resource),
+			zap.String("active_node", activeNode))
+		return nil
+	}
+
 	// Get local hostname to check if active node is local
 	hostnameBytes, _ := exec.Command("hostname").Output()
 	localHostname := strings.TrimSpace(string(hostnameBytes))

@@ -1,18 +1,55 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, HealthInfo } from '../services/api';
-import { clsx } from 'clsx';
 import {
-  MdComputer,
-  MdCheckCircle,
-  MdCancel,
-  MdFavorite,
-  MdInfo,
-  MdClose,
-  MdAdd,
-  MdRefresh,
-  MdDelete
-} from 'react-icons/md';
+  Server,
+  HeartPulse,
+  Info,
+  Plus,
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react';
+import { api, type Node, type HealthInfo } from '@/services/api';
+import { StatusBadge } from '@/components/StatusBadge';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function formatLastSeen(lastSeen: string): string {
+  const ts = Number(lastSeen);
+  if (!ts) return '-';
+  return new Date(ts * 1000).toLocaleString();
+}
 
 export function NodesPage() {
   const queryClient = useQueryClient();
@@ -21,417 +58,452 @@ export function NodesPage() {
     queryFn: () => api.getNodes(),
   });
 
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [healthNode, setHealthNode] = useState<string | null>(null);
   const [healthData, setHealthData] = useState<HealthInfo | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [detailsNode, setDetailsNode] = useState<any>(null);
-  const [deletingNode, setDeletingNode] = useState<string | null>(null);
+  const [detailsNode, setDetailsNode] = useState<Node | null>(null);
 
   const healthCheckMutation = useMutation({
     mutationFn: (nodeName: string) => api.healthCheck(nodeName),
     onSuccess: (data) => {
       setHealthData(data.health);
-      setSelectedNode(null);
     },
-    onError: (error) => {
-      alert(`Health check failed: ${error.message}`);
-      setSelectedNode(null);
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setHealthNode(null);
     },
   });
 
   const unregisterMutation = useMutation({
     mutationFn: (address: string) => api.unregisterNode(address),
     onSuccess: () => {
+      toast.success('Node unregistered');
       queryClient.invalidateQueries({ queryKey: ['nodes'] });
-      setDeletingNode(null);
     },
-    onError: (error) => {
-      alert(`Failed to unregister node: ${error.message}`);
-      setDeletingNode(null);
-    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const handleHealthCheck = (nodeName: string) => {
-    setSelectedNode(nodeName);
+    setHealthNode(nodeName);
+    setHealthData(null);
     healthCheckMutation.mutate(nodeName);
   };
 
-  const handleShowDetails = (node: any) => {
-    setDetailsNode(node);
-    setShowDetailsModal(true);
-  };
-
-  const handleUnregister = (nodeName: string, nodeAddress: string) => {
-    if (confirm(`Are you sure you want to unregister node "${nodeName}"?`)) {
-      setDeletingNode(nodeName);
-      unregisterMutation.mutate(nodeAddress);
+  const closeHealthDialog = (open: boolean) => {
+    if (!open) {
+      setHealthNode(null);
+      setHealthData(null);
     }
   };
 
-  const closeHealthModal = () => {
-    setHealthData(null);
-    setSelectedNode(null);
-  };
-
-  if (isLoading) {
-    return <div className="text-center py-12">Loading...</div>;
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Storage Nodes</h3>
-        <button
-          onClick={() => setShowRegisterModal(true)}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <MdAdd className="h-4 w-4" />
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Storage Nodes</h2>
+        <Button onClick={() => setRegisterOpen(true)}>
+          <Plus className="h-4 w-4" />
           Register Node
-        </button>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {nodes?.nodes.map((node) => (
-          <NodeCard
-            key={node.name}
-            node={node}
-            onHealthCheck={handleHealthCheck}
-            onShowDetails={handleShowDetails}
-            onUnregister={handleUnregister}
-            isLoading={healthCheckMutation.isPending && selectedNode === node.name}
-            isDeleting={unregisterMutation.isPending && deletingNode === node.name}
-          />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-9 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : !nodes?.nodes.length ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <Server className="h-10 w-10 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              No nodes registered. Register a storage node to get started.
+            </p>
+            <Button onClick={() => setRegisterOpen(true)} variant="outline">
+              <Plus className="h-4 w-4" />
+              Register Node
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          {nodes.nodes.map((node) => {
+            const isOnline = node.state === 'online';
+            const isChecking =
+              healthCheckMutation.isPending && healthNode === node.name;
+            const isDeleting =
+              unregisterMutation.isPending &&
+              unregisterMutation.variables === node.address;
+            return (
+              <Card key={node.name} className="flex flex-col">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <Server className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">{node.name}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {node.hostname}
+                      </p>
+                    </div>
+                  </div>
+                  <StatusBadge status={node.state} />
+                </CardHeader>
+                <CardContent className="flex flex-1 flex-col">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Address</span>
+                      <span className="font-medium">{node.address}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Version</span>
+                      <span className="font-medium">{node.version || '-'}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Last Seen</span>
+                      <span className="font-medium">
+                        {formatLastSeen(node.lastSeen)}
+                      </span>
+                    </div>
+                  </div>
 
-      {/* Register Node Modal */}
-      {showRegisterModal && (
-        <Modal onClose={() => setShowRegisterModal(false)} title="Register Node">
-          <RegisterNodeForm
-            onSuccess={() => {
-              setShowRegisterModal(false);
-              queryClient.invalidateQueries({ queryKey: ['nodes'] });
-            }}
-            onCancel={() => setShowRegisterModal(false)}
-          />
-        </Modal>
+                  <Separator className="my-4" />
+
+                  <div className="mt-auto flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled={isChecking || !isOnline}
+                      onClick={() => handleHealthCheck(node.name)}
+                    >
+                      {isChecking ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <HeartPulse className="h-4 w-4" />
+                      )}
+                      Health
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDetailsNode(node)}
+                    >
+                      <Info className="h-4 w-4" />
+                      Details
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Unregister node "{node.name}"?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This removes the node from the controller's
+                            inventory. Resources and pools hosted on this node
+                            will no longer be managed. This action cannot be
+                            undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() =>
+                              unregisterMutation.mutate(node.address)
+                            }
+                          >
+                            Unregister
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
-      {/* Health Check Modal */}
-      {healthData && (
-        <Modal onClose={closeHealthModal} title="Health Check Results">
-          <HealthResult health={healthData} onClose={closeHealthModal} />
-        </Modal>
-      )}
+      <RegisterNodeDialog open={registerOpen} onOpenChange={setRegisterOpen} />
 
-      {/* Node Details Modal */}
-      {showDetailsModal && detailsNode && (
-        <Modal onClose={() => setShowDetailsModal(false)} title="Node Details">
-          <NodeDetails node={detailsNode} onClose={() => setShowDetailsModal(false)} />
-        </Modal>
-      )}
+      <HealthDialog
+        open={!!healthData}
+        nodeName={healthNode}
+        health={healthData}
+        onOpenChange={closeHealthDialog}
+      />
+
+      <DetailsDialog
+        node={detailsNode}
+        onOpenChange={(open) => !open && setDetailsNode(null)}
+      />
     </div>
   );
 }
 
-interface NodeCardProps {
-  node: {
-    name: string;
-    address: string;
-    hostname: string;
-    state: string;
-    lastSeen: string;
-    version: string;
-  };
-  onHealthCheck: (name: string) => void;
-  onShowDetails: (node: any) => void;
-  onUnregister: (nodeName: string, nodeAddress: string) => void;
-  isLoading: boolean;
-  isDeleting: boolean;
+interface RegisterNodeDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-function NodeCard({ node, onHealthCheck, onShowDetails, onUnregister, isLoading, isDeleting }: NodeCardProps) {
-  const isOnline = node.state === 'online';
-
-  return (
-    <div className="card">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={clsx(
-            'h-10 w-10 rounded-full flex items-center justify-center',
-            isOnline ? 'bg-green-100' : 'bg-red-100'
-          )}>
-            <MdComputer className={clsx(
-              'h-5 w-5',
-              isOnline ? 'text-green-600' : 'text-red-600'
-            )} />
-          </div>
-          <div>
-            <h4 className="font-semibold text-gray-900">{node.name}</h4>
-            <p className="text-sm text-gray-500">{node.hostname}</p>
-          </div>
-        </div>
-        <span
-          className={clsx(
-            'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
-            isOnline
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-800'
-          )}
-        >
-          {isOnline ? <MdCheckCircle className="h-3 w-3" /> : <MdCancel className="h-3 w-3" />}
-          {isOnline ? 'Online' : 'Offline'}
-        </span>
-      </div>
-
-      <div className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-gray-500">Address</span>
-          <span className="text-gray-900">{node.address}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Version</span>
-          <span className="text-gray-900">{node.version}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Last Seen</span>
-          <span className="text-gray-900">
-            {new Date(Number(node.lastSeen) * 1000).toLocaleString()}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-        <button
-          onClick={() => onHealthCheck(node.name)}
-          disabled={isLoading || !isOnline}
-          className={clsx(
-            'btn btn-secondary flex-1 text-xs flex items-center justify-center gap-1',
-            (isLoading || !isOnline) && 'opacity-50 cursor-not-allowed'
-          )}
-        >
-          {isLoading ? <MdRefresh className="h-3 w-3 animate-spin" /> : <MdFavorite className="h-3 w-3" />}
-          Health Check
-        </button>
-        <button
-          onClick={() => onShowDetails(node)}
-          className="btn btn-secondary text-xs flex items-center justify-center gap-1"
-        >
-          <MdInfo className="h-3 w-3" />
-          Details
-        </button>
-        <button
-          onClick={() => onUnregister(node.name, node.address)}
-          disabled={isDeleting}
-          className={clsx(
-            'btn btn-danger text-xs flex items-center justify-center gap-1',
-            isDeleting && 'opacity-50 cursor-not-allowed'
-          )}
-        >
-          {isDeleting ? <MdRefresh className="h-3 w-3 animate-spin" /> : <MdDelete className="h-3 w-3" />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-interface ModalProps {
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}
-
-function Modal({ onClose, title, children }: ModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <MdClose className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-4">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface RegisterNodeFormProps {
-  onSuccess: () => void;
-  onCancel: () => void;
-}
-
-function RegisterNodeForm({ onSuccess, onCancel }: RegisterNodeFormProps) {
+function RegisterNodeDialog({ open, onOpenChange }: RegisterNodeDialogProps) {
   const queryClient = useQueryClient();
-  const [nodeName, setNodeName] = useState('');
-  const [nodeAddress, setNodeAddress] = useState('');
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
 
   const registerMutation = useMutation({
-    mutationFn: (data: { name: string; address: string }) => api.registerNode(data),
+    mutationFn: (data: { name: string; address: string }) =>
+      api.registerNode(data),
     onSuccess: () => {
+      toast.success('Node registered');
       queryClient.invalidateQueries({ queryKey: ['nodes'] });
-      onSuccess();
+      setName('');
+      setAddress('');
+      onOpenChange(false);
     },
-    onError: (error) => {
-      alert(`Failed to register node: ${error.message}`);
-    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    registerMutation.mutate({ name: nodeName, address: nodeAddress });
+    registerMutation.mutate({ name: name.trim(), address: address.trim() });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Node Name
-        </label>
-        <input
-          type="text"
-          value={nodeName}
-          onChange={(e) => setNodeName(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g., orange1"
-          required
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Node Address
-        </label>
-        <input
-          type="text"
-          value={nodeAddress}
-          onChange={(e) => setNodeAddress(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g., 192.168.1.100 or hostname"
-          required
-        />
-      </div>
-      <div className="flex gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={registerMutation.isPending}
-          className="btn btn-secondary flex-1"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={registerMutation.isPending}
-          className="btn btn-primary flex-1"
-        >
-          {registerMutation.isPending ? 'Registering...' : 'Register'}
-        </button>
-      </div>
-    </form>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Register Node</DialogTitle>
+            <DialogDescription>
+              Add a storage node to the controller inventory.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="node-name">Node Name</Label>
+              <Input
+                id="node-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., orange1"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="node-address">Node Address</Label>
+              <Input
+                id="node-address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="e.g., 192.168.1.100 or hostname"
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={registerMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={registerMutation.isPending}>
+              {registerMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              Register
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-interface HealthResultProps {
-  health: HealthInfo;
-  onClose: () => void;
+interface HealthDialogProps {
+  open: boolean;
+  nodeName: string | null;
+  health: HealthInfo | null;
+  onOpenChange: (open: boolean) => void;
 }
 
-function HealthResult({ health, onClose }: HealthResultProps) {
-  const checks = [
-    { name: 'DRBD', installed: health.drbdInstalled, version: health.drbdVersion },
-    { name: 'DRBD Reactor', installed: health.drbdReactorInstalled, version: health.drbdReactorVersion, running: health.drbdReactorRunning },
-    { name: 'Resource Agents', installed: health.resourceAgentsInstalled },
-  ];
+function HealthCheckRow({
+  label,
+  ok,
+  detail,
+}: {
+  label: string;
+  ok: boolean;
+  detail?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border p-3">
+      <div className="flex items-center gap-3">
+        {ok ? (
+          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+        ) : (
+          <XCircle className="h-5 w-5 text-red-500" />
+        )}
+        <div>
+          <p className="text-sm font-medium">{label}</p>
+          {detail && (
+            <p className="text-xs text-muted-foreground">{detail}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HealthDialog({
+  open,
+  nodeName,
+  health,
+  onOpenChange,
+}: HealthDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            Health Check{nodeName ? ` — ${nodeName}` : ''}
+          </DialogTitle>
+          <DialogDescription>
+            Prerequisite software and OCF agents on the node.
+          </DialogDescription>
+        </DialogHeader>
+        {health && (
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <HealthCheckRow
+                label="DRBD"
+                ok={health.drbdInstalled}
+                detail={
+                  health.drbdInstalled
+                    ? `Installed${
+                        health.drbdVersion
+                          ? ` · v${health.drbdVersion}`
+                          : ''
+                      }`
+                    : 'Not installed'
+                }
+              />
+              <HealthCheckRow
+                label="DRBD Reactor"
+                ok={health.drbdReactorInstalled}
+                detail={
+                  health.drbdReactorInstalled
+                    ? `Installed${
+                        health.drbdReactorVersion
+                          ? ` · v${health.drbdReactorVersion}`
+                          : ''
+                      } · ${
+                        health.drbdReactorRunning ? 'running' : 'stopped'
+                      }`
+                    : 'Not installed'
+                }
+              />
+              <HealthCheckRow
+                label="Resource Agents"
+                ok={health.resourceAgentsInstalled}
+                detail={
+                  health.resourceAgentsInstalled
+                    ? 'Installed'
+                    : 'Not installed'
+                }
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium">Available OCF Agents</p>
+              {health.availableAgents && health.availableAgents.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {health.availableAgents.map((agent) => (
+                    <Badge key={agent} variant="secondary">
+                      {agent}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No OCF agents detected.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface DetailsDialogProps {
+  node: Node | null;
+  onOpenChange: (open: boolean) => void;
+}
+
+function DetailsDialog({ node, onOpenChange }: DetailsDialogProps) {
+  const details: { label: string; value: string }[] = node
+    ? [
+        { label: 'Name', value: node.name },
+        { label: 'Address', value: node.address },
+        { label: 'Hostname', value: node.hostname },
+        { label: 'State', value: node.state },
+        { label: 'Version', value: node.version || '-' },
+        { label: 'Last Seen', value: formatLastSeen(node.lastSeen) },
+      ]
+    : [];
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        {checks.map((check) => (
-          <div key={check.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              {check.installed ? (
-                <MdCheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <MdCancel className="h-5 w-5 text-red-500" />
-              )}
-              <div>
-                <p className="font-medium">{check.name}</p>
-                {check.version && (
-                  <p className="text-sm text-gray-500">Version: {check.version}</p>
+    <Dialog open={!!node} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Node Details</DialogTitle>
+          <DialogDescription>{node?.name}</DialogDescription>
+        </DialogHeader>
+        <div className="py-2">
+          {details.map((d, i) => (
+            <div key={d.label}>
+              {i > 0 && <Separator />}
+              <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
+                <span className="text-muted-foreground">{d.label}</span>
+                {d.label === 'State' ? (
+                  <StatusBadge status={d.value} />
+                ) : (
+                  <span className="font-medium">{d.value}</span>
                 )}
               </div>
             </div>
-            {check.running !== undefined && (
-              <span className={clsx(
-                'px-2 py-1 rounded text-xs font-medium',
-                check.running ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-              )}>
-                {check.running ? 'Running' : 'Stopped'}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {health.availableAgents && health.availableAgents.length > 0 && (
-        <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Available OCF Agents:</p>
-          <div className="flex flex-wrap gap-1">
-            {health.availableAgents.map((agent) => (
-              <span key={agent} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                {agent}
-              </span>
-            ))}
-          </div>
+          ))}
         </div>
-      )}
-
-      <button onClick={onClose} className="btn btn-primary w-full">
-        Close
-      </button>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-interface NodeDetailsProps {
-  node: any;
-  onClose: () => void;
-}
-
-function NodeDetails({ node, onClose }: NodeDetailsProps) {
-  const details = [
-    { label: 'Name', value: node.name },
-    { label: 'Address', value: node.address },
-    { label: 'Hostname', value: node.hostname },
-    { label: 'State', value: node.state },
-    { label: 'Version', value: node.version },
-    {
-      label: 'Last Seen',
-      value: new Date(Number(node.lastSeen) * 1000).toLocaleString()
-    },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        {details.map((detail) => (
-          <div key={detail.label} className="flex justify-between py-2 border-b border-gray-100">
-            <span className="text-gray-500">{detail.label}</span>
-            <span className="font-medium">{detail.value}</span>
-          </div>
-        ))}
-      </div>
-      <button onClick={onClose} className="btn btn-primary w-full">
-        Close
-      </button>
-    </div>
-  );
-}
-

@@ -1,5 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { Toaster } from '@/components/ui/sonner';
+import { AuthTokenDialog } from '@/components/AuthTokenDialog';
 import { MainLayout } from './layouts/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { NodesPage } from './pages/NodesPage';
@@ -21,19 +24,23 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="nodes" element={<NodesPage />} />
-            <Route path="pools" element={<PoolsPage />} />
-            <Route path="resources" element={<ResourcesPage />} />
-            <Route path="gateways" element={<GatewaysPage />} />
-            <Route path="ha" element={<HAPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <TooltipProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="nodes" element={<NodesPage />} />
+              <Route path="pools" element={<PoolsPage />} />
+              <Route path="resources" element={<ResourcesPage />} />
+              <Route path="gateways" element={<GatewaysPage />} />
+              <Route path="ha" element={<HAPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+        <AuthTokenDialog />
+        <Toaster richColors position="top-right" />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

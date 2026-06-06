@@ -9,6 +9,11 @@ const httpAgent = new http.Agent({
 
 export default defineConfig({
   plugins: [pluginReact()],
+  resolve: {
+    alias: {
+      '@': './src',
+    },
+  },
   source: {
     entry: {
       index: './src/index.tsx',

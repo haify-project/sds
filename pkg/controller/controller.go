@@ -275,6 +275,14 @@ func (c *Controller) startGRPCServer() error {
 	if len(streamInterceptors) > 0 {
 		opts = append(opts, grpc.ChainStreamInterceptor(streamInterceptors...))
 	}
+	// The in-process REST gateway dials back with 10s keepalive pings; the
+	// gRPC default enforcement (5 min) answers those with GOAWAY
+	// "too_many_pings", and every REST request in the reconnect window
+	// fails with a 500. Permit frequent pings explicitly.
+	opts = append(opts, grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+		MinTime:             5 * time.Second,
+		PermitWithoutStream: true,
+	}))
 	c.server = grpc.NewServer(opts...)
 
 	// Register health service
@@ -303,15 +311,14 @@ func (c *Controller) startGRPCServer() error {
 	if err != nil {
 		return fmt.Errorf("failed to listen for REST: %w", err)
 	}
-	// Wrap listener to reject HTTP/2 connections
-	restLis = &http1OnlyListener{Listener: restLis}
 
-	// Create and register gRPC-Gateway
-	gatewayMux := runtime.NewServeMux(
-		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
-			return key, true
-		}),
-	)
+	// Create and register gRPC-Gateway. The default header matcher forwards
+	// well-known headers (Authorization arrives as grpcgateway-authorization,
+	// which the auth interceptor accepts). Forwarding ALL headers is not an
+	// option: browsers send hop-by-hop headers like "Connection" that are
+	// illegal in HTTP/2 and kill the loopback gRPC stream with
+	// RST_STREAM PROTOCOL_ERROR.
+	gatewayMux := runtime.NewServeMux()
 
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -331,12 +338,13 @@ func (c *Controller) startGRPCServer() error {
 	// Wrap with CORS handler
 	corsHandler := corsMiddleware(gatewayMux)
 
-	// Create HTTP server for gateway (disable HTTP/2 for REST API)
+	// Create HTTP server for gateway. Plain-text HTTP/1.1: h2 negotiation
+	// only happens over TLS (TLSNextProto kept empty), and browsers never
+	// speak h2c without an explicit upgrade, which we don't offer.
 	gatewayServer := &http.Server{
 		Handler:           corsHandler,
 		ReadHeaderTimeout: 5 * time.Second,
-		// Disable HTTP/2 to avoid protocol mismatch with browsers
-		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
+		TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
 	go func() {
@@ -353,23 +361,18 @@ func (c *Controller) startGRPCServer() error {
 	return nil
 }
 
-// corsMiddleware adds CORS headers and forces HTTP/1.1
+// corsMiddleware adds CORS headers and answers preflight requests.
+//
+// Note: this deliberately does NOT force "Connection: close" or sniff for an
+// HTTP/2 preface. A previous first-byte 'P' check meant to reject the h2c
+// preface ("PRI ...") also killed every connection whose first request was a
+// POST or PATCH, silently breaking all mutating REST calls from browsers.
 func corsMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Force HTTP/1.1 response
-		w.Header().Set("Connection", "close")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
-
-		// Reject HTTP/2 upgrade attempts
-		if r.Header.Get("Upgrade") == "h2c" || r.ProtoMajor == 2 {
-			w.Header().Set("Connection", "close")
-			w.WriteHeader(http.StatusHTTPVersionNotSupported)
-			_, _ = w.Write([]byte("HTTP/2 not supported, use HTTP/1.1"))
-			return
-		}
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
@@ -378,39 +381,6 @@ func corsMiddleware(h http.Handler) http.Handler {
 
 		h.ServeHTTP(w, r)
 	})
-}
-
-// http1OnlyListener wraps a listener to reject HTTP/2 client preface
-type http1OnlyListener struct {
-	net.Listener
-}
-
-func (l *http1OnlyListener) Accept() (net.Conn, error) {
-	conn, err := l.Listener.Accept()
-	if err != nil {
-		return conn, err
-	}
-	return &http1OnlyConn{Conn: conn}, nil
-}
-
-type http1OnlyConn struct {
-	net.Conn
-	firstByte bool
-}
-
-func (c *http1OnlyConn) Read(b []byte) (int, error) {
-	n, err := c.Conn.Read(b)
-	if n > 0 && !c.firstByte {
-		c.firstByte = true
-		// HTTP/2 client preface starts with "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
-		// The magic bytes are 0x505249202a20485454502f322e300d0a0d0a534d0d0a0d0a
-		// First byte is 'P' (0x50) for PRI, or we can check for the connection preface
-		if len(b) > 0 && b[0] == 0x50 { // 'P' from "PRI"
-			c.Conn.Close()
-			return 0, net.ErrClosed
-		}
-	}
-	return n, err
 }
 
 // startMetricsServer starts the Prometheus metrics HTTP server

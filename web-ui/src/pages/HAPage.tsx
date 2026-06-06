@@ -1,19 +1,69 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../services/api';
-import { clsx } from 'clsx';
+import { api, HaConfig, Resource, SelfHaStatus } from '@/services/api';
+import { StatusBadge } from '@/components/StatusBadge';
+import { toast } from 'sonner';
 import {
-  MdHealthAndSafety,
-  MdAdd,
-  MdDelete,
-  MdRefresh,
-  MdExitToApp,
-  MdInfo,
-  MdClose,
-} from 'react-icons/md';
+  HeartPulse,
+  Plus,
+  Trash2,
+  Info,
+  LogOut,
+  Loader2,
+  ShieldCheck,
+  ShieldOff,
+  Server,
+} from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+const SELF_HA_RESOURCE = 'sds-meta';
+
+/** Self-HA enable/disable failures often manifest as fetch errors while the
+ * controller restarts under drbd-reactor. Surface those as informational. */
+function isRestartError(message: string): boolean {
+  return message.includes('fetch') || message.includes('Failed');
+}
 
 export function HAPage() {
   const queryClient = useQueryClient();
+
   const { data: haConfigs, isLoading } = useQuery({
     queryKey: ['ha'],
     queryFn: () => api.getHaConfigs(),
@@ -24,434 +74,864 @@ export function HAPage() {
     queryFn: () => api.getResources(),
   });
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedHa, setSelectedHa] = useState<any>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailsConfig, setDetailsConfig] = useState<HaConfig | null>(null);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['ha'] });
+    queryClient.invalidateQueries({ queryKey: ['resources'] });
+  };
 
   const evictMutation = useMutation({
     mutationFn: (resource: string) => api.evictHa(resource),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ha'] });
-      queryClient.invalidateQueries({ queryKey: ['resources'] });
-      alert('Eviction initiated successfully');
+      toast.success('Eviction initiated; failover in progress');
+      invalidate();
     },
-    onError: (error) => {
-      alert(`Failed to evict: ${error.message}`);
-    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (resource: string) => api.deleteHa(resource),
     onSuccess: () => {
+      toast.success('HA configuration deleted');
       queryClient.invalidateQueries({ queryKey: ['ha'] });
     },
-    onError: (error) => {
-      alert(`Failed to delete HA config: ${error.message}`);
-    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const handleEvict = (resource: string) => {
-    if (confirm(`Evict HA resource "${resource}"? This will trigger failover to another node.`)) {
-      evictMutation.mutate(resource);
-    }
-  };
-
-  const handleDelete = (resource: string) => {
-    if (confirm(`Delete HA configuration for "${resource}"?`)) {
-      deleteMutation.mutate(resource);
-    }
-  };
-
-  const handleShowDetails = async (resource: string) => {
+  const showDetails = async (resource: string) => {
     try {
       const data = await api.getHaConfig(resource);
-      setSelectedHa(data.config);
-      setShowDetailsModal(true);
-    } catch (error: any) {
-      alert(`Failed to get HA details: ${error.message}`);
+      setDetailsConfig(data.config);
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
 
-  if (isLoading) {
-    return <div className="text-center py-12">Loading...</div>;
-  }
-
   const resourceMap = new Map(
-    resources?.resources.map(r => [r.name, r] as [string, typeof r]) ?? []
+    (resources?.resources ?? []).map((r) => [r.name, r] as [string, Resource])
   );
 
-  // Find resources without HA config
-  const resourcesWithoutHA = resources?.resources.filter(
-    r => !haConfigs?.configs.some(ha => ha.resource === r.name)
-  ) ?? [];
+  const configs = haConfigs?.configs ?? [];
+
+  // Resources without an existing HA config are eligible for creation.
+  const resourcesWithoutHA = (resources?.resources ?? []).filter(
+    (r) => !configs.some((ha) => ha.resource === r.name)
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">HA Configurations</h3>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn btn-primary flex items-center gap-2"
+      <SelfHaCard />
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">HA Configurations</h3>
+          <p className="text-sm text-muted-foreground">
+            Make DRBD resources highly available with a floating VIP and
+            automatic failover.
+          </p>
+        </div>
+        <Button
+          onClick={() => setCreateOpen(true)}
           disabled={resourcesWithoutHA.length === 0}
         >
-          <MdAdd className="h-4 w-4" />
+          <Plus className="mr-2 h-4 w-4" />
           Create HA Config
-        </button>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {haConfigs?.configs.map((config) => (
-          <HAConfigCard
-            key={config.resource}
-            config={config}
-            resource={resourceMap.get(config.resource)}
-            onEvict={handleEvict}
-            onDelete={handleDelete}
-            onShowDetails={handleShowDetails}
-            isEvicting={evictMutation.isPending}
-            isDeleting={deleteMutation.isPending}
-          />
-        ))}
-      </div>
-
-      {(!haConfigs?.configs || haConfigs.configs.length === 0) && (
-        <div className="text-center py-12 text-gray-500">
-          No HA configurations found. Create a resource first, then configure HA.
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full" />
+          ))}
+        </div>
+      ) : configs.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <HeartPulse className="h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              No HA configurations found. Create a resource first, then
+              configure HA.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {configs.map((config) => (
+            <HAConfigCard
+              key={config.resource}
+              config={config}
+              resource={resourceMap.get(config.resource)}
+              onShowDetails={showDetails}
+              onEvict={(r) => evictMutation.mutate(r)}
+              onDelete={(r) => deleteMutation.mutate(r)}
+              isEvicting={evictMutation.isPending}
+              isDeleting={deleteMutation.isPending}
+            />
+          ))}
         </div>
       )}
 
-      {/* Create HA Modal */}
-      {showCreateModal && (
-        <Modal onClose={() => setShowCreateModal(false)} title="Create HA Configuration">
-          <CreateHAForm
-            resources={resourcesWithoutHA}
-            onSuccess={() => {
-              setShowCreateModal(false);
-              queryClient.invalidateQueries({ queryKey: ['ha'] });
-            }}
-            onCancel={() => setShowCreateModal(false)}
-          />
-        </Modal>
-      )}
+      <CreateHADialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        resources={resourcesWithoutHA}
+        onCreated={() => {
+          setCreateOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['ha'] });
+        }}
+      />
 
-      {/* Details Modal */}
-      {showDetailsModal && selectedHa && (
-        <Modal onClose={() => setShowDetailsModal(false)} title="HA Configuration Details">
-          <HADetails config={selectedHa} onClose={() => setShowDetailsModal(false)} />
-        </Modal>
-      )}
+      <DetailsDialog
+        config={detailsConfig}
+        onOpenChange={(open) => !open && setDetailsConfig(null)}
+      />
     </div>
   );
 }
 
-interface HAConfigCardProps {
-  config: {
-    resource: string;
-    vip: string;
-    mountPoint: string;
-    fsType: string;
-    services: string[];
-  };
-  resource?: {
-    name: string;
-    port: number;
-    protocol: string;
-    nodes: string[];
-    role: string;
-    volumes: Array<{ volumeId: number; device: string; sizeGb: number }>;
-    nodeStates?: Record<string, { role: string; diskState: string; replication: string }>;
-  };
-  onEvict: (resource: string) => void;
-  onDelete: (resource: string) => void;
-  onShowDetails: (resource: string) => void;
-  isEvicting: boolean;
-  isDeleting: boolean;
-}
+// ==================== Controller Self-HA ====================
 
-function HAConfigCard({ config, resource, onEvict, onDelete, onShowDetails, isEvicting, isDeleting }: HAConfigCardProps) {
-  const isRunning = resource?.role === 'Primary';
-  const primaryNode = resource?.nodes.find(n => resource.nodeStates?.[n]?.role === 'Primary');
-
-  return (
-    <div className="card">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-lg bg-primary-100 flex items-center justify-center">
-            <MdHealthAndSafety className="h-6 w-6 text-primary-600" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-gray-900">{config.resource}</h4>
-            {resource && (
-              <p className="text-sm text-gray-500">
-                Port: {resource.port} • Protocol: {resource.protocol}
-              </p>
-            )}
-          </div>
-        </div>
-        <span className={clsx(
-          'inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium',
-          isRunning ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-        )}>
-          {isRunning ? 'Running' : 'Stopped'}
-        </span>
-      </div>
-
-      <div className="space-y-3">
-        <InfoRow label="VIP" value={config.vip} />
-        <InfoRow label="Mount Point" value={config.mountPoint || '-'} />
-        <InfoRow label="Filesystem" value={config.fsType || '-'} />
-        <InfoRow label="Primary Node" value={primaryNode || '-'} />
-        <InfoRow
-          label="Services"
-          value={config.services?.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {config.services.map(s => (
-                <span key={s} className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
-                  {s}
-                </span>
-              ))}
-            </div>
-          ) : '-'}
-        />
-      </div>
-
-      <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-        <button
-          onClick={() => onShowDetails(config.resource)}
-          className="btn btn-secondary text-xs flex items-center gap-1"
-        >
-          <MdInfo className="h-3 w-3" />
-          Details
-        </button>
-        <button
-          onClick={() => onEvict(config.resource)}
-          disabled={isEvicting || !isRunning}
-          className={clsx(
-            'btn btn-warning text-xs flex items-center gap-1',
-            (!isRunning || isEvicting) && 'opacity-50 cursor-not-allowed'
-          )}
-        >
-          {isEvicting ? <MdRefresh className="h-3 w-3 animate-spin" /> : <MdExitToApp className="h-3 w-3" />}
-          Evict
-        </button>
-        <button
-          onClick={() => onDelete(config.resource)}
-          disabled={isDeleting}
-          className="btn btn-danger text-xs flex items-center gap-1"
-        >
-          <MdDelete className="h-3 w-3" />
-          Delete
-        </button>
-      </div>
-    </div>
-  );
-}
-
-interface InfoRowProps {
-  label: string;
-  value: string | React.ReactNode;
-}
-
-function InfoRow({ label, value }: InfoRowProps) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-gray-900 font-mono text-xs">
-        {typeof value === 'string' ? value : value}
-      </span>
-    </div>
-  );
-}
-
-interface ModalProps {
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}
-
-function Modal({ onClose, title, children }: ModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <MdClose className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-4">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-interface CreateHAFormProps {
-  resources: Array<{ name: string; nodes: string[] }>;
-  onSuccess: () => void;
-  onCancel: () => void;
-}
-
-function CreateHAForm({ resources, onSuccess, onCancel }: CreateHAFormProps) {
-  const [resource, setResource] = useState('');
-  const [vip, setVip] = useState('');
-  const [mountPoint, setMountPoint] = useState('');
-  const [fsType, setFsType] = useState('ext4');
-  const [services, setServices] = useState('');
-
-  const createMutation = useMutation({
-    mutationFn: () => api.makeHa(resource, {
-      vip,
-      mountPoint: mountPoint || undefined,
-      fstype: mountPoint ? fsType : undefined,
-      services: services ? services.split(',').map(s => s.trim()).filter(s => s) : undefined,
-    }),
-    onSuccess: () => onSuccess(),
-    onError: (error) => alert(`Failed to create HA config: ${error.message}`),
+function SelfHaCard() {
+  const queryClient = useQueryClient();
+  const {
+    data: status,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['selfha'],
+    queryFn: () => api.getSelfHaStatus(),
+    refetchInterval: 15000,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createMutation.mutate();
-  };
+  const [enableOpen, setEnableOpen] = useState(false);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ['selfha'] });
+
+  const evictMutation = useMutation({
+    mutationFn: () => api.evictHa(SELF_HA_RESOURCE),
+    onSuccess: () => {
+      toast.success('Controller eviction initiated; failing over');
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: (node: string) => api.disableSelfHa(node),
+    onSuccess: () => {
+      toast.success('Self-HA disabled; controller returning to standalone');
+      invalidate();
+    },
+    onError: (e: Error) => {
+      if (isRestartError(e.message)) {
+        toast.info('Controller is restarting; refresh shortly');
+      } else {
+        toast.error(e.message);
+      }
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="h-5 w-5" />
+            Controller Self-HA
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-20 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // A failed status query is NOT the same as "self-HA disabled" — showing
+  // the disabled state here would invite an accidental second enablement.
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldOff className="h-5 w-5 text-amber-500" />
+              Controller Self-HA
+            </CardTitle>
+            <StatusBadge status="unknown" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Could not load self-HA status: {(error as Error).message}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>
+            <Loader2 className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {resources.length === 0 ? (
-        <div className="text-center py-4 text-gray-500">
-          No resources available for HA configuration.
-          <br />
-          All resources already have HA configured.
-        </div>
-      ) : (
-        <>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">DRBD Resource</label>
-            <select
-              value={resource}
-              onChange={(e) => setResource(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            >
-              <option value="">Select a resource...</option>
-              {resources.map((r) => (
-                <option key={r.name} value={r.name}>{r.name} ({r.nodes.join(', ')})</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Virtual IP (CIDR)</label>
-            <input
-              type="text"
-              value={vip}
-              onChange={(e) => setVip(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g., 192.168.1.100/24"
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">The VIP that will float between nodes</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mount Point (optional)</label>
-            <input
-              type="text"
-              value={mountPoint}
-              onChange={(e) => setMountPoint(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g., /mnt/data"
-            />
-            <p className="text-xs text-gray-500 mt-1">Path where the DRBD device will be mounted</p>
-          </div>
-
-          {mountPoint && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Filesystem Type</label>
-              <select
-                value={fsType}
-                onChange={(e) => setFsType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="ext4">ext4</option>
-                <option value="xfs">XFS</option>
-              </select>
-            </div>
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            {status?.enabled ? (
+              <ShieldCheck className="h-5 w-5 text-emerald-600" />
+            ) : (
+              <ShieldOff className="h-5 w-5 text-muted-foreground" />
+            )}
+            Controller Self-HA
+          </CardTitle>
+          {status?.enabled ? (
+            <StatusBadge status="enabled" />
+          ) : (
+            <Button size="sm" onClick={() => setEnableOpen(true)}>
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Enable Self-HA
+            </Button>
           )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {status?.enabled ? (
+          <SelfHaEnabled
+            status={status}
+            onEvict={() => evictMutation.mutate()}
+            onDisable={(node) => disableMutation.mutate(node)}
+            isEvicting={evictMutation.isPending}
+            isDisabling={disableMutation.isPending}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Standalone controller. Enable Self-HA to run the management plane on
+            its own DRBD resource with a floating VIP and automatic failover.
+          </p>
+        )}
+      </CardContent>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Services (comma-separated, optional)</label>
-            <input
-              type="text"
-              value={services}
-              onChange={(e) => setServices(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g., mysql.service, nginx.service"
-            />
-            <p className="text-xs text-gray-500 mt-1">Systemd services to start/stop with the resource</p>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={createMutation.isPending}
-              className="btn btn-secondary flex-1"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className="btn btn-primary flex-1"
-            >
-              {createMutation.isPending ? 'Creating...' : 'Create'}
-            </button>
-          </div>
-        </>
-      )}
-    </form>
+      <EnableSelfHaDialog
+        open={enableOpen}
+        onOpenChange={setEnableOpen}
+        onEnabled={() => {
+          setEnableOpen(false);
+          invalidate();
+        }}
+      />
+    </Card>
   );
 }
 
-interface HADetailsProps {
-  config: any;
-  onClose: () => void;
-}
-
-function HADetails({ config, onClose }: HADetailsProps) {
-  const details = [
-    { label: 'Resource', value: config.resource },
-    { label: 'Virtual IP', value: config.vip },
-    { label: 'Mount Point', value: config.mountPoint || '-' },
-    { label: 'Filesystem', value: config.fsType || '-' },
-  ];
+function SelfHaEnabled({
+  status,
+  onEvict,
+  onDisable,
+  isEvicting,
+  isDisabling,
+}: {
+  status: SelfHaStatus;
+  onEvict: () => void;
+  onDisable: (node: string) => void;
+  isEvicting: boolean;
+  isDisabling: boolean;
+}) {
+  const [disableNode, setDisableNode] = useState(status.activeNode || '');
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        {details.map((detail) => (
-          <div key={detail.label} className="flex justify-between py-2 border-b border-gray-100">
-            <span className="text-gray-500">{detail.label}</span>
-            <span className="font-medium">{detail.value}</span>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Virtual IP</p>
+          <p className="font-mono text-sm">{status.vip || '-'}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">
+            Active Node
+          </p>
+          <Badge className="bg-emerald-600 hover:bg-emerald-600">
+            <Server className="mr-1 h-3 w-3" />
+            {status.activeNode || '-'}
+          </Badge>
+        </div>
       </div>
 
-      {config.services && config.services.length > 0 && (
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Services</h4>
-          <div className="space-y-1">
-            {config.services.map((service: string) => (
-              <div key={service} className="flex items-center gap-2 py-1 bg-gray-50 px-2 rounded text-sm">
-                <span className="text-gray-700">{service}</span>
-              </div>
-            ))}
-          </div>
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">Member Nodes</p>
+        <div className="flex flex-wrap gap-2">
+          {(status.nodes ?? []).map((node) => (
+            <Badge key={node} variant="secondary">
+              {node}
+            </Badge>
+          ))}
         </div>
-      )}
+      </div>
 
-      <button onClick={onClose} className="btn btn-primary w-full">Close</button>
+      <Separator />
+
+      <div className="flex flex-wrap gap-2">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={isEvicting}>
+              {isEvicting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="mr-2 h-4 w-4" />
+              )}
+              Evict Controller
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Evict the controller?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The management plane will briefly fail over to another node.
+                In-flight requests may fail for a few seconds until the VIP
+                moves and the controller restarts on the new active node.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={onEvict}>
+                Evict Controller
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={isDisabling}>
+              {isDisabling ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldOff className="mr-2 h-4 w-4" />
+              )}
+              Disable
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Disable Self-HA?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The controller will restart in standalone mode on the selected
+                node. The VIP is released, so this UI endpoint may move and
+                requests may fail briefly — reconnect to the node's own address
+                afterwards.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-1.5 py-2">
+              <Label>Standalone Node</Label>
+              <Select value={disableNode} onValueChange={setDisableNode}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a node..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(status.nodes ?? []).map((node) => (
+                    <SelectItem key={node} value={node}>
+                      {node}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!disableNode}
+                onClick={() => disableNode && onDisable(disableNode)}
+              >
+                Disable Self-HA
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }
 
+function EnableSelfHaDialog({
+  open,
+  onOpenChange,
+  onEnabled,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEnabled: () => void;
+}) {
+  const [vip, setVip] = useState('');
+  const [pool, setPool] = useState('');
+  const [sizeGb, setSizeGb] = useState('1');
+  const [port, setPort] = useState('7999');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.enableSelfHa({
+        vip,
+        pool,
+        sizeGb: parseInt(sizeGb, 10),
+        port: parseInt(port, 10),
+      }),
+    onSuccess: () => {
+      toast.info(
+        'Controller is restarting under drbd-reactor management. Requests may fail briefly while the VIP comes up.',
+        { duration: Infinity, closeButton: true }
+      );
+      onEnabled();
+    },
+    onError: (e: Error) => {
+      if (isRestartError(e.message)) {
+        toast.info('Controller is restarting; refresh shortly');
+      } else {
+        toast.error(e.message);
+      }
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Enable Controller Self-HA</DialogTitle>
+          <DialogDescription>
+            Run the management plane on its own DRBD resource with a floating
+            VIP and drbd-reactor failover.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            mutation.mutate();
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label>Virtual IP (CIDR)</Label>
+            <Input
+              value={vip}
+              onChange={(e) => setVip(e.target.value)}
+              placeholder="192.168.1.250/24"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Pool</Label>
+            <Input
+              value={pool}
+              onChange={(e) => setPool(e.target.value)}
+              placeholder="vg0"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Size (GB)</Label>
+              <Input
+                type="number"
+                value={sizeGb}
+                onChange={(e) => setSizeGb(e.target.value)}
+                min={1}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>DRBD Port</Label>
+              <Input
+                type="number"
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="submit"
+              disabled={mutation.isPending || !vip || !pool}
+            >
+              {mutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Enable Self-HA
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ==================== HA Config Card ====================
+
+function HAConfigCard({
+  config,
+  resource,
+  onShowDetails,
+  onEvict,
+  onDelete,
+  isEvicting,
+  isDeleting,
+}: {
+  config: HaConfig;
+  resource?: Resource;
+  onShowDetails: (resource: string) => void;
+  onEvict: (resource: string) => void;
+  onDelete: (resource: string) => void;
+  isEvicting: boolean;
+  isDeleting: boolean;
+}) {
+  // The resources list endpoint reports Role "Unknown" without node states;
+  // live status comes from the per-resource status RPC instead.
+  const { data: liveStatus } = useQuery({
+    queryKey: ['ha-status', config.resource],
+    queryFn: () => api.resourceStatus(config.resource),
+    refetchInterval: 15000,
+  });
+  const nodeStates = liveStatus?.status?.nodeStates ?? resource?.nodeStates ?? {};
+  const primaryNode = Object.keys(nodeStates).find(
+    (n) => nodeStates[n]?.role === 'Primary'
+  );
+  const isRunning = Boolean(primaryNode);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <HeartPulse className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <CardTitle className="text-base">{config.resource}</CardTitle>
+              {resource && (
+                <p className="text-sm text-muted-foreground">
+                  Port: {resource.port} • Protocol: {resource.protocol}
+                </p>
+              )}
+            </div>
+          </div>
+          <StatusBadge status={isRunning ? 'running' : 'stopped'} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1 text-sm">
+          <InfoRow label="VIP" value={config.vip} mono />
+          <InfoRow label="Mount Point" value={config.mountPoint || '-'} mono />
+          <InfoRow label="Filesystem" value={config.fsType || '-'} />
+          <InfoRow label="Primary Node" value={primaryNode || '-'} />
+          <div className="flex items-start justify-between gap-2 py-1">
+            <span className="text-muted-foreground">Services</span>
+            {config.services?.length > 0 ? (
+              <div className="flex flex-wrap justify-end gap-1">
+                {config.services.map((s) => (
+                  <Badge key={s} variant="secondary" className="font-mono">
+                    {s}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <span className="font-medium">-</span>
+            )}
+          </div>
+        </div>
+
+        <Separator />
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onShowDetails(config.resource)}
+          >
+            <Info className="mr-1 h-3 w-3" />
+            Details
+          </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isEvicting || !isRunning}
+              >
+                {isEvicting ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <LogOut className="mr-1 h-3 w-3" />
+                )}
+                Evict
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Evict "{config.resource}"?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This triggers a failover to another node. The VIP moves and
+                  clients will briefly lose connectivity until the resource is
+                  promoted elsewhere.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onEvict(config.resource)}>
+                  Evict
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={isDeleting}>
+                <Trash2 className="mr-1 h-3 w-3 text-destructive" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete HA configuration?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This removes the drbd-reactor HA config for "{config.resource}
+                  ". The DRBD resource and its data are not affected, but
+                  automatic failover stops.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onDelete(config.resource)}>
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-2 py-1">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={mono ? 'font-mono text-xs' : 'font-medium'}>{value}</span>
+    </div>
+  );
+}
+
+// ==================== Details Dialog ====================
+
+function DetailsDialog({
+  config,
+  onOpenChange,
+}: {
+  config: HaConfig | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const rows = config
+    ? [
+        ['Resource', config.resource],
+        ['Virtual IP', config.vip],
+        ['Mount Point', config.mountPoint || '-'],
+        ['Filesystem', config.fsType || '-'],
+      ]
+    : [];
+
+  return (
+    <Dialog open={!!config} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>HA Configuration Details</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-1 text-sm">
+          {rows.map(([label, value]) => (
+            <div
+              key={label}
+              className="flex justify-between border-b py-2 last:border-0"
+            >
+              <span className="text-muted-foreground">{label}</span>
+              <span className="font-medium">{value}</span>
+            </div>
+          ))}
+          {config?.services && config.services.length > 0 && (
+            <div className="pt-2">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Services
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {config.services.map((service) => (
+                  <Badge key={service} variant="secondary" className="font-mono">
+                    {service}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ==================== Create HA Dialog ====================
+
+function CreateHADialog({
+  open,
+  onOpenChange,
+  resources,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  resources: Resource[];
+  onCreated: () => void;
+}) {
+  const [resource, setResource] = useState('');
+  const [vip, setVip] = useState('');
+  const [mountPoint, setMountPoint] = useState('');
+  const [fstype, setFstype] = useState('ext4');
+  const [services, setServices] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.makeHa(resource, {
+        vip,
+        mountPoint: mountPoint || undefined,
+        fstype: mountPoint ? fstype : undefined,
+        services: services
+          ? services.split(',').map((s) => s.trim()).filter(Boolean)
+          : undefined,
+      }),
+    onSuccess: () => {
+      toast.success('HA configuration created');
+      onCreated();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create HA Configuration</DialogTitle>
+          <DialogDescription>
+            Attach a floating VIP and automatic failover to a DRBD resource.
+          </DialogDescription>
+        </DialogHeader>
+        {resources.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            No resources available for HA configuration. All resources already
+            have HA configured.
+          </p>
+        ) : (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              mutation.mutate();
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label>DRBD Resource</Label>
+              <Select value={resource} onValueChange={setResource}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a resource..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {resources.map((r) => (
+                    <SelectItem key={r.name} value={r.name}>
+                      {r.name} ({r.nodes.join(', ')})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Virtual IP (CIDR)</Label>
+              <Input
+                value={vip}
+                onChange={(e) => setVip(e.target.value)}
+                placeholder="192.168.1.100/24"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                The VIP that will float between nodes.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Mount Point (optional)</Label>
+              <Input
+                value={mountPoint}
+                onChange={(e) => setMountPoint(e.target.value)}
+                placeholder="/mnt/data"
+              />
+              <p className="text-xs text-muted-foreground">
+                Path where the DRBD device will be mounted.
+              </p>
+            </div>
+
+            {mountPoint && (
+              <div className="space-y-1.5">
+                <Label>Filesystem Type</Label>
+                <Select value={fstype} onValueChange={setFstype}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ext4">ext4</SelectItem>
+                    <SelectItem value="xfs">XFS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>Services (comma-separated, optional)</Label>
+              <Input
+                value={services}
+                onChange={(e) => setServices(e.target.value)}
+                placeholder="mysql.service, nginx.service"
+              />
+              <p className="text-xs text-muted-foreground">
+                Systemd services to start/stop with the resource.
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="submit"
+                disabled={mutation.isPending || !resource || !vip}
+              >
+                {mutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

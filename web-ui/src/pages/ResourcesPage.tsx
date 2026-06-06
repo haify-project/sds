@@ -1,22 +1,85 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ResourceStatus } from '../services/api';
-import { clsx } from 'clsx';
+import { api, Resource, Volume } from '../services/api';
+import { StatusBadge } from '@/components/StatusBadge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  MdViewInAr,
-  MdAdd,
-  MdClose,
-  MdVisibility,
-  MdDelete,
-  MdArrowUpward,
-  MdArrowDownward,
-  MdStorage,
-  MdFolder,
-  MdRefresh,
-} from 'react-icons/md';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import {
+  Plus,
+  Star,
+  Eye,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Database,
+  FolderCog,
+  Trash2,
+  MoreHorizontal,
+  Loader2,
+  Boxes,
+} from 'lucide-react';
+
+interface NodeOpt {
+  name: string;
+  address: string;
+}
+interface PoolOpt {
+  name: string;
+  node: string;
+  type: string;
+  freeGb: string;
+}
 
 export function ResourcesPage() {
-  const queryClient = useQueryClient();
   const { data: resources, isLoading } = useQuery({
     queryKey: ['resources'],
     queryFn: () => api.getResources(),
@@ -32,355 +95,969 @@ export function ResourcesPage() {
     queryFn: () => api.getNodes(),
   });
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showMountModal, setShowMountModal] = useState(false);
-  const [selectedResource, setSelectedResource] = useState<string | null>(null);
-  const [statusData, setStatusData] = useState<ResourceStatus | null>(null);
-  const [mountResource, setMountResource] = useState<{ name: string; volumeId: number } | null>(null);
-
-  const deleteMutation = useMutation({
-    mutationFn: (name: string) => api.deleteResource(name),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['resources'] });
-    },
-    onError: (error) => {
-      alert(`Failed to delete resource: ${error.message}`);
-    },
-  });
-
-  const primaryMutation = useMutation({
-    mutationFn: (data: { resource: string; node: string }) =>
-      api.setPrimary(data.resource, data.node, true),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['resources'] });
-    },
-    onError: (error) => {
-      alert(`Failed to set primary: ${error.message}`);
-    },
-  });
-
-  const secondaryMutation = useMutation({
-    mutationFn: (data: { resource: string; node: string }) =>
-      api.setSecondary(data.resource, data.node),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['resources'] });
-    },
-    onError: (error) => {
-      alert(`Failed to set secondary: ${error.message}`);
-    },
-  });
-
-  const statusMutation = useMutation({
-    mutationFn: (name: string) => api.resourceStatus(name),
-    onSuccess: (data) => {
-      setStatusData(data.status);
-      setSelectedResource(null);
-    },
-    onError: (error) => {
-      alert(`Failed to get status: ${error.message}`);
-      setSelectedResource(null);
-    },
-  });
-
-  const handleDelete = (name: string) => {
-    if (confirm(`Are you sure you want to delete resource "${name}"? This will remove all data.`)) {
-      deleteMutation.mutate(name);
-    }
-  };
-
-  const handleSetPrimary = (resource: string, node: string) => {
-    if (confirm(`Set ${resource} as Primary on ${node}?`)) {
-      primaryMutation.mutate({ resource, node });
-    }
-  };
-
-  const handleSetSecondary = (resource: string, node: string) => {
-    if (confirm(`Set ${resource} as Secondary on ${node}?`)) {
-      secondaryMutation.mutate({ resource, node });
-    }
-  };
-
-  const handleShowStatus = (name: string) => {
-    setSelectedResource(name);
-    statusMutation.mutate(name);
-  };
-
-  const handleMount = (name: string, volumeId: number) => {
-    setMountResource({ name, volumeId });
-    setShowMountModal(true);
-  };
-
-  if (isLoading) {
-    return <div className="text-center py-12">Loading...</div>;
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">DRBD Resources</h3>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <MdAdd className="h-4 w-4" />
-          Create Resource
-        </button>
+        <CreateResourceDialog
+          nodes={nodes?.nodes ?? []}
+          pools={pools?.pools ?? []}
+        />
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Resource</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Port</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Protocol</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Nodes</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Role</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Volumes</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {resources?.resources.map((resource) => (
-              <ResourceRow
-                key={resource.name}
-                resource={resource}
-                onDelete={handleDelete}
-                onSetPrimary={handleSetPrimary}
-                onSetSecondary={handleSetSecondary}
-                onShowStatus={handleShowStatus}
-                onMount={handleMount}
-                isLoading={statusMutation.isPending && selectedResource === resource.name}
-                isDeleting={deleteMutation.isPending}
-                isUpdating={primaryMutation.isPending || secondaryMutation.isPending}
-              />
+      <Card>
+        {isLoading ? (
+          <div className="space-y-3 p-4">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
             ))}
-          </tbody>
-        </table>
-
-        {!resources?.resources.length && (
-          <div className="text-center py-12 text-gray-500">
-            No resources found. Create your first resource to get started.
           </div>
+        ) : !resources?.resources.length ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
+            <Boxes className="h-10 w-10" />
+            <p>No resources found. Create your first resource to get started.</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Resource</TableHead>
+                <TableHead>Port</TableHead>
+                <TableHead>Protocol</TableHead>
+                <TableHead>Nodes</TableHead>
+                <TableHead>Volumes</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {resources.resources.map((resource) => (
+                <ResourceRow
+                  key={resource.name}
+                  resource={resource}
+                  pools={pools?.pools ?? []}
+                  nodes={nodes?.nodes ?? []}
+                />
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </div>
-
-      {/* Create Resource Modal */}
-      {showCreateModal && (
-        <Modal onClose={() => setShowCreateModal(false)} title="Create DRBD Resource">
-          <CreateResourceForm
-            nodes={nodes?.nodes ?? []}
-            pools={pools?.pools ?? []}
-            onSuccess={() => {
-              setShowCreateModal(false);
-              queryClient.invalidateQueries({ queryKey: ['resources'] });
-            }}
-            onCancel={() => setShowCreateModal(false)}
-          />
-        </Modal>
-      )}
-
-      {/* Status Modal */}
-      {showStatusModal && statusData && (
-        <Modal onClose={() => setShowStatusModal(false)} title={`Resource Status: ${statusData.name}`}>
-          <ResourceStatusView status={statusData} onClose={() => setShowStatusModal(false)} />
-        </Modal>
-      )}
-
-      {/* Mount Modal */}
-      {showMountModal && mountResource && (
-        <Modal onClose={() => setShowMountModal(false)} title={`Mount Resource: ${mountResource.name}`}>
-          <MountForm
-            resourceName={mountResource.name}
-            volumeId={mountResource.volumeId}
-            onSuccess={() => {
-              setShowMountModal(false);
-              queryClient.invalidateQueries({ queryKey: ['resources'] });
-            }}
-            onCancel={() => setShowMountModal(false)}
-          />
-        </Modal>
-      )}
+      </Card>
     </div>
   );
 }
 
-interface ResourceRowProps {
-  resource: {
-    name: string;
-    port: number;
-    protocol: string;
-    nodes: string[];
-    role: string;
-    volumes: Array<{ volumeId: number; device: string; sizeGb: number }>;
-    nodeStates?: Record<string, { role: string; diskState: string; replication: string }>;
-  };
-  onDelete: (name: string) => void;
-  onSetPrimary: (resource: string, node: string) => void;
-  onSetSecondary: (resource: string, node: string) => void;
-  onShowStatus: (name: string) => void;
-  onMount: (name: string, volumeId: number) => void;
-  isLoading: boolean;
-  isDeleting: boolean;
-  isUpdating: boolean;
-}
-
-function ResourceRow({ resource, onDelete, onSetPrimary, onSetSecondary, onShowStatus, onMount, isLoading, isDeleting, isUpdating }: ResourceRowProps) {
-  const [showActions, setShowActions] = useState(false);
-  const primaryNode = resource.nodes.find(n => resource.nodeStates?.[n]?.role === 'Primary');
-
+function ResourceRow({
+  resource,
+  pools,
+  nodes,
+}: {
+  resource: Resource;
+  pools: PoolOpt[];
+  nodes: NodeOpt[];
+}) {
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50">
-      <td className="py-3 px-4">
+    <TableRow>
+      <TableCell>
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded bg-purple-100 flex items-center justify-center">
-            <MdViewInAr className="h-4 w-4 text-purple-600" />
-          </div>
+          <span className="flex h-8 w-8 items-center justify-center rounded bg-primary/10">
+            <Database className="h-4 w-4 text-primary" />
+          </span>
           <span className="font-medium">{resource.name}</span>
         </div>
-      </td>
-      <td className="py-3 px-4 text-sm text-gray-500">{resource.port}</td>
-      <td className="py-3 px-4">
-        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">
-          {resource.protocol}
-        </span>
-      </td>
-      <td className="py-3 px-4 text-sm text-gray-500">
+      </TableCell>
+      <TableCell className="text-muted-foreground">{resource.port}</TableCell>
+      <TableCell>
+        <Badge variant="secondary">{resource.protocol}</Badge>
+      </TableCell>
+      <TableCell>
         <div className="flex flex-wrap gap-1">
           {resource.nodes.map((node) => {
             const state = resource.nodeStates?.[node];
             const isPrimary = state?.role === 'Primary';
             return (
-              <span
-                key={node}
-                className={clsx(
-                  'px-2 py-0.5 rounded text-xs',
-                  isPrimary ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+              <span key={node} className="inline-flex items-center gap-1">
+                {isPrimary && (
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                 )}
-              >
-                {node}{isPrimary ? ' (P)' : ''}
+                <StatusBadge status={state?.role ?? node} />
+                {state?.role && (
+                  <span className="text-xs text-muted-foreground">{node}</span>
+                )}
               </span>
             );
           })}
         </div>
-      </td>
-      <td className="py-3 px-4">
-        <span className={clsx(
-          'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-          resource.role === 'Primary' && 'bg-green-100 text-green-700',
-          resource.role === 'Secondary' && 'bg-gray-100 text-gray-700',
-          resource.role === 'Unknown' && 'bg-yellow-100 text-yellow-700',
-        )}>
-          {resource.role}
-        </span>
-      </td>
-      <td className="py-3 px-4 text-sm text-gray-500">{resource.volumes.length}</td>
-      <td className="py-3 px-4">
-        <div className="flex justify-end gap-1">
-          <button
-            onClick={() => onShowStatus(resource.name)}
-            disabled={isLoading}
-            className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1"
-          >
-            {isLoading ? <MdRefresh className="h-3 w-3 animate-spin" /> : <MdVisibility className="h-3 w-3" />}
-            Status
-          </button>
-          <div className="relative">
-            <button
-              onClick={() => setShowActions(!showActions)}
-              className="btn btn-secondary text-xs py-1 px-2"
-            >
-              More
-            </button>
-            {showActions && (
-              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border z-10">
-                <div className="py-1">
-                  {resource.nodes.map((node) => (
-                    <button
-                      key={node}
-                      onClick={() => {
-                        onSetPrimary(resource.name, node);
-                        setShowActions(false);
-                      }}
-                      disabled={isUpdating}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
-                    >
-                      <MdArrowUpward className="h-3 w-3" />
-                      Primary on {node}
-                    </button>
-                  ))}
-                  {resource.volumes.map((vol) => (
-                    <button
-                      key={vol.volumeId}
-                      onClick={() => {
-                        onMount(resource.name, vol.volumeId);
-                        setShowActions(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
-                    >
-                      <MdFolder className="h-3 w-3" />
-                      Mount Vol {vol.volumeId}
-                    </button>
-                  ))}
-                  <hr className="my-1" />
-                  <button
-                    onClick={() => {
-                      onDelete(resource.name);
-                      setShowActions(false);
-                    }}
-                    disabled={isDeleting}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  >
-                    <MdDelete className="h-3 w-3" />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {resource.volumes.length}
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-1">
+          <StatusDialog resourceName={resource.name} />
+          <ResourceActionsMenu
+            resource={resource}
+            pools={pools}
+            nodes={nodes}
+          />
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
-interface ModalProps {
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
+function ResourceActionsMenu({
+  resource,
+  pools,
+  nodes,
+}: {
+  resource: Resource;
+  pools: PoolOpt[];
+  nodes: NodeOpt[];
+}) {
+  const [primaryOpen, setPrimaryOpen] = useState(false);
+  const [secondaryOpen, setSecondaryOpen] = useState(false);
+  const [volumesOpen, setVolumesOpen] = useState(false);
+  const [mountOpen, setMountOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" className="h-8 w-8">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>{resource.name}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setPrimaryOpen(true)}>
+            <ArrowUpCircle className="h-4 w-4" />
+            Set Primary
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setSecondaryOpen(true)}>
+            <ArrowDownCircle className="h-4 w-4" />
+            Set Secondary
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setVolumesOpen(true)}>
+            <Database className="h-4 w-4" />
+            Volumes
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setMountOpen(true)}>
+            <FolderCog className="h-4 w-4" />
+            Filesystem / Mount
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <SetRoleDialog
+        open={primaryOpen}
+        onOpenChange={setPrimaryOpen}
+        resource={resource}
+        mode="primary"
+      />
+      <SetRoleDialog
+        open={secondaryOpen}
+        onOpenChange={setSecondaryOpen}
+        resource={resource}
+        mode="secondary"
+      />
+      <VolumesDialog
+        open={volumesOpen}
+        onOpenChange={setVolumesOpen}
+        resource={resource}
+        pools={pools}
+      />
+      <MountDialog
+        open={mountOpen}
+        onOpenChange={setMountOpen}
+        resource={resource}
+        nodes={nodes}
+      />
+      <DeleteResourceDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        resourceName={resource.name}
+      />
+    </>
+  );
 }
 
-function Modal({ onClose, title, children }: ModalProps) {
+function StatusDialog({ resourceName }: { resourceName: string }) {
+  const [open, setOpen] = useState(false);
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['resource-status', resourceName],
+    queryFn: () => api.resourceStatus(resourceName),
+    enabled: open,
+  });
+
+  const status = data?.status;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <MdClose className="h-5 w-5" />
-          </button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Eye className="h-4 w-4" />
+          Status
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Resource Status: {resourceName}</DialogTitle>
+          <DialogDescription>Live DRBD status for this resource.</DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-3 py-2">
+            <Skeleton className="h-6 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : isError ? (
+          <p className="py-4 text-sm text-destructive">
+            {(error as Error).message}
+          </p>
+        ) : status ? (
+          <div className="space-y-5 py-2">
+            <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
+              <span className="text-sm text-muted-foreground">Overall Role</span>
+              <StatusBadge status={status.role} />
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-sm font-medium">Node States</h4>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Node</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Disk</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(status.nodeStates || {}).map(
+                    ([node, state]) => (
+                      <TableRow key={node}>
+                        <TableCell className="font-medium">{node}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={state.role} />
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={state.diskState} />
+                        </TableCell>
+                      </TableRow>
+                    ),
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-sm font-medium">Volumes</h4>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Device</TableHead>
+                    <TableHead>Size</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {status.volumes?.map((vol) => (
+                    <TableRow key={vol.volumeId}>
+                      <TableCell>{vol.volumeId}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {vol.device}
+                      </TableCell>
+                      <TableCell>{vol.sizeGb} GB</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SetRoleDialog({
+  open,
+  onOpenChange,
+  resource,
+  mode,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  resource: Resource;
+  mode: 'primary' | 'secondary';
+}) {
+  const queryClient = useQueryClient();
+  const [node, setNode] = useState(resource.nodes[0] ?? '');
+  const [force, setForce] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      mode === 'primary'
+        ? api.setPrimary(resource.name, node, force)
+        : api.setSecondary(resource.name, node),
+    onSuccess: () => {
+      toast.success(
+        `${resource.name} set ${mode === 'primary' ? 'Primary' : 'Secondary'} on ${node}`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            Set {mode === 'primary' ? 'Primary' : 'Secondary'} — {resource.name}
+          </DialogTitle>
+          <DialogDescription>
+            Choose the node to promote to{' '}
+            {mode === 'primary' ? 'Primary' : 'Secondary'}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Node</Label>
+            <Select value={node} onValueChange={setNode}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a node..." />
+              </SelectTrigger>
+              <SelectContent>
+                {resource.nodes.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {mode === 'primary' && (
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="force-primary">Force</Label>
+                <p className="text-xs text-muted-foreground">
+                  Force promotion even if peers are unreachable.
+                </p>
+              </div>
+              <Switch
+                id="force-primary"
+                checked={force}
+                onCheckedChange={setForce}
+              />
+            </div>
+          )}
         </div>
-        <div className="p-4">{children}</div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={mutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending || !node}
+          >
+            {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Apply
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function VolumesDialog({
+  open,
+  onOpenChange,
+  resource,
+  pools,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  resource: Resource;
+  pools: PoolOpt[];
+}) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['resource', resource.name],
+    queryFn: () => api.getResource(resource.name),
+    enabled: open,
+  });
+
+  const volumes = data?.resource?.volumes ?? resource.volumes;
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['resource', resource.name] });
+    queryClient.invalidateQueries({ queryKey: ['resources'] });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Volumes — {resource.name}</DialogTitle>
+          <DialogDescription>
+            Manage volumes backing this resource.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="volumes" className="py-2">
+          <TabsList>
+            <TabsTrigger value="volumes">Volumes</TabsTrigger>
+            <TabsTrigger value="add">Add Volume</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="volumes" className="space-y-2">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : volumes.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No volumes.
+              </p>
+            ) : (
+              volumes.map((vol) => (
+                <VolumeRow
+                  key={vol.volumeId}
+                  resourceName={resource.name}
+                  volume={vol}
+                  onChanged={invalidate}
+                />
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="add">
+            <AddVolumeForm
+              resourceName={resource.name}
+              pools={pools}
+              onAdded={invalidate}
+            />
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function VolumeRow({
+  resourceName,
+  volume,
+  onChanged,
+}: {
+  resourceName: string;
+  volume: Volume;
+  onChanged: () => void;
+}) {
+  const [resizing, setResizing] = useState(false);
+  const [newSize, setNewSize] = useState(String(volume.sizeGb));
+
+  const resizeMutation = useMutation({
+    mutationFn: (sizeGb: number) =>
+      api.resizeVolume(resourceName, volume.volumeId, sizeGb),
+    onSuccess: () => {
+      toast.success(`Volume ${volume.volumeId} resized`);
+      onChanged();
+      setResizing(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => api.removeVolume(resourceName, volume.volumeId),
+    onSuccess: () => {
+      toast.success(`Volume ${volume.volumeId} removed`);
+      onChanged();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-sm font-medium">Volume {volume.volumeId}</span>
+          <span className="font-mono text-xs text-muted-foreground">
+            {volume.device}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">{volume.sizeGb} GB</Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setResizing((v) => !v)}
+          >
+            Resize
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Remove volume {volume.volumeId}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently destroys the backing storage for volume{' '}
+                  {volume.volumeId} of {resourceName}. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => removeMutation.mutate()}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Remove
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
+
+      {resizing && (
+        <form
+          className="mt-3 flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const size = parseInt(newSize, 10);
+            if (Number.isFinite(size) && size > 0) resizeMutation.mutate(size);
+          }}
+        >
+          <div className="flex-1 space-y-1">
+            <Label htmlFor={`resize-${volume.volumeId}`}>New size (GB)</Label>
+            <Input
+              id={`resize-${volume.volumeId}`}
+              type="number"
+              min={1}
+              value={newSize}
+              onChange={(e) => setNewSize(e.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={resizeMutation.isPending}>
+            {resizeMutation.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            )}
+            Apply
+          </Button>
+        </form>
+      )}
     </div>
   );
 }
 
-interface CreateResourceFormProps {
-  nodes: Array<{ name: string; address: string }>;
-  pools: Array<{ name: string; node: string; type: string; freeGb: string }>;
-  onSuccess: () => void;
-  onCancel: () => void;
+function AddVolumeForm({
+  resourceName,
+  pools,
+  onAdded,
+}: {
+  resourceName: string;
+  pools: PoolOpt[];
+  onAdded: () => void;
+}) {
+  const [volume, setVolume] = useState('');
+  const [pool, setPool] = useState('');
+  const [sizeGb, setSizeGb] = useState('10');
+
+  const addMutation = useMutation({
+    mutationFn: (data: { volume: string; pool: string; sizeGb: number }) =>
+      api.addVolume(resourceName, data),
+    onSuccess: () => {
+      toast.success(`Volume "${volume}" added`);
+      onAdded();
+      setVolume('');
+      setPool('');
+      setSizeGb('10');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    addMutation.mutate({
+      volume,
+      pool,
+      sizeGb: parseInt(sizeGb, 10),
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="add-vol-name">Volume Name</Label>
+        <Input
+          id="add-vol-name"
+          value={volume}
+          onChange={(e) => setVolume(e.target.value)}
+          placeholder="e.g., data2"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Pool</Label>
+        <Select value={pool} onValueChange={setPool}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a pool..." />
+          </SelectTrigger>
+          <SelectContent>
+            {pools.map((p) => (
+              <SelectItem key={`${p.node}-${p.name}`} value={p.name}>
+                {p.name} ({p.node}) - {p.freeGb}GB free
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="add-vol-size">Size (GB)</Label>
+        <Input
+          id="add-vol-size"
+          type="number"
+          min={1}
+          value={sizeGb}
+          onChange={(e) => setSizeGb(e.target.value)}
+          required
+        />
+      </div>
+      <Button type="submit" disabled={addMutation.isPending || !pool}>
+        {addMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        Add Volume
+      </Button>
+    </form>
+  );
 }
 
-function CreateResourceForm({ nodes, pools, onSuccess, onCancel }: CreateResourceFormProps) {
+function MountDialog({
+  open,
+  onOpenChange,
+  resource,
+  nodes,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  resource: Resource;
+  nodes: NodeOpt[];
+}) {
+  const multiVolume = resource.volumes.length > 1;
+  const [volumeId, setVolumeId] = useState(
+    String(resource.volumes[0]?.volumeId ?? 0),
+  );
+
+  const [fstype, setFstype] = useState('ext4');
+  const [formatNode, setFormatNode] = useState('');
+  const [mountPath, setMountPath] = useState('');
+  const [mountNode, setMountNode] = useState('');
+  const [unmountNode, setUnmountNode] = useState('');
+
+  const vid = parseInt(volumeId, 10) || 0;
+  const noneValue = '__none__';
+
+  const formatMutation = useMutation({
+    mutationFn: () =>
+      api.createFilesystem(
+        resource.name,
+        vid,
+        fstype,
+        formatNode || undefined,
+      ),
+    onSuccess: () => toast.success('Filesystem created'),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const mountMutation = useMutation({
+    mutationFn: () =>
+      api.mountResource(
+        resource.name,
+        vid,
+        mountPath,
+        undefined,
+        mountNode || undefined,
+      ),
+    onSuccess: () => {
+      toast.success(`Mounted ${resource.name} at ${mountPath}`);
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const unmountMutation = useMutation({
+    mutationFn: () =>
+      api.unmountResource(resource.name, vid, unmountNode || undefined),
+    onSuccess: () => {
+      toast.success(`Unmounted ${resource.name}`);
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Filesystem / Mount — {resource.name}</DialogTitle>
+          <DialogDescription>
+            Format, mount, or unmount the resource volume.
+          </DialogDescription>
+        </DialogHeader>
+
+        {multiVolume && (
+          <div className="space-y-2 pt-2">
+            <Label>Volume</Label>
+            <Select value={volumeId} onValueChange={setVolumeId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {resource.volumes.map((v) => (
+                  <SelectItem key={v.volumeId} value={String(v.volumeId)}>
+                    Volume {v.volumeId} ({v.sizeGb} GB)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <Tabs defaultValue="format" className="py-2">
+          <TabsList>
+            <TabsTrigger value="format">Format</TabsTrigger>
+            <TabsTrigger value="mount">Mount</TabsTrigger>
+            <TabsTrigger value="unmount">Unmount</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="format" className="space-y-4">
+            <div className="space-y-2">
+              <Label>Filesystem Type</Label>
+              <Select value={fstype} onValueChange={setFstype}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ext4">ext4</SelectItem>
+                  <SelectItem value="xfs">xfs</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Node (optional)</Label>
+              <Select
+                value={formatNode || noneValue}
+                onValueChange={(v) =>
+                  setFormatNode(v === noneValue ? '' : v)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Auto (Primary)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={noneValue}>Auto (Primary)</SelectItem>
+                  {nodes.map((n) => (
+                    <SelectItem key={n.name} value={n.name}>
+                      {n.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={() => formatMutation.mutate()}
+              disabled={formatMutation.isPending}
+            >
+              {formatMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              Create Filesystem
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="mount" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="mount-path">Mount Path</Label>
+              <Input
+                id="mount-path"
+                value={mountPath}
+                onChange={(e) => setMountPath(e.target.value)}
+                placeholder="/mnt/data"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Node (optional)</Label>
+              <Select
+                value={mountNode || noneValue}
+                onValueChange={(v) => setMountNode(v === noneValue ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Auto (Primary)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={noneValue}>Auto (Primary)</SelectItem>
+                  {nodes.map((n) => (
+                    <SelectItem key={n.name} value={n.name}>
+                      {n.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={() => mountMutation.mutate()}
+              disabled={mountMutation.isPending || !mountPath}
+            >
+              {mountMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              Mount
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="unmount" className="space-y-4">
+            <div className="space-y-2">
+              <Label>Node (optional)</Label>
+              <Select
+                value={unmountNode || noneValue}
+                onValueChange={(v) =>
+                  setUnmountNode(v === noneValue ? '' : v)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Auto (Primary)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={noneValue}>Auto (Primary)</SelectItem>
+                  {nodes.map((n) => (
+                    <SelectItem key={n.name} value={n.name}>
+                      {n.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="destructive"
+              onClick={() => unmountMutation.mutate()}
+              disabled={unmountMutation.isPending}
+            >
+              {unmountMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              Unmount
+            </Button>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteResourceDialog({
+  open,
+  onOpenChange,
+  resourceName,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  resourceName: string;
+}) {
+  const queryClient = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteResource(resourceName),
+    onSuccess: () => {
+      toast.success(`Resource "${resourceName}" deleted`);
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete resource "{resourceName}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes the DRBD resource and destroys all backing volumes and
+            their data on every node. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              deleteMutation.mutate();
+            }}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleteMutation.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            )}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function CreateResourceDialog({
+  nodes,
+  pools,
+}: {
+  nodes: NodeOpt[];
+  pools: PoolOpt[];
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [port, setPort] = useState('7000');
   const [protocol, setProtocol] = useState('C');
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [sizeGb, setSizeGb] = useState('10');
   const [pool, setPool] = useState('');
+
+  const noneValue = '__none__';
+
+  const reset = () => {
+    setName('');
+    setPort('7000');
+    setProtocol('C');
+    setSelectedNodes([]);
+    setSizeGb('10');
+    setPool('');
+  };
 
   const createMutation = useMutation({
     mutationFn: (data: {
@@ -389,297 +1066,189 @@ function CreateResourceForm({ nodes, pools, onSuccess, onCancel }: CreateResourc
       nodes: string[];
       protocol: string;
       sizeGb: number;
-      pool: string;
+      pool?: string;
     }) => api.createResource(data),
-    onSuccess: () => onSuccess(),
-    onError: (error) => alert(`Failed to create resource: ${error.message}`),
+    onSuccess: () => {
+      toast.success(`Resource "${name}" created`);
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+      setOpen(false);
+      reset();
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
+
+  const toggleNode = (nodeName: string) => {
+    setSelectedNodes((prev) =>
+      prev.includes(nodeName)
+        ? prev.filter((n) => n !== nodeName)
+        : [...prev, nodeName],
+    );
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedNodes.length < 2) {
-      alert('Please select at least 2 nodes for replication');
+    if (selectedNodes.length < 1) {
+      toast.error('Select at least 1 node');
       return;
     }
     createMutation.mutate({
       name,
-      port: parseInt(port),
+      port: parseInt(port, 10),
       nodes: selectedNodes,
       protocol,
-      sizeGb: parseInt(sizeGb),
-      pool,
+      sizeGb: parseInt(sizeGb, 10),
+      pool: pool || undefined,
     });
   };
 
-  const toggleNode = (nodeName: string) => {
-    setSelectedNodes((prev) =>
-      prev.includes(nodeName) ? prev.filter((n) => n !== nodeName) : [...prev, nodeName]
-    );
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Resource Name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g., data"
-          required
-        />
-      </div>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="h-4 w-4" />
+          Create Resource
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Create DRBD Resource</DialogTitle>
+            <DialogDescription>
+              Define a replicated DRBD resource across one or more nodes.
+            </DialogDescription>
+          </DialogHeader>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
-          <input
-            type="number"
-            value={port}
-            onChange={(e) => setPort(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Protocol</label>
-          <select
-            value={protocol}
-            onChange={(e) => setProtocol(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="C">C (Sync)</option>
-            <option value="A">A (Async)</option>
-            <option value="B">B (Semi-sync)</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Nodes (select at least 2)</label>
-        <div className="space-y-2">
-          {nodes.map((node) => (
-            <label key={node.name} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedNodes.includes(node.name)}
-                onChange={() => toggleNode(node.name)}
-                className="rounded border-gray-300 text-primary-600"
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="res-name">Resource Name</Label>
+              <Input
+                id="res-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., data"
+                required
               />
-              <span className="text-sm">{node.name} ({node.address})</span>
-            </label>
-          ))}
-        </div>
-      </div>
+            </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Size (GB)</label>
-          <input
-            type="number"
-            value={sizeGb}
-            onChange={(e) => setSizeGb(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Pool (optional)</label>
-          <select
-            value={pool}
-            onChange={(e) => setPool(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">Auto-select</option>
-            {pools.map((p) => (
-              <option key={`${p.node}-${p.name}`} value={p.name}>
-                {p.name} ({p.node}) - {p.freeGb}GB free
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <button type="button" onClick={onCancel} disabled={createMutation.isPending} className="btn btn-secondary flex-1">
-          Cancel
-        </button>
-        <button type="submit" disabled={createMutation.isPending} className="btn btn-primary flex-1">
-          {createMutation.isPending ? 'Creating...' : 'Create'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-interface ResourceStatusViewProps {
-  status: ResourceStatus;
-  onClose: () => void;
-}
-
-function ResourceStatusView({ status, onClose }: ResourceStatusViewProps) {
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <div className="flex justify-between py-2 border-b border-gray-100">
-          <span className="text-gray-500">Name</span>
-          <span className="font-medium">{status.name}</span>
-        </div>
-        <div className="flex justify-between py-2 border-b border-gray-100">
-          <span className="text-gray-500">Role</span>
-          <span className={clsx(
-            'font-medium',
-            status.role === 'Primary' ? 'text-green-600' : 'text-gray-600'
-          )}>{status.role}</span>
-        </div>
-        <div className="flex justify-between py-2 border-b border-gray-100">
-          <span className="text-gray-500">Nodes</span>
-          <span className="font-medium">{status.nodes.join(', ')}</span>
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-sm font-medium text-gray-700 mb-2">Node States</h4>
-        <div className="space-y-2">
-          {Object.entries(status.nodeStates || {}).map(([node, state]) => (
-            <div key={node} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <span className="text-sm font-medium">{node}</span>
-              <div className="flex gap-2">
-                <span className={clsx(
-                  'text-xs px-2 py-1 rounded',
-                  state.role === 'Primary' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                )}>{state.role}</span>
-                <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">{state.diskState}</span>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="res-port">Port</Label>
+                <Input
+                  id="res-port"
+                  type="number"
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Protocol</Label>
+                <Select value={protocol} onValueChange={setProtocol}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="C">C (Sync)</SelectItem>
+                    <SelectItem value="A">A (Async)</SelectItem>
+                    <SelectItem value="B">B (Semi-sync)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      <div>
-        <h4 className="text-sm font-medium text-gray-700 mb-2">Volumes</h4>
-        <div className="space-y-2">
-          {status.volumes?.map((vol) => (
-            <div key={vol.volumeId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <div>
-                <span className="text-sm font-medium">Volume {vol.volumeId}</span>
-                <span className="text-xs text-gray-500 ml-2">{vol.device}</span>
+            <div className="space-y-2">
+              <Label>Nodes</Label>
+              <div className="space-y-2 rounded-lg border p-3">
+                {nodes.map((node) => (
+                  <label
+                    key={node.name}
+                    className="flex cursor-pointer items-center gap-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input accent-primary"
+                      checked={selectedNodes.includes(node.name)}
+                      onChange={() => toggleNode(node.name)}
+                    />
+                    <span>
+                      {node.name}{' '}
+                      <span className="text-muted-foreground">
+                        ({node.address})
+                      </span>
+                    </span>
+                  </label>
+                ))}
+                {nodes.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No nodes available.
+                  </p>
+                )}
               </div>
-              <span className="text-xs text-gray-500">{vol.sizeGb} GB</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <button onClick={onClose} className="btn btn-primary w-full">Close</button>
-    </div>
-  );
-}
-
-interface MountFormProps {
-  resourceName: string;
-  volumeId: number;
-  onSuccess: () => void;
-  onCancel: () => void;
-}
-
-function MountForm({ resourceName, volumeId, onSuccess, onCancel }: MountFormProps) {
-  const [path, setPath] = useState('');
-  const [fstype, setFstype] = useState('ext4');
-  const [action, setAction] = useState<'mount' | 'unmount' | 'format'>('mount');
-
-  const mountMutation = useMutation({
-    mutationFn: () => api.mountResource(resourceName, volumeId, path, fstype),
-    onSuccess: () => onSuccess(),
-    onError: (error) => alert(`Failed to mount: ${error.message}`),
-  });
-
-  const unmountMutation = useMutation({
-    mutationFn: () => api.unmountResource(resourceName, volumeId),
-    onSuccess: () => onSuccess(),
-    onError: (error) => alert(`Failed to unmount: ${error.message}`),
-  });
-
-  const formatMutation = useMutation({
-    mutationFn: () => api.createFilesystem(resourceName, volumeId, fstype),
-    onSuccess: () => {
-      alert('Filesystem created successfully');
-    },
-    onError: (error) => alert(`Failed to create filesystem: ${error.message}`),
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (action === 'mount') mountMutation.mutate();
-    else if (action === 'unmount') unmountMutation.mutate();
-    else formatMutation.mutate();
-  };
-
-  const isLoading = mountMutation.isPending || unmountMutation.isPending || formatMutation.isPending;
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="p-3 bg-gray-50 rounded-lg text-sm">
-        <span className="text-gray-500">Resource:</span> {resourceName} (Volume {volumeId})
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
-        <div className="flex gap-2">
-          {(['mount', 'unmount', 'format'] as const).map((a) => (
-            <button
-              key={a}
-              type="button"
-              onClick={() => setAction(a)}
-              className={clsx(
-                'flex-1 py-2 px-3 text-sm rounded-md border',
-                action === a ? 'bg-primary-50 border-primary-500 text-primary-700' : 'border-gray-300'
+              {selectedNodes.length === 1 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Only 1 node selected — this resource will have no replication.
+                </p>
               )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="res-size">Size (GB)</Label>
+                <Input
+                  id="res-size"
+                  type="number"
+                  min={1}
+                  value={sizeGb}
+                  onChange={(e) => setSizeGb(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Pool (optional)</Label>
+                <Select
+                  value={pool || noneValue}
+                  onValueChange={(v) => setPool(v === noneValue ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Auto-select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={noneValue}>Auto-select</SelectItem>
+                    {pools.map((p) => (
+                      <SelectItem
+                        key={`${p.node}-${p.name}`}
+                        value={p.name}
+                      >
+                        {p.name} ({p.node}) - {p.freeGb}GB free
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={createMutation.isPending}
             >
-              {a.charAt(0).toUpperCase() + a.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {action !== 'unmount' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Filesystem Type</label>
-          <select
-            value={fstype}
-            onChange={(e) => setFstype(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="ext4">ext4</option>
-            <option value="xfs">XFS</option>
-          </select>
-        </div>
-      )}
-
-      {action === 'mount' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Mount Path</label>
-          <input
-            type="text"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            placeholder="e.g., /mnt/data"
-            required
-          />
-        </div>
-      )}
-
-      <div className="flex gap-2 pt-2">
-        <button type="button" onClick={onCancel} disabled={isLoading} className="btn btn-secondary flex-1">
-          Cancel
-        </button>
-        <button type="submit" disabled={isLoading} className="btn btn-primary flex-1">
-          {isLoading ? 'Processing...' : action.charAt(0).toUpperCase() + action.slice(1)}
-        </button>
-      </div>
-    </form>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || selectedNodes.length < 1}
+            >
+              {createMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              Create
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-

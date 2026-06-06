@@ -116,8 +116,9 @@ export interface SnapshotsResponse extends ApiResponse {
 }
 
 // API token storage for controllers with [auth] enabled. The token is kept
-// in localStorage; on a 401/403 the user is prompted once and the request
-// retried, so no separate login page is needed for this single-admin model.
+// in localStorage; on a 401/403 the registered prompt handler (a proper
+// dialog mounted by the app shell) asks for a token once and the request is
+// retried — no separate login page is needed for this single-admin model.
 const TOKEN_STORAGE_KEY = 'sds_api_token';
 
 export function getApiToken(): string {
@@ -130,6 +131,29 @@ export function setApiToken(token: string): void {
   } else {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
   }
+}
+
+// authPromptHandler resolves to true when the user supplied a (new) token
+// and the failed request should be retried. The app shell registers a
+// dialog-based handler; window.prompt is the headless fallback.
+type AuthPromptHandler = () => Promise<boolean>;
+let authPromptHandler: AuthPromptHandler | null = null;
+
+export function setAuthPromptHandler(handler: AuthPromptHandler | null): void {
+  authPromptHandler = handler;
+}
+
+async function promptForToken(): Promise<boolean> {
+  if (authPromptHandler) {
+    return authPromptHandler();
+  }
+  const entered = window.prompt(
+    'SDS API token required (controller has authentication enabled):',
+    getApiToken()
+  );
+  if (entered === null) return false;
+  setApiToken(entered.trim());
+  return true;
 }
 
 class ApiClient {
@@ -163,12 +187,7 @@ class ApiClient {
     let response = await doFetch();
 
     if (response.status === 401 || response.status === 403) {
-      const entered = window.prompt(
-        'SDS API token required (controller has authentication enabled):',
-        getApiToken()
-      );
-      if (entered !== null) {
-        setApiToken(entered.trim());
+      if (await promptForToken()) {
         response = await doFetch();
       }
     }
@@ -401,6 +420,174 @@ class ApiClient {
 
   stopGateway = (id: string) =>
     this.request<ApiResponse>(`/gateways/${id}/stop`, { method: 'POST' });
+
+  // ==================== NFS Export Management ====================
+  listNFSExports = (resource: string) =>
+    this.request<ApiResponse & { exports: NFSExport[] }>('/gateways/nfs/exports:list', {
+      method: 'POST',
+      body: JSON.stringify({ resource }),
+    });
+
+  addNFSExport = (data: {
+    resource: string;
+    exportPath: string;
+    fsid?: number;
+    clientSpec?: string;
+    options?: string;
+  }) =>
+    this.request<ApiResponse>('/gateways/nfs/exports:add', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  removeNFSExport = (resource: string, exportPath: string) =>
+    this.request<ApiResponse>('/gateways/nfs/exports:remove', {
+      method: 'POST',
+      body: JSON.stringify({ resource, exportPath }),
+    });
+
+  // ==================== iSCSI LUN / Initiator / CHAP ====================
+  listISCSILUNs = (resource: string) =>
+    this.request<ApiResponse & { luns: ISCSILUN[] }>('/gateways/iscsi/luns:list', {
+      method: 'POST',
+      body: JSON.stringify({ resource }),
+    });
+
+  addISCSILUN = (data: { resource: string; lun: number; device: string }) =>
+    this.request<ApiResponse>('/gateways/iscsi/luns:add', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  removeISCSILUN = (resource: string, lun: number) =>
+    this.request<ApiResponse>('/gateways/iscsi/luns:remove', {
+      method: 'POST',
+      body: JSON.stringify({ resource, lun }),
+    });
+
+  listISCSIInitiators = (resource: string) =>
+    this.request<ApiResponse & { initiators: string[] }>('/gateways/iscsi/initiators:list', {
+      method: 'POST',
+      body: JSON.stringify({ resource }),
+    });
+
+  addISCSIInitiator = (resource: string, initiator: string) =>
+    this.request<ApiResponse>('/gateways/iscsi/initiators:add', {
+      method: 'POST',
+      body: JSON.stringify({ resource, initiator }),
+    });
+
+  removeISCSIInitiator = (resource: string, initiator: string) =>
+    this.request<ApiResponse>('/gateways/iscsi/initiators:remove', {
+      method: 'POST',
+      body: JSON.stringify({ resource, initiator }),
+    });
+
+  getISCSIChap = (resource: string) =>
+    this.request<ApiResponse & { username: string; password: string; mutual: boolean }>(
+      '/gateways/iscsi/chap:get',
+      { method: 'POST', body: JSON.stringify({ resource }) }
+    );
+
+  setISCSIChap = (data: {
+    resource: string;
+    username: string;
+    password: string;
+    mutual?: boolean;
+  }) =>
+    this.request<ApiResponse>('/gateways/iscsi/chap:set', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  // ==================== NVMe Namespace / Host ====================
+  listNVMeNamespaces = (resource: string) =>
+    this.request<ApiResponse & { namespaces: NVMeNamespace[] }>('/gateways/nvme/namespaces:list', {
+      method: 'POST',
+      body: JSON.stringify({ resource }),
+    });
+
+  addNVMeNamespace = (resource: string, device: string) =>
+    this.request<ApiResponse>('/gateways/nvme/namespaces:add', {
+      method: 'POST',
+      body: JSON.stringify({ resource, device }),
+    });
+
+  removeNVMeNamespace = (resource: string, namespaceId: number) =>
+    this.request<ApiResponse>('/gateways/nvme/namespaces:remove', {
+      method: 'POST',
+      body: JSON.stringify({ resource, namespaceId }),
+    });
+
+  listNVMeHosts = (resource: string) =>
+    this.request<ApiResponse & { hosts: string[] }>('/gateways/nvme/hosts:list', {
+      method: 'POST',
+      body: JSON.stringify({ resource }),
+    });
+
+  addNVMeHost = (resource: string, hostNqn: string) =>
+    this.request<ApiResponse>('/gateways/nvme/hosts:add', {
+      method: 'POST',
+      body: JSON.stringify({ resource, hostNqn }),
+    });
+
+  removeNVMeHost = (resource: string, hostNqn: string) =>
+    this.request<ApiResponse>('/gateways/nvme/hosts:remove', {
+      method: 'POST',
+      body: JSON.stringify({ resource, hostNqn }),
+    });
+
+  // ==================== Controller Self-HA ====================
+  getSelfHaStatus = () => this.request<SelfHaStatus>('/selfha');
+
+  enableSelfHa = (data: {
+    vip: string;
+    pool: string;
+    sizeGb?: number;
+    port?: number;
+    nodes?: string[];
+  }) =>
+    this.request<ApiResponse & { resource: string; handoffLog: string }>('/selfha/enable', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  disableSelfHa = (node: string) =>
+    this.request<ApiResponse>('/selfha/disable', {
+      method: 'POST',
+      body: JSON.stringify({ node }),
+    });
+}
+
+export interface NFSExport {
+  directory: string;
+  fsid: string;
+  clientspec: string;
+  options: string;
+}
+
+export interface ISCSILUN {
+  lun: number;
+  device: string;
+  targetIqn: string;
+}
+
+export interface NVMeNamespace {
+  namespaceId: number;
+  backingPath: string;
+  uuid: string;
+  nguid: string;
+  nqn: string;
+}
+
+export interface SelfHaStatus {
+  success: boolean;
+  message: string;
+  enabled: boolean;
+  resource: string;
+  vip: string;
+  nodes: string[];
+  activeNode: string;
 }
 
 export const api = new ApiClient();
