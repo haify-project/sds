@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -529,8 +530,19 @@ func (a *GatewayDeploymentClient) DistributeConfig(ctx context.Context, hosts []
 }
 
 func (a *GatewayDeploymentClient) Exec(ctx context.Context, hosts []string, cmd string) error {
-	_, err := a.dc.Exec(ctx, hosts, cmd)
-	return err
+	result, err := a.dc.Exec(ctx, hosts, cmd)
+	if err != nil {
+		return err
+	}
+	// Per-host command failures must surface: swallowing them let gateway
+	// setup steps (e.g. formatting the cluster-private volume) fail
+	// silently while the gateway reported success.
+	for host, hr := range result.Hosts {
+		if !hr.Success {
+			return fmt.Errorf("command failed on %s: %s", host, strings.TrimSpace(hr.Output))
+		}
+	}
+	return nil
 }
 
 // ==================== DATABASE ====================

@@ -102,7 +102,7 @@ func TestGenerateNFSGatewayConfig(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	require.NotEmpty(t, config)
 
@@ -149,7 +149,7 @@ func TestGenerateNFSGatewayConfigWithCustomFSType(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Verify custom filesystem type
@@ -187,7 +187,7 @@ func TestGenerateNFSGatewayConfigDefaultClients(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// When no clients specified, should default to 0.0.0.0/0.0.0.0
@@ -242,7 +242,7 @@ func TestAddNFSExportUpdatesConfig(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-nfs-resource"), config)
 
@@ -269,7 +269,7 @@ func TestRemoveNFSExportUpdatesConfig(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-nfs-resource"), config)
 
@@ -358,7 +358,7 @@ func TestNFSExportPath(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Export path should be under DefaultExportBasePath
@@ -394,7 +394,7 @@ func TestNFSClusterPrivatePath(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Cluster private path should be under DefaultClusterPrivateMountPath

@@ -53,7 +53,7 @@ func TestGenerateNVMeGatewayConfig(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	require.NotEmpty(t, config)
 
@@ -102,7 +102,7 @@ func TestGenerateNVMeGatewayConfigMultipleNamespaces(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 4)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(4))
 	require.NoError(t, err)
 
 	// Only volumes 1+ are exposed as namespaces.
@@ -143,7 +143,7 @@ func TestGenerateNVMeGatewayConfigRDMA(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Verify RDMA transport type is used
@@ -179,7 +179,7 @@ func TestGenerateNVMeGatewayConfigDefaultTransport(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Default should be TCP
@@ -334,7 +334,7 @@ func TestAddNamespaceUpdatesConfig(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
 
@@ -361,7 +361,7 @@ func TestRemoveNamespaceUpdatesConfig(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 3)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(3))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
 
@@ -399,7 +399,7 @@ func TestAddAndRemoveNVMeHost(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
 
@@ -431,7 +431,7 @@ func TestDeleteAndListNVMePort(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
 
@@ -484,7 +484,7 @@ func TestNVMeGatewayUUIDGeneration(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Only the exposed namespace should have UUID metadata.
@@ -523,7 +523,7 @@ func TestNVMeGatewaySerialGeneration(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Verify serial is present (16 hex chars derived from SHA256)

@@ -272,6 +272,39 @@ func (m *Manager) writeReactorConfig(ctx context.Context, resource, pluginID, co
 	return nil
 }
 
+// ensureGatewayPrerequisites promotes the resource on one of ITS OWN nodes
+// and makes sure the cluster-private volume (volume 0) carries a filesystem;
+// the promoter's Filesystem agent only mounts, it never formats. mkfs runs
+// only when blkid finds no existing filesystem, so the call is idempotent
+// and never destroys data.
+func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource, device string, nodes []string) error {
+	if len(nodes) == 0 {
+		return fmt.Errorf("resource %s has no nodes", resource)
+	}
+	node := nodes[0]
+	if err := m.resources.SetPrimary(ctx, resource, node, false); err != nil {
+		return fmt.Errorf("failed to promote %s on %s: %w", resource, node, err)
+	}
+	// A freshly promoted resource can lose Primary for a moment when a
+	// previous reactor teardown is still settling, which makes mkfs race a
+	// demote. Retry briefly instead of failing the whole gateway creation.
+	cmd := fmt.Sprintf("sudo blkid %s >/dev/null 2>&1 || sudo mkfs.ext4 -q %s", device, device)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(2 * time.Second)
+			if err := m.resources.SetPrimary(ctx, resource, node, false); err != nil {
+				m.logger.Warn("Re-promote before mkfs retry failed",
+					zap.String("resource", resource), zap.Error(err))
+			}
+		}
+		if lastErr = m.deployment.Exec(ctx, []string{node}, cmd); lastErr == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("failed to prepare cluster-private filesystem on %s: %w", device, lastErr)
+}
+
 // getDRBDDevice gets the DRBD device path for a resource
 func (m *Manager) getDRBDDevice(ctx context.Context, resource string) (string, error) {
 	// Try to get device from resource info
@@ -333,6 +366,19 @@ func parseDeviceMinorFromConfig(configContent string) int {
 	}
 
 	return -1
+}
+
+// volumeDevice returns the device path for a volume, preferring the real
+// device reported by the resource manager. The minor-arithmetic fallback
+// (base minor + volume number) only holds when minors happen to be
+// consecutive, which global minor allocation does not guarantee.
+func volumeDevice(volumes []*ResourceVolumeInfo, baseDevice string, volumeNumber int) string {
+	for _, v := range volumes {
+		if int(v.VolumeID) == volumeNumber && v.Device != "" {
+			return v.Device
+		}
+	}
+	return getDRBDDeviceForVolume(baseDevice, volumeNumber)
 }
 
 // getDRBDDeviceForVolume returns the DRBD device path for a specific volume number

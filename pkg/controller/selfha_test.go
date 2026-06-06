@@ -347,3 +347,64 @@ func TestSelfHaDisableScriptCleansReactorDropins(t *testing.T) {
 	assert.NotContains(t, script, "service-ip@10.0.0.50-24.service.d")
 	assert.Contains(t, script, "/run/systemd/system/sds-controller.service.d")
 }
+
+// TestAutoSelectPool covers the no-pool-given path of resource creation:
+// unambiguous with one registered pool, explicit errors otherwise.
+func TestAutoSelectPool(t *testing.T) {
+	dep := selfHaFakeDeployment()
+	ctrl, _, _ := newSelfHaTestController(t, dep)
+
+	_, err := ctrl.resources.autoSelectPool(context.Background())
+	assert.ErrorContains(t, err, "no pools are registered")
+
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0", Node: "node1"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0", Node: "node2"}))
+	name, err := ctrl.resources.autoSelectPool(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "sds_vg0", name)
+
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_other", Node: "node1"}))
+	_, err = ctrl.resources.autoSelectPool(context.Background())
+	assert.ErrorContains(t, err, "multiple pools")
+}
+
+func TestParseDeviceMinor(t *testing.T) {
+	cases := []struct {
+		line string
+		want int
+		ok   bool
+	}{
+		{"        device    minor 2;", 2, true},
+		{"device minor 999;", 999, true},
+		{"  device /dev/drbd7 minor 7;", 7, true},
+		{"    disk      /dev/vg/lv;", 0, false},
+		{"minor 3;", 0, false},
+	}
+	for _, c := range cases {
+		got, ok := parseDeviceMinor(c.line)
+		assert.Equal(t, c.ok, ok, c.line)
+		if ok {
+			assert.Equal(t, c.want, got, c.line)
+		}
+	}
+}
+
+// TestNextGlobalMinorScansAllResources guards minor allocation: minors are a
+// node-global namespace, so the next free one must account for every
+// resource config, not just the resource being modified.
+func TestNextGlobalMinorScansAllResources(t *testing.T) {
+	dep := &fakeDeploymentClient{
+		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+			if strings.Contains(cmd, "cat /etc/drbd.d/*.res") {
+				return successExecResult(hosts,
+					"resource a {\n    volume 0 {\n        device    minor 0;\n    }\n}\n"+
+						"resource b {\n    volume 0 {\n        device    minor 999;\n    }\n}\n"), nil
+			}
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+	minor, err := ctrl.resources.nextGlobalMinor(context.Background(), "10.0.0.1")
+	require.NoError(t, err)
+	assert.Equal(t, 1000, minor)
+}

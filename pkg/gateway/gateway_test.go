@@ -411,3 +411,13 @@ func TestServiceIPStruct(t *testing.T) {
 	assert.Equal(t, "192.168.1.100", serviceIP.IP.String())
 	assert.Equal(t, 24, serviceIP.Prefix)
 }
+
+// testVolumes builds consecutive-minor volumes matching the old fixture
+// assumption (/dev/drbd0 base, volume N at minor N).
+func testVolumes(count int) []*ResourceVolumeInfo {
+	vols := make([]*ResourceVolumeInfo, count)
+	for i := 0; i < count; i++ {
+		vols[i] = &ResourceVolumeInfo{VolumeID: uint32(i), Device: fmt.Sprintf("/dev/drbd%d", i), SizeGB: 1}
+	}
+	return vols
+}

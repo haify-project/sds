@@ -471,7 +471,7 @@ function CreateISCSIForm({
   const [allowedInitiators, setAllowedInitiators] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [implementation, setImplementation] = useState('lio');
+  const [implementation, setImplementation] = useState('lio-t');
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -556,9 +556,9 @@ function CreateISCSIForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="lio">LIO (Linux IO)</SelectItem>
+            <SelectItem value="lio-t">LIO (targetcli)</SelectItem>
+            <SelectItem value="scst">SCST</SelectItem>
             <SelectItem value="tgt">TGT</SelectItem>
-            <SelectItem value="iet">IET</SelectItem>
           </SelectContent>
         </Select>
       </div>

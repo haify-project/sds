@@ -234,8 +234,16 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		return fmt.Errorf("deployment client not set")
 	}
 
+	// Auto-select the pool when none was given: with exactly one registered
+	// pool name the choice is unambiguous; otherwise the caller must decide.
+	// (A hardcoded fallback name here used to send lvcreate at a volume
+	// group that doesn't exist.)
 	if pool == "" {
-		pool = "data-pool"
+		selected, err := rm.autoSelectPool(ctx)
+		if err != nil {
+			return err
+		}
+		pool = selected
 	}
 	pool = normalizeManagedName(pool)
 
@@ -316,7 +324,14 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	}
 
 	// 2. Generate DRBD config
-	drbdConfig := rm.generateDrbdConfig(name, port, nodes, protocol, pool, volumeName, storageType, drbdOptions)
+	// Allocate a node-global device minor: minors are shared across every
+	// DRBD resource on a node, so derive the next free one from all existing
+	// configs instead of assuming port-7000 stays collision-free.
+	minor, err := rm.nextGlobalMinor(ctx, nodeIPs[0])
+	if err != nil {
+		return fmt.Errorf("failed to allocate device minor: %w", err)
+	}
+	drbdConfig := rm.generateDrbdConfig(name, port, minor, nodes, protocol, pool, volumeName, storageType, drbdOptions)
 
 	// 3. Distribute config to all nodes
 	configResult, err := rm.deployment.DistributeConfig(ctx, nodeIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
@@ -455,7 +470,7 @@ func getFirstNonLoopbackIP() string {
 }
 
 // generateDrbdConfig generates a DRBD resource configuration file
-func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []string, protocol, pool, volumeName, storageType string, options map[string]string) string {
+func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor int, nodes []string, protocol, pool, volumeName, storageType string, options map[string]string) string {
 	var config strings.Builder
 
 	// Organize options by section -> key -> value
@@ -564,7 +579,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 
 	// Generate volume 0 block
 	config.WriteString("\n    volume 0 {\n")
-	config.WriteString(fmt.Sprintf("        device    minor %d;\n", port-7000))
+	config.WriteString(fmt.Sprintf("        device    minor %d;\n", minor))
 
 	// Use ZFS device path or LVM device path based on storage type
 	var diskPath string
@@ -813,8 +828,16 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		return fmt.Errorf("deployment client not set")
 	}
 
+	// Auto-select the pool when none was given: with exactly one registered
+	// pool name the choice is unambiguous; otherwise the caller must decide.
+	// (A hardcoded fallback name here used to send lvcreate at a volume
+	// group that doesn't exist.)
 	if pool == "" {
-		pool = "data-pool"
+		selected, err := rm.autoSelectPool(ctx)
+		if err != nil {
+			return err
+		}
+		pool = selected
 	}
 	pool = normalizeManagedName(pool)
 
@@ -839,10 +862,8 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		return fmt.Errorf("failed to get config")
 	}
 
+	// Volume numbers are scoped to this resource's config.
 	maxVolNum := -1
-	maxMinor := -1
-
-	// Parse volume numbers from config
 	lines := strings.Split(hostResult.Output, "\n")
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -856,22 +877,19 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 				}
 			}
 		}
-		if strings.Contains(trimmed, "device    minor") {
-			parts := strings.Fields(trimmed)
-			if len(parts) >= 4 {
-				if minor, err := strconv.Atoi(strings.TrimSuffix(parts[3], ";")); err == nil {
-					if minor > maxMinor {
-						maxMinor = minor
-					}
-				}
-			}
-		}
 	}
-
 	newVolNum := maxVolNum + 1
 
-	// Simple strategy: use maxMinor + 1
-	newMinor := maxMinor + 1
+	// Device minors are GLOBAL on a node: scanning only this resource's
+	// config hands out minors already claimed by other resources and
+	// drbdadm rejects the whole config with "conflicting use of
+	// device-minor". Collect minors across every resource file instead.
+	// (The previous in-file scan was additionally broken — it required 4
+	// fields on a 3-field line and always allocated minor 0.)
+	newMinor, err := rm.nextGlobalMinor(ctx, hosts[0])
+	if err != nil {
+		return fmt.Errorf("failed to allocate device minor: %w", err)
+	}
 
 	// Extend the synchronized DRBD resource config with the new volume block.
 	// LINBIT recommends updating the config identically on all nodes and then
@@ -902,6 +920,17 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 
 	if _, err := rm.deployment.DistributeConfig(ctx, hosts, updatedConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
 		return fmt.Errorf("failed to distribute updated config: %w", err)
+	}
+
+	// The new volume's backing device has no DRBD metadata yet; without
+	// create-md the subsequent adjust attaches it Diskless.
+	createMDCmd := fmt.Sprintf("sudo drbdadm create-md --force %s/%d", resource, newVolNum)
+	mdResult, err := rm.deployment.Exec(ctx, hosts, createMDCmd)
+	if err != nil {
+		return fmt.Errorf("failed to create metadata for new volume: %w", err)
+	}
+	if !mdResult.AllSuccess() {
+		return fmt.Errorf("metadata creation for new volume failed on hosts: %v", mdResult.FailedHosts())
 	}
 
 	adjustCmd := fmt.Sprintf("sudo drbdadm adjust %s", resource)
@@ -1010,6 +1039,72 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		zap.String("name", name))
 
 	return nil
+}
+
+// nextGlobalMinor returns the lowest unused DRBD device minor on host,
+// derived from every resource config present: minors are a node-global
+// namespace and drbdadm rejects configs that reuse one.
+func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, host string) (int, error) {
+	result, err := rm.deployment.Exec(ctx, []string{host}, "cat /etc/drbd.d/*.res 2>/dev/null || true")
+	if err != nil {
+		return 0, err
+	}
+	maxMinor := -1
+	for _, hr := range result.Hosts {
+		for _, line := range strings.Split(hr.Output, "\n") {
+			if minor, ok := parseDeviceMinor(line); ok && minor > maxMinor {
+				maxMinor = minor
+			}
+		}
+	}
+	return maxMinor + 1, nil
+}
+
+// parseDeviceMinor extracts N from DRBD config lines like
+// "device minor 7;" or "device /dev/drbd7 minor 7;" regardless of spacing.
+func parseDeviceMinor(line string) (int, bool) {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "device") || !strings.Contains(trimmed, "minor") {
+		return 0, false
+	}
+	fields := strings.Fields(trimmed)
+	for i, f := range fields {
+		if f == "minor" && i+1 < len(fields) {
+			if minor, err := strconv.Atoi(strings.TrimSuffix(fields[i+1], ";")); err == nil {
+				return minor, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// autoSelectPool returns the single registered pool name, or an error when
+// the choice would be ambiguous (zero or multiple distinct pool names).
+func (rm *ResourceManager) autoSelectPool(ctx context.Context) (string, error) {
+	if rm.controller.db == nil {
+		return "", fmt.Errorf("no pool specified and database not available for auto-selection")
+	}
+	pools, err := rm.controller.db.ListPools(ctx)
+	if err != nil {
+		return "", fmt.Errorf("no pool specified and pool lookup failed: %w", err)
+	}
+	names := make(map[string]bool)
+	for _, p := range pools {
+		names[p.Name] = true
+	}
+	if len(names) == 1 {
+		for name := range names {
+			return name, nil
+		}
+	}
+	if len(names) == 0 {
+		return "", fmt.Errorf("no pool specified and no pools are registered; create one with 'pool create'")
+	}
+	choices := make([]string, 0, len(names))
+	for name := range names {
+		choices = append(choices, name)
+	}
+	return "", fmt.Errorf("no pool specified and multiple pools exist (%v); pass --pool", choices)
 }
 
 // deleteBackingVolume removes a volume's backing LV or zvol on all hosts.

@@ -56,7 +56,7 @@ func TestGenerateISCSIGatewayConfig(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	require.NotEmpty(t, config)
 
@@ -104,7 +104,7 @@ func TestGenerateISCSIGatewayConfigMultipleLUNs(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 4)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(4))
 	require.NoError(t, err)
 
 	// Only volumes 1+ are exposed as LUNs.
@@ -145,14 +145,16 @@ func TestGenerateISCSIGatewayConfigDefaults(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Should have default values
 	assert.Contains(t, config, "incoming_username=username") // default username
 	assert.Contains(t, config, "incoming_password=password") // default password
 	assert.Contains(t, config, "implementation=lio-t")       // default implementation
-	assert.Contains(t, config, "allowed_initiators=ALL")     // default initiators
+	// Empty allowed_initiators stays empty: the OCF agent validates each
+	// token as an initiator WWN, so an invented "ALL" breaks target start.
+	assert.Contains(t, config, "allowed_initiators= ")
 }
 
 func TestGenerateIQN(t *testing.T) {
@@ -305,7 +307,7 @@ func TestAddLUNUpdatesConfig(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
 
@@ -332,7 +334,7 @@ func TestListLUNs(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 3)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(3))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
 
@@ -358,7 +360,7 @@ func TestRemoveLUNUpdatesConfig(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 3)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(3))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
 
@@ -397,7 +399,7 @@ func TestAddAndListInitiators(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
 
@@ -424,7 +426,7 @@ func TestSetAndGetCHAP(t *testing.T) {
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
 
@@ -473,7 +475,7 @@ func TestISCSIGatewaySerialGeneration(t *testing.T) {
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 
-	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
 	// Only the exposed data volume should have a serial.
