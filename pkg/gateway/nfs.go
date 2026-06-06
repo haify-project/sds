@@ -75,7 +75,10 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 	// Promote on one of the resource's own nodes and make sure the
 	// cluster-private volume carries a filesystem BEFORE reactor takes
 	// over: its Filesystem agent mounts but never formats.
-	if err := n.ensureGatewayPrerequisites(ctx, req.Resource, drbdDevice, resInfo.Nodes); err != nil {
+	// NFS mounts TWO filesystems: the cluster-private volume and the
+	// export volume, so both need formatting before reactor takes over.
+	if err := n.ensureGatewayPrerequisites(ctx, req.Resource, resInfo.Nodes,
+		drbdDevice, volumeDevice(resInfo.Volumes, drbdDevice, 1)); err != nil {
 		return &v1.CreateNFSGatewayResponse{
 			Success: false,
 			Message: err.Error(),

@@ -184,7 +184,24 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 			m.logger.Warn("Failed to stop gateway services", zap.String("host", host), zap.Error(err))
 		}
 
-		// 2. Delete reactor config files (all types: nfs, iscsi, nvmeof)
+		// 2. Flush leftover portblock DROP rules BEFORE removing the configs
+		// (the config is the only place the VIP/port pair is recorded).
+		// The OCF portblock pair accumulates rules across reactor reloads
+		// and failed start loops, leaving the port silently firewalled even
+		// though every service shows green.
+		flushCmd := fmt.Sprintf(
+			"for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do "+
+				"test -f $f || continue; "+
+				"ip=$(grep -oE 'ip=[0-9.]+' $f | head -1 | cut -d= -f2); "+
+				"port=$(grep -oE 'portno=[0-9]+' $f | head -1 | cut -d= -f2); "+
+				"test -n \"$ip\" || continue; "+
+				"while sudo iptables -D INPUT -d $ip -p tcp -m multiport --dports $port -j DROP 2>/dev/null; do :; done; "+
+				"done; true", id, id, id)
+		if err := m.deployment.Exec(ctx, []string{host}, flushCmd); err != nil {
+			m.logger.Warn("Failed to flush leftover portblock rules", zap.String("host", host), zap.Error(err))
+		}
+
+		// 3. Delete reactor config files (all types: nfs, iscsi, nvmeof)
 		configFiles := []string{
 			fmt.Sprintf("sds-nfs-%s.toml", id),
 			fmt.Sprintf("sds-iscsi-%s.toml", id),
@@ -199,7 +216,7 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 			}
 		}
 
-		// 3. Reload drbd-reactor to pick up changes
+		// 4. Reload drbd-reactor to pick up changes
 		if err := m.deployment.Exec(ctx, []string{host}, "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor"); err != nil {
 			m.logger.Warn("Failed to reload drbd-reactor", zap.String("host", host), zap.Error(err))
 		}
@@ -277,7 +294,7 @@ func (m *Manager) writeReactorConfig(ctx context.Context, resource, pluginID, co
 // the promoter's Filesystem agent only mounts, it never formats. mkfs runs
 // only when blkid finds no existing filesystem, so the call is idempotent
 // and never destroys data.
-func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource, device string, nodes []string) error {
+func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource string, nodes []string, devices ...string) error {
 	if len(nodes) == 0 {
 		return fmt.Errorf("resource %s has no nodes", resource)
 	}
@@ -288,21 +305,28 @@ func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource, devi
 	// A freshly promoted resource can lose Primary for a moment when a
 	// previous reactor teardown is still settling, which makes mkfs race a
 	// demote. Retry briefly instead of failing the whole gateway creation.
-	cmd := fmt.Sprintf("sudo blkid %s >/dev/null 2>&1 || sudo mkfs.ext4 -q %s", device, device)
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(2 * time.Second)
-			if err := m.resources.SetPrimary(ctx, resource, node, false); err != nil {
-				m.logger.Warn("Re-promote before mkfs retry failed",
-					zap.String("resource", resource), zap.Error(err))
+	for _, device := range devices {
+		cmd := fmt.Sprintf("sudo blkid %s >/dev/null 2>&1 || sudo mkfs.ext4 -q %s", device, device)
+		var lastErr error
+		formatted := false
+		for attempt := 0; attempt < 3; attempt++ {
+			if attempt > 0 {
+				time.Sleep(2 * time.Second)
+				if err := m.resources.SetPrimary(ctx, resource, node, false); err != nil {
+					m.logger.Warn("Re-promote before mkfs retry failed",
+						zap.String("resource", resource), zap.Error(err))
+				}
+			}
+			if lastErr = m.deployment.Exec(ctx, []string{node}, cmd); lastErr == nil {
+				formatted = true
+				break
 			}
 		}
-		if lastErr = m.deployment.Exec(ctx, []string{node}, cmd); lastErr == nil {
-			return nil
+		if !formatted {
+			return fmt.Errorf("failed to prepare filesystem on %s: %w", device, lastErr)
 		}
 	}
-	return fmt.Errorf("failed to prepare cluster-private filesystem on %s: %w", device, lastErr)
+	return nil
 }
 
 // getDRBDDevice gets the DRBD device path for a resource

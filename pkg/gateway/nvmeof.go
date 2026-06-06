@@ -76,7 +76,7 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 	// Promote on one of the resource's own nodes and make sure the
 	// cluster-private volume carries a filesystem BEFORE reactor takes
 	// over: its Filesystem agent mounts but never formats.
-	if err := n.ensureGatewayPrerequisites(ctx, req.Resource, drbdDevice, resInfo.Nodes); err != nil {
+	if err := n.ensureGatewayPrerequisites(ctx, req.Resource, resInfo.Nodes, drbdDevice); err != nil {
 		return &v1.CreateNVMeGatewayResponse{
 			Success: false,
 			Message: err.Error(),

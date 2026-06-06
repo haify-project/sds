@@ -75,7 +75,7 @@ func (i *iSCSIManager) CreateISCSIGateway(ctx context.Context, req *v1.CreateISC
 	// Promote on one of the resource's own nodes and make sure the
 	// cluster-private volume carries a filesystem BEFORE reactor takes
 	// over: its Filesystem agent mounts but never formats.
-	if err := i.ensureGatewayPrerequisites(ctx, req.Resource, drbdDevice, resInfo.Nodes); err != nil {
+	if err := i.ensureGatewayPrerequisites(ctx, req.Resource, resInfo.Nodes, drbdDevice); err != nil {
 		return &v1.CreateISCSIGatewayResponse{
 			Success: false,
 			Message: err.Error(),
