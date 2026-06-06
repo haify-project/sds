@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -202,10 +203,13 @@ export function DashboardPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-muted-foreground">Members:</span>
                     {selfHa.nodes.map((n) => (
-                      <StatusBadge
+                      <Badge
                         key={n}
-                        status={n === selfHa.activeNode ? 'active' : n}
-                      />
+                        variant={n === selfHa.activeNode ? 'default' : 'secondary'}
+                      >
+                        {n}
+                        {n === selfHa.activeNode && ' (active)'}
+                      </Badge>
                     ))}
                   </div>
                 </>

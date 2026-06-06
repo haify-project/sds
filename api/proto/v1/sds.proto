@@ -110,18 +110,33 @@ service SDSController {
     option (google.api.http) = { get: "/v1/selfha"; };
   }
 
-  // Snapshot operations
+  // Snapshot operations. Volume identifiers are "<pool>/<lv>" paths, so the
+  // REST bindings need the two-segment pattern {volume=*/*}; a plain
+  // {volume} never matches a value containing a slash. The single-segment
+  // binding is kept for backward compatibility.
   rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse) {
-    option (google.api.http) = { post: "/v1/volumes/{volume}/snapshots"; body: "*"; };
+    option (google.api.http) = {
+      post: "/v1/volumes/{volume=*/*}/snapshots"; body: "*";
+      additional_bindings { post: "/v1/volumes/{volume}/snapshots"; body: "*"; }
+    };
   }
   rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse) {
-    option (google.api.http) = { delete: "/v1/volumes/{volume}/snapshots/{snapshot_name}"; };
+    option (google.api.http) = {
+      delete: "/v1/volumes/{volume=*/*}/snapshots/{snapshot_name}";
+      additional_bindings { delete: "/v1/volumes/{volume}/snapshots/{snapshot_name}"; }
+    };
   }
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (RestoreSnapshotResponse) {
-    option (google.api.http) = { post: "/v1/volumes/{volume}/snapshots/{snapshot_name}/restore"; body: "*"; };
+    option (google.api.http) = {
+      post: "/v1/volumes/{volume=*/*}/snapshots/{snapshot_name}/restore"; body: "*";
+      additional_bindings { post: "/v1/volumes/{volume}/snapshots/{snapshot_name}/restore"; body: "*"; }
+    };
   }
   rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse) {
-    option (google.api.http) = { get: "/v1/volumes/{volume}/snapshots"; };
+    option (google.api.http) = {
+      get: "/v1/volumes/{volume=*/*}/snapshots";
+      additional_bindings { get: "/v1/volumes/{volume}/snapshots"; }
+    };
   }
 
   // Gateway operations

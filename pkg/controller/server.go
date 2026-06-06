@@ -428,6 +428,16 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		}
 	}
 
+	for _, v := range resource.Volumes {
+		status.Volumes = append(status.Volumes, &sdspb.VolumeInfo{
+			VolumeId:      v.VolumeID,
+			Device:        v.Device,
+			SizeGb:        v.SizeGB,
+			Pool:          v.Pool,
+			BackingVolume: v.BackingVolume,
+		})
+	}
+
 	return &sdspb.ResourceStatusResponse{
 		Success: true,
 		Message: "Resource status retrieved",

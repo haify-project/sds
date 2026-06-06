@@ -139,7 +139,10 @@ type SDSControllerClient interface {
 	EnableSelfHa(ctx context.Context, in *EnableSelfHaRequest, opts ...grpc.CallOption) (*EnableSelfHaResponse, error)
 	DisableSelfHa(ctx context.Context, in *DisableSelfHaRequest, opts ...grpc.CallOption) (*DisableSelfHaResponse, error)
 	GetSelfHaStatus(ctx context.Context, in *GetSelfHaStatusRequest, opts ...grpc.CallOption) (*GetSelfHaStatusResponse, error)
-	// Snapshot operations
+	// Snapshot operations. Volume identifiers are "<pool>/<lv>" paths, so the
+	// REST bindings need the two-segment pattern {volume=*/*}; a plain
+	// {volume} never matches a value containing a slash. The single-segment
+	// binding is kept for backward compatibility.
 	CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (*CreateSnapshotResponse, error)
 	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
 	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (*RestoreSnapshotResponse, error)
@@ -1001,7 +1004,10 @@ type SDSControllerServer interface {
 	EnableSelfHa(context.Context, *EnableSelfHaRequest) (*EnableSelfHaResponse, error)
 	DisableSelfHa(context.Context, *DisableSelfHaRequest) (*DisableSelfHaResponse, error)
 	GetSelfHaStatus(context.Context, *GetSelfHaStatusRequest) (*GetSelfHaStatusResponse, error)
-	// Snapshot operations
+	// Snapshot operations. Volume identifiers are "<pool>/<lv>" paths, so the
+	// REST bindings need the two-segment pattern {volume=*/*}; a plain
+	// {volume} never matches a value containing a slash. The single-segment
+	// binding is kept for backward compatibility.
 	CreateSnapshot(context.Context, *CreateSnapshotRequest) (*CreateSnapshotResponse, error)
 	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
 	RestoreSnapshot(context.Context, *RestoreSnapshotRequest) (*RestoreSnapshotResponse, error)

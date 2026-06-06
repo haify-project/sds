@@ -209,24 +209,6 @@ func backingPathForVolume(pool, volumeName, storageType string) string {
 	return fmt.Sprintf("/dev/%s/%s", pool, volumeName)
 }
 
-func poolAndVolumeFromDiskPath(diskPath string) (pool, volume string) {
-	trimmed := strings.TrimSpace(diskPath)
-	if strings.HasPrefix(trimmed, "/dev/zvol/") {
-		parts := strings.Split(strings.TrimPrefix(trimmed, "/dev/zvol/"), "/")
-		if len(parts) >= 2 {
-			return parts[0], parts[len(parts)-1]
-		}
-		return "", ""
-	}
-	if strings.HasPrefix(trimmed, "/dev/") {
-		parts := strings.Split(strings.TrimPrefix(trimmed, "/dev/"), "/")
-		if len(parts) >= 2 {
-			return parts[0], parts[len(parts)-1]
-		}
-	}
-	return "", ""
-}
-
 func findVolumeRecord(volumes []*database.Volume, volumeID uint32) *database.Volume {
 	for _, volume := range volumes {
 		if volume.VolumeID == int(volumeID) {
@@ -789,13 +771,29 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 			nodeAddresses = strings.Split(dbRes.Nodes, ",")
 		}
 
+		// Volume metadata comes from the database: listing must not fan out
+		// SSH status calls per resource, and the persisted records carry
+		// everything the API exposes (id, size, pool, backing volume).
+		var volumes []*ResourceVolumeInfo
+		if dbVolumes, err := rm.controller.db.ListVolumes(ctx, dbRes.Name); err == nil {
+			for _, volume := range dbVolumes {
+				volumes = append(volumes, &ResourceVolumeInfo{
+					VolumeID:      uint32(volume.VolumeID),
+					Device:        fmt.Sprintf("/dev/drbd/by-res/%s/%d", dbRes.Name, volume.VolumeID),
+					SizeGB:        uint64(max(volume.SizeGB, 0)),
+					Pool:          volume.Pool,
+					BackingVolume: volume.VolumeName,
+				})
+			}
+		}
+
 		resources = append(resources, &ResourceInfo{
 			Name:       dbRes.Name,
 			Port:       uint32(dbRes.Port),
 			Protocol:   dbRes.Protocol,
 			Nodes:      nodeAddresses,
-			Role:       "Unknown", // Will be updated by GetResource if needed
-			Volumes:    []*ResourceVolumeInfo{},
+			Role:       "Unknown", // Live role comes from GetResource/ResourceStatus
+			Volumes:    volumes,
 			NodeStates: make(map[string]*ResourceNodeState),
 		})
 	}
@@ -1557,7 +1555,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 
 	// Generate drbd-reactor promoter config
 	configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
-	configContent := rm.generatePromoterConfig(resource, nodeAddresses, services, mountPoint, fsType, vip)
+	configContent := rm.generatePromoterConfig(resource, services, mountPoint, vip)
 
 	rm.controller.logger.Debug("Generated promoter config",
 		zap.String("config", configContent))
@@ -1980,7 +1978,7 @@ func (rm *ResourceManager) RemoveHa(ctx context.Context, resource string) error 
 }
 
 // generatePromoterConfig generates drbd-reactor promoter TOML config
-func (rm *ResourceManager) generatePromoterConfig(resource string, nodeAddresses, services []string, mountPoint, fsType, vip string) string {
+func (rm *ResourceManager) generatePromoterConfig(resource string, services []string, mountPoint, vip string) string {
 	var startActions []string
 
 	// Add mount unit if mount point specified

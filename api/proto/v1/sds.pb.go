@@ -10137,7 +10137,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\vmount_point\x18\x03 \x01(\tR\n" +
 	"mountPoint\x12\x17\n" +
 	"\afs_type\x18\x04 \x01(\tR\x06fsType\x12\x1a\n" +
-	"\bservices\x18\x05 \x03(\tR\bservices2\xabA\n" +
+	"\bservices\x18\x05 \x03(\tR\bservices2\xf5B\n" +
 	"\rSDSController\x12Q\n" +
 	"\n" +
 	"CreatePool\x12\x15.v1.CreatePoolRequest\x1a\x16.v1.CreatePoolResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/pools\x12U\n" +
@@ -10173,11 +10173,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\fEnableSelfHa\x12\x17.v1.EnableSelfHaRequest\x1a\x18.v1.EnableSelfHaResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/v1/selfha/enable\x12c\n" +
 	"\rDisableSelfHa\x12\x18.v1.DisableSelfHaRequest\x1a\x19.v1.DisableSelfHaResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/selfha/disable\x12^\n" +
 	"\x0fGetSelfHaStatus\x12\x1a.v1.GetSelfHaStatusRequest\x1a\x1b.v1.GetSelfHaStatusResponse\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +
-	"/v1/selfha\x12r\n" +
-	"\x0eCreateSnapshot\x12\x19.v1.CreateSnapshotRequest\x1a\x1a.v1.CreateSnapshotResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/v1/volumes/{volume}/snapshots\x12\x7f\n" +
-	"\x0eDeleteSnapshot\x12\x19.v1.DeleteSnapshotRequest\x1a\x1a.v1.DeleteSnapshotResponse\"6\x82\xd3\xe4\x93\x020*./v1/volumes/{volume}/snapshots/{snapshot_name}\x12\x8d\x01\n" +
-	"\x0fRestoreSnapshot\x12\x1a.v1.RestoreSnapshotRequest\x1a\x1b.v1.RestoreSnapshotResponse\"A\x82\xd3\xe4\x93\x02;:\x01*\"6/v1/volumes/{volume}/snapshots/{snapshot_name}/restore\x12l\n" +
-	"\rListSnapshots\x12\x18.v1.ListSnapshotsRequest\x1a\x19.v1.ListSnapshotsResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/volumes/{volume}/snapshots\x12j\n" +
+	"/v1/selfha\x12\x9b\x01\n" +
+	"\x0eCreateSnapshot\x12\x19.v1.CreateSnapshotRequest\x1a\x1a.v1.CreateSnapshotResponse\"R\x82\xd3\xe4\x93\x02L:\x01*Z#:\x01*\"\x1e/v1/volumes/{volume}/snapshots\"\"/v1/volumes/{volume=*/*}/snapshots\x12\xb5\x01\n" +
+	"\x0eDeleteSnapshot\x12\x19.v1.DeleteSnapshotRequest\x1a\x1a.v1.DeleteSnapshotResponse\"l\x82\xd3\xe4\x93\x02fZ0*./v1/volumes/{volume}/snapshots/{snapshot_name}*2/v1/volumes/{volume=*/*}/snapshots/{snapshot_name}\x12\xcf\x01\n" +
+	"\x0fRestoreSnapshot\x12\x1a.v1.RestoreSnapshotRequest\x1a\x1b.v1.RestoreSnapshotResponse\"\x82\x01\x82\xd3\xe4\x93\x02|:\x01*Z;:\x01*\"6/v1/volumes/{volume}/snapshots/{snapshot_name}/restore\":/v1/volumes/{volume=*/*}/snapshots/{snapshot_name}/restore\x12\x92\x01\n" +
+	"\rListSnapshots\x12\x18.v1.ListSnapshotsRequest\x1a\x19.v1.ListSnapshotsResponse\"L\x82\xd3\xe4\x93\x02FZ \x12\x1e/v1/volumes/{volume}/snapshots\x12\"/v1/volumes/{volume=*/*}/snapshots\x12j\n" +
 	"\x10CreateNFSGateway\x12\x1b.v1.CreateNFSGatewayRequest\x1a\x1c.v1.CreateNFSGatewayResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/gateways/nfs\x12r\n" +
 	"\x12CreateISCSIGateway\x12\x1d.v1.CreateISCSIGatewayRequest\x1a\x1e.v1.CreateISCSIGatewayResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/gateways/iscsi\x12n\n" +
 	"\x11CreateNVMeGateway\x12\x1c.v1.CreateNVMeGatewayRequest\x1a\x1d.v1.CreateNVMeGatewayResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/v1/gateways/nvme\x12_\n" +
