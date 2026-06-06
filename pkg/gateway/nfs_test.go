@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	v1 "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	v1 "github.com/liliang-cn/sds/api/proto/v1"
 )
 
 func TestNFSFormatCIDR(t *testing.T) {
@@ -92,11 +92,11 @@ func TestGenerateNFSGatewayConfig(t *testing.T) {
 	nfsManager := NewNFSManager(baseManager)
 
 	req := &v1.CreateNFSGatewayRequest{
-		Resource:    "data",
-		ServiceIp:   "192.168.1.100/24",
-		ExportPath:  "/export/data",
-		FsType:      "ext4",
-		AllowedIps:  []string{"192.168.1.0/24", "10.0.0.0/8"},
+		Resource:   "data",
+		ServiceIp:  "192.168.1.100/24",
+		ExportPath: "/export/data",
+		FsType:     "ext4",
+		AllowedIps: []string{"192.168.1.0/24", "10.0.0.0/8"},
 	}
 
 	serviceIP, err := parseServiceIP(req.ServiceIp)
@@ -139,11 +139,11 @@ func TestGenerateNFSGatewayConfigWithCustomFSType(t *testing.T) {
 	nfsManager := NewNFSManager(baseManager)
 
 	req := &v1.CreateNFSGatewayRequest{
-		Resource:    "data",
-		ServiceIp:   "10.0.0.100/24",
-		ExportPath:  "/data",
-		FsType:      "xfs",
-		AllowedIps:  []string{"0.0.0.0/0"},
+		Resource:   "data",
+		ServiceIp:  "10.0.0.100/24",
+		ExportPath: "/data",
+		FsType:     "xfs",
+		AllowedIps: []string{"0.0.0.0/0"},
 	}
 
 	serviceIP, err := parseServiceIP(req.ServiceIp)
@@ -177,11 +177,11 @@ func TestGenerateNFSGatewayConfigDefaultClients(t *testing.T) {
 	nfsManager := NewNFSManager(baseManager)
 
 	req := &v1.CreateNFSGatewayRequest{
-		Resource:    "data",
-		ServiceIp:   "192.168.1.100/24",
-		ExportPath:  "/export/data",
-		FsType:      "ext4",
-		AllowedIps:  []string{}, // Empty - should default to allow all
+		Resource:   "data",
+		ServiceIp:  "192.168.1.100/24",
+		ExportPath: "/export/data",
+		FsType:     "ext4",
+		AllowedIps: []string{}, // Empty - should default to allow all
 	}
 
 	serviceIP, err := parseServiceIP(req.ServiceIp)
@@ -229,16 +229,57 @@ func TestDeleteNFSGateway(t *testing.T) {
 	assert.NotEmpty(t, mockDeployment.ExecCommands)
 }
 
-func TestAddNFSExportNotImplemented(t *testing.T) {
+func TestAddNFSExportUpdatesConfig(t *testing.T) {
 	logger := zap.NewNop()
-	baseManager := New(nil, nil, logger, nil)
+	mockDeployment := &MockDeploymentClient{}
+	baseManager := New(nil, mockDeployment, logger, []string{"node1"})
 	nfsManager := NewNFSManager(baseManager)
 
-	ctx := context.Background()
-	err := nfsManager.AddNFSExport(ctx, "resource", "/export", 1, "*", "rw")
+	req := &v1.CreateNFSGatewayRequest{
+		Resource:   "resource",
+		ServiceIp:  "192.168.1.100/24",
+		ExportPath: "/data",
+	}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	require.NoError(t, err)
+	mockDeployment.SetConfig(gatewayConfigPath("sds-nfs-resource"), config)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	ctx := context.Background()
+	err = nfsManager.AddNFSExport(ctx, "resource", "/backup", 99, "10.0.0.0/8", "ro")
+
+	require.NoError(t, err)
+	exports, err := nfsManager.ListNFSExports(ctx, "resource")
+	require.NoError(t, err)
+	assert.NotEmpty(t, exports)
+	assert.True(t, strings.Contains(mockDeployment.Configs[gatewayConfigPath("sds-nfs-resource")], "directory=/srv/gateway-exports/resource/backup"))
+}
+
+func TestRemoveNFSExportUpdatesConfig(t *testing.T) {
+	logger := zap.NewNop()
+	mockDeployment := &MockDeploymentClient{}
+	baseManager := New(nil, mockDeployment, logger, []string{"node1"})
+	nfsManager := NewNFSManager(baseManager)
+
+	req := &v1.CreateNFSGatewayRequest{
+		Resource:   "resource",
+		ServiceIp:  "192.168.1.100/24",
+		ExportPath: "/data",
+	}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0")
+	require.NoError(t, err)
+	mockDeployment.SetConfig(gatewayConfigPath("sds-nfs-resource"), config)
+
+	ctx := context.Background()
+	err = nfsManager.RemoveNFSExport(ctx, "resource", "/data")
+
+	require.NoError(t, err)
+	exports, err := nfsManager.ListNFSExports(ctx, "resource")
+	require.NoError(t, err)
+	assert.Empty(t, exports)
 }
 
 func TestListNFSExportsWithNonexistentConfig(t *testing.T) {

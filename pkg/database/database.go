@@ -457,15 +457,15 @@ const (
 
 // Gateway represents a storage gateway
 type Gateway struct {
-	ID        int64
-	Name      string
-	Resource  string
-	Type      GatewayType
-	Config    map[string]interface{}
-	Status    string
+	ID         int64
+	Name       string
+	Resource   string
+	Type       GatewayType
+	Config     map[string]interface{}
+	Status     string
 	ActiveNode string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // SaveGateway saves or updates a gateway
@@ -512,6 +512,36 @@ func (db *DB) GetGateway(ctx context.Context, name string) (*Gateway, error) {
 	return &gateway, nil
 }
 
+// GetGatewayByResource retrieves a gateway by resource name.
+func (db *DB) GetGatewayByResource(ctx context.Context, resource string) (*Gateway, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var result *Gateway
+	err := db.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(gatewaysBucket))
+		return b.ForEach(func(k, v []byte) error {
+			var gateway Gateway
+			if err := json.Unmarshal(v, &gateway); err != nil {
+				return err
+			}
+			if gateway.Resource != resource && gateway.Name != resource {
+				return nil
+			}
+			copyGateway := gateway
+			result = &copyGateway
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("gateway not found")
+	}
+	return result, nil
+}
+
 // ListGateways lists all gateways
 func (db *DB) ListGateways(ctx context.Context) ([]*Gateway, error) {
 	db.mu.RLock()
@@ -544,18 +574,48 @@ func (db *DB) DeleteGateway(ctx context.Context, name string) error {
 	})
 }
 
+// DeleteGatewayByResource deletes all gateways matching the resource name.
+func (db *DB) DeleteGatewayByResource(ctx context.Context, resource string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	return db.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(gatewaysBucket))
+		var keys [][]byte
+		err := b.ForEach(func(k, v []byte) error {
+			var gateway Gateway
+			if err := json.Unmarshal(v, &gateway); err != nil {
+				return err
+			}
+			if gateway.Resource == resource || gateway.Name == resource {
+				keys = append(keys, append([]byte(nil), k...))
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
+			if err := b.Delete(key); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // ==================== VOLUME ====================
 
 // Volume represents a volume in a resource
 type Volume struct {
-	ID          int64
+	ID           int64
 	ResourceName string
 	VolumeName   string
 	VolumeID     int
-	Pool        string
-	SizeGB      int
-	Device      string
-	CreatedAt   time.Time
+	Pool         string
+	SizeGB       int
+	Device       string
+	CreatedAt    time.Time
 }
 
 // SaveVolume saves or updates a volume

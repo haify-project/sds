@@ -7,10 +7,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"go.uber.org/zap"
 	v1 "github.com/liliang-cn/sds/api/proto/v1"
+	"go.uber.org/zap"
 )
 
 // NFSManager handles NFS gateway operations
@@ -299,43 +300,84 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		zap.String("resource", resource),
 		zap.String("export_path", exportPath))
 
-	// To implement: parse and append to the existing config
-	return fmt.Errorf("AddNFSExport not yet implemented - please recreate gateway with all exports")
+	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := n.readGatewayConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	lines, trailingNewline := splitConfigLines(content)
+	exportID := nextExportID(lines)
+	if fsid <= 0 {
+		fsid = exportID
+	}
+	if clientSpec == "" {
+		clientSpec = "0.0.0.0/0.0.0.0"
+	}
+	if options == "" {
+		options = "rw,all_squash,anonuid=0,anongid=0"
+	}
+
+	newLine := buildNFSExportLine(exportID, normalizeNFSExportPath(resource, exportPath), strconv.Itoa(fsid), clientSpec, options)
+	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
+		return strings.Contains(line, "ocf:heartbeat:portblock") && strings.Contains(line, "action=unblock")
+	})
+	if err != nil {
+		return err
+	}
+
+	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+}
+
+// RemoveNFSExport removes an export from an existing NFS gateway.
+func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath string) error {
+	n.logger.Info("Removing NFS export",
+		zap.String("resource", resource),
+		zap.String("export_path", exportPath))
+
+	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := n.readGatewayConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	normalizedPath := normalizeNFSExportPath(resource, exportPath)
+	lines, trailingNewline := splitConfigLines(content)
+	lines, removed := removeLine(lines, func(line string) bool {
+		params, ok := parseNFSExportLine(line)
+		return ok && params["directory"] == normalizedPath
+	})
+	if !removed {
+		return fmt.Errorf("export not found: %s", normalizedPath)
+	}
+
+	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
 }
 
 // ListNFSExports lists all exports for an NFS gateway
 func (n *NFSManager) ListNFSExports(ctx context.Context, resource string) ([]map[string]string, error) {
 	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("sds-nfs-%s.toml", resource))
-	content, err := os.ReadFile(configPath)
+	content, err := n.readGatewayConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config: %w", err)
+		return nil, err
 	}
 
 	var exports []map[string]string
-	lines := strings.Split(string(content), "\n")
+	lines := strings.Split(content, "\n")
 
 	for _, line := range lines {
-		if strings.Contains(line, "ocf:heartbeat:exportfs") {
-			// Parse export line
-			parts := strings.Fields(line)
-			exportInfo := make(map[string]string)
-
-			for _, part := range parts {
-				if strings.HasPrefix(part, "directory=") {
-					exportInfo["directory"] = strings.TrimPrefix(part, "directory=")
-				} else if strings.HasPrefix(part, "fsid=") {
-					exportInfo["fsid"] = strings.TrimPrefix(part, "fsid=")
-				} else if strings.HasPrefix(part, "clientspec=") {
-					exportInfo["clientspec"] = strings.TrimPrefix(part, "clientspec=")
-				} else if strings.HasPrefix(part, "options=") {
-					exportInfo["options"] = strings.TrimPrefix(part, "options=")
-				}
-			}
-
-			if len(exportInfo) > 0 {
-				exports = append(exports, exportInfo)
-			}
+		params, ok := parseNFSExportLine(line)
+		if !ok {
+			continue
 		}
+		exports = append(exports, map[string]string{
+			"directory":  params["directory"],
+			"fsid":       params["fsid"],
+			"clientspec": params["clientspec"],
+			"options":    params["options"],
+		})
 	}
 
 	return exports, nil

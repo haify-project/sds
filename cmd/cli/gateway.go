@@ -20,6 +20,8 @@ func gatewayCommand() *cobra.Command {
 	cmd.AddCommand(gatewayNFS())
 	cmd.AddCommand(gatewayNVMe())
 	cmd.AddCommand(gatewayList())
+	cmd.AddCommand(gatewayGet())
+	cmd.AddCommand(gatewayStatus())
 	cmd.AddCommand(gatewayDelete())
 	cmd.AddCommand(gatewayStart())
 	cmd.AddCommand(gatewayStop())
@@ -35,6 +37,9 @@ func gatewayISCSI() *cobra.Command {
 
 	cmd.AddCommand(iscsiCreate())
 	cmd.AddCommand(iscsiList())
+	cmd.AddCommand(iscsiLUNCommand())
+	cmd.AddCommand(iscsiInitiatorCommand())
+	cmd.AddCommand(iscsiCHAPCommand())
 
 	return cmd
 }
@@ -68,13 +73,13 @@ func iscsiCreate() *cobra.Command {
 
 			// Create iSCSI gateway
 			req := &v1.CreateISCSIGatewayRequest{
-				Resource:           resource,
-				ServiceIp:          serviceIP,
-				Iqn:                iqn,
-				AllowedInitiators:  allowedInitiators,
-				Username:           username,
-				Password:           password,
-				Implementation:     implementation,
+				Resource:          resource,
+				ServiceIp:         serviceIP,
+				Iqn:               iqn,
+				AllowedInitiators: allowedInitiators,
+				Username:          username,
+				Password:          password,
+				Implementation:    implementation,
 			}
 
 			if req.Implementation == "" {
@@ -174,6 +179,8 @@ func gatewayNFS() *cobra.Command {
 
 	cmd.AddCommand(nfsCreate())
 	cmd.AddCommand(nfsList())
+	cmd.AddCommand(nfsExportCommand())
+	cmd.AddCommand(nfsMount())
 
 	return cmd
 }
@@ -235,7 +242,7 @@ func nfsCreate() *cobra.Command {
 			fmt.Printf("\nNext steps:\n")
 			fmt.Printf("  1. Reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
 			fmt.Printf("  2. Check gateway status: sudo journalctl -u drbd-reactor -f\n")
-			fmt.Printf("  3. Mount on client: sudo mount -t nfs %s:%s /mnt\n", serviceIP, exportPath)
+			fmt.Printf("  3. Mount on client: sudo mount -t nfs %s:%s /mnt\n", gatewayServiceHost(serviceIP), gatewayExportDirectory(resource, exportPath))
 
 			return nil
 		},
@@ -245,7 +252,7 @@ func nfsCreate() *cobra.Command {
 	cmd.Flags().StringVar(&serviceIP, "service-ip", "", "Service IP (e.g., 192.168.1.200/24)")
 	cmd.Flags().StringVar(&exportPath, "export-path", "", "Export path (e.g., /data)")
 	cmd.Flags().StringSliceVar(&allowedIPs, "allowed-ips", []string{}, "Allowed client IPs (e.g., 192.168.1.0/24)")
-	cmd.Flags().StringVar(&fsType, "fs-type", "ext4", "Filesystem type (ext4, xfs)")
+	cmd.Flags().StringVar(&fsType, "fs-type", "ext4", "Filesystem type (ext4, xfs, btrfs)")
 
 	_ = cmd.MarkFlagRequired("resource")
 	_ = cmd.MarkFlagRequired("service-ip")
@@ -310,6 +317,8 @@ func gatewayNVMe() *cobra.Command {
 
 	cmd.AddCommand(nvmeCreate())
 	cmd.AddCommand(nvmeList())
+	cmd.AddCommand(nvmeNamespaceCommand())
+	cmd.AddCommand(nvmeHostCommand())
 
 	return cmd
 }
@@ -590,4 +599,3 @@ This is typically handled automatically by drbd-reactor.`,
 
 	return cmd
 }
-

@@ -229,13 +229,13 @@ func (s *Server) HealthCheck(ctx context.Context, req *sdspb.HealthCheckRequest)
 		Success: true,
 		Message: "Health check completed",
 		Health: &sdspb.NodeHealthInfo{
-			DrbdInstalled:            health.DrbdInstalled,
-			DrbdVersion:              health.DrbdVersion,
-			DrbdReactorInstalled:     health.DrbdReactorInstalled,
-			DrbdReactorVersion:       health.DrbdReactorVersion,
-			DrbdReactorRunning:       health.DrbdReactorRunning,
-			ResourceAgentsInstalled:  health.ResourceAgentsInstalled,
-			AvailableAgents:          health.AvailableAgents,
+			DrbdInstalled:           health.DrbdInstalled,
+			DrbdVersion:             health.DrbdVersion,
+			DrbdReactorInstalled:    health.DrbdReactorInstalled,
+			DrbdReactorVersion:      health.DrbdReactorVersion,
+			DrbdReactorRunning:      health.DrbdReactorRunning,
+			ResourceAgentsInstalled: health.ResourceAgentsInstalled,
+			AvailableAgents:         health.AvailableAgents,
 		},
 	}, nil
 }
@@ -282,9 +282,11 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 	var pbVolumes []*sdspb.VolumeInfo
 	for _, v := range resource.Volumes {
 		pbVolumes = append(pbVolumes, &sdspb.VolumeInfo{
-			VolumeId: v.VolumeID,
-			Device:   v.Device,
-			SizeGb:   v.SizeGB,
+			VolumeId:      v.VolumeID,
+			Device:        v.Device,
+			SizeGb:        v.SizeGB,
+			Pool:          v.Pool,
+			BackingVolume: v.BackingVolume,
 		})
 	}
 
@@ -301,13 +303,13 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 		Success: true,
 		Message: "Resource found",
 		Resource: &sdspb.ResourceInfo{
-			Name:        resource.Name,
-			Port:        resource.Port,
-			Protocol:    resource.Protocol,
-			Nodes:       resource.Nodes,
-			Role:        resource.Role,
-			Volumes:     pbVolumes,
-			NodeStates:  nodeStates,
+			Name:       resource.Name,
+			Port:       resource.Port,
+			Protocol:   resource.Protocol,
+			Nodes:      resource.Nodes,
+			Role:       resource.Role,
+			Volumes:    pbVolumes,
+			NodeStates: nodeStates,
 		},
 	}, nil
 }
@@ -326,9 +328,11 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 		var pbVolumes []*sdspb.VolumeInfo
 		for _, v := range r.Volumes {
 			pbVolumes = append(pbVolumes, &sdspb.VolumeInfo{
-				VolumeId: v.VolumeID,
-				Device:   v.Device,
-				SizeGb:   v.SizeGB,
+				VolumeId:      v.VolumeID,
+				Device:        v.Device,
+				SizeGb:        v.SizeGB,
+				Pool:          v.Pool,
+				BackingVolume: v.BackingVolume,
 			})
 		}
 		pbResources = append(pbResources, &sdspb.ResourceInfo{
@@ -342,8 +346,8 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 	}
 
 	return &sdspb.ListResourcesResponse{
-		Success: true,
-		Message: "Resources listed successfully",
+		Success:   true,
+		Message:   "Resources listed successfully",
 		Resources: pbResources,
 	}, nil
 }
@@ -402,9 +406,9 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 
 	// Convert to status format with detailed node states
 	status := &sdspb.ResourceStatus{
-		Name:     resource.Name,
-		Role:     resource.Role,
-		Nodes:    resource.Nodes,
+		Name:       resource.Name,
+		Role:       resource.Role,
+		Nodes:      resource.Nodes,
 		NodeStates: make(map[string]*sdspb.NodeResourceState),
 	}
 
@@ -512,8 +516,8 @@ func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.M
 		}, nil
 	}
 	return &sdspb.MakeHaResponse{
-		Success: true,
-		Message: "HA configuration created successfully",
+		Success:    true,
+		Message:    "HA configuration created successfully",
 		ConfigPath: configPath,
 	}, nil
 }
@@ -659,8 +663,8 @@ func (s *Server) ListSnapshots(ctx context.Context, req *sdspb.ListSnapshotsRequ
 	}
 
 	return &sdspb.ListSnapshotsResponse{
-		Success: true,
-		Message: "Snapshots listed successfully",
+		Success:   true,
+		Message:   "Snapshots listed successfully",
 		Snapshots: pbSnapshots,
 	}, nil
 }
@@ -684,13 +688,15 @@ func (s *Server) CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGatew
 			Resource: req.Resource,
 			Type:     database.GatewayTypeNFS,
 			Config: map[string]interface{}{
-				"service_ip":    req.ServiceIp,
-				"export_path":   req.ExportPath,
-				"allowed_ips":   req.AllowedIps,
-				"fs_type":       req.FsType,
-				"options":       req.Options,
+				"service_ip":       req.ServiceIp,
+				"service_host":     gatewayServiceHost(req.ServiceIp),
+				"export_path":      req.ExportPath,
+				"export_directory": gatewayExportDirectory(req.Resource, req.ExportPath),
+				"allowed_ips":      req.AllowedIps,
+				"fs_type":          req.FsType,
+				"options":          req.Options,
 			},
-			Status: "created",
+			Status: "configured",
 		}
 		if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
 			s.ctrl.logger.Error("Failed to save gateway to database", zap.Error(err))
@@ -718,14 +724,15 @@ func (s *Server) CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISCSIG
 			Type:     database.GatewayTypeISCSI,
 			Config: map[string]interface{}{
 				"service_ip":         req.ServiceIp,
+				"service_host":       gatewayServiceHost(req.ServiceIp),
 				"iqn":                req.Iqn,
-				"allowed_initiators":  req.AllowedInitiators,
+				"allowed_initiators": req.AllowedInitiators,
 				"username":           req.Username,
 				"password":           req.Password,
 				"implementation":     req.Implementation,
 				"options":            req.Options,
 			},
-			Status: "created",
+			Status: "configured",
 		}
 		if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
 			s.ctrl.logger.Error("Failed to save gateway to database", zap.Error(err))
@@ -752,12 +759,13 @@ func (s *Server) CreateNVMeGateway(ctx context.Context, req *sdspb.CreateNVMeGat
 			Resource: req.Resource,
 			Type:     database.GatewayTypeNVMEOF,
 			Config: map[string]interface{}{
-				"service_ip":      req.ServiceIp,
-				"nqn":             req.Nqn,
-				"transport_type":  req.TransportType,
-				"options":         req.Options,
+				"service_ip":     req.ServiceIp,
+				"service_host":   gatewayServiceHost(req.ServiceIp),
+				"nqn":            req.Nqn,
+				"transport_type": req.TransportType,
+				"options":        req.Options,
 			},
-			Status: "created",
+			Status: "configured",
 		}
 		if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
 			s.ctrl.logger.Error("Failed to save gateway to database", zap.Error(err))
@@ -778,7 +786,7 @@ func (s *Server) DeleteGateway(ctx context.Context, req *sdspb.DeleteGatewayRequ
 
 	// Delete from database
 	if s.ctrl.db != nil {
-		if err := s.ctrl.db.DeleteGateway(ctx, req.Id); err != nil {
+		if err := s.ctrl.db.DeleteGatewayByResource(ctx, req.Id); err != nil {
 			s.ctrl.logger.Error("Failed to delete gateway from database", zap.Error(err))
 		}
 	}
@@ -790,7 +798,7 @@ func (s *Server) DeleteGateway(ctx context.Context, req *sdspb.DeleteGatewayRequ
 }
 
 func (s *Server) GetGateway(ctx context.Context, req *sdspb.GetGatewayRequest) (*sdspb.GetGatewayResponse, error) {
-	gw, err := s.gateway.GetGateway(ctx, req.Id)
+	gw, err := s.getGatewayInfo(ctx, req.Id)
 	if err != nil {
 		return &sdspb.GetGatewayResponse{
 			Success: false,
@@ -800,17 +808,12 @@ func (s *Server) GetGateway(ctx context.Context, req *sdspb.GetGatewayRequest) (
 	return &sdspb.GetGatewayResponse{
 		Success: true,
 		Message: "Gateway found",
-		Gateway: &sdspb.GatewayInfo{
-			Id:       gw.ID,
-			Name:     gw.Name,
-			Type:     gw.Type,
-			Resource: gw.Resource,
-		},
+		Gateway: s.enrichGatewayInfo(ctx, gw),
 	}, nil
 }
 
 func (s *Server) ListGateways(ctx context.Context, req *sdspb.ListGatewaysRequest) (*sdspb.ListGatewaysResponse, error) {
-	gateways, err := s.gateway.ListGateways(ctx)
+	gateways, err := s.listGatewayInfos(ctx)
 	if err != nil {
 		return &sdspb.ListGatewaysResponse{
 			Success: false,
@@ -820,17 +823,12 @@ func (s *Server) ListGateways(ctx context.Context, req *sdspb.ListGatewaysReques
 
 	var pbGateways []*sdspb.GatewayInfo
 	for _, gw := range gateways {
-		pbGateways = append(pbGateways, &sdspb.GatewayInfo{
-			Id:       gw.ID,
-			Name:     gw.Name,
-			Type:     gw.Type,
-			Resource: gw.Resource,
-		})
+		pbGateways = append(pbGateways, s.enrichGatewayInfo(ctx, gw))
 	}
 
 	return &sdspb.ListGatewaysResponse{
-		Success: true,
-		Message: "Gateways listed successfully",
+		Success:  true,
+		Message:  "Gateways listed successfully",
 		Gateways: pbGateways,
 	}, nil
 }
@@ -842,6 +840,14 @@ func (s *Server) StartGateway(ctx context.Context, req *sdspb.StartGatewayReques
 			Success: false,
 			Message: err.Error(),
 		}, nil
+	}
+	if s.ctrl.db != nil {
+		if gw, err := s.ctrl.db.GetGatewayByResource(ctx, req.Id); err == nil {
+			gw.Status = "started"
+			if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
+				s.ctrl.logger.Error("Failed to update gateway status in database", zap.Error(err))
+			}
+		}
 	}
 	return &sdspb.StartGatewayResponse{
 		Success: true,
@@ -856,6 +862,15 @@ func (s *Server) StopGateway(ctx context.Context, req *sdspb.StopGatewayRequest)
 			Success: false,
 			Message: err.Error(),
 		}, nil
+	}
+	if s.ctrl.db != nil {
+		if gw, err := s.ctrl.db.GetGatewayByResource(ctx, req.Id); err == nil {
+			gw.Status = "stopped"
+			gw.ActiveNode = ""
+			if err := s.ctrl.db.SaveGateway(ctx, gw); err != nil {
+				s.ctrl.logger.Error("Failed to update gateway status in database", zap.Error(err))
+			}
+		}
 	}
 	return &sdspb.StopGatewayResponse{
 		Success: true,
@@ -905,13 +920,13 @@ func (s *Server) ListZFSpools(ctx context.Context, req *sdspb.ListZFSPoolsReques
 	var pbPools []*sdspb.PoolInfo
 	for _, p := range pools {
 		pbPools = append(pbPools, &sdspb.PoolInfo{
-			Name:       p.Name,
-			Type:       p.Type,
-			Node:       p.Node,
-			TotalGb:    p.TotalGB,
-			FreeGb:     p.FreeGB,
-			Devices:    p.Devices,
-			Thin:       p.Thin,
+			Name:        p.Name,
+			Type:        p.Type,
+			Node:        p.Node,
+			TotalGb:     p.TotalGB,
+			FreeGb:      p.FreeGB,
+			Devices:     p.Devices,
+			Thin:        p.Thin,
 			Compression: p.Compression,
 		})
 	}
@@ -1030,8 +1045,8 @@ func (s *Server) ListZFSSnapshots(ctx context.Context, req *sdspb.ListZFSSnapsho
 	}
 
 	return &sdspb.ListZFSSnapshotsResponse{
-		Success: true,
-		Message: "ZFS snapshots listed successfully",
+		Success:   true,
+		Message:   "ZFS snapshots listed successfully",
 		Snapshots: pbSnapshots,
 	}, nil
 }
@@ -1098,8 +1113,8 @@ func (s *Server) ListLvmSnapshots(ctx context.Context, req *sdspb.ListLvmSnapsho
 	snapshots, err := s.storage.ListLvmSnapshots(ctx, req.LvName, req.Node)
 	if err != nil {
 		return &sdspb.ListLvmSnapshotsResponse{
-			Success:  false,
-			Message:  err.Error(),
+			Success:   false,
+			Message:   err.Error(),
 			Snapshots: nil,
 		}, nil
 	}
@@ -1114,8 +1129,8 @@ func (s *Server) ListLvmSnapshots(ctx context.Context, req *sdspb.ListLvmSnapsho
 		})
 	}
 	return &sdspb.ListLvmSnapshotsResponse{
-		Success:  true,
-		Message:  "LVM snapshots listed successfully",
+		Success:   true,
+		Message:   "LVM snapshots listed successfully",
 		Snapshots: protoSnapshots,
 	}, nil
 }

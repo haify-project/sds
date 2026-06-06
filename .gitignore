@@ -34,3 +34,6 @@ go.work.sum
 bin/
 
 node_modules/
+
+# Embedded UI build artifact (copied from web-ui/dist during make build)
+ui/dist/

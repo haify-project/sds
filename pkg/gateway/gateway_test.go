@@ -263,8 +263,8 @@ func TestManagerListGateways(t *testing.T) {
 		"sds-nfs-data.toml",
 		"sds-iscsi-data.toml",
 		"sds-nvmeof-data.toml",
-		"sds-ha-resource.toml",   // Should be filtered out
-		"other-config.toml",      // Should be ignored
+		"sds-ha-resource.toml", // Should be filtered out
+		"other-config.toml",    // Should be ignored
 	}
 
 	for _, cfg := range configs {
@@ -322,6 +322,17 @@ func TestManagerGetGateway(t *testing.T) {
 	_ = err
 }
 
+func TestManagerStopGateway(t *testing.T) {
+	logger := zap.NewNop()
+	mockDeployment := &MockDeploymentClient{}
+	manager := New(nil, mockDeployment, logger, []string{"node1", "node2"})
+
+	err := manager.StopGateway(context.Background(), "test-resource")
+	require.NoError(t, err)
+	require.NotEmpty(t, mockDeployment.ExecCommands)
+	assert.Contains(t, mockDeployment.ExecCommands[0], "drbd-services@test\\x2dresource.target")
+}
+
 // ==================== Mock Implementations ====================
 
 type MockResourceManager struct {
@@ -348,10 +359,25 @@ func (m *MockResourceManager) SetPrimary(ctx context.Context, resource, node str
 }
 
 type MockDeploymentClient struct {
-	Configs        map[string]string
-	ExecCommands   []string
-	DistributeErr  error
-	ExecErr        error
+	Configs       map[string]string
+	ExecCommands  []string
+	DistributeErr error
+	ExecErr       error
+}
+
+func (m *MockDeploymentClient) GetConfig(path string) (string, bool) {
+	if m.Configs == nil {
+		return "", false
+	}
+	value, ok := m.Configs[path]
+	return value, ok
+}
+
+func (m *MockDeploymentClient) SetConfig(path, content string) {
+	if m.Configs == nil {
+		m.Configs = make(map[string]string)
+	}
+	m.Configs[path] = content
 }
 
 func (m *MockDeploymentClient) DistributeConfig(ctx context.Context, hosts []string, content, remotePath string) error {

@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go.uber.org/zap"
 	v1 "github.com/liliang-cn/sds/api/proto/v1"
+	"go.uber.org/zap"
 )
 
 // iSCSIManager handles iSCSI gateway operations
@@ -151,31 +151,21 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 	prefix := serviceIP.Prefix
 	portal := fmt.Sprintf("%s:%d", ipAddr, DefaultISCSIPort)
 
-	// Prepare LUNs - Volume 0 is cluster-private, volumes 1+ are LUNs
-	// Each LUN needs a unique serial number based on IQN + volume number
+	// Prepare LUNs - Volume 0 is cluster-private, volumes 1+ are exposed as LUNs.
+	// Each LUN needs a unique serial number based on IQN + volume number.
 	type LUN struct {
-		Number  int
-		Device  string
-		Serial  string
+		Number int
+		Device string
+		Serial string
 	}
 
-	luns := make([]LUN, volumeCount)
-	for v := 0; v < volumeCount; v++ {
-		if v == 0 {
-			// Volume 0 - cluster private (not exposed as LUN)
-			luns[v] = LUN{
-				Number: 0,
-				Device: drbdDevice,
-				Serial: generateSerialFromIQN(req.Iqn, 0),
-			}
-		} else {
-			// Volume N - exposed as LUN N
-			luns[v] = LUN{
-				Number: v,
-				Device: getDRBDDeviceForVolume(drbdDevice, v),
-				Serial: generateSerialFromIQN(req.Iqn, v),
-			}
-		}
+	luns := make([]LUN, 0, max(volumeCount-1, 0))
+	for v := 1; v < volumeCount; v++ {
+		luns = append(luns, LUN{
+			Number: v,
+			Device: getDRBDDeviceForVolume(drbdDevice, v),
+			Serial: generateSerialFromIQN(req.Iqn, v),
+		})
 	}
 
 	// Default values
@@ -297,9 +287,43 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 		zap.Int("lun", lunNumber),
 		zap.String("device", device))
 
-	// Read existing config, parse, add LUN, rewrite
-	// For simplicity, return not implemented
-	return fmt.Errorf("AddLUN not yet implemented - please recreate gateway with all LUNs")
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	lines, trailingNewline := splitConfigLines(content)
+	for _, line := range lines {
+		if params, ok := parseISCSILUNLine(line); ok && params["lun"] == fmt.Sprintf("%d", lunNumber) {
+			return fmt.Errorf("LUN %d already exists", lunNumber)
+		}
+	}
+
+	targetIdx := findLineIndex(lines, func(line string) bool {
+		_, ok := parseISCSITargetLine(line)
+		return ok
+	})
+	if targetIdx < 0 {
+		return fmt.Errorf("failed to locate iSCSI target definition")
+	}
+
+	targetParams, _ := parseISCSITargetLine(lines[targetIdx])
+	iqn := targetParams["iqn"]
+	if iqn == "" {
+		return fmt.Errorf("failed to parse target IQN from config")
+	}
+
+	newLine := buildISCSILUNLine(lunNumber, iqn, device)
+	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
+		return strings.Contains(line, "ocf:heartbeat:portblock") && strings.Contains(line, "action=unblock")
+	})
+	if err != nil {
+		return err
+	}
+
+	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveLUN removes a LUN from an iSCSI gateway
@@ -308,7 +332,48 @@ func (i *iSCSIManager) RemoveLUN(ctx context.Context, resource string, lunNumber
 		zap.String("resource", resource),
 		zap.Int("lun", lunNumber))
 
-	return fmt.Errorf("RemoveLUN not yet implemented")
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	lines, trailingNewline := splitConfigLines(content)
+	lines, removed := removeLine(lines, func(line string) bool {
+		params, ok := parseISCSILUNLine(line)
+		return ok && params["lun"] == fmt.Sprintf("%d", lunNumber)
+	})
+	if !removed {
+		return fmt.Errorf("LUN %d not found", lunNumber)
+	}
+
+	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+}
+
+// ListLUNs lists all configured LUNs for an iSCSI gateway.
+func (i *iSCSIManager) ListLUNs(ctx context.Context, resource string) ([]map[string]string, error) {
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var luns []map[string]string
+	for _, line := range strings.Split(content, "\n") {
+		params, ok := parseISCSILUNLine(line)
+		if !ok {
+			continue
+		}
+		luns = append(luns, map[string]string{
+			"lun":        params["lun"],
+			"device":     params["path"],
+			"target_iqn": params["target_iqn"],
+		})
+	}
+
+	return luns, nil
 }
 
 // ==================== Target Management ====================
@@ -332,7 +397,30 @@ func (i *iSCSIManager) DeleteTarget(ctx context.Context, resource string) error 
 
 // ListTargets lists all iSCSI targets
 func (i *iSCSIManager) ListTargets(ctx context.Context, host string) ([]string, error) {
-	return []string{}, nil
+	files, err := os.ReadDir(DrbdReactorConfigDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config directory: %w", err)
+	}
+
+	var targets []string
+	for _, file := range files {
+		if !strings.HasPrefix(file.Name(), "sds-iscsi-") || !strings.HasSuffix(file.Name(), ".toml") {
+			continue
+		}
+
+		content, err := os.ReadFile(filepath.Join(DrbdReactorConfigDir, file.Name()))
+		if err != nil {
+			continue
+		}
+
+		for _, line := range strings.Split(string(content), "\n") {
+			if params, ok := parseISCSITargetLine(line); ok && params["iqn"] != "" {
+				targets = append(targets, params["iqn"])
+			}
+		}
+	}
+
+	return uniqueSortedValues(targets), nil
 }
 
 // ==================== ACL Management ====================
@@ -343,8 +431,35 @@ func (i *iSCSIManager) AddInitiator(ctx context.Context, resource, initiatorIQN 
 		zap.String("resource", resource),
 		zap.String("iqn", initiatorIQN))
 
-	// Update the ACL in the target configuration
-	return fmt.Errorf("AddInitiator not yet implemented - please recreate gateway")
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	lines, trailingNewline := splitConfigLines(content)
+	targetIdx := findLineIndex(lines, func(line string) bool {
+		_, ok := parseISCSITargetLine(line)
+		return ok
+	})
+	if targetIdx < 0 {
+		return fmt.Errorf("failed to locate iSCSI target definition")
+	}
+
+	params, _ := parseISCSITargetLine(lines[targetIdx])
+	allowed := parseAllowedList(params["allowed_initiators"])
+	allowed = append(allowed, initiatorIQN)
+	lines[targetIdx] = buildISCSITargetLine(
+		params["iqn"],
+		params["portals"],
+		params["incoming_username"],
+		params["incoming_password"],
+		formatAllowedList(allowed),
+		params["implementation"],
+	)
+
+	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveInitiator removes an initiator from the iSCSI gateway
@@ -353,13 +468,65 @@ func (i *iSCSIManager) RemoveInitiator(ctx context.Context, resource, initiatorI
 		zap.String("resource", resource),
 		zap.String("iqn", initiatorIQN))
 
-	return fmt.Errorf("RemoveInitiator not yet implemented")
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	lines, trailingNewline := splitConfigLines(content)
+	targetIdx := findLineIndex(lines, func(line string) bool {
+		_, ok := parseISCSITargetLine(line)
+		return ok
+	})
+	if targetIdx < 0 {
+		return fmt.Errorf("failed to locate iSCSI target definition")
+	}
+
+	params, _ := parseISCSITargetLine(lines[targetIdx])
+	current := parseAllowedList(params["allowed_initiators"])
+	if len(current) == 0 {
+		return fmt.Errorf("gateway currently allows all initiators; cannot remove a specific initiator without first defining an explicit ACL")
+	}
+
+	updated := removeValue(current, initiatorIQN)
+	if len(updated) == len(current) {
+		return fmt.Errorf("initiator not found: %s", initiatorIQN)
+	}
+
+	lines[targetIdx] = buildISCSITargetLine(
+		params["iqn"],
+		params["portals"],
+		params["incoming_username"],
+		params["incoming_password"],
+		formatAllowedList(updated),
+		params["implementation"],
+	)
+
+	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
 }
 
 // ListInitiators lists all initiators for an iSCSI gateway
 func (i *iSCSIManager) ListInitiators(ctx context.Context, resource string) ([]string, error) {
-	// Read from gateway config or query targetcli
-	return []string{}, nil
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, line := range strings.Split(content, "\n") {
+		if params, ok := parseISCSITargetLine(line); ok {
+			allowed := parseAllowedList(params["allowed_initiators"])
+			if len(allowed) == 0 {
+				return []string{"ALL"}, nil
+			}
+			return allowed, nil
+		}
+	}
+
+	return nil, fmt.Errorf("failed to locate iSCSI target definition")
 }
 
 // ==================== CHAP Authentication ====================
@@ -371,14 +538,55 @@ func (i *iSCSIManager) SetCHAP(ctx context.Context, resource, username, password
 		zap.String("username", username),
 		zap.Bool("mutual", mutual))
 
-	// Update the gateway configuration with new CHAP credentials
-	return fmt.Errorf("SetCHAP not yet implemented - please recreate gateway")
+	if mutual {
+		return fmt.Errorf("mutual CHAP is not supported by the current iSCSI gateway config writer")
+	}
+
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	lines, trailingNewline := splitConfigLines(content)
+	targetIdx := findLineIndex(lines, func(line string) bool {
+		_, ok := parseISCSITargetLine(line)
+		return ok
+	})
+	if targetIdx < 0 {
+		return fmt.Errorf("failed to locate iSCSI target definition")
+	}
+
+	params, _ := parseISCSITargetLine(lines[targetIdx])
+	lines[targetIdx] = buildISCSITargetLine(
+		params["iqn"],
+		params["portals"],
+		username,
+		password,
+		formatAllowedList(parseAllowedList(params["allowed_initiators"])),
+		params["implementation"],
+	)
+
+	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
 }
 
 // GetCHAP gets CHAP authentication settings
 func (i *iSCSIManager) GetCHAP(ctx context.Context, resource string) (username, password string, mutual bool, err error) {
-	// Read from gateway config
-	return "", "", false, fmt.Errorf("CHAP not configured or not implemented")
+	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	configPath := gatewayConfigPath(pluginID)
+	content, err := i.readGatewayConfig(configPath)
+	if err != nil {
+		return "", "", false, err
+	}
+
+	for _, line := range strings.Split(content, "\n") {
+		if params, ok := parseISCSITargetLine(line); ok {
+			return params["incoming_username"], params["incoming_password"], false, nil
+		}
+	}
+
+	return "", "", false, fmt.Errorf("failed to locate iSCSI target definition")
 }
 
 // ==================== Helper Functions ====================

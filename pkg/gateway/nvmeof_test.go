@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	v1 "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	v1 "github.com/liliang-cn/sds/api/proto/v1"
 )
 
 func TestNewNVMeManager(t *testing.T) {
@@ -44,9 +44,9 @@ func TestGenerateNVMeGatewayConfig(t *testing.T) {
 	nvmeManager := NewNVMeManager(baseManager)
 
 	req := &v1.CreateNVMeGatewayRequest{
-		Resource:     "data",
-		Nqn:          "nqn.2024-01.com.example:sds.data",
-		ServiceIp:    "192.168.1.150/24",
+		Resource:      "data",
+		Nqn:           "nqn.2024-01.com.example:sds.data",
+		ServiceIp:     "192.168.1.150/24",
 		TransportType: "tcp",
 	}
 
@@ -67,7 +67,7 @@ func TestGenerateNVMeGatewayConfig(t *testing.T) {
 	assert.Contains(t, config, "ocf:heartbeat:nvmet-port")
 	assert.Contains(t, config, "ocf:heartbeat:Filesystem")
 	assert.Contains(t, config, "ocf:heartbeat:portblock")
-	assert.Contains(t, config, "tcp") // Transport type
+	assert.Contains(t, config, "tcp")  // Transport type
 	assert.Contains(t, config, "4420") // Default NVMe port
 }
 
@@ -93,9 +93,9 @@ func TestGenerateNVMeGatewayConfigMultipleNamespaces(t *testing.T) {
 	nvmeManager := NewNVMeManager(baseManager)
 
 	req := &v1.CreateNVMeGatewayRequest{
-		Resource:     "data",
-		Nqn:          "nqn.2024-01.com.example:sds.multi-ns",
-		ServiceIp:    "10.0.0.50/24",
+		Resource:      "data",
+		Nqn:           "nqn.2024-01.com.example:sds.multi-ns",
+		ServiceIp:     "10.0.0.50/24",
 		TransportType: "tcp",
 	}
 
@@ -105,12 +105,10 @@ func TestGenerateNVMeGatewayConfigMultipleNamespaces(t *testing.T) {
 	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 4)
 	require.NoError(t, err)
 
-	// Should have multiple namespace entries
+	// Only volumes 1+ are exposed as namespaces.
 	nsCount := strings.Count(config, "nvmet-namespace")
-	assert.Equal(t, 4, nsCount) // 4 volumes
-
-	// Should have namespace IDs 0, 1, 2, 3
-	assert.Contains(t, config, "namespace_id=0")
+	assert.Equal(t, 3, nsCount)
+	assert.NotContains(t, config, "namespace_id=0")
 	assert.Contains(t, config, "namespace_id=1")
 	assert.Contains(t, config, "namespace_id=2")
 	assert.Contains(t, config, "namespace_id=3")
@@ -136,9 +134,9 @@ func TestGenerateNVMeGatewayConfigRDMA(t *testing.T) {
 	nvmeManager := NewNVMeManager(baseManager)
 
 	req := &v1.CreateNVMeGatewayRequest{
-		Resource:     "data",
-		Nqn:          "nqn.2024-01.com.example:sds.rdma",
-		ServiceIp:    "192.168.1.150/24",
+		Resource:      "data",
+		Nqn:           "nqn.2024-01.com.example:sds.rdma",
+		ServiceIp:     "192.168.1.150/24",
 		TransportType: "rdma",
 	}
 
@@ -172,9 +170,9 @@ func TestGenerateNVMeGatewayConfigDefaultTransport(t *testing.T) {
 	nvmeManager := NewNVMeManager(baseManager)
 
 	req := &v1.CreateNVMeGatewayRequest{
-		Resource:     "data",
-		Nqn:          "nqn.2024-01.com.example:sds.default",
-		ServiceIp:    "192.168.1.150/24",
+		Resource:  "data",
+		Nqn:       "nqn.2024-01.com.example:sds.default",
+		ServiceIp: "192.168.1.150/24",
 		// No TransportType specified
 	}
 
@@ -323,28 +321,57 @@ func TestDeleteNVMeGateway(t *testing.T) {
 	assert.NotEmpty(t, mockDeployment.ExecCommands)
 }
 
-func TestAddNamespaceNotImplemented(t *testing.T) {
+func TestAddNamespaceUpdatesConfig(t *testing.T) {
 	logger := zap.NewNop()
-	baseManager := New(nil, nil, logger, nil)
+	mockDeployment := &MockDeploymentClient{}
+	baseManager := New(nil, mockDeployment, logger, []string{"node1"})
 	nvmeManager := NewNVMeManager(baseManager)
 
-	ctx := context.Background()
-	err := nvmeManager.AddNamespace(ctx, "resource", "/dev/drbd1")
+	req := &v1.CreateNVMeGatewayRequest{
+		Resource:  "resource",
+		Nqn:       "nqn.2024-01.com.example:sds.resource",
+		ServiceIp: "192.168.1.150/24",
+	}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	require.NoError(t, err)
+	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	ctx := context.Background()
+	err = nvmeManager.AddNamespace(ctx, "resource", "/dev/drbd3")
+
+	require.NoError(t, err)
+	updated, ok := mockDeployment.GetConfig(gatewayConfigPath("sds-nvmeof-resource"))
+	require.True(t, ok)
+	assert.Contains(t, updated, "namespace_id=2")
+	assert.Contains(t, updated, "backing_path=/dev/drbd3")
 }
 
-func TestRemoveNamespaceNotImplemented(t *testing.T) {
+func TestRemoveNamespaceUpdatesConfig(t *testing.T) {
 	logger := zap.NewNop()
-	baseManager := New(nil, nil, logger, nil)
+	mockDeployment := &MockDeploymentClient{}
+	baseManager := New(nil, mockDeployment, logger, []string{"node1"})
 	nvmeManager := NewNVMeManager(baseManager)
 
-	ctx := context.Background()
-	err := nvmeManager.RemoveNamespace(ctx, "resource", 1)
+	req := &v1.CreateNVMeGatewayRequest{
+		Resource:  "resource",
+		Nqn:       "nqn.2024-01.com.example:sds.resource",
+		ServiceIp: "192.168.1.150/24",
+	}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 3)
+	require.NoError(t, err)
+	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	ctx := context.Background()
+	err = nvmeManager.RemoveNamespace(ctx, "resource", 2)
+
+	require.NoError(t, err)
+	updated, ok := mockDeployment.GetConfig(gatewayConfigPath("sds-nvmeof-resource"))
+	require.True(t, ok)
+	assert.NotContains(t, updated, "namespace_id=2")
 }
 
 func TestCreateSubsystemManagedByOCF(t *testing.T) {
@@ -359,16 +386,68 @@ func TestCreateSubsystemManagedByOCF(t *testing.T) {
 	assert.Contains(t, err.Error(), "OCF resource agent")
 }
 
-func TestAddHostNotImplemented(t *testing.T) {
+func TestAddAndRemoveNVMeHost(t *testing.T) {
 	logger := zap.NewNop()
-	baseManager := New(nil, nil, logger, nil)
+	mockDeployment := &MockDeploymentClient{}
+	baseManager := New(nil, mockDeployment, logger, []string{"node1"})
 	nvmeManager := NewNVMeManager(baseManager)
 
-	ctx := context.Background()
-	err := nvmeManager.AddHost(ctx, "resource", "nqn.2024-01.com.example:host")
+	req := &v1.CreateNVMeGatewayRequest{
+		Resource:  "resource",
+		Nqn:       "nqn.2024-01.com.example:sds.resource",
+		ServiceIp: "192.168.1.150/24",
+	}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	require.NoError(t, err)
+	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	ctx := context.Background()
+	err = nvmeManager.AddHost(ctx, "resource", "nqn.2024-01.com.example:host1")
+	require.NoError(t, err)
+
+	hosts, err := nvmeManager.ListHosts(ctx, "resource")
+	require.NoError(t, err)
+	assert.Contains(t, hosts, "nqn.2024-01.com.example:host1")
+
+	err = nvmeManager.RemoveHost(ctx, "resource", "nqn.2024-01.com.example:host1")
+	require.NoError(t, err)
+	hosts, err = nvmeManager.ListHosts(ctx, "resource")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALL"}, hosts)
+}
+
+func TestDeleteAndListNVMePort(t *testing.T) {
+	logger := zap.NewNop()
+	mockDeployment := &MockDeploymentClient{}
+	baseManager := New(nil, mockDeployment, logger, []string{"node1"})
+	nvmeManager := NewNVMeManager(baseManager)
+
+	req := &v1.CreateNVMeGatewayRequest{
+		Resource:  "resource",
+		Nqn:       "nqn.2024-01.com.example:sds.resource",
+		ServiceIp: "192.168.1.150/24",
+	}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
+	require.NoError(t, err)
+	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
+
+	ctx := context.Background()
+	ports, err := nvmeManager.ListPorts(ctx, "resource")
+	require.NoError(t, err)
+	require.Len(t, ports, 1)
+	assert.Equal(t, "192.168.1.150", ports[0]["addr"])
+	assert.Equal(t, "4420", ports[0]["port"])
+
+	err = nvmeManager.DeletePort(ctx, "resource", "192.168.1.150", 4420)
+	require.NoError(t, err)
+
+	updated, ok := mockDeployment.GetConfig(gatewayConfigPath("sds-nvmeof-resource"))
+	require.True(t, ok)
+	assert.NotContains(t, updated, "ocf:heartbeat:nvmet-port")
 }
 
 func TestNVMeDefaultPort(t *testing.T) {
@@ -408,11 +487,11 @@ func TestNVMeGatewayUUIDGeneration(t *testing.T) {
 	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", 2)
 	require.NoError(t, err)
 
-	// Verify UUIDs are present for namespaces
+	// Only the exposed namespace should have UUID metadata.
 	uuidCount := strings.Count(config, "uuid=")
 	nguidCount := strings.Count(config, "nguid=")
-	assert.Equal(t, 2, uuidCount)   // Each namespace has a UUID
-	assert.Equal(t, 2, nguidCount)  // Each namespace has an NGUID
+	assert.Equal(t, 1, uuidCount)
+	assert.Equal(t, 1, nguidCount)
 }
 
 func TestNVMeGatewaySerialGeneration(t *testing.T) {

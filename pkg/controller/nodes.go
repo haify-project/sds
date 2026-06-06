@@ -15,20 +15,20 @@ import (
 type NodeState string
 
 const (
-	NodeStateOnline  NodeState = "online"
-	NodeStateOffline NodeState = "offline"
+	NodeStateOnline   NodeState = "online"
+	NodeStateOffline  NodeState = "offline"
 	NodeStateDegraded NodeState = "degraded"
 )
 
 // NodeInfo represents node information
 type NodeInfo struct {
-	Name       string                 `json:"name"`
-	Address    string                 `json:"address"`
-	Hostname   string                 `json:"hostname"`
-	State      NodeState              `json:"state"`
-	LastSeen   time.Time              `json:"last_seen"`
-	Capacity   map[string]interface{} `json:"capacity"`
-	Version    string                 `json:"version"`
+	Name     string                 `json:"name"`
+	Address  string                 `json:"address"`
+	Hostname string                 `json:"hostname"`
+	State    NodeState              `json:"state"`
+	LastSeen time.Time              `json:"last_seen"`
+	Capacity map[string]interface{} `json:"capacity"`
+	Version  string                 `json:"version"`
 }
 
 // NodeManager manages cluster nodes
@@ -48,9 +48,6 @@ func NewNodeManager(ctrl *Controller) *NodeManager {
 
 // RegisterNode registers a new node
 func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (*NodeInfo, error) {
-	nm.mu.Lock()
-	defer nm.mu.Unlock()
-
 	nm.controller.logger.Info("Registering node", zap.String("name", name), zap.String("address", address))
 
 	// Check node health by executing hostname command
@@ -79,12 +76,14 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 		Hostname: hostname,
 		State:    NodeStateOnline,
 		LastSeen: time.Now(),
-		Version:  "1.0.0", // TODO: detect version from node environment
+		Version:  nm.detectNodeVersion(ctx, address),
 		Capacity: make(map[string]interface{}),
 	}
 
 	// Save to in-memory cache
+	nm.mu.Lock()
 	nm.nodes[address] = nodeInfo
+	nm.mu.Unlock()
 
 	// Update controller's hosts list if not already present
 	nm.controller.hostsLock.Lock()
@@ -103,6 +102,7 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 	if hostname != "" {
 		nm.controller.hostsMap[hostname] = address
 	}
+	nm.controller.gateway.SetHosts(nm.controller.hosts)
 	nm.controller.hostsLock.Unlock()
 
 	// Add hosts entry to all existing nodes for new node
@@ -136,16 +136,41 @@ func (nm *NodeManager) UnregisterNode(ctx context.Context, address string) error
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
 
-	nm.controller.logger.Info("Unregistering node", zap.String("address", address))
-
-	// Mark node as offline
-	if node := nm.nodes[address]; node != nil {
-		node.State = NodeStateOffline
+	resolved := nm.controller.ResolveHost(address)
+	node := nm.nodes[resolved]
+	if node == nil {
+		return fmt.Errorf("node not found: %s", address)
 	}
+
+	nm.controller.logger.Info("Unregistering node",
+		zap.String("address", address),
+		zap.String("resolved", resolved),
+		zap.String("name", node.Name))
+
+	delete(nm.nodes, resolved)
+
+	nm.controller.hostsLock.Lock()
+	filteredHosts := make([]string, 0, len(nm.controller.hosts))
+	for _, host := range nm.controller.hosts {
+		if host != resolved {
+			filteredHosts = append(filteredHosts, host)
+		}
+	}
+	nm.controller.hosts = filteredHosts
+
+	delete(nm.controller.hostsMap, resolved)
+	if node.Name != "" {
+		delete(nm.controller.hostsMap, node.Name)
+	}
+	if node.Hostname != "" {
+		delete(nm.controller.hostsMap, node.Hostname)
+	}
+	nm.controller.gateway.SetHosts(nm.controller.hosts)
+	nm.controller.hostsLock.Unlock()
 
 	// Delete from database
 	if nm.controller.db != nil {
-		if err := nm.controller.db.DeleteNode(ctx, address); err != nil {
+		if err := nm.controller.db.DeleteNode(ctx, resolved); err != nil {
 			nm.controller.logger.Error("Failed to delete node from database", zap.Error(err))
 		}
 	}
@@ -159,7 +184,7 @@ func (nm *NodeManager) GetNodeAddressByName(name string) string {
 	defer nm.mu.RUnlock()
 
 	for addr, node := range nm.nodes {
-		if node.Name == name {
+		if node.Name == name || node.Hostname == name || addr == name {
 			return addr
 		}
 	}
@@ -171,7 +196,19 @@ func (nm *NodeManager) GetNode(ctx context.Context, address string) (*NodeInfo, 
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
 
-	node := nm.nodes[address]
+	resolved := address
+	if node := nm.nodes[resolved]; node != nil {
+		return node, nil
+	}
+
+	for addr, node := range nm.nodes {
+		if node.Name == address || node.Hostname == address {
+			resolved = addr
+			break
+		}
+	}
+
+	node := nm.nodes[resolved]
 	if node == nil {
 		return nil, fmt.Errorf("node not found: %s", address)
 	}
@@ -311,19 +348,25 @@ func (nm *NodeManager) HealthCheck(ctx context.Context, nodeName string) (*NodeH
 		AvailableAgents: make([]string, 0),
 	}
 
-	// Get node info to find hostname for SSH
-	var sshTarget string
+	// Resolve the most reliable SSH target we have: address first, then hostname/name.
+	sshTarget := nm.controller.ResolveHost(nodeName)
 	nm.mu.RLock()
 	for _, node := range nm.nodes {
-		if node.Name == nodeName {
-			sshTarget = node.Hostname // Use hostname for SSH
+		if node.Name == nodeName || node.Hostname == nodeName || node.Address == nodeName {
+			if node.Address != "" {
+				sshTarget = node.Address
+			} else if node.Hostname != "" {
+				sshTarget = node.Hostname
+			} else {
+				sshTarget = node.Name
+			}
 			break
 		}
 	}
 	nm.mu.RUnlock()
 
 	if sshTarget == "" {
-		// Fallback to node name if not found
+		// Fallback to node name/address if not found
 		sshTarget = nodeName
 	}
 
@@ -400,6 +443,22 @@ func (nm *NodeManager) HealthCheck(ctx context.Context, nodeName string) (*NodeH
 	return info, nil
 }
 
+func (nm *NodeManager) detectNodeVersion(ctx context.Context, address string) string {
+	result, err := nm.controller.deployment.Exec(ctx, []string{address}, "cat /etc/os-release 2>/dev/null || uname -r")
+	if err != nil || !result.AllSuccess() {
+		return "unknown"
+	}
+
+	for _, r := range result.Hosts {
+		if !r.Success || strings.TrimSpace(r.Output) == "" {
+			continue
+		}
+		return parseNodeEnvironmentVersion(r.Output)
+	}
+
+	return "unknown"
+}
+
 // parseVersion extracts version string from command output
 func parseVersion(output string) string {
 	// Look for version patterns like "v1.2.3", "1.2.3", "DRBDADM_VERSION=9.33.0"
@@ -431,6 +490,42 @@ func parseVersion(output string) string {
 		}
 	}
 	return "unknown"
+}
+
+func parseNodeEnvironmentVersion(output string) string {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return "unknown"
+	}
+
+	if strings.Contains(trimmed, "=") {
+		osRelease := make(map[string]string)
+		for _, line := range strings.Split(trimmed, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			key := strings.TrimSpace(parts[0])
+			value := strings.Trim(strings.TrimSpace(parts[1]), `"`)
+			osRelease[key] = value
+		}
+
+		switch {
+		case osRelease["PRETTY_NAME"] != "":
+			return osRelease["PRETTY_NAME"]
+		case osRelease["NAME"] != "" && osRelease["VERSION"] != "":
+			return strings.TrimSpace(osRelease["NAME"] + " " + osRelease["VERSION"])
+		case osRelease["NAME"] != "" && osRelease["VERSION_ID"] != "":
+			return strings.TrimSpace(osRelease["NAME"] + " " + osRelease["VERSION_ID"])
+		}
+	}
+
+	if version := parseVersion(trimmed); version != "unknown" {
+		return version
+	}
+
+	return trimmed
 }
 
 // addHostsEntry adds the new node's hostname and IP to /etc/hosts on all existing nodes

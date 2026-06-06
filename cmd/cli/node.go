@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	v1 "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/spf13/cobra"
 )
@@ -78,12 +77,12 @@ func nodeList() *cobra.Command {
 
 func nodeGet() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <node-address>",
+		Use:   "get <node>",
 		Short: "Get node details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			address := args[0]
+			nodeRef := args[0]
 
 			// Create SDS client
 			sdsClient, err := client.NewSDSClient(controllerAddr)
@@ -92,24 +91,9 @@ func nodeGet() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			// List all nodes and find the requested one
-			nodes, err := sdsClient.ListNodes(ctx)
+			foundNode, err := sdsClient.GetNode(ctx, nodeRef)
 			if err != nil {
-				return fmt.Errorf("failed to list nodes: %w", err)
-			}
-
-			// Find the node
-			var foundNode *v1.NodeInfo
-			for _, node := range nodes {
-				if node.Address == address {
-					foundNode = node
-					break
-				}
-			}
-
-			if foundNode == nil {
-				fmt.Printf("Node not found: %s\n", address)
-				return nil
+				return fmt.Errorf("failed to get node: %w", err)
 			}
 
 			// Print node details

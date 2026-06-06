@@ -1,0 +1,50 @@
+package controller
+
+import (
+	"context"
+
+	"github.com/liliang-cn/sds/pkg/deployment"
+)
+
+type deploymentClient interface {
+	DistributeConfig(ctx context.Context, hosts []string, content, remotePath string, opts ...deployment.ConfigOption) (*deployment.ConfigResult, error)
+	DeleteConfig(ctx context.Context, hosts []string, remotePath string) error
+	Exec(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error)
+
+	PVCreate(ctx context.Context, hosts []string, device string, opts ...deployment.LVMOption) (*deployment.ExecResult, error)
+	VGCreate(ctx context.Context, hosts []string, vgName string, devices []string) (*deployment.ExecResult, error)
+	LVCreate(ctx context.Context, hosts []string, vgName, lvName, size string) (*deployment.ExecResult, error)
+	LVCreateThinPool(ctx context.Context, hosts []string, vgName, poolName, size string) (*deployment.ExecResult, error)
+	LVCreateThinVolume(ctx context.Context, hosts []string, vgName, poolName, lvName, size string) (*deployment.ExecResult, error)
+	LVCreateSnapshot(ctx context.Context, hosts []string, vgName, lvName, snapshotName, size string) (*deployment.ExecResult, error)
+	LVCreateThinSnapshot(ctx context.Context, hosts []string, vgName, lvName, snapshotName string) (*deployment.ExecResult, error)
+	LVIsThin(ctx context.Context, host, vgName, lvName string) (bool, error)
+	LVRemoveSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error)
+	LVListSnapshots(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
+	LVMergeSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error)
+
+	ZFSCreatePool(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...deployment.ZFSOption) (*deployment.ExecResult, error)
+	ZFSDestroyPool(ctx context.Context, hosts []string, poolName string) (*deployment.ExecResult, error)
+	ZFSListPools(ctx context.Context, hosts []string) (*deployment.ExecResult, error)
+	ZFSCreateDataset(ctx context.Context, hosts []string, datasetName string, opts ...deployment.ZFSOption) (*deployment.ExecResult, error)
+	ZFSCreateThinDataset(ctx context.Context, hosts []string, poolName, datasetName, size string) (*deployment.ExecResult, error)
+	ZFSDestroyDataset(ctx context.Context, hosts []string, datasetName string) (*deployment.ExecResult, error)
+	ZFSSnapshot(ctx context.Context, hosts []string, dataset, snapshotName string) (*deployment.ExecResult, error)
+	ZFSRollback(ctx context.Context, hosts []string, dataset, snapshotName string) (*deployment.ExecResult, error)
+	ZFSClone(ctx context.Context, hosts []string, snapshot, clonePath string) (*deployment.ExecResult, error)
+	ZFSListSnapshots(ctx context.Context, hosts []string, dataset string) (*deployment.ExecResult, error)
+	ZFSDestroySnapshot(ctx context.Context, hosts []string, snapshot string) (*deployment.ExecResult, error)
+	ZFSSetQuota(ctx context.Context, hosts []string, dataset, quota string) (*deployment.ExecResult, error)
+	ZFSResizeVolume(ctx context.Context, hosts []string, volumePath, newSize string) (*deployment.ExecResult, error)
+
+	DRBDUp(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
+	DRBDDown(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
+	DRBDPrimary(ctx context.Context, host, resource string, force bool) (*deployment.HostResult, error)
+	DRBDSecondary(ctx context.Context, host, resource string) (*deployment.HostResult, error)
+	DRBDCreateMD(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
+	DRBDStatus(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
+	ReactorReload(ctx context.Context, hosts []string) (*deployment.ExecResult, error)
+	ReactorPromoterStatusByResource(ctx context.Context, host, resource string) (*deployment.ReactorPromoterStatus, error)
+}
+
+var _ deploymentClient = (*deployment.Client)(nil)

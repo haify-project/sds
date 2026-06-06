@@ -15,8 +15,8 @@ import (
 	"text/template"
 	"time"
 
-	"go.uber.org/zap"
 	v1 "github.com/liliang-cn/sds/api/proto/v1"
+	"go.uber.org/zap"
 )
 
 const (
@@ -58,9 +58,9 @@ type ResourceInfo struct {
 
 // ResourceNodeState represents node state for a resource
 type ResourceNodeState struct {
-	Role             string
-	DiskState        string
-	Replication      string
+	Role        string
+	DiskState   string
+	Replication string
 }
 
 // ResourceManager provides access to DRBD resource operations
@@ -89,8 +89,16 @@ func New(resources ResourceManager, deployment DeploymentClient, logger *zap.Log
 		resources:  resources,
 		deployment: deployment,
 		logger:     logger,
-		hosts:      hosts,
+		hosts:      append([]string(nil), hosts...),
 	}
+}
+
+func (m *Manager) SetHosts(hosts []string) {
+	m.hosts = append([]string(nil), hosts...)
+}
+
+func (m *Manager) Hosts() []string {
+	return append([]string(nil), m.hosts...)
 }
 
 // GatewayInfo represents gateway information
@@ -431,7 +439,9 @@ func (m *Manager) StartGateway(ctx context.Context, id string) error {
 
 // StopGateway stops a gateway
 func (m *Manager) StopGateway(ctx context.Context, id string) error {
-	return fmt.Errorf("stopping individual gateways not yet implemented")
+	escapedID := strings.ReplaceAll(id, "-", "\\x2d")
+	stopCmd := fmt.Sprintf("systemctl stop drbd-services@%s.target 2>/dev/null || true", escapedID)
+	return m.deployment.Exec(ctx, m.hosts, stopCmd)
 }
 
 // reloadDrbdReactor reloads drbd-reactor configuration

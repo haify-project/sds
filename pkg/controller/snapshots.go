@@ -31,6 +31,8 @@ func NewSnapshotManager(ctrl *Controller) *SnapshotManager {
 
 // CreateSnapshot creates a snapshot
 func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotName, node string) error {
+	address := sm.controller.ResolveHost(node)
+
 	sm.controller.logger.Info("Creating snapshot",
 		zap.String("volume", volume),
 		zap.String("snapshot", snapshotName),
@@ -42,7 +44,7 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotN
 
 	// Create snapshot using lvcreate
 	cmd := fmt.Sprintf("sudo lvcreate -s -n %s %s", snapshotName, originPath)
-	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
+	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %w", err)
 	}
@@ -60,6 +62,8 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotN
 
 // DeleteSnapshot deletes a snapshot
 func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotName, node string) error {
+	address := sm.controller.ResolveHost(node)
+
 	sm.controller.logger.Info("Deleting snapshot",
 		zap.String("volume", volume),
 		zap.String("snapshot", snapshotName),
@@ -71,7 +75,7 @@ func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotN
 
 	// Remove snapshot
 	cmd := fmt.Sprintf("sudo lvremove -f %s", snapshotPath)
-	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
+	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to delete snapshot: %w", err)
 	}
@@ -90,10 +94,11 @@ func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotN
 func (sm *SnapshotManager) ListSnapshots(ctx context.Context, volume, node string) ([]*SnapshotInfo, error) {
 	// Parse volume path
 	vg, lv := parseVolumePath(volume)
+	address := sm.controller.ResolveHost(node)
 
 	// List snapshots using lvs
 	cmd := fmt.Sprintf("sudo lvs --noheadings --separator '|' -o lv_name,lv_size,origin %s", vg)
-	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
+	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list snapshots: %w", err)
 	}
@@ -135,6 +140,8 @@ func (sm *SnapshotManager) ListSnapshots(ctx context.Context, volume, node strin
 
 // RestoreSnapshot restores a snapshot
 func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshotName, node string) error {
+	address := sm.controller.ResolveHost(node)
+
 	sm.controller.logger.Info("Restoring snapshot",
 		zap.String("volume", volume),
 		zap.String("snapshot", snapshotName),
@@ -148,7 +155,7 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 	// First, unmount if mounted (caller should handle this)
 	// Then use lvconvert --merge
 	cmd := fmt.Sprintf("sudo lvconvert --merge %s", snapshotPath)
-	result, err := sm.controller.deployment.Exec(ctx, []string{node}, cmd)
+	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}

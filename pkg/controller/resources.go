@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"go.uber.org/zap"
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
+	"go.uber.org/zap"
 )
 
 // ResourceInfo represents DRBD resource information
@@ -38,12 +38,18 @@ type ResourceVolumeInfo struct {
 	VolumeID uint32
 	Device   string
 	SizeGB   uint64
+	// Pool is the storage pool (volume group) backing this volume.
+	Pool string
+	// BackingVolume is the logical volume name inside the pool
+	// (e.g. "<resource>_data"); "<pool>/<backing_volume>" is the path
+	// consumed by snapshot operations.
+	BackingVolume string
 }
 
 // ResourceManager manages DRBD resources using dispatch
 type ResourceManager struct {
 	controller *Controller
-	deployment *deployment.Client
+	deployment deploymentClient
 	hosts      []string
 	hostMap    map[string]string // hostname -> IP for config generation
 	mu         sync.RWMutex
@@ -59,7 +65,7 @@ func NewResourceManager(ctrl *Controller) *ResourceManager {
 }
 
 // SetDeployment sets the deployment client
-func (rm *ResourceManager) SetDeployment(client *deployment.Client) {
+func (rm *ResourceManager) SetDeployment(client deploymentClient) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 	rm.deployment = client
@@ -69,11 +75,11 @@ func (rm *ResourceManager) SetDeployment(client *deployment.Client) {
 func (rm *ResourceManager) SetHosts(hosts []string) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
-	
+
 	// Clean hosts list and build map
 	var cleanHosts []string
 	rm.hostMap = make(map[string]string)
-	
+
 	for _, host := range hosts {
 		// Try to resolve hostname to IP
 		parts := strings.Split(host, ":")
@@ -81,7 +87,7 @@ func (rm *ResourceManager) SetHosts(hosts []string) {
 			// Format: "hostname:ip"
 			hostname := parts[0]
 			ip := parts[1]
-			
+
 			rm.hostMap[hostname] = ip
 			cleanHosts = append(cleanHosts, ip)
 		} else {
@@ -98,6 +104,136 @@ func (rm *ResourceManager) GetHosts() []string {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 	return rm.hosts
+}
+
+func (rm *ResourceManager) resourceHosts(ctx context.Context, resource string) ([]string, error) {
+	if rm.controller.db != nil {
+		dbRes, err := rm.controller.db.GetResource(ctx, resource)
+		if err == nil && dbRes != nil {
+			var hosts []string
+			for _, node := range strings.Split(dbRes.Nodes, ",") {
+				node = strings.TrimSpace(node)
+				if node == "" {
+					continue
+				}
+				hosts = append(hosts, rm.controller.ResolveHost(node))
+			}
+			if len(hosts) > 0 {
+				return hosts, nil
+			}
+		}
+	}
+
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	if len(rm.hosts) == 0 {
+		return nil, fmt.Errorf("no hosts configured")
+	}
+	return append([]string(nil), rm.hosts...), nil
+}
+
+type resourceConfigVolume struct {
+	VolumeID  int
+	Minor     int
+	DiskPath  string
+	StartLine int
+	EndLine   int
+}
+
+func parseResourceConfigVolumes(content string) []resourceConfigVolume {
+	lines := strings.Split(content, "\n")
+	var volumes []resourceConfigVolume
+	var current *resourceConfigVolume
+	depth := 0
+
+	for idx, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if current == nil && strings.HasPrefix(trimmed, "volume ") && strings.Contains(trimmed, "{") {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 2 {
+				volID, err := strconv.Atoi(strings.TrimSuffix(parts[1], "{"))
+				if err == nil {
+					current = &resourceConfigVolume{VolumeID: volID, Minor: -1, StartLine: idx}
+					depth = strings.Count(line, "{") - strings.Count(line, "}")
+					if depth <= 0 {
+						current.EndLine = idx
+						volumes = append(volumes, *current)
+						current = nil
+						depth = 0
+					}
+					continue
+				}
+			}
+		}
+
+		if current == nil {
+			continue
+		}
+
+		if strings.Contains(trimmed, "device") && strings.Contains(trimmed, "minor") {
+			parts := strings.Fields(trimmed)
+			for i, part := range parts {
+				if part == "minor" && i+1 < len(parts) {
+					if minor, err := strconv.Atoi(strings.TrimSuffix(parts[i+1], ";")); err == nil {
+						current.Minor = minor
+					}
+					break
+				}
+			}
+		}
+
+		if strings.HasPrefix(trimmed, "disk") {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 2 {
+				current.DiskPath = strings.TrimSuffix(parts[1], ";")
+			}
+		}
+
+		depth += strings.Count(line, "{") - strings.Count(line, "}")
+		if depth <= 0 {
+			current.EndLine = idx
+			volumes = append(volumes, *current)
+			current = nil
+			depth = 0
+		}
+	}
+
+	return volumes
+}
+
+func backingPathForVolume(pool, volumeName, storageType string) string {
+	if storageType == "zfs" || storageType == "zfs-thin" {
+		return fmt.Sprintf("/dev/zvol/%s/%s", pool, volumeName)
+	}
+	return fmt.Sprintf("/dev/%s/%s", pool, volumeName)
+}
+
+func poolAndVolumeFromDiskPath(diskPath string) (pool, volume string) {
+	trimmed := strings.TrimSpace(diskPath)
+	if strings.HasPrefix(trimmed, "/dev/zvol/") {
+		parts := strings.Split(strings.TrimPrefix(trimmed, "/dev/zvol/"), "/")
+		if len(parts) >= 2 {
+			return parts[0], parts[len(parts)-1]
+		}
+		return "", ""
+	}
+	if strings.HasPrefix(trimmed, "/dev/") {
+		parts := strings.Split(strings.TrimPrefix(trimmed, "/dev/"), "/")
+		if len(parts) >= 2 {
+			return parts[0], parts[len(parts)-1]
+		}
+	}
+	return "", ""
+}
+
+func findVolumeRecord(volumes []*database.Volume, volumeID uint32) *database.Volume {
+	for _, volume := range volumes {
+		if volume.VolumeID == int(volumeID) {
+			return volume
+		}
+	}
+	return nil
 }
 
 // CreateResource creates a DRBD resource across multiple nodes
@@ -119,6 +255,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	if pool == "" {
 		pool = "data-pool"
 	}
+	pool = normalizeManagedName(pool)
 
 	if storageType == "" {
 		storageType = "lvm"
@@ -238,12 +375,21 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		if err := rm.controller.db.SaveResource(ctx, dbRes); err != nil {
 			rm.controller.logger.Warn("Failed to save resource to database", zap.Error(err))
 		}
-	}
 
-	// 7. Update hosts for this resource
-	rm.mu.Lock()
-	rm.hosts = nodeIPs
-	rm.mu.Unlock()
+		volumeRecord := &database.Volume{
+			ResourceName: name,
+			VolumeName:   volumeName,
+			VolumeID:     0,
+			Pool:         pool,
+			SizeGB:       int(sizeGB),
+			Device:       backingPathForVolume(pool, volumeName, storageType),
+		}
+		if err := rm.controller.db.SaveVolume(ctx, volumeRecord); err != nil {
+			rm.controller.logger.Warn("Failed to save initial volume to database",
+				zap.String("resource", name),
+				zap.Error(err))
+		}
+	}
 
 	rm.controller.logger.Info("DRBD resource created successfully",
 		zap.String("name", name))
@@ -347,7 +493,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 	setOption("options", "on-no-quorum", "io-error")
 	setOption("options", "on-no-data-accessible", "io-error")
 	setOption("options", "on-suspended-primary-outdated", "force-secondary")
-	
+
 	setOption("net", "rr-conflict", "retry-connect")
 
 	// Process user options
@@ -372,7 +518,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 
 	for _, s := range knownSections {
 		opts, ok := sections[s]
-		
+
 		// Always write net section to include protocol
 		if s == "net" {
 			config.WriteString("\n    net {\n")
@@ -394,14 +540,14 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 
 		if ok && len(opts) > 0 {
 			config.WriteString(fmt.Sprintf("\n    %s {\n", s))
-			
+
 			// Sort keys for deterministic output
 			var keys []string
 			for k := range opts {
 				keys = append(keys, k)
 			}
 			sort.Strings(keys)
-			
+
 			for _, k := range keys {
 				config.WriteString(fmt.Sprintf("        %s %s;\n", k, opts[k]))
 			}
@@ -418,7 +564,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 		}
 	}
 	sort.Strings(customSections)
-	
+
 	for _, s := range customSections {
 		// Generic write
 		opts := sections[s]
@@ -447,7 +593,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 	}
 	config.WriteString(fmt.Sprintf("        disk      %s;\n", diskPath))
 	config.WriteString("        meta-disk internal;\n")
-	
+
 	// Inject disk options here
 	if diskOpts, ok := sections["disk"]; ok && len(diskOpts) > 0 {
 		config.WriteString("        disk {\n")
@@ -461,7 +607,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, nodes []
 		}
 		config.WriteString("        }\n")
 	}
-	
+
 	config.WriteString("    }\n")
 
 	// Generate on sections for each node
@@ -515,18 +661,27 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		return nil, fmt.Errorf("database not available")
 	}
 
-	rm.mu.RLock()
-	hosts := rm.hosts
-	rm.mu.RUnlock()
-
-	if len(hosts) == 0 {
-		return nil, fmt.Errorf("no hosts configured")
+	hosts, err := rm.resourceHosts(ctx, name)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get resource info from database
 	dbRes, err := rm.controller.db.GetResource(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("resource not found: %s", name)
+	}
+
+	dbVolumes, err := rm.controller.db.ListVolumes(ctx, name)
+	if err != nil {
+		rm.controller.logger.Warn("Failed to list resource volumes from database",
+			zap.String("resource", name),
+			zap.Error(err))
+		dbVolumes = nil
+	}
+	dbVolumeByID := make(map[int]*database.Volume, len(dbVolumes))
+	for _, volume := range dbVolumes {
+		dbVolumeByID[volume.VolumeID] = volume
 	}
 
 	// Parse nodeAddresses from comma-separated string
@@ -559,10 +714,22 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 				// Parse volumes
 				volInfo := parseVolumesFromStatus(r.Output)
 				for _, v := range volInfo {
+					sizeGB := v.sizeGB
+					pool := ""
+					backingVolume := ""
+					if dbVol, ok := dbVolumeByID[v.id]; ok {
+						if sizeGB == 0 {
+							sizeGB = uint64(max(dbVol.SizeGB, 0))
+						}
+						pool = dbVol.Pool
+						backingVolume = dbVol.VolumeName
+					}
 					volumes = append(volumes, &ResourceVolumeInfo{
-						VolumeID: uint32(v.id),
-						Device:   v.device,
-						SizeGB:   v.sizeGB,
+						VolumeID:      uint32(v.id),
+						Device:        v.device,
+						SizeGB:        sizeGB,
+						Pool:          pool,
+						BackingVolume: backingVolume,
 					})
 				}
 
@@ -585,6 +752,18 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		Role:       localRole, // Local node's role
 		Volumes:    volumes,
 		NodeStates: nodeStates,
+	}
+
+	if len(info.Volumes) == 0 && len(dbVolumes) > 0 {
+		for _, volume := range dbVolumes {
+			info.Volumes = append(info.Volumes, &ResourceVolumeInfo{
+				VolumeID:      uint32(volume.VolumeID),
+				Device:        fmt.Sprintf("/dev/drbd/by-res/%s/%d", name, volume.VolumeID),
+				SizeGB:        uint64(max(volume.SizeGB, 0)),
+				Pool:          volume.Pool,
+				BackingVolume: volume.VolumeName,
+			})
+		}
 	}
 
 	return info, nil
@@ -611,12 +790,12 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 		}
 
 		resources = append(resources, &ResourceInfo{
-			Name:     dbRes.Name,
-			Port:     uint32(dbRes.Port),
-			Protocol: dbRes.Protocol,
-			Nodes:    nodeAddresses,
-			Role:     "Unknown", // Will be updated by GetResource if needed
-			Volumes:  []*ResourceVolumeInfo{},
+			Name:       dbRes.Name,
+			Port:       uint32(dbRes.Port),
+			Protocol:   dbRes.Protocol,
+			Nodes:      nodeAddresses,
+			Role:       "Unknown", // Will be updated by GetResource if needed
+			Volumes:    []*ResourceVolumeInfo{},
 			NodeStates: make(map[string]*ResourceNodeState),
 		})
 	}
@@ -639,10 +818,12 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	if pool == "" {
 		pool = "data-pool"
 	}
+	pool = normalizeManagedName(pool)
 
-	rm.mu.RLock()
-	hosts := rm.hosts
-	rm.mu.RUnlock()
+	hosts, err := rm.resourceHosts(ctx, resource)
+	if err != nil {
+		return err
+	}
 
 	// Get current config to find next volume number and minor
 	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("cat /etc/drbd.d/%s.res", resource))
@@ -694,8 +875,9 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	// Simple strategy: use maxMinor + 1
 	newMinor := maxMinor + 1
 
-	// Generate volume block for new volume
-	// Note: AddVolume currently only supports LVM
+	// Extend the synchronized DRBD resource config with the new volume block.
+	// LINBIT recommends updating the config identically on all nodes and then
+	// calling `drbdadm adjust <resource>` to let DRBD enable the new volume.
 	volumeBlock := fmt.Sprintf("    volume %d {\n        device    minor %d;\n        disk      /dev/%s/%s;\n        meta-disk internal;\n    }",
 		newVolNum, newMinor, pool, volume)
 
@@ -707,42 +889,51 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		}
 	}
 
-	// Add volume block to config on all nodeAddresses
-	for _, host := range hosts {
-		updateCmd := fmt.Sprintf("sed -i '/^}/i %s' /etc/drbd.d/%s.res", volumeBlock, resource)
-		_, err := rm.deployment.Exec(ctx, []string{host}, updateCmd)
-		if err != nil {
-			return fmt.Errorf("failed to update config on %s: %w", host, err)
+	lines = strings.Split(hostResult.Output, "\n")
+	insertIdx := len(lines)
+	for idx := len(lines) - 1; idx >= 0; idx-- {
+		if strings.TrimSpace(lines[idx]) == "}" {
+			insertIdx = idx
+			break
 		}
 	}
+	updatedLines := append([]string{}, lines[:insertIdx]...)
+	updatedLines = append(updatedLines, volumeBlock)
+	updatedLines = append(updatedLines, lines[insertIdx:]...)
+	updatedConfig := strings.Join(updatedLines, "\n")
 
-	// Down resource, create metadata for new volume, up resource
-	for _, host := range hosts {
-		_, _ = rm.deployment.DRBDDown(ctx, []string{host}, resource)
+	if _, err := rm.deployment.DistributeConfig(ctx, hosts, updatedConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
+		return fmt.Errorf("failed to distribute updated config: %w", err)
 	}
 
-	// Create metadata for new volume only
-	for _, host := range hosts {
-		createMetaCmd := fmt.Sprintf("sudo drbdmeta --force %d v09 /dev/%s/%s internal create-md %d",
-			newMinor, pool, volume, len(hosts)*3)
-		_, err := rm.deployment.Exec(ctx, []string{host}, createMetaCmd)
-		if err != nil {
-			return fmt.Errorf("failed to create metadata on %s: %w", host, err)
-		}
-	}
-
-	// Up resource
-	upResult, err := rm.deployment.DRBDUp(ctx, hosts, resource)
+	adjustCmd := fmt.Sprintf("sudo drbdadm adjust %s", resource)
+	adjustResult, err := rm.deployment.Exec(ctx, hosts, adjustCmd)
 	if err != nil {
-		return fmt.Errorf("failed to bring up resource: %w", err)
+		return fmt.Errorf("failed to adjust resource after volume add: %w", err)
 	}
-	if !upResult.AllSuccess() {
-		return fmt.Errorf("resource up failed on hosts: %v", upResult.FailedHosts())
+	if !adjustResult.AllSuccess() {
+		return fmt.Errorf("resource adjust failed on hosts: %v", adjustResult.FailedHosts())
 	}
 
 	rm.controller.logger.Info("Volume added successfully",
 		zap.String("resource", resource),
 		zap.String("volume", volume))
+
+	if rm.controller.db != nil {
+		if err := rm.controller.db.SaveVolume(ctx, &database.Volume{
+			ResourceName: resource,
+			VolumeName:   volume,
+			VolumeID:     newVolNum,
+			Pool:         pool,
+			SizeGB:       int(sizeGB),
+			Device:       fmt.Sprintf("/dev/%s/%s", pool, volume),
+		}); err != nil {
+			rm.controller.logger.Warn("Failed to save added volume to database",
+				zap.String("resource", resource),
+				zap.String("volume", volume),
+				zap.Error(err))
+		}
+	}
 
 	return nil
 }
@@ -757,9 +948,10 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		return fmt.Errorf("deployment client not set")
 	}
 
-	rm.mu.RLock()
-	hosts := rm.hosts
-	rm.mu.RUnlock()
+	hosts, err := rm.resourceHosts(ctx, name)
+	if err != nil {
+		return err
+	}
 
 	// 1. Down resource on all nodeAddresses
 	downResult, err := rm.deployment.DRBDDown(ctx, hosts, name)
@@ -779,6 +971,24 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 
 	// 3. Delete LVs (optional, depends on use case)
 	// This is left for the caller to decide
+
+	if rm.controller.db != nil {
+		if volumes, err := rm.controller.db.ListVolumes(ctx, name); err == nil {
+			for _, volume := range volumes {
+				if err := rm.controller.db.DeleteVolume(ctx, name, volume.VolumeName); err != nil {
+					rm.controller.logger.Warn("Failed to delete volume from database",
+						zap.String("resource", name),
+						zap.String("volume", volume.VolumeName),
+						zap.Error(err))
+				}
+			}
+		}
+		if err := rm.controller.db.DeleteResource(ctx, name); err != nil {
+			rm.controller.logger.Warn("Failed to delete resource from database",
+				zap.String("name", name),
+				zap.Error(err))
+		}
+	}
 
 	rm.controller.logger.Info("Resource deleted successfully",
 		zap.String("name", name))
@@ -815,15 +1025,18 @@ func (rm *ResourceManager) SetPrimary(ctx context.Context, resource, node string
 
 // SetSecondary sets a resource to Secondary on the specified node
 func (rm *ResourceManager) SetSecondary(ctx context.Context, resource, node string) error {
+	address := rm.controller.ResolveHost(node)
+
 	rm.controller.logger.Info("Setting resource secondary",
 		zap.String("resource", resource),
-		zap.String("node", node))
+		zap.String("node", node),
+		zap.String("address", address))
 
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
 
-	result, err := rm.deployment.DRBDSecondary(ctx, node, resource)
+	result, err := rm.deployment.DRBDSecondary(ctx, address, resource)
 	if err != nil {
 		return fmt.Errorf("failed to set secondary: %w", err)
 	}
@@ -845,11 +1058,86 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 		return fmt.Errorf("deployment client not set")
 	}
 
-	// For now, this requires deleting the volume block from config
-	// and bringing the resource down and up
-	// This is complex and may need to be implemented carefully
+	if volumeID == 0 {
+		return fmt.Errorf("removing volume 0 is not supported")
+	}
 
-	return fmt.Errorf("RemoveVolume not yet implemented")
+	hosts, err := rm.resourceHosts(ctx, resource)
+	if err != nil {
+		return err
+	}
+
+	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("cat /etc/drbd.d/%s.res", resource))
+	if err != nil {
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	var hostResult *deployment.HostResult
+	for _, r := range result.Hosts {
+		hostResult = r
+		break
+	}
+	if hostResult == nil || !hostResult.Success {
+		return fmt.Errorf("failed to get config")
+	}
+
+	configContent := hostResult.Output
+	volumes := parseResourceConfigVolumes(configContent)
+	var target *resourceConfigVolume
+	for i := range volumes {
+		if volumes[i].VolumeID == int(volumeID) {
+			target = &volumes[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("volume %d not found", volumeID)
+	}
+
+	lines := strings.Split(configContent, "\n")
+	start := target.StartLine
+	if start > 0 && strings.TrimSpace(lines[start-1]) == "" {
+		start--
+	}
+	updatedLines := append([]string{}, lines[:start]...)
+	updatedLines = append(updatedLines, lines[target.EndLine+1:]...)
+	newConfig := strings.Join(updatedLines, "\n")
+
+	if _, err := rm.deployment.DistributeConfig(ctx, hosts, newConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
+		return fmt.Errorf("failed to distribute updated config: %w", err)
+	}
+
+	if _, err := rm.deployment.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm adjust %s", resource)); err != nil {
+		return fmt.Errorf("failed to adjust resource after config update: %w", err)
+	}
+
+	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {
+		dataset := strings.TrimPrefix(target.DiskPath, "/dev/zvol/")
+		if _, err := rm.deployment.ZFSDestroyDataset(ctx, hosts, dataset); err != nil {
+			return fmt.Errorf("failed to delete ZFS backing volume: %w", err)
+		}
+	} else {
+		removeCmd := fmt.Sprintf("sudo lvremove -f %s", target.DiskPath)
+		if _, err := rm.deployment.Exec(ctx, hosts, removeCmd); err != nil {
+			return fmt.Errorf("failed to delete LVM backing volume: %w", err)
+		}
+	}
+
+	if rm.controller.db != nil {
+		dbVolumes, err := rm.controller.db.ListVolumes(ctx, resource)
+		if err == nil {
+			if volume := findVolumeRecord(dbVolumes, volumeID); volume != nil {
+				if err := rm.controller.db.DeleteVolume(ctx, resource, volume.VolumeName); err != nil {
+					rm.controller.logger.Warn("Failed to delete volume metadata",
+						zap.String("resource", resource),
+						zap.String("volume", volume.VolumeName),
+						zap.Error(err))
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // ResizeVolume resizes a DRBD volume
@@ -863,10 +1151,70 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 		return fmt.Errorf("deployment client not set")
 	}
 
-	// Resize LV on all nodeAddresses first
-	// Then call drbdadm resize
+	hosts, err := rm.resourceHosts(ctx, resource)
+	if err != nil {
+		return err
+	}
 
-	return fmt.Errorf("ResizeVolume not yet implemented")
+	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("cat /etc/drbd.d/%s.res", resource))
+	if err != nil {
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	var hostResult *deployment.HostResult
+	for _, r := range result.Hosts {
+		hostResult = r
+		break
+	}
+	if hostResult == nil || !hostResult.Success {
+		return fmt.Errorf("failed to get config")
+	}
+
+	var target *resourceConfigVolume
+	for _, volume := range parseResourceConfigVolumes(hostResult.Output) {
+		if volume.VolumeID == int(volumeID) {
+			v := volume
+			target = &v
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("volume %d not found", volumeID)
+	}
+
+	sizeArg := fmt.Sprintf("%dG", newSizeGB)
+	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {
+		volumePath := strings.TrimPrefix(target.DiskPath, "/dev/zvol/")
+		if _, err := rm.deployment.ZFSResizeVolume(ctx, hosts, volumePath, sizeArg); err != nil {
+			return fmt.Errorf("failed to resize ZFS backing volume: %w", err)
+		}
+	} else {
+		resizeCmd := fmt.Sprintf("sudo lvresize -L %s -y %s", sizeArg, target.DiskPath)
+		if _, err := rm.deployment.Exec(ctx, hosts, resizeCmd); err != nil {
+			return fmt.Errorf("failed to resize LVM backing volume: %w", err)
+		}
+	}
+
+	if _, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("sudo drbdadm resize %s/%d", resource, volumeID)); err != nil {
+		return fmt.Errorf("failed to resize DRBD volume: %w", err)
+	}
+
+	if rm.controller.db != nil {
+		dbVolumes, err := rm.controller.db.ListVolumes(ctx, resource)
+		if err == nil {
+			if volume := findVolumeRecord(dbVolumes, volumeID); volume != nil {
+				volume.SizeGB = int(newSizeGB)
+				if err := rm.controller.db.SaveVolume(ctx, volume); err != nil {
+					rm.controller.logger.Warn("Failed to update volume metadata",
+						zap.String("resource", resource),
+						zap.String("volume", volume.VolumeName),
+						zap.Error(err))
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // Mount mounts a DRBD device
@@ -964,14 +1312,8 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 	if rm.deployment == nil {
 		return "", fmt.Errorf("deployment client not set")
 	}
-
-	// Get hosts for deployment
-	rm.mu.RLock()
-	hosts := rm.hosts
-	rm.mu.RUnlock()
-
-	if len(hosts) == 0 {
-		return "", fmt.Errorf("no hosts configured")
+	if rm.controller.db == nil {
+		return "", fmt.Errorf("database not available")
 	}
 
 	// Get resource info to find nodeAddresses
@@ -998,6 +1340,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		}
 		nodeAddresses[i] = addr
 	}
+	hosts := nodeAddresses
 
 	// Step 1: Check DRBD status and ensure resource is up
 	rm.controller.logger.Info("Checking DRBD resource status",
@@ -1270,13 +1613,9 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 	rm.controller.logger.Info("Evicting HA resource",
 		zap.String("resource", resource))
 
-	// Get hosts for deployment
-	rm.mu.RLock()
-	hosts := rm.hosts
-	rm.mu.RUnlock()
-
-	if len(hosts) == 0 {
-		return fmt.Errorf("no hosts configured")
+	hosts, err := rm.resourceHosts(ctx, resource)
+	if err != nil {
+		return err
 	}
 
 	rm.controller.logger.Info("Hosts configured",
@@ -1353,6 +1692,27 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 	rm.controller.logger.Info("findActiveNode called",
 		zap.String("resource", resource),
 		zap.Int("hosts_count", len(hosts)))
+
+	// Prefer drbd-reactor's structured JSON status for HA resources when available.
+	for _, host := range hosts {
+		promoter, err := rm.deployment.ReactorPromoterStatusByResource(ctx, host, resource)
+		if err != nil || promoter == nil {
+			continue
+		}
+		if promoter.PrimaryOn != "" {
+			if primaryHost := rm.getNodeHost(promoter.PrimaryOn); primaryHost != "" {
+				rm.controller.logger.Info("Found active node from reactor status",
+					zap.String("resource", resource),
+					zap.String("primary_on", promoter.PrimaryOn),
+					zap.String("resolved_host", primaryHost))
+				return primaryHost, nil
+			}
+			rm.controller.logger.Info("Using reactor primary_on directly",
+				zap.String("resource", resource),
+				zap.String("primary_on", promoter.PrimaryOn))
+			return promoter.PrimaryOn, nil
+		}
+	}
 
 	var localHostname string
 
@@ -1480,6 +1840,10 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 // getNodeHost gets the host address for a node name
 // hosts format is "nodename:ip" or just "nodename"
 func (rm *ResourceManager) getNodeHost(nodeName string) string {
+	if resolved := rm.controller.ResolveHost(nodeName); resolved != nodeName {
+		return resolved
+	}
+
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 
@@ -1504,10 +1868,14 @@ func (rm *ResourceManager) RemoveHa(ctx context.Context, resource string) error 
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
+	if rm.controller.db == nil {
+		return fmt.Errorf("database not available")
+	}
 
-	rm.mu.RLock()
-	hosts := rm.hosts
-	rm.mu.RUnlock()
+	hosts, err := rm.resourceHosts(ctx, resource)
+	if err != nil {
+		return err
+	}
 
 	// Get HA config to know what to clean up
 	haCfg, err := rm.controller.db.GetHaConfig(ctx, resource)
@@ -1569,7 +1937,7 @@ func (rm *ResourceManager) generatePromoterConfig(resource string, nodeAddresses
 		if !strings.Contains(vipParam, "-") {
 			vipParam = vipParam + "-32"
 		}
-		
+
 		serviceIPUnit := fmt.Sprintf("\"service-ip@%s.service\"", vipParam)
 		startActions = append(startActions, serviceIPUnit)
 	}
@@ -1616,9 +1984,10 @@ func (rm *ResourceManager) CreateFilesystemOnly(ctx context.Context, resource st
 	drbdDevice := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, volumeID)
 
 	// Create filesystem on the specified node (should be Primary)
-	// Note: xfs uses -f (lowercase), ext4 uses -F (uppercase)
+	// Note: xfs/btrfs use -f (lowercase), ext4 uses -F (uppercase)
+	fsType = strings.ToLower(strings.TrimSpace(fsType))
 	forceFlag := "-F"
-	if fsType == "xfs" {
+	if fsType == "xfs" || fsType == "btrfs" {
 		forceFlag = "-f"
 	}
 	mkfsCmd := fmt.Sprintf("sudo mkfs.%s %s %s", fsType, forceFlag, drbdDevice)
@@ -1644,27 +2013,56 @@ func (rm *ResourceManager) CreateFilesystemOnly(ctx context.Context, resource st
 // Helper functions for parsing DRBD status output
 
 type volumeInfo struct {
-	id      int
-	device  string
-	sizeGB  uint64
+	id     int
+	device string
+	sizeGB uint64
+}
+
+// isIndentedStatusLine reports whether a raw drbdadm/drbdsetup status line is
+// indented. Peer and per-volume detail lines are indented; the local resource
+// line is not.
+func isIndentedStatusLine(line string) bool {
+	return strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")
+}
+
+// localStatusLine returns the trimmed local resource line from drbdadm or
+// drbdsetup status output. The local line is the first unindented line that
+// carries a "role:" field; unindented lines without one (such as the
+// "drbdsetup status <res> --verbose" command echo printed by
+// "drbdadm status --verbose") are skipped.
+func localStatusLine(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if line == "" || isIndentedStatusLine(line) {
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "role:") {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func parseRoleFromStatus(output string) string {
-	if strings.Contains(output, "role:Primary") {
-		return "Primary"
-	}
-	if strings.Contains(output, "role:Secondary") {
-		return "Secondary"
+	for _, field := range strings.Fields(localStatusLine(output)) {
+		if strings.HasPrefix(field, "role:") {
+			role := strings.TrimSuffix(strings.TrimPrefix(field, "role:"), ",")
+			switch role {
+			case "Primary", "Secondary":
+				return role
+			}
+		}
 	}
 	return "Unknown"
 }
 
 // parseNodeStatesFromStatus parses each node's role and disk state from DRBD status output
 // Format:
-//   ha_res role:Primary
-//     disk:UpToDate open:no
-//   orange2 role:Secondary
-//     peer-disk:UpToDate
+//
+//	ha_res role:Primary
+//	  disk:UpToDate open:no
+//	orange2 role:Secondary
+//	  peer-disk:UpToDate
 func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string]*ResourceNodeState {
 	nodeStates := make(map[string]*ResourceNodeState)
 	lines := strings.Split(output, "\n")
@@ -1673,10 +2071,12 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 	localRole := "Unknown"
 	localDiskState := "Unknown"
 
-	for i, line := range lines {
+	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// First line: "resource_name role:Primary"
-		if i == 0 && strings.Contains(trimmed, "role:") {
+		// Local resource line: the first unindented line carrying "role:".
+		// Skips the "drbdsetup status <res> --verbose" command echo emitted
+		// by "drbdadm status --verbose"; peer role lines are indented.
+		if localRole == "Unknown" && !isIndentedStatusLine(line) && strings.Contains(trimmed, "role:") {
 			parts := strings.Fields(trimmed)
 			for _, p := range parts {
 				if strings.HasPrefix(p, "role:") {
@@ -1686,8 +2086,9 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 				}
 			}
 		}
-		// Local disk: "  disk:UpToDate open:no"
-		if strings.HasPrefix(trimmed, "disk:") && !strings.Contains(trimmed, "peer-disk:") {
+		// Local disk can be a standalone "disk:UpToDate" line or a verbose
+		// volume line such as "volume:0 minor:0 disk:UpToDate ..."
+		if !strings.Contains(trimmed, "peer-disk:") && (strings.HasPrefix(trimmed, "disk:") || (strings.Contains(trimmed, "volume:") && strings.Contains(trimmed, "disk:"))) {
 			parts := strings.Fields(trimmed)
 			for _, p := range parts {
 				if strings.HasPrefix(p, "disk:") {
@@ -1715,23 +2116,29 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 
 		// Check if this line starts with a node name followed by "role:"
 		// This matches "orange2 role:Secondary" pattern
-		if len(parts) >= 2 && strings.HasPrefix(parts[1], "role:") {
-			// Find which node this is
-			for _, node := range nodeAddresses {
-				if node == nodeAddresses[0] {
-					continue // Skip local node
-				}
-				if parts[0] == node {
-					currentNode = node
-					// Parse role from parts[1] which is "role:Secondary"
-					role := strings.TrimPrefix(parts[1], "role:")
-					role = strings.TrimSuffix(role, ",")
-					if _, exists := nodeStates[currentNode]; !exists {
-						nodeStates[currentNode] = &ResourceNodeState{Role: role}
-					} else {
-						nodeStates[currentNode].Role = role
-					}
+		if len(parts) >= 2 {
+			role := ""
+			for _, part := range parts[1:] {
+				if strings.HasPrefix(part, "role:") {
+					role = strings.TrimSuffix(strings.TrimPrefix(part, "role:"), ",")
 					break
+				}
+			}
+			if role != "" {
+				// Find which node this is
+				for _, node := range nodeAddresses {
+					if node == nodeAddresses[0] {
+						continue // Skip local node
+					}
+					if parts[0] == node {
+						currentNode = node
+						if _, exists := nodeStates[currentNode]; !exists {
+							nodeStates[currentNode] = &ResourceNodeState{Role: role}
+						} else {
+							nodeStates[currentNode].Role = role
+						}
+						break
+					}
 				}
 			}
 		}
@@ -1739,9 +2146,9 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 		// Check for peer-disk state (belongs to currentNode)
 		if strings.Contains(trimmed, "peer-disk:") && currentNode != "" {
 			parts := strings.Fields(trimmed)
-			for j, p := range parts {
-				if p == "peer-disk:" && j+1 < len(parts) {
-					diskState := strings.TrimSuffix(parts[j+1], ",")
+			for _, p := range parts {
+				if strings.HasPrefix(p, "peer-disk:") {
+					diskState := strings.TrimSuffix(strings.TrimPrefix(p, "peer-disk:"), ",")
 					if _, exists := nodeStates[currentNode]; !exists {
 						nodeStates[currentNode] = &ResourceNodeState{DiskState: diskState}
 					} else {
@@ -1758,33 +2165,53 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 
 func parseVolumesFromStatus(output string) []volumeInfo {
 	var volumes []volumeInfo
+	seen := make(map[int]bool)
 
-	lines := strings.Split(output, "\n")
-	currentVol := -1
-
-	for _, line := range lines {
+	for _, line := range strings.Split(output, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "volume:") {
-			parts := strings.Fields(trimmed)
-			if len(parts) >= 2 {
-				if num, err := strconv.Atoi(parts[1]); err == nil {
-					currentVol = num
+		if !strings.Contains(trimmed, "volume:") || strings.Contains(trimmed, "peer-disk:") {
+			continue
+		}
+
+		fields := strings.Fields(trimmed)
+		volumeID := -1
+		minor := -1
+		var sizeGB uint64
+		for i, field := range fields {
+			switch {
+			case strings.HasPrefix(field, "volume:"):
+				value := strings.TrimPrefix(field, "volume:")
+				if value == "" && i+1 < len(fields) {
+					value = fields[i+1]
+				}
+				if parsed, err := strconv.Atoi(strings.TrimSuffix(value, ",")); err == nil {
+					volumeID = parsed
+				}
+			case strings.HasPrefix(field, "minor:"):
+				if parsed, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(field, "minor:"), ",")); err == nil {
+					minor = parsed
+				}
+			case strings.HasPrefix(field, "size:"):
+				if parsed, err := strconv.ParseUint(strings.TrimSuffix(strings.TrimPrefix(field, "size:"), ","), 10, 64); err == nil {
+					sizeGB = parsed / 1024 / 1024
 				}
 			}
 		}
-		if currentVol >= 0 && strings.Contains(trimmed, "disk:") {
-			// Found disk line for current volume
-			parts := strings.Fields(trimmed)
-			if len(parts) >= 2 {
-				device := strings.TrimSuffix(parts[1], ",")
-				volumes = append(volumes, volumeInfo{
-					id:     currentVol,
-					device: device,
-					sizeGB: 0, // Would need to query LVM for actual size
-				})
-			}
-			currentVol = -1
+
+		if volumeID < 0 || seen[volumeID] {
+			continue
 		}
+
+		device := ""
+		if minor >= 0 {
+			device = fmt.Sprintf("/dev/drbd%d", minor)
+		}
+		volumes = append(volumes, volumeInfo{
+			id:     volumeID,
+			device: device,
+			sizeGB: sizeGB,
+		})
+		seen[volumeID] = true
 	}
 
 	return volumes

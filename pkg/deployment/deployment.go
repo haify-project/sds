@@ -292,7 +292,7 @@ func isLocalHost(host string) bool {
 // DeleteConfig removes a config file from all nodes
 func (c *Client) DeleteConfig(ctx context.Context, hosts []string, remotePath string) error {
 	c.logger.Info("Deleting config", zap.String("path", remotePath))
-	
+
 	_, err := c.Exec(ctx, hosts, fmt.Sprintf("sudo rm -f %s", remotePath))
 	return err
 }
@@ -357,14 +357,14 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 			}
 		}
 		result.Hosts[host] = &dispatch.HostResult{
-			Host:     host,
-			Output:   output,
+			Host:      host,
+			Output:    output,
 			StartTime: start,
 			EndTime:   end,
-			Duration: end.Sub(start),
-			ExitCode: exitCode,
-			ErrorMsg: errorMsg,
-			Success:  exitCode == 0 && errorMsg == nil,
+			Duration:  end.Sub(start),
+			ExitCode:  exitCode,
+			ErrorMsg:  errorMsg,
+			Success:   exitCode == 0 && errorMsg == nil,
 		}
 	}
 
@@ -573,7 +573,7 @@ func (c *Client) LVIsThin(ctx context.Context, host, vgName, lvName string) (boo
 	if err != nil {
 		return false, err
 	}
-	
+
 	for _, r := range result.Hosts {
 		if r.Success {
 			segType := strings.TrimSpace(r.Output)
@@ -656,7 +656,8 @@ func (c *Client) DRBDAdjust(ctx context.Context, hosts []string, resource string
 
 // DRBDStatus gets DRBD resource status
 func (c *Client) DRBDStatus(ctx context.Context, hosts []string, resource string) (*ExecResult, error) {
-	return c.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm status %s", resource))
+	cmd := fmt.Sprintf("sudo drbdadm status %s --verbose 2>/dev/null || sudo drbdadm status %s", resource, resource)
+	return c.Exec(ctx, hosts, cmd)
 }
 
 // ============ Reactor Operations ============
@@ -692,21 +693,21 @@ func (c *Client) ReactorReload(ctx context.Context, hosts []string) (*ExecResult
 
 // ReactorStatus represents the status output from drbd-reactorctl status --json
 type ReactorStatus struct {
-	Promoter  []ReactorPromoterStatus `json:"promoter"`
-	Prometheus []ReactorPluginStatus  `json:"prometheus"`
-	Debugger  []ReactorPluginStatus   `json:"debugger"`
-	UMH       []ReactorPluginStatus   `json:"umh"`
-	AgentX    []ReactorPluginStatus   `json:"agentx"`
+	Promoter   []ReactorPromoterStatus `json:"promoter"`
+	Prometheus []ReactorPluginStatus   `json:"prometheus"`
+	Debugger   []ReactorPluginStatus   `json:"debugger"`
+	UMH        []ReactorPluginStatus   `json:"umh"`
+	AgentX     []ReactorPluginStatus   `json:"agentx"`
 }
 
 // ReactorPromoterStatus represents status of a promoter plugin
 type ReactorPromoterStatus struct {
-	DRBDResource string                    `json:"drbd_resource"`
-	Path         string                    `json:"path"`
-	PrimaryOn    string                    `json:"primary_on"`
-	Target       ReactorServiceStatus      `json:"target"`
-	Dependencies []ReactorServiceStatus    `json:"dependencies"`
-	Status       string                    `json:"status"`
+	DRBDResource string                 `json:"drbd_resource"`
+	Path         string                 `json:"path"`
+	PrimaryOn    string                 `json:"primary_on"`
+	Target       ReactorServiceStatus   `json:"target"`
+	Dependencies []ReactorServiceStatus `json:"dependencies"`
+	Status       string                 `json:"status"`
 }
 
 // ReactorServiceStatus represents status of a systemd service
@@ -890,9 +891,9 @@ func WithLVMForce(force bool) LVMOption {
 type ZFSOption func(*zfsOptions)
 
 type zfsOptions struct {
-	thin       bool
+	thin        bool
 	compression bool
-	dedup      bool
+	dedup       bool
 }
 
 // WithZFSThin enables thin provisioning for ZFS

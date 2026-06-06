@@ -15,11 +15,11 @@ import (
 
 // ReactorStatus represents the status output from drbd-reactorctl status --json
 type ReactorStatus struct {
-	Promoter  []ReactorPromoterStatus `json:"promoter"`
-	Prometheus []ReactorPluginStatus  `json:"prometheus"`
-	Debugger  []ReactorPluginStatus   `json:"debugger"`
-	UMH       []ReactorPluginStatus   `json:"umh"`
-	AgentX    []ReactorPluginStatus   `json:"agentx"`
+	Promoter   []ReactorPromoterStatus `json:"promoter"`
+	Prometheus []ReactorPluginStatus   `json:"prometheus"`
+	Debugger   []ReactorPluginStatus   `json:"debugger"`
+	UMH        []ReactorPluginStatus   `json:"umh"`
+	AgentX     []ReactorPluginStatus   `json:"agentx"`
 }
 
 // ReactorPromoterStatus represents status of a promoter plugin
@@ -53,6 +53,7 @@ func haCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(haCreate())
+	cmd.AddCommand(haEvict())
 	cmd.AddCommand(haDelete())
 	cmd.AddCommand(haList())
 	cmd.AddCommand(haStatus())
@@ -153,68 +154,110 @@ func haDelete() *cobra.Command {
 	return cmd
 }
 
+func haEvict() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "evict <resource>",
+		Short: "Evict an HA resource from the current active node",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.EvictHa(ctx, resource); err != nil {
+				return fmt.Errorf("failed to evict HA resource: %w", err)
+			}
+
+			fmt.Printf("HA resource evicted successfully\n")
+			fmt.Printf("  Resource: %s\n", resource)
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
 func haList() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all HA configurations",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			configDir := "/etc/drbd-reactor.d"
-			configFiles, err := listHAConfigs(configDir)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := client.NewSDSClient(controllerAddr)
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			configs, err := sdsClient.ListHa(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list HA configs: %w", err)
 			}
 
-			if len(configFiles) == 0 {
+			if len(configs) == 0 {
 				fmt.Println("No HA configurations found")
 				return nil
 			}
 
-			// Get reactor status for all promoters
-			reactorStatus, err := getReactorStatus()
-			if err != nil {
-				fmt.Printf("Warning: could not get reactor status: %v\n\n", err)
-				reactorStatus = &ReactorStatus{}
-			}
-
-			// Build a map of resource -> promoter status
+			fmt.Printf("HA Configurations (%d):\n", len(configs))
+			reactorStatus, reactorErr := getReactorStatus()
 			promoterMap := make(map[string]*ReactorPromoterStatus)
-			for i := range reactorStatus.Promoter {
-				p := &reactorStatus.Promoter[i]
-				promoterMap[p.DRBDResource] = p
+			if reactorErr == nil && reactorStatus != nil {
+				for i := range reactorStatus.Promoter {
+					p := &reactorStatus.Promoter[i]
+					promoterMap[p.DRBDResource] = p
+				}
 			}
 
-			fmt.Printf("HA Configurations (%d):\n", len(configFiles))
-			for _, cfg := range configFiles {
-				fmt.Printf("  - %s\n", cfg.Resource)
-
-				// Show reactor status if available
-				if promoter, ok := promoterMap[cfg.Resource]; ok {
-					icon := statusIcon(promoter.Status)
-					fmt.Printf("      Status:    %s %s\n", icon, promoter.Status)
+			for _, cfg := range configs {
+				fmt.Printf("  - %s\n", cfg.GetResource())
+				if promoter, ok := promoterMap[cfg.GetResource()]; ok {
+					fmt.Printf("      Status:    %s %s\n", statusIcon(promoter.Status), promoter.Status)
 					if promoter.PrimaryOn != "" {
 						fmt.Printf("      Primary:   %s\n", promoter.PrimaryOn)
 					}
+					if promoter.Target.Name != "" {
+						fmt.Printf("      Target:    %s (%s)\n", promoter.Target.Name, promoter.Target.Status)
+					}
 				}
-
-				if cfg.MountPoint != "" {
-					fmt.Printf("      Mount:     %s (%s)\n", cfg.MountPoint, cfg.FSType)
-				}
-				if len(cfg.Services) > 0 {
-					// Filter out internal services for cleaner display
-					var userServices []string
-					for _, svc := range cfg.Services {
-						if !strings.HasPrefix(svc, "drbd-") && !strings.HasPrefix(svc, "service-ip@") {
-							userServices = append(userServices, svc)
+				if status, err := sdsClient.ResourceStatus(ctx, cfg.GetResource()); err == nil {
+					activeNode := ""
+					for node, nodeState := range status.GetNodeStates() {
+						if nodeState.GetRole() == "Primary" {
+							activeNode = node
+							break
 						}
 					}
-					if len(userServices) > 0 {
-						fmt.Printf("      Services:  %v\n", userServices)
+					if activeNode != "" {
+						fmt.Printf("      Active:    %s\n", activeNode)
+					} else if status.GetRole() != "" {
+						fmt.Printf("      Role:      %s\n", status.GetRole())
 					}
 				}
-				if cfg.VIP != "" {
-					fmt.Printf("      VIP:       %s\n", cfg.VIP)
+				if cfg.GetMountPoint() != "" {
+					fmt.Printf("      Mount:     %s (%s)\n", cfg.GetMountPoint(), cfg.GetFsType())
+				}
+				if len(cfg.GetServices()) > 0 {
+					fmt.Printf("      Services:  %v\n", cfg.GetServices())
+				}
+				if cfg.GetVip() != "" {
+					fmt.Printf("      VIP:       %s\n", cfg.GetVip())
 				}
 				fmt.Println()
+			}
+
+			if reactorErr != nil {
+				fmt.Printf("Warning: failed to read local drbd-reactor status JSON: %v\n", reactorErr)
 			}
 
 			return nil
@@ -231,60 +274,82 @@ func haStatus() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
-			configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 
-			cfg, err := readHAConfig(configPath)
+			sdsClient, err := client.NewSDSClient(controllerAddr)
 			if err != nil {
-				return fmt.Errorf("failed to read HA config: %w", err)
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			cfg, err := sdsClient.GetHa(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to get HA config: %w", err)
 			}
 
-			// Get reactor status
-			promoter, err := getReactorPromoterStatus(resource)
+			resourceStatus, statusErr := sdsClient.ResourceStatus(ctx, resource)
+			promoter, promoterErr := getReactorPromoterStatus(resource)
 
 			fmt.Printf("HA Configuration: %s\n", resource)
-			fmt.Printf("  Config:  %s\n", configPath)
-
-			// Show reactor status
-			if err == nil && promoter != nil {
-				icon := statusIcon(promoter.Status)
-				fmt.Printf("  Status:  %s %s\n", icon, promoter.Status)
+			fmt.Printf("  Config:  controller database\n")
+			if statusErr == nil && resourceStatus != nil {
+				activeNode := ""
+				for node, nodeState := range resourceStatus.GetNodeStates() {
+					if nodeState.GetRole() == "Primary" {
+						activeNode = node
+						break
+					}
+				}
+				if activeNode != "" {
+					fmt.Printf("  Active:  %s\n", activeNode)
+				}
+				fmt.Printf("  Role:    %s\n", resourceStatus.GetRole())
+				fmt.Printf("  Nodes:   %v\n", resourceStatus.GetNodes())
+			}
+			if promoterErr == nil && promoter != nil {
+				fmt.Printf("  Status:  %s %s\n", statusIcon(promoter.Status), promoter.Status)
 				if promoter.PrimaryOn != "" {
-					fmt.Printf("  Active:  %s\n", promoter.PrimaryOn)
-				}
-			} else {
-				fmt.Printf("  Status:  (unable to get reactor status)\n")
-			}
-
-			if cfg.MountPoint != "" {
-				fmt.Printf("  Mount:   %s (%s)\n", cfg.MountPoint, cfg.FSType)
-			}
-			if cfg.VIP != "" {
-				fmt.Printf("  VIP:     %s\n", cfg.VIP)
-			}
-			if len(cfg.Services) > 0 {
-				// Show user services (filter internal ones)
-				var userServices []string
-				for _, svc := range cfg.Services {
-					if !strings.HasPrefix(svc, "drbd-") && !strings.HasPrefix(svc, "service-ip@") {
-						userServices = append(userServices, svc)
-					}
-				}
-				if len(userServices) > 0 {
-					fmt.Printf("  Services: %v\n", userServices)
+					fmt.Printf("  Primary: %s\n", promoter.PrimaryOn)
 				}
 			}
 
-			// Show detailed service status from reactor
-			if promoter != nil {
-				fmt.Printf("\nServices:\n")
-				fmt.Printf("  %s %s\n", statusIcon(promoter.Target.Status), promoter.Target.Name)
-				for i, dep := range promoter.Dependencies {
-					prefix := "├─"
-					if i == len(promoter.Dependencies)-1 {
-						prefix = "└─"
-					}
-					fmt.Printf("    %s %s %s\n", statusIcon(dep.Status), prefix, dep.Name)
+			if cfg.GetMountPoint() != "" {
+				fmt.Printf("  Mount:   %s (%s)\n", cfg.GetMountPoint(), cfg.GetFsType())
+			}
+			if cfg.GetVip() != "" {
+				fmt.Printf("  VIP:     %s\n", cfg.GetVip())
+			}
+			if len(cfg.GetServices()) > 0 {
+				fmt.Printf("  Services: %v\n", cfg.GetServices())
+			}
+			if statusErr == nil && resourceStatus != nil && len(resourceStatus.GetNodeStates()) > 0 {
+				fmt.Printf("  Node States:\n")
+				for node, nodeState := range resourceStatus.GetNodeStates() {
+					fmt.Printf("    - %s: role=%s disk=%s repl=%s\n",
+						node,
+						nodeState.GetRole(),
+						nodeState.GetDiskState(),
+						nodeState.GetReplicationState())
 				}
+			}
+			if promoterErr == nil && promoter != nil {
+				fmt.Printf("  Promoter Target:\n")
+				fmt.Printf("    - %s %s (%s)\n",
+					statusIcon(promoter.Target.Status),
+					promoter.Target.Name,
+					promoter.Target.Status)
+				if len(promoter.Dependencies) > 0 {
+					fmt.Printf("  Dependencies:\n")
+					for _, dep := range promoter.Dependencies {
+						fmt.Printf("    - %s %s (%s)\n",
+							statusIcon(dep.Status),
+							dep.Name,
+							dep.Status)
+					}
+				}
+			} else if promoterErr != nil {
+				fmt.Printf("  Reactor: local promoter status unavailable (%v)\n", promoterErr)
 			}
 
 			return nil

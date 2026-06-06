@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
-	"go.uber.org/zap"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/liliang-cn/sds/pkg/config"
@@ -31,7 +31,7 @@ type Controller struct {
 	config     *config.Config
 	logger     *zap.Logger
 	db         *database.DB
-	deployment *deployment.Client
+	deployment deploymentClient
 	hosts      []string
 	hostsMap   map[string]string // hostname -> address mapping
 	hostsLock  sync.RWMutex
@@ -181,6 +181,7 @@ func (c *Controller) Start() error {
 	// Initialize deployment client with hosts
 	c.resources.SetDeployment(c.deployment)
 	c.resources.SetHosts(c.hosts)
+	c.gateway.SetHosts(c.hosts)
 
 	// Start metrics server if enabled
 	if c.config.Metrics.Enabled && c.metrics != nil {
@@ -300,7 +301,7 @@ func (c *Controller) startGRPCServer() error {
 
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4*1024*1024)),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4 * 1024 * 1024)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                10 * time.Second,
 			Timeout:             time.Second,
@@ -398,7 +399,6 @@ func (c *http1OnlyConn) Read(b []byte) (int, error) {
 	return n, err
 }
 
-
 // startMetricsServer starts the Prometheus metrics HTTP server
 func (c *Controller) startMetricsServer() error {
 	addr := fmt.Sprintf("%s:%d", c.config.Metrics.ListenAddress, c.config.Metrics.Port)
@@ -423,7 +423,7 @@ func (c *Controller) GetHosts() []string {
 }
 
 // GetDeployment returns the deployment client
-func (c *Controller) GetDeployment() *deployment.Client {
+func (c *Controller) GetDeployment() deploymentClient {
 	return c.deployment
 }
 

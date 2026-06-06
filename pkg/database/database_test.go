@@ -64,12 +64,12 @@ func TestNodeCRUD(t *testing.T) {
 
 	// Create
 	node := &Node{
-		Name:      "test-node",
-		Address:   "192.168.1.100",
-		Hostname:  "test-node.local",
-		State:     "online",
-		Version:   "1.0.0",
-		LastSeen:  time.Now(),
+		Name:     "test-node",
+		Address:  "192.168.1.100",
+		Hostname: "test-node.local",
+		State:    "online",
+		Version:  "1.0.0",
+		LastSeen: time.Now(),
 	}
 
 	err := db.SaveNode(ctx, node)
@@ -292,11 +292,11 @@ func TestGatewayCRUD(t *testing.T) {
 
 	// Create
 	gateway := &Gateway{
-		Name:      "nfs-gateway",
-		Resource:  "data",
-		Type:      GatewayTypeNFS,
-		Config:    map[string]interface{}{"export_path": "/export/data"},
-		Status:    "active",
+		Name:       "nfs-gateway",
+		Resource:   "data",
+		Type:       GatewayTypeNFS,
+		Config:     map[string]interface{}{"export_path": "/export/data"},
+		Status:     "active",
 		ActiveNode: "node1",
 	}
 
@@ -358,6 +358,49 @@ func TestGatewayTypes(t *testing.T) {
 	gateways, err := db.ListGateways(ctx)
 	require.NoError(t, err)
 	assert.Len(t, gateways, 3)
+}
+
+func TestGetGatewayByResource(t *testing.T) {
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	gateway := &Gateway{
+		Name:       "data-nfs",
+		Resource:   "data",
+		Type:       GatewayTypeNFS,
+		Status:     "configured",
+		ActiveNode: "node1",
+	}
+
+	err := db.SaveGateway(ctx, gateway)
+	require.NoError(t, err)
+
+	retrieved, err := db.GetGatewayByResource(ctx, "data")
+	require.NoError(t, err)
+	assert.Equal(t, gateway.Name, retrieved.Name)
+	assert.Equal(t, gateway.Resource, retrieved.Resource)
+}
+
+func TestDeleteGatewayByResource(t *testing.T) {
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	first := &Gateway{Name: "data-nfs", Resource: "data", Type: GatewayTypeNFS}
+	second := &Gateway{Name: "logs-nfs", Resource: "logs", Type: GatewayTypeNFS}
+
+	require.NoError(t, db.SaveGateway(ctx, first))
+	require.NoError(t, db.SaveGateway(ctx, second))
+
+	require.NoError(t, db.DeleteGatewayByResource(ctx, "data"))
+
+	_, err := db.GetGateway(ctx, "data-nfs")
+	assert.Error(t, err)
+
+	retrieved, err := db.GetGateway(ctx, "logs-nfs")
+	require.NoError(t, err)
+	assert.Equal(t, "logs", retrieved.Resource)
 }
 
 // ==================== Volume Tests ====================

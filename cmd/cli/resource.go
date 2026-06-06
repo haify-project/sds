@@ -334,8 +334,6 @@ func resourceAddVolume() *cobra.Command {
 }
 
 func resourceRemoveVolume() *cobra.Command {
-	var node string
-
 	cmd := &cobra.Command{
 		Use:   "remove-volume <resource> <volume-id>",
 		Short: "Remove a volume from resource",
@@ -357,7 +355,7 @@ func resourceRemoveVolume() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			err = sdsClient.RemoveVolume(ctx, resource, volumeID, node)
+			err = sdsClient.RemoveVolume(ctx, resource, volumeID)
 			if err != nil {
 				return fmt.Errorf("failed to remove volume: %w", err)
 			}
@@ -367,13 +365,10 @@ func resourceRemoveVolume() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
-
 	return cmd
 }
 
 func resourceResizeVolume() *cobra.Command {
-	var node string
 	var size string
 
 	cmd := &cobra.Command{
@@ -407,7 +402,7 @@ func resourceResizeVolume() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			err = sdsClient.ResizeVolume(ctx, resource, volumeID, node, uint32(sizeGiB))
+			err = sdsClient.ResizeVolume(ctx, resource, volumeID, uint32(sizeGiB))
 			if err != nil {
 				return fmt.Errorf("failed to resize volume: %w", err)
 			}
@@ -416,8 +411,6 @@ func resourceResizeVolume() *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
 
 	return cmd
 }

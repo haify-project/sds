@@ -137,6 +137,57 @@ service SDSController {
   rpc StopGateway(StopGatewayRequest) returns (StopGatewayResponse) {
     option (google.api.http) = { post: "/v1/gateways/{id}/stop"; body: "*"; };
   }
+  rpc AddNFSExport(AddNFSExportRequest) returns (AddNFSExportResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/exports:add"; body: "*"; };
+  }
+  rpc RemoveNFSExport(RemoveNFSExportRequest) returns (RemoveNFSExportResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/exports:remove"; body: "*"; };
+  }
+  rpc ListNFSExports(ListNFSExportsRequest) returns (ListNFSExportsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/exports:list"; body: "*"; };
+  }
+  rpc AddISCSILUN(AddISCSILUNRequest) returns (AddISCSILUNResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/luns:add"; body: "*"; };
+  }
+  rpc RemoveISCSILUN(RemoveISCSILUNRequest) returns (RemoveISCSILUNResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/luns:remove"; body: "*"; };
+  }
+  rpc ListISCSILUNs(ListISCSILUNsRequest) returns (ListISCSILUNsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/luns:list"; body: "*"; };
+  }
+  rpc AddISCSIInitiator(AddISCSIInitiatorRequest) returns (AddISCSIInitiatorResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/initiators:add"; body: "*"; };
+  }
+  rpc RemoveISCSIInitiator(RemoveISCSIInitiatorRequest) returns (RemoveISCSIInitiatorResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/initiators:remove"; body: "*"; };
+  }
+  rpc ListISCSIInitiators(ListISCSIInitiatorsRequest) returns (ListISCSIInitiatorsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/initiators:list"; body: "*"; };
+  }
+  rpc SetISCSIChap(SetISCSIChapRequest) returns (SetISCSIChapResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/chap:set"; body: "*"; };
+  }
+  rpc GetISCSIChap(GetISCSIChapRequest) returns (GetISCSIChapResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/chap:get"; body: "*"; };
+  }
+  rpc AddNVMeNamespace(AddNVMeNamespaceRequest) returns (AddNVMeNamespaceResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/namespaces:add"; body: "*"; };
+  }
+  rpc RemoveNVMeNamespace(RemoveNVMeNamespaceRequest) returns (RemoveNVMeNamespaceResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/namespaces:remove"; body: "*"; };
+  }
+  rpc ListNVMeNamespaces(ListNVMeNamespacesRequest) returns (ListNVMeNamespacesResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/namespaces:list"; body: "*"; };
+  }
+  rpc AddNVMeHost(AddNVMeHostRequest) returns (AddNVMeHostResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/hosts:add"; body: "*"; };
+  }
+  rpc RemoveNVMeHost(RemoveNVMeHostRequest) returns (RemoveNVMeHostResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/hosts:remove"; body: "*"; };
+  }
+  rpc ListNVMeHosts(ListNVMeHostsRequest) returns (ListNVMeHostsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/hosts:list"; body: "*"; };
+  }
 
   // ZFS operations
   rpc CreateZFSPool(CreateZFSPoolRequest) returns (CreateZFSPoolResponse) {
@@ -695,6 +746,11 @@ message VolumeInfo {
   uint32 volume_id = 1;
   string device = 2;
   uint64 size_gb = 3;
+  // Storage pool (volume group) backing this volume.
+  string pool = 4;
+  // Backing logical volume name inside the pool (e.g. "<resource>_data").
+  // Combined with pool it forms the "<pool>/<lv>" path used by snapshot APIs.
+  string backing_volume = 5;
 }
 
 // Snapshot messages
@@ -853,6 +909,205 @@ message GatewayInfo {
   map<string, string> options = 9;
 }
 
+message NFSExportInfo {
+  string directory = 1;
+  string fsid = 2;
+  string clientspec = 3;
+  string options = 4;
+}
+
+message AddNFSExportRequest {
+  string resource = 1;
+  string export_path = 2;
+  int32 fsid = 3;
+  string client_spec = 4;
+  string options = 5;
+}
+
+message AddNFSExportResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveNFSExportRequest {
+  string resource = 1;
+  string export_path = 2;
+}
+
+message RemoveNFSExportResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListNFSExportsRequest {
+  string resource = 1;
+}
+
+message ListNFSExportsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NFSExportInfo exports = 3;
+}
+
+message ISCSILUNInfo {
+  int32 lun = 1;
+  string device = 2;
+  string target_iqn = 3;
+}
+
+message AddISCSILUNRequest {
+  string resource = 1;
+  int32 lun = 2;
+  string device = 3;
+}
+
+message AddISCSILUNResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveISCSILUNRequest {
+  string resource = 1;
+  int32 lun = 2;
+}
+
+message RemoveISCSILUNResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListISCSILUNsRequest {
+  string resource = 1;
+}
+
+message ListISCSILUNsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ISCSILUNInfo luns = 3;
+}
+
+message AddISCSIInitiatorRequest {
+  string resource = 1;
+  string initiator = 2;
+}
+
+message AddISCSIInitiatorResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveISCSIInitiatorRequest {
+  string resource = 1;
+  string initiator = 2;
+}
+
+message RemoveISCSIInitiatorResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListISCSIInitiatorsRequest {
+  string resource = 1;
+}
+
+message ListISCSIInitiatorsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string initiators = 3;
+}
+
+message SetISCSIChapRequest {
+  string resource = 1;
+  string username = 2;
+  string password = 3;
+  bool mutual = 4;
+}
+
+message SetISCSIChapResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetISCSIChapRequest {
+  string resource = 1;
+}
+
+message GetISCSIChapResponse {
+  bool success = 1;
+  string message = 2;
+  string username = 3;
+  string password = 4;
+  bool mutual = 5;
+}
+
+message NVMeNamespaceInfo {
+  int32 namespace_id = 1;
+  string backing_path = 2;
+  string uuid = 3;
+  string nguid = 4;
+  string nqn = 5;
+}
+
+message AddNVMeNamespaceRequest {
+  string resource = 1;
+  string device = 2;
+}
+
+message AddNVMeNamespaceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveNVMeNamespaceRequest {
+  string resource = 1;
+  int32 namespace_id = 2;
+}
+
+message RemoveNVMeNamespaceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListNVMeNamespacesRequest {
+  string resource = 1;
+}
+
+message ListNVMeNamespacesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NVMeNamespaceInfo namespaces = 3;
+}
+
+message AddNVMeHostRequest {
+  string resource = 1;
+  string host_nqn = 2;
+}
+
+message AddNVMeHostResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveNVMeHostRequest {
+  string resource = 1;
+  string host_nqn = 2;
+}
+
+message RemoveNVMeHostResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListNVMeHostsRequest {
+  string resource = 1;
+}
+
+message ListNVMeHostsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string hosts = 3;
+}
+
 message DeleteHaRequest {
   string resource = 1;
 }
@@ -887,4 +1142,3 @@ message HaConfigInfo {
   string fs_type = 4;
   repeated string services = 5;
 }
-
