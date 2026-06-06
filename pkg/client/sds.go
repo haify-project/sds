@@ -547,6 +547,64 @@ func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []stri
 	return resp.ConfigPath, nil
 }
 
+// EnableSelfHa makes the controller itself highly available. It returns the
+// metadata resource name and the node-local handoff log path.
+func (c *SDSClient) EnableSelfHa(ctx context.Context, vip, pool string, sizeGB, port uint32, nodes []string) (string, string, error) {
+	resp, err := c.client.EnableSelfHa(ctx, &sdspb.EnableSelfHaRequest{
+		Vip:    vip,
+		Pool:   pool,
+		SizeGb: sizeGB,
+		Port:   port,
+		Nodes:  nodes,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	if !resp.Success {
+		return "", "", fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Resource, resp.HandoffLog, nil
+}
+
+// DisableSelfHa reverts the controller to standalone operation on node.
+func (c *SDSClient) DisableSelfHa(ctx context.Context, node string) error {
+	resp, err := c.client.DisableSelfHa(ctx, &sdspb.DisableSelfHaRequest{Node: node})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
+// SelfHaStatus describes the controller self-HA state.
+type SelfHaStatus struct {
+	Enabled    bool
+	Resource   string
+	VIP        string
+	Nodes      []string
+	ActiveNode string
+}
+
+// GetSelfHaStatus reports the controller self-HA state.
+func (c *SDSClient) GetSelfHaStatus(ctx context.Context) (*SelfHaStatus, error) {
+	resp, err := c.client.GetSelfHaStatus(ctx, &sdspb.GetSelfHaStatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return &SelfHaStatus{
+		Enabled:    resp.Enabled,
+		Resource:   resp.Resource,
+		VIP:        resp.Vip,
+		Nodes:      resp.Nodes,
+		ActiveNode: resp.ActiveNode,
+	}, nil
+}
+
 // EvictHa evicts an HA resource from the active node
 func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
 	req := &sdspb.EvictHaRequest{

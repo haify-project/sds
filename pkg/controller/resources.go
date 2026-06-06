@@ -969,18 +969,36 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		return fmt.Errorf("failed to delete config: %w", err)
 	}
 
-	// 3. Delete LVs (optional, depends on use case)
-	// This is left for the caller to decide
-
+	// 3. Delete backing volumes. This must happen BEFORE the database
+	// records go away — they are the only remaining knowledge of which
+	// LVs/zvols belong to this resource. Failures abort unless force is
+	// set, so the records survive for a retry instead of leaking storage.
 	if rm.controller.db != nil {
-		if volumes, err := rm.controller.db.ListVolumes(ctx, name); err == nil {
-			for _, volume := range volumes {
-				if err := rm.controller.db.DeleteVolume(ctx, name, volume.VolumeName); err != nil {
-					rm.controller.logger.Warn("Failed to delete volume from database",
-						zap.String("resource", name),
-						zap.String("volume", volume.VolumeName),
-						zap.Error(err))
+		volumes, listErr := rm.controller.db.ListVolumes(ctx, name)
+		if listErr != nil {
+			rm.controller.logger.Warn("Failed to list volumes for backing cleanup",
+				zap.String("resource", name),
+				zap.Error(listErr))
+		}
+		for _, volume := range volumes {
+			if err := rm.deleteBackingVolume(ctx, hosts, volume); err != nil {
+				if !force {
+					return fmt.Errorf("failed to remove backing volume %s/%s (rerun with force to skip): %w",
+						volume.Pool, volume.VolumeName, err)
 				}
+				rm.controller.logger.Warn("Failed to remove backing volume (force: continuing)",
+					zap.String("resource", name),
+					zap.String("volume", volume.VolumeName),
+					zap.Error(err))
+			}
+		}
+
+		for _, volume := range volumes {
+			if err := rm.controller.db.DeleteVolume(ctx, name, volume.VolumeName); err != nil {
+				rm.controller.logger.Warn("Failed to delete volume from database",
+					zap.String("resource", name),
+					zap.String("volume", volume.VolumeName),
+					zap.Error(err))
 			}
 		}
 		if err := rm.controller.db.DeleteResource(ctx, name); err != nil {
@@ -993,6 +1011,36 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 	rm.controller.logger.Info("Resource deleted successfully",
 		zap.String("name", name))
 
+	return nil
+}
+
+// deleteBackingVolume removes a volume's backing LV or zvol on all hosts.
+// The device path recorded at creation time identifies the storage type:
+// "/dev/zvol/<pool>/<vol>" is ZFS, "/dev/<pool>/<vol>" is LVM.
+func (rm *ResourceManager) deleteBackingVolume(ctx context.Context, hosts []string, volume *database.Volume) error {
+	if volume.Pool == "" || volume.VolumeName == "" {
+		return fmt.Errorf("volume record incomplete (pool=%q, volume=%q)", volume.Pool, volume.VolumeName)
+	}
+	var cmd string
+	if strings.HasPrefix(volume.Device, "/dev/zvol/") {
+		cmd = fmt.Sprintf("sudo zfs destroy %s/%s", volume.Pool, volume.VolumeName)
+	} else {
+		cmd = fmt.Sprintf("sudo lvremove -f %s/%s", volume.Pool, volume.VolumeName)
+	}
+	result, err := rm.deployment.Exec(ctx, hosts, cmd)
+	if err != nil {
+		return err
+	}
+	if !result.AllSuccess() {
+		// Tolerate hosts where the volume is already gone.
+		for host, hr := range result.Hosts {
+			if !hr.Success &&
+				!strings.Contains(hr.Output, "not found") &&
+				!strings.Contains(hr.Output, "does not exist") {
+				return fmt.Errorf("removal failed on %s: %s", host, strings.TrimSpace(hr.Output))
+			}
+		}
+	}
 	return nil
 }
 

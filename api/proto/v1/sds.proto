@@ -98,6 +98,18 @@ service SDSController {
     option (google.api.http) = { get: "/v1/ha"; };
   }
 
+  // Controller self-HA operations: make the controller itself highly
+  // available on its own DRBD + drbd-reactor machinery.
+  rpc EnableSelfHa(EnableSelfHaRequest) returns (EnableSelfHaResponse) {
+    option (google.api.http) = { post: "/v1/selfha/enable"; body: "*"; };
+  }
+  rpc DisableSelfHa(DisableSelfHaRequest) returns (DisableSelfHaResponse) {
+    option (google.api.http) = { post: "/v1/selfha/disable"; body: "*"; };
+  }
+  rpc GetSelfHaStatus(GetSelfHaStatusRequest) returns (GetSelfHaStatusResponse) {
+    option (google.api.http) = { get: "/v1/selfha"; };
+  }
+
   // Snapshot operations
   rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse) {
     option (google.api.http) = { post: "/v1/volumes/{volume}/snapshots"; body: "*"; };
@@ -716,6 +728,43 @@ message EvictHaRequest {
 message EvictHaResponse {
   bool success = 1;
   string message = 2;
+}
+
+// Controller self-HA messages
+message EnableSelfHaRequest {
+  string vip = 1;             // virtual IP for the controller (CIDR, required)
+  string pool = 2;            // storage pool backing the metadata resource
+  uint32 size_gb = 3;         // metadata resource size (default 1)
+  uint32 port = 4;            // DRBD port for the metadata resource (default 7999)
+  repeated string nodes = 5;  // target nodes (default: all registered nodes)
+}
+
+message EnableSelfHaResponse {
+  bool success = 1;
+  string message = 2;
+  string resource = 3;        // metadata resource name (sds-meta)
+  string handoff_log = 4;     // node-local log path of the handoff script
+}
+
+message DisableSelfHaRequest {
+  string node = 1;            // node that keeps running the standalone controller
+}
+
+message DisableSelfHaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetSelfHaStatusRequest {}
+
+message GetSelfHaStatusResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;           // self-HA config present
+  string resource = 4;        // metadata resource name
+  string vip = 5;
+  repeated string nodes = 6;
+  string active_node = 7;     // node currently running the controller (DRBD Primary)
 }
 
 message ResourceInfo {

@@ -1898,6 +1898,93 @@
         ]
       }
     },
+    "/v1/selfha": {
+      "get": {
+        "operationId": "SDSController_GetSelfHaStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSelfHaStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/selfha/disable": {
+      "post": {
+        "operationId": "SDSController_DisableSelfHa",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DisableSelfHaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1DisableSelfHaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/selfha/enable": {
+      "post": {
+        "summary": "Controller self-HA operations: make the controller itself highly\navailable on its own DRBD + drbd-reactor machinery.",
+        "operationId": "SDSController_EnableSelfHa",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1EnableSelfHaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1EnableSelfHaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/volumes/{volume}/snapshots": {
       "get": {
         "operationId": "SDSController_ListSnapshots",
@@ -3313,6 +3400,76 @@
         }
       }
     },
+    "v1DisableSelfHaRequest": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "title": "node that keeps running the standalone controller"
+        }
+      }
+    },
+    "v1DisableSelfHaResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1EnableSelfHaRequest": {
+      "type": "object",
+      "properties": {
+        "vip": {
+          "type": "string",
+          "title": "virtual IP for the controller (CIDR, required)"
+        },
+        "pool": {
+          "type": "string",
+          "title": "storage pool backing the metadata resource"
+        },
+        "sizeGb": {
+          "type": "integer",
+          "format": "int64",
+          "title": "metadata resource size (default 1)"
+        },
+        "port": {
+          "type": "integer",
+          "format": "int64",
+          "title": "DRBD port for the metadata resource (default 7999)"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "target nodes (default: all registered nodes)"
+        }
+      },
+      "title": "Controller self-HA messages"
+    },
+    "v1EnableSelfHaResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "resource": {
+          "type": "string",
+          "title": "metadata resource name (sds-meta)"
+        },
+        "handoffLog": {
+          "type": "string",
+          "title": "node-local log path of the handoff script"
+        }
+      }
+    },
     "v1EvictHaResponse": {
       "type": "object",
       "properties": {
@@ -3455,6 +3612,38 @@
         },
         "resource": {
           "$ref": "#/definitions/v1ResourceInfo"
+        }
+      }
+    },
+    "v1GetSelfHaStatusResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean",
+          "title": "self-HA config present"
+        },
+        "resource": {
+          "type": "string",
+          "title": "metadata resource name"
+        },
+        "vip": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "activeNode": {
+          "type": "string",
+          "title": "node currently running the controller (DRBD Primary)"
         }
       }
     },

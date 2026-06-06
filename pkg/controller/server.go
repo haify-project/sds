@@ -522,6 +522,54 @@ func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.M
 	}, nil
 }
 
+func (s *Server) EnableSelfHa(ctx context.Context, req *sdspb.EnableSelfHaRequest) (*sdspb.EnableSelfHaResponse, error) {
+	handoffLog, err := s.resources.EnableSelfHa(ctx, req.Vip, req.Pool, req.SizeGb, req.Port, req.Nodes)
+	if err != nil {
+		return &sdspb.EnableSelfHaResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.EnableSelfHaResponse{
+		Success:    true,
+		Message:    "Self-HA handoff started; the controller will restart under drbd-reactor management",
+		Resource:   SelfHaResource,
+		HandoffLog: handoffLog,
+	}, nil
+}
+
+func (s *Server) DisableSelfHa(ctx context.Context, req *sdspb.DisableSelfHaRequest) (*sdspb.DisableSelfHaResponse, error) {
+	if err := s.resources.DisableSelfHa(ctx, req.Node); err != nil {
+		return &sdspb.DisableSelfHaResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.DisableSelfHaResponse{
+		Success: true,
+		Message: "Self-HA disable started; the controller will restart standalone on " + req.Node,
+	}, nil
+}
+
+func (s *Server) GetSelfHaStatus(ctx context.Context, req *sdspb.GetSelfHaStatusRequest) (*sdspb.GetSelfHaStatusResponse, error) {
+	status, err := s.resources.GetSelfHaStatus(ctx)
+	if err != nil {
+		return &sdspb.GetSelfHaStatusResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.GetSelfHaStatusResponse{
+		Success:    true,
+		Message:    "OK",
+		Enabled:    status.Enabled,
+		Resource:   status.Resource,
+		Vip:        status.VIP,
+		Nodes:      status.Nodes,
+		ActiveNode: status.ActiveNode,
+	}, nil
+}
+
 func (s *Server) EvictHa(ctx context.Context, req *sdspb.EvictHaRequest) (*sdspb.EvictHaResponse, error) {
 	err := s.resources.EvictHa(ctx, req.Resource)
 	if err != nil {

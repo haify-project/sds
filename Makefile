@@ -1,23 +1,42 @@
-.PHONY: build test clean install-controller install-cli run-controller run-cli proto web-ui web-ui-dev web-ui-build
+.PHONY: build test clean install-controller install-cli run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure
 
-# Build binaries
-build: web-ui-build
+# Sync the freshly built web UI into ui/dist for go:embed. The directory is
+# gitignored and intentionally kept around after builds so plain `go build`
+# and `go test ./...` keep working without re-running npm.
+ui-sync: web-ui-build
 	@echo "Preparing UI for embedding..."
 	@rm -rf ui/dist
 	@cp -r web-ui/dist ui/
+
+# Ensure ui/dist exists so go:embed (ui/ui.go) compiles. Prefers the real
+# web-ui build output; falls back to a clearly marked placeholder so Go
+# tests can run on machines without Node.js.
+ui-ensure:
+	@if [ ! -f ui/dist/index.html ]; then \
+		if [ -d web-ui/dist ]; then \
+			echo "Syncing ui/dist from existing web-ui/dist..."; \
+			rm -rf ui/dist && cp -r web-ui/dist ui/; \
+		else \
+			echo "web-ui/dist not found; writing placeholder ui/dist (run 'make build' for the real UI)"; \
+			mkdir -p ui/dist; \
+			echo '<!DOCTYPE html><html><body>SDS UI placeholder - run make build to embed the real UI</body></html>' > ui/dist/index.html; \
+		fi \
+	fi
+
+# Build binaries
+build: ui-sync
 	@echo "Building sds-controller..."
 	go build -o bin/sds-controller ./cmd/controller
 	@echo "Building sds-cli..."
 	go build -o bin/sds-cli ./cmd/cli
-	@rm -rf ui/dist
 
 # Run tests
-test:
+test: ui-ensure
 	go test -v ./...
 
 # Clean build artifacts
 clean:
-	rm -rf bin/
+	rm -rf bin/ ui/dist
 
 # Install controller systemd service
 install-controller: build

@@ -850,6 +850,17 @@ func TestResourceManagerDeleteResourceRemovesDatabaseRecord(t *testing.T) {
 	volumes, err := ctrl.db.ListVolumes(context.Background(), "res1")
 	require.NoError(t, err)
 	assert.Empty(t, volumes)
+
+	// The backing LV must be removed on all resource hosts — the database
+	// records were the last knowledge of which LVs belonged to the resource.
+	foundLvremove := false
+	for _, call := range dep.execCalls {
+		if strings.Contains(call.cmd, "lvremove -f sds_data-pool/res1_data") {
+			foundLvremove = true
+			assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, call.hosts)
+		}
+	}
+	assert.True(t, foundLvremove, "backing LV was not removed")
 }
 
 func TestResourceManagerGetResourceUsesResourceSpecificHosts(t *testing.T) {

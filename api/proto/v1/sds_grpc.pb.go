@@ -47,6 +47,9 @@ const (
 	SDSController_DeleteHa_FullMethodName             = "/v1.SDSController/DeleteHa"
 	SDSController_GetHa_FullMethodName                = "/v1.SDSController/GetHa"
 	SDSController_ListHa_FullMethodName               = "/v1.SDSController/ListHa"
+	SDSController_EnableSelfHa_FullMethodName         = "/v1.SDSController/EnableSelfHa"
+	SDSController_DisableSelfHa_FullMethodName        = "/v1.SDSController/DisableSelfHa"
+	SDSController_GetSelfHaStatus_FullMethodName      = "/v1.SDSController/GetSelfHaStatus"
 	SDSController_CreateSnapshot_FullMethodName       = "/v1.SDSController/CreateSnapshot"
 	SDSController_DeleteSnapshot_FullMethodName       = "/v1.SDSController/DeleteSnapshot"
 	SDSController_RestoreSnapshot_FullMethodName      = "/v1.SDSController/RestoreSnapshot"
@@ -131,6 +134,11 @@ type SDSControllerClient interface {
 	DeleteHa(ctx context.Context, in *DeleteHaRequest, opts ...grpc.CallOption) (*DeleteHaResponse, error)
 	GetHa(ctx context.Context, in *GetHaRequest, opts ...grpc.CallOption) (*GetHaResponse, error)
 	ListHa(ctx context.Context, in *ListHaRequest, opts ...grpc.CallOption) (*ListHaResponse, error)
+	// Controller self-HA operations: make the controller itself highly
+	// available on its own DRBD + drbd-reactor machinery.
+	EnableSelfHa(ctx context.Context, in *EnableSelfHaRequest, opts ...grpc.CallOption) (*EnableSelfHaResponse, error)
+	DisableSelfHa(ctx context.Context, in *DisableSelfHaRequest, opts ...grpc.CallOption) (*DisableSelfHaResponse, error)
+	GetSelfHaStatus(ctx context.Context, in *GetSelfHaStatusRequest, opts ...grpc.CallOption) (*GetSelfHaStatusResponse, error)
 	// Snapshot operations
 	CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (*CreateSnapshotResponse, error)
 	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
@@ -465,6 +473,36 @@ func (c *sDSControllerClient) ListHa(ctx context.Context, in *ListHaRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListHaResponse)
 	err := c.cc.Invoke(ctx, SDSController_ListHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) EnableSelfHa(ctx context.Context, in *EnableSelfHaRequest, opts ...grpc.CallOption) (*EnableSelfHaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnableSelfHaResponse)
+	err := c.cc.Invoke(ctx, SDSController_EnableSelfHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DisableSelfHa(ctx context.Context, in *DisableSelfHaRequest, opts ...grpc.CallOption) (*DisableSelfHaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DisableSelfHaResponse)
+	err := c.cc.Invoke(ctx, SDSController_DisableSelfHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetSelfHaStatus(ctx context.Context, in *GetSelfHaStatusRequest, opts ...grpc.CallOption) (*GetSelfHaStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSelfHaStatusResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetSelfHaStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -958,6 +996,11 @@ type SDSControllerServer interface {
 	DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error)
 	GetHa(context.Context, *GetHaRequest) (*GetHaResponse, error)
 	ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error)
+	// Controller self-HA operations: make the controller itself highly
+	// available on its own DRBD + drbd-reactor machinery.
+	EnableSelfHa(context.Context, *EnableSelfHaRequest) (*EnableSelfHaResponse, error)
+	DisableSelfHa(context.Context, *DisableSelfHaRequest) (*DisableSelfHaResponse, error)
+	GetSelfHaStatus(context.Context, *GetSelfHaStatusRequest) (*GetSelfHaStatusResponse, error)
 	// Snapshot operations
 	CreateSnapshot(context.Context, *CreateSnapshotRequest) (*CreateSnapshotResponse, error)
 	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
@@ -1101,6 +1144,15 @@ func (UnimplementedSDSControllerServer) GetHa(context.Context, *GetHaRequest) (*
 }
 func (UnimplementedSDSControllerServer) ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListHa not implemented")
+}
+func (UnimplementedSDSControllerServer) EnableSelfHa(context.Context, *EnableSelfHaRequest) (*EnableSelfHaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnableSelfHa not implemented")
+}
+func (UnimplementedSDSControllerServer) DisableSelfHa(context.Context, *DisableSelfHaRequest) (*DisableSelfHaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DisableSelfHa not implemented")
+}
+func (UnimplementedSDSControllerServer) GetSelfHaStatus(context.Context, *GetSelfHaStatusRequest) (*GetSelfHaStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSelfHaStatus not implemented")
 }
 func (UnimplementedSDSControllerServer) CreateSnapshot(context.Context, *CreateSnapshotRequest) (*CreateSnapshotResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSnapshot not implemented")
@@ -1758,6 +1810,60 @@ func _SDSController_ListHa_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).ListHa(ctx, req.(*ListHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_EnableSelfHa_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableSelfHaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).EnableSelfHa(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_EnableSelfHa_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).EnableSelfHa(ctx, req.(*EnableSelfHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DisableSelfHa_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableSelfHaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DisableSelfHa(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DisableSelfHa_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DisableSelfHa(ctx, req.(*DisableSelfHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetSelfHaStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSelfHaStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetSelfHaStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetSelfHaStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetSelfHaStatus(ctx, req.(*GetSelfHaStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2690,6 +2796,18 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListHa",
 			Handler:    _SDSController_ListHa_Handler,
+		},
+		{
+			MethodName: "EnableSelfHa",
+			Handler:    _SDSController_EnableSelfHa_Handler,
+		},
+		{
+			MethodName: "DisableSelfHa",
+			Handler:    _SDSController_DisableSelfHa_Handler,
+		},
+		{
+			MethodName: "GetSelfHaStatus",
+			Handler:    _SDSController_GetSelfHaStatus_Handler,
 		},
 		{
 			MethodName: "CreateSnapshot",
