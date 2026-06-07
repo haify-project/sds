@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
-	github.com/liliang-cn/dispatch v1.1.5
+	github.com/liliang-cn/dispatch v1.1.6
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
