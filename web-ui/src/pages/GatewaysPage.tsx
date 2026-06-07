@@ -722,6 +722,23 @@ function ManageDialog({
   gateway: Gateway | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const queryClient = useQueryClient();
+  const restartMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.stopGateway(id);
+      await api.startGateway(id);
+    },
+    onSuccess: () => {
+      toast.success('Gateway restarting; pending changes will apply');
+      queryClient.invalidateQueries({ queryKey: ['gateways'] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // The backend reports the NVMe type as "nvmeof" (reactor config naming).
+  const gwType = gateway?.type === 'nvmeof' ? 'nvme' : gateway?.type;
+
   return (
     <Dialog open={!!gateway} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -734,15 +751,33 @@ function ManageDialog({
             Resource: {gateway?.resource}
           </DialogDescription>
         </DialogHeader>
-        {gateway?.type === 'nfs' && (
-          <ManageNFS resource={gateway.resource} />
-        )}
-        {gateway?.type === 'iscsi' && (
-          <ManageISCSI resource={gateway.resource} />
-        )}
-        {gateway?.type === 'nvme' && (
-          <ManageNVMe resource={gateway.resource} />
-        )}
+
+        <div className="flex items-start justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Changes are persisted to the gateway config and take effect on
+              the next restart or failover — the running target is not
+              modified live.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            disabled={restartMutation.isPending}
+            onClick={() => gateway && restartMutation.mutate(gateway.id)}
+          >
+            {restartMutation.isPending && (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            )}
+            Restart now
+          </Button>
+        </div>
+
+        {gwType === 'nfs' && <ManageNFS resource={gateway!.resource} />}
+        {gwType === 'iscsi' && <ManageISCSI resource={gateway!.resource} />}
+        {gwType === 'nvme' && <ManageNVMe resource={gateway!.resource} />}
       </DialogContent>
     </Dialog>
   );

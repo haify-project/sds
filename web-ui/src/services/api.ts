@@ -42,6 +42,10 @@ export interface Volume {
   volumeId: number;
   device: string;
   sizeGb: number;
+  // Backing location, used to build the "<pool>/<lv>" path snapshot APIs
+  // operate on.
+  pool?: string;
+  backingVolume?: string;
 }
 
 export interface NodeState {
@@ -238,6 +242,19 @@ class ApiClient {
 
   deletePool = (name: string, node?: string) =>
     this.request<ApiResponse>(`/pools/${name}${node ? `?node=${node}` : ''}`, { method: 'DELETE' });
+
+  // ZFS pools live on a dedicated API: creation takes vdevs (whole devices
+  // or partitions), not the LVM disks/VG flow.
+  createZFSPool = (data: { name: string; node: string; vdevs: string[] }) =>
+    this.request<ApiResponse>('/zfs/pools', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  deleteZFSPool = (name: string, node?: string) =>
+    this.request<ApiResponse>(`/zfs/pools/${name}${node ? `?node=${node}` : ''}`, {
+      method: 'DELETE',
+    });
 
   addDisk = (pool: string, disk: string, node?: string) =>
     this.request<ApiResponse>(`/pools/${pool}/disks`, {

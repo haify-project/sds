@@ -212,12 +212,17 @@ function CreatePoolDialog({
   const [disks, setDisks] = useState('');
 
   const createMutation = useMutation({
+    // ZFS pools go through their dedicated endpoint; sending type=zfs to
+    // the LVM /pools flow would vgcreate over the device instead.
     mutationFn: (data: {
       name: string;
       type: string;
       node: string;
       disks: string[];
-    }) => api.createPool(data),
+    }) =>
+      data.type === 'zfs'
+        ? api.createZFSPool({ name: data.name, node: data.node, vdevs: data.disks })
+        : api.createPool(data),
     onSuccess: () => {
       toast.success(`Pool "${name}" created`);
       queryClient.invalidateQueries({ queryKey: ['pools'] });
@@ -425,7 +430,10 @@ function DeletePoolDialog({ pool }: { pool: Pool }) {
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.deletePool(pool.name, pool.node),
+    mutationFn: () =>
+      pool.type === 'zfs'
+        ? api.deleteZFSPool(pool.name, pool.node)
+        : api.deletePool(pool.name, pool.node),
     onSuccess: () => {
       toast.success(`Pool "${pool.name}" deleted`);
       queryClient.invalidateQueries({ queryKey: ['pools'] });

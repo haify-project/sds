@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, Resource, Volume } from '../services/api';
 import { StatusBadge } from '@/components/StatusBadge';
+import { SnapshotsDialog } from '@/components/SnapshotsDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +67,7 @@ import {
   MoreHorizontal,
   Loader2,
   Boxes,
+Camera,
 } from 'lucide-react';
 
 interface NodeOpt {
@@ -217,6 +219,7 @@ function ResourceActionsMenu({
   const [primaryOpen, setPrimaryOpen] = useState(false);
   const [secondaryOpen, setSecondaryOpen] = useState(false);
   const [volumesOpen, setVolumesOpen] = useState(false);
+  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
   const [mountOpen, setMountOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -242,6 +245,10 @@ function ResourceActionsMenu({
           <DropdownMenuItem onSelect={() => setVolumesOpen(true)}>
             <Database className="h-4 w-4" />
             Volumes
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setSnapshotsOpen(true)}>
+            <Camera className="h-4 w-4" />
+            Snapshots
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setMountOpen(true)}>
             <FolderCog className="h-4 w-4" />
@@ -269,6 +276,11 @@ function ResourceActionsMenu({
         onOpenChange={setSecondaryOpen}
         resource={resource}
         mode="secondary"
+      />
+      <SnapshotsDialog
+        resource={resource.name}
+        open={snapshotsOpen}
+        onOpenChange={setSnapshotsOpen}
       />
       <VolumesDialog
         open={volumesOpen}
@@ -1047,8 +1059,19 @@ function CreateResourceDialog({
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [sizeGb, setSizeGb] = useState('10');
   const [pool, setPool] = useState('');
+  const [storageType, setStorageType] = useState('lvm');
 
   const noneValue = '__none__';
+
+  // Pool types as the backend reports them, per storage type.
+  const poolTypeFor: Record<string, string> = {
+    lvm: 'vg',
+    'lvm-thin': 'thin_pool',
+    zfs: 'zfs',
+  };
+  const matchingPools = pools.filter(
+    (p) => p.type === poolTypeFor[storageType],
+  );
 
   const reset = () => {
     setName('');
@@ -1057,6 +1080,7 @@ function CreateResourceDialog({
     setSelectedNodes([]);
     setSizeGb('10');
     setPool('');
+    setStorageType('lvm');
   };
 
   const createMutation = useMutation({
@@ -1067,6 +1091,7 @@ function CreateResourceDialog({
       protocol: string;
       sizeGb: number;
       pool?: string;
+      storageType?: string;
     }) => api.createResource(data),
     onSuccess: () => {
       toast.success(`Resource "${name}" created`);
@@ -1098,6 +1123,7 @@ function CreateResourceDialog({
       protocol,
       sizeGb: parseInt(sizeGb, 10),
       pool: pool || undefined,
+      storageType,
     });
   };
 
@@ -1204,17 +1230,39 @@ function CreateResourceDialog({
                 />
               </div>
               <div className="space-y-2">
+                <Label>Storage Type</Label>
+                <Select
+                  value={storageType}
+                  onValueChange={(v) => {
+                    setStorageType(v);
+                    setPool(''); // pools are type-specific
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lvm">LVM</SelectItem>
+                    <SelectItem value="lvm-thin">LVM Thin</SelectItem>
+                    <SelectItem value="zfs">ZFS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
                 <Label>Pool (optional)</Label>
                 <Select
                   value={pool || noneValue}
                   onValueChange={(v) => setPool(v === noneValue ? '' : v)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Auto-select" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={noneValue}>Auto-select</SelectItem>
-                    {pools.map((p) => (
+                    {matchingPools.map((p) => (
                       <SelectItem
                         key={`${p.node}-${p.name}`}
                         value={p.name}
