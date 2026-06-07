@@ -153,8 +153,11 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
 		fsType = DefaultFSType
 	}
 
-	// Prepare export path
-	exportsPath := filepath.Join(DefaultExportBasePath, req.Resource, req.ExportPath)
+	// Prepare export path (the directory clients mount)
+	exportsPath, err := resolveNFSExportPath(req.Resource, req.ExportPath)
+	if err != nil {
+		return "", err
+	}
 
 	// Generate UUID-based FSID (matches linstor-gateway)
 	// FSID is derived from resource UUID + volume UUID for uniqueness
@@ -317,7 +320,11 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		options = "rw,all_squash,anonuid=0,anongid=0"
 	}
 
-	newLine := buildNFSExportLine(exportID, normalizeNFSExportPath(resource, exportPath), strconv.Itoa(fsid), clientSpec, options)
+	resolvedPath, err := resolveNFSExportPath(resource, exportPath)
+	if err != nil {
+		return err
+	}
+	newLine := buildNFSExportLine(exportID, resolvedPath, strconv.Itoa(fsid), clientSpec, options)
 	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
 		return strings.Contains(line, "ocf:heartbeat:portblock") && strings.Contains(line, "action=unblock")
 	})
@@ -341,7 +348,10 @@ func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath s
 		return err
 	}
 
-	normalizedPath := normalizeNFSExportPath(resource, exportPath)
+	normalizedPath, err := resolveNFSExportPath(resource, exportPath)
+	if err != nil {
+		return err
+	}
 	lines, trailingNewline := splitConfigLines(content)
 	lines, removed := removeLine(lines, func(line string) bool {
 		params, ok := parseNFSExportLine(line)

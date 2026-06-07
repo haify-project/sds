@@ -337,13 +337,32 @@ func nextExportID(lines []string) int {
 	return maxID + 1
 }
 
-func normalizeNFSExportPath(resource, exportPath string) string {
+// resolveNFSExportPath turns the user-supplied export path into the
+// directory that is mounted and exported. An absolute path is honored
+// verbatim — when an admin asks for /srv/nfs-test, clients mount
+// <vip>:/srv/nfs-test, not a path nested under the gateway base directory.
+// Relative or empty paths land under DefaultExportBasePath/<resource> so
+// quick setups stay grouped and collision-free.
+func resolveNFSExportPath(resource, exportPath string) (string, error) {
 	exportPath = strings.TrimSpace(exportPath)
 	if exportPath == "" {
-		return filepath.Join(DefaultExportBasePath, resource)
+		return filepath.Join(DefaultExportBasePath, resource), nil
 	}
-	if strings.HasPrefix(exportPath, DefaultExportBasePath+string(os.PathSeparator)) {
-		return exportPath
+	if !strings.HasPrefix(exportPath, "/") {
+		return filepath.Join(DefaultExportBasePath, resource, exportPath), nil
 	}
-	return filepath.Join(DefaultExportBasePath, resource, strings.TrimPrefix(exportPath, "/"))
+
+	cleaned := filepath.Clean(exportPath)
+	if cleaned == "/" {
+		return "", fmt.Errorf("export path must not be the filesystem root")
+	}
+	// The export directory becomes a mount point owned by the gateway;
+	// refuse paths that would shadow system directories or SDS state.
+	forbidden := []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/proc", "/root", "/run", "/sbin", "/sys", "/usr", "/var/lib/sds"}
+	for _, prefix := range forbidden {
+		if cleaned == prefix || strings.HasPrefix(cleaned, prefix+"/") {
+			return "", fmt.Errorf("export path %s would shadow %s; choose a dedicated directory (e.g. /srv/...)", cleaned, prefix)
+		}
+	}
+	return cleaned, nil
 }

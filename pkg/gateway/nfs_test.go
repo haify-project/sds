@@ -253,7 +253,8 @@ func TestAddNFSExportUpdatesConfig(t *testing.T) {
 	exports, err := nfsManager.ListNFSExports(ctx, "resource")
 	require.NoError(t, err)
 	assert.NotEmpty(t, exports)
-	assert.True(t, strings.Contains(mockDeployment.Configs[gatewayConfigPath("sds-nfs-resource")], "directory=/srv/gateway-exports/resource/backup"))
+	// Absolute paths are honored verbatim under the new semantics.
+	assert.True(t, strings.Contains(mockDeployment.Configs[gatewayConfigPath("sds-nfs-resource")], "directory=/backup"))
 }
 
 func TestRemoveNFSExportUpdatesConfig(t *testing.T) {
@@ -361,9 +362,37 @@ func TestNFSExportPath(t *testing.T) {
 	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
-	// Export path should be under DefaultExportBasePath
-	assert.Contains(t, config, DefaultExportBasePath)
-	assert.Contains(t, config, req.Resource)
+	// An absolute export path is honored verbatim: the admin asked for
+	// /data, so clients mount <vip>:/data — not a path nested under the
+	// gateway base directory.
+	assert.Contains(t, config, "directory=/data ")
+	assert.NotContains(t, config, DefaultExportBasePath)
+}
+
+func TestResolveNFSExportPath(t *testing.T) {
+	// Empty defaults under the base path, grouped by resource.
+	got, err := resolveNFSExportPath("res1", "")
+	require.NoError(t, err)
+	assert.Equal(t, DefaultExportBasePath+"/res1", got)
+
+	// Relative paths are grouped under the base path too.
+	got, err = resolveNFSExportPath("res1", "exports/a")
+	require.NoError(t, err)
+	assert.Equal(t, DefaultExportBasePath+"/res1/exports/a", got)
+
+	// Absolute paths are honored verbatim (cleaned).
+	got, err = resolveNFSExportPath("res1", "/srv/nfs-test/")
+	require.NoError(t, err)
+	assert.Equal(t, "/srv/nfs-test", got)
+
+	// The root and system directories are refused: the export directory
+	// becomes a gateway-owned mount point.
+	_, err = resolveNFSExportPath("res1", "/")
+	assert.Error(t, err)
+	_, err = resolveNFSExportPath("res1", "/etc/exports")
+	assert.Error(t, err)
+	_, err = resolveNFSExportPath("res1", "/var/lib/sds/x")
+	assert.Error(t, err)
 }
 
 func TestNFSClusterPrivatePath(t *testing.T) {

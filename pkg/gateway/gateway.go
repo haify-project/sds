@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -107,6 +108,9 @@ type GatewayInfo struct {
 	Name     string
 	Type     string
 	Resource string
+	// State is "stopped" when the reactor config is disabled; empty means
+	// reactor-managed (live status comes from drbd-reactorctl).
+	State string
 }
 
 // ServiceIP represents a service IP with CIDR notation
@@ -140,10 +144,19 @@ func (m *Manager) ListGateways(ctx context.Context) ([]*GatewayInfo, error) {
 
 	var gateways []*GatewayInfo
 	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "sds-") && strings.HasSuffix(file.Name(), ".toml") {
+		name := file.Name()
+		// A stopped gateway keeps its config as .toml.disabled so reactor
+		// no longer manages it but the definition (and the VIP/port info
+		// deletion relies on) is preserved.
+		disabled := false
+		if strings.HasSuffix(name, ".toml.disabled") {
+			disabled = true
+			name = strings.TrimSuffix(name, ".disabled")
+		}
+		if strings.HasPrefix(name, "sds-") && strings.HasSuffix(name, ".toml") {
 			// Parse gateway type and name from filename
 			// Format: sds-<type>-<resource>.toml
-			parts := strings.TrimPrefix(file.Name(), "sds-")
+			parts := strings.TrimPrefix(name, "sds-")
 			parts = strings.TrimSuffix(parts, ".toml")
 			typeParts := strings.SplitN(parts, "-", 2)
 
@@ -153,11 +166,16 @@ func (m *Manager) ListGateways(ctx context.Context) ([]*GatewayInfo, error) {
 
 				// Only include storage gateway types
 				if storageTypes[gwType] {
+					state := ""
+					if disabled {
+						state = "stopped"
+					}
 					gateways = append(gateways, &GatewayInfo{
 						ID:       resource,
 						Name:     resource,
 						Type:     gwType,
 						Resource: resource,
+						State:    state,
 					})
 				}
 			}
@@ -186,20 +204,7 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 
 		// 2. Flush leftover portblock DROP rules BEFORE removing the configs
 		// (the config is the only place the VIP/port pair is recorded).
-		// The OCF portblock pair accumulates rules across reactor reloads
-		// and failed start loops, leaving the port silently firewalled even
-		// though every service shows green.
-		flushCmd := fmt.Sprintf(
-			"for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do "+
-				"test -f $f || continue; "+
-				"ip=$(grep -oE 'ip=[0-9.]+' $f | head -1 | cut -d= -f2); "+
-				"port=$(grep -oE 'portno=[0-9]+' $f | head -1 | cut -d= -f2); "+
-				"test -n \"$ip\" || continue; "+
-				"while sudo iptables -D INPUT -d $ip -p tcp -m multiport --dports $port -j DROP 2>/dev/null; do :; done; "+
-				"done; true", id, id, id)
-		if err := m.deployment.Exec(ctx, []string{host}, flushCmd); err != nil {
-			m.logger.Warn("Failed to flush leftover portblock rules", zap.String("host", host), zap.Error(err))
-		}
+		m.flushPortblockRules(ctx, []string{host}, id)
 
 		// 3. Delete reactor config files (all types: nfs, iscsi, nvmeof)
 		configFiles := []string{
@@ -210,7 +215,8 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 
 		for _, configFile := range configFiles {
 			configPath := filepath.Join(DrbdReactorConfigDir, configFile)
-			rmCmd := fmt.Sprintf("sudo rm -f %s", configPath)
+			// A stopped gateway keeps its config as .toml.disabled.
+			rmCmd := fmt.Sprintf("sudo rm -f %s %s.disabled", configPath, configPath)
 			if err := m.deployment.Exec(ctx, []string{host}, rmCmd); err != nil {
 				m.logger.Warn("Failed to remove config file", zap.String("host", host), zap.String("file", configPath), zap.Error(err))
 			}
@@ -502,16 +508,79 @@ func (m *Manager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeGatew
 	}, nil
 }
 
-// StartGateway starts a gateway
+// StartGateway starts a stopped gateway by re-enabling its reactor config
+// (.toml.disabled -> .toml) and reloading drbd-reactor, which then promotes
+// and starts the service chain on the best node.
 func (m *Manager) StartGateway(ctx context.Context, id string) error {
+	enableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
+  [ -f "$f.disabled" ] && mv "$f.disabled" "$f"
+done
+true`, id, id, id)
+	if err := m.runScript(ctx, m.hosts, enableScript); err != nil {
+		return fmt.Errorf("failed to re-enable gateway config: %w", err)
+	}
 	return m.reloadDrbdReactor(ctx)
 }
 
-// StopGateway stops a gateway
+// StopGateway stops a gateway. Simply stopping the systemd target is not
+// enough: drbd-reactor sees the resource may promote again and restarts the
+// whole chain within seconds. Mirroring `drbd-reactorctl disable`, the
+// reactor config is renamed to .toml.disabled first so reactor drops the
+// resource, then the target is stopped for real.
 func (m *Manager) StopGateway(ctx context.Context, id string) error {
+	disableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
+  [ -f "$f" ] && mv "$f" "$f.disabled"
+done
+true`, id, id, id)
+	if err := m.runScript(ctx, m.hosts, disableScript); err != nil {
+		return fmt.Errorf("failed to disable gateway config: %w", err)
+	}
+	if err := m.reloadDrbdReactor(ctx); err != nil {
+		return err
+	}
+
 	escapedID := strings.ReplaceAll(id, "-", "\\x2d")
 	stopCmd := fmt.Sprintf("systemctl stop drbd-services@%s.target 2>/dev/null || true", escapedID)
-	return m.deployment.Exec(ctx, m.hosts, stopCmd)
+	if err := m.deployment.Exec(ctx, m.hosts, stopCmd); err != nil {
+		return err
+	}
+	// With reactor management gone and the target down, any DROP rule left
+	// for the gateway's VIP/port is stale residue from reload/failure
+	// loops; flush it so a later start isn't silently firewalled.
+	m.flushPortblockRules(ctx, m.hosts, id)
+	return nil
+}
+
+// runScript executes a shell script on hosts. Dispatch wraps commands in
+// sh -c "..." (double quotes), so $variables are expanded by the OUTER
+// shell — i.e. silently emptied — before the script runs. Base64-encoding
+// the script makes it immune to that quoting chain.
+func (m *Manager) runScript(ctx context.Context, hosts []string, script string) error {
+	encoded := base64.StdEncoding.EncodeToString([]byte(script))
+	cmd := fmt.Sprintf("echo %s | base64 -d | sudo /bin/sh", encoded)
+	return m.deployment.Exec(ctx, hosts, cmd)
+}
+
+// flushPortblockRules removes accumulated portblock DROP rules for the
+// gateway's VIP/port on the given hosts. The OCF portblock/portunblock pair
+// is not symmetric across drbd-reactor reloads and failed start loops, so
+// rules pile up and leave a port firewalled while every service shows
+// healthy. The VIP/port pair is extracted from the gateway's reactor config,
+// which must therefore still exist when this is called. Best-effort: a flush
+// failure is logged, never fatal.
+func (m *Manager) flushPortblockRules(ctx context.Context, hosts []string, id string) {
+	script := fmt.Sprintf(`for b in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
+  f=$b; [ -f "$f" ] || f=$b.disabled; [ -f "$f" ] || continue
+  ip=$(grep -oE 'ip=[0-9.]+' "$f" | head -1 | cut -d= -f2)
+  port=$(grep -oE 'portno=[0-9]+' "$f" | head -1 | cut -d= -f2)
+  [ -n "$ip" ] && [ -n "$port" ] || continue
+  while iptables -D INPUT -d "$ip" -p tcp -m multiport --dports "$port" -j DROP 2>/dev/null; do :; done
+done
+true`, id, id, id)
+	if err := m.runScript(ctx, hosts, script); err != nil {
+		m.logger.Warn("Failed to flush leftover portblock rules",
+			zap.String("gateway", id), zap.Error(err))
+	}
 }
 
 // reloadDrbdReactor reloads drbd-reactor configuration

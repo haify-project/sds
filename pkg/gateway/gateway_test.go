@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -329,8 +330,39 @@ func TestManagerStopGateway(t *testing.T) {
 
 	err := manager.StopGateway(context.Background(), "test-resource")
 	require.NoError(t, err)
-	require.NotEmpty(t, mockDeployment.ExecCommands)
-	assert.Contains(t, mockDeployment.ExecCommands[0], "drbd-services@test\\x2dresource.target")
+	require.GreaterOrEqual(t, len(mockDeployment.ExecCommands), 3)
+	// Stop must disable the reactor config FIRST: a plain systemctl stop is
+	// undone within seconds because reactor re-promotes the resource. The
+	// script travels base64-encoded to survive dispatch's sh -c "..."
+	// quoting, which empties $variables.
+	decoded := decodeScriptCommand(t, mockDeployment.ExecCommands[0])
+	assert.Contains(t, decoded, `mv "$f" "$f.disabled"`)
+	assert.Contains(t, strings.Join(mockDeployment.ExecCommands, "\n"), "reload drbd-reactor")
+	assert.Contains(t, strings.Join(mockDeployment.ExecCommands, "\n"), "drbd-services@test\\x2dresource.target")
+}
+
+// decodeScriptCommand extracts and decodes the base64 payload from a
+// runScript-style command ("echo <b64> | base64 -d | sudo /bin/sh").
+func decodeScriptCommand(t *testing.T, cmd string) string {
+	t.Helper()
+	require.Contains(t, cmd, "base64 -d")
+	fields := strings.Fields(cmd)
+	require.GreaterOrEqual(t, len(fields), 2)
+	raw, err := base64.StdEncoding.DecodeString(fields[1])
+	require.NoError(t, err)
+	return string(raw)
+}
+
+func TestManagerStartGatewayReenablesConfig(t *testing.T) {
+	logger := zap.NewNop()
+	mockDeployment := &MockDeploymentClient{}
+	manager := New(nil, mockDeployment, logger, []string{"node1"})
+
+	err := manager.StartGateway(context.Background(), "test-resource")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(mockDeployment.ExecCommands), 2)
+	decoded := decodeScriptCommand(t, mockDeployment.ExecCommands[0])
+	assert.Contains(t, decoded, `mv "$f.disabled" "$f"`)
 }
 
 // ==================== Mock Implementations ====================
