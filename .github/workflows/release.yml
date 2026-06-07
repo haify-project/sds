@@ -47,12 +47,13 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-controller ./cmd/controller
           go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-cli ./cmd/cli
-          chmod +x dist/sds-controller dist/sds-cli
+          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-mcp ./cmd/mcp
+          chmod +x dist/sds-controller dist/sds-cli dist/sds-mcp
 
       - name: Create archive
         run: |
           cd dist
-          tar -czf sds-linux-amd64.tar.gz sds-controller sds-cli
+          tar -czf sds-linux-amd64.tar.gz sds-controller sds-cli sds-mcp
           sha256sum sds-linux-amd64.tar.gz > sds-linux-amd64.tar.gz.sha256
 
       - name: Release

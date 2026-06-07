@@ -46,6 +46,9 @@ graph TD
   - **NVMe-oF**: NVMe over Fabrics target management.
 - **Snapshots**:
   - Support for both LVM and ZFS snapshots.
+- **AI Integration (MCP)**:
+  - `sds-mcp` exposes all storage operations as Model Context Protocol tools
+    for AI assistants (Claude Code, Claude Desktop, and other MCP clients).
 
 ## Project Structure
 
@@ -53,13 +56,15 @@ graph TD
 sds/
 ├── cmd/
 │   ├── cli/              # Command line interface (sds-cli)
-│   └── controller/       # Controller service (sds-controller)
+│   ├── controller/       # Controller service (sds-controller)
+│   └── mcp/              # MCP server for AI assistants (sds-mcp)
 ├── pkg/
 │   ├── client/           # gRPC client library
 │   ├── controller/       # Core controller logic
 │   ├── database/         # BoltDB persistence layer
 │   ├── deployment/       # SSH execution engine (wraps dispatch)
 │   ├── gateway/          # Gateway (iSCSI/NFS/NVMe) managers
+│   ├── mcpserver/        # MCP tool definitions and handlers
 │   ├── config/           # Configuration parsing
 │   └── util/             # Utilities
 ├── api/proto/v1/         # gRPC Protocol Buffers definitions
@@ -180,6 +185,24 @@ sds-cli gateway nfs create \
     --service-ip 192.168.123.201/24 \
     --export-path /data/share
 ```
+
+### 5. AI Assistants (MCP)
+
+`sds-mcp` serves the full management surface (45 tools: pools, resources,
+snapshots, gateways, HA) over the Model Context Protocol on stdio. Destructive
+operations are annotated so MCP clients ask for confirmation, and `--read-only`
+restricts the server to list/status/health tools.
+
+```bash
+# Register with Claude Code
+claude mcp add sds -- sds-mcp --controller orange1:3374
+
+# Monitoring-only access
+claude mcp add sds-ro -- sds-mcp --controller orange1:3374 --read-only
+```
+
+The API token is resolved like sds-cli: `--token` flag, `SDS_TOKEN` env,
+`~/.sds/token`, then `/etc/sds/token`.
 
 ## License
 

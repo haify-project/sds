@@ -1,4 +1,4 @@
-.PHONY: build test clean install-controller install-cli run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure
+.PHONY: build test clean install-controller install-cli install-mcp run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure
 
 # Sync the freshly built web UI into ui/dist for go:embed. The directory is
 # gitignored and intentionally kept around after builds so plain `go build`
@@ -29,6 +29,8 @@ build: ui-sync
 	go build -o bin/sds-controller ./cmd/controller
 	@echo "Building sds-cli..."
 	go build -o bin/sds-cli ./cmd/cli
+	@echo "Building sds-mcp..."
+	go build -o bin/sds-mcp ./cmd/mcp
 
 # Run tests
 test: ui-ensure
@@ -55,6 +57,12 @@ install-cli: build
 	@echo "Installing sds-cli..."
 	sudo cp bin/sds-cli /usr/local/bin/
 	@echo "CLI installed to /usr/local/bin/sds-cli"
+
+# Install MCP server
+install-mcp: build
+	@echo "Installing sds-mcp..."
+	sudo cp bin/sds-mcp /usr/local/bin/
+	@echo "MCP server installed to /usr/local/bin/sds-mcp"
 
 # Run controller locally
 run-controller:
