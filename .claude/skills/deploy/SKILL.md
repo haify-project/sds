@@ -9,10 +9,21 @@ description: Guide for deploying and testing SDS in a local development and test
 
 ## 环境前提
 
-- **本地开发机**: 安装了 Go 1.22+, Make, Protoc。
+- **本地开发机**: 安装了 Go 1.24+, Make, Protoc。
 - **测试节点**: `orange1`, `orange2`, `orange3`。
 - **SSH 配置**: 本地到测试节点、以及测试节点之间（特别是 `orange1` 到其他节点）的 SSH 免密登录已配置完成。
 - **存储设备**: 所有节点上均已准备好闲置的 `/dev/sdb` 用于测试。
+
+## 控制器端口
+
+| 端口 | 用途 |
+|------|------|
+| 3374 | gRPC API（sds-cli） |
+| 3375 | REST API（gRPC-gateway，HTTP/JSON） |
+| 3376 | Web UI（内嵌 SPA） |
+| 9433 | Prometheus 指标 |
+
+**API 认证（可选）**: 在 `/etc/sds/controller.toml` 中设置 `[auth] enabled = true` 和 `token`（至少 16 字符）后，gRPC 和 REST 均需要 Bearer Token。sds-cli 按以下顺序解析 token：`--token` 参数 → `SDS_TOKEN` 环境变量 → `~/.sds/token` → `/etc/sds/token`。REST 请求需带 `Authorization: Bearer <token>` 头。
 
 ## 1. 构建与部署
 
@@ -24,38 +35,47 @@ description: Guide for deploying and testing SDS in a local development and test
 
 # 部署到所有测试节点
 ./scripts/deploy-all.sh orange1,orange2,orange3
+
+# 或者直接使用 deploy.sh（支持 --build / --cli-only）
+./scripts/deploy.sh --hosts orange1 --build
+./scripts/deploy.sh --hosts orange2,orange3 --cli-only
 ```
 
 该脚本会：
 
 1.  执行 `make build`。
-2.  调用 `deploy.sh` 将组件部署到指定主机。
-3.  在目标节点配置并启动 `sds-controller.service`。
+2.  调用 `deploy.sh` 将组件部署到指定主机（controller → `/opt/sds/bin/`，cli → `/usr/local/bin/`）。
+3.  在目标节点配置并启动 `sds-controller.service`，并自动启用 drbd-reactor 自动 reload。
 
 **验证节点状态：**
 
 ```bash
 ssh orange1 "sds-cli node list"
+ssh orange1 "sds-cli health-check"
 ```
 
 ## 2. 准备存储 (Pool)
 
-使用准备好的 `/dev/sdb` 创建存储池。
+使用准备好的 `/dev/sdb` 创建存储池。`--type` 支持：`lvm`、`lvm-thin`、`zfs`、`zfs-thin`。
 
-### 2.1 创建 LVM Pool (VG)
+### 2.1 创建 LVM Pool
 
 ```bash
-# 在各节点上为 /dev/sdb 创建名为 data-pool 的池
-ssh orange1 "sds-cli pool create --name data-pool --type vg --node orange1 --devices /dev/sdb"
-ssh orange1 "sds-cli pool create --name data-pool --type vg --node orange2 --devices /dev/sdb"
+# --nodes 支持逗号分隔的多个节点，一条命令即可
+ssh orange1 "sds-cli pool create --name data-pool --type lvm --nodes orange1,orange2 --devices /dev/sdb"
 ```
 
-### 2.2 创建 ZFS Pool
+### 2.2 创建 LVM Thin Pool
 
 ```bash
-# 在各节点上为 /dev/sdb 创建名为 tank 的 ZFS 池
-ssh orange1 "sds-cli storage pool create-zfs --name tank --node orange1 --devices /dev/sdb"
-ssh orange1 "sds-cli storage pool create-zfs --name tank --node orange2 --devices /dev/sdb"
+# --size 指定 VG 内 thin pool 的大小
+ssh orange1 "sds-cli pool create --name thin-pool --type lvm-thin --nodes orange1,orange2 --devices /dev/sdb --size 10G"
+```
+
+### 2.3 创建 ZFS Pool
+
+```bash
+ssh orange1 "sds-cli pool create --name tank --type zfs --nodes orange1,orange2 --devices /dev/sdb"
 ```
 
 ## 3. 测试资源创建 (Resource)
@@ -85,8 +105,66 @@ ssh orange1 "sds-cli resource create --name res-opt --port 7002 --size 1G --node
 ssh orange1 "sds-cli resource create --name res-zfs --port 7003 --size 1G --nodes orange1,orange2 --pool tank --storage-type zfs"
 ```
 
-## 4. 故障排查
+## 4. 快照测试 (Snapshot)
+
+快照按存储类型区分：LVM 使用 COW 快照（restore 通过 `lvconvert --merge`），ZFS 使用原生 snapshot/rollback。
+
+```bash
+# LVM 快照（--size 为 COW 空间预留）
+ssh orange1 "sds-cli resource snapshot create --resource res01 --name snap1 --node orange1 --pool data-pool --size 1G"
+ssh orange1 "sds-cli resource snapshot list --resource res01 --node orange1 --pool data-pool"
+ssh orange1 "sds-cli resource snapshot restore --resource res01 --name snap1 --node orange1 --pool data-pool"
+ssh orange1 "sds-cli resource snapshot delete --resource res01 --name snap1 --node orange1 --pool data-pool"
+
+# ZFS 快照：追加 --storage-type zfs --pool tank
+```
+
+## 5. 网关测试 (Gateway)
+
+```bash
+# 创建 NFS 网关（export 路径按传入值原样导出）
+ssh orange1 "sds-cli gateway nfs create --resource res01 --service-ip 192.168.123.51/24 --export-path /mnt/res01"
+
+# 网关生命周期管理
+ssh orange1 "sds-cli gateway status --resource res01"
+ssh orange1 "sds-cli gateway stop --resource res01"
+ssh orange1 "sds-cli gateway start --resource res01"
+ssh orange1 "sds-cli gateway delete --resource res01"
+```
+
+**注意**: iSCSI/NVMe-oF 网关配置包含 portblock OCF agent（在非活动节点上 DROP 网关端口流量）。创建/删除网关时会自动清理残留的 portblock 规则；若客户端连接异常，可用 `sudo iptables -L -n | grep <port>` 检查。
+
+## 6. 控制器自身 HA (可选)
+
+```bash
+# 启用：创建 sds-meta DRBD 资源存放数据库，控制器分发到所有节点并由 drbd-reactor 托管
+ssh orange1 "sds-cli ha self enable --vip 192.168.123.60/24 --pool data-pool"
+
+# 之后通过 VIP 访问
+ssh orange1 "sds-cli --controller 192.168.123.60:3374 ha self status"
+
+# 恢复单机模式
+ssh orange1 "sds-cli --controller 192.168.123.60:3374 ha self disable --node orange1"
+```
+
+## 7. REST API 与 Web UI
+
+```bash
+# REST API（端口 3375）
+curl -s http://orange1:3375/v1/pools | jq
+curl -s http://orange1:3375/v1/resources | jq
+
+# 启用认证后
+curl -s -H "Authorization: Bearer $(cat ~/.sds/token)" http://orange1:3375/v1/pools | jq
+
+# Web UI（端口 3376）
+# 浏览器访问 http://orange1:3376/
+```
+
+## 8. 故障排查
 
 - **控制器日志**: `ssh orange1 "journalctl -u sds-controller -f"`
-- **DRBD 状态**: `ssh orange1 "sudo drbdadm status"`
+- **节点健康检查**: `ssh orange1 "sds-cli health-check"`
+- **DRBD 状态**: `ssh orange1 "sds-cli resource status res01"`（优先于直接 `drbdadm status`）
 - **清理环境**: `ssh orange1 "sudo rm /etc/drbd.d/res*.res && sudo systemctl reload drbd-reactor"`
+- **残留 portblock 规则**: `ssh orange1 "sudo iptables -L -n | grep -E '3260|4420'"`
