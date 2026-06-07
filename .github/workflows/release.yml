@@ -20,6 +20,24 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-ui/package-lock.json
+
+      - name: Build web UI
+        working-directory: web-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Sync UI for embedding
+        run: |
+          rm -rf ui/dist
+          cp -r web-ui/dist ui/
+
       - name: Build binaries
         env:
           GOOS: linux
