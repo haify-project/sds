@@ -1118,7 +1118,12 @@ func (rm *ResourceManager) deleteBackingVolume(ctx context.Context, hosts []stri
 	if strings.HasPrefix(volume.Device, "/dev/zvol/") {
 		cmd = fmt.Sprintf("sudo zfs destroy %s/%s", volume.Pool, volume.VolumeName)
 	} else {
-		cmd = fmt.Sprintf("sudo lvremove -f %s/%s", volume.Pool, volume.VolumeName)
+		// The backing LV stays "open" while any DRBD minor still holds it,
+		// and by this point the resource config may already be gone, so
+		// drbdadm cannot help. drbdsetup operates on kernel state directly
+		// and is the reliable way to release the device before lvremove.
+		cmd = fmt.Sprintf("sudo lvremove -f %s/%s || { sudo drbdsetup down %s 2>/dev/null; sudo lvremove -f %s/%s; }",
+			volume.Pool, volume.VolumeName, volume.ResourceName, volume.Pool, volume.VolumeName)
 	}
 	result, err := rm.deployment.Exec(ctx, hosts, cmd)
 	if err != nil {

@@ -189,24 +189,21 @@ func (m *Manager) ListGateways(ctx context.Context) ([]*GatewayInfo, error) {
 func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 	m.logger.Info("Deleting gateway", zap.String("id", id))
 
-	// Stop drbd-reactor services and remove config on all nodes
+	// Take the gateway out of reactor management FIRST (same disable
+	// semantics as StopGateway). Stopping the target while the config is
+	// live races reactor restarting the chain — which is exactly how stale
+	// portblock rules survived deletion.
+	if err := m.StopGateway(ctx, id); err != nil {
+		m.logger.Warn("Failed to stop gateway before deletion", zap.String("id", id), zap.Error(err))
+	}
+
+	// Remove configs on all nodes
 	for _, host := range m.hosts {
-		m.logger.Info("Stopping gateway services on node",
+		m.logger.Info("Removing gateway config on node",
 			zap.String("node", host),
 			zap.String("gateway", id))
 
-		// 1. Stop drbd-reactor services for this gateway
-		escapedID := strings.ReplaceAll(id, "-", "\\x2d")
-		stopCmd := fmt.Sprintf("systemctl stop drbd-services@%s.target 2>/dev/null || true", escapedID)
-		if err := m.deployment.Exec(ctx, []string{host}, stopCmd); err != nil {
-			m.logger.Warn("Failed to stop gateway services", zap.String("host", host), zap.Error(err))
-		}
-
-		// 2. Flush leftover portblock DROP rules BEFORE removing the configs
-		// (the config is the only place the VIP/port pair is recorded).
-		m.flushPortblockRules(ctx, []string{host}, id)
-
-		// 3. Delete reactor config files (all types: nfs, iscsi, nvmeof)
+		// Delete reactor config files (all types: nfs, iscsi, nvmeof)
 		configFiles := []string{
 			fmt.Sprintf("sds-nfs-%s.toml", id),
 			fmt.Sprintf("sds-iscsi-%s.toml", id),
@@ -222,7 +219,7 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 			}
 		}
 
-		// 4. Reload drbd-reactor to pick up changes
+		// Reload drbd-reactor to pick up changes
 		if err := m.deployment.Exec(ctx, []string{host}, "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor"); err != nil {
 			m.logger.Warn("Failed to reload drbd-reactor", zap.String("host", host), zap.Error(err))
 		}
