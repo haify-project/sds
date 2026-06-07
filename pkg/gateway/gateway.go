@@ -301,6 +301,10 @@ func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource strin
 	if len(nodes) == 0 {
 		return fmt.Errorf("resource %s has no nodes", resource)
 	}
+	// A recreated gateway may inherit stale portblock DROP rules from a
+	// previous incarnation (or its failovers); flush them so the freshly
+	// started gateway is actually reachable.
+	m.flushPortblockRules(ctx, m.hosts, resource)
 	node := nodes[0]
 	if err := m.resources.SetPrimary(ctx, resource, node, false); err != nil {
 		return fmt.Errorf("failed to promote %s on %s: %w", resource, node, err)
