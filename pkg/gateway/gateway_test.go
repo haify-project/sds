@@ -360,8 +360,12 @@ func TestManagerStartGatewayReenablesConfig(t *testing.T) {
 
 	err := manager.StartGateway(context.Background(), "test-resource")
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(mockDeployment.ExecCommands), 2)
-	decoded := decodeScriptCommand(t, mockDeployment.ExecCommands[0])
+	require.GreaterOrEqual(t, len(mockDeployment.ExecCommands), 3)
+	// Command 0 flushes stale portblock rules (failback safety); command 1
+	// re-enables the config.
+	flushed := decodeScriptCommand(t, mockDeployment.ExecCommands[0])
+	assert.Contains(t, flushed, "iptables -D INPUT")
+	decoded := decodeScriptCommand(t, mockDeployment.ExecCommands[1])
 	assert.Contains(t, decoded, `mv "$f.disabled" "$f"`)
 }
 

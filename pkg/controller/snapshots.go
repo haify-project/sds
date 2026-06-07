@@ -42,14 +42,23 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotN
 	vg, lv := parseVolumePath(volume)
 	originPath := fmt.Sprintf("/dev/%s/%s", vg, lv)
 
-	// Create snapshot using lvcreate
-	cmd := fmt.Sprintf("sudo lvcreate -s -n %s %s", snapshotName, originPath)
+	// Create snapshot using lvcreate. Thick LVM snapshots require a COW
+	// size or they are rejected outright ("Please specify either size or
+	// extents"); 20% of the origin is a sane default for the
+	// backup-then-delete workflow this API serves. Callers needing exact
+	// sizing use the LVM-specific RPC, which takes an explicit size.
+	cmd := fmt.Sprintf("sudo lvcreate -s -l 20%%ORIGIN -n %s %s", snapshotName, originPath)
 	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %w", err)
 	}
 
 	if !result.AllSuccess() {
+		for host, hr := range result.Hosts {
+			if !hr.Success {
+				return fmt.Errorf("failed to create snapshot on %s: %s", host, strings.TrimSpace(hr.Output))
+			}
+		}
 		return fmt.Errorf("failed to create snapshot: %v", result.FailedHosts())
 	}
 

@@ -942,6 +942,17 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		return fmt.Errorf("resource adjust failed on hosts: %v", adjustResult.FailedHosts())
 	}
 
+	// A brand-new volume is Inconsistent on every node with no UpToDate
+	// peer to sync from, so DRBD refuses to open it ("Could not open")
+	// until an initial sync source exists. The volume is empty, so skip
+	// the pointless full sync the LINSTOR way: declare a new current UUID
+	// with a cleared bitmap on one node, which marks all replicas UpToDate.
+	skipSyncCmd := fmt.Sprintf("sudo drbdadm new-current-uuid --clear-bitmap %s/%d", resource, newVolNum)
+	if err := rm.execAllSuccess(ctx, []string{hosts[0]}, skipSyncCmd,
+		"failed to initialize new volume sync state"); err != nil {
+		return err
+	}
+
 	rm.controller.logger.Info("Volume added successfully",
 		zap.String("resource", resource),
 		zap.String("volume", volume))

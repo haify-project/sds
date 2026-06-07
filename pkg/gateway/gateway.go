@@ -509,6 +509,12 @@ func (m *Manager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeGatew
 // (.toml.disabled -> .toml) and reloading drbd-reactor, which then promotes
 // and starts the service chain on the best node.
 func (m *Manager) StartGateway(ctx context.Context, id string) error {
+	// Flush stale portblock DROP rules first (config still readable as
+	// .disabled). The OCF portunblock agent's stop action deliberately
+	// re-blocks the port, so every failover leaves one rule behind on the
+	// old node — and a later failback finds the port silently firewalled.
+	m.flushPortblockRules(ctx, m.hosts, id)
+
 	enableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
   [ -f "$f.disabled" ] && mv "$f.disabled" "$f"
 done
