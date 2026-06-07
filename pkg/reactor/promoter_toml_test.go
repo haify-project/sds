@@ -157,18 +157,18 @@ func TestGenerateGenericPromoterConfig(t *testing.T) {
 	units := []string{"postgresql.service", "nginx.service"}
 	ocfResources := []map[string]string{
 		{
-			"provider": "heartbeat",
-			"agent":    "Filesystem",
-			"name":     "fs_data",
-			"device":   "/dev/drbd0",
+			"provider":  "heartbeat",
+			"agent":     "Filesystem",
+			"name":      "fs_data",
+			"device":    "/dev/drbd0",
 			"directory": "/mnt/data",
-			"fstype":   "ext4",
+			"fstype":    "ext4",
 		},
 		{
-			"provider": "heartbeat",
-			"agent":    "IPaddr2",
-			"name":     "vip",
-			"ip":       "192.168.1.100",
+			"provider":     "heartbeat",
+			"agent":        "IPaddr2",
+			"name":         "vip",
+			"ip":           "192.168.1.100",
 			"cidr_netmask": "24",
 		},
 	}

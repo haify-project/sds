@@ -10137,7 +10137,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\vmount_point\x18\x03 \x01(\tR\n" +
 	"mountPoint\x12\x17\n" +
 	"\afs_type\x18\x04 \x01(\tR\x06fsType\x12\x1a\n" +
-	"\bservices\x18\x05 \x03(\tR\bservices2\xf5B\n" +
+	"\bservices\x18\x05 \x03(\tR\bservices2\xbeE\n" +
 	"\rSDSController\x12Q\n" +
 	"\n" +
 	"CreatePool\x12\x15.v1.CreatePoolRequest\x1a\x16.v1.CreatePoolResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/pools\x12U\n" +
@@ -10208,14 +10208,14 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\rDeleteZFSPool\x12\x18.v1.DeleteZFSPoolRequest\x1a\x19.v1.DeleteZFSPoolResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/v1/zfs/pools/{name}\x12A\n" +
 	"\fListZFSpools\x12\x17.v1.ListZFSPoolsRequest\x1a\x18.v1.ListZFSPoolsResponse\x12j\n" +
 	"\x10CreateZFSDataset\x12\x1b.v1.CreateZFSDatasetRequest\x1a\x1c.v1.CreateZFSDatasetResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/zfs/datasets\x12f\n" +
-	"\x0fCreateZFSVolume\x12\x1a.v1.CreateZFSVolumeRequest\x1a\x1b.v1.CreateZFSVolumeResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/zfs/volumes\x12t\n" +
-	"\x0fResizeZFSVolume\x12\x1a.v1.ResizeZFSVolumeRequest\x1a\x1b.v1.ResizeZFSVolumeResponse\"(\x82\xd3\xe4\x93\x02\":\x01*2\x1d/v1/zfs/volumes/{volume_path}\x12v\n" +
-	"\x10DeleteZFSDataset\x12\x1b.v1.DeleteZFSDatasetRequest\x1a\x1c.v1.DeleteZFSDatasetResponse\"'\x82\xd3\xe4\x93\x02!*\x1f/v1/zfs/datasets/{dataset_path}\x12\x81\x01\n" +
-	"\x11CreateZFSSnapshot\x12\x1c.v1.CreateZFSSnapshotRequest\x1a\x1d.v1.CreateZFSSnapshotResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/v1/zfs/datasets/{dataset}/snapshots\x12v\n" +
-	"\x11DeleteZFSSnapshot\x12\x1c.v1.DeleteZFSSnapshotRequest\x1a\x1d.v1.DeleteZFSSnapshotResponse\"$\x82\xd3\xe4\x93\x02\x1e*\x1c/v1/zfs/snapshots/{snapshot}\x12{\n" +
-	"\x10ListZFSSnapshots\x12\x1b.v1.ListZFSSnapshotsRequest\x1a\x1c.v1.ListZFSSnapshotsResponse\",\x82\xd3\xe4\x93\x02&\x12$/v1/zfs/datasets/{dataset}/snapshots\x12\x9c\x01\n" +
-	"\x12RestoreZFSSnapshot\x12\x1d.v1.RestoreZFSSnapshotRequest\x1a\x1e.v1.RestoreZFSSnapshotResponse\"G\x82\xd3\xe4\x93\x02A:\x01*\"</v1/zfs/datasets/{dataset}/snapshots/{snapshot_name}/restore\x12|\n" +
-	"\x10CloneZFSSnapshot\x12\x1b.v1.CloneZFSSnapshotRequest\x1a\x1c.v1.CloneZFSSnapshotResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/zfs/snapshots/{snapshot}/clone\x12\x80\x01\n" +
+	"\x0fCreateZFSVolume\x12\x1a.v1.CreateZFSVolumeRequest\x1a\x1b.v1.CreateZFSVolumeResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/zfs/volumes\x12\x9c\x01\n" +
+	"\x0fResizeZFSVolume\x12\x1a.v1.ResizeZFSVolumeRequest\x1a\x1b.v1.ResizeZFSVolumeResponse\"P\x82\xd3\xe4\x93\x02J:\x01*Z\":\x01*2\x1d/v1/zfs/volumes/{volume_path}2!/v1/zfs/volumes/{volume_path=*/*}\x12\x9d\x01\n" +
+	"\x10DeleteZFSDataset\x12\x1b.v1.DeleteZFSDatasetRequest\x1a\x1c.v1.DeleteZFSDatasetResponse\"N\x82\xd3\xe4\x93\x02HZ!*\x1f/v1/zfs/datasets/{dataset_path}*#/v1/zfs/datasets/{dataset_path=*/*}\x12\xb0\x01\n" +
+	"\x11CreateZFSSnapshot\x12\x1c.v1.CreateZFSSnapshotRequest\x1a\x1d.v1.CreateZFSSnapshotResponse\"^\x82\xd3\xe4\x93\x02X:\x01*Z):\x01*\"$/v1/zfs/datasets/{dataset}/snapshots\"(/v1/zfs/datasets/{dataset=*/*}/snapshots\x12\x9a\x01\n" +
+	"\x11DeleteZFSSnapshot\x12\x1c.v1.DeleteZFSSnapshotRequest\x1a\x1d.v1.DeleteZFSSnapshotResponse\"H\x82\xd3\xe4\x93\x02BZ\x1e*\x1c/v1/zfs/snapshots/{snapshot}* /v1/zfs/snapshots/{snapshot=*/*}\x12\xa7\x01\n" +
+	"\x10ListZFSSnapshots\x12\x1b.v1.ListZFSSnapshotsRequest\x1a\x1c.v1.ListZFSSnapshotsResponse\"X\x82\xd3\xe4\x93\x02RZ&\x12$/v1/zfs/datasets/{dataset}/snapshots\x12(/v1/zfs/datasets/{dataset=*/*}/snapshots\x12\xe5\x01\n" +
+	"\x12RestoreZFSSnapshot\x12\x1d.v1.RestoreZFSSnapshotRequest\x1a\x1e.v1.RestoreZFSSnapshotResponse\"\x8f\x01\x82\xd3\xe4\x93\x02\x88\x01:\x01*ZA:\x01*\"</v1/zfs/datasets/{dataset}/snapshots/{snapshot_name}/restore\"@/v1/zfs/datasets/{dataset=*/*}/snapshots/{snapshot_name}/restore\x12\xa9\x01\n" +
+	"\x10CloneZFSSnapshot\x12\x1b.v1.CloneZFSSnapshotRequest\x1a\x1c.v1.CloneZFSSnapshotResponse\"Z\x82\xd3\xe4\x93\x02T:\x01*Z':\x01*\"\"/v1/zfs/snapshots/{snapshot}/clone\"&/v1/zfs/snapshots/{snapshot=*/*}/clone\x12\x80\x01\n" +
 	"\x11CreateLvmSnapshot\x12\x1c.v1.CreateLvmSnapshotRequest\x1a\x1d.v1.CreateLvmSnapshotResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/v1/lvm/volumes/{lv_name}/snapshots\x12\x8d\x01\n" +
 	"\x11DeleteLvmSnapshot\x12\x1c.v1.DeleteLvmSnapshotRequest\x1a\x1d.v1.DeleteLvmSnapshotResponse\";\x82\xd3\xe4\x93\x025*3/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}\x12z\n" +
 	"\x10ListLvmSnapshots\x12\x1b.v1.ListLvmSnapshotsRequest\x1a\x1c.v1.ListLvmSnapshotsResponse\"+\x82\xd3\xe4\x93\x02%\x12#/v1/lvm/volumes/{lv_name}/snapshots\x12\x9b\x01\n" +

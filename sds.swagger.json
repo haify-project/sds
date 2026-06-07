@@ -2339,6 +2339,42 @@
         ]
       }
     },
+    "/v1/zfs/datasets/{datasetPath_1}": {
+      "delete": {
+        "operationId": "SDSController_DeleteZFSDataset2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteZFSDatasetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "datasetPath_1",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/zfs/datasets/{datasetPath}": {
       "delete": {
         "operationId": "SDSController_DeleteZFSDataset",
@@ -2361,6 +2397,43 @@
             "name": "datasetPath",
             "in": "path",
             "required": true,
+            "type": "string",
+            "pattern": "[^/]+/[^/]+"
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/zfs/datasets/{dataset_1}/snapshots": {
+      "get": {
+        "operationId": "SDSController_ListZFSSnapshots2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListZFSSnapshotsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "dataset_1",
+            "in": "path",
+            "required": true,
             "type": "string"
           },
           {
@@ -2368,6 +2441,87 @@
             "in": "query",
             "required": false,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "summary": "ZFS Snapshot operations\nZFS snapshot identifiers are \"\u003cpool\u003e/\u003cdataset\u003e\" (and\n\"\u003cpool\u003e/\u003cdataset\u003e@\u003csnap\u003e\") paths; single-segment {param} patterns never\nmatch values containing '/', so two-segment bindings come first.\nDeeply nested datasets (pool/a/b) are not reachable over REST.",
+        "operationId": "SDSController_CreateZFSSnapshot2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateZFSSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "dataset_1",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerCreateZFSSnapshotBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/zfs/datasets/{dataset_1}/snapshots/{snapshotName}/restore": {
+      "post": {
+        "operationId": "SDSController_RestoreZFSSnapshot2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RestoreZFSSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "dataset_1",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "snapshotName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRestoreZFSSnapshotBody"
+            }
           }
         ],
         "tags": [
@@ -2397,7 +2551,8 @@
             "name": "dataset",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "pattern": "[^/]+/[^/]+"
           },
           {
             "name": "node",
@@ -2411,7 +2566,7 @@
         ]
       },
       "post": {
-        "summary": "ZFS Snapshot operations",
+        "summary": "ZFS Snapshot operations\nZFS snapshot identifiers are \"\u003cpool\u003e/\u003cdataset\u003e\" (and\n\"\u003cpool\u003e/\u003cdataset\u003e@\u003csnap\u003e\") paths; single-segment {param} patterns never\nmatch values containing '/', so two-segment bindings come first.\nDeeply nested datasets (pool/a/b) are not reachable over REST.",
         "operationId": "SDSController_CreateZFSSnapshot",
         "responses": {
           "200": {
@@ -2432,7 +2587,8 @@
             "name": "dataset",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "pattern": "[^/]+/[^/]+"
           },
           {
             "name": "body",
@@ -2470,7 +2626,8 @@
             "name": "dataset",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "pattern": "[^/]+/[^/]+"
           },
           {
             "name": "snapshotName",
@@ -2561,6 +2718,80 @@
         ]
       }
     },
+    "/v1/zfs/snapshots/{snapshot_1}": {
+      "delete": {
+        "operationId": "SDSController_DeleteZFSSnapshot2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteZFSSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "snapshot_1",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/zfs/snapshots/{snapshot_1}/clone": {
+      "post": {
+        "operationId": "SDSController_CloneZFSSnapshot2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CloneZFSSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "snapshot_1",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerCloneZFSSnapshotBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/zfs/snapshots/{snapshot}": {
       "delete": {
         "operationId": "SDSController_DeleteZFSSnapshot",
@@ -2583,7 +2814,8 @@
             "name": "snapshot",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "pattern": "[^/]+/[^/]+"
           },
           {
             "name": "node",
@@ -2619,7 +2851,8 @@
             "name": "snapshot",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "pattern": "[^/]+/[^/]+"
           },
           {
             "name": "body",
@@ -2667,6 +2900,44 @@
         ]
       }
     },
+    "/v1/zfs/volumes/{volumePath_1}": {
+      "patch": {
+        "operationId": "SDSController_ResizeZFSVolume2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ResizeZFSVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumePath_1",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerResizeZFSVolumeBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/zfs/volumes/{volumePath}": {
       "patch": {
         "operationId": "SDSController_ResizeZFSVolume",
@@ -2689,7 +2960,8 @@
             "name": "volumePath",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "pattern": "[^/]+/[^/]+"
           },
           {
             "name": "body",

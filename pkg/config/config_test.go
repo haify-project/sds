@@ -179,8 +179,8 @@ port = 8080
 
 func TestConfigValidate(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  *Config
+		name     string
+		config   *Config
 		hasError bool
 	}{
 		{
@@ -188,7 +188,7 @@ func TestConfigValidate(t *testing.T) {
 			config: &Config{
 				Server: ServerConfig{
 					ListenAddress: "0.0.0.0",
-					Port:         3374,
+					Port:          3374,
 				},
 			},
 			hasError: false,

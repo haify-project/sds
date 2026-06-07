@@ -177,10 +177,10 @@ func TestOptions(t *testing.T) {
 
 // MockClient for testing controller package
 type MockClient struct {
-	ExecFunc            func(ctx context.Context, hosts []string, cmd string) (*ExecResult, error)
+	ExecFunc             func(ctx context.Context, hosts []string, cmd string) (*ExecResult, error)
 	DistributeConfigFunc func(ctx context.Context, hosts []string, content, path string, opts ...ConfigOption) (*ConfigResult, error)
-	DRBDPrimaryFunc     func(ctx context.Context, host, resource string, force bool) (*HostResult, error)
-	DRBDStatusFunc      func(ctx context.Context, hosts []string, resource string) (*ExecResult, error)
+	DRBDPrimaryFunc      func(ctx context.Context, host, resource string, force bool) (*HostResult, error)
+	DRBDStatusFunc       func(ctx context.Context, hosts []string, resource string) (*ExecResult, error)
 }
 
 func (m *MockClient) Exec(ctx context.Context, hosts []string, cmd string) (*ExecResult, error) {

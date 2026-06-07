@@ -168,7 +168,7 @@ func TestValidateWithCustomValues(t *testing.T) {
 	cfg := &Config{
 		Server: ServerConfig{
 			ListenAddress: "127.0.0.1",
-			Port:         9999,
+			Port:          9999,
 		},
 		Log: LogConfig{
 			Level:  "debug",
@@ -192,7 +192,7 @@ func TestConfigSaveWithAllSections(t *testing.T) {
 	cfg := &Config{
 		Server: ServerConfig{
 			ListenAddress: "0.0.0.0",
-			Port:         3374,
+			Port:          3374,
 		},
 		Database: DatabaseConfig{
 			Path: "/var/lib/sds/sds.db",

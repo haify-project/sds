@@ -231,27 +231,52 @@ service SDSController {
     option (google.api.http) = { post: "/v1/zfs/volumes"; body: "*"; };
   }
   rpc ResizeZFSVolume(ResizeZFSVolumeRequest) returns (ResizeZFSVolumeResponse) {
-    option (google.api.http) = { patch: "/v1/zfs/volumes/{volume_path}"; body: "*"; };
+    option (google.api.http) = {
+      patch: "/v1/zfs/volumes/{volume_path=*/*}"; body: "*";
+      additional_bindings { patch: "/v1/zfs/volumes/{volume_path}"; body: "*"; }
+    };
   }
   rpc DeleteZFSDataset(DeleteZFSDatasetRequest) returns (DeleteZFSDatasetResponse) {
-    option (google.api.http) = { delete: "/v1/zfs/datasets/{dataset_path}"; };
+    option (google.api.http) = {
+      delete: "/v1/zfs/datasets/{dataset_path=*/*}";
+      additional_bindings { delete: "/v1/zfs/datasets/{dataset_path}"; }
+    };
   }
 
   // ZFS Snapshot operations
+  // ZFS snapshot identifiers are "<pool>/<dataset>" (and
+  // "<pool>/<dataset>@<snap>") paths; single-segment {param} patterns never
+  // match values containing '/', so two-segment bindings come first.
+  // Deeply nested datasets (pool/a/b) are not reachable over REST.
   rpc CreateZFSSnapshot(CreateZFSSnapshotRequest) returns (CreateZFSSnapshotResponse) {
-    option (google.api.http) = { post: "/v1/zfs/datasets/{dataset}/snapshots"; body: "*"; };
+    option (google.api.http) = {
+      post: "/v1/zfs/datasets/{dataset=*/*}/snapshots"; body: "*";
+      additional_bindings { post: "/v1/zfs/datasets/{dataset}/snapshots"; body: "*"; }
+    };
   }
   rpc DeleteZFSSnapshot(DeleteZFSSnapshotRequest) returns (DeleteZFSSnapshotResponse) {
-    option (google.api.http) = { delete: "/v1/zfs/snapshots/{snapshot}"; };
+    option (google.api.http) = {
+      delete: "/v1/zfs/snapshots/{snapshot=*/*}";
+      additional_bindings { delete: "/v1/zfs/snapshots/{snapshot}"; }
+    };
   }
   rpc ListZFSSnapshots(ListZFSSnapshotsRequest) returns (ListZFSSnapshotsResponse) {
-    option (google.api.http) = { get: "/v1/zfs/datasets/{dataset}/snapshots"; };
+    option (google.api.http) = {
+      get: "/v1/zfs/datasets/{dataset=*/*}/snapshots";
+      additional_bindings { get: "/v1/zfs/datasets/{dataset}/snapshots"; }
+    };
   }
   rpc RestoreZFSSnapshot(RestoreZFSSnapshotRequest) returns (RestoreZFSSnapshotResponse) {
-    option (google.api.http) = { post: "/v1/zfs/datasets/{dataset}/snapshots/{snapshot_name}/restore"; body: "*"; };
+    option (google.api.http) = {
+      post: "/v1/zfs/datasets/{dataset=*/*}/snapshots/{snapshot_name}/restore"; body: "*";
+      additional_bindings { post: "/v1/zfs/datasets/{dataset}/snapshots/{snapshot_name}/restore"; body: "*"; }
+    };
   }
   rpc CloneZFSSnapshot(CloneZFSSnapshotRequest) returns (CloneZFSSnapshotResponse) {
-    option (google.api.http) = { post: "/v1/zfs/snapshots/{snapshot}/clone"; body: "*"; };
+    option (google.api.http) = {
+      post: "/v1/zfs/snapshots/{snapshot=*/*}/clone"; body: "*";
+      additional_bindings { post: "/v1/zfs/snapshots/{snapshot}/clone"; body: "*"; }
+    };
   }
 
   // LVM Snapshot operations

@@ -458,7 +458,10 @@ func (c *Client) ZFSCreateThinDataset(ctx context.Context, hosts []string, poolN
 
 // ZFSDestroyDataset destroys a ZFS dataset
 func (c *Client) ZFSDestroyDataset(ctx context.Context, hosts []string, datasetName string) (*ExecResult, error) {
-	cmd := fmt.Sprintf("sudo zfs destroy -f %s", datasetName)
+	// -r removes dependent snapshots too: a dataset delete through the
+	// management API is an explicit teardown, and without -r any dataset
+	// that was ever snapshotted becomes undeletable ("has children").
+	cmd := fmt.Sprintf("sudo zfs destroy -r -f %s", datasetName)
 	return c.Exec(ctx, hosts, cmd)
 }
 
@@ -514,13 +517,18 @@ func (c *Client) ZFSResizeVolume(ctx context.Context, hosts []string, volumePath
 
 // PVCreate creates physical volumes
 func (c *Client) PVCreate(ctx context.Context, hosts []string, device string, opts ...LVMOption) (*ExecResult, error) {
-	cmd := fmt.Sprintf("sudo pvcreate %s", device)
+	// Idempotent: a device that is already a PV (e.g. from a partially
+	// completed earlier pool creation) is left alone instead of failing
+	// the whole retry with "Can't initialize ... without -ff".
+	cmd := fmt.Sprintf("sudo pvs %s >/dev/null 2>&1 || sudo pvcreate -y %s", device, device)
 	return c.Exec(ctx, hosts, cmd)
 }
 
 // VGCreate creates volume groups
 func (c *Client) VGCreate(ctx context.Context, hosts []string, vgName string, devices []string) (*ExecResult, error) {
-	cmd := fmt.Sprintf("sudo vgcreate %s %s", vgName, strings.Join(devices, " "))
+	// Idempotent for retries: an existing VG with the target name is the
+	// successful outcome of a previous attempt, not an error.
+	cmd := fmt.Sprintf("sudo vgs %s >/dev/null 2>&1 || sudo vgcreate %s %s", vgName, vgName, strings.Join(devices, " "))
 	return c.Exec(ctx, hosts, cmd)
 }
 
@@ -532,8 +540,14 @@ func (c *Client) LVCreate(ctx context.Context, hosts []string, vgName, lvName, s
 
 // LVCreateThinPool creates a thin pool logical volume
 func (c *Client) LVCreateThinPool(ctx context.Context, hosts []string, vgName, poolName, size string) (*ExecResult, error) {
-	// lvcreate -L <size> -T <vg>/<pool>
-	cmd := fmt.Sprintf("sudo lvcreate -y -L %s -T %s/%s", size, vgName, poolName)
+	// lvcreate only accepts absolute sizes with -L; percentage sizes like
+	// "95%FREE" need the extents flag -l, otherwise creation fails with
+	// "Invalid argument for --size".
+	sizeFlag := "-L"
+	if strings.Contains(size, "%") {
+		sizeFlag = "-l"
+	}
+	cmd := fmt.Sprintf("sudo lvcreate -y %s %s -T %s/%s", sizeFlag, size, vgName, poolName)
 	return c.Exec(ctx, hosts, cmd)
 }
 

@@ -181,7 +181,7 @@ func TestSizeToGiBStringEdgeCases(t *testing.T) {
 		{"1TB", 931, false}, // 1TB = 10^12 bytes / 1024^3 ≈ 931 GiB
 		{"1000MiB", 0, false},
 		{"1024MiB", 1, false},
-		{"10GB", 9, false},  // 10GB is about 9.3 GiB
+		{"10GB", 9, false}, // 10GB is about 9.3 GiB
 		{"invalid", 0, true},
 		{"", 0, true},
 		{"-1GiB", 0, true},

@@ -136,10 +136,10 @@ func TestFormatBytes(t *testing.T) {
 		{1024 * 1024, "1.00 MiB"},
 		{1024 * 1024 * 1024, "1.00 GiB"},
 		{1024 * 1024 * 1024 * 1024, "1.00 TiB"},
-		{1536, "1.50 KiB"},                    // 1.5 KiB
-		{2 * 1024 * 1024, "2.00 MiB"},         // 2 MiB
-		{3 * 1024 * 1024 * 1024, "3.00 GiB"},  // 3 GiB
-		{500 * 1024 * 1024, "500.00 MiB"},     // 500 MiB
+		{1536, "1.50 KiB"},                   // 1.5 KiB
+		{2 * 1024 * 1024, "2.00 MiB"},        // 2 MiB
+		{3 * 1024 * 1024 * 1024, "3.00 GiB"}, // 3 GiB
+		{500 * 1024 * 1024, "500.00 MiB"},    // 500 MiB
 	}
 
 	for _, tt := range tests {
@@ -182,7 +182,7 @@ func TestSizeToGiBString(t *testing.T) {
 	}{
 		{"1GiB", 1, false},
 		{"10GiB", 10, false},
-		{"1GB", 0, false},  // 1GB < 1GiB
+		{"1GB", 0, false}, // 1GB < 1GiB
 		{"1024MiB", 1, false},
 		{"1TiB", 1024, false},
 		{"invalid", 0, true},

@@ -667,7 +667,11 @@ func (sm *StorageManager) ZFSDeleteDataset(ctx context.Context, datasetPath, nod
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to delete ZFS dataset: %v", result.FailedHosts())
+		for host, hr := range result.Hosts {
+			if !hr.Success {
+				return fmt.Errorf("failed to delete ZFS dataset on %s: %s", host, strings.TrimSpace(hr.Output+hr.Error.Error()))
+			}
+		}
 	}
 
 	return nil
@@ -785,7 +789,11 @@ func (sm *StorageManager) ZFSDeleteSnapshot(ctx context.Context, snapshot, node 
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to delete ZFS snapshot: %v", result.FailedHosts())
+		for host, hr := range result.Hosts {
+			if !hr.Success {
+				return fmt.Errorf("failed to delete ZFS snapshot on %s: %s", host, strings.TrimSpace(hr.Output+hr.Error.Error()))
+			}
+		}
 	}
 
 	return nil

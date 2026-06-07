@@ -182,6 +182,10 @@ type SDSControllerClient interface {
 	ResizeZFSVolume(ctx context.Context, in *ResizeZFSVolumeRequest, opts ...grpc.CallOption) (*ResizeZFSVolumeResponse, error)
 	DeleteZFSDataset(ctx context.Context, in *DeleteZFSDatasetRequest, opts ...grpc.CallOption) (*DeleteZFSDatasetResponse, error)
 	// ZFS Snapshot operations
+	// ZFS snapshot identifiers are "<pool>/<dataset>" (and
+	// "<pool>/<dataset>@<snap>") paths; single-segment {param} patterns never
+	// match values containing '/', so two-segment bindings come first.
+	// Deeply nested datasets (pool/a/b) are not reachable over REST.
 	CreateZFSSnapshot(ctx context.Context, in *CreateZFSSnapshotRequest, opts ...grpc.CallOption) (*CreateZFSSnapshotResponse, error)
 	DeleteZFSSnapshot(ctx context.Context, in *DeleteZFSSnapshotRequest, opts ...grpc.CallOption) (*DeleteZFSSnapshotResponse, error)
 	ListZFSSnapshots(ctx context.Context, in *ListZFSSnapshotsRequest, opts ...grpc.CallOption) (*ListZFSSnapshotsResponse, error)
@@ -1047,6 +1051,10 @@ type SDSControllerServer interface {
 	ResizeZFSVolume(context.Context, *ResizeZFSVolumeRequest) (*ResizeZFSVolumeResponse, error)
 	DeleteZFSDataset(context.Context, *DeleteZFSDatasetRequest) (*DeleteZFSDatasetResponse, error)
 	// ZFS Snapshot operations
+	// ZFS snapshot identifiers are "<pool>/<dataset>" (and
+	// "<pool>/<dataset>@<snap>") paths; single-segment {param} patterns never
+	// match values containing '/', so two-segment bindings come first.
+	// Deeply nested datasets (pool/a/b) are not reachable over REST.
 	CreateZFSSnapshot(context.Context, *CreateZFSSnapshotRequest) (*CreateZFSSnapshotResponse, error)
 	DeleteZFSSnapshot(context.Context, *DeleteZFSSnapshotRequest) (*DeleteZFSSnapshotResponse, error)
 	ListZFSSnapshots(context.Context, *ListZFSSnapshotsRequest) (*ListZFSSnapshotsResponse, error)
