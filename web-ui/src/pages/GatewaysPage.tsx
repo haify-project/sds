@@ -686,14 +686,16 @@ function DetailsDialog({
         <DialogHeader>
           <DialogTitle>Gateway Details</DialogTitle>
         </DialogHeader>
-        <div className="space-y-1 text-sm">
+        <div className="max-h-[70vh] space-y-1 overflow-y-auto text-sm">
           {rows.map(([label, value]) => (
             <div
               key={label}
-              className="flex justify-between border-b py-2 last:border-0"
+              className="flex items-start justify-between gap-4 border-b py-2 last:border-0"
             >
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium">{value || '-'}</span>
+              <span className="shrink-0 text-muted-foreground">{label}</span>
+              <span className="min-w-0 break-words text-right font-medium">
+                {value || '-'}
+              </span>
             </div>
           ))}
           {gateway?.options && Object.keys(gateway.options).length > 0 && (
@@ -705,10 +707,12 @@ function DetailsDialog({
                 {Object.entries(gateway.options).map(([k, v]) => (
                   <div
                     key={k}
-                    className="flex justify-between rounded bg-muted px-2 py-1 text-xs"
+                    className="flex items-start justify-between gap-4 rounded bg-muted px-2 py-1 text-xs"
                   >
-                    <span className="text-muted-foreground">{k}</span>
-                    <span className="font-mono">{String(v)}</span>
+                    <span className="shrink-0 text-muted-foreground">{k}</span>
+                    <span className="min-w-0 break-all text-right font-mono">
+                      {String(v)}
+                    </span>
                   </div>
                 ))}
               </div>
