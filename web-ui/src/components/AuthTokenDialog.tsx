@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import { getApiToken, setApiToken, setAuthPromptHandler } from '@/services/api';
  * pending request resumes after the user saves a token (or gives up).
  */
 export function AuthTokenDialog() {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [token, setToken] = useState('');
   const resolverRef = useRef<((retry: boolean) => void) | null>(null);
@@ -47,8 +49,11 @@ export function AuthTokenDialog() {
 
   const save = useCallback(() => {
     setApiToken(token.trim());
+    // Refetch everything: queries that failed before a token was set (returning
+    // empty data, e.g. empty resource dropdowns) must reload with the new token.
+    queryClient.invalidateQueries();
     finish(true);
-  }, [token, finish]);
+  }, [token, finish, queryClient]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && finish(false)}>

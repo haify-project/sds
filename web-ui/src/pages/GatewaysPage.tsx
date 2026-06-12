@@ -136,7 +136,14 @@ export function GatewaysPage() {
             Export DRBD resources over NFS, iSCSI and NVMe-oF.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button
+          onClick={() => {
+            // Pull a fresh resource list so newly created resources show up in
+            // the dropdown without a full page reload.
+            queryClient.invalidateQueries({ queryKey: ['resources'] });
+            setCreateOpen(true);
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Create Gateway
         </Button>

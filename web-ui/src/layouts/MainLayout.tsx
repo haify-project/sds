@@ -7,14 +7,10 @@ import {
   Network,
   ShieldCheck,
   HardDrive,
-  KeyRound,
   Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ThemeCustomizer } from '@/components/ThemeCustomizer';
-import { setApiToken } from '@/services/api';
+import { UserMenu } from '@/components/UserMenu';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -64,27 +60,10 @@ export function MainLayout() {
             );
           })}
         </nav>
-        <div className="flex items-center justify-between border-t border-sidebar-border px-4 py-3">
+        <div className="border-t border-sidebar-border px-4 py-3">
           <span className="font-mono text-[0.7rem] text-muted-foreground">
             v1.4.0
           </span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setApiToken('');
-                  window.location.reload();
-                }}
-                aria-label="Clear API token"
-              >
-                <KeyRound className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Clear stored API token</TooltipContent>
-          </Tooltip>
         </div>
       </aside>
 
@@ -94,7 +73,7 @@ export function MainLayout() {
           <h2 className="text-sm font-semibold tracking-tight">
             {current?.name ?? 'Dashboard'}
           </h2>
-          <ThemeCustomizer />
+          <UserMenu />
         </header>
         <main className="app-canvas flex-1 overflow-auto p-6 lg:p-8">
           <Outlet />

@@ -1,14 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  ShieldCheck,
-  UserRound,
-  Lock,
-  Plus,
-  Trash2,
-  Loader2,
-  Copy,
-} from 'lucide-react';
+import { Lock, Plus, Trash2, Loader2, Copy } from 'lucide-react';
 import { api } from '@/services/api';
 import {
   Card,
@@ -114,40 +106,30 @@ export function AccessPage() {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Identity */}
+  if (!canAdmin) {
+    return (
       <Card className="max-w-xl">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
-            <UserRound className="h-4 w-4 text-primary" />
-            Signed in as
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Lock className="h-4 w-4 text-muted-foreground" />
+            Access Control
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-2xl font-semibold tracking-tight">
-              {whoami.user}
-            </span>
-            <Badge variant="secondary" className="capitalize">
-              {whoami.role}
-            </Badge>
-            {whoami.can_admin && (
-              <Badge className="gap-1">
-                <ShieldCheck className="h-3 w-3" />
-                admin
-              </Badge>
-            )}
-          </div>
-          {!canAdmin && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Role and user assignments are visible to administrators only.
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground">
+            You are signed in as{' '}
+            <span className="font-medium text-foreground">{whoami.user}</span>{' '}
+            (<span className="capitalize">{whoami.role}</span>). User and role
+            management is available to administrators only.
+          </p>
         </CardContent>
       </Card>
+    );
+  }
 
-      {canAdmin && (
+  return (
+    <div className="space-y-6">
+      {
         <>
           {/* Users */}
           <Card>
@@ -220,7 +202,7 @@ export function AccessPage() {
             </CardContent>
           </Card>
         </>
-      )}
+      }
     </div>
   );
 }
