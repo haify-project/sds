@@ -25,6 +25,7 @@ import (
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/liliang-cn/sds/pkg/gateway"
 	"github.com/liliang-cn/sds/pkg/metrics"
+	"github.com/liliang-cn/sds/pkg/rbac"
 )
 
 // Controller represents the SDS controller
@@ -256,18 +257,54 @@ func (c *Controller) startGRPCServer() error {
 	}
 
 	// Create gRPC server. Interceptor order matters: metrics first so even
-	// rejected requests are counted, then authentication.
+	// rejected requests are counted, then audit (so denied attempts are still
+	// recorded), then authentication.
 	var unaryInterceptors []grpc.UnaryServerInterceptor
 	var streamInterceptors []grpc.StreamServerInterceptor
 	if c.metrics != nil {
 		unaryInterceptors = append(unaryInterceptors, c.metrics.UnaryServerInterceptor())
 	}
-	if c.config.Auth.Enabled {
+
+	// Build the RBAC engine first so the audit interceptor — which runs ahead
+	// of the identity check — can still attribute each call to a user.
+	var rbacEngine *rbac.Engine
+	var auditUser userResolver
+	if c.config.RBAC.Enabled {
+		var err error
+		rbacEngine, err = rbac.New(dbRBACStore{c.db}, toRBACUsers(c.config.RBAC.Users), toRBACPolicies(c.config.RBAC.Policies))
+		if err != nil {
+			return fmt.Errorf("failed to initialize RBAC: %w", err)
+		}
+		auditUser = func(ctx context.Context) string {
+			name, _ := rbacEngine.ResolveUser(bearerToken(ctx))
+			return name
+		}
+	}
+
+	if c.config.Audit.Enabled {
+		auditLog := c.logger.Named("audit")
+		unaryInterceptors = append(unaryInterceptors,
+			auditUnaryInterceptor(auditLog, c.config.Audit.IncludeReads, auditUser))
+		streamInterceptors = append(streamInterceptors,
+			auditStreamInterceptor(auditLog, c.config.Audit.IncludeReads, auditUser))
+		c.logger.Info("API audit log enabled",
+			zap.Bool("include_reads", c.config.Audit.IncludeReads))
+	}
+
+	switch {
+	case c.config.RBAC.Enabled:
+		unaryInterceptors = append(unaryInterceptors,
+			rbacIdentityUnaryInterceptor(rbacEngine), rbacAuthzUnaryInterceptor(rbacEngine))
+		streamInterceptors = append(streamInterceptors,
+			rbacIdentityStreamInterceptor(rbacEngine), rbacAuthzStreamInterceptor(rbacEngine))
+		c.logger.Info("API authorization enabled (RBAC)",
+			zap.Int("users", len(c.config.RBAC.Users)))
+	case c.config.Auth.Enabled:
 		unaryInterceptors = append(unaryInterceptors, authUnaryInterceptor(c.config.Auth.Token))
 		streamInterceptors = append(streamInterceptors, authStreamInterceptor(c.config.Auth.Token))
 		c.logger.Info("API authentication enabled (bearer token)")
-	} else {
-		c.logger.Warn("API authentication is DISABLED; enable [auth] in controller.toml for production")
+	default:
+		c.logger.Warn("API authentication is DISABLED; enable [auth] or [rbac] in controller.toml for production")
 	}
 	var opts []grpc.ServerOption
 	if len(unaryInterceptors) > 0 {
@@ -335,6 +372,9 @@ func (c *Controller) startGRPCServer() error {
 	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(context.Background(), gatewayMux, grpcAddr, dialOpts); err != nil {
 		return fmt.Errorf("failed to register gateway handler: %w", err)
 	}
+
+	// Read-only RBAC introspection endpoints for the UI/CLI (whoami / policies).
+	c.registerRBACRoutes(gatewayMux, rbacEngine)
 
 	// Wrap with CORS handler
 	corsHandler := corsMiddleware(gatewayMux)

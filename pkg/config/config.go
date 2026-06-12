@@ -16,6 +16,44 @@ type Config struct {
 	Log      LogConfig      `mapstructure:"log"`
 	Storage  StorageConfig  `mapstructure:"storage"`
 	Metrics  MetricsConfig  `mapstructure:"metrics"`
+	Audit    AuditConfig    `mapstructure:"audit"`
+	RBAC     RBACConfig     `mapstructure:"rbac"`
+}
+
+// RBACConfig controls Casbin-backed role authorization. When enabled, callers
+// authenticate with a per-user bearer token and every API call is checked
+// against the caller's role. Users and any extra policies are declared here, so
+// RBAC needs no extra service or database — it stays inside the controller
+// binary. When disabled, the single-token [auth] model applies.
+type RBACConfig struct {
+	Enabled  bool         `mapstructure:"enabled"`
+	Users    []RBACUser   `mapstructure:"users"`
+	Policies []RBACPolicy `mapstructure:"policies"`
+}
+
+// RBACUser is an identity with a bearer token and a role. Built-in roles are
+// admin, operator and viewer; custom role names require matching policies.
+type RBACUser struct {
+	Name  string `mapstructure:"name"`
+	Token string `mapstructure:"token"`
+	Role  string `mapstructure:"role"`
+}
+
+// RBACPolicy grants a role an action on an object (both may be "*"). These are
+// additive on top of the built-in role defaults.
+type RBACPolicy struct {
+	Role   string `mapstructure:"role"`
+	Object string `mapstructure:"object"`
+	Action string `mapstructure:"action"`
+}
+
+// AuditConfig controls the API audit log. When enabled, every state-changing
+// API call is recorded with the caller, target, outcome and latency under the
+// "audit" logger. Read-only calls (List/Get/…) are skipped unless
+// IncludeReads is set, to keep the audit trail high-signal.
+type AuditConfig struct {
+	Enabled      bool `mapstructure:"enabled"`
+	IncludeReads bool `mapstructure:"include_reads"`
 }
 
 // AuthConfig controls API authentication. When enabled, every gRPC and REST
@@ -116,6 +154,27 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
 		}
 	}
+	if c.RBAC.Enabled {
+		if len(c.RBAC.Users) == 0 {
+			return fmt.Errorf("rbac.users must declare at least one user when rbac is enabled")
+		}
+		seen := make(map[string]struct{}, len(c.RBAC.Users))
+		for i, u := range c.RBAC.Users {
+			if u.Name == "" {
+				return fmt.Errorf("rbac.users[%d].name is required", i)
+			}
+			if u.Role == "" {
+				return fmt.Errorf("rbac.users[%q].role is required", u.Name)
+			}
+			if len(u.Token) < 16 {
+				return fmt.Errorf("rbac.users[%q].token must be at least 16 characters", u.Name)
+			}
+			if _, dup := seen[u.Token]; dup {
+				return fmt.Errorf("rbac.users[%q] reuses a token assigned to another user", u.Name)
+			}
+			seen[u.Token] = struct{}{}
+		}
+	}
 	return nil
 }
 
@@ -132,6 +191,9 @@ func setDefaults() {
 	viper.SetDefault("metrics.enabled", true)
 	viper.SetDefault("metrics.listen_address", "0.0.0.0")
 	viper.SetDefault("metrics.port", 9433)
+	viper.SetDefault("audit.enabled", true)
+	viper.SetDefault("audit.include_reads", false)
+	viper.SetDefault("rbac.enabled", false)
 }
 
 // Save saves configuration to file
@@ -144,6 +206,8 @@ func (c *Config) Save(path string) error {
 	config.Set("log", c.Log)
 	config.Set("storage", c.Storage)
 	config.Set("metrics", c.Metrics)
+	config.Set("audit", c.Audit)
+	config.Set("rbac", c.RBAC)
 
 	return config.WriteConfigAs(path)
 }

@@ -21,7 +21,12 @@ const (
 	volumesBucket   = "volumes"
 	gatewaysBucket  = "gateways"
 	haConfigsBucket = "ha_configs"
+	rbacBucket      = "rbac"
 )
+
+// rbacStateKey is the single key under rbacBucket holding the serialized RBAC
+// snapshot (policies, role assignments and token digests).
+const rbacStateKey = "state"
 
 // DB holds the database connection
 type DB struct {
@@ -59,7 +64,7 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 
 	// Initialize buckets
 	if err := db.Update(func(tx *bolt.Tx) error {
-		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, volumesBucket, gatewaysBucket, haConfigsBucket}
+		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket}
 		for _, bucket := range buckets {
 			_, err := tx.CreateBucketIfNotExists([]byte(bucket))
 			if err != nil {
@@ -675,4 +680,37 @@ func (db *DB) DeleteVolume(ctx context.Context, resourceName, volumeName string)
 		b := tx.Bucket([]byte(volumesBucket))
 		return b.Delete([]byte(key))
 	})
+}
+
+// ==================== RBAC ====================
+
+// SaveRBAC persists the serialized RBAC snapshot (opaque to the database; the
+// rbac package owns the encoding).
+func (db *DB) SaveRBAC(ctx context.Context, data []byte) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Copy: bbolt does not retain the caller's slice past the transaction.
+	buf := make([]byte, len(data))
+	copy(buf, data)
+	return db.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte(rbacBucket)).Put([]byte(rbacStateKey), buf)
+	})
+}
+
+// LoadRBAC returns the stored RBAC snapshot, or nil if none has been saved yet.
+func (db *DB) LoadRBAC(ctx context.Context) ([]byte, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var out []byte
+	err := db.db.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket([]byte(rbacBucket)).Get([]byte(rbacStateKey))
+		if v != nil {
+			out = make([]byte, len(v))
+			copy(out, v)
+		}
+		return nil
+	})
+	return out, err
 }
