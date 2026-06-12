@@ -288,6 +288,12 @@ class ApiClient {
   resourceStatus = (name: string) =>
     this.request<ApiResponse & { status: ResourceStatus }>(`/resources/${name}/status`);
 
+  updateResourceOptions = (name: string, options: Record<string, string>) =>
+    this.request<ApiResponse>(
+      `/resources/${encodeURIComponent(name)}/options`,
+      { method: 'POST', body: JSON.stringify({ options }) }
+    );
+
   setPrimary = (resource: string, node: string, force = false) =>
     this.request<ApiResponse>(`/resources/${resource}/primary`, {
       method: 'POST',
