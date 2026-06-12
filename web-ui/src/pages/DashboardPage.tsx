@@ -70,20 +70,23 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
               Online Nodes
             </CardTitle>
-            <Server className="h-5 w-5 text-muted-foreground" />
+            <Server className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             {nodesLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
               <>
-                <div className="text-2xl font-bold">
-                  {onlineNodes}/{totalNodes}
+                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
+                  {onlineNodes}
+                  <span className="text-xl text-muted-foreground">
+                    /{totalNodes}
+                  </span>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground">
                   nodes reporting online
                 </p>
               </>
@@ -93,17 +96,17 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
               Storage
             </CardTitle>
-            <HardDrive className="h-5 w-5 text-muted-foreground" />
+            <HardDrive className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             {poolsLoading ? (
               <Skeleton className="h-8 w-32" />
             ) : (
               <>
-                <div className="text-2xl font-bold">
+                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
                   {freeStorage}
                   <span className="text-sm font-normal text-muted-foreground">
                     {' '}
@@ -121,18 +124,22 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
               Resources
             </CardTitle>
-            <Boxes className="h-5 w-5 text-muted-foreground" />
+            <Boxes className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             {resourcesLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold">{totalResources}</div>
-                <p className="text-xs text-muted-foreground">DRBD resources</p>
+                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
+                  {totalResources}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  DRBD resources
+                </p>
               </>
             )}
           </CardContent>
@@ -140,20 +147,23 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
               Gateways
             </CardTitle>
-            <Network className="h-5 w-5 text-muted-foreground" />
+            <Network className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             {gatewaysLoading ? (
               <Skeleton className="h-8 w-20" />
             ) : (
               <>
-                <div className="text-2xl font-bold">
-                  {runningGateways}/{totalGateways}
+                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
+                  {runningGateways}
+                  <span className="text-xl text-muted-foreground">
+                    /{totalGateways}
+                  </span>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground">
                   running gateways
                 </p>
               </>
@@ -257,16 +267,16 @@ export function DashboardPage() {
                 {nodes?.nodes.map((node) => (
                   <TableRow key={node.name}>
                     <TableCell className="font-medium">{node.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {node.address}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {node.hostname}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={node.state} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {node.version}
                     </TableCell>
                   </TableRow>

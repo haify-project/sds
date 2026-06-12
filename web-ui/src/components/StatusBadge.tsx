@@ -11,15 +11,23 @@ const RED = ['offline', 'stopped', 'inactive', 'failed', 'error', 'diskless', 'd
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
   const s = (status || 'unknown').toLowerCase();
-  const color = GREEN.includes(s)
-    ? 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900'
+  // Monochrome pill; the small dot is the only color, carrying the status signal.
+  const dot = GREEN.includes(s)
+    ? 'bg-emerald-500'
     : YELLOW.includes(s)
-      ? 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900'
+      ? 'bg-amber-500'
       : RED.includes(s)
-        ? 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-900'
-        : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800';
+        ? 'bg-red-500'
+        : 'bg-muted-foreground';
   return (
-    <Badge variant="outline" className={cn(color, className)}>
+    <Badge
+      variant="outline"
+      className={cn(
+        'gap-1.5 border-border bg-transparent font-normal capitalize text-foreground',
+        className
+      )}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />
       {status || 'unknown'}
     </Badge>
   );
