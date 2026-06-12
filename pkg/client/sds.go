@@ -422,6 +422,22 @@ func (c *SDSClient) AddVolume(ctx context.Context, resource, volume, pool string
 	return nil
 }
 
+// UpdateResourceOptions applies DRBD options ("section/key" -> value) to an
+// existing resource and runs drbdadm adjust across the cluster.
+func (c *SDSClient) UpdateResourceOptions(ctx context.Context, resource string, options map[string]string) error {
+	resp, err := c.client.UpdateResourceOptions(ctx, &sdspb.UpdateResourceOptionsRequest{
+		Name:    resource,
+		Options: options,
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 // RemoveVolume removes a volume from a resource
 func (c *SDSClient) RemoveVolume(ctx context.Context, resource string, volumeID uint32) error {
 	req := &sdspb.RemoveVolumeRequest{

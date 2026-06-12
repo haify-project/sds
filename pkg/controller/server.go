@@ -366,6 +366,19 @@ func (s *Server) AddVolume(ctx context.Context, req *sdspb.AddVolumeRequest) (*s
 	}, nil
 }
 
+func (s *Server) UpdateResourceOptions(ctx context.Context, req *sdspb.UpdateResourceOptionsRequest) (*sdspb.UpdateResourceOptionsResponse, error) {
+	if err := s.resources.SetOptions(ctx, req.Name, req.Options); err != nil {
+		return &sdspb.UpdateResourceOptionsResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.UpdateResourceOptionsResponse{
+		Success: true,
+		Message: "Resource options updated and applied",
+	}, nil
+}
+
 func (s *Server) RemoveVolume(ctx context.Context, req *sdspb.RemoveVolumeRequest) (*sdspb.RemoveVolumeResponse, error) {
 	err := s.resources.RemoveVolume(ctx, req.Resource, req.VolumeId)
 	if err != nil {

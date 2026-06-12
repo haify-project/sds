@@ -64,6 +64,9 @@ service SDSController {
   rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse) {
     option (google.api.http) = { patch: "/v1/resources/{resource}/volumes/{volume_id}"; body: "*"; };
   }
+  rpc UpdateResourceOptions(UpdateResourceOptionsRequest) returns (UpdateResourceOptionsResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/options"; body: "*"; };
+  }
   rpc ResourceStatus(ResourceStatusRequest) returns (ResourceStatusResponse) {
     option (google.api.http) = { get: "/v1/resources/{name}/status"; };
   }
@@ -655,6 +658,19 @@ message AddVolumeRequest {
 }
 
 message AddVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UpdateResourceOptionsRequest {
+  string name = 1;
+  // DRBD options as "section/key" -> value (e.g. "net/max-buffers" -> "8000",
+  // "on-no-quorum" -> "suspend-io"). Keys without a section default to the
+  // resource-level "options" section.
+  map<string, string> options = 2;
+}
+
+message UpdateResourceOptionsResponse {
   bool success = 1;
   string message = 2;
 }

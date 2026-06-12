@@ -987,6 +987,61 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	return nil
 }
 
+// SetOptions updates DRBD options on an existing resource. It rewrites the
+// shared .res config in place — preserving volumes and node sections — and runs
+// `drbdadm adjust` so the changes take effect without recreating the resource.
+// Keys use the "section/key" form (e.g. "net/max-buffers", "disk/on-io-error");
+// a bare key defaults to the resource-level "options" section.
+func (rm *ResourceManager) SetOptions(ctx context.Context, resource string, options map[string]string) error {
+	if len(options) == 0 {
+		return fmt.Errorf("no options provided")
+	}
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+	hosts, err := rm.resourceHosts(ctx, resource)
+	if err != nil {
+		return err
+	}
+	if len(hosts) == 0 {
+		return fmt.Errorf("resource %q has no nodes", resource)
+	}
+
+	// Read the current config from one node; the mesh keeps them identical.
+	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("cat /etc/drbd.d/%s.res", resource))
+	if err != nil {
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+	var current string
+	var found bool
+	for _, hr := range result.Hosts {
+		current, found = hr.Output, hr.Success
+		break
+	}
+	if !found || strings.TrimSpace(current) == "" {
+		return fmt.Errorf("resource %q config not found on %s", resource, hosts[0])
+	}
+
+	updated, err := applyDrbdOptions(current, options)
+	if err != nil {
+		return fmt.Errorf("failed to apply options: %w", err)
+	}
+
+	if _, err := rm.deployment.DistributeConfig(ctx, hosts, updated, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
+		return fmt.Errorf("failed to distribute updated config: %w", err)
+	}
+
+	if err := rm.execAllSuccess(ctx, hosts, fmt.Sprintf("sudo drbdadm adjust %s", resource),
+		"failed to apply DRBD options"); err != nil {
+		return err
+	}
+
+	rm.controller.logger.Info("Updated DRBD options",
+		zap.String("resource", resource),
+		zap.Any("options", options))
+	return nil
+}
+
 // DeleteResource deletes a DRBD resource from all nodeAddresses
 func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, force bool) error {
 	rm.controller.logger.Info("Deleting DRBD resource",

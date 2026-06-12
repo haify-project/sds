@@ -1407,6 +1407,44 @@
         ]
       }
     },
+    "/v1/resources/{name}/options": {
+      "post": {
+        "operationId": "SDSController_UpdateResourceOptions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateResourceOptionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerUpdateResourceOptionsBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{name}/status": {
       "get": {
         "operationId": "SDSController_ResourceStatus",
@@ -3187,6 +3225,18 @@
         }
       }
     },
+    "SDSControllerUpdateResourceOptionsBody": {
+      "type": "object",
+      "properties": {
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "DRBD options as \"section/key\" -\u003e value (e.g. \"net/max-buffers\" -\u003e \"8000\",\n\"on-no-quorum\" -\u003e \"suspend-io\"). Keys without a section default to the\nresource-level \"options\" section."
+        }
+      }
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -4388,6 +4438,24 @@
         }
       }
     },
+    "v1ListZFSPoolsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "pools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PoolInfo"
+          }
+        }
+      }
+    },
     "v1ListZFSSnapshotsResponse": {
       "type": "object",
       "properties": {
@@ -4958,6 +5026,17 @@
       }
     },
     "v1UnregisterNodeResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UpdateResourceOptionsResponse": {
       "type": "object",
       "properties": {
         "success": {
