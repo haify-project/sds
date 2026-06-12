@@ -91,6 +91,11 @@ type volumeAddIn struct {
 	SizeGB   uint32 `json:"size_gb" jsonschema:"volume size in GiB"`
 }
 
+type resourceSetOptionsIn struct {
+	Resource string            `json:"resource" jsonschema:"DRBD resource name"`
+	Options  map[string]string `json:"options" jsonschema:"DRBD options as section/key -> value (e.g. net/max-buffers: 8000, on-no-quorum: suspend-io, disk/on-io-error: detach); a bare key defaults to the resource-level options section"`
+}
+
 type volumeRemoveIn struct {
 	Resource string `json:"resource" jsonschema:"DRBD resource name"`
 	VolumeID uint32 `json:"volume_id" jsonschema:"volume ID within the resource"`
@@ -222,6 +227,21 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				return nil, opResult{}, err
 			}
 			return nil, ok(fmt.Sprintf("volume %s (%d GiB) added to resource %s", in.Volume, in.SizeGB, in.Resource)), nil
+		})
+
+	addWrite(s, srv, writeTool("sds_resource_set_options", "Set DRBD options",
+		"Update DRBD options on an existing resource and apply them live with "+
+			"`drbdadm adjust`, without recreating it. Options use the "+
+			"\"section/key\" form (e.g. net/max-buffers, disk/on-io-error); a bare "+
+			"key defaults to the resource-level options section."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceSetOptionsIn) (*mcp.CallToolResult, opResult, error) {
+			if len(in.Options) == 0 {
+				return nil, opResult{}, fmt.Errorf("options must not be empty")
+			}
+			if err := s.client.UpdateResourceOptions(ctx, in.Resource, in.Options); err != nil {
+				return nil, opResult{}, err
+			}
+			return nil, ok(fmt.Sprintf("applied %d option(s) to resource %s and adjusted", len(in.Options), in.Resource)), nil
 		})
 
 	addWrite(s, srv, destructiveTool("sds_resource_remove_volume", "Remove volume",

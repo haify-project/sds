@@ -25,6 +25,8 @@ description: Guide for deploying and testing SDS in a local development and test
 
 **API 认证（可选）**: 在 `/etc/sds/controller.toml` 中设置 `[auth] enabled = true` 和 `token`（至少 16 字符）后，gRPC 和 REST 均需要 Bearer Token。sds-cli 按以下顺序解析 token：`--token` 参数 → `SDS_TOKEN` 环境变量 → `~/.sds/token` → `/etc/sds/token`。REST 请求需带 `Authorization: Bearer <token>` 头。
 
+**RBAC（可选，比单 token 更细）**: 在 `controller.toml` 设置 `[rbac] enabled = true` 并声明 `[[rbac.users]]`（name/token/role，role = admin/operator/viewer）后，单 token 失效，改用**每用户 token**。开启时配置要写到**所有节点**（self-HA 会故障转移）。改完重启 active 节点。用户/角色之后可在 Web UI 的 **Access** 页或 `sds-cli rbac user ...` 管理，持久化进 `sds.db`。
+
 ## 1. 构建与部署
 
 使用一键部署脚本，自动执行编译并将二进制文件及配置分发到目标节点。
@@ -46,6 +48,58 @@ description: Guide for deploying and testing SDS in a local development and test
 1.  执行 `make build`。
 2.  调用 `deploy.sh` 将组件部署到指定主机（controller → `/opt/sds/bin/`，cli → `/usr/local/bin/`）。
 3.  在目标节点配置并启动 `sds-controller.service`，并自动启用 drbd-reactor 自动 reload。
+
+> ⚠️ `deploy-all.sh` / `deploy.sh` 假设的是**单控制器**模型,**不适用于控制器 self-HA 集群**,也不做交叉编译。两个常见坑见下。
+
+### ⚠️ 坑一:交叉编译(开发机非 linux/amd64 时)
+
+`make build` 只编译**本机架构**。开发机是 macOS(darwin/arm64)、节点是 linux/x86_64 时,直接 scp 过去的二进制**根本不能执行**。必须交叉编译:
+
+```bash
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sds-controller ./cmd/controller
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sds-cli ./cmd/cli
+```
+
+### ⚠️ 坑二:Web UI 嵌入是**旧的**
+
+`make ui-ensure` **只在 `ui/dist` 不存在时**才同步,改了 web-ui 后它不会更新,导致二进制里嵌的是旧 UI。每次重新构建控制器前要**强制同步**:
+
+```bash
+cd web-ui && npm run build && cd ..
+rm -rf ui/dist && cp -r web-ui/dist ui/dist    # 强制,别用 make ui-ensure
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sds-controller ./cmd/controller
+```
+
+### 控制器 self-HA 集群的正确部署(重要)
+
+本集群用 **drbd-reactor 托管控制器**:`sds-controller` **只在 active(`sds-meta` 资源为 Primary 的)节点运行**,standby 节点的服务是 `inactive` 且 `enabled=disabled`(由 reactor 管,不是 systemd)。所以**不能**在每个节点 `systemctl enable/start`(standby 上会因 DRBD 依赖失败)。正确做法:**所有节点都换二进制,只重启 active 节点**。
+
+```bash
+# 0) 交叉编译 + 强制同步 UI(见上)
+
+# 1) 找出 active 节点(sds-meta Primary)
+for h in orange1 orange2 orange3; do echo -n "$h: "; ssh $h "drbdadm role sds-meta 2>/dev/null"; done
+
+# 2) 把新二进制推到所有节点(原地替换,不动 standby 的服务状态)
+for h in orange1 orange2 orange3; do
+  scp -q bin/sds-controller bin/sds-cli $h:/tmp/
+  ssh $h 'sudo install -m755 /tmp/sds-controller /opt/sds/bin/sds-controller && \
+          sudo install -m755 /tmp/sds-cli /usr/local/bin/sds-cli && rm -f /tmp/sds-*'
+done
+
+# 3) 只重启 active 节点(假设是 orange3),reactor 会让它保持 Primary
+ssh orange3 'sudo systemctl restart sds-controller && sleep 3; systemctl is-active sds-controller'
+```
+
+> 注意:如果 active 节点是 orange1/2,把第 3 步换成对应节点。standby 节点拿到新二进制后,将来故障转移过去时自然就是新版本。
+
+### 访问地址(self-HA VIP)
+
+控制器 self-HA 会有一个**浮动 VIP**(配在 drbd-reactor 的 promoter 里,如 `192.168.123.51`),始终跟随 active 节点。用 VIP 访问最稳:
+
+- Web UI: `http://<VIP>:3376/`
+- REST: `http://<VIP>:3375`
+- gRPC(CLI): `sds-cli -c <VIP>:3374`
 
 **验证节点状态：**
 
@@ -79,6 +133,10 @@ ssh orange1 "sds-cli pool create --name tank --type zfs --nodes orange1,orange2 
 ```
 
 ## 3. 测试资源创建 (Resource)
+
+> **端口**:每个 DRBD 资源的 `--port` 必须全局唯一。从 controller v1.4 起,`resource create` 会**预检端口**,撞了会清晰报错(`port N is already in use by resource X`),而不是含糊的 `metadata creation failed`。已用端口看 `/etc/drbd.d/*.res`。
+>
+> **改 DRBD options**:不用重建资源,用 `sds-cli resource set-options <res> --drbd-options 'net/max-buffers=8000,on-no-quorum=suspend-io,disk/on-io-error=detach'`(就地改 `.res` + `drbdadm adjust`),或 Web UI 资源页的 **Edit DRBD Options**。格式 `section/key=value`,裸 key 进 options 段。
 
 ### 3.1 创建 LVM 资源 (默认)
 
@@ -120,6 +178,8 @@ ssh orange1 "sds-cli resource snapshot delete --resource res01 --name snap1 --no
 ```
 
 ## 5. 网关测试 (Gateway)
+
+> 网关需要资源有 **≥2 个卷**(volume 0 存故障转移状态,volume 1+ 存数据)。从 controller v1.4 起,`[gateway] auto_state_volume`(默认开)会在建网关时**自动补**那个 state 卷,所以单卷资源也能直接建网关,不用先手动 `add-volume`。
 
 ```bash
 # 创建 NFS 网关（export 路径按传入值原样导出）
