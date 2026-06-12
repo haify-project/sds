@@ -92,7 +92,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	ctrl.nodes = NewNodeManager(ctrl)
 
 	// Initialize gateway with adapters
-	gwResourceManager := NewGatewayResourceManager(ctrl.resources)
+	gwResourceManager := NewGatewayResourceManager(ctrl.resources,
+		cfg.Gateway.AutoStateVolume, cfg.Gateway.StateVolumeSizeGB)
 	gwDeploymentClient := NewGatewayDeploymentClient(deploymentClient)
 	ctrl.gateway = gateway.New(gwResourceManager, gwDeploymentClient, logger, []string{})
 
@@ -506,12 +507,59 @@ func (c *Controller) NormalizeHost(addrOrHost string) string {
 
 // GatewayResourceManager adapts ResourceManager to gateway.ResourceManager interface
 type GatewayResourceManager struct {
-	rm *ResourceManager
+	rm                *ResourceManager
+	autoStateVolume   bool
+	stateVolumeSizeGB uint32
 }
 
-// NewGatewayResourceManager creates a new gateway resource manager adapter
-func NewGatewayResourceManager(rm *ResourceManager) gateway.ResourceManager {
-	return &GatewayResourceManager{rm: rm}
+// NewGatewayResourceManager creates a new gateway resource manager adapter.
+// autoStateVolume/stateVolumeSizeGB control whether a missing cluster-private
+// state volume is provisioned automatically during gateway creation.
+func NewGatewayResourceManager(rm *ResourceManager, autoStateVolume bool, stateVolumeSizeGB uint32) gateway.ResourceManager {
+	if stateVolumeSizeGB == 0 {
+		stateVolumeSizeGB = 1
+	}
+	return &GatewayResourceManager{
+		rm:                rm,
+		autoStateVolume:   autoStateVolume,
+		stateVolumeSizeGB: stateVolumeSizeGB,
+	}
+}
+
+// EnsureGatewayVolumes provisions the small cluster-private state volume(s) a
+// gateway needs, so a single-volume resource can be exported directly. It is a
+// no-op when the resource already has enough volumes or when auto-provisioning
+// is disabled (the gateway's own check then surfaces a clear error).
+func (a *GatewayResourceManager) EnsureGatewayVolumes(ctx context.Context, resource string, minVolumes int) error {
+	if !a.autoStateVolume {
+		return nil
+	}
+	info, err := a.rm.GetResource(ctx, resource)
+	if err != nil {
+		return err
+	}
+	if len(info.Volumes) >= minVolumes {
+		return nil
+	}
+	if len(info.Volumes) == 0 {
+		return fmt.Errorf("resource %q has no volumes to derive a pool from", resource)
+	}
+	pool := info.Volumes[0].Pool
+	if pool == "" {
+		return fmt.Errorf("cannot determine storage pool for resource %q", resource)
+	}
+	for n := len(info.Volumes); n < minVolumes; n++ {
+		volName := fmt.Sprintf("%s_state%d", resource, n)
+		a.rm.controller.logger.Info("Auto-provisioning gateway state volume",
+			zap.String("resource", resource),
+			zap.String("volume", volName),
+			zap.String("pool", pool),
+			zap.Uint32("size_gb", a.stateVolumeSizeGB))
+		if err := a.rm.AddVolume(ctx, resource, volName, pool, a.stateVolumeSizeGB); err != nil {
+			return fmt.Errorf("auto-provision state volume %q: %w", volName, err)
+		}
+	}
+	return nil
 }
 
 func (a *GatewayResourceManager) GetResource(ctx context.Context, name string) (*gateway.ResourceInfo, error) {

@@ -40,6 +40,16 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 		}, err
 	}
 
+	// Auto-provision the cluster-private state volume when the resource is one
+	// short, so a single-volume resource can be exported without a manual
+	// add-volume step first.
+	if err := n.resources.EnsureGatewayVolumes(ctx, req.Resource, 2); err != nil {
+		return &v1.CreateNVMeGatewayResponse{
+			Success: false,
+			Message: fmt.Sprintf("failed to provision gateway state volume: %v", err),
+		}, err
+	}
+
 	// Get volume info from resource - NVMe-oF requires at least 2 volumes
 	// Volume 0: cluster-private, Volume 1+: namespaces exposed to initiators
 	resInfo, err := n.resources.GetResource(ctx, req.Resource)

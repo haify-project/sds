@@ -18,6 +18,17 @@ type Config struct {
 	Metrics  MetricsConfig  `mapstructure:"metrics"`
 	Audit    AuditConfig    `mapstructure:"audit"`
 	RBAC     RBACConfig     `mapstructure:"rbac"`
+	Gateway  GatewayConfig  `mapstructure:"gateway"`
+}
+
+// GatewayConfig controls gateway provisioning behavior. Every gateway needs a
+// small cluster-private "state" volume (volume 0) in addition to the data
+// volume so the OCF agents can carry failover state. When AutoStateVolume is
+// set, the controller provisions that volume automatically during gateway
+// creation instead of failing when the resource has only one volume.
+type GatewayConfig struct {
+	AutoStateVolume   bool   `mapstructure:"auto_state_volume"`
+	StateVolumeSizeGB uint32 `mapstructure:"state_volume_size_gb"`
 }
 
 // RBACConfig controls Casbin-backed role authorization. When enabled, callers
@@ -194,6 +205,8 @@ func setDefaults() {
 	viper.SetDefault("audit.enabled", true)
 	viper.SetDefault("audit.include_reads", false)
 	viper.SetDefault("rbac.enabled", false)
+	viper.SetDefault("gateway.auto_state_volume", true)
+	viper.SetDefault("gateway.state_volume_size_gb", 1)
 }
 
 // Save saves configuration to file
@@ -208,6 +221,7 @@ func (c *Config) Save(path string) error {
 	config.Set("metrics", c.Metrics)
 	config.Set("audit", c.Audit)
 	config.Set("rbac", c.RBAC)
+	config.Set("gateway", c.Gateway)
 
 	return config.WriteConfigAs(path)
 }

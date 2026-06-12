@@ -68,6 +68,12 @@ type ResourceNodeState struct {
 type ResourceManager interface {
 	GetResource(ctx context.Context, name string) (*ResourceInfo, error)
 	SetPrimary(ctx context.Context, resource, node string, force bool) error
+	// EnsureGatewayVolumes makes sure a resource has at least minVolumes
+	// volumes, auto-provisioning the small cluster-private state volume(s) a
+	// gateway needs. A no-op when the resource already qualifies or when
+	// auto-provisioning is disabled (in which case the caller's own volume
+	// check still reports a clear error).
+	EnsureGatewayVolumes(ctx context.Context, resource string, minVolumes int) error
 }
 
 // DeploymentClient provides deployment operations

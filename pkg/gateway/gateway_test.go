@@ -394,6 +394,12 @@ func (m *MockResourceManager) SetPrimary(ctx context.Context, resource, node str
 	return nil
 }
 
+// EnsureGatewayVolumesFunc lets tests stub auto-provisioning; nil is a no-op so
+// the existing volume-count assertions keep working unchanged.
+func (m *MockResourceManager) EnsureGatewayVolumes(ctx context.Context, resource string, minVolumes int) error {
+	return nil
+}
+
 type MockDeploymentClient struct {
 	Configs       map[string]string
 	ExecCommands  []string

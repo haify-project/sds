@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -266,6 +267,16 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 			ip = node // fallback to node name
 		}
 		nodeIPs[i] = ip
+	}
+
+	// Pre-flight: reject a port already bound by another DRBD resource on the
+	// nodes (including ones SDS does not manage) with a clear message, rather
+	// than letting `drbdadm create-md` fail later with an opaque error.
+	if conflict, err := rm.findPortConflict(ctx, nodeIPs[0], port, name); err != nil {
+		rm.controller.logger.Warn("port conflict pre-check failed; continuing",
+			zap.Uint32("port", port), zap.Error(err))
+	} else if conflict != "" {
+		return fmt.Errorf("DRBD port %d is already in use by resource %q; choose a different port", port, conflict)
 	}
 
 	// 1. Create storage volumes on all nodes (LVM or ZFS)
@@ -1055,6 +1066,30 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 // nextGlobalMinor returns the lowest unused DRBD device minor on host,
 // derived from every resource config present: minors are a node-global
 // namespace and drbdadm rejects configs that reuse one.
+// findPortConflict returns the name of an existing DRBD resource on host that
+// already binds the given TCP port, or "" if the port is free. The resource
+// being created (selfName) is ignored so re-runs don't flag themselves.
+func (rm *ResourceManager) findPortConflict(ctx context.Context, host string, port uint32, selfName string) (string, error) {
+	cmd := fmt.Sprintf("grep -lE 'address[^;]*:%d;' /etc/drbd.d/*.res 2>/dev/null || true", port)
+	result, err := rm.deployment.Exec(ctx, []string{host}, cmd)
+	if err != nil {
+		return "", err
+	}
+	for _, hr := range result.Hosts {
+		for _, line := range strings.Split(hr.Output, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			base := strings.TrimSuffix(filepath.Base(line), ".res")
+			if base != selfName {
+				return base, nil
+			}
+		}
+	}
+	return "", nil
+}
+
 func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, host string) (int, error) {
 	result, err := rm.deployment.Exec(ctx, []string{host}, "cat /etc/drbd.d/*.res 2>/dev/null || true")
 	if err != nil {

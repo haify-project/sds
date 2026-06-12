@@ -40,6 +40,16 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 		}, err
 	}
 
+	// Auto-provision the cluster-private state volume when the resource is one
+	// short, so a single-volume resource can be exported without a manual
+	// add-volume step first.
+	if err := n.resources.EnsureGatewayVolumes(ctx, req.Resource, 2); err != nil {
+		return &v1.CreateNFSGatewayResponse{
+			Success: false,
+			Message: fmt.Sprintf("failed to provision gateway state volume: %v", err),
+		}, err
+	}
+
 	// Get volume info from resource - NFS requires at least 2 volumes
 	// Volume 0: cluster-private (NFS state), Volume 1+: exported data
 	resInfo, err := n.resources.GetResource(ctx, req.Resource)

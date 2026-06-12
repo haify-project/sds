@@ -41,3 +41,4 @@ ui/dist/
 # Stray local build outputs
 /cli
 /controller
+.playwright-mcp/
