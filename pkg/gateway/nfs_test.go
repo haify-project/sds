@@ -114,7 +114,10 @@ func TestGenerateNFSGatewayConfig(t *testing.T) {
 	assert.Contains(t, config, "ocf:heartbeat:IPaddr2")
 	assert.Contains(t, config, "ocf:heartbeat:nfsserver")
 	assert.Contains(t, config, "ocf:heartbeat:exportfs")
-	assert.Contains(t, config, "ocf:heartbeat:portblock")
+	// NFS deliberately omits portblock/portunblock: the floating IP already
+	// fences the VIP, and the pair stranded a DROP rule on the new active node
+	// after failover.
+	assert.NotContains(t, config, "portblock")
 	assert.Contains(t, config, req.ServiceIp)
 	assert.Contains(t, config, "/dev/drbd0")
 }

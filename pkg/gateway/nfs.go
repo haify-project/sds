@@ -144,7 +144,6 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
       target-as = "BindsTo"
 
       start = [
-        "ocf:heartbeat:portblock portblock ip={{ .IPAddress }} portno={{ .NFSPort }} action=block protocol=tcp",
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
         "ocf:heartbeat:Filesystem fs_export device={{ .ExportDevice }} directory={{ .ExportPath }} fstype={{ .FSType }} run_fsck=no",
         "ocf:heartbeat:IPaddr2 service_ip ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
@@ -152,9 +151,14 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
 {{ range $idx, $client := .AllowedClients }}
         "ocf:heartbeat:exportfs export_{{ $idx }} directory={{ $.ExportPath }} fsid={{ $.FSID }} clientspec={{ $client }} options={{ $.Options }}",
 {{ end }}
-        "ocf:heartbeat:portblock portunblock ip={{ .IPAddress }} portno={{ .NFSPort }} action=unblock protocol=tcp tickle_dir={{ .ClusterPrivatePath }}",
       ]
 `
+	// NFS deliberately omits the portblock/portunblock OCF pair. The floating
+	// service IP (IPaddr2) already ensures only the active node answers on the
+	// VIP, and NFS clients reconnect when it moves. The portblock pair is only
+	// needed for iSCSI/NVMe TCP-session fencing; on NFS it added no benefit and
+	// could strand a DROP rule on the new active node after a failover (the
+	// unblock step is not guaranteed to clear it), firewalling clients off 2049.
 
 	ipAddr := serviceIP.IP.String()
 	prefix := serviceIP.Prefix
@@ -335,8 +339,11 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		return err
 	}
 	newLine := buildNFSExportLine(exportID, resolvedPath, strconv.Itoa(fsid), clientSpec, options)
+	// Insert the new export as the last entry of the start = [ ... ] array,
+	// i.e. just before its closing bracket. (Previously anchored on the
+	// portunblock line, which NFS no longer emits.)
 	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
-		return strings.Contains(line, "ocf:heartbeat:portblock") && strings.Contains(line, "action=unblock")
+		return strings.TrimSpace(line) == "]"
 	})
 	if err != nil {
 		return err
