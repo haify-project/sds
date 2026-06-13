@@ -43,9 +43,9 @@ const sampleRes = `resource data {
 
 func TestApplyDrbdOptions(t *testing.T) {
 	out, err := applyDrbdOptions(sampleRes, map[string]string{
-		"on-no-quorum":     "suspend-io", // replace existing in options
-		"net/max-buffers":  "8000",       // add to existing net block
-		"disk/on-io-error": "detach",     // create disk block inside volume 0
+		"on-no-quorum":        "suspend-io",                      // replace existing in options
+		"net/max-buffers":     "8000",                            // add to existing net block
+		"disk/on-io-error":    "detach",                          // create disk block inside volume 0
 		"handlers/fence-peer": "/usr/lib/drbd/crm-fence-peer.sh", // create new block
 	})
 	if err != nil {
@@ -53,9 +53,9 @@ func TestApplyDrbdOptions(t *testing.T) {
 	}
 
 	checks := []string{
-		"on-no-quorum suspend-io;",       // replaced
-		"max-buffers 8000;",              // added to net
-		"on-io-error detach;",            // disk option
+		"on-no-quorum suspend-io;",                    // replaced
+		"max-buffers 8000;",                           // added to net
+		"on-io-error detach;",                         // disk option
 		"fence-peer /usr/lib/drbd/crm-fence-peer.sh;", // new handlers block
 	}
 	for _, c := range checks {

@@ -1995,9 +1995,16 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 		checkCmd := exec.Command("drbdsetup", "status", resource)
 		output, err := checkCmd.Output()
 		if err != nil {
+			// Only an ExitError carries Stderr; a missing binary yields an
+			// *exec.Error, so guard the type assertion (it used to panic when
+			// drbdsetup was absent, e.g. in unit tests).
+			var stderr string
+			if ee, ok := err.(*exec.ExitError); ok {
+				stderr = string(ee.Stderr)
+			}
 			rm.controller.logger.Warn("Failed to check local DRBD status",
 				zap.Error(err),
-				zap.String("stderr", string(err.(*exec.ExitError).Stderr)))
+				zap.String("stderr", stderr))
 		} else {
 			lines := strings.Split(string(output), "\n")
 			rm.controller.logger.Info("Local DRBD status",
