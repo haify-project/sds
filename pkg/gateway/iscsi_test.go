@@ -68,7 +68,8 @@ func TestGenerateISCSIGatewayConfig(t *testing.T) {
 	assert.Contains(t, config, "ocf:heartbeat:iSCSITarget")
 	assert.Contains(t, config, "ocf:heartbeat:iSCSILogicalUnit")
 	assert.Contains(t, config, "ocf:heartbeat:Filesystem")
-	assert.Contains(t, config, "ocf:heartbeat:portblock")
+	// portblock removed: it left a stale DROP on the active node after failover.
+	assert.NotContains(t, config, "portblock")
 	assert.Contains(t, config, req.Implementation)
 	assert.Contains(t, config, req.Username)
 	assert.Contains(t, config, "3260") // Default iSCSI port

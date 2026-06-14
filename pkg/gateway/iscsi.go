@@ -142,15 +142,18 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 
       start = [
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
-        "ocf:heartbeat:portblock pblock0 ip={{ .IPAddress }} portno={{ .ISCSIPort }} action=block protocol=tcp",
         "ocf:heartbeat:IPaddr2 service_ip0 ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
         "ocf:heartbeat:iSCSITarget target iqn={{ .IQN }} portals={{ .Portal }} incoming_username={{ .Username }} incoming_password={{ .Password }} allowed_initiators={{ .AllowedInitiators }} implementation={{ .Implementation }}",
 {{ range $idx, $lun := .LUNs }}
         "ocf:heartbeat:iSCSILogicalUnit lu{{ $lun.Number }} target_iqn={{ $.IQN }} lun={{ $lun.Number }} path={{ $lun.Device }} product_id={{ $lun.Serial }} scsi_sn={{ $lun.Serial }}",
 {{ end }}
-        "ocf:heartbeat:portblock portunblock0 ip={{ .IPAddress }} portno={{ .ISCSIPort }} action=unblock protocol=tcp tickle_dir={{ .ClusterPrivatePath }}",
       ]
 `
+	// portblock/portunblock removed: on failover the unblock step did not
+	// reliably clear the block's DROP rule on the new active node, firewalling
+	// clients off the iSCSI port (verified on real node failover). The data
+	// fencing is provided by DRBD (the demoted node goes Secondary, losing
+	// write access) plus the target being stopped and the VIP moving away.
 
 	ipAddr := serviceIP.IP.String()
 	prefix := serviceIP.Prefix
@@ -328,8 +331,10 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 	}
 
 	newLine := buildISCSILUNLine(lunNumber, iqn, device)
+	// Insert the new LUN as the last entry of the start array (before its
+	// closing bracket); portunblock no longer exists to anchor on.
 	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
-		return strings.Contains(line, "ocf:heartbeat:portblock") && strings.Contains(line, "action=unblock")
+		return strings.TrimSpace(line) == "]"
 	})
 	if err != nil {
 		return err

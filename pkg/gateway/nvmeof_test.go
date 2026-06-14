@@ -66,9 +66,9 @@ func TestGenerateNVMeGatewayConfig(t *testing.T) {
 	assert.Contains(t, config, "ocf:heartbeat:nvmet-namespace")
 	assert.Contains(t, config, "ocf:heartbeat:nvmet-port")
 	assert.Contains(t, config, "ocf:heartbeat:Filesystem")
-	assert.Contains(t, config, "ocf:heartbeat:portblock")
-	assert.Contains(t, config, "tcp")  // Transport type
-	assert.Contains(t, config, "4420") // Default NVMe port
+	// portblock removed: it left a stale DROP on the active node after failover.
+	assert.NotContains(t, config, "portblock")
+	assert.Contains(t, config, "tcp") // Transport type
 }
 
 func TestGenerateNVMeGatewayConfigMultipleNamespaces(t *testing.T) {

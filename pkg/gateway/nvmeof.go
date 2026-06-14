@@ -142,7 +142,6 @@ func (n *NVMeManager) generateNVMeGatewayConfig(req *v1.CreateNVMeGatewayRequest
       target-as = "Requires"
 
       start = [
-        "ocf:heartbeat:portblock portblock ip={{ .IPAddress }} portno={{ .NVMePort }} action=block protocol=tcp",
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
         "ocf:heartbeat:IPaddr2 service_ip ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
         "ocf:heartbeat:nvmet-subsystem subsys nqn={{ .NQN }} serial={{ .Serial }}",
@@ -150,9 +149,11 @@ func (n *NVMeManager) generateNVMeGatewayConfig(req *v1.CreateNVMeGatewayRequest
         "ocf:heartbeat:nvmet-namespace ns_{{ $ns.Number }} nqn={{ $.NQN }} namespace_id={{ $ns.Number }} backing_path={{ $ns.Device }} uuid={{ $ns.UUID }} nguid={{ $ns.NGUID }}",
 {{ end }}
         "ocf:heartbeat:nvmet-port port nqns={{ .NQN }} addr={{ .IPAddress }} type={{ .TransportType }}",
-        "ocf:heartbeat:portblock portunblock ip={{ .IPAddress }} portno={{ .NVMePort }} action=unblock protocol=tcp tickle_dir={{ .ClusterPrivatePath }}",
       ]
 `
+	// portblock/portunblock removed (same failover bug as iSCSI/NFS: the unblock
+	// step did not reliably clear the block's DROP on the new active node).
+	// DRBD demotion + subsystem teardown + VIP move provide the fencing.
 
 	ipAddr := serviceIP.IP.String()
 	prefix := serviceIP.Prefix
