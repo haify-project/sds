@@ -16,6 +16,7 @@ type deploymentClient interface {
 	LVCreate(ctx context.Context, hosts []string, vgName, lvName, size string) (*deployment.ExecResult, error)
 	LVCreateThinPool(ctx context.Context, hosts []string, vgName, poolName, size string) (*deployment.ExecResult, error)
 	LVCreateThinVolume(ctx context.Context, hosts []string, vgName, poolName, lvName, size string) (*deployment.ExecResult, error)
+	LVRemove(ctx context.Context, hosts []string, lvPath string) (*deployment.ExecResult, error)
 	LVCreateSnapshot(ctx context.Context, hosts []string, vgName, lvName, snapshotName, size string) (*deployment.ExecResult, error)
 	LVCreateThinSnapshot(ctx context.Context, hosts []string, vgName, lvName, snapshotName string) (*deployment.ExecResult, error)
 	LVIsThin(ctx context.Context, host, vgName, lvName string) (bool, error)

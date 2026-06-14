@@ -311,6 +311,10 @@ func (f *fakeDeploymentClient) DRBDDown(ctx context.Context, hosts []string, res
 	return successExecResult(hosts, ""), nil
 }
 
+func (f *fakeDeploymentClient) LVRemove(ctx context.Context, hosts []string, lvPath string) (*deployment.ExecResult, error) {
+	return successExecResult(hosts, ""), nil
+}
+
 func (f *fakeDeploymentClient) DRBDPrimary(ctx context.Context, host, resource string, force bool) (*deployment.HostResult, error) {
 	if f.drbdPrimaryFunc != nil {
 		return f.drbdPrimaryFunc(ctx, host, resource, force)

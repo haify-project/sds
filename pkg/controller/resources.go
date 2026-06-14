@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
@@ -279,6 +280,27 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		return fmt.Errorf("DRBD port %d is already in use by resource %q; choose a different port", port, conflict)
 	}
 
+	// Roll back partial state if a later step fails: a half-created resource
+	// (e.g. LVs made but create-md failed) otherwise leaves orphaned backing
+	// volumes and a stray .res that block a clean retry.
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		rm.controller.logger.Warn("Resource create failed; rolling back partial state",
+			zap.String("name", name))
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_, _ = rm.deployment.DRBDDown(cleanupCtx, nodeIPs, name)
+		_, _ = rm.deployment.Exec(cleanupCtx, nodeIPs, fmt.Sprintf("sudo rm -f /etc/drbd.d/%s.res", name))
+		if storageType == "zfs" || storageType == "zfs-thin" {
+			_, _ = rm.deployment.ZFSDestroyDataset(cleanupCtx, nodeIPs, fmt.Sprintf("%s/%s", pool, volumeName))
+		} else {
+			_, _ = rm.deployment.LVRemove(cleanupCtx, nodeIPs, fmt.Sprintf("/dev/%s/%s", pool, volumeName))
+		}
+	}()
+
 	// 1. Create storage volumes on all nodes (LVM or ZFS)
 	if storageType == "zfs" || storageType == "zfs-thin" {
 		// Create ZFS zvol on all nodes
@@ -402,6 +424,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	rm.controller.logger.Info("DRBD resource created successfully",
 		zap.String("name", name))
 
+	committed = true
 	return nil
 }
 
