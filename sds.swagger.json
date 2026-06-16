@@ -4844,6 +4844,17 @@
           "additionalProperties": {
             "$ref": "#/definitions/v1NodeResourceState"
           }
+        },
+        "disklessNodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Nodes participating only as diskless quorum tiebreakers (vote, no data)."
+        },
+        "quorumRisk": {
+          "type": "boolean",
+          "description": "True when the resource has two diskful nodes and no tiebreaker, so a\nsingle node failure suspends I/O (no quorum majority)."
         }
       }
     },

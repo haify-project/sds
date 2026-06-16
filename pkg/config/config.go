@@ -19,6 +19,17 @@ type Config struct {
 	Audit    AuditConfig    `mapstructure:"audit"`
 	RBAC     RBACConfig     `mapstructure:"rbac"`
 	Gateway  GatewayConfig  `mapstructure:"gateway"`
+	Resource ResourceConfig `mapstructure:"resource"`
+}
+
+// ResourceConfig controls DRBD resource provisioning behavior. A 2-node
+// resource under quorum=majority cannot keep serving I/O when either node
+// fails (the survivor has no majority). When AutoTiebreaker is set, the
+// controller automatically adds a third diskless node — one that only votes
+// in quorum and stores no data — so the cluster keeps a majority through any
+// single-node failure, matching LINSTOR's auto-quorum-tiebreaker behavior.
+type ResourceConfig struct {
+	AutoTiebreaker bool `mapstructure:"auto_tiebreaker"`
 }
 
 // GatewayConfig controls gateway provisioning behavior. Every gateway needs a
@@ -207,6 +218,7 @@ func setDefaults() {
 	viper.SetDefault("rbac.enabled", false)
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)
+	viper.SetDefault("resource.auto_tiebreaker", true)
 }
 
 // Save saves configuration to file
@@ -222,6 +234,7 @@ func (c *Config) Save(path string) error {
 	config.Set("audit", c.Audit)
 	config.Set("rbac", c.RBAC)
 	config.Set("gateway", c.Gateway)
+	config.Set("resource", c.Resource)
 
 	return config.WriteConfigAs(path)
 }

@@ -831,6 +831,11 @@ message ResourceInfo {
   string role = 5;
   repeated VolumeInfo volumes = 6;
   map<string, NodeResourceState> node_states = 7;
+  // Nodes participating only as diskless quorum tiebreakers (vote, no data).
+  repeated string diskless_nodes = 8;
+  // True when the resource has two diskful nodes and no tiebreaker, so a
+  // single node failure suspends I/O (no quorum majority).
+  bool quorum_risk = 9;
 }
 
 message ResourceStatus {

@@ -277,13 +277,17 @@ func (db *DB) DeletePool(ctx context.Context, name string) error {
 
 // Resource represents a DRBD resource
 type Resource struct {
-	Name      string
-	Port      int
-	Nodes     string
-	Protocol  string
-	Replicas  int
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Name     string
+	Port     int
+	Nodes    string
+	Protocol string
+	Replicas int
+	// DisklessNodes is a comma-separated list of node names that participate
+	// in the resource as diskless quorum tiebreakers (they vote in quorum but
+	// store no data). Empty for ordinary all-diskful resources.
+	DisklessNodes string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // SaveResource saves or updates a resource

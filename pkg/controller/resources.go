@@ -26,6 +26,12 @@ type ResourceInfo struct {
 	Role       string
 	Volumes    []*ResourceVolumeInfo
 	NodeStates map[string]*ResourceNodeState
+	// DisklessNodes are nodes that join the resource purely as quorum
+	// tiebreakers: they vote but store no data.
+	DisklessNodes []string
+	// QuorumRisk is true when the resource has exactly two diskful nodes and
+	// no tiebreaker, so losing either node suspends I/O (no quorum majority).
+	QuorumRisk bool
 }
 
 // ResourceNodeState represents detailed state of a node for a resource
@@ -132,6 +138,29 @@ func (rm *ResourceManager) resourceHosts(ctx context.Context, resource string) (
 		return nil, fmt.Errorf("no hosts configured")
 	}
 	return append([]string(nil), rm.hosts...), nil
+}
+
+// disklessHosts returns the resolved addresses of a resource's diskless quorum
+// tiebreaker nodes, or nil when it has none. Kept separate from resourceHosts
+// because tiebreakers must never be treated as data-bearing nodes (e.g. as
+// failover Primary candidates) — only teardown needs them.
+func (rm *ResourceManager) disklessHosts(ctx context.Context, resource string) []string {
+	if rm.controller.db == nil {
+		return nil
+	}
+	dbRes, err := rm.controller.db.GetResource(ctx, resource)
+	if err != nil || dbRes == nil || dbRes.DisklessNodes == "" {
+		return nil
+	}
+	var hosts []string
+	for _, node := range strings.Split(dbRes.DisklessNodes, ",") {
+		node = strings.TrimSpace(node)
+		if node == "" {
+			continue
+		}
+		hosts = append(hosts, rm.controller.ResolveHost(node))
+	}
+	return hosts
 }
 
 type resourceConfigVolume struct {
@@ -260,7 +289,30 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	// For both LVM and ZFS, we use a consistent volume name
 	volumeName := fmt.Sprintf("%s_data", name)
 
-	// Convert node names to IP addresses for deployment
+	// Quorum tiebreaker: a 2-node resource under quorum=majority loses its
+	// majority the moment either node fails (the survivor is only 1/2), so
+	// DRBD suspends I/O. Add a third diskless node — it votes in quorum but
+	// stores no data — when one is available, so the survivor keeps a 2/3
+	// majority through any single-node failure. Mirrors LINSTOR's
+	// auto-add-quorum-tiebreaker. If no spare node exists we proceed with a
+	// bare 2-node resource but flag the quorum risk loudly.
+	var disklessNodes []string
+	if len(nodes) == 2 {
+		if rm.controller.config != nil && rm.controller.config.Resource.AutoTiebreaker {
+			if tb := rm.selectTiebreaker(ctx, nodes); tb != "" {
+				disklessNodes = []string{tb}
+				rm.controller.logger.Info("Adding diskless quorum tiebreaker to 2-node resource",
+					zap.String("resource", name),
+					zap.String("tiebreaker", tb))
+			}
+		}
+		if len(disklessNodes) == 0 {
+			rm.controller.logger.Warn("2-node resource has no quorum tiebreaker: a single node failure will suspend I/O (no quorum majority). Register a third node, or it stays a degraded 2-node resource.",
+				zap.String("resource", name))
+		}
+	}
+
+	// Convert diskful node names to IP addresses for deployment.
 	nodeIPs := make([]string, len(nodes))
 	for i, node := range nodes {
 		ip := rm.controller.nodes.GetNodeAddressByName(node)
@@ -269,6 +321,19 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		}
 		nodeIPs[i] = ip
 	}
+
+	// Diskless tiebreaker IPs, and the union of all participating node IPs.
+	// Config, `drbdadm up` and teardown reach every node; LV creation and
+	// create-md touch diskful nodes only.
+	disklessIPs := make([]string, len(disklessNodes))
+	for i, node := range disklessNodes {
+		ip := rm.controller.nodes.GetNodeAddressByName(node)
+		if ip == "" {
+			ip = node
+		}
+		disklessIPs[i] = ip
+	}
+	allIPs := append(append([]string{}, nodeIPs...), disklessIPs...)
 
 	// Pre-flight: reject a port already bound by another DRBD resource on the
 	// nodes (including ones SDS does not manage) with a clear message, rather
@@ -292,8 +357,9 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 			zap.String("name", name))
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		_, _ = rm.deployment.DRBDDown(cleanupCtx, nodeIPs, name)
-		_, _ = rm.deployment.Exec(cleanupCtx, nodeIPs, fmt.Sprintf("sudo rm -f /etc/drbd.d/%s.res", name))
+		_, _ = rm.deployment.DRBDDown(cleanupCtx, allIPs, name)
+		_, _ = rm.deployment.Exec(cleanupCtx, allIPs, fmt.Sprintf("sudo rm -f /etc/drbd.d/%s.res", name))
+		// Backing volumes exist on diskful nodes only.
 		if storageType == "zfs" || storageType == "zfs-thin" {
 			_, _ = rm.deployment.ZFSDestroyDataset(cleanupCtx, nodeIPs, fmt.Sprintf("%s/%s", pool, volumeName))
 		} else {
@@ -364,10 +430,10 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	if err != nil {
 		return fmt.Errorf("failed to allocate device minor: %w", err)
 	}
-	drbdConfig := rm.generateDrbdConfig(name, port, minor, nodes, protocol, pool, volumeName, storageType, drbdOptions)
+	drbdConfig := rm.generateDrbdConfig(name, port, minor, nodes, disklessNodes, protocol, pool, volumeName, storageType, drbdOptions)
 
-	// 3. Distribute config to all nodes
-	configResult, err := rm.deployment.DistributeConfig(ctx, nodeIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
+	// 3. Distribute config to all nodes (diskful + diskless tiebreaker)
+	configResult, err := rm.deployment.DistributeConfig(ctx, allIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
 	if err != nil {
 		return fmt.Errorf("failed to distribute config: %w", err)
 	}
@@ -375,7 +441,8 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		return fmt.Errorf("config distribution failed on some hosts")
 	}
 
-	// 4. Create metadata on all nodes
+	// 4. Create metadata on diskful nodes only. A diskless tiebreaker has no
+	// backing disk, so `drbdadm create-md` does not apply to it.
 	mdResult, err := rm.deployment.DRBDCreateMD(ctx, nodeIPs, name)
 	if err != nil {
 		return fmt.Errorf("failed to create metadata: %w", err)
@@ -384,8 +451,9 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		return fmt.Errorf("metadata creation failed on hosts: %v", mdResult.FailedHosts())
 	}
 
-	// 5. Bring up resource on all nodes
-	upResult, err := rm.deployment.DRBDUp(ctx, nodeIPs, name)
+	// 5. Bring up resource on all nodes. The diskless node comes up Diskless
+	// and connects; it only participates in quorum.
+	upResult, err := rm.deployment.DRBDUp(ctx, allIPs, name)
 	if err != nil {
 		return fmt.Errorf("failed to bring up resource: %w", err)
 	}
@@ -396,11 +464,12 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 	// 6. Save to database
 	if rm.controller.db != nil {
 		dbRes := &database.Resource{
-			Name:     name,
-			Port:     int(port),
-			Nodes:    strings.Join(nodes, ","),
-			Protocol: protocol,
-			Replicas: len(nodes),
+			Name:          name,
+			Port:          int(port),
+			Nodes:         strings.Join(nodes, ","),
+			Protocol:      protocol,
+			Replicas:      len(nodes),
+			DisklessNodes: strings.Join(disklessNodes, ","),
 		}
 		if err := rm.controller.db.SaveResource(ctx, dbRes); err != nil {
 			rm.controller.logger.Warn("Failed to save resource to database", zap.Error(err))
@@ -426,6 +495,46 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 
 	committed = true
 	return nil
+}
+
+// selectTiebreaker picks a registered node, not already part of the resource,
+// to serve as a diskless quorum tiebreaker. Online nodes are preferred;
+// selection is deterministic (lowest node name) so repeated creations are
+// stable. Returns "" when no spare node is available — the caller then keeps
+// the resource as a bare 2-node configuration.
+func (rm *ResourceManager) selectTiebreaker(ctx context.Context, nodes []string) string {
+	inUse := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		inUse[n] = true
+	}
+
+	all, err := rm.controller.nodes.ListNodes(ctx)
+	if err != nil {
+		rm.controller.logger.Warn("Failed to list nodes for tiebreaker selection", zap.Error(err))
+		return ""
+	}
+
+	var online, offline []string
+	for _, n := range all {
+		if n == nil || inUse[n.Name] {
+			continue
+		}
+		if n.State == NodeStateOnline {
+			online = append(online, n.Name)
+		} else {
+			offline = append(offline, n.Name)
+		}
+	}
+
+	candidates := online
+	if len(candidates) == 0 {
+		candidates = offline
+	}
+	if len(candidates) == 0 {
+		return ""
+	}
+	sort.Strings(candidates)
+	return candidates[0]
 }
 
 // resolveToIP resolves a hostname to an IP address. If the input is already
@@ -504,7 +613,7 @@ func getFirstNonLoopbackIP() string {
 }
 
 // generateDrbdConfig generates a DRBD resource configuration file
-func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor int, nodes []string, protocol, pool, volumeName, storageType string, options map[string]string) string {
+func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor int, nodes, disklessNodes []string, protocol, pool, volumeName, storageType string, options map[string]string) string {
 	var config strings.Builder
 
 	// Organize options by section -> key -> value
@@ -641,9 +750,17 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor in
 
 	config.WriteString("    }\n")
 
-	// Generate on sections for each node
-	var nodeIPs []string
-	for i, node := range nodes {
+	// Generate on sections for each node. Diskful nodes come first and share
+	// the resource-level volume 0 above; diskless tiebreaker nodes follow and
+	// override volume 0 with `disk none` so they join quorum without storing
+	// data. node-id is the position in this combined ordering.
+	allNodes := append(append([]string{}, nodes...), disklessNodes...)
+	diskless := make(map[string]bool, len(disklessNodes))
+	for _, n := range disklessNodes {
+		diskless[n] = true
+	}
+
+	for i, node := range allNodes {
 		// Get IP address from NodeManager by node name
 		ip := rm.controller.nodes.GetNodeAddressByName(node)
 
@@ -662,19 +779,24 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor in
 		// Resolve hostname to IP address if not already an IP
 		ip = resolveToIP(ip)
 
-		nodeIPs = append(nodeIPs, ip)
 		config.WriteString(fmt.Sprintf("\n    on %s {\n", node))
 		config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
 		config.WriteString(fmt.Sprintf("        node-id   %d;\n", i))
+		if diskless[node] {
+			config.WriteString("        volume 0 {\n")
+			config.WriteString(fmt.Sprintf("            device    minor %d;\n", minor))
+			config.WriteString("            disk      none;\n")
+			config.WriteString("        }\n")
+		}
 		config.WriteString("    }\n")
 	}
 
 	// Add connection-mesh for multi-node DRBD 9
 	// DRBD 9 requires a full mesh of connections between all nodes
-	if len(nodes) > 2 {
+	if len(allNodes) > 2 {
 		config.WriteString("\n    connection-mesh {\n")
 		config.WriteString("        hosts")
-		for _, node := range nodes {
+		for _, node := range allNodes {
 			config.WriteString(fmt.Sprintf(" %s", node))
 		}
 		config.WriteString(";\n")
@@ -719,6 +841,11 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 	var nodeAddresses []string
 	if dbRes.Nodes != "" {
 		nodeAddresses = strings.Split(dbRes.Nodes, ",")
+	}
+
+	var disklessNodes []string
+	if dbRes.DisklessNodes != "" {
+		disklessNodes = strings.Split(dbRes.DisklessNodes, ",")
 	}
 
 	rm.controller.logger.Debug("GetResource",
@@ -776,13 +903,17 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 	}
 
 	info := &ResourceInfo{
-		Name:       dbRes.Name,
-		Port:       uint32(dbRes.Port),
-		Protocol:   dbRes.Protocol,
-		Nodes:      nodeAddresses,
-		Role:       localRole, // Local node's role
-		Volumes:    volumes,
-		NodeStates: nodeStates,
+		Name:          dbRes.Name,
+		Port:          uint32(dbRes.Port),
+		Protocol:      dbRes.Protocol,
+		Nodes:         nodeAddresses,
+		Role:          localRole, // Local node's role
+		Volumes:       volumes,
+		NodeStates:    nodeStates,
+		DisklessNodes: disklessNodes,
+		// Two diskful nodes with no tiebreaker means a single failure drops
+		// below quorum majority and suspends I/O.
+		QuorumRisk: len(nodeAddresses) == 2 && len(disklessNodes) == 0,
 	}
 
 	if len(info.Volumes) == 0 && len(dbVolumes) > 0 {
@@ -1080,8 +1211,13 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		return err
 	}
 
-	// 1. Down resource on all nodeAddresses
-	downResult, err := rm.deployment.DRBDDown(ctx, hosts, name)
+	// Diskless quorum tiebreakers carry the config and a kernel resource but no
+	// backing volume. They must be torn down too, or the config and minor/port
+	// linger in the kernel as an orphan that blocks reusing them later.
+	allHosts := append(append([]string(nil), hosts...), rm.disklessHosts(ctx, name)...)
+
+	// 1. Down resource on all nodes (diskful + diskless tiebreaker)
+	downResult, err := rm.deployment.DRBDDown(ctx, allHosts, name)
 	if err != nil {
 		return fmt.Errorf("failed to bring down resource: %w", err)
 	}
@@ -1090,8 +1226,8 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		return fmt.Errorf("resource down failed on hosts: %v", downResult.FailedHosts())
 	}
 
-	// 2. Delete config file from all nodeAddresses
-	err = rm.deployment.DeleteConfig(ctx, hosts, fmt.Sprintf("/etc/drbd.d/%s.res", name))
+	// 2. Delete config file from all nodes
+	err = rm.deployment.DeleteConfig(ctx, allHosts, fmt.Sprintf("/etc/drbd.d/%s.res", name))
 	if err != nil {
 		return fmt.Errorf("failed to delete config: %w", err)
 	}
@@ -1169,7 +1305,14 @@ func (rm *ResourceManager) findPortConflict(ctx context.Context, host string, po
 }
 
 func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, host string) (int, error) {
-	result, err := rm.deployment.Exec(ctx, []string{host}, "cat /etc/drbd.d/*.res 2>/dev/null || true")
+	// Minors are a node-global namespace. Scanning only .res files misses
+	// minors still held by the kernel from a previously-removed resource: its
+	// config is gone but the /dev/drbdN node lingers and the minor stays
+	// "configured", so reusing it makes `drbdadm create-md` fail with
+	// "Device 'N' is configured". Take the max over both the configs and the
+	// live /dev/drbd* device nodes so a fresh minor never collides.
+	result, err := rm.deployment.Exec(ctx, []string{host},
+		"cat /etc/drbd.d/*.res 2>/dev/null; ls -1d /dev/drbd[0-9]* 2>/dev/null || true")
 	if err != nil {
 		return 0, err
 	}
@@ -1179,9 +1322,40 @@ func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, host string) (in
 			if minor, ok := parseDeviceMinor(line); ok && minor > maxMinor {
 				maxMinor = minor
 			}
+			if minor, ok := parseDevNodeMinor(line); ok && minor > maxMinor {
+				maxMinor = minor
+			}
 		}
 	}
 	return maxMinor + 1, nil
+}
+
+// parseDevNodeMinor extracts N from a DRBD device node path like
+// "/dev/drbd1005", ignoring the symlink tree under /dev/drbd/.
+func parseDevNodeMinor(line string) (int, bool) {
+	trimmed := strings.TrimSpace(line)
+	const prefix = "/dev/drbd"
+	if !strings.HasPrefix(trimmed, prefix) {
+		return 0, false
+	}
+	rest := strings.TrimPrefix(trimmed, prefix)
+	if rest == "" || !isAllDigits(rest) {
+		return 0, false
+	}
+	n, err := strconv.Atoi(rest)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func isAllDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // parseDeviceMinor extracts N from DRBD config lines like

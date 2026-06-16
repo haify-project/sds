@@ -36,6 +36,8 @@ export interface Resource {
   role: string;
   volumes: Volume[];
   nodeStates: Record<string, NodeState>;
+  disklessNodes?: string[];
+  quorumRisk?: boolean;
 }
 
 export interface Volume {

@@ -303,13 +303,15 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 		Success: true,
 		Message: "Resource found",
 		Resource: &sdspb.ResourceInfo{
-			Name:       resource.Name,
-			Port:       resource.Port,
-			Protocol:   resource.Protocol,
-			Nodes:      resource.Nodes,
-			Role:       resource.Role,
-			Volumes:    pbVolumes,
-			NodeStates: nodeStates,
+			Name:          resource.Name,
+			Port:          resource.Port,
+			Protocol:      resource.Protocol,
+			Nodes:         resource.Nodes,
+			Role:          resource.Role,
+			Volumes:       pbVolumes,
+			NodeStates:    nodeStates,
+			DisklessNodes: resource.DisklessNodes,
+			QuorumRisk:    resource.QuorumRisk,
 		},
 	}, nil
 }
@@ -336,12 +338,14 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 			})
 		}
 		pbResources = append(pbResources, &sdspb.ResourceInfo{
-			Name:     r.Name,
-			Port:     r.Port,
-			Protocol: r.Protocol,
-			Nodes:    r.Nodes,
-			Role:     r.Role,
-			Volumes:  pbVolumes,
+			Name:          r.Name,
+			Port:          r.Port,
+			Protocol:      r.Protocol,
+			Nodes:         r.Nodes,
+			Role:          r.Role,
+			Volumes:       pbVolumes,
+			DisklessNodes: r.DisklessNodes,
+			QuorumRisk:    r.QuorumRisk,
 		})
 	}
 

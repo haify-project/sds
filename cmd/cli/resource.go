@@ -220,6 +220,12 @@ func resourceGet() *cobra.Command {
 				}
 				fmt.Printf("    %s: %s%s\n", node, state, diskState)
 			}
+			for _, node := range resource.DisklessNodes {
+				fmt.Printf("    %s: diskless (quorum tiebreaker)\n", node)
+			}
+			if resource.QuorumRisk {
+				fmt.Printf("  Quorum:   ⚠ 2-node, no tiebreaker — a single node failure suspends I/O\n")
+			}
 			if len(resource.Volumes) > 0 {
 				fmt.Printf("  Volumes:\n")
 				for _, vol := range resource.Volumes {
@@ -289,7 +295,14 @@ func resourceList() *cobra.Command {
 			}
 
 			for _, r := range resources {
-				fmt.Printf("%s (port=%d, protocol=%s, nodes=%v)\n", r.Name, r.Port, r.Protocol, r.Nodes)
+				line := fmt.Sprintf("%s (port=%d, protocol=%s, nodes=%v)", r.Name, r.Port, r.Protocol, r.Nodes)
+				if len(r.DisklessNodes) > 0 {
+					line += fmt.Sprintf(" tiebreaker=%v", r.DisklessNodes)
+				}
+				if r.QuorumRisk {
+					line += " ⚠quorum-risk"
+				}
+				fmt.Println(line)
 			}
 
 			return nil

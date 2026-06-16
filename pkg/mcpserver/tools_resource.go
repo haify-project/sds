@@ -25,13 +25,15 @@ type nodeStateOut struct {
 }
 
 type resourceOut struct {
-	Name       string         `json:"name"`
-	Port       uint32         `json:"port"`
-	Protocol   string         `json:"protocol,omitempty"`
-	Nodes      []string       `json:"nodes"`
-	Role       string         `json:"role,omitempty"`
-	Volumes    []volumeOut    `json:"volumes,omitempty"`
-	NodeStates []nodeStateOut `json:"node_states,omitempty"`
+	Name          string         `json:"name"`
+	Port          uint32         `json:"port"`
+	Protocol      string         `json:"protocol,omitempty"`
+	Nodes         []string       `json:"nodes"`
+	Role          string         `json:"role,omitempty"`
+	Volumes       []volumeOut    `json:"volumes,omitempty"`
+	NodeStates    []nodeStateOut `json:"node_states,omitempty"`
+	DisklessNodes []string       `json:"diskless_nodes,omitempty"`
+	QuorumRisk    bool           `json:"quorum_risk,omitempty"`
 }
 
 type resourceListOut struct {
@@ -140,13 +142,15 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			out := resourceListOut{Resources: make([]resourceOut, 0, len(resources))}
 			for _, r := range resources {
 				out.Resources = append(out.Resources, resourceOut{
-					Name:       r.Name,
-					Port:       r.Port,
-					Protocol:   r.Protocol,
-					Nodes:      r.Nodes,
-					Role:       r.Role,
-					Volumes:    volumesOut(r.Volumes),
-					NodeStates: nodeStatesOut(r.NodeStates),
+					Name:          r.Name,
+					Port:          r.Port,
+					Protocol:      r.Protocol,
+					Nodes:         r.Nodes,
+					Role:          r.Role,
+					Volumes:       volumesOut(r.Volumes),
+					NodeStates:    nodeStatesOut(r.NodeStates),
+					DisklessNodes: r.DisklessNodes,
+					QuorumRisk:    r.QuorumRisk,
 				})
 			}
 			return nil, out, nil

@@ -167,6 +167,15 @@ function ResourceRow({
             <Database className="h-4 w-4 text-primary" />
           </span>
           <span className="font-medium">{resource.name}</span>
+          {resource.quorumRisk && (
+            <Badge
+              variant="outline"
+              className="border-amber-500 text-amber-600"
+              title="2-node resource with no quorum tiebreaker: a single node failure suspends I/O"
+            >
+              quorum risk
+            </Badge>
+          )}
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">{resource.port}</TableCell>
@@ -190,6 +199,14 @@ function ResourceRow({
               </span>
             );
           })}
+          {resource.disklessNodes?.map((node) => (
+            <span key={node} className="inline-flex items-center gap-1">
+              <Badge variant="outline" title="Diskless quorum tiebreaker">
+                tiebreaker
+              </Badge>
+              <span className="text-xs text-muted-foreground">{node}</span>
+            </span>
+          ))}
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">
