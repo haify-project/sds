@@ -140,4 +140,85 @@ func (s *Server) registerSnapshotTools(srv *mcp.Server) {
 			}
 			return nil, ok(fmt.Sprintf("resource %s restored from snapshot %s on %s", in.Resource, in.Name, in.Node)), nil
 		})
+
+	s.registerSnapshotScheduleTools(srv)
+}
+
+type scheduleCreateIn struct {
+	Resource string `json:"resource" jsonschema:"DRBD resource to snapshot on a schedule"`
+	Cron     string `json:"cron" jsonschema:"standard 5-field cron expression, e.g. '0 * * * *' for hourly"`
+	Hourly   int32  `json:"keep_hourly,omitempty" jsonschema:"hourly snapshots to retain"`
+	Daily    int32  `json:"keep_daily,omitempty" jsonschema:"daily snapshots to retain"`
+	Weekly   int32  `json:"keep_weekly,omitempty" jsonschema:"weekly snapshots to retain"`
+	Monthly  int32  `json:"keep_monthly,omitempty" jsonschema:"monthly snapshots to retain"`
+	Yearly   int32  `json:"keep_yearly,omitempty" jsonschema:"yearly snapshots to retain"`
+	Disabled bool   `json:"disabled,omitempty" jsonschema:"create the schedule disabled"`
+}
+
+type scheduleNameIn struct {
+	Name string `json:"name" jsonschema:"schedule name (equals the resource name)"`
+}
+
+type scheduleOut struct {
+	Name     string `json:"name"`
+	Resource string `json:"resource"`
+	Cron     string `json:"cron"`
+	Enabled  bool   `json:"enabled"`
+	Keep     string `json:"keep"`
+	LastRun  string `json:"last_run,omitempty"`
+	NextRun  string `json:"next_run,omitempty"`
+}
+
+type scheduleListOut struct {
+	Schedules []scheduleOut `json:"schedules"`
+}
+
+// registerSnapshotScheduleTools adds cron-driven snapshot schedule tools.
+func (s *Server) registerSnapshotScheduleTools(srv *mcp.Server) {
+	addWrite(s, srv, writeTool("sds_snapshot_schedule_create", "Create snapshot schedule",
+		"Create (or replace) a cron-driven snapshot schedule for a resource. Snapshots are taken on every "+
+			"diskful node and pruned by a grandfather-father-son retention policy. One schedule per resource. "+
+			"Set at least one keep_* count."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in scheduleCreateIn) (*mcp.CallToolResult, opResult, error) {
+			keep := &sdspb.GFSRetention{
+				Hourly: in.Hourly, Daily: in.Daily, Weekly: in.Weekly, Monthly: in.Monthly, Yearly: in.Yearly,
+			}
+			if err := s.client.CreateSnapshotSchedule(ctx, in.Resource, in.Cron, keep, !in.Disabled); err != nil {
+				return nil, opResult{}, err
+			}
+			return nil, ok(fmt.Sprintf("snapshot schedule for %s created (cron %q)", in.Resource, in.Cron)), nil
+		})
+
+	addRead(s, srv, readOnlyTool("sds_snapshot_schedule_list", "List snapshot schedules",
+		"List all cron-driven snapshot schedules with their retention policy, last run and next run time."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, scheduleListOut, error) {
+			schedules, err := s.client.ListSnapshotSchedules(ctx)
+			if err != nil {
+				return nil, scheduleListOut{}, err
+			}
+			out := scheduleListOut{Schedules: make([]scheduleOut, 0, len(schedules))}
+			for _, sc := range schedules {
+				k := sc.Keep
+				out.Schedules = append(out.Schedules, scheduleOut{
+					Name:     sc.Name,
+					Resource: sc.Resource,
+					Cron:     sc.Cron,
+					Enabled:  sc.Enabled,
+					Keep: fmt.Sprintf("hourly=%d daily=%d weekly=%d monthly=%d yearly=%d",
+						k.GetHourly(), k.GetDaily(), k.GetWeekly(), k.GetMonthly(), k.GetYearly()),
+					LastRun: sc.LastRun,
+					NextRun: sc.NextRun,
+				})
+			}
+			return nil, out, nil
+		})
+
+	addWrite(s, srv, destructiveTool("sds_snapshot_schedule_delete", "Delete snapshot schedule",
+		"Delete a snapshot schedule by name. Existing snapshots are kept; only future scheduled snapshots stop."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in scheduleNameIn) (*mcp.CallToolResult, opResult, error) {
+			if err := s.client.DeleteSnapshotSchedule(ctx, in.Name); err != nil {
+				return nil, opResult{}, err
+			}
+			return nil, ok(fmt.Sprintf("snapshot schedule %s deleted", in.Name)), nil
+		})
 }

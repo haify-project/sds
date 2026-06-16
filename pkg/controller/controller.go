@@ -51,6 +51,7 @@ type Controller struct {
 	snapshots *SnapshotManager
 	nodes     *NodeManager
 	gateway   *gateway.Manager
+	schedules *ScheduleManager
 }
 
 // New creates a new controller
@@ -90,6 +91,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	ctrl.resources = NewResourceManager(ctrl)
 	ctrl.snapshots = NewSnapshotManager(ctrl)
 	ctrl.nodes = NewNodeManager(ctrl)
+	ctrl.schedules = NewScheduleManager(ctrl)
 
 	// Initialize gateway with adapters
 	gwResourceManager := NewGatewayResourceManager(ctrl.resources,
@@ -208,6 +210,16 @@ func (c *Controller) Start() error {
 		return fmt.Errorf("failed to start UI server: %w", err)
 	}
 
+	// Start the snapshot scheduler. Only the active controller reaches here
+	// (self-HA promotes a single node), so no distributed coordination is
+	// needed. Schedules persist in the DB and reload on the next active node
+	// after failover.
+	if c.config.Schedule.Enabled && c.db != nil {
+		if err := c.schedules.Start(context.Background()); err != nil {
+			c.logger.Warn("Failed to start snapshot scheduler", zap.Error(err))
+		}
+	}
+
 	c.logger.Info("SDS controller started",
 		zap.String("address", c.config.Server.ListenAddress),
 		zap.Int("port", c.config.Server.Port),
@@ -221,6 +233,11 @@ func (c *Controller) Stop() {
 	c.logger.Info("Stopping SDS controller")
 
 	c.cancel()
+
+	// Stop the snapshot scheduler
+	if c.schedules != nil {
+		c.schedules.Stop()
+	}
 
 	// Stop metrics server
 	if c.metricsServer != nil {

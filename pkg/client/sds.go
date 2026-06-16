@@ -788,6 +788,47 @@ func (c *SDSClient) ListSnapshots(ctx context.Context, volume, node string) ([]*
 	return resp.Snapshots, nil
 }
 
+// CreateSnapshotSchedule creates a cron-driven snapshot schedule with GFS retention.
+func (c *SDSClient) CreateSnapshotSchedule(ctx context.Context, resource, cron string, keep *sdspb.GFSRetention, enabled bool) error {
+	resp, err := c.client.CreateSnapshotSchedule(ctx, &sdspb.CreateSnapshotScheduleRequest{
+		Resource: resource,
+		Cron:     cron,
+		Keep:     keep,
+		Enabled:  enabled,
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
+// ListSnapshotSchedules returns all snapshot schedules.
+func (c *SDSClient) ListSnapshotSchedules(ctx context.Context) ([]*sdspb.SnapshotScheduleInfo, error) {
+	resp, err := c.client.ListSnapshotSchedules(ctx, &sdspb.ListSnapshotSchedulesRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Schedules, nil
+}
+
+// DeleteSnapshotSchedule removes a snapshot schedule by name.
+func (c *SDSClient) DeleteSnapshotSchedule(ctx context.Context, name string) error {
+	resp, err := c.client.DeleteSnapshotSchedule(ctx, &sdspb.DeleteSnapshotScheduleRequest{Name: name})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 // RestoreSnapshot restores a snapshot to its source volume
 func (c *SDSClient) RestoreSnapshot(ctx context.Context, volume, snapshotName, node string) error {
 	req := &sdspb.RestoreSnapshotRequest{

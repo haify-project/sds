@@ -20,6 +20,15 @@ type Config struct {
 	RBAC     RBACConfig     `mapstructure:"rbac"`
 	Gateway  GatewayConfig  `mapstructure:"gateway"`
 	Resource ResourceConfig `mapstructure:"resource"`
+	Schedule ScheduleConfig `mapstructure:"schedule"`
+}
+
+// ScheduleConfig is the master switch for the snapshot scheduler. When enabled,
+// the active controller runs cron-driven snapshot schedules and prunes old
+// snapshots per each schedule's GFS retention policy. Disabling it stops all
+// scheduled snapshots without deleting the schedule definitions.
+type ScheduleConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // ResourceConfig controls DRBD resource provisioning behavior. A 2-node
@@ -219,6 +228,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)
 	viper.SetDefault("resource.auto_tiebreaker", true)
+	viper.SetDefault("schedule.enabled", true)
 }
 
 // Save saves configuration to file
@@ -235,6 +245,7 @@ func (c *Config) Save(path string) error {
 	config.Set("rbac", c.RBAC)
 	config.Set("gateway", c.Gateway)
 	config.Set("resource", c.Resource)
+	config.Set("schedule", c.Schedule)
 
 	return config.WriteConfigAs(path)
 }

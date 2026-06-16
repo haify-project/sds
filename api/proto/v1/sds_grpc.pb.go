@@ -19,83 +19,86 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SDSController_CreatePool_FullMethodName            = "/v1.SDSController/CreatePool"
-	SDSController_DeletePool_FullMethodName            = "/v1.SDSController/DeletePool"
-	SDSController_GetPool_FullMethodName               = "/v1.SDSController/GetPool"
-	SDSController_ListPools_FullMethodName             = "/v1.SDSController/ListPools"
-	SDSController_AddDiskToPool_FullMethodName         = "/v1.SDSController/AddDiskToPool"
-	SDSController_RegisterNode_FullMethodName          = "/v1.SDSController/RegisterNode"
-	SDSController_UnregisterNode_FullMethodName        = "/v1.SDSController/UnregisterNode"
-	SDSController_GetNode_FullMethodName               = "/v1.SDSController/GetNode"
-	SDSController_ListNodes_FullMethodName             = "/v1.SDSController/ListNodes"
-	SDSController_HealthCheck_FullMethodName           = "/v1.SDSController/HealthCheck"
-	SDSController_CreateResource_FullMethodName        = "/v1.SDSController/CreateResource"
-	SDSController_DeleteResource_FullMethodName        = "/v1.SDSController/DeleteResource"
-	SDSController_GetResource_FullMethodName           = "/v1.SDSController/GetResource"
-	SDSController_ListResources_FullMethodName         = "/v1.SDSController/ListResources"
-	SDSController_AddVolume_FullMethodName             = "/v1.SDSController/AddVolume"
-	SDSController_RemoveVolume_FullMethodName          = "/v1.SDSController/RemoveVolume"
-	SDSController_ResizeVolume_FullMethodName          = "/v1.SDSController/ResizeVolume"
-	SDSController_UpdateResourceOptions_FullMethodName = "/v1.SDSController/UpdateResourceOptions"
-	SDSController_ResourceStatus_FullMethodName        = "/v1.SDSController/ResourceStatus"
-	SDSController_SetPrimary_FullMethodName            = "/v1.SDSController/SetPrimary"
-	SDSController_SetSecondary_FullMethodName          = "/v1.SDSController/SetSecondary"
-	SDSController_CreateFilesystem_FullMethodName      = "/v1.SDSController/CreateFilesystem"
-	SDSController_MountResource_FullMethodName         = "/v1.SDSController/MountResource"
-	SDSController_UnmountResource_FullMethodName       = "/v1.SDSController/UnmountResource"
-	SDSController_MakeHa_FullMethodName                = "/v1.SDSController/MakeHa"
-	SDSController_EvictHa_FullMethodName               = "/v1.SDSController/EvictHa"
-	SDSController_DeleteHa_FullMethodName              = "/v1.SDSController/DeleteHa"
-	SDSController_GetHa_FullMethodName                 = "/v1.SDSController/GetHa"
-	SDSController_ListHa_FullMethodName                = "/v1.SDSController/ListHa"
-	SDSController_EnableSelfHa_FullMethodName          = "/v1.SDSController/EnableSelfHa"
-	SDSController_DisableSelfHa_FullMethodName         = "/v1.SDSController/DisableSelfHa"
-	SDSController_GetSelfHaStatus_FullMethodName       = "/v1.SDSController/GetSelfHaStatus"
-	SDSController_CreateSnapshot_FullMethodName        = "/v1.SDSController/CreateSnapshot"
-	SDSController_DeleteSnapshot_FullMethodName        = "/v1.SDSController/DeleteSnapshot"
-	SDSController_RestoreSnapshot_FullMethodName       = "/v1.SDSController/RestoreSnapshot"
-	SDSController_ListSnapshots_FullMethodName         = "/v1.SDSController/ListSnapshots"
-	SDSController_CreateNFSGateway_FullMethodName      = "/v1.SDSController/CreateNFSGateway"
-	SDSController_CreateISCSIGateway_FullMethodName    = "/v1.SDSController/CreateISCSIGateway"
-	SDSController_CreateNVMeGateway_FullMethodName     = "/v1.SDSController/CreateNVMeGateway"
-	SDSController_DeleteGateway_FullMethodName         = "/v1.SDSController/DeleteGateway"
-	SDSController_GetGateway_FullMethodName            = "/v1.SDSController/GetGateway"
-	SDSController_ListGateways_FullMethodName          = "/v1.SDSController/ListGateways"
-	SDSController_StartGateway_FullMethodName          = "/v1.SDSController/StartGateway"
-	SDSController_StopGateway_FullMethodName           = "/v1.SDSController/StopGateway"
-	SDSController_AddNFSExport_FullMethodName          = "/v1.SDSController/AddNFSExport"
-	SDSController_RemoveNFSExport_FullMethodName       = "/v1.SDSController/RemoveNFSExport"
-	SDSController_ListNFSExports_FullMethodName        = "/v1.SDSController/ListNFSExports"
-	SDSController_AddISCSILUN_FullMethodName           = "/v1.SDSController/AddISCSILUN"
-	SDSController_RemoveISCSILUN_FullMethodName        = "/v1.SDSController/RemoveISCSILUN"
-	SDSController_ListISCSILUNs_FullMethodName         = "/v1.SDSController/ListISCSILUNs"
-	SDSController_AddISCSIInitiator_FullMethodName     = "/v1.SDSController/AddISCSIInitiator"
-	SDSController_RemoveISCSIInitiator_FullMethodName  = "/v1.SDSController/RemoveISCSIInitiator"
-	SDSController_ListISCSIInitiators_FullMethodName   = "/v1.SDSController/ListISCSIInitiators"
-	SDSController_SetISCSIChap_FullMethodName          = "/v1.SDSController/SetISCSIChap"
-	SDSController_GetISCSIChap_FullMethodName          = "/v1.SDSController/GetISCSIChap"
-	SDSController_AddNVMeNamespace_FullMethodName      = "/v1.SDSController/AddNVMeNamespace"
-	SDSController_RemoveNVMeNamespace_FullMethodName   = "/v1.SDSController/RemoveNVMeNamespace"
-	SDSController_ListNVMeNamespaces_FullMethodName    = "/v1.SDSController/ListNVMeNamespaces"
-	SDSController_AddNVMeHost_FullMethodName           = "/v1.SDSController/AddNVMeHost"
-	SDSController_RemoveNVMeHost_FullMethodName        = "/v1.SDSController/RemoveNVMeHost"
-	SDSController_ListNVMeHosts_FullMethodName         = "/v1.SDSController/ListNVMeHosts"
-	SDSController_CreateZFSPool_FullMethodName         = "/v1.SDSController/CreateZFSPool"
-	SDSController_DeleteZFSPool_FullMethodName         = "/v1.SDSController/DeleteZFSPool"
-	SDSController_ListZFSpools_FullMethodName          = "/v1.SDSController/ListZFSpools"
-	SDSController_CreateZFSDataset_FullMethodName      = "/v1.SDSController/CreateZFSDataset"
-	SDSController_CreateZFSVolume_FullMethodName       = "/v1.SDSController/CreateZFSVolume"
-	SDSController_ResizeZFSVolume_FullMethodName       = "/v1.SDSController/ResizeZFSVolume"
-	SDSController_DeleteZFSDataset_FullMethodName      = "/v1.SDSController/DeleteZFSDataset"
-	SDSController_CreateZFSSnapshot_FullMethodName     = "/v1.SDSController/CreateZFSSnapshot"
-	SDSController_DeleteZFSSnapshot_FullMethodName     = "/v1.SDSController/DeleteZFSSnapshot"
-	SDSController_ListZFSSnapshots_FullMethodName      = "/v1.SDSController/ListZFSSnapshots"
-	SDSController_RestoreZFSSnapshot_FullMethodName    = "/v1.SDSController/RestoreZFSSnapshot"
-	SDSController_CloneZFSSnapshot_FullMethodName      = "/v1.SDSController/CloneZFSSnapshot"
-	SDSController_CreateLvmSnapshot_FullMethodName     = "/v1.SDSController/CreateLvmSnapshot"
-	SDSController_DeleteLvmSnapshot_FullMethodName     = "/v1.SDSController/DeleteLvmSnapshot"
-	SDSController_ListLvmSnapshots_FullMethodName      = "/v1.SDSController/ListLvmSnapshots"
-	SDSController_RestoreLvmSnapshot_FullMethodName    = "/v1.SDSController/RestoreLvmSnapshot"
+	SDSController_CreatePool_FullMethodName             = "/v1.SDSController/CreatePool"
+	SDSController_DeletePool_FullMethodName             = "/v1.SDSController/DeletePool"
+	SDSController_GetPool_FullMethodName                = "/v1.SDSController/GetPool"
+	SDSController_ListPools_FullMethodName              = "/v1.SDSController/ListPools"
+	SDSController_AddDiskToPool_FullMethodName          = "/v1.SDSController/AddDiskToPool"
+	SDSController_RegisterNode_FullMethodName           = "/v1.SDSController/RegisterNode"
+	SDSController_UnregisterNode_FullMethodName         = "/v1.SDSController/UnregisterNode"
+	SDSController_GetNode_FullMethodName                = "/v1.SDSController/GetNode"
+	SDSController_ListNodes_FullMethodName              = "/v1.SDSController/ListNodes"
+	SDSController_HealthCheck_FullMethodName            = "/v1.SDSController/HealthCheck"
+	SDSController_CreateResource_FullMethodName         = "/v1.SDSController/CreateResource"
+	SDSController_DeleteResource_FullMethodName         = "/v1.SDSController/DeleteResource"
+	SDSController_GetResource_FullMethodName            = "/v1.SDSController/GetResource"
+	SDSController_ListResources_FullMethodName          = "/v1.SDSController/ListResources"
+	SDSController_AddVolume_FullMethodName              = "/v1.SDSController/AddVolume"
+	SDSController_RemoveVolume_FullMethodName           = "/v1.SDSController/RemoveVolume"
+	SDSController_ResizeVolume_FullMethodName           = "/v1.SDSController/ResizeVolume"
+	SDSController_UpdateResourceOptions_FullMethodName  = "/v1.SDSController/UpdateResourceOptions"
+	SDSController_ResourceStatus_FullMethodName         = "/v1.SDSController/ResourceStatus"
+	SDSController_SetPrimary_FullMethodName             = "/v1.SDSController/SetPrimary"
+	SDSController_SetSecondary_FullMethodName           = "/v1.SDSController/SetSecondary"
+	SDSController_CreateFilesystem_FullMethodName       = "/v1.SDSController/CreateFilesystem"
+	SDSController_MountResource_FullMethodName          = "/v1.SDSController/MountResource"
+	SDSController_UnmountResource_FullMethodName        = "/v1.SDSController/UnmountResource"
+	SDSController_MakeHa_FullMethodName                 = "/v1.SDSController/MakeHa"
+	SDSController_EvictHa_FullMethodName                = "/v1.SDSController/EvictHa"
+	SDSController_DeleteHa_FullMethodName               = "/v1.SDSController/DeleteHa"
+	SDSController_GetHa_FullMethodName                  = "/v1.SDSController/GetHa"
+	SDSController_ListHa_FullMethodName                 = "/v1.SDSController/ListHa"
+	SDSController_EnableSelfHa_FullMethodName           = "/v1.SDSController/EnableSelfHa"
+	SDSController_DisableSelfHa_FullMethodName          = "/v1.SDSController/DisableSelfHa"
+	SDSController_GetSelfHaStatus_FullMethodName        = "/v1.SDSController/GetSelfHaStatus"
+	SDSController_CreateSnapshot_FullMethodName         = "/v1.SDSController/CreateSnapshot"
+	SDSController_DeleteSnapshot_FullMethodName         = "/v1.SDSController/DeleteSnapshot"
+	SDSController_RestoreSnapshot_FullMethodName        = "/v1.SDSController/RestoreSnapshot"
+	SDSController_ListSnapshots_FullMethodName          = "/v1.SDSController/ListSnapshots"
+	SDSController_CreateSnapshotSchedule_FullMethodName = "/v1.SDSController/CreateSnapshotSchedule"
+	SDSController_ListSnapshotSchedules_FullMethodName  = "/v1.SDSController/ListSnapshotSchedules"
+	SDSController_DeleteSnapshotSchedule_FullMethodName = "/v1.SDSController/DeleteSnapshotSchedule"
+	SDSController_CreateNFSGateway_FullMethodName       = "/v1.SDSController/CreateNFSGateway"
+	SDSController_CreateISCSIGateway_FullMethodName     = "/v1.SDSController/CreateISCSIGateway"
+	SDSController_CreateNVMeGateway_FullMethodName      = "/v1.SDSController/CreateNVMeGateway"
+	SDSController_DeleteGateway_FullMethodName          = "/v1.SDSController/DeleteGateway"
+	SDSController_GetGateway_FullMethodName             = "/v1.SDSController/GetGateway"
+	SDSController_ListGateways_FullMethodName           = "/v1.SDSController/ListGateways"
+	SDSController_StartGateway_FullMethodName           = "/v1.SDSController/StartGateway"
+	SDSController_StopGateway_FullMethodName            = "/v1.SDSController/StopGateway"
+	SDSController_AddNFSExport_FullMethodName           = "/v1.SDSController/AddNFSExport"
+	SDSController_RemoveNFSExport_FullMethodName        = "/v1.SDSController/RemoveNFSExport"
+	SDSController_ListNFSExports_FullMethodName         = "/v1.SDSController/ListNFSExports"
+	SDSController_AddISCSILUN_FullMethodName            = "/v1.SDSController/AddISCSILUN"
+	SDSController_RemoveISCSILUN_FullMethodName         = "/v1.SDSController/RemoveISCSILUN"
+	SDSController_ListISCSILUNs_FullMethodName          = "/v1.SDSController/ListISCSILUNs"
+	SDSController_AddISCSIInitiator_FullMethodName      = "/v1.SDSController/AddISCSIInitiator"
+	SDSController_RemoveISCSIInitiator_FullMethodName   = "/v1.SDSController/RemoveISCSIInitiator"
+	SDSController_ListISCSIInitiators_FullMethodName    = "/v1.SDSController/ListISCSIInitiators"
+	SDSController_SetISCSIChap_FullMethodName           = "/v1.SDSController/SetISCSIChap"
+	SDSController_GetISCSIChap_FullMethodName           = "/v1.SDSController/GetISCSIChap"
+	SDSController_AddNVMeNamespace_FullMethodName       = "/v1.SDSController/AddNVMeNamespace"
+	SDSController_RemoveNVMeNamespace_FullMethodName    = "/v1.SDSController/RemoveNVMeNamespace"
+	SDSController_ListNVMeNamespaces_FullMethodName     = "/v1.SDSController/ListNVMeNamespaces"
+	SDSController_AddNVMeHost_FullMethodName            = "/v1.SDSController/AddNVMeHost"
+	SDSController_RemoveNVMeHost_FullMethodName         = "/v1.SDSController/RemoveNVMeHost"
+	SDSController_ListNVMeHosts_FullMethodName          = "/v1.SDSController/ListNVMeHosts"
+	SDSController_CreateZFSPool_FullMethodName          = "/v1.SDSController/CreateZFSPool"
+	SDSController_DeleteZFSPool_FullMethodName          = "/v1.SDSController/DeleteZFSPool"
+	SDSController_ListZFSpools_FullMethodName           = "/v1.SDSController/ListZFSpools"
+	SDSController_CreateZFSDataset_FullMethodName       = "/v1.SDSController/CreateZFSDataset"
+	SDSController_CreateZFSVolume_FullMethodName        = "/v1.SDSController/CreateZFSVolume"
+	SDSController_ResizeZFSVolume_FullMethodName        = "/v1.SDSController/ResizeZFSVolume"
+	SDSController_DeleteZFSDataset_FullMethodName       = "/v1.SDSController/DeleteZFSDataset"
+	SDSController_CreateZFSSnapshot_FullMethodName      = "/v1.SDSController/CreateZFSSnapshot"
+	SDSController_DeleteZFSSnapshot_FullMethodName      = "/v1.SDSController/DeleteZFSSnapshot"
+	SDSController_ListZFSSnapshots_FullMethodName       = "/v1.SDSController/ListZFSSnapshots"
+	SDSController_RestoreZFSSnapshot_FullMethodName     = "/v1.SDSController/RestoreZFSSnapshot"
+	SDSController_CloneZFSSnapshot_FullMethodName       = "/v1.SDSController/CloneZFSSnapshot"
+	SDSController_CreateLvmSnapshot_FullMethodName      = "/v1.SDSController/CreateLvmSnapshot"
+	SDSController_DeleteLvmSnapshot_FullMethodName      = "/v1.SDSController/DeleteLvmSnapshot"
+	SDSController_ListLvmSnapshots_FullMethodName       = "/v1.SDSController/ListLvmSnapshots"
+	SDSController_RestoreLvmSnapshot_FullMethodName     = "/v1.SDSController/RestoreLvmSnapshot"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -149,6 +152,10 @@ type SDSControllerClient interface {
 	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
 	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (*RestoreSnapshotResponse, error)
 	ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// Snapshot schedule operations (cron-driven snapshots + GFS retention)
+	CreateSnapshotSchedule(ctx context.Context, in *CreateSnapshotScheduleRequest, opts ...grpc.CallOption) (*CreateSnapshotScheduleResponse, error)
+	ListSnapshotSchedules(ctx context.Context, in *ListSnapshotSchedulesRequest, opts ...grpc.CallOption) (*ListSnapshotSchedulesResponse, error)
+	DeleteSnapshotSchedule(ctx context.Context, in *DeleteSnapshotScheduleRequest, opts ...grpc.CallOption) (*DeleteSnapshotScheduleResponse, error)
 	// Gateway operations
 	CreateNFSGateway(ctx context.Context, in *CreateNFSGatewayRequest, opts ...grpc.CallOption) (*CreateNFSGatewayResponse, error)
 	CreateISCSIGateway(ctx context.Context, in *CreateISCSIGatewayRequest, opts ...grpc.CallOption) (*CreateISCSIGatewayResponse, error)
@@ -562,6 +569,36 @@ func (c *sDSControllerClient) ListSnapshots(ctx context.Context, in *ListSnapsho
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSnapshotsResponse)
 	err := c.cc.Invoke(ctx, SDSController_ListSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateSnapshotSchedule(ctx context.Context, in *CreateSnapshotScheduleRequest, opts ...grpc.CallOption) (*CreateSnapshotScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateSnapshotScheduleResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateSnapshotSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListSnapshotSchedules(ctx context.Context, in *ListSnapshotSchedulesRequest, opts ...grpc.CallOption) (*ListSnapshotSchedulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotSchedulesResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListSnapshotSchedules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteSnapshotSchedule(ctx context.Context, in *DeleteSnapshotScheduleRequest, opts ...grpc.CallOption) (*DeleteSnapshotScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteSnapshotScheduleResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteSnapshotSchedule_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1029,6 +1066,10 @@ type SDSControllerServer interface {
 	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
 	RestoreSnapshot(context.Context, *RestoreSnapshotRequest) (*RestoreSnapshotResponse, error)
 	ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error)
+	// Snapshot schedule operations (cron-driven snapshots + GFS retention)
+	CreateSnapshotSchedule(context.Context, *CreateSnapshotScheduleRequest) (*CreateSnapshotScheduleResponse, error)
+	ListSnapshotSchedules(context.Context, *ListSnapshotSchedulesRequest) (*ListSnapshotSchedulesResponse, error)
+	DeleteSnapshotSchedule(context.Context, *DeleteSnapshotScheduleRequest) (*DeleteSnapshotScheduleResponse, error)
 	// Gateway operations
 	CreateNFSGateway(context.Context, *CreateNFSGatewayRequest) (*CreateNFSGatewayResponse, error)
 	CreateISCSIGateway(context.Context, *CreateISCSIGatewayRequest) (*CreateISCSIGatewayResponse, error)
@@ -1195,6 +1236,15 @@ func (UnimplementedSDSControllerServer) RestoreSnapshot(context.Context, *Restor
 }
 func (UnimplementedSDSControllerServer) ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListSnapshots not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateSnapshotSchedule(context.Context, *CreateSnapshotScheduleRequest) (*CreateSnapshotScheduleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateSnapshotSchedule not implemented")
+}
+func (UnimplementedSDSControllerServer) ListSnapshotSchedules(context.Context, *ListSnapshotSchedulesRequest) (*ListSnapshotSchedulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListSnapshotSchedules not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteSnapshotSchedule(context.Context, *DeleteSnapshotScheduleRequest) (*DeleteSnapshotScheduleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteSnapshotSchedule not implemented")
 }
 func (UnimplementedSDSControllerServer) CreateNFSGateway(context.Context, *CreateNFSGatewayRequest) (*CreateNFSGatewayResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateNFSGateway not implemented")
@@ -1984,6 +2034,60 @@ func _SDSController_ListSnapshots_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).ListSnapshots(ctx, req.(*ListSnapshotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateSnapshotSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSnapshotScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateSnapshotSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateSnapshotSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateSnapshotSchedule(ctx, req.(*CreateSnapshotScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListSnapshotSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSnapshotSchedulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListSnapshotSchedules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListSnapshotSchedules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListSnapshotSchedules(ctx, req.(*ListSnapshotSchedulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteSnapshotSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSnapshotScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteSnapshotSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteSnapshotSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteSnapshotSchedule(ctx, req.(*DeleteSnapshotScheduleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2876,6 +2980,18 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSnapshots",
 			Handler:    _SDSController_ListSnapshots_Handler,
+		},
+		{
+			MethodName: "CreateSnapshotSchedule",
+			Handler:    _SDSController_CreateSnapshotSchedule_Handler,
+		},
+		{
+			MethodName: "ListSnapshotSchedules",
+			Handler:    _SDSController_ListSnapshotSchedules_Handler,
+		},
+		{
+			MethodName: "DeleteSnapshotSchedule",
+			Handler:    _SDSController_DeleteSnapshotSchedule_Handler,
 		},
 		{
 			MethodName: "CreateNFSGateway",

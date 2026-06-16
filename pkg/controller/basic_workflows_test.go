@@ -378,6 +378,7 @@ func newBasicTestController(dep deploymentClient) *Controller {
 	ctrl.snapshots = NewSnapshotManager(ctrl)
 	ctrl.resources.SetDeployment(dep)
 	ctrl.gateway = gateway.New(nil, nil, zap.NewNop(), nil)
+	ctrl.schedules = NewScheduleManager(ctrl)
 	return ctrl
 }
 

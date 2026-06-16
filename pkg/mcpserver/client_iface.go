@@ -49,6 +49,11 @@ type ControllerClient interface {
 	DeleteZFSSnapshot(ctx context.Context, snapshot, node string) error
 	RestoreZFSSnapshot(ctx context.Context, dataset, snapshotName, node string) error
 
+	// Snapshot schedules (cron-driven, GFS retention)
+	CreateSnapshotSchedule(ctx context.Context, resource, cron string, keep *sdspb.GFSRetention, enabled bool) error
+	ListSnapshotSchedules(ctx context.Context) ([]*sdspb.SnapshotScheduleInfo, error)
+	DeleteSnapshotSchedule(ctx context.Context, name string) error
+
 	// Gateways
 	ListGateways(ctx context.Context) ([]*sdspb.GatewayInfo, error)
 	GetGateway(ctx context.Context, id string) (*sdspb.GatewayInfo, error)

@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/liliang-cn/sds/pkg/database"
@@ -742,6 +744,84 @@ func (s *Server) ListSnapshots(ctx context.Context, req *sdspb.ListSnapshotsRequ
 		Message:   "Snapshots listed successfully",
 		Snapshots: pbSnapshots,
 	}, nil
+}
+
+// ==================== SNAPSHOT SCHEDULE OPERATIONS ====================
+
+func (s *Server) CreateSnapshotSchedule(ctx context.Context, req *sdspb.CreateSnapshotScheduleRequest) (*sdspb.CreateSnapshotScheduleResponse, error) {
+	err := s.ctrl.schedules.CreateSchedule(ctx, req.Resource, req.Cron, gfsFromProto(req.Keep), req.Enabled)
+	if err != nil {
+		return &sdspb.CreateSnapshotScheduleResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.CreateSnapshotScheduleResponse{
+		Success: true,
+		Message: fmt.Sprintf("Snapshot schedule for %q created", req.Resource),
+	}, nil
+}
+
+func (s *Server) ListSnapshotSchedules(ctx context.Context, req *sdspb.ListSnapshotSchedulesRequest) (*sdspb.ListSnapshotSchedulesResponse, error) {
+	schedules, err := s.ctrl.schedules.ListSchedules(ctx)
+	if err != nil {
+		return &sdspb.ListSnapshotSchedulesResponse{Success: false, Message: err.Error()}, nil
+	}
+	now := time.Now()
+	var out []*sdspb.SnapshotScheduleInfo
+	for _, sc := range schedules {
+		info := &sdspb.SnapshotScheduleInfo{
+			Name:     sc.Name,
+			Resource: sc.Resource,
+			Cron:     sc.Cron,
+			Enabled:  sc.Enabled,
+			Keep:     gfsToProto(sc.Keep),
+		}
+		if !sc.LastRun.IsZero() {
+			info.LastRun = sc.LastRun.UTC().Format(time.RFC3339)
+		}
+		if sc.Enabled {
+			if next := NextRun(sc.Cron, now); !next.IsZero() {
+				info.NextRun = next.UTC().Format(time.RFC3339)
+			}
+		}
+		out = append(out, info)
+	}
+	return &sdspb.ListSnapshotSchedulesResponse{
+		Success:   true,
+		Message:   "Snapshot schedules listed successfully",
+		Schedules: out,
+	}, nil
+}
+
+func (s *Server) DeleteSnapshotSchedule(ctx context.Context, req *sdspb.DeleteSnapshotScheduleRequest) (*sdspb.DeleteSnapshotScheduleResponse, error) {
+	if err := s.ctrl.schedules.DeleteSchedule(ctx, req.Name); err != nil {
+		return &sdspb.DeleteSnapshotScheduleResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.DeleteSnapshotScheduleResponse{
+		Success: true,
+		Message: fmt.Sprintf("Snapshot schedule %q deleted", req.Name),
+	}, nil
+}
+
+func gfsFromProto(p *sdspb.GFSRetention) database.GFSPolicy {
+	if p == nil {
+		return database.GFSPolicy{}
+	}
+	return database.GFSPolicy{
+		Hourly:  int(p.Hourly),
+		Daily:   int(p.Daily),
+		Weekly:  int(p.Weekly),
+		Monthly: int(p.Monthly),
+		Yearly:  int(p.Yearly),
+	}
+}
+
+func gfsToProto(p database.GFSPolicy) *sdspb.GFSRetention {
+	return &sdspb.GFSRetention{
+		Hourly:  int32(p.Hourly),
+		Daily:   int32(p.Daily),
+		Weekly:  int32(p.Weekly),
+		Monthly: int32(p.Monthly),
+		Yearly:  int32(p.Yearly),
+	}
 }
 
 // ==================== GATEWAY OPERATIONS ====================

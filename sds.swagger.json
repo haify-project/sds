@@ -2023,6 +2023,89 @@
         ]
       }
     },
+    "/v1/snapshot-schedules": {
+      "get": {
+        "operationId": "SDSController_ListSnapshotSchedules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSnapshotSchedulesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "summary": "Snapshot schedule operations (cron-driven snapshots + GFS retention)",
+        "operationId": "SDSController_CreateSnapshotSchedule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateSnapshotScheduleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateSnapshotScheduleRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/snapshot-schedules/{name}": {
+      "delete": {
+        "operationId": "SDSController_DeleteSnapshotSchedule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteSnapshotScheduleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/volumes/{volume_1}/snapshots": {
       "get": {
         "operationId": "SDSController_ListSnapshots2",
@@ -3693,6 +3776,34 @@
         }
       }
     },
+    "v1CreateSnapshotScheduleRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "keep": {
+          "$ref": "#/definitions/v1GFSRetention"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1CreateSnapshotScheduleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1CreateZFSDatasetRequest": {
       "type": "object",
       "properties": {
@@ -3852,6 +3963,17 @@
         }
       }
     },
+    "v1DeleteSnapshotScheduleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1DeleteZFSDatasetResponse": {
       "type": "object",
       "properties": {
@@ -3965,6 +4087,32 @@
           "type": "string"
         }
       }
+    },
+    "v1GFSRetention": {
+      "type": "object",
+      "properties": {
+        "hourly": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "daily": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "weekly": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "monthly": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "yearly": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "GFSRetention is a grandfather-father-son retention policy: how many\nsnapshots to keep per time bucket. Zero disables a bucket."
     },
     "v1GatewayInfo": {
       "type": "object",
@@ -4416,6 +4564,24 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ResourceInfo"
+          }
+        }
+      }
+    },
+    "v1ListSnapshotSchedulesResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "schedules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SnapshotScheduleInfo"
           }
         }
       }
@@ -4999,6 +5165,32 @@
           "format": "uint64"
         },
         "createdAt": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SnapshotScheduleInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "resource": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "keep": {
+          "$ref": "#/definitions/v1GFSRetention"
+        },
+        "lastRun": {
+          "type": "string"
+        },
+        "nextRun": {
           "type": "string"
         }
       }

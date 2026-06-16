@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/liliang-cn/sds/pkg/util"
 	"github.com/spf13/cobra"
 )
@@ -769,7 +770,140 @@ func resourceSnapshot() *cobra.Command {
 	cmd.AddCommand(resourceSnapshotList())
 	cmd.AddCommand(resourceSnapshotRestore())
 	cmd.AddCommand(resourceSnapshotDelete())
+	cmd.AddCommand(resourceSnapshotSchedule())
 
+	return cmd
+}
+
+// resourceSnapshotSchedule manages cron-driven snapshot schedules with GFS retention.
+func resourceSnapshotSchedule() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "schedule",
+		Short: "Scheduled snapshots with GFS retention",
+	}
+	cmd.AddCommand(resourceSnapshotScheduleCreate())
+	cmd.AddCommand(resourceSnapshotScheduleList())
+	cmd.AddCommand(resourceSnapshotScheduleDelete())
+	return cmd
+}
+
+func resourceSnapshotScheduleCreate() *cobra.Command {
+	var resource, cronExpr string
+	var hourly, daily, weekly, monthly, yearly int
+	var disabled bool
+
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create or replace a snapshot schedule for a resource",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if resource == "" {
+				return fmt.Errorf("--resource is required")
+			}
+			if cronExpr == "" {
+				return fmt.Errorf("--cron is required (standard 5-field cron, e.g. \"0 * * * *\")")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			keep := &sdspb.GFSRetention{
+				Hourly:  int32(hourly),
+				Daily:   int32(daily),
+				Weekly:  int32(weekly),
+				Monthly: int32(monthly),
+				Yearly:  int32(yearly),
+			}
+			if err := sdsClient.CreateSnapshotSchedule(ctx, resource, cronExpr, keep, !disabled); err != nil {
+				return fmt.Errorf("failed to create snapshot schedule: %w", err)
+			}
+			fmt.Printf("Snapshot schedule for %q created (cron=%q)\n", resource, cronExpr)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&resource, "resource", "", "Target resource (required)")
+	cmd.Flags().StringVar(&cronExpr, "cron", "", "Standard 5-field cron expression (required)")
+	cmd.Flags().IntVar(&hourly, "keep-hourly", 0, "Hourly snapshots to retain")
+	cmd.Flags().IntVar(&daily, "keep-daily", 0, "Daily snapshots to retain")
+	cmd.Flags().IntVar(&weekly, "keep-weekly", 0, "Weekly snapshots to retain")
+	cmd.Flags().IntVar(&monthly, "keep-monthly", 0, "Monthly snapshots to retain")
+	cmd.Flags().IntVar(&yearly, "keep-yearly", 0, "Yearly snapshots to retain")
+	cmd.Flags().BoolVar(&disabled, "disabled", false, "Create the schedule disabled")
+	return cmd
+}
+
+func resourceSnapshotScheduleList() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List snapshot schedules",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			schedules, err := sdsClient.ListSnapshotSchedules(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to list snapshot schedules: %w", err)
+			}
+			if len(schedules) == 0 {
+				fmt.Println("No snapshot schedules found")
+				return nil
+			}
+			for _, s := range schedules {
+				state := "enabled"
+				if !s.Enabled {
+					state = "disabled"
+				}
+				k := s.Keep
+				fmt.Printf("%s (resource=%s, cron=%q, %s)\n", s.Name, s.Resource, s.Cron, state)
+				fmt.Printf("  keep: hourly=%d daily=%d weekly=%d monthly=%d yearly=%d\n",
+					k.GetHourly(), k.GetDaily(), k.GetWeekly(), k.GetMonthly(), k.GetYearly())
+				if s.LastRun != "" {
+					fmt.Printf("  last run: %s\n", s.LastRun)
+				}
+				if s.NextRun != "" {
+					fmt.Printf("  next run: %s\n", s.NextRun)
+				}
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func resourceSnapshotScheduleDelete() *cobra.Command {
+	var name string
+	cmd := &cobra.Command{
+		Use:   "delete",
+		Short: "Delete a snapshot schedule (existing snapshots are kept)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if name == "" {
+				return fmt.Errorf("--name is required (the resource name)")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.DeleteSnapshotSchedule(ctx, name); err != nil {
+				return fmt.Errorf("failed to delete snapshot schedule: %w", err)
+			}
+			fmt.Printf("Snapshot schedule %q deleted\n", name)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "", "Schedule name (= resource name) (required)")
 	return cmd
 }
 
