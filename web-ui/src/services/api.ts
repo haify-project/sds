@@ -40,6 +40,28 @@ export interface Resource {
   quorumRisk?: boolean;
 }
 
+export interface GFSRetention {
+  hourly?: number;
+  daily?: number;
+  weekly?: number;
+  monthly?: number;
+  yearly?: number;
+}
+
+export interface SnapshotSchedule {
+  name: string;
+  resource: string;
+  cron: string;
+  enabled: boolean;
+  keep?: GFSRetention;
+  lastRun?: string;
+  nextRun?: string;
+}
+
+export interface SnapshotSchedulesResponse extends ApiResponse {
+  schedules: SnapshotSchedule[];
+}
+
 export interface Volume {
   volumeId: number;
   device: string;
@@ -294,6 +316,27 @@ class ApiClient {
     this.request<ApiResponse>(
       `/resources/${encodeURIComponent(name)}/options`,
       { method: 'POST', body: JSON.stringify({ options }) }
+    );
+
+  // ==================== Snapshot schedules ====================
+  getSnapshotSchedules = () =>
+    this.request<SnapshotSchedulesResponse>('/snapshot-schedules');
+
+  createSnapshotSchedule = (data: {
+    resource: string;
+    cron: string;
+    keep: GFSRetention;
+    enabled: boolean;
+  }) =>
+    this.request<ApiResponse>('/snapshot-schedules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+  deleteSnapshotSchedule = (name: string) =>
+    this.request<ApiResponse>(
+      `/snapshot-schedules/${encodeURIComponent(name)}`,
+      { method: 'DELETE' },
     );
 
   setPrimary = (resource: string, node: string, force = false) =>
