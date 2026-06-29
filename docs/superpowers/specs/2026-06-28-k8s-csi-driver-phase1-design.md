@@ -32,6 +32,20 @@ This document covers **sub-project ① only**.
   controller's execution backend without touching the CSI layer.
 - **Repo:** monorepo — code lives in the existing `sds` repo, reusing
   `pkg/client` and `api/proto/v1`.
+- **Build vs fork Piraeus:** build the CSI driver fresh; do **not** fork
+  piraeus-operator or linstor-csi as a base. Both are Apache-2.0 (forking is
+  legally fine), but piraeus-operator's value is orchestrating LINSTOR (useless
+  with our backend), and linstor-csi's reusable part is only the CSI skeleton
+  (the easy part) while its backend layer is LINSTOR's data model (not reusable).
+  A fork would be more deletion than authoring. Instead, reuse the
+  **backend-agnostic** pieces and treat the rest as reference:
+  - `drbd-module-loader` image/DaemonSet — reuse as-is in ④ (loads the DRBD
+    kernel module; backend-agnostic).
+  - CSI sidecar deployment patterns (external-provisioner, node-driver-registrar,
+    livenessprobe args + RBAC) and CSIDriver/StorageClass/privileged-DaemonSet
+    manifest shapes — copy as a reference to avoid known pitfalls.
+  - linstor-csi's CSI service skeleton and idempotency handling — read as a
+    reference implementation; write our own code.
 
 ## Architecture
 
