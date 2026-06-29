@@ -1,0 +1,16 @@
+# Build both CSI plugin binaries into a minimal image.
+FROM golang:1.25 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /out/csi-controller ./cmd/csi-controller && \
+    CGO_ENABLED=0 go build -o /out/csi-node ./cmd/csi-node
+
+# Node plugin needs mount/umount/mkfs from the host PATH; use a small base that
+# has util-linux + e2fsprogs + xfsprogs.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        util-linux e2fsprogs xfsprogs && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/csi-controller /usr/local/bin/csi-controller
+COPY --from=build /out/csi-node /usr/local/bin/csi-node
