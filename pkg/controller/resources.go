@@ -6,6 +6,7 @@ import (
 	"net"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -334,6 +335,15 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		disklessIPs[i] = ip
 	}
 	allIPs := append(append([]string{}, nodeIPs...), disklessIPs...)
+
+	if port == 0 {
+		p, err := rm.nextGlobalPort(ctx, nodeIPs[0])
+		if err != nil {
+			return fmt.Errorf("allocate port: %w", err)
+		}
+		port = p
+		rm.controller.logger.Info("auto-allocated DRBD port", zap.Uint32("port", port), zap.String("resource", name))
+	}
 
 	// Pre-flight: reject a port already bound by another DRBD resource on the
 	// nodes (including ones SDS does not manage) with a clear message, rather
@@ -1328,6 +1338,47 @@ func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, host string) (in
 		}
 	}
 	return maxMinor + 1, nil
+}
+
+var portLineRe = regexp.MustCompile(`:(\d+);`)
+
+// parsePortsFromResConfigs extracts DRBD ports from the `address ...:<port>;`
+// lines of concatenated .res file contents.
+func parsePortsFromResConfigs(text string) []uint32 {
+	var ports []uint32
+	for _, m := range portLineRe.FindAllStringSubmatch(text, -1) {
+		if p, err := strconv.Atoi(m[1]); err == nil {
+			ports = append(ports, uint32(p))
+		}
+	}
+	return ports
+}
+
+// lowestFreePort returns the lowest port >= base not present in used.
+func lowestFreePort(used []uint32, base uint32) uint32 {
+	set := map[uint32]bool{}
+	for _, p := range used {
+		set[p] = true
+	}
+	for p := base; ; p++ {
+		if !set[p] {
+			return p
+		}
+	}
+}
+
+// nextGlobalPort scans existing .res files on host and returns the lowest free
+// DRBD port at or above 7000.
+func (rm *ResourceManager) nextGlobalPort(ctx context.Context, host string) (uint32, error) {
+	result, err := rm.deployment.Exec(ctx, []string{host}, "cat /etc/drbd.d/*.res 2>/dev/null || true")
+	if err != nil {
+		return 0, err
+	}
+	text := ""
+	for _, hr := range result.Hosts {
+		text += hr.Output
+	}
+	return lowestFreePort(parsePortsFromResConfigs(text), 7000), nil
 }
 
 // parseDevNodeMinor extracts N from a DRBD device node path like

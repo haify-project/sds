@@ -31,6 +31,8 @@ build: ui-sync
 	go build -o bin/sds-cli ./cmd/cli
 	@echo "Building sds-mcp..."
 	go build -o bin/sds-mcp ./cmd/mcp
+	go build -o bin/csi-controller ./cmd/csi-controller
+	go build -o bin/csi-node ./cmd/csi-node
 
 # Run tests
 test: ui-ensure

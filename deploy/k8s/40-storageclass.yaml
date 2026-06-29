@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: sds-drbd
+provisioner: sds.csi.liliang-cn.com
+parameters:
+  pool: "vg0"
+  replicas: "2"
+  storageType: "lvm"
+reclaimPolicy: Delete
+allowVolumeExpansion: false
+volumeBindingMode: WaitForFirstConsumer

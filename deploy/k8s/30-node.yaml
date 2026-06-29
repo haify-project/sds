@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sds-csi-node
+  namespace: kube-system
+spec:
+  selector: { matchLabels: { app: sds-csi-node } }
+  template:
+    metadata: { labels: { app: sds-csi-node } }
+    spec:
+      serviceAccountName: sds-csi-node
+      hostNetwork: true
+      containers:
+        - name: node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
+          args:
+            - "--csi-address=/csi/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/sds.csi.liliang-cn.com/csi.sock"
+          volumeMounts:
+            - { name: socket-dir, mountPath: /csi }
+            - { name: registration-dir, mountPath: /registration }
+        - name: plugin
+          image: sds-csi:latest
+          command: ["/usr/local/bin/csi-node"]
+          args:
+            - "--endpoint=unix:///csi/csi.sock"
+            - "--sds-controller=sds-controller:3374"
+          securityContext:
+            privileged: true
+          env:
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: NODE_IP
+              valueFrom: { fieldRef: { fieldPath: status.hostIP } }
+          volumeMounts:
+            - { name: socket-dir, mountPath: /csi }
+            - { name: kubelet-dir, mountPath: /var/lib/kubelet, mountPropagation: Bidirectional }
+            - { name: dev-dir, mountPath: /dev }
+      volumes:
+        - name: socket-dir
+          hostPath: { path: /var/lib/kubelet/plugins/sds.csi.liliang-cn.com, type: DirectoryOrCreate }
+        - name: registration-dir
+          hostPath: { path: /var/lib/kubelet/plugins_registry, type: Directory }
+        - name: kubelet-dir
+          hostPath: { path: /var/lib/kubelet, type: Directory }
+        - name: dev-dir
+          hostPath: { path: /dev, type: Directory }

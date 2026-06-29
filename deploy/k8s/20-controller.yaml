@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sds-csi-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: sds-csi-controller } }
+  template:
+    metadata: { labels: { app: sds-csi-controller } }
+    spec:
+      serviceAccountName: sds-csi-controller
+      containers:
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v5.1.0
+          args:
+            - "--csi-address=/csi/csi.sock"
+            - "--feature-gates=Topology=true"
+            - "--strict-topology"
+            - "--immediate-topology=false"
+            - "--v=2"
+          volumeMounts:
+            - { name: socket-dir, mountPath: /csi }
+        - name: plugin
+          image: sds-csi:latest
+          command: ["/usr/local/bin/csi-controller"]
+          args:
+            - "--endpoint=unix:///csi/csi.sock"
+            - "--sds-controller=sds-controller:3374"
+          volumeMounts:
+            - { name: socket-dir, mountPath: /csi }
+        - name: liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.14.0
+          args: ["--csi-address=/csi/csi.sock"]
+          volumeMounts:
+            - { name: socket-dir, mountPath: /csi }
+      volumes:
+        - { name: socket-dir, emptyDir: {} }
