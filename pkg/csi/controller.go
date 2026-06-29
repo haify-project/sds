@@ -26,11 +26,23 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if req.GetName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume name is required")
 	}
+	if len(req.GetVolumeCapabilities()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "volume capabilities are required")
+	}
 	name := sanitizeResourceName(req.GetName())
 	sizeGB := bytesToGiB(req.GetCapacityRange().GetRequiredBytes())
 
-	// Idempotency: if the resource already exists, return it unchanged.
+	// Idempotency: if the resource already exists, check capacity range compatibility.
 	if existing, err := s.backend.GetResource(ctx, name); err == nil && existing != nil {
+		// If the caller specified an exact capacity range (RequiredBytes == LimitBytes),
+		// and it differs from what was provisioned, return AlreadyExists per CSI spec.
+		cr := req.GetCapacityRange()
+		if cr != nil && cr.GetLimitBytes() > 0 && cr.GetRequiredBytes() == cr.GetLimitBytes() {
+			existingSizeGB := bytesToGiB(cr.GetRequiredBytes())
+			if len(existing.GetVolumes()) > 0 && uint64(existingSizeGB) != existing.GetVolumes()[0].GetSizeGb() {
+				return nil, status.Errorf(codes.AlreadyExists, "volume %q already exists with different capacity", name)
+			}
+		}
 		return &csi.CreateVolumeResponse{Volume: &csi.Volume{
 			VolumeId:           existing.GetName(),
 			CapacityBytes:      int64(sizeGB) * giB,
@@ -92,6 +104,15 @@ func (s *controllerServer) ControllerGetCapabilities(context.Context, *csi.Contr
 }
 
 func (s *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+	if req.GetVolumeId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume id is required")
+	}
+	if len(req.GetVolumeCapabilities()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "volume capabilities are required")
+	}
+	if _, err := s.backend.GetResource(ctx, req.GetVolumeId()); err != nil {
+		return nil, status.Errorf(codes.NotFound, "volume %q not found", req.GetVolumeId())
+	}
 	for _, c := range req.GetVolumeCapabilities() {
 		if c.GetAccessMode().GetMode() != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
 			return &csi.ValidateVolumeCapabilitiesResponse{}, nil // unsupported -> empty Confirmed

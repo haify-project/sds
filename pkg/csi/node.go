@@ -2,6 +2,7 @@ package csi
 
 import (
 	"context"
+	"os"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"go.uber.org/zap"
@@ -42,6 +43,9 @@ func (s *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	staging := req.GetStagingTargetPath()
 	if res == "" || staging == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume id and staging path are required")
+	}
+	if req.GetVolumeCapability() == nil {
+		return nil, status.Error(codes.InvalidArgument, "volume capability is required")
 	}
 
 	// Promote this node to DRBD Primary.
@@ -97,6 +101,9 @@ func (s *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	if staging == "" || target == "" {
 		return nil, status.Error(codes.InvalidArgument, "staging and target paths are required")
 	}
+	if req.GetVolumeCapability() == nil {
+		return nil, status.Error(codes.InvalidArgument, "volume capability is required")
+	}
 	if err := s.mounter.EnsureDir(target); err != nil {
 		return nil, status.Errorf(codes.Internal, "mkdir target: %v", err)
 	}
@@ -121,8 +128,13 @@ func (s *nodeServer) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpubli
 	if req.GetTargetPath() == "" {
 		return nil, status.Error(codes.InvalidArgument, "target path is required")
 	}
-	if err := s.mounter.Unmount(req.GetTargetPath()); err != nil {
+	target := req.GetTargetPath()
+	if err := s.mounter.Unmount(target); err != nil {
 		return nil, status.Errorf(codes.Internal, "unmount target: %v", err)
+	}
+	// CSI spec requires the SP to delete the target_path after a successful unpublish.
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		return nil, status.Errorf(codes.Internal, "remove target: %v", err)
 	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
