@@ -623,10 +623,20 @@ message CreateResourceRequest {
   uint32 port = 2;
   repeated string nodes = 3;
   string protocol = 4;
-  uint32 size_gb = 5;
-  string pool = 6;
-  string storage_type = 7;  // "lvm" or "zfs"
+  uint32 size_gb = 5;  // single-volume shorthand; ignored when `volumes` is set
+  string pool = 6;     // single-volume shorthand; ignored when `volumes` is set
+  string storage_type = 7;  // "lvm", "lvm-thin" or "zfs" (applies to all volumes)
   map<string, string> drbd_options = 8;
+  // volumes lists one or more DRBD volumes to create atomically (volume 0..N).
+  // When empty, a single volume is created from size_gb/pool for back-compat.
+  repeated VolumeSpec volumes = 9;
+}
+
+// VolumeSpec is one DRBD volume within a resource. storage_type comes from the
+// resource; each volume may target its own pool.
+message VolumeSpec {
+  uint32 size_gb = 1;
+  string pool = 2;  // optional; auto-selected when empty
 }
 
 message CreateResourceResponse {

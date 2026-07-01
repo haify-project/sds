@@ -300,6 +300,11 @@ class ApiClient {
     sizeGb?: number;
     pool?: string;
     storageType?: string;
+    // Multiple DRBD volumes (volume 0..N). When omitted, sizeGb/pool create a
+    // single volume. Each volume shares the resource's storageType.
+    volumes?: { sizeGb: number; pool?: string }[];
+    // DRBD options as "section/key" -> value (e.g. "net/max-buffers" -> "8000").
+    drbdOptions?: Record<string, string>;
   }) =>
     this.request<ApiResponse>('/resources', {
       method: 'POST',

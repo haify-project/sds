@@ -250,45 +250,89 @@ func findVolumeRecord(volumes []*database.Volume, volumeID uint32) *database.Vol
 	return nil
 }
 
-// CreateResource creates a DRBD resource across multiple nodes
+// VolumeSpec describes one DRBD volume to create: its size and (optionally) the
+// pool it is backed by. The storage type is a resource-level property shared by
+// all volumes.
+type VolumeSpec struct {
+	SizeGB uint32
+	Pool   string
+}
+
+// resolvedVolume is a VolumeSpec with its pool auto-selected/normalized, a
+// concrete backing-volume name and (later) an allocated device minor.
+type resolvedVolume struct {
+	id         int
+	volumeName string
+	pool       string
+	sizeGB     uint32
+	minor      int
+}
+
+// CreateResource creates a single-volume DRBD resource. It is a thin wrapper
+// over CreateResourceWithVolumes retained for existing callers (CLI, self-HA,
+// CSI) that only ever create one volume.
 func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, storageType string, drbdOptions map[string]string) error {
+	return rm.CreateResourceWithVolumes(ctx, name, port, nodes, protocol, storageType, drbdOptions,
+		[]VolumeSpec{{SizeGB: sizeGB, Pool: pool}})
+}
+
+// CreateResourceWithVolumes creates a DRBD resource with one or more volumes
+// (volume 0..N) atomically across the given nodes. All volumes share the
+// resource's storage type; each may target its own pool.
+func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name string, port uint32, nodes []string, protocol string, storageType string, drbdOptions map[string]string, volumes []VolumeSpec) error {
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+	if len(volumes) == 0 {
+		return fmt.Errorf("at least one volume is required")
+	}
+
+	if storageType == "" {
+		storageType = "lvm"
+	}
+	if protocol == "" {
+		protocol = "C"
+	}
+
+	// Resolve every volume: auto-select+normalize its pool and derive a backing
+	// volume name. Volume 0 keeps the historical "<name>_data" name (so existing
+	// resources and callers are unaffected); extra volumes use "<name>_vol<K>".
+	resolved := make([]resolvedVolume, len(volumes))
+	for i, v := range volumes {
+		if v.SizeGB == 0 {
+			return fmt.Errorf("volume %d: size must be greater than 0 GB", i)
+		}
+		pool := v.Pool
+		if pool == "" {
+			// Auto-select the pool when none was given: with exactly one
+			// registered pool name the choice is unambiguous; otherwise the
+			// caller must decide.
+			selected, err := rm.autoSelectPool(ctx)
+			if err != nil {
+				return err
+			}
+			pool = selected
+		}
+		volumeName := fmt.Sprintf("%s_data", name)
+		if i > 0 {
+			volumeName = fmt.Sprintf("%s_vol%d", name, i)
+		}
+		resolved[i] = resolvedVolume{
+			id:         i,
+			volumeName: volumeName,
+			pool:       normalizeManagedName(pool),
+			sizeGB:     v.SizeGB,
+		}
+	}
+
 	rm.controller.logger.Info("Creating DRBD resource",
 		zap.String("name", name),
 		zap.Uint32("port", port),
 		zap.Strings("nodes", nodes),
 		zap.String("protocol", protocol),
-		zap.Uint32("size_gb", sizeGB),
-		zap.String("pool", pool),
+		zap.Int("volumes", len(resolved)),
 		zap.String("storage_type", storageType),
 		zap.Any("options", drbdOptions))
-
-	if rm.deployment == nil {
-		return fmt.Errorf("deployment client not set")
-	}
-
-	// Auto-select the pool when none was given: with exactly one registered
-	// pool name the choice is unambiguous; otherwise the caller must decide.
-	// (A hardcoded fallback name here used to send lvcreate at a volume
-	// group that doesn't exist.)
-	if pool == "" {
-		selected, err := rm.autoSelectPool(ctx)
-		if err != nil {
-			return err
-		}
-		pool = selected
-	}
-	pool = normalizeManagedName(pool)
-
-	if storageType == "" {
-		storageType = "lvm"
-	}
-
-	if protocol == "" {
-		protocol = "C"
-	}
-
-	// For both LVM and ZFS, we use a consistent volume name
-	volumeName := fmt.Sprintf("%s_data", name)
 
 	// Quorum tiebreaker: a 2-node resource under quorum=majority loses its
 	// majority the moment either node fails (the survivor is only 1/2), so
@@ -370,77 +414,34 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		_, _ = rm.deployment.DRBDDown(cleanupCtx, allIPs, name)
 		_, _ = rm.deployment.Exec(cleanupCtx, allIPs, fmt.Sprintf("sudo rm -f /etc/drbd.d/%s.res", name))
 		// Backing volumes exist on diskful nodes only.
-		if storageType == "zfs" || storageType == "zfs-thin" {
-			_, _ = rm.deployment.ZFSDestroyDataset(cleanupCtx, nodeIPs, fmt.Sprintf("%s/%s", pool, volumeName))
-		} else {
-			_, _ = rm.deployment.LVRemove(cleanupCtx, nodeIPs, fmt.Sprintf("/dev/%s/%s", pool, volumeName))
+		for _, v := range resolved {
+			if storageType == "zfs" || storageType == "zfs-thin" {
+				_, _ = rm.deployment.ZFSDestroyDataset(cleanupCtx, nodeIPs, fmt.Sprintf("%s/%s", v.pool, v.volumeName))
+			} else {
+				_, _ = rm.deployment.LVRemove(cleanupCtx, nodeIPs, fmt.Sprintf("/dev/%s/%s", v.pool, v.volumeName))
+			}
 		}
 	}()
 
-	// 1. Create storage volumes on all nodes (LVM or ZFS)
-	if storageType == "zfs" || storageType == "zfs-thin" {
-		// Create ZFS zvol on all nodes
-		// For zfs-thin, ZFSCreateThinDataset handles sparse creation (which is default for ZVOLs created with -s)
-		for i, nodeIP := range nodeIPs {
-			zvolPath := fmt.Sprintf("%s/%s", pool, volumeName)
-			result, err := rm.deployment.ZFSCreateThinDataset(ctx, []string{nodeIP}, pool, volumeName, fmt.Sprintf("%dG", sizeGB))
-			if err != nil {
-				return fmt.Errorf("failed to create ZFS zvol on %s: %w", nodes[i], err)
-			}
-			if !result.AllSuccess() {
-				for host, hres := range result.Hosts {
-					if !hres.Success {
-						return fmt.Errorf("ZFS zvol creation failed on %s: %s", host, hres.Output)
-					}
-				}
-			}
-			rm.controller.logger.Info("Created ZFS zvol",
-				zap.String("zvol", zvolPath),
-				zap.String("node", nodes[i]))
-		}
-	} else if storageType == "lvm-thin" {
-		// Create LVM Thin LV
-		// Convention: Thin Pool name is pool + "_thin"
-		thinPoolName := pool + "_thin"
-		for i, nodeIP := range nodeIPs {
-			result, err := rm.deployment.LVCreateThinVolume(ctx, []string{nodeIP}, pool, thinPoolName, volumeName, fmt.Sprintf("%dG", sizeGB))
-			if err != nil {
-				return fmt.Errorf("failed to create Thin LV on %s: %w", nodes[i], err)
-			}
-			if !result.AllSuccess() {
-				for host, hres := range result.Hosts {
-					if !hres.Success {
-						return fmt.Errorf("Thin LV creation failed on %s: %s", host, hres.Output)
-					}
-				}
-			}
-		}
-	} else {
-		// Create LVM LV on all nodes (default)
-		for i, nodeIP := range nodeIPs {
-			result, err := rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, volumeName, fmt.Sprintf("%dG", sizeGB))
-			if err != nil {
-				return fmt.Errorf("failed to create LV on %s: %w", nodes[i], err)
-			}
-			if !result.AllSuccess() {
-				for host, hres := range result.Hosts {
-					if !hres.Success {
-						return fmt.Errorf("LV creation failed on %s: %s", host, hres.Output)
-					}
-				}
-			}
+	// 1. Create the backing storage for every volume on all diskful nodes.
+	for _, v := range resolved {
+		if err := rm.createBackingVolume(ctx, nodeIPs, nodes, storageType, v.pool, v.volumeName, v.sizeGB); err != nil {
+			return err
 		}
 	}
 
-	// 2. Generate DRBD config
-	// Allocate a node-global device minor: minors are shared across every
-	// DRBD resource on a node, so derive the next free one from all existing
-	// configs instead of assuming port-7000 stays collision-free.
-	minor, err := rm.nextGlobalMinor(ctx, nodeIPs[0])
+	// 2. Generate DRBD config.
+	// Allocate node-global device minors: minors are shared across every DRBD
+	// resource on a node. nextGlobalMinor returns (max existing minor)+1, so a
+	// run of len(resolved) consecutive minors from that base is collision-free.
+	baseMinor, err := rm.nextGlobalMinor(ctx, nodeIPs[0])
 	if err != nil {
 		return fmt.Errorf("failed to allocate device minor: %w", err)
 	}
-	drbdConfig := rm.generateDrbdConfig(name, port, minor, nodes, disklessNodes, protocol, pool, volumeName, storageType, drbdOptions)
+	for i := range resolved {
+		resolved[i].minor = baseMinor + i
+	}
+	drbdConfig := rm.generateDrbdConfig(name, port, resolved, nodes, disklessNodes, protocol, storageType, drbdOptions)
 
 	// 3. Distribute config to all nodes (diskful + diskless tiebreaker)
 	configResult, err := rm.deployment.DistributeConfig(ctx, allIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
@@ -485,18 +486,21 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 			rm.controller.logger.Warn("Failed to save resource to database", zap.Error(err))
 		}
 
-		volumeRecord := &database.Volume{
-			ResourceName: name,
-			VolumeName:   volumeName,
-			VolumeID:     0,
-			Pool:         pool,
-			SizeGB:       int(sizeGB),
-			Device:       backingPathForVolume(pool, volumeName, storageType),
-		}
-		if err := rm.controller.db.SaveVolume(ctx, volumeRecord); err != nil {
-			rm.controller.logger.Warn("Failed to save initial volume to database",
-				zap.String("resource", name),
-				zap.Error(err))
+		for _, v := range resolved {
+			volumeRecord := &database.Volume{
+				ResourceName: name,
+				VolumeName:   v.volumeName,
+				VolumeID:     v.id,
+				Pool:         v.pool,
+				SizeGB:       int(v.sizeGB),
+				Device:       backingPathForVolume(v.pool, v.volumeName, storageType),
+			}
+			if err := rm.controller.db.SaveVolume(ctx, volumeRecord); err != nil {
+				rm.controller.logger.Warn("Failed to save volume to database",
+					zap.String("resource", name),
+					zap.Int("volume", v.id),
+					zap.Error(err))
+			}
 		}
 	}
 
@@ -504,6 +508,37 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 		zap.String("name", name))
 
 	committed = true
+	return nil
+}
+
+// createBackingVolume creates one volume's backing storage (ZFS zvol, LVM thin
+// LV or plain LVM LV per storageType) on every diskful node. nodeIPs and nodes
+// are parallel (IP for the command, name for error messages).
+func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nodes []string, storageType, pool, volumeName string, sizeGB uint32) error {
+	size := fmt.Sprintf("%dG", sizeGB)
+	for i, nodeIP := range nodeIPs {
+		var result *deployment.ExecResult
+		var err error
+		switch storageType {
+		case "zfs", "zfs-thin":
+			result, err = rm.deployment.ZFSCreateThinDataset(ctx, []string{nodeIP}, pool, volumeName, size)
+		case "lvm-thin":
+			// Convention: the thin pool is named "<pool>_thin".
+			result, err = rm.deployment.LVCreateThinVolume(ctx, []string{nodeIP}, pool, pool+"_thin", volumeName, size)
+		default:
+			result, err = rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, volumeName, size)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to create backing volume %s/%s on %s: %w", pool, volumeName, nodes[i], err)
+		}
+		if !result.AllSuccess() {
+			for host, hres := range result.Hosts {
+				if !hres.Success {
+					return fmt.Errorf("backing volume %s/%s creation failed on %s: %s", pool, volumeName, host, hres.Output)
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -622,8 +657,10 @@ func getFirstNonLoopbackIP() string {
 	return "127.0.0.1"
 }
 
-// generateDrbdConfig generates a DRBD resource configuration file
-func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor int, nodes, disklessNodes []string, protocol, pool, volumeName, storageType string, options map[string]string) string {
+// generateDrbdConfig generates a DRBD resource configuration file for one or
+// more volumes (volume 0..N). Diskful nodes share the resource-level volume
+// blocks; diskless tiebreaker nodes override each with `disk none`.
+func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes []resolvedVolume, nodes, disklessNodes []string, protocol, storageType string, options map[string]string) string {
 	var config strings.Builder
 
 	// Organize options by section -> key -> value
@@ -730,40 +767,46 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor in
 		config.WriteString("    }\n")
 	}
 
-	// Generate volume 0 block
-	config.WriteString("\n    volume 0 {\n")
-	config.WriteString(fmt.Sprintf("        device    minor %d;\n", minor))
-
-	// Use ZFS device path or LVM device path based on storage type
-	var diskPath string
-	if storageType == "zfs" || storageType == "zfs-thin" {
-		diskPath = fmt.Sprintf("/dev/zvol/%s/%s", pool, volumeName)
-	} else {
-		diskPath = fmt.Sprintf("/dev/%s/%s", pool, volumeName)
-	}
-	config.WriteString(fmt.Sprintf("        disk      %s;\n", diskPath))
-	config.WriteString("        meta-disk internal;\n")
-
-	// Inject disk options here
+	// Gather disk options once; they are applied to every volume block.
+	var diskOptKeys []string
 	if diskOpts, ok := sections["disk"]; ok && len(diskOpts) > 0 {
-		config.WriteString("        disk {\n")
-		var keys []string
 		for k := range diskOpts {
-			keys = append(keys, k)
+			diskOptKeys = append(diskOptKeys, k)
 		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			config.WriteString(fmt.Sprintf("            %s %s;\n", k, diskOpts[k]))
-		}
-		config.WriteString("        }\n")
+		sort.Strings(diskOptKeys)
 	}
 
-	config.WriteString("    }\n")
+	// Generate a resource-level block for each volume (volume 0..N).
+	for _, v := range volumes {
+		config.WriteString(fmt.Sprintf("\n    volume %d {\n", v.id))
+		config.WriteString(fmt.Sprintf("        device    minor %d;\n", v.minor))
+
+		// Use the ZFS or LVM device path based on storage type.
+		var diskPath string
+		if storageType == "zfs" || storageType == "zfs-thin" {
+			diskPath = fmt.Sprintf("/dev/zvol/%s/%s", v.pool, v.volumeName)
+		} else {
+			diskPath = fmt.Sprintf("/dev/%s/%s", v.pool, v.volumeName)
+		}
+		config.WriteString(fmt.Sprintf("        disk      %s;\n", diskPath))
+		config.WriteString("        meta-disk internal;\n")
+
+		if len(diskOptKeys) > 0 {
+			diskOpts := sections["disk"]
+			config.WriteString("        disk {\n")
+			for _, k := range diskOptKeys {
+				config.WriteString(fmt.Sprintf("            %s %s;\n", k, diskOpts[k]))
+			}
+			config.WriteString("        }\n")
+		}
+
+		config.WriteString("    }\n")
+	}
 
 	// Generate on sections for each node. Diskful nodes come first and share
-	// the resource-level volume 0 above; diskless tiebreaker nodes follow and
-	// override volume 0 with `disk none` so they join quorum without storing
-	// data. node-id is the position in this combined ordering.
+	// the resource-level volume blocks above; diskless tiebreaker nodes follow
+	// and override every volume with `disk none` so they join quorum without
+	// storing data. node-id is the position in this combined ordering.
 	allNodes := append(append([]string{}, nodes...), disklessNodes...)
 	diskless := make(map[string]bool, len(disklessNodes))
 	for _, n := range disklessNodes {
@@ -793,10 +836,12 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, minor in
 		config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
 		config.WriteString(fmt.Sprintf("        node-id   %d;\n", i))
 		if diskless[node] {
-			config.WriteString("        volume 0 {\n")
-			config.WriteString(fmt.Sprintf("            device    minor %d;\n", minor))
-			config.WriteString("            disk      none;\n")
-			config.WriteString("        }\n")
+			for _, v := range volumes {
+				config.WriteString(fmt.Sprintf("        volume %d {\n", v.id))
+				config.WriteString(fmt.Sprintf("            device    minor %d;\n", v.minor))
+				config.WriteString("            disk      none;\n")
+				config.WriteString("        }\n")
+			}
 		}
 		config.WriteString("    }\n")
 	}

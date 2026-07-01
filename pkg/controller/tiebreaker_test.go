@@ -33,9 +33,10 @@ func TestGenerateDrbdConfigDisklessTiebreaker(t *testing.T) {
 	})
 
 	cfg := ctrl.resources.generateDrbdConfig(
-		"res1", 7001, 0,
+		"res1", 7001,
+		[]resolvedVolume{{id: 0, minor: 0, pool: "vg0", volumeName: "res1_data"}},
 		[]string{"node1", "node2"}, []string{"node3"},
-		"C", "vg0", "res1_data", "lvm", nil)
+		"C", "lvm", nil)
 
 	// The diskful nodes share the resource-level data disk.
 	assert.Equal(t, 1, strings.Count(cfg, "disk      /dev/vg0/res1_data;"),
@@ -53,6 +54,60 @@ func TestGenerateDrbdConfigDisklessTiebreaker(t *testing.T) {
 	// A 3-node resource must declare a full connection mesh covering all nodes.
 	assert.Contains(t, cfg, "connection-mesh {")
 	assert.Contains(t, cfg, "hosts node1 node2 node3;")
+}
+
+func TestGenerateDrbdConfigMultipleVolumes(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	registerNodes(ctrl, map[string]string{
+		"node1": "10.0.0.1",
+		"node2": "10.0.0.2",
+	})
+
+	cfg := ctrl.resources.generateDrbdConfig(
+		"res1", 7001,
+		[]resolvedVolume{
+			{id: 0, minor: 5, pool: "vg0", volumeName: "res1_data"},
+			{id: 1, minor: 6, pool: "vg1", volumeName: "res1_vol1"},
+		},
+		[]string{"node1", "node2"}, nil,
+		"C", "lvm", nil)
+
+	// Both volume blocks are present with their own minor and backing disk.
+	assert.Contains(t, cfg, "volume 0 {")
+	assert.Contains(t, cfg, "device    minor 5;")
+	assert.Contains(t, cfg, "disk      /dev/vg0/res1_data;")
+	assert.Contains(t, cfg, "volume 1 {")
+	assert.Contains(t, cfg, "device    minor 6;")
+	assert.Contains(t, cfg, "disk      /dev/vg1/res1_vol1;")
+
+	// Each volume appears exactly once at the resource level (diskful nodes).
+	assert.Equal(t, 1, strings.Count(cfg, "volume 0 {"))
+	assert.Equal(t, 1, strings.Count(cfg, "volume 1 {"))
+}
+
+func TestGenerateDrbdConfigMultiVolumeDisklessOverridesEach(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	registerNodes(ctrl, map[string]string{
+		"node1": "10.0.0.1",
+		"node2": "10.0.0.2",
+		"node3": "10.0.0.3",
+	})
+
+	cfg := ctrl.resources.generateDrbdConfig(
+		"res1", 7001,
+		[]resolvedVolume{
+			{id: 0, minor: 0, pool: "vg0", volumeName: "res1_data"},
+			{id: 1, minor: 1, pool: "vg0", volumeName: "res1_vol1"},
+		},
+		[]string{"node1", "node2"}, []string{"node3"},
+		"C", "lvm", nil)
+
+	// The diskless tiebreaker must override BOTH volumes with disk none, or it
+	// would try to attach a backing disk it does not have.
+	assert.Equal(t, 2, strings.Count(cfg, "disk      none;"),
+		"tiebreaker should mark every volume diskless")
 }
 
 func TestParseDevNodeMinor(t *testing.T) {

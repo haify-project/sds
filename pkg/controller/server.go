@@ -245,7 +245,16 @@ func (s *Server) HealthCheck(ctx context.Context, req *sdspb.HealthCheckRequest)
 // ==================== RESOURCE OPERATIONS ====================
 
 func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRequest) (*sdspb.CreateResourceResponse, error) {
-	err := s.resources.CreateResource(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool, req.StorageType, req.DrbdOptions)
+	// Prefer the explicit multi-volume list; fall back to the single-volume
+	// size_gb/pool shorthand when it is empty (older clients, CLI).
+	volumes := make([]VolumeSpec, 0, len(req.Volumes))
+	for _, v := range req.Volumes {
+		volumes = append(volumes, VolumeSpec{SizeGB: v.SizeGb, Pool: v.Pool})
+	}
+	if len(volumes) == 0 {
+		volumes = append(volumes, VolumeSpec{SizeGB: req.SizeGb, Pool: req.Pool})
+	}
+	err := s.resources.CreateResourceWithVolumes(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes)
 	if err != nil {
 		return &sdspb.CreateResourceResponse{
 			Success: false,

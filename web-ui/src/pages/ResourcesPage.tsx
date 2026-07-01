@@ -1410,11 +1410,39 @@ function CreateResourceDialog({
   const [port, setPort] = useState('7000');
   const [protocol, setProtocol] = useState('C');
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
-  const [sizeGb, setSizeGb] = useState('10');
-  const [pool, setPool] = useState('');
   const [storageType, setStorageType] = useState('lvm');
+  // One or more DRBD volumes (volume 0..N). Each has its own size and pool.
+  const [volumes, setVolumes] = useState<{ sizeGb: string; pool: string }[]>([
+    { sizeGb: '10', pool: '' },
+  ]);
+  // DRBD options as section/key -> value rows (net/disk/options), optional.
+  const [optionRows, setOptionRows] = useState<{ key: string; value: string }[]>(
+    [],
+  );
+  const [showOptions, setShowOptions] = useState(false);
 
   const noneValue = '__none__';
+
+  const setVolume = (i: number, patch: Partial<{ sizeGb: string; pool: string }>) =>
+    setVolumes((prev) =>
+      prev.map((v, idx) => (idx === i ? { ...v, ...patch } : v)),
+    );
+  const addVolume = () =>
+    setVolumes((prev) => [...prev, { sizeGb: '10', pool: '' }]);
+  const removeVolume = (i: number) =>
+    setVolumes((prev) => prev.filter((_, idx) => idx !== i));
+
+  const setOptionRow = (
+    i: number,
+    patch: Partial<{ key: string; value: string }>,
+  ) =>
+    setOptionRows((prev) =>
+      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
+    );
+  const addOptionRow = () =>
+    setOptionRows((prev) => [...prev, { key: '', value: '' }]);
+  const removeOptionRow = (i: number) =>
+    setOptionRows((prev) => prev.filter((_, idx) => idx !== i));
 
   // Pool types as the backend reports them, per storage type.
   const poolTypeFor: Record<string, string> = {
@@ -1431,21 +1459,15 @@ function CreateResourceDialog({
     setPort('7000');
     setProtocol('C');
     setSelectedNodes([]);
-    setSizeGb('10');
-    setPool('');
     setStorageType('lvm');
+    setVolumes([{ sizeGb: '10', pool: '' }]);
+    setOptionRows([]);
+    setShowOptions(false);
   };
 
   const createMutation = useMutation({
-    mutationFn: (data: {
-      name: string;
-      port: number;
-      nodes: string[];
-      protocol: string;
-      sizeGb: number;
-      pool?: string;
-      storageType?: string;
-    }) => api.createResource(data),
+    mutationFn: (data: Parameters<typeof api.createResource>[0]) =>
+      api.createResource(data),
     onSuccess: () => {
       toast.success(`Resource "${name}" created`);
       queryClient.invalidateQueries({ queryKey: ['resources'] });
@@ -1469,14 +1491,28 @@ function CreateResourceDialog({
       toast.error('Select at least 1 node');
       return;
     }
+    const parsedVolumes = volumes.map((v) => ({
+      sizeGb: parseInt(v.sizeGb, 10),
+      pool: v.pool || undefined,
+    }));
+    if (parsedVolumes.some((v) => !v.sizeGb || v.sizeGb < 1)) {
+      toast.error('Every volume needs a size of at least 1 GB');
+      return;
+    }
+    // Collect non-empty option rows into a section/key -> value map.
+    const drbdOptions: Record<string, string> = {};
+    for (const r of optionRows) {
+      const key = r.key.trim();
+      if (key) drbdOptions[key] = r.value.trim();
+    }
     createMutation.mutate({
       name,
       port: parseInt(port, 10),
       nodes: selectedNodes,
       protocol,
-      sizeGb: parseInt(sizeGb, 10),
-      pool: pool || undefined,
       storageType,
+      volumes: parsedVolumes,
+      drbdOptions: Object.keys(drbdOptions).length ? drbdOptions : undefined,
     });
   };
 
@@ -1570,62 +1606,155 @@ function CreateResourceDialog({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="res-size">Size (GB)</Label>
-                <Input
-                  id="res-size"
-                  type="number"
-                  min={1}
-                  value={sizeGb}
-                  onChange={(e) => setSizeGb(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Storage Type</Label>
-                <Select
-                  value={storageType}
-                  onValueChange={(v) => {
-                    setStorageType(v);
-                    setPool(''); // pools are type-specific
-                  }}
+            <div className="space-y-2">
+              <Label>Storage Type</Label>
+              <Select
+                value={storageType}
+                onValueChange={(v) => {
+                  setStorageType(v);
+                  // Pools are type-specific; clear each volume's pick.
+                  setVolumes((prev) => prev.map((vol) => ({ ...vol, pool: '' })));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lvm">LVM</SelectItem>
+                  <SelectItem value="lvm-thin">LVM Thin</SelectItem>
+                  <SelectItem value="zfs">ZFS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Volumes (volume 0..N) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Volumes</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addVolume}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lvm">LVM</SelectItem>
-                    <SelectItem value="lvm-thin">LVM Thin</SelectItem>
-                    <SelectItem value="zfs">ZFS</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <Plus className="h-4 w-4" />
+                  Add volume
+                </Button>
+              </div>
+              <div className="space-y-2 rounded-lg border p-3">
+                {volumes.map((vol, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <div className="w-24 space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        {i === 0 ? 'Size (GB)' : `Vol ${i} · GB`}
+                      </Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={vol.sizeGb}
+                        onChange={(e) => setVolume(i, { sizeGb: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Pool (optional)
+                      </Label>
+                      <Select
+                        value={vol.pool || noneValue}
+                        onValueChange={(v) =>
+                          setVolume(i, { pool: v === noneValue ? '' : v })
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Auto-select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={noneValue}>Auto-select</SelectItem>
+                          {matchingPools.map((p) => (
+                            <SelectItem
+                              key={`${p.node}-${p.name}`}
+                              value={p.name}
+                            >
+                              {p.name} ({p.node}) - {p.freeGb}GB free
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeVolume(i)}
+                      disabled={volumes.length === 1}
+                      title="Remove volume"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label>Pool (optional)</Label>
-                <Select
-                  value={pool || noneValue}
-                  onValueChange={(v) => setPool(v === noneValue ? '' : v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Auto-select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={noneValue}>Auto-select</SelectItem>
-                    {matchingPools.map((p) => (
-                      <SelectItem
-                        key={`${p.node}-${p.name}`}
-                        value={p.name}
+            {/* DRBD options (advanced) */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => setShowOptions((s) => !s)}
+              >
+                {showOptions ? '▾' : '▸'} DRBD Options (advanced)
+              </button>
+              {showOptions && (
+                <div className="space-y-2 rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Keys are <code className="font-mono">section/key</code> —
+                    e.g. <code className="font-mono">net/max-buffers</code>,{' '}
+                    <code className="font-mono">disk/on-io-error</code>,{' '}
+                    <code className="font-mono">options/auto-promote</code>. See
+                    the DRBD 9 user guide.
+                  </p>
+                  {optionRows.map((row, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        className="flex-1"
+                        placeholder="net/max-buffers"
+                        value={row.key}
+                        onChange={(e) => setOptionRow(i, { key: e.target.value })}
+                      />
+                      <Input
+                        className="flex-1"
+                        placeholder="8000"
+                        value={row.value}
+                        onChange={(e) =>
+                          setOptionRow(i, { value: e.target.value })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeOptionRow(i)}
+                        title="Remove option"
                       >
-                        {p.name} ({p.node}) - {p.freeGb}GB free
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addOptionRow}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add option
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 

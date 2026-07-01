@@ -3736,20 +3736,30 @@
         },
         "sizeGb": {
           "type": "integer",
-          "format": "int64"
+          "format": "int64",
+          "title": "single-volume shorthand; ignored when `volumes` is set"
         },
         "pool": {
-          "type": "string"
+          "type": "string",
+          "title": "single-volume shorthand; ignored when `volumes` is set"
         },
         "storageType": {
           "type": "string",
-          "title": "\"lvm\" or \"zfs\""
+          "title": "\"lvm\", \"lvm-thin\" or \"zfs\" (applies to all volumes)"
         },
         "drbdOptions": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VolumeSpec"
+          },
+          "description": "volumes lists one or more DRBD volumes to create atomically (volume 0..N).\nWhen empty, a single volume is created from size_gb/pool for back-compat."
         }
       },
       "title": "Resource messages"
@@ -5273,6 +5283,20 @@
           "description": "Backing logical volume name inside the pool (e.g. \"\u003cresource\u003e_data\").\nCombined with pool it forms the \"\u003cpool\u003e/\u003clv\u003e\" path used by snapshot APIs."
         }
       }
+    },
+    "v1VolumeSpec": {
+      "type": "object",
+      "properties": {
+        "sizeGb": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "pool": {
+          "type": "string",
+          "title": "optional; auto-selected when empty"
+        }
+      },
+      "description": "VolumeSpec is one DRBD volume within a resource. storage_type comes from the\nresource; each volume may target its own pool."
     }
   }
 }
