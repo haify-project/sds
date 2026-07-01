@@ -477,6 +477,25 @@ func TestParseNodeStatesFromVerboseStatus(t *testing.T) {
 	assert.Equal(t, "UpToDate", states["node2"].DiskState)
 }
 
+func TestParseNodeStatesIgnoresDisklessTiebreakerPeer(t *testing.T) {
+	// Real output from the diskful Primary of a 2-diskful + 1-tiebreaker
+	// resource. The tiebreaker (orange3) is NOT in nodeAddresses (it lives in
+	// DisklessNodes), so its "peer-disk:Diskless" line must not be attributed
+	// to the preceding diskful node (orange2).
+	output := "data role:Primary\n" +
+		"  disk:UpToDate open:no\n" +
+		"  orange2 role:Secondary\n" +
+		"    peer-disk:UpToDate\n" +
+		"  orange3 role:Secondary\n" +
+		"    peer-disk:Diskless peer-client:yes\n"
+	states := parseNodeStatesFromStatus(output, []string{"orange1", "orange2"})
+	require.Len(t, states, 2)
+	assert.Equal(t, "UpToDate", states["orange1"].DiskState)
+	assert.Equal(t, "Secondary", states["orange2"].Role)
+	// Must stay UpToDate — the tiebreaker's Diskless must not bleed onto orange2.
+	assert.Equal(t, "UpToDate", states["orange2"].DiskState)
+}
+
 func TestParseVolumesFromVerboseStatus(t *testing.T) {
 	output := "res1 role:Primary suspended:no\n  volume:0 minor:7 disk:UpToDate size:6291456\n  volume:1 minor:8 disk:UpToDate size:1048576\n  node2 connection:Connected role:Secondary\n    volume:0 replication:Established peer-disk:UpToDate\n"
 	volumes := parseVolumesFromStatus(output)
