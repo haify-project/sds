@@ -259,14 +259,21 @@ func (s *Server) gatewayRuntimeInfo(ctx context.Context, resource string) (strin
 		options["node_states"] = nodeStates
 	}
 
-	if strings.EqualFold(info.Role, "Primary") {
-		state = "started"
-	}
 	for nodeName, nodeState := range info.NodeStates {
 		if nodeState != nil && strings.EqualFold(nodeState.Role, "Primary") {
 			activeNode = nodeName
-			state = "started"
 			break
+		}
+	}
+	// "started" must mean the promoter's services actually came up, not merely
+	// that the DRBD resource is Primary. A gateway whose target failed to start
+	// (missing agent, mount error, ...) is reported as "failed" so the UI does
+	// not show a broken gateway as running.
+	if activeNode != "" {
+		if s.gateway != nil && s.gateway.GatewayServiceActive(ctx, s.ctrl.ResolveHost(activeNode), resource) {
+			state = "started"
+		} else {
+			state = "failed"
 		}
 	}
 

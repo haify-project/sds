@@ -149,13 +149,32 @@ func TestGenerateISCSIGatewayConfigDefaults(t *testing.T) {
 	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 
-	// Should have default values
-	assert.Contains(t, config, "incoming_username=username") // default username
-	assert.Contains(t, config, "incoming_password=password") // default password
-	assert.Contains(t, config, "implementation=lio-t")       // default implementation
+	// With no credentials supplied, CHAP must be omitted entirely rather than
+	// forced on with bogus "username"/"password" placeholders.
+	assert.NotContains(t, config, "incoming_username")
+	assert.NotContains(t, config, "incoming_password")
+	assert.Contains(t, config, "implementation=lio-t") // default implementation
 	// Empty allowed_initiators stays empty: the OCF agent validates each
 	// token as an initiator WWN, so an invented "ALL" breaks target start.
 	assert.Contains(t, config, "allowed_initiators= ")
+}
+
+func TestGenerateISCSIGatewayConfigWithCHAP(t *testing.T) {
+	iscsiManager := NewISCSIManager(New(nil, nil, zap.NewNop(), nil))
+	req := &v1.CreateISCSIGatewayRequest{
+		Resource:  "data",
+		Iqn:       "iqn.2024-01.com.example:sds.data",
+		ServiceIp: "192.168.1.200/24",
+		Username:  "alice",
+		Password:  "s3cret",
+	}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
+	require.NoError(t, err)
+	// Supplied credentials must be emitted as CHAP args on the target.
+	assert.Contains(t, config, "incoming_username=alice")
+	assert.Contains(t, config, "incoming_password=s3cret")
 }
 
 func TestGenerateIQN(t *testing.T) {
