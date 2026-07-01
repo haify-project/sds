@@ -42,3 +42,7 @@ ui/dist/
 /cli
 /controller
 .playwright-mcp/
+
+# stray local screenshots
+sds-dashboard.png
+sds-resource-status.png
