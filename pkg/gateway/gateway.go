@@ -342,6 +342,45 @@ func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource strin
 	return nil
 }
 
+// checkGatewayPrereqs verifies that the OCF resource agents and userspace tools
+// a gateway type needs are installed on every node, so gateway creation fails
+// with a clear, actionable message instead of writing a drbd-reactor promoter
+// config that then silently fails to start (e.g. missing resource-agents-extra
+// for the Filesystem agent, or targetcli for iSCSITarget).
+func (m *Manager) checkGatewayPrereqs(ctx context.Context, nodes []string, agents, tools []string) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+	parts := []string{"missing=''"}
+	for _, a := range agents {
+		parts = append(parts, fmt.Sprintf(
+			"test -x /usr/lib/ocf/resource.d/heartbeat/%s || missing=\"$missing ocf:heartbeat:%s\"", a, a))
+	}
+	for _, t := range tools {
+		parts = append(parts, fmt.Sprintf(
+			"command -v %s >/dev/null 2>&1 || missing=\"$missing %s\"", t, t))
+	}
+	parts = append(parts, "if [ -n \"$missing\" ]; then echo \"missing:$missing\"; exit 1; fi")
+	cmd := strings.Join(parts, "; ")
+	if err := m.deployment.Exec(ctx, nodes, cmd); err != nil {
+		return fmt.Errorf("gateway prerequisites missing (install resource-agents-extra and the target tooling): %w", err)
+	}
+	return nil
+}
+
+// GatewayServiceActive reports whether the drbd-reactor promoter target for a
+// gateway resource is actually running on the given node — i.e. all start
+// actions (mount, VIP, target, LUNs) succeeded. It distinguishes a gateway
+// that is really serving from one whose DRBD resource is Primary but whose
+// services failed to start (e.g. a missing OCF agent).
+func (m *Manager) GatewayServiceActive(ctx context.Context, node, resource string) bool {
+	if node == "" {
+		return false
+	}
+	cmd := fmt.Sprintf("systemctl is-active drbd-services@%s.target 2>/dev/null | grep -qx active", resource)
+	return m.deployment.Exec(ctx, []string{node}, cmd) == nil
+}
+
 // getDRBDDevice gets the DRBD device path for a resource
 func (m *Manager) getDRBDDevice(ctx context.Context, resource string) (string, error) {
 	// Try to get device from resource info

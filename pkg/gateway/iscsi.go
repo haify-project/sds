@@ -39,6 +39,17 @@ func (i *iSCSIManager) CreateISCSIGateway(ctx context.Context, req *v1.CreateISC
 		}, err
 	}
 
+	// Fail early with a clear message if the OCF agents/tools an iSCSI gateway
+	// needs are not installed on the resource's nodes, rather than writing a
+	// promoter config that silently fails to start.
+	if res, rerr := i.resources.GetResource(ctx, req.Resource); rerr == nil && res != nil {
+		if err := i.checkGatewayPrereqs(ctx, res.Nodes,
+			[]string{"Filesystem", "IPaddr2", "iSCSITarget", "iSCSILogicalUnit"},
+			[]string{"targetcli"}); err != nil {
+			return &v1.CreateISCSIGatewayResponse{Success: false, Message: err.Error()}, err
+		}
+	}
+
 	// Auto-provision the cluster-private state volume when the resource is one
 	// short, so a single-volume resource can be exported without a manual
 	// add-volume step first.
@@ -143,7 +154,7 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
       start = [
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
         "ocf:heartbeat:IPaddr2 service_ip0 ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
-        "ocf:heartbeat:iSCSITarget target iqn={{ .IQN }} portals={{ .Portal }} incoming_username={{ .Username }} incoming_password={{ .Password }} allowed_initiators={{ .AllowedInitiators }} implementation={{ .Implementation }}",
+        "ocf:heartbeat:iSCSITarget target iqn={{ .IQN }} portals={{ .Portal }} {{ .CHAPArgs }}allowed_initiators={{ .AllowedInitiators }} implementation={{ .Implementation }}",
 {{ range $idx, $lun := .LUNs }}
         "ocf:heartbeat:iSCSILogicalUnit lu{{ $lun.Number }} target_iqn={{ $.IQN }} lun={{ $lun.Number }} path={{ $lun.Device }} product_id={{ $lun.Serial }} scsi_sn={{ $lun.Serial }}",
 {{ end }}
@@ -186,11 +197,13 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 	implementation := req.Implementation
 	allowedInitiators := strings.Join(req.AllowedInitiators, " ")
 
-	if username == "" {
-		username = "username"
-	}
-	if password == "" {
-		password = "password"
+	// Only emit CHAP arguments when credentials were actually supplied.
+	// Writing literal "username"/"password" placeholders (the old default)
+	// forced CHAP auth with bogus credentials on a gateway the user meant to
+	// leave open.
+	chapArgs := ""
+	if username != "" && password != "" {
+		chapArgs = fmt.Sprintf("incoming_username=%s incoming_password=%s ", username, password)
 	}
 	if implementation == "" || implementation == "lio" {
 		// "lio" historically meant the long-gone lio_node toolchain; every
@@ -214,8 +227,7 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 		FSType             string
 		ClusterPrivatePath string
 		ISCSIPort          int
-		Username           string
-		Password           string
+		CHAPArgs           string
 		AllowedInitiators  string
 		Implementation     string
 		LUNs               []LUN
@@ -231,8 +243,7 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 		DRBDDevice:         drbdDevice,
 		ClusterPrivatePath: clusterPrivatePath,
 		ISCSIPort:          DefaultISCSIPort,
-		Username:           username,
-		Password:           password,
+		CHAPArgs:           chapArgs,
 		AllowedInitiators:  allowedInitiators,
 		Implementation:     implementation,
 		LUNs:               luns,

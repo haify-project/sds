@@ -76,6 +76,17 @@ export function GatewaysPage() {
   const { data: gateways, isLoading } = useQuery({
     queryKey: ['gateways'],
     queryFn: () => api.getGateways(),
+    // A freshly created gateway is briefly "failed"/transitional while the
+    // drbd-reactor promoter starts its services; poll until every gateway
+    // settles so the UI reflects the real state instead of a stale snapshot.
+    refetchInterval: (query) => {
+      const gws =
+        (query.state.data as { gateways?: { state?: string }[] } | undefined)
+          ?.gateways ?? [];
+      return gws.some((g) => g.state !== 'started' && g.state !== 'stopped')
+        ? 3000
+        : false;
+    },
   });
   const { data: resources } = useQuery({
     queryKey: ['resources'],
