@@ -1216,6 +1216,19 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		return fmt.Errorf("deployment client not set")
 	}
 
+	// If this resource has an HA config (a drbd-reactor promoter + VIP), tear it
+	// down first — otherwise deleting the resource orphans the HA reactor config
+	// and its DB record, which then lingers in the UI referencing a gone
+	// resource.
+	if rm.controller.db != nil {
+		if ha, herr := rm.controller.db.GetHaConfig(ctx, name); herr == nil && ha != nil {
+			if err := rm.RemoveHa(ctx, name); err != nil {
+				rm.controller.logger.Warn("Failed to remove HA config during resource delete (continuing)",
+					zap.String("resource", name), zap.Error(err))
+			}
+		}
+	}
+
 	hosts, err := rm.resourceHosts(ctx, name)
 	if err != nil {
 		return err
