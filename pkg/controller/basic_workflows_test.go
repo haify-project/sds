@@ -1062,7 +1062,7 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 		if call.cmd == "sudo drbdadm adjust res1" {
 			sawAdjust = true
 		}
-		if call.cmd == "sudo lvremove -f /dev/sds_data-pool/res1_logs" {
+		if strings.Contains(call.cmd, "lvremove -f /dev/sds_data-pool/res1_logs") {
 			sawLVRemove = true
 		}
 	}
@@ -1071,6 +1071,41 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 	volumes, err := ctrl.db.ListVolumes(context.Background(), "res1")
 	require.NoError(t, err)
 	assert.Empty(t, volumes)
+}
+
+// A failed lvremove on any node must surface as an error, not a silent success
+// that leaves an orphaned LV and a lopsided DRBD resource.
+func TestResourceManagerRemoveVolumeErrorsWhenBackingRemovalFails(t *testing.T) {
+	config := "resource res1 {\n    volume 1 {\n        device    minor 2;\n        disk      /dev/sds_data-pool/res1_logs;\n        meta-disk internal;\n    }\n}\n"
+	dep := &fakeDeploymentClient{
+		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
+				return successExecResult(hosts, config), nil
+			}
+			if strings.Contains(cmd, "lvremove") {
+				res := successExecResult(hosts, "")
+				for _, h := range res.Hosts {
+					h.Success = false
+					h.Output = "Logical volume is used by another device."
+				}
+				return res, nil
+			}
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	require.NoError(t, err)
+	defer db.Close()
+	ctrl.db = db
+	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
+		Name: "res1", Port: 7001, Nodes: "node1,node2", Protocol: "C", Replicas: 2,
+	}))
+	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
+	ctrl.hostsMap["node1"] = "10.0.0.1"
+
+	err = ctrl.resources.RemoveVolume(context.Background(), "res1", 1)
+	require.Error(t, err, "RemoveVolume must not report success when lvremove fails")
 }
 
 func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
