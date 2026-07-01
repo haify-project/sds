@@ -1085,9 +1085,21 @@ function AddVolumeForm({
             <SelectValue placeholder="Select a pool..." />
           </SelectTrigger>
           <SelectContent>
-            {pools.map((p) => (
-              <SelectItem key={`${p.node}-${p.name}`} value={p.name}>
-                {p.name} ({p.node}) - {p.freeGb}GB free
+            {Array.from(
+              pools
+                .reduce((m, p) => {
+                  const cur = m.get(p.name);
+                  // A pool name is shared across the diskful nodes; show one
+                  // entry per name with the tightest (minimum) free space, so
+                  // SelectItem values stay unique and the trigger doesn't
+                  // concatenate duplicate labels.
+                  if (!cur || p.freeGb < cur.freeGb) m.set(p.name, p);
+                  return m;
+                }, new Map<string, PoolOpt>())
+                .values()
+            ).map((p) => (
+              <SelectItem key={p.name} value={p.name}>
+                {p.name} - {p.freeGb}GB free
               </SelectItem>
             ))}
           </SelectContent>
