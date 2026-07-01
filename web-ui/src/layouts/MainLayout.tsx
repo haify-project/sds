@@ -1,4 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useIsFetching } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Server,
@@ -8,6 +9,7 @@ import {
   ShieldCheck,
   HardDrive,
   Lock,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
@@ -24,6 +26,7 @@ const navigation = [
 
 export function MainLayout() {
   const location = useLocation();
+  const isFetching = useIsFetching();
 
   const current = navigation.find((n) => n.href === location.pathname);
 
@@ -70,9 +73,21 @@ export function MainLayout() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 items-center justify-between border-b border-border px-6">
-          <h2 className="text-sm font-semibold tracking-tight">
-            {current?.name ?? 'Dashboard'}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold tracking-tight">
+              {current?.name ?? 'Dashboard'}
+            </h2>
+            {isFetching > 0 && (
+              <span
+                className="flex items-center gap-1 text-xs text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Refreshing
+              </span>
+            )}
+          </div>
           <UserMenu />
         </header>
         <main className="app-canvas flex-1 overflow-auto p-6 lg:p-8">

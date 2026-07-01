@@ -51,6 +51,15 @@ export function DashboardPage() {
   const onlineNodes =
     nodes?.nodes.filter((n) => n.state === 'online').length ?? 0;
 
+  // selfHa.activeNode is an address; members are node names. Resolve the
+  // active node's name so it displays as a name and highlights correctly.
+  const nodeNameByAddr = new Map(
+    (nodes?.nodes ?? []).map((n) => [n.address, n.name]),
+  );
+  const activeNodeName = selfHa?.activeNode
+    ? nodeNameByAddr.get(selfHa.activeNode) ?? selfHa.activeNode
+    : '';
+
   const totalStorage =
     pools?.pools.reduce((acc, p) => acc + Number(p.totalGb), 0) ?? 0;
   const freeStorage =
@@ -198,9 +207,7 @@ export function DashboardPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Active node: </span>
-                  <span className="font-medium">
-                    {selfHa.activeNode || '-'}
-                  </span>
+                  <span className="font-medium">{activeNodeName || '-'}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Resource: </span>
@@ -215,10 +222,10 @@ export function DashboardPage() {
                     {selfHa.nodes.map((n) => (
                       <Badge
                         key={n}
-                        variant={n === selfHa.activeNode ? 'default' : 'secondary'}
+                        variant={n === activeNodeName ? 'default' : 'secondary'}
                       >
                         {n}
-                        {n === selfHa.activeNode && ' (active)'}
+                        {n === activeNodeName && ' (active)'}
                       </Badge>
                     ))}
                   </div>

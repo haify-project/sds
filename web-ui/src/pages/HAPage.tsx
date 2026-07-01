@@ -346,6 +346,20 @@ function SelfHaEnabled({
 }) {
   const [disableNode, setDisableNode] = useState(status.activeNode || '');
 
+  const { data: nodes } = useQuery({
+    queryKey: ['nodes'],
+    queryFn: () => api.getNodes(),
+  });
+
+  // status.activeNode is an address; members are node names. Resolve the
+  // active node's name so it displays as a name and highlights correctly.
+  const nodeNameByAddr = new Map(
+    (nodes?.nodes ?? []).map((n) => [n.address, n.name]),
+  );
+  const activeNodeName = status.activeNode
+    ? nodeNameByAddr.get(status.activeNode) ?? status.activeNode
+    : '';
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -359,7 +373,7 @@ function SelfHaEnabled({
           </p>
           <Badge className="bg-emerald-600 hover:bg-emerald-600">
             <Server className="mr-1 h-3 w-3" />
-            {status.activeNode || '-'}
+            {activeNodeName || '-'}
           </Badge>
         </div>
       </div>
@@ -368,8 +382,18 @@ function SelfHaEnabled({
         <p className="text-xs font-medium text-muted-foreground">Member Nodes</p>
         <div className="flex flex-wrap gap-2">
           {(status.nodes ?? []).map((node) => (
-            <Badge key={node} variant="secondary">
+            <Badge
+              key={node}
+              className={
+                node === activeNodeName
+                  ? 'bg-emerald-600 hover:bg-emerald-600'
+                  : undefined
+              }
+              variant={node === activeNodeName ? 'default' : 'secondary'}
+            >
+              {node === activeNodeName && <Server className="mr-1 h-3 w-3" />}
               {node}
+              {node === activeNodeName && ' (active)'}
             </Badge>
           ))}
         </div>
