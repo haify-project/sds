@@ -1226,6 +1226,12 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 	// linger in the kernel as an orphan that blocks reusing them later.
 	allHosts := append(append([]string(nil), hosts...), rm.disklessHosts(ctx, name)...)
 
+	// Best-effort unmount of the resource's DRBD devices so a mounted resource
+	// can be brought down — drbdadm down fails on a busy (mounted) device,
+	// which would otherwise leave the mount and block teardown.
+	_, _ = rm.deployment.Exec(ctx, allHosts,
+		fmt.Sprintf("for d in /dev/drbd/by-res/%s/*; do sudo umount \"$d\" 2>/dev/null; done; true", name))
+
 	// 1. Down resource on all nodes (diskful + diskless tiebreaker)
 	downResult, err := rm.deployment.DRBDDown(ctx, allHosts, name)
 	if err != nil {
@@ -1467,11 +1473,15 @@ func (rm *ResourceManager) deleteBackingVolume(ctx context.Context, hosts []stri
 	if strings.HasPrefix(volume.Device, "/dev/zvol/") {
 		cmd = fmt.Sprintf("sudo zfs destroy %s/%s", volume.Pool, volume.VolumeName)
 	} else {
-		// The backing LV stays "open" while any DRBD minor still holds it,
-		// and by this point the resource config may already be gone, so
-		// drbdadm cannot help. drbdsetup operates on kernel state directly
-		// and is the reliable way to release the device before lvremove.
-		cmd = fmt.Sprintf("sudo lvremove -f %s/%s || { sudo drbdsetup down %s 2>/dev/null; sudo lvremove -f %s/%s; }",
+		// Two things block removal of the origin LV: (1) any LVM snapshot of it
+		// (e.g. scheduled snapshots) must go first, or lvremove reports the
+		// origin "is used by another device"; (2) a DRBD minor may still hold
+		// it, and by this point the config may be gone so drbdadm cannot help —
+		// drbdsetup operates on kernel state directly. Remove snapshots, then
+		// the origin, releasing the minor on the retry.
+		cmd = fmt.Sprintf("for s in $(sudo lvs --noheadings -o lv_name -S origin=%s %s 2>/dev/null); do sudo lvremove -f %s/$s; done; "+
+			"sudo lvremove -f %s/%s || { sudo drbdsetup down %s 2>/dev/null; sudo lvremove -f %s/%s; }",
+			volume.VolumeName, volume.Pool, volume.Pool,
 			volume.Pool, volume.VolumeName, volume.ResourceName, volume.Pool, volume.VolumeName)
 	}
 	result, err := rm.deployment.Exec(ctx, hosts, cmd)
@@ -1602,19 +1612,36 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 		return fmt.Errorf("failed to distribute updated config: %w", err)
 	}
 
-	if _, err := rm.deployment.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm adjust %s", resource)); err != nil {
+	adjustRes, err := rm.deployment.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm adjust %s", resource))
+	if err != nil {
 		return fmt.Errorf("failed to adjust resource after config update: %w", err)
+	}
+	if !adjustRes.AllSuccess() {
+		return fmt.Errorf("drbdadm adjust failed on %v after removing volume %d", adjustRes.FailedHosts(), volumeID)
 	}
 
 	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {
 		dataset := strings.TrimPrefix(target.DiskPath, "/dev/zvol/")
-		if _, err := rm.deployment.ZFSDestroyDataset(ctx, hosts, dataset); err != nil {
+		zfsRes, err := rm.deployment.ZFSDestroyDataset(ctx, hosts, dataset)
+		if err != nil {
 			return fmt.Errorf("failed to delete ZFS backing volume: %w", err)
 		}
+		if !zfsRes.AllSuccess() {
+			return fmt.Errorf("ZFS backing volume removal failed on %v", zfsRes.FailedHosts())
+		}
 	} else {
-		removeCmd := fmt.Sprintf("sudo lvremove -f %s", target.DiskPath)
-		if _, err := rm.deployment.Exec(ctx, hosts, removeCmd); err != nil {
+		// A failed lvremove on any node leaves an orphan and a lopsided DRBD
+		// resource, so surface per-host failures instead of only transport
+		// errors. Detaching the just-removed volume's minor releases the LV if
+		// the kernel still holds it after the adjust.
+		removeCmd := fmt.Sprintf("sudo lvremove -f %s || { sudo drbdsetup detach %s/%d 2>/dev/null; sudo lvremove -f %s; }",
+			target.DiskPath, resource, volumeID, target.DiskPath)
+		rmRes, err := rm.deployment.Exec(ctx, hosts, removeCmd)
+		if err != nil {
 			return fmt.Errorf("failed to delete LVM backing volume: %w", err)
+		}
+		if !rmRes.AllSuccess() {
+			return fmt.Errorf("LVM backing volume removal failed on %v", rmRes.FailedHosts())
 		}
 	}
 
@@ -1680,18 +1707,30 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 	sizeArg := fmt.Sprintf("%dG", newSizeGB)
 	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {
 		volumePath := strings.TrimPrefix(target.DiskPath, "/dev/zvol/")
-		if _, err := rm.deployment.ZFSResizeVolume(ctx, hosts, volumePath, sizeArg); err != nil {
+		zfsRes, err := rm.deployment.ZFSResizeVolume(ctx, hosts, volumePath, sizeArg)
+		if err != nil {
 			return fmt.Errorf("failed to resize ZFS backing volume: %w", err)
+		}
+		if !zfsRes.AllSuccess() {
+			return fmt.Errorf("ZFS backing volume resize failed on %v", zfsRes.FailedHosts())
 		}
 	} else {
 		resizeCmd := fmt.Sprintf("sudo lvresize -L %s -y %s", sizeArg, target.DiskPath)
-		if _, err := rm.deployment.Exec(ctx, hosts, resizeCmd); err != nil {
+		lvRes, err := rm.deployment.Exec(ctx, hosts, resizeCmd)
+		if err != nil {
 			return fmt.Errorf("failed to resize LVM backing volume: %w", err)
+		}
+		if !lvRes.AllSuccess() {
+			return fmt.Errorf("LVM backing volume resize failed on %v", lvRes.FailedHosts())
 		}
 	}
 
-	if _, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("sudo drbdadm resize %s/%d", resource, volumeID)); err != nil {
+	drbdRes, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("sudo drbdadm resize %s/%d", resource, volumeID))
+	if err != nil {
 		return fmt.Errorf("failed to resize DRBD volume: %w", err)
+	}
+	if !drbdRes.AllSuccess() {
+		return fmt.Errorf("DRBD volume resize failed on %v", drbdRes.FailedHosts())
 	}
 
 	if rm.controller.db != nil {
@@ -1714,8 +1753,11 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 
 // Mount mounts a DRBD device
 func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint string, volumeID uint32, node, fsType string) error {
-	// Resolve node to address
-	address := rm.controller.ResolveHost(node)
+	// Resolve node to address; empty means the current Primary.
+	address, err := rm.resolveNodeOrPrimary(ctx, resource, node)
+	if err != nil {
+		return fmt.Errorf("resolve target node: %w", err)
+	}
 
 	rm.controller.logger.Info("Mounting resource",
 		zap.String("resource", resource),
@@ -1733,7 +1775,7 @@ func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint strin
 
 	// Create mount point
 	mkdirCmd := fmt.Sprintf("sudo mkdir -p %s", mountPoint)
-	_, err := rm.deployment.Exec(ctx, []string{address}, mkdirCmd)
+	_, err = rm.deployment.Exec(ctx, []string{address}, mkdirCmd)
 	if err != nil {
 		return fmt.Errorf("failed to create mount point: %w", err)
 	}
@@ -1753,8 +1795,11 @@ func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint strin
 
 // Unmount unmounts a DRBD device
 func (rm *ResourceManager) Unmount(ctx context.Context, resource string, volumeID uint32, node string) error {
-	// Resolve node to address
-	address := rm.controller.ResolveHost(node)
+	// Resolve node to address; empty means the current Primary.
+	address, err := rm.resolveNodeOrPrimary(ctx, resource, node)
+	if err != nil {
+		return fmt.Errorf("resolve target node: %w", err)
+	}
 
 	rm.controller.logger.Info("Unmounting resource",
 		zap.String("resource", resource),
@@ -2484,9 +2529,41 @@ on-drbd-demote-failure = "reboot"
 }
 
 // CreateFilesystemOnly creates a filesystem on a DRBD device
+// primaryAddress returns the address of the node currently Primary for the
+// resource, from live DRBD status.
+func (rm *ResourceManager) primaryAddress(ctx context.Context, resource string) (string, error) {
+	info, err := rm.GetResource(ctx, resource)
+	if err != nil {
+		return "", err
+	}
+	for addr, st := range info.NodeStates {
+		if st.Role == "Primary" {
+			return addr, nil
+		}
+	}
+	return "", fmt.Errorf("no Primary node for resource %q; specify a node explicitly", resource)
+}
+
+// resolveNodeOrPrimary resolves a node selection to a host address. An empty
+// selection ("Auto (Primary)") resolves to the current Primary; if there is no
+// Primary that is a hard error rather than a silent no-op on an empty host.
+func (rm *ResourceManager) resolveNodeOrPrimary(ctx context.Context, resource, node string) (string, error) {
+	if strings.TrimSpace(node) == "" {
+		return rm.primaryAddress(ctx, resource)
+	}
+	addr := rm.controller.ResolveHost(node)
+	if strings.TrimSpace(addr) == "" {
+		return "", fmt.Errorf("unknown node %q", node)
+	}
+	return addr, nil
+}
+
 func (rm *ResourceManager) CreateFilesystemOnly(ctx context.Context, resource string, volumeID uint32, fsType string, node string) error {
-	// Resolve node to address
-	address := rm.controller.ResolveHost(node)
+	// Resolve node to address; empty means the current Primary.
+	address, err := rm.resolveNodeOrPrimary(ctx, resource, node)
+	if err != nil {
+		return fmt.Errorf("resolve target node: %w", err)
+	}
 
 	rm.controller.logger.Info("Creating filesystem",
 		zap.String("resource", resource),
