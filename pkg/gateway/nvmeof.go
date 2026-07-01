@@ -40,6 +40,17 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 		}, err
 	}
 
+	// Fail early with a clear message if the OCF agents/tools an NVMe-oF gateway
+	// needs are not installed on the resource's nodes, instead of writing a
+	// promoter config that silently fails to start.
+	if res, rerr := n.resources.GetResource(ctx, req.Resource); rerr == nil && res != nil {
+		if err := n.checkGatewayPrereqs(ctx, res.Nodes,
+			[]string{"Filesystem", "IPaddr2", "nvmet-subsystem", "nvmet-namespace", "nvmet-port"},
+			[]string{"nvmetcli"}); err != nil {
+			return &v1.CreateNVMeGatewayResponse{Success: false, Message: err.Error()}, err
+		}
+	}
+
 	// Auto-provision the cluster-private state volume when the resource is one
 	// short, so a single-volume resource can be exported without a manual
 	// add-volume step first.
