@@ -1882,6 +1882,17 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 	}
 	hosts := nodeAddresses
 
+	// A VIP is served by the service-ip@ systemd template, which depends on the
+	// service-ip helper. Without it the promoter target fails to start ("Unit
+	// service-ip@... not found") and the HA config is silently broken. Check up
+	// front on every node — the same guard Self-HA already uses.
+	if strings.TrimSpace(vip) != "" {
+		if err := rm.execAllSuccess(ctx, hosts, "test -x /usr/local/bin/service-ip",
+			"service-ip helper is not installed at /usr/local/bin/service-ip on all nodes (required for the HA VIP)"); err != nil {
+			return "", err
+		}
+	}
+
 	// Step 1: Check DRBD status and ensure resource is up
 	rm.controller.logger.Info("Checking DRBD resource status",
 		zap.String("resource", resource),
