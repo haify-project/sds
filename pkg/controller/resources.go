@@ -2645,12 +2645,14 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 			}
 			if role != "" {
 				// Find which node this is
+				matched := false
 				for _, node := range nodeAddresses {
 					if node == nodeAddresses[0] {
 						continue // Skip local node
 					}
 					if parts[0] == node {
 						currentNode = node
+						matched = true
 						if _, exists := nodeStates[currentNode]; !exists {
 							nodeStates[currentNode] = &ResourceNodeState{Role: role}
 						} else {
@@ -2658,6 +2660,14 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 						}
 						break
 					}
+				}
+				// A role-carrying line whose name is not a tracked node is
+				// either the local resource line or a peer absent from
+				// nodeAddresses (e.g. a diskless quorum tiebreaker). Reset
+				// currentNode so its following peer-disk line is not
+				// misattributed to the previously matched node.
+				if !matched {
+					currentNode = ""
 				}
 			}
 		}
