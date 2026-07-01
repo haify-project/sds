@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Plus, Trash2, Loader2, Copy } from 'lucide-react';
 import { api } from '@/services/api';
+import { copyToClipboard } from '@/lib/utils';
 import {
   Card,
   CardContent,
@@ -430,10 +431,11 @@ function AddUserDialog({ roles }: { roles: string[] }) {
               size="icon"
               variant="outline"
               className="h-9 w-9 shrink-0"
-              onClick={() => {
+              onClick={async () => {
                 if (createdToken) {
-                  navigator.clipboard.writeText(createdToken);
-                  toast.success('Token copied');
+                  const ok = await copyToClipboard(createdToken);
+                  if (ok) toast.success('Token copied');
+                  else toast.error('Copy failed — select and copy manually');
                 }
               }}
             >
