@@ -869,11 +869,15 @@ func TestResourceManagerCreateResourceEnablesDRBDBootUnit(t *testing.T) {
 	}
 	require.NotNil(t, installHosts,
 		"expected an exec call that writes and enables sds-drbd-up.service; got %+v", dep.execCalls)
-	// The boot unit must reconcile with `adjust all` (idempotent, attaches
-	// disks, tolerates already-up peers), NOT `up all` which aborts on an
-	// already-up resource and leaves later ones Diskless.
-	assert.Contains(t, installCmd, "adjust all")
-	assert.NotContains(t, installCmd, "ExecStart=$DRBDADM up all")
+	// The boot bring-up must install the helper script, activate LVM first
+	// (so backing devices exist), and adjust each resource INDEPENDENTLY.
+	// It must not use `up all`/`adjust all`, which abort on a foreign resource
+	// that is already up ("minor exists") and leave the rest Diskless.
+	assert.Contains(t, installCmd, drbdBootScriptPath)
+	assert.Contains(t, installCmd, "vgchange -ay")
+	assert.Contains(t, installCmd, `adjust "$res"`)
+	assert.NotContains(t, installCmd, "adjust all")
+	assert.NotContains(t, installCmd, "up all\n")
 	// The un-enableable LSB drbd.service must never be the mechanism.
 	for _, call := range dep.execCalls {
 		assert.NotContains(t, call.cmd, "systemctl enable drbd.service",

@@ -542,33 +542,51 @@ const drbdBootUnit = "sds-drbd-up.service"
 // drbdBootUnitPath is where the generated unit is written on each node.
 const drbdBootUnitPath = "/etc/systemd/system/sds-drbd-up.service"
 
+// drbdBootScriptPath is the helper script ExecStart runs. Keeping the logic in
+// a script (rather than an inline ExecStart) lets it activate LVM first and
+// reconcile each resource tolerantly at boot.
+const drbdBootScriptPath = "/usr/local/sbin/sds-drbd-up.sh"
+
 // drbdBootUnitInstallCmd renders the single shell command that (idempotently)
-// installs and enables the DRBD boot unit on a node. It discovers the drbdadm
-// path at install time (PATH first, then the usual sbin locations, defaulting
-// to /sbin/drbdadm) so ExecStart points at a binary that actually exists,
-// writes the unit file, then daemon-reloads and enables it. Ordering
-// (Before=drbd-reactor.service, After/Wants=network-online.target) ensures the
-// resources are up before drbd-reactor tries to promote them after a reboot.
+// installs and enables the DRBD boot bring-up on a node: a helper script plus a
+// oneshot systemd unit that runs it before drbd-reactor. The script:
+//   - activates LVM volume groups (`vgchange -ay`) so DRBD backing devices
+//     exist before attach — otherwise a resource comes up Diskless because its
+//     backing LV was not yet active at boot;
+//   - adjusts EACH resource independently with `|| true`, so a foreign resource
+//     already brought up by its own drbd-reactor promoter (which fails with
+//     "minor exists" / exit 10) can neither abort the remaining resources nor
+//     fail the unit. `drbdadm` is discovered inside the script at runtime.
 func drbdBootUnitInstallCmd() string {
 	return `set -e
+sudo tee ` + drbdBootScriptPath + ` > /dev/null <<'EOSCRIPT'
+#!/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/usr/bin:/bin
+export PATH
 DRBDADM="$(command -v drbdadm 2>/dev/null || true)"
-if [ -z "$DRBDADM" ]; then
-  for p in /sbin/drbdadm /usr/sbin/drbdadm /usr/local/sbin/drbdadm; do
-    if [ -x "$p" ]; then DRBDADM="$p"; break; fi
-  done
-fi
-[ -n "$DRBDADM" ] || DRBDADM=/sbin/drbdadm
-sudo tee ` + drbdBootUnitPath + ` > /dev/null <<EOF
+[ -n "$DRBDADM" ] || DRBDADM=/usr/sbin/drbdadm
+# 1. Activate LVM so DRBD backing devices exist before we attach them.
+vgchange -ay >/dev/null 2>&1 || true
+udevadm settle >/dev/null 2>&1 || true
+# 2. Reconcile each resource independently; tolerate ones already up (a foreign
+#    reactor-managed resource yields "minor exists" / exit 10).
+for res in $("$DRBDADM" sh-resources 2>/dev/null); do
+  "$DRBDADM" adjust "$res" >/dev/null 2>&1 || true
+done
+exit 0
+EOSCRIPT
+sudo chmod +x ` + drbdBootScriptPath + `
+sudo tee ` + drbdBootUnitPath + ` > /dev/null <<'EOF'
 [Unit]
 Description=Bring up all SDS DRBD resources at boot
-After=network-online.target
+After=network-online.target lvm2-monitor.service local-fs.target
 Wants=network-online.target
 Before=drbd-reactor.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=$DRBDADM adjust all
+ExecStart=` + drbdBootScriptPath + `
 
 [Install]
 WantedBy=multi-user.target
