@@ -1313,6 +1313,30 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		}
 	}
 
+	// If this resource still exports a gateway (NFS/iSCSI/NVMe-oF), tear it
+	// down first. The gateway's drbd-reactor promoter holds the DRBD device
+	// Primary (keeping its LVs open) via drbd-services@<res>.target; deleting
+	// the resource without removing the gateway config would leave that
+	// promoter + target ACTIVE and the device UP, orphaning the resource as a
+	// live device we could no longer bring down or lvremove. This mirrors the
+	// HA cascade above and reuses the exact teardown Server.DeleteGateway runs
+	// (Manager.DeleteGateway removes the reactor configs and stops the target;
+	// DeleteGatewayByResource drops the DB record).
+	if rm.controller.db != nil {
+		if gw, gerr := rm.controller.db.GetGatewayByResource(ctx, name); gerr == nil && gw != nil {
+			if rm.controller.gateway != nil {
+				if err := rm.controller.gateway.DeleteGateway(ctx, name); err != nil {
+					rm.controller.logger.Warn("Failed to tear down gateway during resource delete (continuing)",
+						zap.String("resource", name), zap.Error(err))
+				}
+			}
+			if err := rm.controller.db.DeleteGatewayByResource(ctx, name); err != nil {
+				rm.controller.logger.Warn("Failed to delete gateway record during resource delete (continuing)",
+					zap.String("resource", name), zap.Error(err))
+			}
+		}
+	}
+
 	hosts, err := rm.resourceHosts(ctx, name)
 	if err != nil {
 		return err
