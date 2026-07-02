@@ -183,3 +183,48 @@ func TestResourceManagerAdoptResourceIsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, volumes, 1)
 }
+
+// The older single-volume DRBD syntax declares device/disk at the resource
+// level (no `volume {}` block). Adopting such a resource must still discover its
+// one volume, not report zero.
+func TestParseResourceConfigVolumesImplicitOldFormat(t *testing.T) {
+	res := `resource kaiwudb {
+  device    /dev/drbd0;
+  disk      /dev/sdb;
+  meta-disk internal;
+
+  options {
+    quorum majority;
+    on-no-quorum io-error;
+  }
+  net {
+    protocol C;
+  }
+  on orange1 { node-id 0; address 192.168.123.214:7789; }
+  on orange2 { node-id 1; address 192.168.123.215:7789; }
+  on orange3 { node-id 2; address 192.168.123.216:7789; }
+}`
+	vols := parseResourceConfigVolumes(res)
+	require.Len(t, vols, 1, "old resource-level device/disk must yield one volume")
+	assert.Equal(t, 0, vols[0].VolumeID)
+	assert.Equal(t, 0, vols[0].Minor)
+	assert.Equal(t, "/dev/sdb", vols[0].DiskPath)
+}
+
+// The new `volume {}` block syntax must be unaffected by the old-format
+// fallback (regression guard).
+func TestParseResourceConfigVolumesNewBlockFormatUnaffected(t *testing.T) {
+	res := `resource data {
+  on n1 { address 10.0.0.1:7000; }
+  volume 0 {
+    device    minor 5;
+    disk      /dev/vg0/data_data;
+    meta-disk internal;
+  }
+}`
+	vols := parseResourceConfigVolumes(res)
+	require.Len(t, vols, 1)
+	assert.Equal(t, 0, vols[0].VolumeID)
+	assert.Equal(t, 5, vols[0].Minor)
+	assert.Equal(t, "/dev/vg0/data_data", vols[0].DiskPath)
+}

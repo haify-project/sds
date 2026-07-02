@@ -237,7 +237,65 @@ func parseResourceConfigVolumes(content string) []resourceConfigVolume {
 		}
 	}
 
+	// Fall back to the older single-volume syntax (device/disk declared at the
+	// resource level, no `volume {}` block) when no volume blocks were found,
+	// so adopting a pre-9 / hand-written resource still discovers its volume.
+	if len(volumes) == 0 {
+		if implicit := parseImplicitVolume0(content); implicit != nil {
+			volumes = append(volumes, *implicit)
+		}
+	}
+
 	return volumes
+}
+
+// parseImplicitVolume0 handles the older single-volume DRBD syntax where the
+// device/disk are declared directly at the resource level instead of inside a
+// `volume {}` block, e.g.:
+//
+//	resource r {
+//	  device    /dev/drbd0;
+//	  disk      /dev/sdb;
+//	  meta-disk internal;
+//	  on node { ... }
+//	}
+//
+// It returns a synthesized volume 0, or nil if no resource-level disk is found.
+func parseImplicitVolume0(content string) *resourceConfigVolume {
+	depth := 0
+	vol := resourceConfigVolume{VolumeID: 0, Minor: -1}
+	haveDisk := false
+	for idx, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Only resource-level declarations (depth 1) count — not lines inside
+		// on{}, net{}, options{} or a disk{} options block.
+		if depth == 1 {
+			switch {
+			case strings.HasPrefix(trimmed, "device") && !strings.Contains(trimmed, "minor"):
+				// old form: `device /dev/drbdN;`
+				if fields := strings.Fields(trimmed); len(fields) >= 2 {
+					if m, ok := parseDevNodeMinor(strings.TrimSuffix(fields[1], ";")); ok {
+						vol.Minor = m
+						vol.EndLine = idx
+					}
+				}
+			case strings.HasPrefix(trimmed, "disk") && !strings.Contains(trimmed, "{"):
+				// `disk /dev/sdb;` — not a `disk {` options block; "meta-disk"
+				// does not match the "disk" prefix.
+				if fields := strings.Fields(trimmed); len(fields) >= 2 {
+					vol.DiskPath = strings.TrimSuffix(fields[1], ";")
+					vol.StartLine = idx
+					vol.EndLine = idx
+					haveDisk = true
+				}
+			}
+		}
+		depth += strings.Count(line, "{") - strings.Count(line, "}")
+	}
+	if !haveDisk {
+		return nil
+	}
+	return &vol
 }
 
 func backingPathForVolume(pool, volumeName, storageType string) string {
