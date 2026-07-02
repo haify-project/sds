@@ -479,12 +479,12 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 	}
 
 	// 5b. Ensure a DRBD boot unit is installed and enabled on every
-	// participating node so a rebooted node re-runs `drbdadm up all` on boot
+	// participating node so a rebooted node re-runs `drbdadm adjust all` on boot
 	// and auto-rejoins replication without a manual `drbdadm adjust`. The
 	// packaged drbd.service is an LSB/SysV unit whose Default-Start header is
 	// empty, so `systemctl enable drbd.service` fails ("Default-Start contains
 	// no runlevels") and it can never be enabled. Instead we install our own
-	// native systemd oneshot (sds-drbd-up.service) that runs `drbdadm up all`
+	// native systemd oneshot (sds-drbd-up.service) that runs `drbdadm adjust all`
 	// before drbd-reactor, letting the reactor promote once resources are up.
 	// Installing/enabling is idempotent and harmless on any node with
 	// drbd-utils (diskful or diskless tiebreaker). Best-effort: never fail
@@ -568,7 +568,7 @@ Before=drbd-reactor.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=$DRBDADM up all
+ExecStart=$DRBDADM adjust all
 
 [Install]
 WantedBy=multi-user.target
@@ -578,9 +578,13 @@ sudo systemctl enable ` + drbdBootUnit
 }
 
 // ensureDRBDBootUnitEnabled installs and enables the DRBD boot unit on the
-// given nodes so their resources auto-come-up (`drbdadm up all`) after a
+// given nodes so their resources auto-come-up (`drbdadm adjust all`) after a
 // reboot and re-sync without manual intervention; drbd-reactor then promotes
-// once the resources are up. It is best-effort: any failure is logged and
+// once the resources are up. `adjust all` (not `up all`) is used deliberately:
+// it is idempotent and reconciles config->running state, so it attaches backing
+// disks AND tolerates a resource that is already up (e.g. a non-sds DRBD
+// resource on the same node) instead of aborting with a "minor exists" error
+// and leaving later resources half-up (Diskless). It is best-effort: any failure is logged and
 // swallowed so it never breaks the calling operation (the resource is already
 // up). Writing the same unit file and re-enabling it are idempotent, so
 // repeated calls across resource creations are safe.

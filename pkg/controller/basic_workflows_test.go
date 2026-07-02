@@ -842,7 +842,7 @@ func TestResourceManagerCreateResourcePersistsInitialVolume(t *testing.T) {
 func TestResourceManagerCreateResourceEnablesDRBDBootUnit(t *testing.T) {
 	// After a successful create the native sds-drbd-up.service oneshot must be
 	// installed AND enabled on every diskful node, so a rebooted node re-runs
-	// `drbdadm up all` and rejoins replication without a manual `drbdadm
+	// `drbdadm adjust all` and rejoins replication without a manual `drbdadm
 	// adjust`. We must NOT rely on the packaged drbd.service: it is an LSB unit
 	// that cannot be enabled (empty Default-Start).
 	dep := &fakeDeploymentClient{}
@@ -856,17 +856,24 @@ func TestResourceManagerCreateResourceEnablesDRBDBootUnit(t *testing.T) {
 	require.NoError(t, err)
 
 	var installHosts []string
+	var installCmd string
 	for _, call := range dep.execCalls {
 		// The single install command both writes the unit file to
 		// /etc/systemd/system/sds-drbd-up.service and enables it.
 		if strings.Contains(call.cmd, "/etc/systemd/system/sds-drbd-up.service") &&
 			strings.Contains(call.cmd, "systemctl enable sds-drbd-up.service") {
 			installHosts = call.hosts
+			installCmd = call.cmd
 			break
 		}
 	}
 	require.NotNil(t, installHosts,
 		"expected an exec call that writes and enables sds-drbd-up.service; got %+v", dep.execCalls)
+	// The boot unit must reconcile with `adjust all` (idempotent, attaches
+	// disks, tolerates already-up peers), NOT `up all` which aborts on an
+	// already-up resource and leaves later ones Diskless.
+	assert.Contains(t, installCmd, "adjust all")
+	assert.NotContains(t, installCmd, "ExecStart=$DRBDADM up all")
 	// The un-enableable LSB drbd.service must never be the mechanism.
 	for _, call := range dep.execCalls {
 		assert.NotContains(t, call.cmd, "systemctl enable drbd.service",
