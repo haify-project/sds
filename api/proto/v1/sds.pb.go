@@ -5572,8 +5572,12 @@ type NodeResourceState struct {
 	Role             string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
 	DiskState        string                 `protobuf:"bytes,2,opt,name=disk_state,json=diskState,proto3" json:"disk_state,omitempty"`
 	ReplicationState string                 `protobuf:"bytes,3,opt,name=replication_state,json=replicationState,proto3" json:"replication_state,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Percent of this peer's data in sync (0..100). 100 when steady-state / not
+	// resyncing. Only meaningful for a peer whose replication_state is a resync
+	// state (SyncSource/SyncTarget/PausedSync*).
+	SyncPercent   float64 `protobuf:"fixed64,4,opt,name=sync_percent,json=syncPercent,proto3" json:"sync_percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeResourceState) Reset() {
@@ -5625,6 +5629,13 @@ func (x *NodeResourceState) GetReplicationState() string {
 		return x.ReplicationState
 	}
 	return ""
+}
+
+func (x *NodeResourceState) GetSyncPercent() float64 {
+	if x != nil {
+		return x.SyncPercent
+	}
+	return 0
 }
 
 type VolumeInfo struct {
@@ -10532,12 +10543,13 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\avolumes\x18\x05 \x03(\v2\x0e.v1.VolumeInfoR\avolumes\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
-	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\"s\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\"\x96\x01\n" +
 	"\x11NodeResourceState\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x1d\n" +
 	"\n" +
 	"disk_state\x18\x02 \x01(\tR\tdiskState\x12+\n" +
-	"\x11replication_state\x18\x03 \x01(\tR\x10replicationState\"\x95\x01\n" +
+	"\x11replication_state\x18\x03 \x01(\tR\x10replicationState\x12!\n" +
+	"\fsync_percent\x18\x04 \x01(\x01R\vsyncPercent\"\x95\x01\n" +
 	"\n" +
 	"VolumeInfo\x12\x1b\n" +
 	"\tvolume_id\x18\x01 \x01(\rR\bvolumeId\x12\x16\n" +

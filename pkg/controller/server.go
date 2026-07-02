@@ -305,8 +305,10 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 	nodeStates := make(map[string]*sdspb.NodeResourceState)
 	for node, state := range resource.NodeStates {
 		nodeStates[node] = &sdspb.NodeResourceState{
-			Role:      state.Role,
-			DiskState: state.DiskState,
+			Role:             state.Role,
+			DiskState:        state.DiskState,
+			ReplicationState: state.Replication,
+			SyncPercent:      state.SyncPercent,
 		}
 	}
 
@@ -453,6 +455,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 			Role:             nodeState.Role,
 			DiskState:        nodeState.DiskState,
 			ReplicationState: nodeState.Replication,
+			SyncPercent:      nodeState.SyncPercent,
 		}
 	}
 

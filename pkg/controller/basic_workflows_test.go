@@ -35,6 +35,7 @@ type fakeDeploymentClient struct {
 	drbdPrimaryFunc                     func(ctx context.Context, host, resource string, force bool) (*deployment.HostResult, error)
 	drbdSecondaryFunc                   func(ctx context.Context, host, resource string) (*deployment.HostResult, error)
 	drbdStatusFunc                      func(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
+	drbdStatusJSONFunc                  func(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	reactorReloadFunc                   func(ctx context.Context, hosts []string) (*deployment.ExecResult, error)
 	reactorPromoterStatusByResourceFunc func(ctx context.Context, host, resource string) (*deployment.ReactorPromoterStatus, error)
 	execCalls                           []execCall
@@ -348,6 +349,15 @@ func (f *fakeDeploymentClient) DRBDStatus(ctx context.Context, hosts []string, r
 	if f.drbdStatusFunc != nil {
 		return f.drbdStatusFunc(ctx, hosts, resource)
 	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) DRBDStatusJSON(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error) {
+	if f.drbdStatusJSONFunc != nil {
+		return f.drbdStatusJSONFunc(ctx, hosts, resource)
+	}
+	// No JSON status by default: an empty output makes parseNodeStatesFromJSON
+	// return an error so the caller keeps its text-parsed states.
 	return successExecResult(hosts, ""), nil
 }
 
