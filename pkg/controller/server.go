@@ -477,7 +477,14 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 }
 
 func (s *Server) SetPrimary(ctx context.Context, req *sdspb.SetPrimaryRequest) (*sdspb.SetPrimaryResponse, error) {
-	err := s.resources.SetPrimary(ctx, req.Resource, req.Node, req.Force)
+	var err error
+	if req.QuorumGuarded {
+		// Quorum-guarded promote: try normal, escalate to --force only if the
+		// node holds DRBD quorum, refuse otherwise. `force` is ignored here.
+		err = s.resources.PromoteForNode(ctx, req.Resource, req.Node)
+	} else {
+		err = s.resources.SetPrimary(ctx, req.Resource, req.Node, req.Force)
+	}
 	if err != nil {
 		return &sdspb.SetPrimaryResponse{
 			Success: false,

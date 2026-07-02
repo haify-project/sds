@@ -31,6 +31,10 @@ type SDSBackend interface {
 	ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error)
 	RegisterNode(ctx context.Context, name, address string) (*sdspb.NodeInfo, error)
 	SetPrimary(ctx context.Context, resource, node string, force bool) error
+	// PromoteForNode performs a quorum-guarded promote for hard-failover: the
+	// controller tries a normal promote and only force-promotes if this node
+	// holds DRBD quorum, refusing otherwise to avoid split-brain.
+	PromoteForNode(ctx context.Context, resource, node string) error
 	SetSecondary(ctx context.Context, resource, node string) error
 }
 

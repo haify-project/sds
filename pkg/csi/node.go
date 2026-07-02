@@ -48,9 +48,18 @@ func (s *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return nil, status.Error(codes.InvalidArgument, "volume capability is required")
 	}
 
-	// Promote this node to DRBD Primary.
-	if err := s.backend.SetPrimary(ctx, res, s.nodeName, false); err != nil {
-		return nil, status.Errorf(codes.Internal, "set primary: %v", err)
+	// Promote this node to DRBD Primary using a quorum-guarded promote.
+	//
+	// A graceful move (old node demoted first) succeeds via the normal
+	// non-forced promote inside PromoteForNode. A HARD node failure leaves the
+	// old Primary undemoted, so a plain promote would fail and the volume would
+	// never come up here. PromoteForNode handles that by force-promoting ONLY if
+	// this node currently holds DRBD quorum (majority) — a partitioned old
+	// Primary that lost quorum is blocked from I/O, so forcing is safe. If this
+	// node lacks quorum the controller refuses, and we surface that error rather
+	// than risk a dual-Primary split-brain.
+	if err := s.backend.PromoteForNode(ctx, res, s.nodeName); err != nil {
+		return nil, status.Errorf(codes.Internal, "promote (quorum-guarded): %v", err)
 	}
 
 	device, err := s.deviceFor(ctx, res)

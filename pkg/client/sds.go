@@ -383,6 +383,31 @@ func (c *SDSClient) SetPrimary(ctx context.Context, resource, node string, force
 	return nil
 }
 
+// PromoteForNode requests a SAFE hard-failover promote of resource on node.
+// The controller tries a normal promote first and only escalates to a forced
+// promote if the node holds DRBD quorum; it refuses (returns an error) when the
+// node lacks quorum, avoiding split-brain. This is what the CSI node plugin
+// uses so a Pod rescheduled after a hard node failure can take over its RWO
+// volume iff doing so is safe.
+func (c *SDSClient) PromoteForNode(ctx context.Context, resource, node string) error {
+	req := &sdspb.SetPrimaryRequest{
+		Resource:      resource,
+		Node:          node,
+		QuorumGuarded: true,
+	}
+
+	resp, err := c.client.SetPrimary(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+
+	return nil
+}
+
 // DeleteResource deletes a DRBD resource
 func (c *SDSClient) DeleteResource(ctx context.Context, name string) error {
 	req := &sdspb.DeleteResourceRequest{

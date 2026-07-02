@@ -731,6 +731,14 @@ message SetPrimaryRequest {
   string resource = 1;
   string node = 2;
   bool force = 3;
+  // quorum_guarded requests a SAFE hard-failover promote: the controller tries
+  // a normal (non-forced) promote first and only escalates to `drbdadm primary
+  // --force` if the target node currently holds DRBD quorum (majority). If the
+  // node lacks quorum the promote is REFUSED (forcing without quorum could
+  // split-brain). When set, `force` is ignored. Used by the CSI node plugin so
+  // a Pod rescheduled after a hard node failure promotes the survivor iff it is
+  // safe to do so.
+  bool quorum_guarded = 4;
 }
 
 message SetPrimaryResponse {

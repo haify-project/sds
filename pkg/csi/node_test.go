@@ -2,6 +2,7 @@ package csi
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -62,6 +63,43 @@ func TestNodeStagePromotesAndFormats(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "n1", b.primary["pvc_x"], "must promote this node to Primary")
 	assert.Equal(t, []string{"/dev/drbd100->/stage/pvc_x:ext4"}, m.formatted)
+}
+
+// TestNodeStageUsesQuorumGuardedPromote verifies NodeStageVolume drives the
+// quorum-guarded promote path (PromoteForNode), not a bare force promote.
+func TestNodeStageUsesQuorumGuardedPromote(t *testing.T) {
+	b := newFakeBackend("n1", "n2")
+	require.NoError(t, b.CreateResourceWithPoolAndType(context.Background(), "pvc_x", 0, []string{"n1", "n2"}, "C", 1, "vg0", "lvm", nil))
+	m := newRecordingMounter()
+	req := &csi.NodeStageVolumeRequest{
+		VolumeId:          "pvc_x",
+		StagingTargetPath: "/stage/pvc_x",
+		VolumeCapability:  &csi.VolumeCapability{AccessType: &csi.VolumeCapability_Mount{Mount: &csi.VolumeCapability_MountVolume{FsType: "ext4"}}},
+	}
+	_, err := newTestNode(b, m).NodeStageVolume(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pvc_x"}, b.promoteCalls, "stage must use the quorum-guarded promote")
+	assert.Equal(t, "n1", b.primary["pvc_x"])
+}
+
+// TestNodeStageRefusedWithoutQuorum verifies that when the controller refuses a
+// promote (node lacks DRBD quorum -> split-brain risk), NodeStageVolume fails
+// and does NOT format/mount the volume.
+func TestNodeStageRefusedWithoutQuorum(t *testing.T) {
+	b := newFakeBackend("n1", "n2")
+	require.NoError(t, b.CreateResourceWithPoolAndType(context.Background(), "pvc_x", 0, []string{"n1", "n2"}, "C", 1, "vg0", "lvm", nil))
+	b.promoteErr = fmt.Errorf("refusing to force-promote pvc_x on n1: node does NOT hold DRBD quorum")
+	m := newRecordingMounter()
+	req := &csi.NodeStageVolumeRequest{
+		VolumeId:          "pvc_x",
+		StagingTargetPath: "/stage/pvc_x",
+		VolumeCapability:  &csi.VolumeCapability{AccessType: &csi.VolumeCapability_Mount{Mount: &csi.VolumeCapability_MountVolume{FsType: "ext4"}}},
+	}
+	_, err := newTestNode(b, m).NodeStageVolume(context.Background(), req)
+	require.Error(t, err)
+	assert.Empty(t, m.formatted, "must not format/mount when the promote is refused")
+	_, isPrimary := b.primary["pvc_x"]
+	assert.False(t, isPrimary)
 }
 
 func TestNodeUnstageDemotes(t *testing.T) {

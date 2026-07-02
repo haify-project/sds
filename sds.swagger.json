@@ -3283,6 +3283,10 @@
         },
         "force": {
           "type": "boolean"
+        },
+        "quorumGuarded": {
+          "type": "boolean",
+          "description": "quorum_guarded requests a SAFE hard-failover promote: the controller tries\na normal (non-forced) promote first and only escalates to `drbdadm primary\n--force` if the target node currently holds DRBD quorum (majority). If the\nnode lacks quorum the promote is REFUSED (forcing without quorum could\nsplit-brain). When set, `force` is ignored. Used by the CSI node plugin so\na Pod rescheduled after a hard node failure promotes the survivor iff it is\nsafe to do so."
         }
       }
     },

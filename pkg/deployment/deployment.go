@@ -633,7 +633,15 @@ func (c *Client) DRBDDown(ctx context.Context, hosts []string, resource string) 
 
 // DRBDPrimary sets resource to Primary
 func (c *Client) DRBDPrimary(ctx context.Context, host, resource string, force bool) (*HostResult, error) {
-	cmd := fmt.Sprintf("sudo drbdadm primary --force %s", resource)
+	// Honor the force flag. A plain `drbdadm primary` refuses to promote when a
+	// peer still holds Primary or is unreachable (no quorum) — this is the SAFE
+	// default for graceful moves. `--force` overrides that and MUST only be used
+	// once the caller has confirmed it is safe (e.g. this node holds DRBD
+	// quorum); forcing blindly can create a dual-Primary split-brain.
+	cmd := fmt.Sprintf("sudo drbdadm primary %s", resource)
+	if force {
+		cmd = fmt.Sprintf("sudo drbdadm primary --force %s", resource)
+	}
 	result, err := c.Exec(ctx, []string{host}, cmd)
 	if err != nil {
 		return nil, err
