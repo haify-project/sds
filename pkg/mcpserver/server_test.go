@@ -24,6 +24,11 @@ type mockClient struct {
 	deleteResourceFn func(ctx context.Context, name string) error
 	healthCheckFn    func(ctx context.Context, node string) (*client.NodeHealthInfo, error)
 	lvmSnapshots     []string
+
+	resourceStatusFn   func(ctx context.Context, name string) (*sdspb.ResourceStatus, error)
+	createVolumesCalls [][]*sdspb.VolumeSpec
+	promoteForNode     []string
+	adoptFn            func(ctx context.Context, name string, nodes []string, port uint32, protocol string) (*sdspb.AdoptResourceResponse, error)
 }
 
 func (m *mockClient) ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error) {
@@ -50,6 +55,24 @@ func (m *mockClient) HealthCheck(ctx context.Context, node string) (*client.Node
 func (m *mockClient) CreateLvmSnapshot(_ context.Context, pool, lvName, snapshotName, node, size string) error {
 	m.lvmSnapshots = append(m.lvmSnapshots, strings.Join([]string{pool, lvName, snapshotName, node, size}, "|"))
 	return nil
+}
+
+func (m *mockClient) ResourceStatus(ctx context.Context, name string) (*sdspb.ResourceStatus, error) {
+	return m.resourceStatusFn(ctx, name)
+}
+
+func (m *mockClient) CreateResourceWithVolumes(_ context.Context, _ string, _ uint32, _ []string, _, _ string, _ map[string]string, volumes []*sdspb.VolumeSpec) error {
+	m.createVolumesCalls = append(m.createVolumesCalls, volumes)
+	return nil
+}
+
+func (m *mockClient) PromoteForNode(_ context.Context, resource, node string) error {
+	m.promoteForNode = append(m.promoteForNode, resource+"@"+node)
+	return nil
+}
+
+func (m *mockClient) AdoptResource(ctx context.Context, name string, nodes []string, port uint32, protocol string) (*sdspb.AdoptResourceResponse, error) {
+	return m.adoptFn(ctx, name, nodes, port, protocol)
 }
 
 // connect spins up the MCP server against an in-memory transport and
@@ -107,7 +130,7 @@ func TestToolRegistration(t *testing.T) {
 	for _, want := range []string{
 		"sds_node_list", "sds_node_register", "sds_node_health_check",
 		"sds_pool_list", "sds_pool_create", "sds_pool_delete",
-		"sds_resource_list", "sds_resource_create", "sds_resource_status",
+		"sds_resource_list", "sds_resource_create", "sds_resource_status", "sds_resource_adopt",
 		"sds_snapshot_create", "sds_snapshot_restore",
 		"sds_gateway_list", "sds_gateway_create_nfs", "sds_gateway_create_iscsi", "sds_gateway_create_nvme",
 		"sds_nfs_exports", "sds_iscsi_luns", "sds_iscsi_chap", "sds_nvme_namespaces",
@@ -268,6 +291,150 @@ func TestToolErrorPropagation(t *testing.T) {
 	}
 	if !res.IsError {
 		t.Fatal("expected IsError=true when the controller call fails")
+	}
+}
+
+func TestResourceCreateMultiVolume(t *testing.T) {
+	mock := &mockClient{}
+	session := connect(t, mock, false)
+
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "sds_resource_create",
+		Arguments: map[string]any{
+			"name":  "data",
+			"port":  7001,
+			"nodes": []string{"orange1", "orange2"},
+			"volumes": []map[string]any{
+				{"size_gb": 10, "pool": "vg0"},
+				{"size_gb": 20},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("call sds_resource_create: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("sds_resource_create returned tool error: %v", res.Content)
+	}
+	if len(mock.createVolumesCalls) != 1 {
+		t.Fatalf("expected 1 multi-volume create call, got %d", len(mock.createVolumesCalls))
+	}
+	vols := mock.createVolumesCalls[0]
+	if len(vols) != 2 {
+		t.Fatalf("expected 2 VolumeSpecs, got %d", len(vols))
+	}
+	if vols[0].SizeGb != 10 || vols[0].Pool != "vg0" {
+		t.Fatalf("unexpected volume[0]: %+v", vols[0])
+	}
+	if vols[1].SizeGb != 20 || vols[1].Pool != "" {
+		t.Fatalf("unexpected volume[1]: %+v", vols[1])
+	}
+}
+
+func TestResourceStatusSyncPercent(t *testing.T) {
+	mock := &mockClient{
+		resourceStatusFn: func(_ context.Context, name string) (*sdspb.ResourceStatus, error) {
+			return &sdspb.ResourceStatus{
+				Name: name,
+				Role: "Primary",
+				NodeStates: map[string]*sdspb.NodeResourceState{
+					"orange2": {
+						Role:             "Secondary",
+						DiskState:        "Inconsistent",
+						ReplicationState: "SyncTarget",
+						SyncPercent:      42.5,
+					},
+				},
+			}, nil
+		},
+	}
+	session := connect(t, mock, false)
+
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "sds_resource_status",
+		Arguments: map[string]any{"name": "data"},
+	})
+	if err != nil {
+		t.Fatalf("call sds_resource_status: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("sds_resource_status returned tool error: %v", res.Content)
+	}
+	raw, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal structured content: %v", err)
+	}
+	var out resourceOut
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("unmarshal structured content: %v", err)
+	}
+	if len(out.NodeStates) != 1 {
+		t.Fatalf("expected 1 node state, got %d", len(out.NodeStates))
+	}
+	ns := out.NodeStates[0]
+	if ns.ReplicationState != "SyncTarget" || ns.SyncPercent != 42.5 {
+		t.Fatalf("resync progress not surfaced: %+v", ns)
+	}
+}
+
+func TestResourceSetRoleQuorumGuarded(t *testing.T) {
+	mock := &mockClient{}
+	session := connect(t, mock, false)
+
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "sds_resource_set_role",
+		Arguments: map[string]any{
+			"resource":       "data",
+			"node":           "orange1",
+			"role":           "primary",
+			"quorum_guarded": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call sds_resource_set_role: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("sds_resource_set_role returned tool error: %v", res.Content)
+	}
+	if len(mock.promoteForNode) != 1 || mock.promoteForNode[0] != "data@orange1" {
+		t.Fatalf("quorum_guarded did not route to PromoteForNode: %v", mock.promoteForNode)
+	}
+}
+
+func TestResourceAdopt(t *testing.T) {
+	mock := &mockClient{
+		adoptFn: func(_ context.Context, name string, _ []string, _ uint32, _ string) (*sdspb.AdoptResourceResponse, error) {
+			return &sdspb.AdoptResourceResponse{
+				Success:  true,
+				Nodes:    []string{"orange1", "orange2"},
+				Port:     7005,
+				Protocol: "C",
+				Volumes:  2,
+			}, nil
+		},
+	}
+	session := connect(t, mock, false)
+
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "sds_resource_adopt",
+		Arguments: map[string]any{"resource": "legacy"},
+	})
+	if err != nil {
+		t.Fatalf("call sds_resource_adopt: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("sds_resource_adopt returned tool error: %v", res.Content)
+	}
+	raw, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal structured content: %v", err)
+	}
+	var out resourceAdoptOut
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("unmarshal structured content: %v", err)
+	}
+	if out.Resource != "legacy" || out.Port != 7005 || out.Volumes != 2 || len(out.Nodes) != 2 {
+		t.Fatalf("unexpected adopt output: %+v", out)
 	}
 }
 

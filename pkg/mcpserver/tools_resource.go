@@ -19,9 +19,11 @@ type volumeOut struct {
 }
 
 type nodeStateOut struct {
-	Node      string `json:"node"`
-	Role      string `json:"role,omitempty" jsonschema:"DRBD role: Primary or Secondary"`
-	DiskState string `json:"disk_state,omitempty" jsonschema:"DRBD disk state, e.g. UpToDate"`
+	Node             string  `json:"node"`
+	Role             string  `json:"role,omitempty" jsonschema:"DRBD role: Primary or Secondary"`
+	DiskState        string  `json:"disk_state,omitempty" jsonschema:"DRBD disk state, e.g. UpToDate"`
+	ReplicationState string  `json:"replication_state,omitempty" jsonschema:"DRBD replication state, e.g. Established, SyncSource, SyncTarget"`
+	SyncPercent      float64 `json:"sync_percent,omitempty" jsonschema:"resync completion 0..100; 100 in steady state, lower while a resync is in progress"`
 }
 
 type resourceOut struct {
@@ -57,7 +59,13 @@ func volumesOut(vols []*sdspb.VolumeInfo) []volumeOut {
 func nodeStatesOut(states map[string]*sdspb.NodeResourceState) []nodeStateOut {
 	out := make([]nodeStateOut, 0, len(states))
 	for node, st := range states {
-		out = append(out, nodeStateOut{Node: node, Role: st.Role, DiskState: st.DiskState})
+		out = append(out, nodeStateOut{
+			Node:             node,
+			Role:             st.Role,
+			DiskState:        st.DiskState,
+			ReplicationState: st.ReplicationState,
+			SyncPercent:      st.SyncPercent,
+		})
 	}
 	return out
 }
@@ -68,22 +76,45 @@ type resourceNameIn struct {
 	Name string `json:"name" jsonschema:"DRBD resource name"`
 }
 
+type volumeSpecIn struct {
+	SizeGB uint32 `json:"size_gb" jsonschema:"volume size in GiB"`
+	Pool   string `json:"pool,omitempty" jsonschema:"backing storage pool for this volume; auto-selected when empty"`
+}
+
 type resourceCreateIn struct {
 	Name        string            `json:"name" jsonschema:"DRBD resource name"`
 	Port        uint32            `json:"port" jsonschema:"DRBD replication TCP port, e.g. 7001; must be unique per resource"`
 	Nodes       []string          `json:"nodes" jsonschema:"nodes to replicate across, e.g. [\"orange1\",\"orange2\"]"`
-	Pool        string            `json:"pool" jsonschema:"backing storage pool name"`
-	SizeGB      uint32            `json:"size_gb" jsonschema:"volume size in GiB"`
-	StorageType string            `json:"storage_type,omitempty" jsonschema:"backing storage type: lvm (default) or zfs"`
+	Pool        string            `json:"pool,omitempty" jsonschema:"backing storage pool name (single-volume shorthand; ignored when volumes is set)"`
+	SizeGB      uint32            `json:"size_gb,omitempty" jsonschema:"volume size in GiB (single-volume shorthand; ignored when volumes is set)"`
+	Volumes     []volumeSpecIn    `json:"volumes,omitempty" jsonschema:"optional list of volumes for a multi-volume resource; each element is {size_gb, pool}. When set, volume 0..N are created atomically and the top-level size_gb/pool are ignored. Leave empty for a single-volume resource."`
+	StorageType string            `json:"storage_type,omitempty" jsonschema:"backing storage type: lvm (default), lvm-thin, or zfs (applies to all volumes)"`
 	Protocol    string            `json:"protocol,omitempty" jsonschema:"DRBD protocol A, B, or C (default C)"`
 	DrbdOptions map[string]string `json:"drbd_options,omitempty" jsonschema:"extra DRBD options, e.g. {\"options/on-no-quorum\":\"suspend-io\"}"`
 }
 
 type resourceSetRoleIn struct {
-	Resource string `json:"resource" jsonschema:"DRBD resource name"`
-	Node     string `json:"node" jsonschema:"target node"`
-	Role     string `json:"role" jsonschema:"desired role: primary or secondary"`
-	Force    bool   `json:"force,omitempty" jsonschema:"force promotion (needed for the first promotion of a new resource)"`
+	Resource      string `json:"resource" jsonschema:"DRBD resource name"`
+	Node          string `json:"node" jsonschema:"target node"`
+	Role          string `json:"role" jsonschema:"desired role: primary or secondary"`
+	Force         bool   `json:"force,omitempty" jsonschema:"force promotion (needed for the first promotion of a new resource)"`
+	QuorumGuarded bool   `json:"quorum_guarded,omitempty" jsonschema:"safe hard-failover promote (primary only): the controller force-promotes only if the node holds DRBD quorum and refuses otherwise, preventing split-brain. Use for taking over after a hard node failure. Ignored when role is secondary."`
+}
+
+type resourceAdoptIn struct {
+	Resource string   `json:"resource" jsonschema:"DRBD resource name to adopt (must already exist on the nodes)"`
+	Nodes    []string `json:"nodes,omitempty" jsonschema:"nodes the resource lives on; auto-discovered from the .res when omitted"`
+	Port     uint32   `json:"port,omitempty" jsonschema:"DRBD replication port; auto-discovered from the .res when omitted"`
+	Protocol string   `json:"protocol,omitempty" jsonschema:"DRBD protocol A, B, or C; auto-discovered from the .res when omitted"`
+}
+
+type resourceAdoptOut struct {
+	Resource string   `json:"resource"`
+	Nodes    []string `json:"nodes,omitempty" jsonschema:"nodes recorded for the resource"`
+	Port     uint32   `json:"port,omitempty"`
+	Protocol string   `json:"protocol,omitempty"`
+	Volumes  uint32   `json:"volumes" jsonschema:"number of volumes discovered and recorded"`
+	Detail   string   `json:"detail,omitempty"`
 }
 
 type volumeAddIn struct {
@@ -174,7 +205,10 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 
 	addWrite(s, srv, writeTool("sds_resource_create", "Create resource",
 		"Create a replicated DRBD resource backed by a storage pool. Allocates volumes on every node, "+
-			"writes the DRBD config, and brings the resource up. Initial sync starts automatically."),
+			"writes the DRBD config, and brings the resource up. Initial sync starts automatically. "+
+			"For a single volume pass size_gb (and optionally pool). For a multi-volume resource pass "+
+			"the volumes array instead — each element is {size_gb, pool} and becomes DRBD volume 0..N; "+
+			"the top-level size_gb/pool are then ignored."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceCreateIn) (*mcp.CallToolResult, opResult, error) {
 			if len(in.Nodes) == 0 {
 				return nil, opResult{}, fmt.Errorf("nodes are required")
@@ -186,6 +220,18 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			protocol := in.Protocol
 			if protocol == "" {
 				protocol = "C"
+			}
+			if len(in.Volumes) > 0 {
+				volumes := make([]*sdspb.VolumeSpec, 0, len(in.Volumes))
+				for _, v := range in.Volumes {
+					volumes = append(volumes, &sdspb.VolumeSpec{SizeGb: v.SizeGB, Pool: v.Pool})
+				}
+				if err := s.client.CreateResourceWithVolumes(ctx, in.Name, in.Port, in.Nodes,
+					protocol, storageType, in.DrbdOptions, volumes); err != nil {
+					return nil, opResult{}, err
+				}
+				return nil, ok(fmt.Sprintf("resource %s created on %d node(s) with %d volume(s)",
+					in.Name, len(in.Nodes), len(volumes))), nil
 			}
 			err := s.client.CreateResourceWithPoolAndType(ctx, in.Name, in.Port, in.Nodes,
 				protocol, in.SizeGB, in.Pool, storageType, in.DrbdOptions)
@@ -207,10 +253,18 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 
 	addWrite(s, srv, writeTool("sds_resource_set_role", "Set resource role",
 		"Promote a resource to Primary or demote it to Secondary on a node. "+
-			"Only the Primary node can mount and write the volume."),
+			"Only the Primary node can mount and write the volume. Set quorum_guarded=true "+
+			"for a safe hard-failover promote: the controller force-promotes only if the node "+
+			"holds DRBD quorum and refuses otherwise, avoiding split-brain."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceSetRoleIn) (*mcp.CallToolResult, opResult, error) {
 			switch in.Role {
 			case "primary":
+				if in.QuorumGuarded {
+					if err := s.client.PromoteForNode(ctx, in.Resource, in.Node); err != nil {
+						return nil, opResult{}, err
+					}
+					return nil, ok(fmt.Sprintf("resource %s safely promoted to primary on %s (quorum-guarded)", in.Resource, in.Node)), nil
+				}
 				if err := s.client.SetPrimary(ctx, in.Resource, in.Node, in.Force); err != nil {
 					return nil, opResult{}, err
 				}
@@ -222,6 +276,29 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				return nil, opResult{}, fmt.Errorf("invalid role %q (use primary or secondary)", in.Role)
 			}
 			return nil, ok(fmt.Sprintf("resource %s is now %s on %s", in.Resource, in.Role, in.Node)), nil
+		})
+
+	addWrite(s, srv, writeTool("sds_resource_adopt", "Adopt resource",
+		"Adopt a pre-existing/foreign DRBD resource into SDS management. Auto-discovers "+
+			"nodes/port/volumes from the resource's .res on a node when omitted. Writes only "+
+			"SDS metadata — never touches the DRBD device or data."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceAdoptIn) (*mcp.CallToolResult, resourceAdoptOut, error) {
+			if in.Resource == "" {
+				return nil, resourceAdoptOut{}, fmt.Errorf("resource is required")
+			}
+			resp, err := s.client.AdoptResource(ctx, in.Resource, in.Nodes, in.Port, in.Protocol)
+			if err != nil {
+				return nil, resourceAdoptOut{}, err
+			}
+			return nil, resourceAdoptOut{
+				Resource: in.Resource,
+				Nodes:    resp.Nodes,
+				Port:     resp.Port,
+				Protocol: resp.Protocol,
+				Volumes:  resp.Volumes,
+				Detail: fmt.Sprintf("resource %s adopted (%d node(s), %d volume(s), port %d)",
+					in.Resource, len(resp.Nodes), resp.Volumes, resp.Port),
+			}, nil
 		})
 
 	addWrite(s, srv, writeTool("sds_resource_add_volume", "Add volume",

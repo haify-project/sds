@@ -28,8 +28,11 @@ type ControllerClient interface {
 	ListResources(ctx context.Context) ([]*sdspb.ResourceInfo, error)
 	ResourceStatus(ctx context.Context, name string) (*sdspb.ResourceStatus, error)
 	CreateResourceWithPoolAndType(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, storageType string, drbdOptions map[string]string) error
+	CreateResourceWithVolumes(ctx context.Context, name string, port uint32, nodes []string, protocol, storageType string, drbdOptions map[string]string, volumes []*sdspb.VolumeSpec) error
+	AdoptResource(ctx context.Context, name string, nodes []string, port uint32, protocol string) (*sdspb.AdoptResourceResponse, error)
 	DeleteResource(ctx context.Context, name string) error
 	SetPrimary(ctx context.Context, resource, node string, force bool) error
+	PromoteForNode(ctx context.Context, resource, node string) error
 	SetSecondary(ctx context.Context, resource, node string) error
 	AddVolume(ctx context.Context, resource, volume, pool string, sizeGB uint32) error
 	UpdateResourceOptions(ctx context.Context, resource string, options map[string]string) error

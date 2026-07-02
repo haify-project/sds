@@ -324,6 +324,33 @@ func (c *SDSClient) CreateResourceWithPoolAndType(ctx context.Context, name stri
 	return nil
 }
 
+// CreateResourceWithVolumes creates a DRBD resource with one or more volumes
+// specified explicitly. The volumes slice maps to CreateResourceRequest.Volumes
+// (volume 0..N); size_gb/pool on the request are left zero and ignored by the
+// controller when volumes is non-empty. storageType applies to every volume.
+func (c *SDSClient) CreateResourceWithVolumes(ctx context.Context, name string, port uint32, nodes []string, protocol, storageType string, drbdOptions map[string]string, volumes []*sdspb.VolumeSpec) error {
+	req := &sdspb.CreateResourceRequest{
+		Name:        name,
+		Port:        port,
+		Nodes:       nodes,
+		Protocol:    protocol,
+		StorageType: storageType,
+		DrbdOptions: drbdOptions,
+		Volumes:     volumes,
+	}
+
+	resp, err := c.client.CreateResource(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+
+	return nil
+}
+
 // CreateZFSResource creates a DRBD resource with ZFS backend
 func (c *SDSClient) CreateZFSResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, drbdOptions map[string]string) error {
 	return c.CreateResourceWithPoolAndType(ctx, name, port, nodes, protocol, sizeGB, pool, "zfs", drbdOptions)
