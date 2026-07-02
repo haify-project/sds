@@ -167,10 +167,7 @@ export function HAPage() {
             automatic failover.
           </p>
         </div>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          disabled={resourcesWithoutHA.length === 0}
-        >
+        <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Create HA Config
         </Button>

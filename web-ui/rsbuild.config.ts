@@ -9,6 +9,10 @@ const httpAgent = new http.Agent({
 
 export default defineConfig({
   plugins: [pluginReact()],
+  html: {
+    title: 'SDS UI',
+    favicon: './src/assets/favicon.svg',
+  },
   resolve: {
     alias: {
       '@': './src',
