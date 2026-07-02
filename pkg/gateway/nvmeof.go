@@ -40,13 +40,22 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 		}, err
 	}
 
-	// Fail early with a clear message if the OCF agents/tools an NVMe-oF gateway
+	// Fail early with a clear message if the OCF agents an NVMe-oF gateway
 	// needs are not installed on the resource's nodes, instead of writing a
 	// promoter config that silently fails to start.
+	//
+	// The nvmet-* OCF agents drive the kernel target entirely through configfs
+	// (/sys/kernel/config/nvmet); they invoke no userspace tool such as
+	// nvmetcli, so nvmetcli is deliberately NOT required here. Their real
+	// runtime dependency is the nvmet/nvmet-tcp kernel modules, which
+	// ensureNVMeModules loads (and persists) below.
 	if res, rerr := n.resources.GetResource(ctx, req.Resource); rerr == nil && res != nil {
 		if err := n.checkGatewayPrereqs(ctx, res.Nodes,
 			[]string{"Filesystem", "IPaddr2", "nvmet-subsystem", "nvmet-namespace", "nvmet-port"},
-			[]string{"nvmetcli"}); err != nil {
+			nil); err != nil {
+			return &v1.CreateNVMeGatewayResponse{Success: false, Message: err.Error()}, err
+		}
+		if err := n.ensureNVMeModules(ctx, res.Nodes); err != nil {
 			return &v1.CreateNVMeGatewayResponse{Success: false, Message: err.Error()}, err
 		}
 	}
@@ -615,6 +624,29 @@ func (n *NVMeManager) ListPorts(ctx context.Context, resource string) ([]map[str
 }
 
 // ==================== Helper Functions ====================
+
+// ensureNVMeModules loads the nvmet and nvmet-tcp kernel modules on the given
+// nodes and persists them via /etc/modules-load.d so they survive a reboot,
+// then verifies the nvmet configfs tree exists. The nvmet-* OCF agents operate
+// exclusively through /sys/kernel/config/nvmet, which only appears once these
+// modules are loaded; without them a promoted gateway silently fails to export
+// its namespace. Running this at create time makes a freshly provisioned node
+// serve NVMe-oF without a manual modprobe.
+func (n *NVMeManager) ensureNVMeModules(ctx context.Context, nodes []string) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+	script := `set -e
+modprobe nvmet
+modprobe nvmet-tcp
+printf 'nvmet\nnvmet-tcp\n' > /etc/modules-load.d/nvmet.conf
+test -d /sys/kernel/config/nvmet`
+	if err := n.runScript(ctx, nodes, script); err != nil {
+		return fmt.Errorf("failed to load nvmet kernel modules (nvmet, nvmet-tcp) on gateway nodes; "+
+			"ensure the nvme-target kernel modules are available: %w", err)
+	}
+	return nil
+}
 
 // generateNQN generates an NVMe qualified name for a given resource
 func generateNQN(resource string) string {
