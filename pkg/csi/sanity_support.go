@@ -76,6 +76,7 @@ func (b *sanityBackend) RegisterNode(_ context.Context, name, address string) (*
 }
 
 func (b *sanityBackend) SetPrimary(_ context.Context, _, _ string, _ bool) error { return nil }
+func (b *sanityBackend) PromoteForNode(_ context.Context, _, _ string) error     { return nil }
 func (b *sanityBackend) SetSecondary(_ context.Context, _, _ string) error       { return nil }
 
 var _ SDSBackend = (*sanityBackend)(nil)

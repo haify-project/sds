@@ -14,6 +14,12 @@ type fakeBackend struct {
 	primary   map[string]string // resource -> node
 	createErr error
 
+	// promoteErr, when set, makes PromoteForNode fail (e.g. simulating a
+	// controller that refused to force-promote because the node lacks quorum).
+	promoteErr    error
+	promoteCalls  []string // resources passed to PromoteForNode
+	setPrimaryErr error
+
 	createCalls []createCall
 }
 
@@ -66,6 +72,18 @@ func (f *fakeBackend) RegisterNode(_ context.Context, name, address string) (*sd
 }
 
 func (f *fakeBackend) SetPrimary(_ context.Context, resource, node string, _ bool) error {
+	if f.setPrimaryErr != nil {
+		return f.setPrimaryErr
+	}
+	f.primary[resource] = node
+	return nil
+}
+
+func (f *fakeBackend) PromoteForNode(_ context.Context, resource, node string) error {
+	f.promoteCalls = append(f.promoteCalls, resource)
+	if f.promoteErr != nil {
+		return f.promoteErr
+	}
 	f.primary[resource] = node
 	return nil
 }

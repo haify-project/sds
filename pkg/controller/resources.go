@@ -1674,6 +1674,118 @@ func (rm *ResourceManager) SetSecondary(ctx context.Context, resource, node stri
 	return nil
 }
 
+// PromoteForNode performs a SAFE hard-failover promote of a resource on a node.
+//
+// Why this exists: on a GRACEFUL move the old Primary demotes first, so a plain
+// (non-forced) promote on the new node succeeds. On a HARD failure the old
+// Primary is gone/uncontactable and was never demoted, so a non-forced promote
+// FAILS and the volume never comes up — no automatic failover. Blindly forcing
+// would risk a dual-Primary split-brain if the "failed" node is actually alive
+// behind a network partition.
+//
+// The safe rule is DRBD-native: rely on quorum. sds configures resources with
+// `quorum majority` + `on-no-quorum io-error` and auto-adds a diskless
+// tiebreaker to 2-node resources, giving a 3-way majority. A hard-failed or
+// partitioned old Primary that cannot reach the majority LOSES quorum and its
+// DRBD blocks all I/O, so it cannot serve stale writes. Therefore it is safe to
+// force-promote a surviving Secondary IFF that survivor currently holds quorum.
+//
+// Algorithm:
+//   (a) try a normal, non-forced promote — the safe graceful path;
+//   (b) if it fails (a peer still holds Primary / is unreachable), read this
+//       node's DRBD quorum flag via `drbdsetup status --json`;
+//   (c) only if quorum == true, retry with `drbdadm primary --force`;
+//   (d) if quorum == false (or unknown), REFUSE with an error — promoting
+//       without quorum could split-brain.
+func (rm *ResourceManager) PromoteForNode(ctx context.Context, resource, node string) error {
+	// (a) Safe path: a plain promote succeeds on a graceful move (old Primary
+	// already Secondary) and on any node that can already take Primary. This
+	// path is unchanged from the previous non-forced behavior.
+	if err := rm.SetPrimary(ctx, resource, node, false); err == nil {
+		return nil
+	} else {
+		rm.controller.logger.Warn("Normal promote failed; evaluating quorum before any force-promote",
+			zap.String("resource", resource), zap.String("node", node), zap.Error(err))
+
+		// (b) The promote failed — most likely a hard failover where the old
+		// Primary was never demoted. Decide whether forcing is safe by checking
+		// whether THIS node currently holds DRBD quorum.
+		hasQuorum, qErr := rm.nodeHasQuorum(ctx, resource, node)
+		if qErr != nil {
+			// We cannot prove quorum, so we must not force.
+			return fmt.Errorf("refusing to force-promote %s on %s: normal promote failed (%v) and DRBD quorum could not be determined: %w",
+				resource, node, err, qErr)
+		}
+		if !hasQuorum {
+			// (d) No quorum -> refuse. Forcing here could create a dual-Primary
+			// split-brain if the peer that holds Primary is alive behind a
+			// partition. A quorate peer, if any, is the one that should promote.
+			return fmt.Errorf("refusing to force-promote %s on %s: node does NOT hold DRBD quorum (majority); forcing could cause split-brain / dual-Primary data corruption (original promote error: %v)",
+				resource, node, err)
+		}
+
+		// (c) Quorum held -> safe to force. Any old/partitioned Primary that lost
+		// quorum is blocked from I/O by on-no-quorum=io-error and cannot serve
+		// stale writes, so this node can safely become the sole Primary.
+		rm.controller.logger.Warn("Node holds DRBD quorum; force-promoting for hard failover",
+			zap.String("resource", resource), zap.String("node", node))
+		if fErr := rm.SetPrimary(ctx, resource, node, true); fErr != nil {
+			return fmt.Errorf("force-promote %s on %s (quorum held): %w", resource, node, fErr)
+		}
+		return nil
+	}
+}
+
+// nodeHasQuorum reports whether the given node currently holds DRBD quorum for
+// the resource, read live from `drbdsetup status <res> --json` on that node.
+// Any failure to read or parse the status returns an error (never a false
+// "has quorum"), so callers guarding a force-promote fail closed.
+func (rm *ResourceManager) nodeHasQuorum(ctx context.Context, resource, node string) (bool, error) {
+	if rm.deployment == nil {
+		return false, fmt.Errorf("deployment client not set")
+	}
+	address := rm.controller.ResolveHost(node)
+	res, err := rm.deployment.DRBDStatusJSON(ctx, []string{address}, resource)
+	if err != nil {
+		return false, fmt.Errorf("read drbd status on %s: %w", node, err)
+	}
+	for _, r := range res.Hosts {
+		if !r.Success {
+			return false, fmt.Errorf("drbd status on %s failed: %s", node, r.Output)
+		}
+		return localNodeHasQuorum(r.Output)
+	}
+	return false, fmt.Errorf("no drbd status result returned for %s", node)
+}
+
+// localNodeHasQuorum parses `drbdsetup status <res> --json` and reports whether
+// the local (queried) node holds quorum. It requires every local device to
+// explicitly report quorum:true; if any device is missing the field or reports
+// false, it returns false so a guarded force-promote fails closed.
+func localNodeHasQuorum(output string) (bool, error) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return false, fmt.Errorf("empty drbdsetup status json")
+	}
+	var resources []drbdsetupStatus
+	if err := json.Unmarshal([]byte(trimmed), &resources); err != nil {
+		return false, fmt.Errorf("decode drbdsetup status json: %w", err)
+	}
+	if len(resources) == 0 {
+		return false, fmt.Errorf("drbdsetup status json contained no resources")
+	}
+	res := resources[0]
+	if len(res.Devices) == 0 {
+		return false, fmt.Errorf("drbdsetup status json reported no local devices")
+	}
+	for _, dev := range res.Devices {
+		if dev.Quorum == nil || !*dev.Quorum {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // RemoveVolume removes a volume from a DRBD resource
 func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, volumeID uint32) error {
 	rm.controller.logger.Info("Removing volume from resource",
@@ -3000,6 +3112,13 @@ type drbdsetupStatus struct {
 	Devices []struct {
 		Volume    int    `json:"volume"`
 		DiskState string `json:"disk-state"`
+		// Quorum reports whether the local node currently holds DRBD quorum for
+		// this device. It is a pointer so a missing field (older drbd, or a
+		// diskless view) is distinguishable from an explicit false. A resource
+		// configured with `quorum majority` + `on-no-quorum io-error` blocks I/O
+		// on any node that has lost quorum, which is what makes a guarded
+		// force-promote of a quorate survivor safe.
+		Quorum *bool `json:"quorum"`
 	} `json:"devices"`
 	Connections []struct {
 		Name        string `json:"name"`

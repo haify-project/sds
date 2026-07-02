@@ -4204,10 +4204,18 @@ func (x *ResourceStatusResponse) GetStatus() *ResourceStatus {
 }
 
 type SetPrimaryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Resource      string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
-	Node          string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
-	Force         bool                   `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	Node     string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	Force    bool                   `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
+	// quorum_guarded requests a SAFE hard-failover promote: the controller tries
+	// a normal (non-forced) promote first and only escalates to `drbdadm primary
+	// --force` if the target node currently holds DRBD quorum (majority). If the
+	// node lacks quorum the promote is REFUSED (forcing without quorum could
+	// split-brain). When set, `force` is ignored. Used by the CSI node plugin so
+	// a Pod rescheduled after a hard node failure promotes the survivor iff it is
+	// safe to do so.
+	QuorumGuarded bool `protobuf:"varint,4,opt,name=quorum_guarded,json=quorumGuarded,proto3" json:"quorum_guarded,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4259,6 +4267,13 @@ func (x *SetPrimaryRequest) GetNode() string {
 func (x *SetPrimaryRequest) GetForce() bool {
 	if x != nil {
 		return x.Force
+	}
+	return false
+}
+
+func (x *SetPrimaryRequest) GetQuorumGuarded() bool {
+	if x != nil {
+		return x.QuorumGuarded
 	}
 	return false
 }
@@ -10437,11 +10452,12 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x16ResourceStatusResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12*\n" +
-	"\x06status\x18\x03 \x01(\v2\x12.v1.ResourceStatusR\x06status\"Y\n" +
+	"\x06status\x18\x03 \x01(\v2\x12.v1.ResourceStatusR\x06status\"\x80\x01\n" +
 	"\x11SetPrimaryRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x14\n" +
-	"\x05force\x18\x03 \x01(\bR\x05force\"H\n" +
+	"\x05force\x18\x03 \x01(\bR\x05force\x12%\n" +
+	"\x0equorum_guarded\x18\x04 \x01(\bR\rquorumGuarded\"H\n" +
 	"\x12SetPrimaryResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"E\n" +
