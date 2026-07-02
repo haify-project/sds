@@ -478,6 +478,20 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 		return fmt.Errorf("resource up failed on hosts: %v", upResult.FailedHosts())
 	}
 
+	// 5b. Ensure a DRBD boot unit is installed and enabled on every
+	// participating node so a rebooted node re-runs `drbdadm up all` on boot
+	// and auto-rejoins replication without a manual `drbdadm adjust`. The
+	// packaged drbd.service is an LSB/SysV unit whose Default-Start header is
+	// empty, so `systemctl enable drbd.service` fails ("Default-Start contains
+	// no runlevels") and it can never be enabled. Instead we install our own
+	// native systemd oneshot (sds-drbd-up.service) that runs `drbdadm up all`
+	// before drbd-reactor, letting the reactor promote once resources are up.
+	// Installing/enabling is idempotent and harmless on any node with
+	// drbd-utils (diskful or diskless tiebreaker). Best-effort: never fail
+	// resource creation just because it did not stick — the resource is
+	// already up at this point.
+	rm.ensureDRBDBootUnitEnabled(ctx, allIPs)
+
 	// 6. Save to database
 	if rm.controller.db != nil {
 		dbRes := &database.Resource{
@@ -515,6 +529,82 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 
 	committed = true
 	return nil
+}
+
+// drbdBootUnit is the name of the native systemd oneshot we install to bring
+// all DRBD resources up at boot. We deliberately do NOT reuse the packaged
+// drbd.service: on Ubuntu 24.04 / DRBD 9 that is an LSB/SysV init script whose
+// Default-Start header is empty, so `systemctl enable drbd.service` fails with
+// "Default-Start contains no runlevels, aborting" and the unit can never be
+// enabled. Our own native unit sidesteps that entirely.
+const drbdBootUnit = "sds-drbd-up.service"
+
+// drbdBootUnitPath is where the generated unit is written on each node.
+const drbdBootUnitPath = "/etc/systemd/system/sds-drbd-up.service"
+
+// drbdBootUnitInstallCmd renders the single shell command that (idempotently)
+// installs and enables the DRBD boot unit on a node. It discovers the drbdadm
+// path at install time (PATH first, then the usual sbin locations, defaulting
+// to /sbin/drbdadm) so ExecStart points at a binary that actually exists,
+// writes the unit file, then daemon-reloads and enables it. Ordering
+// (Before=drbd-reactor.service, After/Wants=network-online.target) ensures the
+// resources are up before drbd-reactor tries to promote them after a reboot.
+func drbdBootUnitInstallCmd() string {
+	return `set -e
+DRBDADM="$(command -v drbdadm 2>/dev/null || true)"
+if [ -z "$DRBDADM" ]; then
+  for p in /sbin/drbdadm /usr/sbin/drbdadm /usr/local/sbin/drbdadm; do
+    if [ -x "$p" ]; then DRBDADM="$p"; break; fi
+  done
+fi
+[ -n "$DRBDADM" ] || DRBDADM=/sbin/drbdadm
+sudo tee ` + drbdBootUnitPath + ` > /dev/null <<EOF
+[Unit]
+Description=Bring up all SDS DRBD resources at boot
+After=network-online.target
+Wants=network-online.target
+Before=drbd-reactor.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=$DRBDADM up all
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable ` + drbdBootUnit
+}
+
+// ensureDRBDBootUnitEnabled installs and enables the DRBD boot unit on the
+// given nodes so their resources auto-come-up (`drbdadm up all`) after a
+// reboot and re-sync without manual intervention; drbd-reactor then promotes
+// once the resources are up. It is best-effort: any failure is logged and
+// swallowed so it never breaks the calling operation (the resource is already
+// up). Writing the same unit file and re-enabling it are idempotent, so
+// repeated calls across resource creations are safe.
+func (rm *ResourceManager) ensureDRBDBootUnitEnabled(ctx context.Context, hosts []string) {
+	if rm.deployment == nil || len(hosts) == 0 {
+		return
+	}
+	result, err := rm.deployment.Exec(ctx, hosts, drbdBootUnitInstallCmd())
+	if err != nil {
+		rm.controller.logger.Warn("Failed to install DRBD boot unit; nodes may not auto-up resources after reboot",
+			zap.String("unit", drbdBootUnit),
+			zap.Strings("hosts", hosts),
+			zap.Error(err))
+		return
+	}
+	if !result.AllSuccess() {
+		rm.controller.logger.Warn("Failed to install DRBD boot unit on some hosts; those nodes may not auto-up resources after reboot",
+			zap.String("unit", drbdBootUnit),
+			zap.Strings("failed_hosts", result.FailedHosts()))
+		return
+	}
+	rm.controller.logger.Info("Installed and enabled DRBD boot unit for reboot auto-recovery",
+		zap.String("unit", drbdBootUnit),
+		zap.Strings("hosts", hosts))
 }
 
 // createBackingVolume creates one volume's backing storage (ZFS zvol, LVM thin

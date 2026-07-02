@@ -20,6 +20,56 @@ distros.
 If missing, install DRBD 9 + drbd-utils + drbd-reactor from LINBIT's repo (or the
 distro package). This cluster already had these on all nodes.
 
+### DRBD boot unit (auto-up on reboot) — installed automatically
+
+If nothing runs `drbdadm up all` at boot, a rebooted node brings up **none** of
+its DRBD resources: they never reconnect, never re-sync, and drbd-reactor cannot
+promote/mount them, so the node silently stays out of the cluster until an
+operator runs `drbdadm adjust` by hand. This was found the hard way during
+hard-failover testing.
+
+You might expect the packaged **`drbd.service`** (Ubuntu 24.04 / DRBD 9) to
+cover this, but it **cannot be enabled**: it is an LSB/SysV init script whose
+`Default-Start` header is empty, so `systemctl enable drbd.service` fails with
+
+```
+update-rc.d: error: drbd Default-Start contains no runlevels, aborting
+```
+
+and the unit stays `disabled` no matter how many times you try. Enabling it is
+therefore *not* a usable node prerequisite.
+
+Instead, sds installs and enables its own native systemd oneshot on **resource
+create** — best-effort and idempotent, on every participating node:
+
+```ini
+# /etc/systemd/system/sds-drbd-up.service
+[Unit]
+Description=Bring up all SDS DRBD resources at boot
+After=network-online.target
+Wants=network-online.target
+Before=drbd-reactor.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/drbdadm up all
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`ExecStart` uses whichever `drbdadm` path exists on the node (typically
+`/sbin/drbdadm`). It runs `Before=drbd-reactor.service`, so on reboot the
+resources are up before drbd-reactor tries to promote them. Verify with:
+
+```bash
+systemctl is-enabled sds-drbd-up.service   # -> enabled
+```
+
+Because sds installs this automatically, any node that already hosts an
+sds-created resource auto-recovers on reboot with no operator action.
+
 ---
 
 ## 2. OCF resource agents (all nodes — REQUIRED for gateways AND HA)

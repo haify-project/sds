@@ -839,6 +839,64 @@ func TestResourceManagerCreateResourcePersistsInitialVolume(t *testing.T) {
 	assert.Equal(t, "/dev/sds_data-pool/res1_data", volumes[0].Device)
 }
 
+func TestResourceManagerCreateResourceEnablesDRBDBootUnit(t *testing.T) {
+	// After a successful create the native sds-drbd-up.service oneshot must be
+	// installed AND enabled on every diskful node, so a rebooted node re-runs
+	// `drbdadm up all` and rejoins replication without a manual `drbdadm
+	// adjust`. We must NOT rely on the packaged drbd.service: it is an LSB unit
+	// that cannot be enabled (empty Default-Start).
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
+	ctrl.nodes.nodes["10.0.0.2"] = &NodeInfo{Name: "node2", Address: "10.0.0.2"}
+	ctrl.hostsMap["node1"] = "10.0.0.1"
+	ctrl.hostsMap["node2"] = "10.0.0.2"
+
+	err := ctrl.resources.CreateResource(context.Background(), "res1", 7001, []string{"node1", "node2"}, "", 10, "data-pool", "lvm", nil)
+	require.NoError(t, err)
+
+	var installHosts []string
+	for _, call := range dep.execCalls {
+		// The single install command both writes the unit file to
+		// /etc/systemd/system/sds-drbd-up.service and enables it.
+		if strings.Contains(call.cmd, "/etc/systemd/system/sds-drbd-up.service") &&
+			strings.Contains(call.cmd, "systemctl enable sds-drbd-up.service") {
+			installHosts = call.hosts
+			break
+		}
+	}
+	require.NotNil(t, installHosts,
+		"expected an exec call that writes and enables sds-drbd-up.service; got %+v", dep.execCalls)
+	// The un-enableable LSB drbd.service must never be the mechanism.
+	for _, call := range dep.execCalls {
+		assert.NotContains(t, call.cmd, "systemctl enable drbd.service",
+			"must not attempt to enable the un-enableable LSB drbd.service")
+	}
+	assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.2"}, installHosts,
+		"boot unit must be installed and enabled on both diskful nodes")
+}
+
+func TestResourceManagerCreateResourceSucceedsWhenBootUnitEnableFails(t *testing.T) {
+	// Installing/enabling the boot unit is best-effort: a failure must never
+	// fail resource creation, since the resource is already up at that point.
+	dep := &fakeDeploymentClient{
+		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+			if strings.Contains(cmd, "sds-drbd-up.service") {
+				return nil, context.DeadlineExceeded
+			}
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
+	ctrl.nodes.nodes["10.0.0.2"] = &NodeInfo{Name: "node2", Address: "10.0.0.2"}
+	ctrl.hostsMap["node1"] = "10.0.0.1"
+	ctrl.hostsMap["node2"] = "10.0.0.2"
+
+	err := ctrl.resources.CreateResource(context.Background(), "res1", 7001, []string{"node1", "node2"}, "", 10, "data-pool", "lvm", nil)
+	require.NoError(t, err, "boot-unit enable failure must not fail resource create")
+}
+
 func TestResourceManagerDeleteResourceRemovesDatabaseRecord(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
