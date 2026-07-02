@@ -21,6 +21,7 @@ spec:
             - { name: registration-dir, mountPath: /registration }
         - name: plugin
           image: sds-csi:latest
+          imagePullPolicy: IfNotPresent
           command: ["/usr/local/bin/csi-node"]
           args:
             - "--endpoint=unix:///csi/csi.sock"

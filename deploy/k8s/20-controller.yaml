@@ -23,6 +23,7 @@ spec:
             - { name: socket-dir, mountPath: /csi }
         - name: plugin
           image: sds-csi:latest
+          imagePullPolicy: IfNotPresent
           command: ["/usr/local/bin/csi-controller"]
           args:
             - "--endpoint=unix:///csi/csi.sock"
