@@ -82,11 +82,46 @@ export function HAPage() {
     queryClient.invalidateQueries({ queryKey: ['resources'] });
   };
 
+  // Confirm the failover actually completed with a second toast. evictHa blocks
+  // until the resource is promoted elsewhere, so by onSuccess the move is
+  // (usually) already done — check immediately first, then poll a few times as a
+  // safety net, and report the new active node.
+  const pollFailoverComplete = async (resource: string, fromNode?: string) => {
+    for (let i = 0; i < 20; i++) {
+      try {
+        const s = await api.resourceStatus(resource);
+        const states = s.status?.nodeStates ?? {};
+        const primary = Object.keys(states).find(
+          (n) => states[n]?.role === 'Primary',
+        );
+        if (primary && primary !== fromNode) {
+          toast.success(
+            `Failover complete — ${resource} is now active on ${primary}`,
+          );
+          invalidate();
+          queryClient.invalidateQueries({ queryKey: ['ha-status', resource] });
+          return;
+        }
+      } catch {
+        // transient errors during the VIP move — keep polling
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    toast.info(`${resource}: failover is taking longer than expected`);
+  };
+
   const evictMutation = useMutation({
-    mutationFn: (resource: string) => api.evictHa(resource),
-    onSuccess: () => {
-      toast.success('Eviction initiated; failover in progress');
+    mutationFn: ({ resource }: { resource: string; fromNode?: string }) =>
+      api.evictHa(resource),
+    // Fire the "initiated" toast the moment the user confirms — evictHa blocks
+    // for the whole failover, so putting this in onSuccess would delay it to the
+    // very end and make both toasts appear together.
+    onMutate: () => {
+      toast.info('Eviction initiated; failover in progress');
+    },
+    onSuccess: (_data, { resource, fromNode }) => {
       invalidate();
+      void pollFailoverComplete(resource, fromNode);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -165,7 +200,9 @@ export function HAPage() {
               config={config}
               resource={resourceMap.get(config.resource)}
               onShowDetails={showDetails}
-              onEvict={(r) => evictMutation.mutate(r)}
+              onEvict={(r, fromNode) =>
+                evictMutation.mutate({ resource: r, fromNode })
+              }
               onDelete={(r) => deleteMutation.mutate(r)}
               isEvicting={evictMutation.isPending}
               isDeleting={deleteMutation.isPending}
@@ -608,7 +645,7 @@ function HAConfigCard({
   config: HaConfig;
   resource?: Resource;
   onShowDetails: (resource: string) => void;
-  onEvict: (resource: string) => void;
+  onEvict: (resource: string, fromNode?: string) => void;
   onDelete: (resource: string) => void;
   isEvicting: boolean;
   isDeleting: boolean;
@@ -706,7 +743,9 @@ function HAConfigCard({
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => onEvict(config.resource)}>
+                <AlertDialogAction
+                  onClick={() => onEvict(config.resource, primaryNode)}
+                >
                   Evict
                 </AlertDialogAction>
               </AlertDialogFooter>
