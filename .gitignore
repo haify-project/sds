@@ -46,3 +46,6 @@ ui/dist/
 # stray local screenshots
 sds-dashboard.png
 sds-resource-status.png
+
+# transient subagent worktrees
+.claude/worktrees/
