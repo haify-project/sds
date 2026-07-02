@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, Resource, Volume } from '../services/api';
+import {
+  api,
+  Resource,
+  Volume,
+  ResourceStatus,
+  NodeResourceState,
+} from '../services/api';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SnapshotsDialog } from '@/components/SnapshotsDialog';
 import { Button } from '@/components/ui/button';
@@ -84,6 +90,48 @@ interface PoolOpt {
   freeGb: string;
 }
 
+// DRBD replication states that mean an active (or paused) resync is underway.
+const SYNC_REPLICATION_STATES = new Set([
+  'SyncSource',
+  'SyncTarget',
+  'PausedSyncS',
+  'PausedSyncT',
+  'StartingSyncS',
+  'StartingSyncT',
+  'WFBitMapS',
+  'WFBitMapT',
+]);
+
+// isPeerSyncing reports whether a peer node-state represents a resync in
+// progress. The local node has no replication relationship (empty
+// replicationState) so it never counts as syncing.
+function isPeerSyncing(state?: NodeResourceState): boolean {
+  if (!state) return false;
+  const rs = state.replicationState ?? '';
+  if (SYNC_REPLICATION_STATES.has(rs)) return true;
+  // Any non-idle replication state still short of 100% counts as syncing.
+  if (rs && rs !== 'Established' && rs !== 'Off' && (state.syncPercent ?? 100) < 100)
+    return true;
+  return false;
+}
+
+// statusHasActiveSync is the adaptive-polling predicate: true while any peer of
+// the resource is resyncing, false when everything is idle/UpToDate.
+function statusHasActiveSync(status?: ResourceStatus): boolean {
+  if (!status) return false;
+  return Object.values(status.nodeStates || {}).some(isPeerSyncing);
+}
+
+// syncPollInterval returns 2000ms while a resource is resyncing and false
+// (stop polling) once it settles, matching the design's smart-polling rule.
+function syncPollInterval(query: {
+  state: { data?: unknown };
+}): number | false {
+  const status = (query.state.data as { status?: ResourceStatus } | undefined)
+    ?.status;
+  return statusHasActiveSync(status) ? 2000 : false;
+}
+
 export function ResourcesPage() {
   const { data: resources, isLoading } = useQuery({
     queryKey: ['resources'],
@@ -151,6 +199,51 @@ export function ResourcesPage() {
   );
 }
 
+// SyncIndicator renders a compact "resyncing" badge for a resource in the list,
+// shown only while a peer is actively resyncing. It has its own adaptive query
+// so only resources that are syncing keep polling (2s), stopping at 100%.
+function SyncIndicator({
+  resourceName,
+  localNode,
+}: {
+  resourceName: string;
+  localNode?: string;
+}) {
+  const { data } = useQuery({
+    queryKey: ['resource-status', resourceName],
+    queryFn: () => api.resourceStatus(resourceName),
+    refetchInterval: syncPollInterval,
+  });
+  const status = data?.status;
+  if (!statusHasActiveSync(status)) return null;
+
+  const syncing = Object.entries(status!.nodeStates || {}).find(([, st]) =>
+    isPeerSyncing(st),
+  );
+  if (!syncing) return null;
+  const [peer, st] = syncing;
+  const pct = st.syncPercent ?? 0;
+  // Direction: a SyncSource peer means the local node is the source
+  // (local → peer); a SyncTarget peer means the local node is receiving
+  // (peer → local).
+  const local = localNode ?? 'local';
+  const flow =
+    st.replicationState === 'SyncTarget'
+      ? `${peer} → ${local}`
+      : `${local} → ${peer}`;
+
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1 border-blue-500 text-blue-600"
+      title={`Resync in progress: ${st.replicationState}`}
+    >
+      <Loader2 className="h-3 w-3 animate-spin" />
+      同步中 {flow} {pct.toFixed(0)}%
+    </Badge>
+  );
+}
+
 function ResourceRow({
   resource,
   pools,
@@ -177,6 +270,10 @@ function ResourceRow({
               quorum risk
             </Badge>
           )}
+          <SyncIndicator
+            resourceName={resource.name}
+            localNode={resource.nodes[0]}
+          />
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">{resource.port}</TableCell>
@@ -651,6 +748,8 @@ function StatusDialog({ resourceName }: { resourceName: string }) {
     queryKey: ['resource-status', resourceName],
     queryFn: () => api.resourceStatus(resourceName),
     enabled: open,
+    // Poll 2s while any peer is resyncing; stop the moment it settles.
+    refetchInterval: syncPollInterval,
   });
 
   const status = data?.status;
@@ -694,6 +793,7 @@ function StatusDialog({ resourceName }: { resourceName: string }) {
                     <TableHead>Node</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Disk</TableHead>
+                    <TableHead>Replication</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -706,6 +806,37 @@ function StatusDialog({ resourceName }: { resourceName: string }) {
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={state.diskState} />
+                        </TableCell>
+                        <TableCell>
+                          {state.replicationState ? (
+                            isPeerSyncing(state) ? (
+                              <div className="flex min-w-[150px] items-center gap-2">
+                                <StatusBadge
+                                  status={state.replicationState}
+                                />
+                                <div className="h-1.5 flex-1 overflow-hidden rounded bg-muted">
+                                  <div
+                                    className="h-full rounded bg-primary transition-all"
+                                    style={{
+                                      width: `${Math.min(
+                                        100,
+                                        Math.max(0, state.syncPercent ?? 0),
+                                      )}%`,
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-xs tabular-nums text-muted-foreground">
+                                  {(state.syncPercent ?? 0).toFixed(1)}%
+                                </span>
+                              </div>
+                            ) : (
+                              <StatusBadge status={state.replicationState} />
+                            )
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              —
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ),

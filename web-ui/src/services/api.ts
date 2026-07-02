@@ -76,6 +76,8 @@ export interface NodeState {
   role: string;
   diskState: string;
   replication: string;
+  // Resync completion (0..100). 100 / absent when not resyncing.
+  syncPercent?: number;
 }
 
 export interface Gateway {
@@ -110,6 +112,9 @@ export interface NodeResourceState {
   role: string;
   diskState: string;
   replicationState: string;
+  // Resync completion (0..100). 100 / absent when not resyncing. Only
+  // meaningful for a peer whose replicationState is a resync state.
+  syncPercent?: number;
 }
 
 export interface Snapshot {

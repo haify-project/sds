@@ -871,6 +871,10 @@ message NodeResourceState {
   string role = 1;
   string disk_state = 2;
   string replication_state = 3;
+  // Percent of this peer's data in sync (0..100). 100 when steady-state / not
+  // resyncing. Only meaningful for a peer whose replication_state is a resync
+  // state (SyncSource/SyncTarget/PausedSync*).
+  double sync_percent = 4;
 }
 
 message VolumeInfo {

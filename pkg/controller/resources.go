@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os/exec"
@@ -40,6 +41,11 @@ type ResourceNodeState struct {
 	Role        string
 	DiskState   string
 	Replication string
+	// SyncPercent is the resync completion for a peer (0..100). It is 100 for a
+	// node that is fully in sync / not resyncing, and only carries a meaningful
+	// intermediate value while Replication is a resync state (SyncSource/
+	// SyncTarget/PausedSync*).
+	SyncPercent float64
 }
 
 // ResourceVolumeInfo represents DRBD volume information
@@ -954,6 +960,39 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 
 				break
 			}
+		}
+	}
+
+	// Prefer structured `drbdsetup status --json`: it is keyed by node name and
+	// exposes per-peer replication state and resync completion (percent) that
+	// the plain-text parse above cannot surface. The queried node (hosts[0])
+	// corresponds to the first configured node, so it is the JSON "local" node.
+	// On any failure (older drbd without --json, non-zero exit, parse error) we
+	// keep the text-parsed states above and degrade gracefully.
+	if len(nodeAddresses) > 0 {
+		localNode := nodeAddresses[0]
+		if jsonResult, jerr := rm.deployment.DRBDStatusJSON(ctx, []string{hosts[0]}, name); jerr == nil {
+			for _, r := range jsonResult.Hosts {
+				if !r.Success {
+					continue
+				}
+				parsed, perr := parseNodeStatesFromJSON(r.Output, localNode)
+				if perr != nil {
+					rm.controller.logger.Debug("drbdsetup status --json parse failed; keeping text-parsed states",
+						zap.String("resource", name), zap.Error(perr))
+					break
+				}
+				if len(parsed) > 0 {
+					nodeStates = parsed
+					if local, ok := parsed[localNode]; ok && local.Role != "" {
+						localRole = local.Role
+					}
+				}
+				break
+			}
+		} else {
+			rm.controller.logger.Debug("drbdsetup status --json unavailable; keeping text-parsed states",
+				zap.String("resource", name), zap.Error(jerr))
 		}
 	}
 
@@ -2890,4 +2929,83 @@ func parseVolumesFromStatus(output string) []volumeInfo {
 	}
 
 	return volumes
+}
+
+// drbdsetupStatus mirrors the subset of `drbdsetup status <res> --json` output
+// that carries live role, disk and replication/resync state. Fields absent in
+// steady state (notably "done") are treated as fully in sync.
+type drbdsetupStatus struct {
+	Name    string `json:"name"`
+	Role    string `json:"role"`
+	Devices []struct {
+		Volume    int    `json:"volume"`
+		DiskState string `json:"disk-state"`
+	} `json:"devices"`
+	Connections []struct {
+		Name        string `json:"name"`
+		PeerRole    string `json:"peer-role"`
+		PeerDevices []struct {
+			Volume           int      `json:"volume"`
+			ReplicationState string   `json:"replication-state"`
+			PeerDiskState    string   `json:"peer-disk-state"`
+			// Done is the resync completion percentage (0..100) drbdsetup emits
+			// on a peer_device while resyncing. PercentInSync is accepted as an
+			// alias for robustness across drbd versions. Both are absent in
+			// steady state, so a nil value means "fully in sync".
+			Done          *float64 `json:"done"`
+			PercentInSync *float64 `json:"percent-in-sync"`
+		} `json:"peer_devices"`
+	} `json:"connections"`
+}
+
+// parseNodeStatesFromJSON parses `drbdsetup status <res> --json` into per-node
+// states keyed by node name. localNode is the name of the queried node (the
+// JSON top-level resource); its peers — including any diskless quorum
+// tiebreaker — come from connections[]. It returns an error when the JSON is
+// empty or cannot be decoded so the caller can fall back to the text parser.
+func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNodeState, error) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return nil, fmt.Errorf("empty drbdsetup status json")
+	}
+	var resources []drbdsetupStatus
+	if err := json.Unmarshal([]byte(trimmed), &resources); err != nil {
+		return nil, fmt.Errorf("decode drbdsetup status json: %w", err)
+	}
+	if len(resources) == 0 {
+		return nil, fmt.Errorf("drbdsetup status json contained no resources")
+	}
+	res := resources[0]
+
+	states := make(map[string]*ResourceNodeState)
+
+	// Local node: role + disk from the top-level resource. A node has no
+	// replication relationship to itself, so it is fully in sync (100).
+	local := &ResourceNodeState{Role: res.Role, SyncPercent: 100}
+	if len(res.Devices) > 0 {
+		local.DiskState = res.Devices[0].DiskState
+	}
+	states[localNode] = local
+
+	// Each peer (including a diskless quorum tiebreaker) is one connection.
+	for _, conn := range res.Connections {
+		if conn.Name == "" {
+			continue
+		}
+		peer := &ResourceNodeState{Role: conn.PeerRole, SyncPercent: 100}
+		if len(conn.PeerDevices) > 0 {
+			pd := conn.PeerDevices[0]
+			peer.DiskState = pd.PeerDiskState
+			peer.Replication = pd.ReplicationState
+			switch {
+			case pd.Done != nil:
+				peer.SyncPercent = *pd.Done
+			case pd.PercentInSync != nil:
+				peer.SyncPercent = *pd.PercentInSync
+			}
+		}
+		states[conn.Name] = peer
+	}
+
+	return states, nil
 }

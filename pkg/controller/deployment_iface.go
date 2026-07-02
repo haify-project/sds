@@ -44,6 +44,7 @@ type deploymentClient interface {
 	DRBDSecondary(ctx context.Context, host, resource string) (*deployment.HostResult, error)
 	DRBDCreateMD(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	DRBDStatus(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
+	DRBDStatusJSON(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	ReactorReload(ctx context.Context, hosts []string) (*deployment.ExecResult, error)
 	ReactorPromoterStatusByResource(ctx context.Context, host, resource string) (*deployment.ReactorPromoterStatus, error)
 }

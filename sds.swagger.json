@@ -4778,6 +4778,11 @@
         },
         "replicationState": {
           "type": "string"
+        },
+        "syncPercent": {
+          "type": "number",
+          "format": "double",
+          "description": "Percent of this peer's data in sync (0..100). 100 when steady-state / not\nresyncing. Only meaningful for a peer whose replication_state is a resync\nstate (SyncSource/SyncTarget/PausedSync*)."
         }
       }
     },

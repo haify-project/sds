@@ -674,6 +674,15 @@ func (c *Client) DRBDStatus(ctx context.Context, hosts []string, resource string
 	return c.Exec(ctx, hosts, cmd)
 }
 
+// DRBDStatusJSON gets structured DRBD resource status via
+// `drbdsetup status <res> --json`. The JSON is keyed by node name / node-id
+// and carries per-peer replication state and resync completion (the `done`
+// field), which the plain-text `drbdadm status` output does not expose in a
+// machine-parseable way.
+func (c *Client) DRBDStatusJSON(ctx context.Context, hosts []string, resource string) (*ExecResult, error) {
+	return c.Exec(ctx, hosts, fmt.Sprintf("sudo drbdsetup status %s --json", resource))
+}
+
 // ============ Reactor Operations ============
 
 // ReactorWriteConfig writes reactor plugin config
