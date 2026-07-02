@@ -1691,12 +1691,13 @@ func (rm *ResourceManager) SetSecondary(ctx context.Context, resource, node stri
 // force-promote a surviving Secondary IFF that survivor currently holds quorum.
 //
 // Algorithm:
-//   (a) try a normal, non-forced promote — the safe graceful path;
-//   (b) if it fails (a peer still holds Primary / is unreachable), read this
-//       node's DRBD quorum flag via `drbdsetup status --json`;
-//   (c) only if quorum == true, retry with `drbdadm primary --force`;
-//   (d) if quorum == false (or unknown), REFUSE with an error — promoting
-//       without quorum could split-brain.
+//
+//	(a) try a normal, non-forced promote — the safe graceful path;
+//	(b) if it fails (a peer still holds Primary / is unreachable), read this
+//	    node's DRBD quorum flag via `drbdsetup status --json`;
+//	(c) only if quorum == true, retry with `drbdadm primary --force`;
+//	(d) if quorum == false (or unknown), REFUSE with an error — promoting
+//	    without quorum could split-brain.
 func (rm *ResourceManager) PromoteForNode(ctx context.Context, resource, node string) error {
 	// (a) Safe path: a plain promote succeeds on a graceful move (old Primary
 	// already Secondary) and on any node that can already take Primary. This
@@ -3124,9 +3125,9 @@ type drbdsetupStatus struct {
 		Name        string `json:"name"`
 		PeerRole    string `json:"peer-role"`
 		PeerDevices []struct {
-			Volume           int      `json:"volume"`
-			ReplicationState string   `json:"replication-state"`
-			PeerDiskState    string   `json:"peer-disk-state"`
+			Volume           int    `json:"volume"`
+			ReplicationState string `json:"replication-state"`
+			PeerDiskState    string `json:"peer-disk-state"`
 			// Done is the resync completion percentage (0..100) drbdsetup emits
 			// on a peer_device while resyncing. PercentInSync is accepted as an
 			// alias for robustness across drbd versions. Both are absent in
