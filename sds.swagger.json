@@ -1407,6 +1407,44 @@
         ]
       }
     },
+    "/v1/resources/{name}/adopt": {
+      "post": {
+        "operationId": "SDSController_AdoptResource",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AdoptResourceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerAdoptResourceBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{name}/options": {
       "post": {
         "operationId": "SDSController_UpdateResourceOptions",
@@ -3126,6 +3164,25 @@
         }
       }
     },
+    "SDSControllerAdoptResourceBody": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "port": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "protocol": {
+          "type": "string"
+        }
+      },
+      "description": "AdoptResourceRequest imports an already-existing (foreign) DRBD resource into\nSDS management by recording its metadata in the SDS database. It never\ncreates or modifies the actual DRBD resource or its data. Every field except\nname is optional and auto-discovered from the live .res on a node when\nomitted; a provided value overrides discovery."
+    },
     "SDSControllerCloneZFSSnapshotBody": {
       "type": "object",
       "properties": {
@@ -3495,6 +3552,35 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1AdoptResourceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Discovered/recorded metadata, echoed back for the caller to display."
+        },
+        "port": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "volumes": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },

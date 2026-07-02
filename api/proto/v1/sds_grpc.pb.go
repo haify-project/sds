@@ -30,6 +30,7 @@ const (
 	SDSController_ListNodes_FullMethodName              = "/v1.SDSController/ListNodes"
 	SDSController_HealthCheck_FullMethodName            = "/v1.SDSController/HealthCheck"
 	SDSController_CreateResource_FullMethodName         = "/v1.SDSController/CreateResource"
+	SDSController_AdoptResource_FullMethodName          = "/v1.SDSController/AdoptResource"
 	SDSController_DeleteResource_FullMethodName         = "/v1.SDSController/DeleteResource"
 	SDSController_GetResource_FullMethodName            = "/v1.SDSController/GetResource"
 	SDSController_ListResources_FullMethodName          = "/v1.SDSController/ListResources"
@@ -121,6 +122,7 @@ type SDSControllerClient interface {
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
 	// Resource operations
 	CreateResource(ctx context.Context, in *CreateResourceRequest, opts ...grpc.CallOption) (*CreateResourceResponse, error)
+	AdoptResource(ctx context.Context, in *AdoptResourceRequest, opts ...grpc.CallOption) (*AdoptResourceResponse, error)
 	DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error)
 	GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error)
 	ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error)
@@ -319,6 +321,16 @@ func (c *sDSControllerClient) CreateResource(ctx context.Context, in *CreateReso
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateResourceResponse)
 	err := c.cc.Invoke(ctx, SDSController_CreateResource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) AdoptResource(ctx context.Context, in *AdoptResourceRequest, opts ...grpc.CallOption) (*AdoptResourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdoptResourceResponse)
+	err := c.cc.Invoke(ctx, SDSController_AdoptResource_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1035,6 +1047,7 @@ type SDSControllerServer interface {
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
 	// Resource operations
 	CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error)
+	AdoptResource(context.Context, *AdoptResourceRequest) (*AdoptResourceResponse, error)
 	DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error)
 	GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error)
 	ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error)
@@ -1161,6 +1174,9 @@ func (UnimplementedSDSControllerServer) HealthCheck(context.Context, *HealthChec
 }
 func (UnimplementedSDSControllerServer) CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateResource not implemented")
+}
+func (UnimplementedSDSControllerServer) AdoptResource(context.Context, *AdoptResourceRequest) (*AdoptResourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AdoptResource not implemented")
 }
 func (UnimplementedSDSControllerServer) DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteResource not implemented")
@@ -1584,6 +1600,24 @@ func _SDSController_CreateResource_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).CreateResource(ctx, req.(*CreateResourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_AdoptResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdoptResourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).AdoptResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_AdoptResource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).AdoptResource(ctx, req.(*AdoptResourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2880,6 +2914,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateResource",
 			Handler:    _SDSController_CreateResource_Handler,
+		},
+		{
+			MethodName: "AdoptResource",
+			Handler:    _SDSController_AdoptResource_Handler,
 		},
 		{
 			MethodName: "DeleteResource",

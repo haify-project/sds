@@ -46,6 +46,9 @@ service SDSController {
   rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse) {
     option (google.api.http) = { post: "/v1/resources"; body: "*"; };
   }
+  rpc AdoptResource(AdoptResourceRequest) returns (AdoptResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/adopt"; body: "*"; };
+  }
   rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse) {
     option (google.api.http) = { delete: "/v1/resources/{name}"; };
   }
@@ -642,6 +645,28 @@ message VolumeSpec {
 message CreateResourceResponse {
   bool success = 1;
   string message = 2;
+}
+
+// AdoptResourceRequest imports an already-existing (foreign) DRBD resource into
+// SDS management by recording its metadata in the SDS database. It never
+// creates or modifies the actual DRBD resource or its data. Every field except
+// name is optional and auto-discovered from the live .res on a node when
+// omitted; a provided value overrides discovery.
+message AdoptResourceRequest {
+  string name = 1;
+  repeated string nodes = 2;
+  uint32 port = 3;
+  string protocol = 4;
+}
+
+message AdoptResourceResponse {
+  bool success = 1;
+  string message = 2;
+  // Discovered/recorded metadata, echoed back for the caller to display.
+  repeated string nodes = 3;
+  uint32 port = 4;
+  string protocol = 5;
+  uint32 volumes = 6;
 }
 
 message DeleteResourceRequest {

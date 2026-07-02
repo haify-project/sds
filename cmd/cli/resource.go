@@ -29,6 +29,7 @@ func resourceCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(resourceCreate())
+	cmd.AddCommand(resourceAdopt())
 	cmd.AddCommand(resourceGet())
 	cmd.AddCommand(resourceDelete())
 	cmd.AddCommand(resourceList())
@@ -180,6 +181,61 @@ func resourceCreate() *cobra.Command {
 	_ = cmd.MarkFlagRequired("port")
 	_ = cmd.MarkFlagRequired("nodes")
 	_ = cmd.MarkFlagRequired("size")
+
+	return cmd
+}
+
+func resourceAdopt() *cobra.Command {
+	var nodes string
+	var port uint32
+	var protocol string
+
+	cmd := &cobra.Command{
+		Use:   "adopt <name>",
+		Short: "Adopt an existing (foreign) DRBD resource into SDS management",
+		Long: "Import an already-existing DRBD resource (created outside SDS) into\n" +
+			"SDS management by recording its metadata. This never creates or\n" +
+			"modifies the DRBD resource or its data — it only reads the live\n" +
+			"/etc/drbd.d/<name>.res and records what it finds. Nodes, port and\n" +
+			"protocol are auto-discovered from the config when not supplied.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			var nodeList []string
+			if nodes != "" {
+				nodeList = strings.Split(nodes, ",")
+			}
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			resp, err := sdsClient.AdoptResource(ctx, name, nodeList, port, protocol)
+			if err != nil {
+				return fmt.Errorf("failed to adopt resource: %w", err)
+			}
+
+			fmt.Printf("Resource '%s' adopted into SDS management\n", name)
+			fmt.Printf("  Nodes:    %v\n", resp.Nodes)
+			fmt.Printf("  Port:     %d\n", resp.Port)
+			fmt.Printf("  Protocol: %s\n", resp.Protocol)
+			fmt.Printf("  Volumes:  %d\n", resp.Volumes)
+			fmt.Printf("\nThe DRBD resource and its data were not modified.\n")
+			fmt.Printf("Next: sds-cli ha create %s\n", name)
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&nodes, "nodes", "", "Node names (comma-separated); auto-discovered from the .res when omitted")
+	cmd.Flags().Uint32Var(&port, "port", 0, "DRBD port; auto-discovered from the .res when omitted")
+	cmd.Flags().StringVar(&protocol, "protocol", "", "DRBD protocol (A, B, or C); defaults to C when omitted")
 
 	return cmd
 }

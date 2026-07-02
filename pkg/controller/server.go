@@ -267,6 +267,24 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	}, nil
 }
 
+func (s *Server) AdoptResource(ctx context.Context, req *sdspb.AdoptResourceRequest) (*sdspb.AdoptResourceResponse, error) {
+	result, err := s.resources.AdoptResource(ctx, req.Name, req.Nodes, req.Port, req.Protocol)
+	if err != nil {
+		return &sdspb.AdoptResourceResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.AdoptResourceResponse{
+		Success:  true,
+		Message:  "Resource adopted successfully",
+		Nodes:    result.Nodes,
+		Port:     result.Port,
+		Protocol: result.Protocol,
+		Volumes:  uint32(result.Volumes),
+	}, nil
+}
+
 func (s *Server) DeleteResource(ctx context.Context, req *sdspb.DeleteResourceRequest) (*sdspb.DeleteResourceResponse, error) {
 	err := s.resources.DeleteResource(ctx, req.Name, true)
 	if err != nil {

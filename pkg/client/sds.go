@@ -329,6 +329,31 @@ func (c *SDSClient) CreateZFSResource(ctx context.Context, name string, port uin
 	return c.CreateResourceWithPoolAndType(ctx, name, port, nodes, protocol, sizeGB, pool, "zfs", drbdOptions)
 }
 
+// AdoptResource imports an already-existing (foreign) DRBD resource into SDS
+// management by recording its metadata. nodes/port/protocol may be left empty
+// (nil/0/"") to auto-discover them from the live .res on a node. It never
+// creates or modifies the DRBD resource or its data. Returns the metadata that
+// was recorded.
+func (c *SDSClient) AdoptResource(ctx context.Context, name string, nodes []string, port uint32, protocol string) (*sdspb.AdoptResourceResponse, error) {
+	req := &sdspb.AdoptResourceRequest{
+		Name:     name,
+		Nodes:    nodes,
+		Port:     port,
+		Protocol: protocol,
+	}
+
+	resp, err := c.client.AdoptResource(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+
+	return resp, nil
+}
+
 // GetResource gets resource information
 func (c *SDSClient) GetResource(ctx context.Context, name string) (*sdspb.ResourceInfo, error) {
 	req := &sdspb.GetResourceRequest{
