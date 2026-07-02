@@ -1256,6 +1256,60 @@ func TestResourceManagerRemoveHaUsesResourceNodesOnly(t *testing.T) {
 	assert.ErrorContains(t, err, "not found")
 }
 
+func TestResourceManagerRemoveHaStopsVIP(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+
+	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	require.NoError(t, err)
+	defer db.Close()
+	ctrl.db = db
+
+	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
+		Name:     "res1",
+		Port:     7001,
+		Nodes:    "node1,node2",
+		Protocol: "C",
+		Replicas: 2,
+	}))
+	require.NoError(t, ctrl.db.SaveHaConfig(context.Background(), &database.HaConfig{
+		Resource: "res1",
+		VIP:      "192.168.1.50/24",
+	}))
+	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
+	ctrl.nodes.nodes["10.0.0.2"] = &NodeInfo{Name: "node2", Address: "10.0.0.2"}
+	ctrl.hostsMap["node1"] = "10.0.0.1"
+	ctrl.hostsMap["node2"] = "10.0.0.2"
+
+	require.NoError(t, ctrl.resources.RemoveHa(context.Background(), "res1"))
+
+	var sawStop bool
+	for _, call := range dep.execCalls {
+		if call.cmd == "systemctl stop service-ip@192.168.1.50-24.service" {
+			sawStop = true
+			assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, call.hosts)
+		}
+	}
+	assert.True(t, sawStop, "RemoveHa must explicitly stop the VIP service-ip unit; exec calls: %+v", dep.execCalls)
+}
+
+func TestSelfHaDisableScriptStopsVIP(t *testing.T) {
+	script := generateSelfHaDisableScript([]string{"10.0.0.2"}, "10.0.0.1", "10.0.0.1", "192.168.1.50/24")
+	assert.Contains(t, script, "systemctl stop service-ip@192.168.1.50-24.service",
+		"self-HA disable script must explicitly stop the VIP service-ip unit")
+
+	// A missing VIP (disable retry) must not emit a bogus stop command.
+	scriptNoVIP := generateSelfHaDisableScript([]string{"10.0.0.2"}, "10.0.0.1", "10.0.0.1", "")
+	assert.NotContains(t, scriptNoVIP, "stop service-ip@")
+}
+
+func TestVipServiceIPInstance(t *testing.T) {
+	assert.Equal(t, "192.168.1.50-24", vipServiceIPInstance("192.168.1.50/24"))
+	assert.Equal(t, "192.168.1.50-32", vipServiceIPInstance("192.168.1.50"))
+	assert.Equal(t, "", vipServiceIPInstance(""))
+	assert.Equal(t, "", vipServiceIPInstance("  "))
+}
+
 func TestResourceManagerEvictHaUsesResourceNodesOnly(t *testing.T) {
 	dep := &fakeDeploymentClient{
 		reactorPromoterStatusByResourceFunc: func(ctx context.Context, host, resource string) (*deployment.ReactorPromoterStatus, error) {

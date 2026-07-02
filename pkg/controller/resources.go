@@ -2539,12 +2539,54 @@ func (rm *ResourceManager) RemoveHa(ctx context.Context, resource string) error 
 		rm.controller.logger.Warn("Failed to reload daemons", zap.Error(err))
 	}
 
+	// 3b. Explicitly bring the VIP down. Removing the promoter config and
+	// reloading drbd-reactor does NOT reliably stop the units reactor already
+	// started, and the VIP's service-ip@ unit is Type=oneshot with
+	// RemainAfterExit=yes, so without an explicit stop the floating IP lingers
+	// on whichever node was Primary. Run it on every resource node (we do not
+	// know which one held the VIP) after the config is gone so reactor cannot
+	// restart it. Idempotent: stopping an inactive/absent template instance is
+	// a no-op, and any failure is only a warning so teardown still completes.
+	if inst := vipServiceIPInstance(haCfg.VIP); inst != "" {
+		stopCmd := fmt.Sprintf("systemctl stop service-ip@%s.service", inst)
+		result, err := rm.deployment.Exec(ctx, hosts, stopCmd)
+		if err != nil {
+			rm.controller.logger.Warn("Failed to stop VIP service-ip unit",
+				zap.String("vip", haCfg.VIP), zap.Error(err))
+		} else if result != nil && !result.AllSuccess() {
+			rm.controller.logger.Warn("VIP service-ip unit may still be up on some nodes",
+				zap.String("vip", haCfg.VIP), zap.Strings("failed_hosts", result.FailedHosts()))
+		}
+	}
+
 	// 4. Remove from database
 	if err := rm.controller.db.DeleteHaConfig(ctx, resource); err != nil {
 		return fmt.Errorf("failed to delete HA config from database: %w", err)
 	}
 
 	return nil
+}
+
+// vipServiceIPInstance derives the systemd template instance name for a VIP's
+// service-ip@ unit from its (CIDR) string, matching how the promoter config is
+// generated so teardown can target the exact same unit:
+//
+//	"192.168.1.50/24" -> "192.168.1.50-24"   (service-ip@192.168.1.50-24.service)
+//	"192.168.1.50"     -> "192.168.1.50-32"   (bare IP defaults to /32)
+//
+// It returns "" for an empty vip so callers can skip VIP handling. This is the
+// single source of truth for the instance name; generatePromoterConfig,
+// RemoveHa's VIP-down step and the self-HA disable script all go through it.
+func vipServiceIPInstance(vip string) string {
+	vip = strings.TrimSpace(vip)
+	if vip == "" {
+		return ""
+	}
+	inst := strings.ReplaceAll(vip, "/", "-")
+	if !strings.Contains(inst, "-") {
+		inst = inst + "-32"
+	}
+	return inst
 }
 
 // generatePromoterConfig generates drbd-reactor promoter TOML config
@@ -2563,15 +2605,9 @@ func (rm *ResourceManager) generatePromoterConfig(resource string, services []st
 	}
 
 	// Add VIP if specified
-	if vip != "" {
-		// Use service-ip systemd unit
-		// Format: service-ip@<IP>-<MASK>.service (replace / with -)
-		vipParam := strings.ReplaceAll(vip, "/", "-")
-		if !strings.Contains(vipParam, "-") {
-			vipParam = vipParam + "-32"
-		}
-
-		serviceIPUnit := fmt.Sprintf("\"service-ip@%s.service\"", vipParam)
+	if inst := vipServiceIPInstance(vip); inst != "" {
+		// Use service-ip systemd unit: service-ip@<IP>-<MASK>.service
+		serviceIPUnit := fmt.Sprintf("\"service-ip@%s.service\"", inst)
 		startActions = append(startActions, serviceIPUnit)
 	}
 
