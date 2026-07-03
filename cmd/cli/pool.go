@@ -84,10 +84,10 @@ func poolCreate() *cobra.Command {
 			for _, n := range nodeList {
 				var err error
 				switch poolType {
-				case "zfs", "zfs-thin":
-					thin := (poolType == "zfs-thin")
-					// For ZFS, 'disks' are vdevs
-					err = sdsClient.CreateZFSPool(ctx, name, n, diskList, thin)
+				case "zfs":
+					// For ZFS, 'disks' are vdevs. A zpool has no thin/thick mode;
+					// thin provisioning is a per-zvol property set at volume creation.
+					err = sdsClient.CreateZFSPool(ctx, name, n, diskList)
 				case "vg", "lvm", "lvm-thin", "thin_pool":
 					// normalize type for backend if needed, but backend supports "vg" and "thin_pool"
 					// map lvm -> vg, lvm-thin -> thin_pool
@@ -131,7 +131,7 @@ func poolCreate() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Pool name")
-	cmd.Flags().StringVar(&poolType, "type", "", "Pool type (lvm, lvm-thin, zfs, zfs-thin)")
+	cmd.Flags().StringVar(&poolType, "type", "", "Pool type (lvm, lvm-thin, zfs)")
 	cmd.Flags().StringVar(&nodes, "nodes", "", "Comma-separated nodes where to create the pool")
 	cmd.Flags().StringVar(&devices, "devices", "", "Comma-separated list of devices")
 	cmd.Flags().StringVar(&size, "size", "", "Pool size (e.g., 10G, 10GB, 10GiB, 1T, 1TB)")

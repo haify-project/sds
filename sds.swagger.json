@@ -4081,9 +4081,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "thin": {
-          "type": "boolean"
         }
       },
       "title": "ZFS messages"

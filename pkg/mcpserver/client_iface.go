@@ -20,7 +20,7 @@ type ControllerClient interface {
 	// Pools
 	ListPools(ctx context.Context) ([]*sdspb.PoolInfo, error)
 	CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64) error
-	CreateZFSPool(ctx context.Context, name, node string, vdevs []string, thin bool) error
+	CreateZFSPool(ctx context.Context, name, node string, vdevs []string) error
 	DeletePool(ctx context.Context, pool, node string) error
 	AddDiskToPool(ctx context.Context, pool, disk, node string) error
 

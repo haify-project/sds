@@ -623,18 +623,18 @@ func TestStorageManagerCreateZFSPoolPersistsThinState(t *testing.T) {
 	defer db.Close()
 	ctrl.db = db
 
-	err = ctrl.storage.CreateZFSPool(context.Background(), "tank", "node1", []string{"/dev/nvme0n1"}, true)
+	err = ctrl.storage.CreateZFSPool(context.Background(), "tank", "node1", []string{"/dev/nvme0n1"})
 	require.NoError(t, err)
 
 	require.Len(t, dep.zfsCreatePoolCalls, 1)
 	assert.Equal(t, []string{"10.0.0.1"}, dep.zfsCreatePoolCalls[0].hosts)
 	assert.Equal(t, "sds_tank", dep.zfsCreatePoolCalls[0].poolName)
 	assert.Equal(t, []string{"/dev/nvme0n1"}, dep.zfsCreatePoolCalls[0].vdevs)
-	assert.Equal(t, 1, dep.zfsCreatePoolCalls[0].optCount)
+	assert.Equal(t, 0, dep.zfsCreatePoolCalls[0].optCount)
 
 	stored, err := ctrl.db.GetPool(context.Background(), "sds_tank")
 	require.NoError(t, err)
-	assert.Equal(t, "zfs-thin", stored.Type)
+	assert.Equal(t, "zfs", stored.Type)
 	assert.Equal(t, "node1", stored.Node)
 	assert.Equal(t, "/dev/nvme0n1", stored.Devices)
 }

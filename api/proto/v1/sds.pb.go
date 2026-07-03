@@ -681,7 +681,6 @@ type CreateZFSPoolRequest struct {
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Node          string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
 	Vdevs         []string               `protobuf:"bytes,3,rep,name=vdevs,proto3" json:"vdevs,omitempty"`
-	Thin          bool                   `protobuf:"varint,4,opt,name=thin,proto3" json:"thin,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -735,13 +734,6 @@ func (x *CreateZFSPoolRequest) GetVdevs() []string {
 		return x.Vdevs
 	}
 	return nil
-}
-
-func (x *CreateZFSPoolRequest) GetThin() bool {
-	if x != nil {
-		return x.Thin
-	}
-	return false
 }
 
 type CreateZFSPoolResponse struct {
@@ -11035,12 +11027,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\afree_gb\x18\x05 \x01(\x04R\x06freeGb\x12\x18\n" +
 	"\adevices\x18\x06 \x03(\tR\adevices\x12\x12\n" +
 	"\x04thin\x18\a \x01(\bR\x04thin\x12 \n" +
-	"\vcompression\x18\b \x01(\tR\vcompression\"h\n" +
+	"\vcompression\x18\b \x01(\tR\vcompression\"`\n" +
 	"\x14CreateZFSPoolRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x14\n" +
-	"\x05vdevs\x18\x03 \x03(\tR\x05vdevs\x12\x12\n" +
-	"\x04thin\x18\x04 \x01(\bR\x04thin\"K\n" +
+	"\x05vdevs\x18\x03 \x03(\tR\x05vdevsJ\x04\b\x04\x10\x05R\x04thin\"K\n" +
 	"\x15CreateZFSPoolResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\">\n" +

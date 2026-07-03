@@ -395,7 +395,11 @@ message CreateZFSPoolRequest {
   string name = 1;
   string node = 2;
   repeated string vdevs = 3;
-  bool thin = 4;
+  // Field 4 (bool thin) removed: ZFS has no pool-level thin/thick.
+  // Thin vs thick provisioning is a zvol-level property (zfs create -s -V
+  // / refreservation), handled by CreateZFSVolume, not pool creation.
+  reserved 4;
+  reserved "thin";
 }
 
 message CreateZFSPoolResponse {

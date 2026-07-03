@@ -414,15 +414,12 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 
 // ZFSCreatePool creates a ZFS pool
 func (c *Client) ZFSCreatePool(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...ZFSOption) (*ExecResult, error) {
-	options := &zfsOptions{}
-	for _, opt := range opts {
-		opt(options)
-	}
-
+	// A zpool has no thin/thick mode; it is just the aggregation of vdevs.
+	// Thin vs thick provisioning is a per-zvol property decided at volume
+	// creation time (zfs create -s -V / refreservation), not at the pool level,
+	// so there are currently no pool-level options to apply here.
+	_ = opts
 	cmd := fmt.Sprintf("sudo zpool create -f %s %s", poolName, strings.Join(vdevs, " "))
-	if options.thin {
-		cmd = fmt.Sprintf("sudo zpool create -f -o thinpool=%s %s %s", poolName+"/data", poolName, strings.Join(vdevs, " "))
-	}
 	return c.Exec(ctx, hosts, cmd)
 }
 
@@ -922,16 +919,8 @@ func WithLVMForce(force bool) LVMOption {
 type ZFSOption func(*zfsOptions)
 
 type zfsOptions struct {
-	thin        bool
 	compression bool
 	dedup       bool
-}
-
-// WithZFSThin enables thin provisioning for ZFS
-func WithZFSThin(thin bool) ZFSOption {
-	return func(o *zfsOptions) {
-		o.thin = thin
-	}
 }
 
 // WithZFSCompression enables compression for ZFS

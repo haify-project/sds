@@ -1159,7 +1159,7 @@ func (s *Server) StopGateway(ctx context.Context, req *sdspb.StopGatewayRequest)
 // ==================== ZFS POOL OPERATIONS ====================
 
 func (s *Server) CreateZFSPool(ctx context.Context, req *sdspb.CreateZFSPoolRequest) (*sdspb.CreateZFSPoolResponse, error) {
-	err := s.storage.CreateZFSPool(ctx, req.Name, req.Node, req.Vdevs, req.Thin)
+	err := s.storage.CreateZFSPool(ctx, req.Name, req.Node, req.Vdevs)
 	if err != nil {
 		return &sdspb.CreateZFSPoolResponse{
 			Success: false,

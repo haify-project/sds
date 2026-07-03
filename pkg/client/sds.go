@@ -1359,12 +1359,11 @@ func (c *SDSClient) ListNVMeHosts(ctx context.Context, resource string) ([]strin
 // ==================== ZFS POOL OPERATIONS ====================
 
 // CreateZFSPool creates a ZFS pool
-func (c *SDSClient) CreateZFSPool(ctx context.Context, name, node string, vdevs []string, thin bool) error {
+func (c *SDSClient) CreateZFSPool(ctx context.Context, name, node string, vdevs []string) error {
 	req := &sdspb.CreateZFSPoolRequest{
 		Name:  name,
 		Node:  node,
 		Vdevs: vdevs,
-		Thin:  thin,
 	}
 
 	resp, err := c.client.CreateZFSPool(ctx, req)

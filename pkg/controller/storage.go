@@ -54,12 +54,12 @@ func poolInfoFromDB(pool *database.Pool) *PoolInfo {
 		TotalGB: uint64(max(pool.TotalGB, 0)),
 		FreeGB:  uint64(max(pool.FreeGB, 0)),
 		Devices: devices,
-		Thin:    pool.Type == "thin_pool" || pool.Type == "zfs-thin",
+		Thin:    pool.Type == "thin_pool",
 	}
 }
 
 func isZFSPoolType(poolType string) bool {
-	return poolType == "zfs" || poolType == "zfs-thin"
+	return poolType == "zfs"
 }
 
 func (sm *StorageManager) getPersistedPool(ctx context.Context, name string) (*PoolInfo, error) {
@@ -434,25 +434,21 @@ func (sm *StorageManager) DeletePool(ctx context.Context, name, node string) err
 
 // ==================== ZFS POOL OPERATIONS ====================
 
-// CreateZFSPool creates a ZFS storage pool
-func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, vdevs []string, thin bool) error {
+// CreateZFSPool creates a ZFS storage pool. A zpool has no thin/thick mode;
+// thin vs thick provisioning is a per-zvol property applied at volume creation.
+func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, vdevs []string) error {
 	name = normalizeManagedName(name)
 
 	sm.controller.logger.Info("Creating ZFS pool",
 		zap.String("name", name),
 		zap.String("node", node),
-		zap.Strings("vdevs", vdevs),
-		zap.Bool("thin", thin))
+		zap.Strings("vdevs", vdevs))
 
 	// Convert node name to address
 	address := sm.controller.ResolveHost(node)
 
 	// Create ZFS pool
-	var opts []deployment.ZFSOption
-	if thin {
-		opts = append(opts, deployment.WithZFSThin(true))
-	}
-	result, err := sm.controller.deployment.ZFSCreatePool(ctx, []string{address}, name, vdevs, opts...)
+	result, err := sm.controller.deployment.ZFSCreatePool(ctx, []string{address}, name, vdevs)
 	if err != nil {
 		return fmt.Errorf("failed to create ZFS pool: %w", err)
 	}
@@ -466,13 +462,9 @@ func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, 
 		zap.String("node", node))
 
 	if sm.controller.db != nil {
-		poolType := "zfs"
-		if thin {
-			poolType = "zfs-thin"
-		}
 		dbPool := &database.Pool{
 			Name:    name,
-			Type:    poolType,
+			Type:    "zfs",
 			Node:    node,
 			Devices: strings.Join(vdevs, ","),
 		}
@@ -541,7 +533,7 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 		if persisted, err := sm.listPersistedPools(ctx); err == nil {
 			var zfsPools []*PoolInfo
 			for _, pool := range persisted {
-				if pool.Type == "zfs" || pool.Type == "zfs-thin" {
+				if isZFSPoolType(pool.Type) {
 					zfsPools = append(zfsPools, pool)
 				}
 			}
@@ -599,7 +591,7 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 		if persisted, err := sm.listPersistedPools(ctx); err == nil {
 			var zfsPools []*PoolInfo
 			for _, pool := range persisted {
-				if pool.Type == "zfs" || pool.Type == "zfs-thin" {
+				if isZFSPoolType(pool.Type) {
 					zfsPools = append(zfsPools, pool)
 				}
 			}
