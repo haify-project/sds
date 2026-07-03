@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api, OcfAgentSpec } from '@/services/api';
 import { OcfAgentBuilder } from '@/components/OcfAgentBuilder';
+import { buildPromoterTomlPreview } from '@/lib/toml';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import {
@@ -49,6 +50,27 @@ export function CreateHAPage() {
   const [fstype, setFstype] = useState('ext4');
   const [services, setServices] = useState('');
   const [ocfAgents, setOcfAgents] = useState<OcfAgentSpec[]>([]);
+
+  // Parsed the same way makeHa sends it, so the preview matches what the
+  // backend actually receives.
+  const parsedServices = useMemo(
+    () => services.split(',').map((s) => s.trim()).filter(Boolean),
+    [services],
+  );
+
+  // Live drbd-reactor promoter TOML preview, rebuilt from the current form
+  // state. Mirrors the backend generatePromoterConfig output exactly.
+  const promoterPreview = useMemo(
+    () =>
+      buildPromoterTomlPreview({
+        resource,
+        vip,
+        mountPoint,
+        services: parsedServices,
+        ocfAgents,
+      }),
+    [resource, vip, mountPoint, parsedServices, ocfAgents],
+  );
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -186,6 +208,19 @@ export function CreateHAPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base">
+                DRBD Reactor Promoter Config (preview)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-muted p-4 font-mono text-xs leading-relaxed text-muted-foreground">
+                {promoterPreview}
+              </pre>
+            </CardContent>
+          </Card>
 
           <Separator className="my-6" />
 

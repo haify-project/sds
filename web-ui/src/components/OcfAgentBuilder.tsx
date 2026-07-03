@@ -13,13 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -55,6 +48,8 @@ export function OcfAgentBuilder({
   });
 
   const [search, setSearch] = useState('');
+  // Whether the searchable-combobox dropdown is showing.
+  const [open, setOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState('');
   const [instance, setInstance] = useState('');
   // Parameter values keyed by parameter name.
@@ -73,6 +68,10 @@ export function OcfAgentBuilder({
         (a.shortdesc ?? '').toLowerCase().includes(q),
     );
   }, [allAgents, search]);
+
+  // Cap the dropdown to a handful of matches; with an empty query this shows
+  // the first few agents as a hint of what is available.
+  const shown = useMemo(() => filtered.slice(0, 8), [filtered]);
 
   const selectedSummary: ResourceAgentSummary | undefined = useMemo(() => {
     if (!selectedKey) return undefined;
@@ -150,6 +149,7 @@ export function OcfAgentBuilder({
     setInstance('');
     setValues({});
     setErrors({});
+    setSearch('');
   };
 
   const removeAt = (idx: number) =>
@@ -229,40 +229,67 @@ export function OcfAgentBuilder({
           </div>
         )}
 
-        {/* Agent picker */}
+        {/* Agent picker — single-step searchable combobox */}
         <div className="space-y-1.5">
           <Label>OCF Resource Agent</Label>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search agents (provider or name)..."
-          />
-          <Select value={selectedKey} onValueChange={onSelectAgent}>
-            <SelectTrigger className="w-full">
-              <SelectValue
-                placeholder={
-                  isLoading ? 'Loading agents...' : 'Select an agent...'
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {filtered.map((a) => (
-                <SelectItem
-                  key={agentKey(a.provider, a.name)}
-                  value={agentKey(a.provider, a.name)}
-                >
-                  <span className="font-mono">
-                    {a.provider}:{a.name}
-                  </span>
-                  {a.shortdesc ? (
-                    <span className="ml-2 text-muted-foreground">
-                      {a.shortdesc}
-                    </span>
-                  ) : null}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="relative">
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              // Delay via mousedown-preventDefault on rows, so the click
+              // selects before this blur closes the list.
+              onBlur={() => setOpen(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setOpen(false);
+              }}
+              placeholder={
+                isLoading
+                  ? 'Loading agents...'
+                  : 'Search OCF agents (provider or name)...'
+              }
+            />
+            {open && !isLoading && (
+              <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md">
+                {shown.length === 0 ? (
+                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No matching agents.
+                  </p>
+                ) : (
+                  shown.map((a) => {
+                    const key = agentKey(a.provider, a.name);
+                    return (
+                      <button
+                        type="button"
+                        key={key}
+                        // Select on mousedown so it fires before the input blur
+                        // that would otherwise close the list first.
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          onSelectAgent(key);
+                          setSearch(`${a.provider}:${a.name}`);
+                          setOpen(false);
+                        }}
+                        className="flex w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <span className="font-mono">
+                          {a.provider}:{a.name}
+                        </span>
+                        {a.shortdesc ? (
+                          <span className="text-xs text-muted-foreground">
+                            {a.shortdesc}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
           {isError && (
             <p className="text-xs text-destructive">
               Could not load agents: {(error as Error).message}
