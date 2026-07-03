@@ -9,8 +9,12 @@ import (
 	"strings"
 )
 
-// ocfResourceDir is the standard on-node location for OCF resource agents.
-const ocfResourceDir = "/usr/lib/ocf/resource.d"
+// ocfRoot is the OCF root ($OCF_ROOT); ocfResourceDir is the standard on-node
+// location for OCF resource agents (ocfRoot + "/resource.d"). The meta-data
+// action sources OCF shell libs from $OCF_ROOT/lib, so OCF_ROOT must be the
+// parent of resource.d, not resource.d itself.
+const ocfRoot = "/usr/lib/ocf"
+const ocfResourceDir = ocfRoot + "/resource.d"
 
 // ocfNameRe validates OCF provider/agent names before they are interpolated
 // into a shell command or filesystem path, blocking shell/path injection.
@@ -280,7 +284,7 @@ func (rm *ResourceManager) GetResourceAgentMetadata(ctx context.Context, provide
 	}
 	agentPath := fmt.Sprintf("%s/%s/%s", ocfResourceDir, provider, name)
 	cmd := fmt.Sprintf("if [ -x %s ]; then OCF_ROOT=%s %s meta-data; else echo __SDS_OCF_MISSING__; fi",
-		agentPath, ocfResourceDir, agentPath)
+		agentPath, ocfRoot, agentPath)
 
 	var lastErr error
 	for _, host := range hosts {
