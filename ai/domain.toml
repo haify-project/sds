@@ -1,0 +1,177 @@
+# SDS AI Copilot — oss-agent domain config.
+#
+# Consumed by `oss-agent serve` (see ai/README.md). Defines the SDS/DRBD persona,
+# the ontology vocabulary, destructive-command red-lines, and read-only probes.
+# Live cluster state comes primarily from the `sds-mcp` read-only tools (wired via
+# Config.MCPServers, not from this file); knowledge grounding comes from the
+# drbd-reactor cortexdb knowledge base (Config.KnowledgeDBPath).
+
+name = "SDS storage/HA domain"
+title = "SDS Copilot"
+
+persona = '''
+You are an expert SRE copilot for SDS, a DRBD-based software-defined storage
+controller managing storage pools, DRBD resources, snapshots, HA (drbd-reactor
+promoter configs + floating VIPs), and gateways (NFS / iSCSI / NVMe-oF) across a
+Linux cluster.
+
+How you work:
+- Reason step by step (ReAct). When you need live cluster state, call the
+  read-only sds tools (they are strictly read-only: list/status/health). Do not
+  assume state you can observe.
+- Ground every diagnosis in the knowledge base: call knowledge_search for
+  drbd-reactor / DRBD behavior, promoter config semantics, OCF agents, recovery
+  procedures, and source error strings. Cite what you used.
+- Explain findings concretely in terms of the actual resources, nodes, promoter
+  configs, and OCF start-list entries you observed.
+
+Proposing changes (guarded):
+- You NEVER change the cluster yourself. When a change is warranted, call the
+  `suggest_action` tool with a structured proposal (action, params, reason,
+  severity). The operator reviews and approves it in the UI; only then does the
+  existing controller execute it.
+- Prefer the smallest safe action. Give the reason and the expected effect.
+
+Safety (non-negotiable):
+- A deterministic red-line wall, independent of you, flags data-destroying
+  operations (wipefs, dd to a device, mkfs, lvremove/vgremove, zfs/zpool destroy,
+  and destructive SDS verbs like deleting a pool/resource/gateway). Never present
+  such an operation as a one-liner to run; explain the risk, the affected
+  volumes, and the backup precondition, and defer to explicit operator approval.
+'''
+
+entity_types = [
+  "Cluster", "Node", "StoragePool", "DRBDResource", "Volume",
+  "HAConfig", "PromoterConfig", "OCFAgent", "VIP", "Gateway",
+  "Snapshot", "KernelModule", "ErrorCode", "CLI_Command", "ConfigParameter", "State",
+]
+
+relation_types = [
+  "DEPLOYED_ON", "CONTAINS", "MANAGES", "BACKS", "DEPENDS_ON",
+  "PROMOTES", "EXPORTS", "TRIGGERED_BY", "RESOLVES", "MUTUALLY_EXCLUSIVE",
+  "TRIGGERED_IN_STATE", "DEFINED_IN",
+]
+
+# Regex sources (TOML literal strings preserve backslashes). Group 1 = message.
+# Mine the log/error string literals an operator actually sees, so a real error
+# line can be traced back to its source.
+error_patterns = [
+  '(?:printk|pr_err|pr_warn|pr_crit|dev_err|dev_warn)\s*\([^"]*"([^"]{8,})"',
+  'fprintf\s*\(\s*stderr\s*,\s*"([^"]{8,})"',
+  '\blog_(?:err|error|warn|warning|crit)\s*\([^"]*"([^"]{8,})"',
+  '\bperror\s*\(\s*"([^"]{6,})"',
+  '(?:zap\.\w+|logger\.\w+|fmt\.Errorf)\s*\(\s*"([^"]{8,})"',
+]
+
+# Knowledge is already ingested into drbd-reactor.db; no repos to (re)ingest here.
+repos = []
+
+# ---------------------------------------------------------------------------
+# Deterministic destructive-command red-lines (LLM-independent). Applied to the
+# string form of a suggested action / any command, before an operator can approve.
+# ---------------------------------------------------------------------------
+
+[[red_lines]]
+id = "wipefs"
+severity = "CRITICAL"
+pattern = '\bwipefs\b'
+reason = "wipefs erases filesystem signatures; data irreversibly lost"
+
+[[red_lines]]
+id = "dd-to-device"
+severity = "CRITICAL"
+pattern = '\bdd\b.*\bof=/dev/'
+reason = "dd to a block device overwrites raw disk data"
+
+[[red_lines]]
+id = "mkfs"
+severity = "CRITICAL"
+pattern = '\bmkfs(\.\w+)?\b'
+reason = "mkfs rebuilds a filesystem, wiping the target device"
+
+[[red_lines]]
+id = "lvremove"
+severity = "CRITICAL"
+pattern = '\blvremove\b'
+reason = "lvremove deletes a logical volume; data on it is lost"
+
+[[red_lines]]
+id = "vgremove"
+severity = "CRITICAL"
+pattern = '\bvgremove\b'
+reason = "vgremove deletes a volume group"
+
+[[red_lines]]
+id = "zfs-destroy"
+severity = "CRITICAL"
+pattern = '\bzfs\b.*\bdestroy\b'
+reason = "zfs destroy deletes a dataset/volume/snapshot"
+
+[[red_lines]]
+id = "zpool-destroy"
+severity = "CRITICAL"
+pattern = '\bzpool\b.*\bdestroy\b'
+reason = "zpool destroy destroys an entire storage pool"
+
+[[red_lines]]
+id = "drbdadm-wipe-md"
+severity = "CRITICAL"
+pattern = '\bdrbdadm\b.*\b(wipe-md|create-md)\b'
+reason = "wipe-md/create-md rewrites DRBD metadata; can lose the replica"
+
+# Destructive SDS control verbs. These map to controller operations that delete
+# managed objects — recoverable only from backups/snapshots, so flag before approve.
+[[red_lines]]
+id = "sds-pool-delete"
+severity = "HIGH"
+pattern = '\bpool[._-]?delete\b'
+reason = "deleting a storage pool destroys its volumes"
+
+[[red_lines]]
+id = "sds-resource-delete"
+severity = "HIGH"
+pattern = '\bresource[._-]?delete\b'
+reason = "deleting a DRBD resource tears down replication and its backing volumes"
+
+[[red_lines]]
+id = "sds-ha-delete"
+severity = "HIGH"
+pattern = '\bha[._-]?delete\b'
+reason = "deleting an HA config removes the promoter and floating VIP failover"
+
+[[red_lines]]
+id = "sds-gateway-delete"
+severity = "HIGH"
+pattern = '\bgateway[._-]?delete\b'
+reason = "deleting a gateway stops exporting the storage (NFS/iSCSI/NVMe-oF)"
+
+[[red_lines]]
+id = "sds-snapshot-delete"
+severity = "HIGH"
+pattern = '\bsnapshot[._-]?delete\b'
+reason = "deleting a snapshot discards a recovery point"
+
+# ---------------------------------------------------------------------------
+# Read-only probes (fallback situational awareness on the host running serve).
+# Primary cluster state comes from the sds-mcp read tools; these are extra.
+# ---------------------------------------------------------------------------
+
+[[probes]]
+name = "drbd_status"
+description = "Show DRBD resource roles, connection and disk state."
+argv = ["drbdadm", "status"]
+
+[[probes]]
+name = "reactor_prom_list"
+description = "List drbd-reactor promoter targets and which node holds each."
+argv = ["drbd-reactorctl", "status"]
+
+[[probes]]
+name = "vgs"
+description = "Show LVM volume groups and free space."
+argv = ["vgs"]
+
+[[probes]]
+name = "zpool_status"
+description = "Show ZFS pool health and device status."
+argv = ["zpool", "status"]

@@ -40,10 +40,11 @@ to that library (v0.4.0) and builds the SDS-side consumer.
 
 ```
  sds web-ui (existing React) ── new "AI Copilot" sidebar ──────────┐
-   │  POST /ai/chat/stream  (SSE, tool-use + suggestions streamed)   │
+   │  POST /ai/chat/stream  (NDJSON, tool-use + suggestions streamed)│
    ▼                                                                 │
- oss-agent `serve` process  (SDS domain.toml)                        │
-   agent-go ReAct core                                               │
+ cmd/sds-ai  (NEW small binary in the sds repo that IMPORTS the      │
+   ossagent library — NOT oss-agent's stock `serve`)                 │
+   agent-go ReAct core (via ossagent.New)                            │
      ├─ knowledge_search  → cortexdb: drbd-reactor.db (1024 chunks)  │
      ├─ sds-mcp READ-ONLY tools (list/status/health) → situational   │
      │        awareness                                              │
@@ -62,7 +63,7 @@ to that library (v0.4.0) and builds the SDS-side consumer.
 |---|---|---|---|
 | oss-agent lib v0.4.0 (MCP support) | **user** (oss-agent repo) | Mount MCP-server tools into the ReAct agent; expose read-only filtering + structured suggestions | agent-go `pkg/mcp`, `pkg/agent` |
 | SDS `domain.toml` | me (sds repo) | SDS/DRBD persona, red_lines, knowledge pointer | oss-agent domain schema |
-| oss-agent `serve` deployment (SDS profile) | me | Run the agent HTTP API wired to sds-mcp + drbd-reactor.db | oss-agent lib v0.4.0 |
+| `cmd/sds-ai` binary (sds repo) | me | Imports the ossagent library; wires sds-mcp + drbd-reactor.db + ai/domain.toml; serves `/ai/chat/stream` (NDJSON). Kept as its own binary (ideally a nested go module) so the AI/vector-DB dep tree never bloats the lean controller. The browser can't import a Go lib, so a host process is always required — this is that host. | oss-agent lib v0.4.0 |
 | sds web-ui AI Copilot sidebar | me (sds repo) | Chat (SSE) + suggested-action approval cards | oss-agent serve API; existing controller REST |
 
 ### Dependency direction — no import cycles

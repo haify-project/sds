@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import {
@@ -10,9 +11,11 @@ import {
   HardDrive,
   Lock,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
+import { AICopilot } from '@/components/AICopilot';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -27,6 +30,7 @@ const navigation = [
 export function MainLayout() {
   const location = useLocation();
   const isFetching = useIsFetching();
+  const [aiOpen, setAiOpen] = useState(false);
 
   // Match the deepest nav item whose path prefixes the current location, so
   // sub-routes (e.g. /ha/create) still show their section title ("HA") and
@@ -99,12 +103,31 @@ export function MainLayout() {
               </span>
             )}
           </div>
-          <UserMenu />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setAiOpen((v) => !v)}
+              aria-pressed={aiOpen}
+              title="SDS Copilot"
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                aiOpen
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+              )}
+            >
+              <Sparkles className="h-4 w-4" />
+              Copilot
+            </button>
+            <UserMenu />
+          </div>
         </header>
         <main className="app-canvas flex-1 overflow-auto p-6 lg:p-8">
           <Outlet />
         </main>
       </div>
+
+      <AICopilot open={aiOpen} onClose={() => setAiOpen(false)} />
     </div>
   );
 }
