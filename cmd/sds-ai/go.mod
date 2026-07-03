@@ -67,7 +67,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/json-iterator/go v0.0.0-20171115153421-f7279a603ede // indirect
-	github.com/liliang-cn/agent-go/v2 v2.95.0 // indirect
+	github.com/liliang-cn/agent-go/v2 v2.96.0 // indirect
 	github.com/liliang-cn/cortexdb/v2 v2.38.0 // indirect
 	github.com/liliang-cn/mcp-swagger-server v0.4.0 // indirect
 	github.com/liliang-cn/pipeit v0.1.0 // indirect
@@ -108,10 +108,3 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.38.2 // indirect
 )
-
-// oss-agent v0.4.0 (MCP support) is not published yet; build against the local
-// checkout. Drop this replace once v0.4.0 is tagged and pushed.
-replace github.com/liliang-cn/oss-agent => /Users/liliang/Things/AI/projects/oss-agent
-
-// Use the locally-patched agent-go (stdio MCP subprocess lifetime fix).
-replace github.com/liliang-cn/agent-go/v2 => /Users/liliang/Things/AI/base/agent-go
