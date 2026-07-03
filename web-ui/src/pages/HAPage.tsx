@@ -1,8 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, HaConfig, OcfAgentSpec, Resource, SelfHaStatus } from '@/services/api';
+import { api, HaConfig, Resource, SelfHaStatus } from '@/services/api';
 import { StatusBadge } from '@/components/StatusBadge';
-import { OcfAgentBuilder } from '@/components/OcfAgentBuilder';
 import { toast } from 'sonner';
 import {
   HeartPulse,
@@ -69,6 +69,7 @@ function isRestartError(message: string): boolean {
 
 export function HAPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: haConfigs, isLoading } = useQuery({
     queryKey: ['ha'],
@@ -80,7 +81,6 @@ export function HAPage() {
     queryFn: () => api.getResources(),
   });
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [detailsConfig, setDetailsConfig] = useState<HaConfig | null>(null);
 
   const invalidate = () => {
@@ -156,11 +156,6 @@ export function HAPage() {
 
   const configs = haConfigs?.configs ?? [];
 
-  // Resources without an existing HA config are eligible for creation.
-  const resourcesWithoutHA = (resources?.resources ?? []).filter(
-    (r) => !configs.some((ha) => ha.resource === r.name)
-  );
-
   return (
     <div className="space-y-6">
       <SelfHaCard />
@@ -173,7 +168,7 @@ export function HAPage() {
             automatic failover.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button onClick={() => navigate('/ha/create')}>
           <Plus className="mr-2 h-4 w-4" />
           Create HA Config
         </Button>
@@ -213,16 +208,6 @@ export function HAPage() {
           ))}
         </div>
       )}
-
-      <CreateHADialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        resources={resourcesWithoutHA}
-        onCreated={() => {
-          setCreateOpen(false);
-          queryClient.invalidateQueries({ queryKey: ['ha'] });
-        }}
-      />
 
       <DetailsDialog
         config={detailsConfig}
@@ -962,164 +947,6 @@ function DetailsDialog({
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ==================== Create HA Dialog ====================
-
-function CreateHADialog({
-  open,
-  onOpenChange,
-  resources,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  resources: Resource[];
-  onCreated: () => void;
-}) {
-  const [resource, setResource] = useState('');
-  const [vip, setVip] = useState('');
-  const [mountPoint, setMountPoint] = useState('');
-  const [fstype, setFstype] = useState('ext4');
-  const [services, setServices] = useState('');
-  const [ocfAgents, setOcfAgents] = useState<OcfAgentSpec[]>([]);
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      api.makeHa(resource, {
-        vip,
-        mountPoint: mountPoint || undefined,
-        fstype: mountPoint ? fstype : undefined,
-        services: services
-          ? services.split(',').map((s) => s.trim()).filter(Boolean)
-          : undefined,
-        ocfAgents: ocfAgents.length > 0 ? ocfAgents : undefined,
-      }),
-    onSuccess: () => {
-      toast.success('HA configuration created');
-      setOcfAgents([]);
-      onCreated();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create HA Configuration</DialogTitle>
-          <DialogDescription>
-            Attach a floating VIP and automatic failover to a DRBD resource.
-          </DialogDescription>
-        </DialogHeader>
-        {resources.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            No resources available for HA configuration. All resources already
-            have HA configured.
-          </p>
-        ) : (
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              mutation.mutate();
-            }}
-          >
-            <div className="space-y-1.5">
-              <Label>DRBD Resource</Label>
-              <Select value={resource} onValueChange={setResource}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a resource..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {resources.map((r) => (
-                    <SelectItem key={r.name} value={r.name}>
-                      {r.name} ({r.nodes.join(', ')})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Virtual IP (CIDR)</Label>
-              <Input
-                value={vip}
-                onChange={(e) => setVip(e.target.value)}
-                placeholder="192.168.1.100/24"
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                The VIP that will float between nodes.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Mount Point (optional)</Label>
-              <Input
-                value={mountPoint}
-                onChange={(e) => setMountPoint(e.target.value)}
-                placeholder="/mnt/data"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path where the DRBD device will be mounted.
-              </p>
-            </div>
-
-            {mountPoint && (
-              <div className="space-y-1.5">
-                <Label>Filesystem Type</Label>
-                <Select value={fstype} onValueChange={setFstype}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ext4">ext4</SelectItem>
-                    <SelectItem value="xfs">XFS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label>Services (comma-separated, optional)</Label>
-              <Input
-                value={services}
-                onChange={(e) => setServices(e.target.value)}
-                placeholder="mysql.service, nginx.service"
-              />
-              <p className="text-xs text-muted-foreground">
-                Systemd services to start/stop with the resource.
-              </p>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-1.5">
-              <Label>OCF Agents (optional)</Label>
-              <p className="text-xs text-muted-foreground">
-                Extra OCF resource agents appended to the promoter start list
-                after the built-in mount/VIP items.
-              </p>
-              <OcfAgentBuilder agents={ocfAgents} onChange={setOcfAgents} />
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="submit"
-                disabled={mutation.isPending || !resource || !vip}
-              >
-                {mutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Create
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
       </DialogContent>
     </Dialog>
   );

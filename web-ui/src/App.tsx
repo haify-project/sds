@@ -10,6 +10,7 @@ import { PoolsPage } from './pages/PoolsPage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { GatewaysPage } from './pages/GatewaysPage';
 import { HAPage } from './pages/HAPage';
+import { CreateHAPage } from './pages/CreateHAPage';
 import { AccessPage } from './pages/AccessPage';
 
 const queryClient = new QueryClient({
@@ -36,6 +37,7 @@ function App() {
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="gateways" element={<GatewaysPage />} />
               <Route path="ha" element={<HAPage />} />
+              <Route path="ha/create" element={<CreateHAPage />} />
               <Route path="access" element={<AccessPage />} />
             </Route>
           </Routes>
