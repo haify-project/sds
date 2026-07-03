@@ -112,3 +112,6 @@ require (
 // oss-agent v0.4.0 (MCP support) is not published yet; build against the local
 // checkout. Drop this replace once v0.4.0 is tagged and pushed.
 replace github.com/liliang-cn/oss-agent => /Users/liliang/Things/AI/projects/oss-agent
+
+// Use the locally-patched agent-go (stdio MCP subprocess lifetime fix).
+replace github.com/liliang-cn/agent-go/v2 => /Users/liliang/Things/AI/base/agent-go
