@@ -65,6 +65,36 @@ to that library (v0.4.0) and builds the SDS-side consumer.
 | oss-agent `serve` deployment (SDS profile) | me | Run the agent HTTP API wired to sds-mcp + drbd-reactor.db | oss-agent lib v0.4.0 |
 | sds web-ui AI Copilot sidebar | me (sds repo) | Chat (SSE) + suggested-action approval cards | oss-agent serve API; existing controller REST |
 
+### Dependency direction — no import cycles
+
+The two systems are decoupled through **runtime boundaries (MCP wire protocol +
+HTTP)**, never Go-module imports. This is a hard architectural constraint.
+
+```
+ Compile-time imports (Go module level):
+   oss-agent  ──imports──▶ agent-go, cortexdb     (never imports sds)
+   sds        ──imports──▶ own pkg + MCP SDK       (never imports oss-agent)
+      sds-mcp = cmd/mcp inside the sds module; depends one-way on sds internals.
+
+ Runtime edges (protocol, NOT imports):
+   sds web-ui ──HTTP/SSE──▶ oss-agent serve       (separate process)
+   oss-agent  ──MCP───────▶ sds-mcp               (separate/subprocess)
+   sds web-ui ──HTTP──────▶ sds controller REST   (existing)
+```
+
+Neither module imports the other, so no cycle is possible. The two cycle-forming
+shapes are **explicitly forbidden**:
+
+1. oss-agent MUST NOT `import github.com/liliang-cn/sds` — it reaches the cluster
+   only through the sds-mcp wire protocol (tool name/schema, no Go coupling).
+2. sds MUST NOT `import github.com/liliang-cn/oss-agent` — the AI backend runs as
+   a separate `oss-agent serve` process reached over HTTP.
+
+If a future iteration embeds the agent in-process (agent-go `pkg/mcp/inprocess`),
+the same rule holds: dependency stays one-way `sds → oss-agent`, with sds passing
+its own in-process MCP server to oss-agent via an **interface** — oss-agent still
+never imports sds. The `sds → sds-mcp` edge always stays on the wire.
+
 ## oss-agent library v0.4.0 — API contract (for the user to implement)
 
 This is what the SDS side needs from the library. Names are proposals; the user
