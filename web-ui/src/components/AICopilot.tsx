@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   Check,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,15 @@ import {
 interface ToolTrace {
   name: string;
   args?: unknown;
+  done: boolean;
+}
+
+// argSummary renders a tool call's arguments compactly as "k=v  k=v".
+function argSummary(args: unknown): string {
+  if (!args || typeof args !== 'object') return '';
+  return Object.entries(args as Record<string, unknown>)
+    .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+    .join('  ');
 }
 
 interface Msg {
@@ -103,8 +113,19 @@ function severityClass(sev: string): string {
   }
 }
 
+function severityBorder(sev: string): string {
+  switch (sev) {
+    case 'high':
+      return 'border-l-red-500';
+    case 'low':
+      return 'border-l-muted-foreground/40';
+    default:
+      return 'border-l-amber-500';
+  }
+}
+
 function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
-  const [state, setState] = useState<'idle' | 'running' | 'done' | 'failed'>('idle');
+  const [state, setState] = useState<'idle' | 'running' | 'done' | 'failed' | 'dismissed'>('idle');
   const [result, setResult] = useState('');
   const blocked = suggestion.verdict?.blocked ?? false;
 
@@ -123,18 +144,25 @@ function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
   };
 
   return (
-    <div className="mt-2 rounded-md border border-border bg-card p-3 text-xs">
+    <div className={cn('mt-2 rounded-md border border-l-2 border-border bg-card p-3 text-xs', severityBorder(suggestion.severity))}>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono font-medium">{suggestion.action}</span>
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[0.7rem] font-medium text-muted-foreground">Suggested action</span>
+        </div>
         <Badge variant="outline" className={cn('text-[0.65rem]', severityClass(suggestion.severity))}>
           {suggestion.severity}
         </Badge>
       </div>
+
+      <div className="mt-1.5 font-mono font-medium">{suggestion.action}</div>
       {Object.keys(suggestion.params).length > 0 && (
-        <div className="mt-1 font-mono text-[0.7rem] text-muted-foreground break-all">
-          {Object.entries(suggestion.params)
-            .map(([k, v]) => `${k}=${String(v)}`)
-            .join('  ')}
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {Object.entries(suggestion.params).map(([k, v]) => (
+            <span key={k} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">
+              {k}=<span className="text-foreground">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+            </span>
+          ))}
         </div>
       )}
       {suggestion.reason && <p className="mt-1.5 text-muted-foreground">{suggestion.reason}</p>}
@@ -160,6 +188,11 @@ function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
           {state === 'done' ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
           <span className="break-all">{result}</span>
         </div>
+      ) : state === 'dismissed' ? (
+        <div className="mt-2 flex items-center gap-1.5 text-muted-foreground">
+          <X className="h-3.5 w-3.5" />
+          <span>Dismissed</span>
+        </div>
       ) : (
         <div className="mt-2 flex gap-2">
           <Button
@@ -169,6 +202,15 @@ function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
             onClick={approve}
           >
             {state === 'running' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Approve'}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            disabled={state === 'running'}
+            onClick={() => setState('dismissed')}
+          >
+            Dismiss
           </Button>
         </div>
       )}
@@ -255,7 +297,20 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
           break;
         case 'tool':
           patchLast((m) => {
-            m.tools = [...m.tools, { name: e.name, args: e.args }];
+            m.tools = [...m.tools, { name: e.name, args: e.args, done: false }];
+          });
+          break;
+        case 'tool_result':
+          patchLast((m) => {
+            // mark the last still-running call of this tool as done
+            const tools = [...m.tools];
+            for (let i = tools.length - 1; i >= 0; i--) {
+              if (tools[i].name === e.name && !tools[i].done) {
+                tools[i] = { ...tools[i], done: true };
+                break;
+              }
+            }
+            m.tools = tools;
           });
           break;
         case 'suggestion':
@@ -333,21 +388,40 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
               </div>
             ) : (
               <div className="space-y-2">
-                {m.tools.map((t, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                  >
-                    <Wrench className="h-3 w-3" />
-                    <span className="font-mono">{t.name}</span>
+                {m.tools.length > 0 && (
+                  <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2">
+                    {m.tools.map((t, i) => {
+                      const summary = argSummary(t.args);
+                      return (
+                        <div key={i} className="flex items-start gap-1.5 text-xs">
+                          {t.done ? (
+                            <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
+                          ) : (
+                            <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
+                          )}
+                          <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="font-mono text-foreground">{t.name}</span>
+                          {summary && (
+                            <span className="truncate font-mono text-muted-foreground" title={summary}>
+                              {summary}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
+                )}
                 {m.text && <StreamingMarkdown text={m.text} />}
                 {m.suggestions.map((s, i) => (
                   <SuggestionCard key={i} suggestion={s} />
                 ))}
-                {m.error && <div className="text-xs text-red-500">⚠ {m.error}</div>}
-                {busy && m === messages[messages.length - 1] && !m.text && (
+                {m.error && (
+                  <div className="flex items-start gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-500">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span className="break-all">{m.error}</span>
+                  </div>
+                )}
+                {busy && m === messages[messages.length - 1] && !m.text && m.tools.length === 0 && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 )}
               </div>
