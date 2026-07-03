@@ -100,6 +100,54 @@ export interface HaConfig {
   services: string[];
 }
 
+// A configured OCF resource agent appended to an HA config's promoter
+// start[] array. Composed by the OCF agent builder and submitted to MakeHa.
+export interface OcfAgentSpec {
+  provider: string;
+  name: string;
+  instance: string;
+  params: Record<string, string>;
+}
+
+// Summary entry from GET /ha/resource-agents.
+export interface ResourceAgentSummary {
+  provider: string;
+  name: string;
+  shortdesc: string;
+}
+
+export interface ResourceAgentsResponse {
+  agents: ResourceAgentSummary[];
+}
+
+// A single OCF meta-data parameter (parsed from the agent's meta-data XML).
+export interface OcfAgentParameter {
+  name: string;
+  required: boolean;
+  unique: boolean;
+  type: string;
+  default: string;
+  shortdesc: string;
+  longdesc: string;
+}
+
+// Full OCF agent metadata from GET /ha/resource-agents/{provider}/{name}.
+export interface ResourceAgentMetadata {
+  provider: string;
+  name: string;
+  version: string;
+  shortdesc: string;
+  longdesc: string;
+  parameters: OcfAgentParameter[];
+}
+
+// Promoter TOML for an HA config from GET /ha/{resource}/toml.
+export interface HaTomlResponse {
+  resource: string;
+  path: string;
+  content: string;
+}
+
 export interface ResourceStatus {
   name: string;
   role: string;
@@ -407,6 +455,9 @@ class ApiClient {
     mountPoint?: string;
     fstype?: string;
     services?: string[];
+    // Extra OCF resource agents appended to the promoter start[] after the
+    // built-in mount/vip items (order preserved). Composed by the OCF builder.
+    ocfAgents?: OcfAgentSpec[];
   }) =>
     this.request<ApiResponse & { configPath: string }>(`/resources/${resource}/ha`, {
       method: 'POST',
@@ -420,6 +471,29 @@ class ApiClient {
     this.request<ApiResponse>(`/resources/${resource}/ha/evict`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+
+  // ==================== HA OCF agents + promoter TOML ====================
+  // List OCF resource agents available on the nodes.
+  getResourceAgents = () =>
+    this.request<ResourceAgentsResponse>('/ha/resource-agents');
+
+  // Fetch a single OCF agent's metadata (parameter schema).
+  getResourceAgentMetadata = (provider: string, name: string) =>
+    this.request<ResourceAgentMetadata>(
+      `/ha/resource-agents/${encodeURIComponent(provider)}/${encodeURIComponent(name)}`,
+    );
+
+  // Read an HA config's drbd-reactor promoter TOML.
+  getHaToml = (resource: string) =>
+    this.request<HaTomlResponse>(`/ha/${encodeURIComponent(resource)}/toml`);
+
+  // Write (sync) an HA config's promoter TOML to all nodes and reload
+  // drbd-reactor.
+  syncHaToml = (resource: string, content: string) =>
+    this.request<ApiResponse>(`/ha/${encodeURIComponent(resource)}/toml`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
     });
 
   // ==================== Snapshots ====================
