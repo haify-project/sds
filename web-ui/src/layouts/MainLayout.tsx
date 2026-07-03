@@ -28,7 +28,16 @@ export function MainLayout() {
   const location = useLocation();
   const isFetching = useIsFetching();
 
-  const current = navigation.find((n) => n.href === location.pathname);
+  // Match the deepest nav item whose path prefixes the current location, so
+  // sub-routes (e.g. /ha/create) still show their section title ("HA") and
+  // highlight the right nav item instead of falling back to the default.
+  const current = [...navigation]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find(
+      (n) =>
+        location.pathname === n.href ||
+        location.pathname.startsWith(n.href + '/'),
+    );
 
   return (
     <div className="flex h-screen bg-background">
@@ -45,7 +54,9 @@ export function MainLayout() {
         </div>
         <nav className="flex-1 space-y-0.5 px-3 py-2">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href;
+            const isActive =
+              location.pathname === item.href ||
+              location.pathname.startsWith(item.href + '/');
             return (
               <Link
                 key={item.name}
