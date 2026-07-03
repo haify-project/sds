@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   api,
@@ -18,14 +18,24 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { GripVertical, Info, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
-  ArrowDown,
-  ArrowUp,
-  Info,
-  Loader2,
-  Plus,
-  Trash2,
-} from 'lucide-react';
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const agentKey = (provider: string, name: string) => `${provider}:${name}`;
 
@@ -155,78 +165,64 @@ export function OcfAgentBuilder({
   const removeAt = (idx: number) =>
     onChange(agents.filter((_, i) => i !== idx));
 
-  const moveBy = (idx: number, delta: number) => {
-    const target = idx + delta;
-    if (target < 0 || target >= agents.length) return;
-    const next = [...agents];
-    const [item] = next.splice(idx, 1);
-    next.splice(target, 0, item);
-    onChange(next);
+  // Stable drag-and-drop ids, generated once per agent spec object and kept in a
+  // WeakMap so they survive reorders (arrayMove preserves object identity) and
+  // never leak into the submitted payload. Keying by index would break dnd on
+  // reorder, so we deliberately avoid that.
+  const idMap = useRef(new WeakMap<OcfAgentSpec, string>());
+  const idSeq = useRef(0);
+  const idFor = (a: OcfAgentSpec): string => {
+    let id = idMap.current.get(a);
+    if (!id) {
+      id = `ocf-agent-${idSeq.current++}`;
+      idMap.current.set(a, id);
+    }
+    return id;
+  };
+  const itemIds = useMemo(() => agents.map(idFor), [agents]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = itemIds.indexOf(String(active.id));
+    const newIndex = itemIds.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    onChange(arrayMove(agents, oldIndex, newIndex));
   };
 
   return (
     <TooltipProvider>
       <div className="space-y-4">
-        {/* Built agent list */}
+        {/* Built agent list — drag the grip to reorder */}
         {agents.length > 0 && (
-          <div className="space-y-2">
-            {agents.map((a, idx) => (
-              <div
-                key={`${a.provider}:${a.name}:${a.instance}:${idx}`}
-                className="flex items-center gap-2 rounded-md border p-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="font-mono">
-                      ocf:{a.provider}:{a.name}
-                    </Badge>
-                    <span className="truncate font-mono text-xs text-muted-foreground">
-                      {a.instance}
-                    </span>
-                  </div>
-                  {Object.keys(a.params).length > 0 && (
-                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                      {Object.entries(a.params)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join(' ')}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  disabled={idx === 0}
-                  onClick={() => moveBy(idx, -1)}
-                  title="Move up"
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  disabled={idx === agents.length - 1}
-                  onClick={() => moveBy(idx, 1)}
-                  title="Move down"
-                >
-                  <ArrowDown className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => removeAt(idx)}
-                  title="Remove"
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={itemIds}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2">
+                {agents.map((a, idx) => (
+                  <SortableAgentRow
+                    key={itemIds[idx]}
+                    id={itemIds[idx]}
+                    agent={a}
+                    onRemove={() => removeAt(idx)}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {/* Agent picker — single-step searchable combobox */}
@@ -363,6 +359,82 @@ export function OcfAgentBuilder({
         )}
       </div>
     </TooltipProvider>
+  );
+}
+
+/**
+ * A single agent row in the ordered list. The grip handle is the drag target
+ * (useSortable listeners are attached to it only) so the rest of the row stays
+ * interactive; the trash button removes this agent.
+ */
+function SortableAgentRow({
+  id,
+  agent,
+  onRemove,
+}: {
+  id: string;
+  agent: OcfAgentSpec;
+  onRemove: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 rounded-md border bg-background p-2"
+    >
+      <button
+        type="button"
+        className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
+        title="Drag to reorder"
+        aria-label="Drag to reorder"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="font-mono">
+            ocf:{agent.provider}:{agent.name}
+          </Badge>
+          <span className="truncate font-mono text-xs text-muted-foreground">
+            {agent.instance}
+          </span>
+        </div>
+        {Object.keys(agent.params).length > 0 && (
+          <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+            {Object.entries(agent.params)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(' ')}
+          </p>
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={onRemove}
+        title="Remove"
+      >
+        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+      </Button>
+    </div>
   );
 }
 
