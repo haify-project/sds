@@ -57,13 +57,20 @@ func TestParseByteCount(t *testing.T) {
 }
 
 func TestParseLVMPoolLine(t *testing.T) {
-	name, total, free, ok := parseLVMPoolLine("sds_data-pool|10737418240B|5368709120B")
+	name, total, free, pv, ok := parseLVMPoolLine("sds_data-pool|10737418240B|5368709120B")
 	assert.True(t, ok)
 	assert.Equal(t, "sds_data-pool", name)
 	assert.Equal(t, uint64(10737418240), total)
 	assert.Equal(t, uint64(5368709120), free)
+	assert.Equal(t, "", pv)
 
-	_, _, _, ok = parseLVMPoolLine("broken")
+	// With the optional pv_name field (vgs -o ...,pv_name).
+	name, _, _, pv, ok = parseLVMPoolLine("sds_vg0|10737418240B|5368709120B|/dev/sdc")
+	assert.True(t, ok)
+	assert.Equal(t, "sds_vg0", name)
+	assert.Equal(t, "/dev/sdc", pv)
+
+	_, _, _, _, ok = parseLVMPoolLine("broken")
 	assert.False(t, ok)
 }
 

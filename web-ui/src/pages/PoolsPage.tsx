@@ -195,6 +195,23 @@ function PoolItem({ pool }: { pool: Pool }) {
         <span>{total} GB total</span>
       </div>
       <Progress value={usedPercent} className="h-2" />
+
+      {pool.devices && pool.devices.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <span className="text-xs text-muted-foreground">
+            Devices ({pool.devices.length}):
+          </span>
+          {pool.devices.map((d) => (
+            <Badge
+              key={d}
+              variant="secondary"
+              className="font-mono text-[0.65rem]"
+            >
+              {d}
+            </Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

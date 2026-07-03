@@ -68,28 +68,35 @@ func parseByteCount(raw string) (uint64, error) {
 	return uint64(parsed), nil
 }
 
-func parseLVMPoolLine(line string) (string, uint64, uint64, bool) {
+// parseLVMPoolLine parses one `vgs -o vg_name,vg_size,vg_free[,pv_name]` line.
+// The optional 4th field (pv_name) lets a single vgs call also report the
+// physical devices backing the VG (one row per PV); pv is "" when absent.
+func parseLVMPoolLine(line string) (name string, total, free uint64, pv string, ok bool) {
 	fields := strings.Split(strings.TrimSpace(line), "|")
 	if len(fields) < 3 {
-		return "", 0, 0, false
+		return "", 0, 0, "", false
 	}
 
-	name := strings.TrimSpace(fields[0])
+	name = strings.TrimSpace(fields[0])
 	if name == "" {
-		return "", 0, 0, false
+		return "", 0, 0, "", false
 	}
 
 	total, err := parseByteCount(fields[1])
 	if err != nil {
-		return "", 0, 0, false
+		return "", 0, 0, "", false
 	}
 
-	free, err := parseByteCount(fields[2])
+	free, err = parseByteCount(fields[2])
 	if err != nil {
-		return "", 0, 0, false
+		return "", 0, 0, "", false
 	}
 
-	return name, total, free, true
+	if len(fields) >= 4 {
+		pv = strings.TrimSpace(fields[3])
+	}
+
+	return name, total, free, pv, true
 }
 
 func parseZFSSnapshotLine(line string) (string, string, string, bool) {

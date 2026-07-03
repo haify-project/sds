@@ -231,7 +231,7 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 		if r.Success {
 			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
 			for _, line := range lines {
-				name, totalSize, freeSize, ok := parseLVMPoolLine(line)
+				name, totalSize, freeSize, _, ok := parseLVMPoolLine(line)
 				if ok && name == poolName {
 					return &PoolInfo{
 						Name:    poolName,
@@ -271,8 +271,13 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 		return pools, nil
 	}
 
-	// 1. Get LVM pools
-	result, err := sm.controller.deployment.Exec(ctx, hosts, "sudo vgs --noheadings --units b --separator '|' -o vg_name,vg_size,vg_free")
+	// 1. Get LVM pools. Adding pv_name to the vgs output makes vgs emit one row
+	// per physical volume (vg_name/size/free repeated), so a single SSH round
+	// yields both the capacity AND the devices backing each VG — no separate
+	// pvs call. Rows for the same VG are folded into one PoolInfo, collecting
+	// its devices.
+	poolByKey := make(map[string]*PoolInfo)
+	result, err := sm.controller.deployment.Exec(ctx, hosts, "sudo vgs --noheadings --units b --separator '|' -o vg_name,vg_size,vg_free,pv_name")
 	if err != nil {
 		// Log error but continue to try ZFS
 		sm.controller.logger.Warn("Failed to list LVM pools", zap.Error(err))
@@ -290,25 +295,32 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 					if line == "" {
 						continue
 					}
-					vgName, totalSize, freeSize, ok := parseLVMPoolLine(line)
+					vgName, totalSize, freeSize, pv, ok := parseLVMPoolLine(line)
 					if !ok || !strings.HasPrefix(vgName, managedNamePrefix) {
 						continue
 					}
 					key := normalizedHost + "/lvm/" + vgName
-					if seen[key] {
-						continue
+					pool, exists := poolByKey[key]
+					if !exists {
+						pool = &PoolInfo{
+							Name:    vgName,
+							Type:    "vg",
+							Node:    normalizedHost,
+							TotalGB: totalSize / 1024 / 1024 / 1024,
+							FreeGB:  freeSize / 1024 / 1024 / 1024,
+						}
+						poolByKey[key] = pool
+						seen[key] = true
+						pools = append(pools, pool)
 					}
-					seen[key] = true
-
-					pools = append(pools, &PoolInfo{
-						Name:    vgName,
-						Type:    "vg",
-						Node:    normalizedHost,
-						TotalGB: totalSize / 1024 / 1024 / 1024,
-						FreeGB:  freeSize / 1024 / 1024 / 1024,
-					})
+					if pv != "" {
+						pool.Devices = append(pool.Devices, pv)
+					}
 				}
 			}
+		}
+		for _, pool := range poolByKey {
+			slices.Sort(pool.Devices)
 		}
 	}
 
