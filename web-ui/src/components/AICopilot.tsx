@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Streamdown } from 'streamdown';
 import { toast } from 'sonner';
 import {
   Sparkles,
@@ -37,6 +38,27 @@ interface Msg {
 let msgSeq = 0;
 const nextId = () => `m${++msgSeq}`;
 
+// StreamingMarkdown reveals `text` progressively and renders it with Streamdown,
+// which safely handles incomplete markdown (unterminated **, code fences, tables)
+// as the prefix grows — so the answer "streams" visually even when the backend
+// delivers it in one frame. State is keyed per message, so a completed message
+// keeps its full text and doesn't re-animate on re-render.
+function StreamingMarkdown({ text }: { text: string }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (shown >= text.length) return;
+    const id = setInterval(() => {
+      setShown((s) => Math.min(text.length, s + Math.max(2, Math.ceil((text.length - s) / 12))));
+    }, 24);
+    return () => clearInterval(id);
+  }, [text, shown]);
+  return (
+    <Streamdown className="copilot-md text-sm [&_pre]:text-xs [&_code]:text-xs">
+      {text.slice(0, shown)}
+    </Streamdown>
+  );
+}
+
 // executeSuggestion maps a guarded action proposal onto the existing controller
 // REST the UI already uses. Only a small, explicit allowlist is executable from
 // the copilot (O3); everything else is surfaced as manual. Writes still go
@@ -44,7 +66,9 @@ const nextId = () => `m${++msgSeq}`;
 async function executeSuggestion(s: AISuggestion): Promise<string> {
   const p = s.params as Record<string, string | undefined>;
   switch (s.action) {
-    case 'ha.evict': {
+    case 'ha.evict':
+    case 'ha.failover': {
+      // Evicting the current primary IS a failover (demote here, promote elsewhere).
       if (!p.resource) throw new Error('missing resource');
       return (await api.evictHa(p.resource)).message;
     }
@@ -163,6 +187,37 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
   );
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Resizable split pane: drag the left edge to change the panel width.
+  const [width, setWidth] = useState<number>(() => {
+    const s = typeof localStorage !== 'undefined' ? localStorage.getItem('sds.ai_width') : null;
+    const n = s ? Number(s) : NaN;
+    return Number.isFinite(n) ? n : 400;
+  });
+  const dragging = useRef(false);
+  useEffect(() => {
+    const clamp = (w: number) => Math.min(Math.max(w, 320), Math.round(window.innerWidth * 0.7));
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      setWidth(clamp(window.innerWidth - e.clientX));
+    };
+    const onUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      setWidth((w) => {
+        localStorage.setItem('sds.ai_width', String(w));
+        return w;
+      });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
@@ -205,6 +260,10 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
           break;
         case 'suggestion':
           patchLast((m) => {
+            // Dedupe: the model (or agent-go's duplicate-call re-execution) can
+            // emit the same proposal twice in one turn; show it once.
+            const key = (s: AISuggestion) => `${s.action}|${JSON.stringify(s.params)}`;
+            if (m.suggestions.some((s) => key(s) === key(e.suggestion))) return;
             m.suggestions = [...m.suggestions, e.suggestion];
           });
           break;
@@ -236,7 +295,20 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
   if (!open) return null;
 
   return (
-    <aside className="flex w-96 shrink-0 flex-col border-l border-border bg-background">
+    <aside
+      style={{ width }}
+      className="relative flex shrink-0 flex-col border-l border-border bg-background"
+    >
+      {/* Drag handle to resize the panel */}
+      <div
+        onMouseDown={() => {
+          dragging.current = true;
+          document.body.style.userSelect = 'none';
+          document.body.style.cursor = 'col-resize';
+        }}
+        title="Drag to resize"
+        className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-primary/30"
+      />
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -270,7 +342,7 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
                     <span className="font-mono">{t.name}</span>
                   </div>
                 ))}
-                {m.text && <div className="whitespace-pre-wrap leading-relaxed">{m.text}</div>}
+                {m.text && <StreamingMarkdown text={m.text} />}
                 {m.suggestions.map((s, i) => (
                   <SuggestionCard key={i} suggestion={s} />
                 ))}

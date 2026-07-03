@@ -12,17 +12,15 @@
 // The `suggestion` frame shape is normalized in parseSuggestion() below and will
 // be aligned to the oss-agent v0.4.0 EventSuggestion payload once it is tagged.
 
-// Base URL of the oss-agent serve process. Override at runtime with
-// localStorage['sds.ai_base'] (e.g. "http://orange1:7634/api"). Default mirrors
-// the api.ts host convention on the oss-agent default port (7634).
+// Base URL of the cmd/sds-ai backend. Defaults to the same host on port 7634
+// (sds-ai runs alongside). Override at runtime with localStorage['sds.ai_base']
+// (e.g. "http://127.0.0.1:7634").
 export function aiBase(): string {
   const override =
     typeof localStorage !== 'undefined' ? localStorage.getItem('sds.ai_base') : null;
   if (override) return override.replace(/\/$/, '');
   const { protocol, hostname } = window.location;
-  const host =
-    hostname === 'localhost' || hostname === '127.0.0.1' ? 'orange1' : hostname;
-  return `${protocol}//${host}:7634/api`;
+  return `${protocol}//${hostname}:7634`;
 }
 
 export type AISeverity = 'low' | 'medium' | 'high';
@@ -122,7 +120,7 @@ export async function streamChat(
   onEvent: (e: AIEvent) => void,
   signal?: AbortSignal,
 ): Promise<StreamChatResult> {
-  const res = await fetch(`${aiBase()}/chat/stream`, {
+  const res = await fetch(`${aiBase()}/ai/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, session_id: sessionId ?? '' }),
