@@ -193,6 +193,11 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
             m.text += e.delta;
           });
           break;
+        case 'reset':
+          patchLast((m) => {
+            m.text = '';
+          });
+          break;
         case 'tool':
           patchLast((m) => {
             m.tools = [...m.tools, { name: e.name, args: e.args }];

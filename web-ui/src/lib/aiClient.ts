@@ -44,6 +44,7 @@ export interface AISuggestion {
 
 export type AIEvent =
   | { type: 'text'; delta: string }
+  | { type: 'reset' } // discard answer text streamed so far (a preamble)
   | { type: 'tool'; name: string; args?: unknown }
   | { type: 'tool_result'; name: string }
   | { type: 'suggestion'; suggestion: AISuggestion }
@@ -89,6 +90,8 @@ function frameToEvent(f: RawFrame): AIEvent | null {
   switch (f.t) {
     case 'text':
       return f.d ? { type: 'text', delta: f.d } : null;
+    case 'reset':
+      return { type: 'reset' };
     case 'tool':
       return { type: 'tool', name: f.name ?? '', args: f.args };
     case 'tool_result':
