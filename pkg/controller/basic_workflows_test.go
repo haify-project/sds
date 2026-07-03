@@ -1276,7 +1276,7 @@ func TestResourceManagerMakeHaUsesResourceNodesOnly(t *testing.T) {
 	ctrl.resources.hosts = []string{"wrong-host"}
 	ctrl.resources.mu.Unlock()
 
-	configPath, err := ctrl.resources.MakeHa(context.Background(), "res1", nil, "", "", "")
+	configPath, err := ctrl.resources.MakeHa(context.Background(), "res1", nil, "", "", "", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "/etc/drbd-reactor.d/sds-ha-res1.toml", configPath)
 	require.Len(t, dep.distributedConfigs, 1)

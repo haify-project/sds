@@ -2503,8 +2503,10 @@ WantedBy=multi-user.target
 `, resource, device, mountPoint, fsType)
 }
 
-// MakeHa creates a drbd-reactor promoter config for HA failover
-func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string) (string, error) {
+// MakeHa creates a drbd-reactor promoter config for HA failover. Any ocfAgents
+// are appended, in order, to the promoter start[] list after the built-in
+// mount/vip/services entries. Passing nil keeps the historical behavior.
+func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string, ocfAgents []OcfAgentSpec) (string, error) {
 	rm.controller.logger.Info("Making resource HA",
 		zap.String("resource", resource),
 		zap.Strings("services", services),
@@ -2723,7 +2725,7 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 
 	// Generate drbd-reactor promoter config
 	configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
-	configContent := rm.generatePromoterConfig(resource, services, mountPoint, vip)
+	configContent := rm.generatePromoterConfig(resource, services, mountPoint, vip, ocfAgents)
 
 	rm.controller.logger.Debug("Generated promoter config",
 		zap.String("config", configContent))
@@ -3195,7 +3197,7 @@ func vipServiceIPInstance(vip string) string {
 }
 
 // generatePromoterConfig generates drbd-reactor promoter TOML config
-func (rm *ResourceManager) generatePromoterConfig(resource string, services []string, mountPoint, vip string) string {
+func (rm *ResourceManager) generatePromoterConfig(resource string, services []string, mountPoint, vip string, ocfAgents []OcfAgentSpec) string {
 	var startActions []string
 
 	// Add mount unit if mount point specified
@@ -3219,6 +3221,16 @@ func (rm *ResourceManager) generatePromoterConfig(resource string, services []st
 	// Add systemd services
 	for _, svc := range services {
 		startActions = append(startActions, fmt.Sprintf(`  "%s"`, svc))
+	}
+
+	// Append any extra OCF resource agents, in order, after the built-in
+	// mount/vip/services items.
+	for _, agent := range ocfAgents {
+		entry := renderOcfStartEntry(agent)
+		if entry == "" {
+			continue
+		}
+		startActions = append(startActions, fmt.Sprintf(`  "%s"`, entry))
 	}
 
 	// Generate TOML config

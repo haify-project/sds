@@ -9,6 +9,8 @@ import (
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/gateway"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Server implements the SDS controller gRPC service
@@ -574,7 +576,19 @@ func (s *Server) UnmountResource(ctx context.Context, req *sdspb.UnmountResource
 }
 
 func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.MakeHaResponse, error) {
-	configPath, err := s.resources.MakeHa(ctx, req.Resource, req.Services, req.MountPoint, req.Fstype, req.Vip)
+	var ocfAgents []OcfAgentSpec
+	for _, a := range req.OcfAgents {
+		if a == nil {
+			continue
+		}
+		ocfAgents = append(ocfAgents, OcfAgentSpec{
+			Provider: a.Provider,
+			Name:     a.Name,
+			Instance: a.Instance,
+			Params:   a.Params,
+		})
+	}
+	configPath, err := s.resources.MakeHa(ctx, req.Resource, req.Services, req.MountPoint, req.Fstype, req.Vip, ocfAgents)
 	if err != nil {
 		return &sdspb.MakeHaResponse{
 			Success: false,
@@ -585,6 +599,78 @@ func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.M
 		Success:    true,
 		Message:    "HA configuration created successfully",
 		ConfigPath: configPath,
+	}, nil
+}
+
+// ListResourceAgents lists the OCF resource agents available on the nodes.
+func (s *Server) ListResourceAgents(ctx context.Context, req *sdspb.ListResourceAgentsRequest) (*sdspb.ListResourceAgentsResponse, error) {
+	agents, err := s.resources.ListResourceAgents(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	resp := &sdspb.ListResourceAgentsResponse{}
+	for _, a := range agents {
+		resp.Agents = append(resp.Agents, &sdspb.ResourceAgentInfo{
+			Provider:  a.Provider,
+			Name:      a.Name,
+			Shortdesc: a.Shortdesc,
+		})
+	}
+	return resp, nil
+}
+
+// GetResourceAgentMetadata returns an OCF agent's parsed meta-data parameter schema.
+func (s *Server) GetResourceAgentMetadata(ctx context.Context, req *sdspb.GetResourceAgentMetadataRequest) (*sdspb.GetResourceAgentMetadataResponse, error) {
+	meta, err := s.resources.GetResourceAgentMetadata(ctx, req.Provider, req.Name)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	resp := &sdspb.GetResourceAgentMetadataResponse{
+		Provider:  meta.Provider,
+		Name:      meta.Name,
+		Version:   meta.Version,
+		Shortdesc: meta.Shortdesc,
+		Longdesc:  meta.Longdesc,
+	}
+	for _, p := range meta.Parameters {
+		resp.Parameters = append(resp.Parameters, &sdspb.ResourceAgentParameter{
+			Name:      p.Name,
+			Required:  p.Required,
+			Unique:    p.Unique,
+			Type:      p.Type,
+			Default:   p.Default,
+			Shortdesc: p.Shortdesc,
+			Longdesc:  p.Longdesc,
+		})
+	}
+	return resp, nil
+}
+
+// GetHaToml reads a resource's drbd-reactor promoter TOML.
+func (s *Server) GetHaToml(ctx context.Context, req *sdspb.GetHaTomlRequest) (*sdspb.GetHaTomlResponse, error) {
+	path, content, err := s.resources.GetHaToml(ctx, req.Resource)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	return &sdspb.GetHaTomlResponse{
+		Resource: req.Resource,
+		Path:     path,
+		Content:  content,
+	}, nil
+}
+
+// SyncHaToml writes an edited promoter TOML to all resource nodes and reloads drbd-reactor.
+func (s *Server) SyncHaToml(ctx context.Context, req *sdspb.SyncHaTomlRequest) (*sdspb.SyncHaTomlResponse, error) {
+	message, err := s.resources.SyncHaToml(ctx, req.Resource, req.Content)
+	if err != nil {
+		return &sdspb.SyncHaTomlResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return &sdspb.SyncHaTomlResponse{
+		Success: true,
+		Message: message,
 	}, nil
 }
 

@@ -835,6 +835,131 @@
         ]
       }
     },
+    "/v1/ha/resource-agents": {
+      "get": {
+        "summary": "HA OCF resource-agent discovery and drbd-reactor promoter TOML editing.",
+        "operationId": "SDSController_ListResourceAgents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListResourceAgentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/ha/resource-agents/{provider}/{name}": {
+      "get": {
+        "operationId": "SDSController_GetResourceAgentMetadata",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetResourceAgentMetadataResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/ha/{resource}/toml": {
+      "get": {
+        "operationId": "SDSController_GetHaToml",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetHaTomlResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "operationId": "SDSController_SyncHaToml",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SyncHaTomlResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSyncHaTomlBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/lvm/volumes/{lvName}/snapshots": {
       "get": {
         "operationId": "SDSController_ListLvmSnapshots",
@@ -3271,6 +3396,14 @@
         "vip": {
           "type": "string",
           "title": "optional virtual IP (CIDR, e.g., \"192.168.1.100/24\")"
+        },
+        "ocfAgents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OcfAgent"
+          },
+          "title": "optional OCF agents appended to promoter start[]"
         }
       }
     },
@@ -3360,6 +3493,14 @@
     },
     "SDSControllerStopGatewayBody": {
       "type": "object"
+    },
+    "SDSControllerSyncHaTomlBody": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        }
+      }
     },
     "SDSControllerUnmountResourceBody": {
       "type": "object",
@@ -4278,6 +4419,20 @@
         }
       }
     },
+    "v1GetHaTomlResponse": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
     "v1GetISCSIChapRequest": {
       "type": "object",
       "properties": {
@@ -4331,6 +4486,33 @@
         },
         "pool": {
           "$ref": "#/definitions/v1PoolInfo"
+        }
+      }
+    },
+    "v1GetResourceAgentMetadataResponse": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "shortdesc": {
+          "type": "string"
+        },
+        "longdesc": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceAgentParameter"
+          }
         }
       }
     },
@@ -4650,6 +4832,18 @@
         }
       }
     },
+    "v1ListResourceAgentsResponse": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceAgentInfo"
+          }
+        }
+      }
+    },
     "v1ListResourcesResponse": {
       "type": "object",
       "properties": {
@@ -4876,6 +5070,31 @@
         }
       }
     },
+    "v1OcfAgent": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "title": "e.g. heartbeat"
+        },
+        "name": {
+          "type": "string",
+          "title": "e.g. IPaddr2"
+        },
+        "instance": {
+          "type": "string",
+          "title": "OCF instance id, e.g. vip_pgha"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "OCF parameters (rendered with sorted keys)"
+        }
+      },
+      "description": "OcfAgent is one OCF resource-agent entry to compose into an HA promoter's\nstart[] list. It renders as \"ocf:\u003cprovider\u003e:\u003cname\u003e \u003cinstance\u003e \u003ck\u003e=\u003cv\u003e ...\"."
+    },
     "v1PoolInfo": {
       "type": "object",
       "properties": {
@@ -5077,6 +5296,46 @@
           "type": "boolean"
         },
         "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ResourceAgentInfo": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "shortdesc": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ResourceAgentParameter": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "type": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "shortdesc": {
+          "type": "string"
+        },
+        "longdesc": {
           "type": "string"
         }
       }
@@ -5312,6 +5571,17 @@
       }
     },
     "v1StopGatewayResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SyncHaTomlResponse": {
       "type": "object",
       "properties": {
         "success": {

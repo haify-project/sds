@@ -100,7 +100,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 			if fsType == "" && in.Mount != "" {
 				fsType = "ext4"
 			}
-			configPath, err := s.client.MakeHa(ctx, in.Resource, in.Services, in.Mount, fsType, in.VIP)
+			configPath, err := s.client.MakeHa(ctx, in.Resource, in.Services, in.Mount, fsType, in.VIP, nil)
 			if err != nil {
 				return nil, opResult{}, err
 			}

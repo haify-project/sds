@@ -128,7 +128,7 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 	// only activated by the handoff script after the database copy: enabling
 	// it earlier could let a standby promote an empty filesystem and start a
 	// second controller with an empty database.
-	promoterCfg := rm.generatePromoterConfig(SelfHaResource, []string{selfHaControllerSvc}, selfHaMountPoint, vip)
+	promoterCfg := rm.generatePromoterConfig(SelfHaResource, []string{selfHaControllerSvc}, selfHaMountPoint, vip, nil)
 	if err := rm.distributeToAll(ctx, nodeAddrs, promoterCfg, selfHaReactorConfig+".disabled", ""); err != nil {
 		return "", fmt.Errorf("failed to distribute reactor config: %w", err)
 	}

@@ -19,87 +19,91 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SDSController_CreatePool_FullMethodName             = "/v1.SDSController/CreatePool"
-	SDSController_DeletePool_FullMethodName             = "/v1.SDSController/DeletePool"
-	SDSController_GetPool_FullMethodName                = "/v1.SDSController/GetPool"
-	SDSController_ListPools_FullMethodName              = "/v1.SDSController/ListPools"
-	SDSController_AddDiskToPool_FullMethodName          = "/v1.SDSController/AddDiskToPool"
-	SDSController_RegisterNode_FullMethodName           = "/v1.SDSController/RegisterNode"
-	SDSController_UnregisterNode_FullMethodName         = "/v1.SDSController/UnregisterNode"
-	SDSController_GetNode_FullMethodName                = "/v1.SDSController/GetNode"
-	SDSController_ListNodes_FullMethodName              = "/v1.SDSController/ListNodes"
-	SDSController_HealthCheck_FullMethodName            = "/v1.SDSController/HealthCheck"
-	SDSController_CreateResource_FullMethodName         = "/v1.SDSController/CreateResource"
-	SDSController_AdoptResource_FullMethodName          = "/v1.SDSController/AdoptResource"
-	SDSController_DeleteResource_FullMethodName         = "/v1.SDSController/DeleteResource"
-	SDSController_GetResource_FullMethodName            = "/v1.SDSController/GetResource"
-	SDSController_ListResources_FullMethodName          = "/v1.SDSController/ListResources"
-	SDSController_AddVolume_FullMethodName              = "/v1.SDSController/AddVolume"
-	SDSController_RemoveVolume_FullMethodName           = "/v1.SDSController/RemoveVolume"
-	SDSController_ResizeVolume_FullMethodName           = "/v1.SDSController/ResizeVolume"
-	SDSController_UpdateResourceOptions_FullMethodName  = "/v1.SDSController/UpdateResourceOptions"
-	SDSController_ResourceStatus_FullMethodName         = "/v1.SDSController/ResourceStatus"
-	SDSController_SetPrimary_FullMethodName             = "/v1.SDSController/SetPrimary"
-	SDSController_SetSecondary_FullMethodName           = "/v1.SDSController/SetSecondary"
-	SDSController_CreateFilesystem_FullMethodName       = "/v1.SDSController/CreateFilesystem"
-	SDSController_MountResource_FullMethodName          = "/v1.SDSController/MountResource"
-	SDSController_UnmountResource_FullMethodName        = "/v1.SDSController/UnmountResource"
-	SDSController_MakeHa_FullMethodName                 = "/v1.SDSController/MakeHa"
-	SDSController_EvictHa_FullMethodName                = "/v1.SDSController/EvictHa"
-	SDSController_DeleteHa_FullMethodName               = "/v1.SDSController/DeleteHa"
-	SDSController_GetHa_FullMethodName                  = "/v1.SDSController/GetHa"
-	SDSController_ListHa_FullMethodName                 = "/v1.SDSController/ListHa"
-	SDSController_EnableSelfHa_FullMethodName           = "/v1.SDSController/EnableSelfHa"
-	SDSController_DisableSelfHa_FullMethodName          = "/v1.SDSController/DisableSelfHa"
-	SDSController_GetSelfHaStatus_FullMethodName        = "/v1.SDSController/GetSelfHaStatus"
-	SDSController_CreateSnapshot_FullMethodName         = "/v1.SDSController/CreateSnapshot"
-	SDSController_DeleteSnapshot_FullMethodName         = "/v1.SDSController/DeleteSnapshot"
-	SDSController_RestoreSnapshot_FullMethodName        = "/v1.SDSController/RestoreSnapshot"
-	SDSController_ListSnapshots_FullMethodName          = "/v1.SDSController/ListSnapshots"
-	SDSController_CreateSnapshotSchedule_FullMethodName = "/v1.SDSController/CreateSnapshotSchedule"
-	SDSController_ListSnapshotSchedules_FullMethodName  = "/v1.SDSController/ListSnapshotSchedules"
-	SDSController_DeleteSnapshotSchedule_FullMethodName = "/v1.SDSController/DeleteSnapshotSchedule"
-	SDSController_CreateNFSGateway_FullMethodName       = "/v1.SDSController/CreateNFSGateway"
-	SDSController_CreateISCSIGateway_FullMethodName     = "/v1.SDSController/CreateISCSIGateway"
-	SDSController_CreateNVMeGateway_FullMethodName      = "/v1.SDSController/CreateNVMeGateway"
-	SDSController_DeleteGateway_FullMethodName          = "/v1.SDSController/DeleteGateway"
-	SDSController_GetGateway_FullMethodName             = "/v1.SDSController/GetGateway"
-	SDSController_ListGateways_FullMethodName           = "/v1.SDSController/ListGateways"
-	SDSController_StartGateway_FullMethodName           = "/v1.SDSController/StartGateway"
-	SDSController_StopGateway_FullMethodName            = "/v1.SDSController/StopGateway"
-	SDSController_AddNFSExport_FullMethodName           = "/v1.SDSController/AddNFSExport"
-	SDSController_RemoveNFSExport_FullMethodName        = "/v1.SDSController/RemoveNFSExport"
-	SDSController_ListNFSExports_FullMethodName         = "/v1.SDSController/ListNFSExports"
-	SDSController_AddISCSILUN_FullMethodName            = "/v1.SDSController/AddISCSILUN"
-	SDSController_RemoveISCSILUN_FullMethodName         = "/v1.SDSController/RemoveISCSILUN"
-	SDSController_ListISCSILUNs_FullMethodName          = "/v1.SDSController/ListISCSILUNs"
-	SDSController_AddISCSIInitiator_FullMethodName      = "/v1.SDSController/AddISCSIInitiator"
-	SDSController_RemoveISCSIInitiator_FullMethodName   = "/v1.SDSController/RemoveISCSIInitiator"
-	SDSController_ListISCSIInitiators_FullMethodName    = "/v1.SDSController/ListISCSIInitiators"
-	SDSController_SetISCSIChap_FullMethodName           = "/v1.SDSController/SetISCSIChap"
-	SDSController_GetISCSIChap_FullMethodName           = "/v1.SDSController/GetISCSIChap"
-	SDSController_AddNVMeNamespace_FullMethodName       = "/v1.SDSController/AddNVMeNamespace"
-	SDSController_RemoveNVMeNamespace_FullMethodName    = "/v1.SDSController/RemoveNVMeNamespace"
-	SDSController_ListNVMeNamespaces_FullMethodName     = "/v1.SDSController/ListNVMeNamespaces"
-	SDSController_AddNVMeHost_FullMethodName            = "/v1.SDSController/AddNVMeHost"
-	SDSController_RemoveNVMeHost_FullMethodName         = "/v1.SDSController/RemoveNVMeHost"
-	SDSController_ListNVMeHosts_FullMethodName          = "/v1.SDSController/ListNVMeHosts"
-	SDSController_CreateZFSPool_FullMethodName          = "/v1.SDSController/CreateZFSPool"
-	SDSController_DeleteZFSPool_FullMethodName          = "/v1.SDSController/DeleteZFSPool"
-	SDSController_ListZFSpools_FullMethodName           = "/v1.SDSController/ListZFSpools"
-	SDSController_CreateZFSDataset_FullMethodName       = "/v1.SDSController/CreateZFSDataset"
-	SDSController_CreateZFSVolume_FullMethodName        = "/v1.SDSController/CreateZFSVolume"
-	SDSController_ResizeZFSVolume_FullMethodName        = "/v1.SDSController/ResizeZFSVolume"
-	SDSController_DeleteZFSDataset_FullMethodName       = "/v1.SDSController/DeleteZFSDataset"
-	SDSController_CreateZFSSnapshot_FullMethodName      = "/v1.SDSController/CreateZFSSnapshot"
-	SDSController_DeleteZFSSnapshot_FullMethodName      = "/v1.SDSController/DeleteZFSSnapshot"
-	SDSController_ListZFSSnapshots_FullMethodName       = "/v1.SDSController/ListZFSSnapshots"
-	SDSController_RestoreZFSSnapshot_FullMethodName     = "/v1.SDSController/RestoreZFSSnapshot"
-	SDSController_CloneZFSSnapshot_FullMethodName       = "/v1.SDSController/CloneZFSSnapshot"
-	SDSController_CreateLvmSnapshot_FullMethodName      = "/v1.SDSController/CreateLvmSnapshot"
-	SDSController_DeleteLvmSnapshot_FullMethodName      = "/v1.SDSController/DeleteLvmSnapshot"
-	SDSController_ListLvmSnapshots_FullMethodName       = "/v1.SDSController/ListLvmSnapshots"
-	SDSController_RestoreLvmSnapshot_FullMethodName     = "/v1.SDSController/RestoreLvmSnapshot"
+	SDSController_CreatePool_FullMethodName               = "/v1.SDSController/CreatePool"
+	SDSController_DeletePool_FullMethodName               = "/v1.SDSController/DeletePool"
+	SDSController_GetPool_FullMethodName                  = "/v1.SDSController/GetPool"
+	SDSController_ListPools_FullMethodName                = "/v1.SDSController/ListPools"
+	SDSController_AddDiskToPool_FullMethodName            = "/v1.SDSController/AddDiskToPool"
+	SDSController_RegisterNode_FullMethodName             = "/v1.SDSController/RegisterNode"
+	SDSController_UnregisterNode_FullMethodName           = "/v1.SDSController/UnregisterNode"
+	SDSController_GetNode_FullMethodName                  = "/v1.SDSController/GetNode"
+	SDSController_ListNodes_FullMethodName                = "/v1.SDSController/ListNodes"
+	SDSController_HealthCheck_FullMethodName              = "/v1.SDSController/HealthCheck"
+	SDSController_CreateResource_FullMethodName           = "/v1.SDSController/CreateResource"
+	SDSController_AdoptResource_FullMethodName            = "/v1.SDSController/AdoptResource"
+	SDSController_DeleteResource_FullMethodName           = "/v1.SDSController/DeleteResource"
+	SDSController_GetResource_FullMethodName              = "/v1.SDSController/GetResource"
+	SDSController_ListResources_FullMethodName            = "/v1.SDSController/ListResources"
+	SDSController_AddVolume_FullMethodName                = "/v1.SDSController/AddVolume"
+	SDSController_RemoveVolume_FullMethodName             = "/v1.SDSController/RemoveVolume"
+	SDSController_ResizeVolume_FullMethodName             = "/v1.SDSController/ResizeVolume"
+	SDSController_UpdateResourceOptions_FullMethodName    = "/v1.SDSController/UpdateResourceOptions"
+	SDSController_ResourceStatus_FullMethodName           = "/v1.SDSController/ResourceStatus"
+	SDSController_SetPrimary_FullMethodName               = "/v1.SDSController/SetPrimary"
+	SDSController_SetSecondary_FullMethodName             = "/v1.SDSController/SetSecondary"
+	SDSController_CreateFilesystem_FullMethodName         = "/v1.SDSController/CreateFilesystem"
+	SDSController_MountResource_FullMethodName            = "/v1.SDSController/MountResource"
+	SDSController_UnmountResource_FullMethodName          = "/v1.SDSController/UnmountResource"
+	SDSController_MakeHa_FullMethodName                   = "/v1.SDSController/MakeHa"
+	SDSController_EvictHa_FullMethodName                  = "/v1.SDSController/EvictHa"
+	SDSController_DeleteHa_FullMethodName                 = "/v1.SDSController/DeleteHa"
+	SDSController_GetHa_FullMethodName                    = "/v1.SDSController/GetHa"
+	SDSController_ListHa_FullMethodName                   = "/v1.SDSController/ListHa"
+	SDSController_ListResourceAgents_FullMethodName       = "/v1.SDSController/ListResourceAgents"
+	SDSController_GetResourceAgentMetadata_FullMethodName = "/v1.SDSController/GetResourceAgentMetadata"
+	SDSController_GetHaToml_FullMethodName                = "/v1.SDSController/GetHaToml"
+	SDSController_SyncHaToml_FullMethodName               = "/v1.SDSController/SyncHaToml"
+	SDSController_EnableSelfHa_FullMethodName             = "/v1.SDSController/EnableSelfHa"
+	SDSController_DisableSelfHa_FullMethodName            = "/v1.SDSController/DisableSelfHa"
+	SDSController_GetSelfHaStatus_FullMethodName          = "/v1.SDSController/GetSelfHaStatus"
+	SDSController_CreateSnapshot_FullMethodName           = "/v1.SDSController/CreateSnapshot"
+	SDSController_DeleteSnapshot_FullMethodName           = "/v1.SDSController/DeleteSnapshot"
+	SDSController_RestoreSnapshot_FullMethodName          = "/v1.SDSController/RestoreSnapshot"
+	SDSController_ListSnapshots_FullMethodName            = "/v1.SDSController/ListSnapshots"
+	SDSController_CreateSnapshotSchedule_FullMethodName   = "/v1.SDSController/CreateSnapshotSchedule"
+	SDSController_ListSnapshotSchedules_FullMethodName    = "/v1.SDSController/ListSnapshotSchedules"
+	SDSController_DeleteSnapshotSchedule_FullMethodName   = "/v1.SDSController/DeleteSnapshotSchedule"
+	SDSController_CreateNFSGateway_FullMethodName         = "/v1.SDSController/CreateNFSGateway"
+	SDSController_CreateISCSIGateway_FullMethodName       = "/v1.SDSController/CreateISCSIGateway"
+	SDSController_CreateNVMeGateway_FullMethodName        = "/v1.SDSController/CreateNVMeGateway"
+	SDSController_DeleteGateway_FullMethodName            = "/v1.SDSController/DeleteGateway"
+	SDSController_GetGateway_FullMethodName               = "/v1.SDSController/GetGateway"
+	SDSController_ListGateways_FullMethodName             = "/v1.SDSController/ListGateways"
+	SDSController_StartGateway_FullMethodName             = "/v1.SDSController/StartGateway"
+	SDSController_StopGateway_FullMethodName              = "/v1.SDSController/StopGateway"
+	SDSController_AddNFSExport_FullMethodName             = "/v1.SDSController/AddNFSExport"
+	SDSController_RemoveNFSExport_FullMethodName          = "/v1.SDSController/RemoveNFSExport"
+	SDSController_ListNFSExports_FullMethodName           = "/v1.SDSController/ListNFSExports"
+	SDSController_AddISCSILUN_FullMethodName              = "/v1.SDSController/AddISCSILUN"
+	SDSController_RemoveISCSILUN_FullMethodName           = "/v1.SDSController/RemoveISCSILUN"
+	SDSController_ListISCSILUNs_FullMethodName            = "/v1.SDSController/ListISCSILUNs"
+	SDSController_AddISCSIInitiator_FullMethodName        = "/v1.SDSController/AddISCSIInitiator"
+	SDSController_RemoveISCSIInitiator_FullMethodName     = "/v1.SDSController/RemoveISCSIInitiator"
+	SDSController_ListISCSIInitiators_FullMethodName      = "/v1.SDSController/ListISCSIInitiators"
+	SDSController_SetISCSIChap_FullMethodName             = "/v1.SDSController/SetISCSIChap"
+	SDSController_GetISCSIChap_FullMethodName             = "/v1.SDSController/GetISCSIChap"
+	SDSController_AddNVMeNamespace_FullMethodName         = "/v1.SDSController/AddNVMeNamespace"
+	SDSController_RemoveNVMeNamespace_FullMethodName      = "/v1.SDSController/RemoveNVMeNamespace"
+	SDSController_ListNVMeNamespaces_FullMethodName       = "/v1.SDSController/ListNVMeNamespaces"
+	SDSController_AddNVMeHost_FullMethodName              = "/v1.SDSController/AddNVMeHost"
+	SDSController_RemoveNVMeHost_FullMethodName           = "/v1.SDSController/RemoveNVMeHost"
+	SDSController_ListNVMeHosts_FullMethodName            = "/v1.SDSController/ListNVMeHosts"
+	SDSController_CreateZFSPool_FullMethodName            = "/v1.SDSController/CreateZFSPool"
+	SDSController_DeleteZFSPool_FullMethodName            = "/v1.SDSController/DeleteZFSPool"
+	SDSController_ListZFSpools_FullMethodName             = "/v1.SDSController/ListZFSpools"
+	SDSController_CreateZFSDataset_FullMethodName         = "/v1.SDSController/CreateZFSDataset"
+	SDSController_CreateZFSVolume_FullMethodName          = "/v1.SDSController/CreateZFSVolume"
+	SDSController_ResizeZFSVolume_FullMethodName          = "/v1.SDSController/ResizeZFSVolume"
+	SDSController_DeleteZFSDataset_FullMethodName         = "/v1.SDSController/DeleteZFSDataset"
+	SDSController_CreateZFSSnapshot_FullMethodName        = "/v1.SDSController/CreateZFSSnapshot"
+	SDSController_DeleteZFSSnapshot_FullMethodName        = "/v1.SDSController/DeleteZFSSnapshot"
+	SDSController_ListZFSSnapshots_FullMethodName         = "/v1.SDSController/ListZFSSnapshots"
+	SDSController_RestoreZFSSnapshot_FullMethodName       = "/v1.SDSController/RestoreZFSSnapshot"
+	SDSController_CloneZFSSnapshot_FullMethodName         = "/v1.SDSController/CloneZFSSnapshot"
+	SDSController_CreateLvmSnapshot_FullMethodName        = "/v1.SDSController/CreateLvmSnapshot"
+	SDSController_DeleteLvmSnapshot_FullMethodName        = "/v1.SDSController/DeleteLvmSnapshot"
+	SDSController_ListLvmSnapshots_FullMethodName         = "/v1.SDSController/ListLvmSnapshots"
+	SDSController_RestoreLvmSnapshot_FullMethodName       = "/v1.SDSController/RestoreLvmSnapshot"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -141,6 +145,11 @@ type SDSControllerClient interface {
 	DeleteHa(ctx context.Context, in *DeleteHaRequest, opts ...grpc.CallOption) (*DeleteHaResponse, error)
 	GetHa(ctx context.Context, in *GetHaRequest, opts ...grpc.CallOption) (*GetHaResponse, error)
 	ListHa(ctx context.Context, in *ListHaRequest, opts ...grpc.CallOption) (*ListHaResponse, error)
+	// HA OCF resource-agent discovery and drbd-reactor promoter TOML editing.
+	ListResourceAgents(ctx context.Context, in *ListResourceAgentsRequest, opts ...grpc.CallOption) (*ListResourceAgentsResponse, error)
+	GetResourceAgentMetadata(ctx context.Context, in *GetResourceAgentMetadataRequest, opts ...grpc.CallOption) (*GetResourceAgentMetadataResponse, error)
+	GetHaToml(ctx context.Context, in *GetHaTomlRequest, opts ...grpc.CallOption) (*GetHaTomlResponse, error)
+	SyncHaToml(ctx context.Context, in *SyncHaTomlRequest, opts ...grpc.CallOption) (*SyncHaTomlResponse, error)
 	// Controller self-HA operations: make the controller itself highly
 	// available on its own DRBD + drbd-reactor machinery.
 	EnableSelfHa(ctx context.Context, in *EnableSelfHaRequest, opts ...grpc.CallOption) (*EnableSelfHaResponse, error)
@@ -511,6 +520,46 @@ func (c *sDSControllerClient) ListHa(ctx context.Context, in *ListHaRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListHaResponse)
 	err := c.cc.Invoke(ctx, SDSController_ListHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListResourceAgents(ctx context.Context, in *ListResourceAgentsRequest, opts ...grpc.CallOption) (*ListResourceAgentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResourceAgentsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListResourceAgents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetResourceAgentMetadata(ctx context.Context, in *GetResourceAgentMetadataRequest, opts ...grpc.CallOption) (*GetResourceAgentMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetResourceAgentMetadataResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetResourceAgentMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetHaToml(ctx context.Context, in *GetHaTomlRequest, opts ...grpc.CallOption) (*GetHaTomlResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHaTomlResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetHaToml_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SyncHaToml(ctx context.Context, in *SyncHaTomlRequest, opts ...grpc.CallOption) (*SyncHaTomlResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SyncHaTomlResponse)
+	err := c.cc.Invoke(ctx, SDSController_SyncHaToml_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1066,6 +1115,11 @@ type SDSControllerServer interface {
 	DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error)
 	GetHa(context.Context, *GetHaRequest) (*GetHaResponse, error)
 	ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error)
+	// HA OCF resource-agent discovery and drbd-reactor promoter TOML editing.
+	ListResourceAgents(context.Context, *ListResourceAgentsRequest) (*ListResourceAgentsResponse, error)
+	GetResourceAgentMetadata(context.Context, *GetResourceAgentMetadataRequest) (*GetResourceAgentMetadataResponse, error)
+	GetHaToml(context.Context, *GetHaTomlRequest) (*GetHaTomlResponse, error)
+	SyncHaToml(context.Context, *SyncHaTomlRequest) (*SyncHaTomlResponse, error)
 	// Controller self-HA operations: make the controller itself highly
 	// available on its own DRBD + drbd-reactor machinery.
 	EnableSelfHa(context.Context, *EnableSelfHaRequest) (*EnableSelfHaResponse, error)
@@ -1231,6 +1285,18 @@ func (UnimplementedSDSControllerServer) GetHa(context.Context, *GetHaRequest) (*
 }
 func (UnimplementedSDSControllerServer) ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListHa not implemented")
+}
+func (UnimplementedSDSControllerServer) ListResourceAgents(context.Context, *ListResourceAgentsRequest) (*ListResourceAgentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListResourceAgents not implemented")
+}
+func (UnimplementedSDSControllerServer) GetResourceAgentMetadata(context.Context, *GetResourceAgentMetadataRequest) (*GetResourceAgentMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetResourceAgentMetadata not implemented")
+}
+func (UnimplementedSDSControllerServer) GetHaToml(context.Context, *GetHaTomlRequest) (*GetHaTomlResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetHaToml not implemented")
+}
+func (UnimplementedSDSControllerServer) SyncHaToml(context.Context, *SyncHaTomlRequest) (*SyncHaTomlResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SyncHaToml not implemented")
 }
 func (UnimplementedSDSControllerServer) EnableSelfHa(context.Context, *EnableSelfHaRequest) (*EnableSelfHaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EnableSelfHa not implemented")
@@ -1942,6 +2008,78 @@ func _SDSController_ListHa_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).ListHa(ctx, req.(*ListHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListResourceAgents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListResourceAgentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListResourceAgents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListResourceAgents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListResourceAgents(ctx, req.(*ListResourceAgentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetResourceAgentMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResourceAgentMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetResourceAgentMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetResourceAgentMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetResourceAgentMetadata(ctx, req.(*GetResourceAgentMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetHaToml_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHaTomlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetHaToml(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetHaToml_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetHaToml(ctx, req.(*GetHaTomlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SyncHaToml_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncHaTomlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SyncHaToml(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SyncHaToml_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SyncHaToml(ctx, req.(*SyncHaTomlRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2990,6 +3128,22 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListHa",
 			Handler:    _SDSController_ListHa_Handler,
+		},
+		{
+			MethodName: "ListResourceAgents",
+			Handler:    _SDSController_ListResourceAgents_Handler,
+		},
+		{
+			MethodName: "GetResourceAgentMetadata",
+			Handler:    _SDSController_GetResourceAgentMetadata_Handler,
+		},
+		{
+			MethodName: "GetHaToml",
+			Handler:    _SDSController_GetHaToml_Handler,
+		},
+		{
+			MethodName: "SyncHaToml",
+			Handler:    _SDSController_SyncHaToml_Handler,
 		},
 		{
 			MethodName: "EnableSelfHa",

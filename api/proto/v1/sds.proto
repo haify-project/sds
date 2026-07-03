@@ -104,6 +104,20 @@ service SDSController {
     option (google.api.http) = { get: "/v1/ha"; };
   }
 
+  // HA OCF resource-agent discovery and drbd-reactor promoter TOML editing.
+  rpc ListResourceAgents(ListResourceAgentsRequest) returns (ListResourceAgentsResponse) {
+    option (google.api.http) = { get: "/v1/ha/resource-agents"; };
+  }
+  rpc GetResourceAgentMetadata(GetResourceAgentMetadataRequest) returns (GetResourceAgentMetadataResponse) {
+    option (google.api.http) = { get: "/v1/ha/resource-agents/{provider}/{name}"; };
+  }
+  rpc GetHaToml(GetHaTomlRequest) returns (GetHaTomlResponse) {
+    option (google.api.http) = { get: "/v1/ha/{resource}/toml"; };
+  }
+  rpc SyncHaToml(SyncHaTomlRequest) returns (SyncHaTomlResponse) {
+    option (google.api.http) = { post: "/v1/ha/{resource}/toml"; body: "*"; };
+  }
+
   // Controller self-HA operations: make the controller itself highly
   // available on its own DRBD + drbd-reactor machinery.
   rpc EnableSelfHa(EnableSelfHaRequest) returns (EnableSelfHaResponse) {
@@ -817,12 +831,78 @@ message UnmountResourceResponse {
   string message = 2;
 }
 
+// OcfAgent is one OCF resource-agent entry to compose into an HA promoter's
+// start[] list. It renders as "ocf:<provider>:<name> <instance> <k>=<v> ...".
+message OcfAgent {
+  string provider = 1;               // e.g. heartbeat
+  string name = 2;                   // e.g. IPaddr2
+  string instance = 3;               // OCF instance id, e.g. vip_pgha
+  map<string, string> params = 4;    // OCF parameters (rendered with sorted keys)
+}
+
 message MakeHaRequest {
   string resource = 1;
   repeated string services = 2;      // systemd services to start/stop
   string mount_point = 3;            // optional mount point
   string fstype = 4;                 // filesystem type (if mount_point specified)
   string vip = 5;                    // optional virtual IP (CIDR, e.g., "192.168.1.100/24")
+  repeated OcfAgent ocf_agents = 6;  // optional OCF agents appended to promoter start[]
+}
+
+message ResourceAgentInfo {
+  string provider = 1;
+  string name = 2;
+  string shortdesc = 3;
+}
+
+message ListResourceAgentsRequest {}
+
+message ListResourceAgentsResponse {
+  repeated ResourceAgentInfo agents = 1;
+}
+
+message ResourceAgentParameter {
+  string name = 1;
+  bool required = 2;
+  bool unique = 3;
+  string type = 4;
+  string default = 5;
+  string shortdesc = 6;
+  string longdesc = 7;
+}
+
+message GetResourceAgentMetadataRequest {
+  string provider = 1;
+  string name = 2;
+}
+
+message GetResourceAgentMetadataResponse {
+  string provider = 1;
+  string name = 2;
+  string version = 3;
+  string shortdesc = 4;
+  string longdesc = 5;
+  repeated ResourceAgentParameter parameters = 6;
+}
+
+message GetHaTomlRequest {
+  string resource = 1;
+}
+
+message GetHaTomlResponse {
+  string resource = 1;
+  string path = 2;
+  string content = 3;
+}
+
+message SyncHaTomlRequest {
+  string resource = 1;
+  string content = 2;
+}
+
+message SyncHaTomlResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message MakeHaResponse {

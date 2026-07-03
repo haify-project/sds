@@ -654,14 +654,17 @@ func (c *SDSClient) UnmountResource(ctx context.Context, resource string, volume
 	return nil
 }
 
-// MakeHa creates a drbd-reactor promoter config for HA failover
-func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string) (string, error) {
+// MakeHa creates a drbd-reactor promoter config for HA failover. Optional
+// ocfAgents are appended, in order, to the promoter start[] list; pass nil to
+// keep the historical behavior.
+func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string, ocfAgents []*sdspb.OcfAgent) (string, error) {
 	req := &sdspb.MakeHaRequest{
 		Resource:   resource,
 		Services:   services,
 		MountPoint: mountPoint,
 		Fstype:     fsType,
 		Vip:        vip,
+		OcfAgents:  ocfAgents,
 	}
 
 	resp, err := c.client.MakeHa(ctx, req)
@@ -802,6 +805,52 @@ func (c *SDSClient) ListHa(ctx context.Context) ([]*sdspb.HaConfigInfo, error) {
 	}
 
 	return resp.Configs, nil
+}
+
+// ListResourceAgents lists the OCF resource agents available on the nodes.
+func (c *SDSClient) ListResourceAgents(ctx context.Context) ([]*sdspb.ResourceAgentInfo, error) {
+	resp, err := c.client.ListResourceAgents(ctx, &sdspb.ListResourceAgentsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Agents, nil
+}
+
+// GetResourceAgentMetadata returns an OCF agent's parsed meta-data schema.
+func (c *SDSClient) GetResourceAgentMetadata(ctx context.Context, provider, name string) (*sdspb.GetResourceAgentMetadataResponse, error) {
+	resp, err := c.client.GetResourceAgentMetadata(ctx, &sdspb.GetResourceAgentMetadataRequest{
+		Provider: provider,
+		Name:     name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// GetHaToml reads a resource's drbd-reactor promoter TOML.
+func (c *SDSClient) GetHaToml(ctx context.Context, resource string) (*sdspb.GetHaTomlResponse, error) {
+	resp, err := c.client.GetHaToml(ctx, &sdspb.GetHaTomlRequest{Resource: resource})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// SyncHaToml writes an edited promoter TOML to all resource nodes and reloads
+// drbd-reactor.
+func (c *SDSClient) SyncHaToml(ctx context.Context, resource, content string) (string, error) {
+	resp, err := c.client.SyncHaToml(ctx, &sdspb.SyncHaTomlRequest{
+		Resource: resource,
+		Content:  content,
+	})
+	if err != nil {
+		return "", err
+	}
+	if !resp.Success {
+		return "", fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Message, nil
 }
 
 // ==================== SNAPSHOT OPERATIONS ====================
