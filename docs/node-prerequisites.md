@@ -31,6 +31,19 @@ distro package). This cluster already had these on all nodes.
 > purely the utils version. Match `drbd-reactor --version` / `drbdadm --version`
 > across all nodes.
 
+> **★ A complete drbd-reactor install needs three pieces beyond the binary**, or
+> gateways/HA fail to start:
+> - `/etc/drbd-reactor.toml` — the main config (reactor **won't start** without it:
+>   `Error: Could not read config file: /etc/drbd-reactor.toml`). Minimal:
+>   `snippets = "/etc/drbd-reactor.d"` + `[[log]]\nlevel = "info"`.
+> - `/lib/systemd/system/ocf.rs@.service` — the template systemd unit reactor uses
+>   to run OCF agents. Missing → promoter start fails: `Unit ocf.rs@<...>.service
+>   not found` and it loops trying to promote.
+> - `/usr/libexec/drbd-reactor/ocf-rs-wrapper` — the (compiled) helper that
+>   `ocf.rs@.service` execs.
+> All three come from a proper drbd-reactor package/`make install`; if you hand-copy
+> a reactor binary between nodes, copy these too.
+
 ### DRBD boot unit (auto-up on reboot) — installed automatically
 
 If nothing runs `drbdadm up all` at boot, a rebooted node brings up **none** of
@@ -119,8 +132,23 @@ Symptom when missing: `ocf.rs@target_<res>.service` exits `5/NOTINSTALLED`.
 
 - **NFS**: `nfsserver`/`exportfs` come from `resource-agents-extra` (section 2);
   also install the NFS server itself: `sudo apt-get install -y nfs-kernel-server`.
-- **NVMe-oF**: needs the `nvmet` kernel modules + `nvmetcli`. Not validated in
-  this cluster (the nodes lacked the nvmet agents/tooling). Install before use.
+- **NVMe-oF** (validated on arm64): the promoter uses the `nvmet-subsystem`,
+  `nvmet-namespace`, `nvmet-port` OCF agents (shipped in `resource-agents-extra`
+  under `/usr/lib/ocf/resource.d/heartbeat/`). They drive nvmet directly via
+  configfs (`/sys/kernel/config/nvmet/…`), so **`nvmetcli` is NOT required**
+  (and is not in the Ubuntu 24.04 repos). What you DO need is the **nvmet-tcp /
+  nvme-tcp kernel modules**, which the stock cloud/Lima kernel does **not** ship —
+  they live in `linux-modules-extra`:
+
+  ```bash
+  # target nodes: nvmet + nvmet-tcp; initiator: nvme-tcp
+  sudo apt-get install -y linux-modules-extra-$(uname -r) nvme-cli
+  sudo modprobe nvmet nvmet-tcp   # target nodes
+  sudo modprobe nvme-tcp          # initiator
+  ```
+
+  Symptom when missing: gateway starts but no `:4420` listener / `nvme connect`
+  fails; `modprobe nvmet-tcp` errors with "module not found".
 
 ---
 
