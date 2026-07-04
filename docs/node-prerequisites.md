@@ -340,3 +340,92 @@ for p in \
   test -e "$p" && echo "ok   $p" || echo "MISS $p"
 done
 ```
+
+---
+
+## 11. Kubernetes CSI on the storage nodes (k3s example, arm64/信创)
+
+The SDS CSI driver provisions DRBD-backed PVs. The **k8s worker nodes must BE the
+DRBD storage nodes** (the node plugin runs privileged and promotes/mounts DRBD on
+the host), and `sds-controller` runs **outside** k8s on those hosts (reachable at
+an IP/VIP:3374). Validated end-to-end on a fresh 3-node arm64 (国产芯片) cluster.
+
+### k3s (native arm64)
+
+Install the server on one node, agents on the rest. Pin cluster networking to the
+mutual node network and (in China) route image pulls through a proxy — set it in
+the k3s service env so the embedded containerd inherits it. `NO_PROXY` **must**
+include the cluster/service CIDRs and the node subnet, or internal traffic breaks.
+
+```bash
+# /etc/systemd/system/k3s.service.env  (and k3s-agent.service.env on agents)
+HTTP_PROXY=http://<proxy>:7890
+HTTPS_PROXY=http://<proxy>:7890
+NO_PROXY=127.0.0.1,localhost,10.42.0.0/16,10.43.0.0/16,<node-subnet>/24,.svc,.cluster.local
+
+# server
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+  --node-ip <ip> --advertise-address <ip> --flannel-iface eth0 \
+  --write-kubeconfig-mode 644 --disable traefik --disable servicelb" sh -
+# agent
+curl -sfL https://get.k3s.io | K3S_URL=https://<server-ip>:6443 K3S_TOKEN=<token> \
+  INSTALL_K3S_EXEC="agent --node-ip <ip> --flannel-iface eth0" sh -
+```
+
+### Images — build the plugin for the node arch, sideload the sidecars
+
+The `sds-csi` image must match the node arch — an amd64 image will NOT run on
+arm64 nodes. Build it for the target arch and import into every node's containerd:
+
+```bash
+# cross-build the two binaries (host go), assemble a minimal arm64 image, save, import
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o csi-controller ./cmd/csi-controller
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o csi-node       ./cmd/csi-node
+docker build --platform linux/arm64 -t sds-csi:latest .    # debian-slim + the 2 binaries
+docker save sds-csi:latest -o sds-csi.tar
+# on every node:
+sudo k3s ctr images import sds-csi.tar
+```
+
+The upstream **sidecars live on `registry.k8s.io`, which redirects to
+`*.pkg.dev` and is often unreachable in China (pull fails with `EOF`)** — even via
+an HTTP proxy. Pull them from a mirror, retag to the original names, save, and
+`k3s ctr images import` on every node (default pull policy IfNotPresent then finds
+them locally):
+
+```bash
+M=registry.aliyuncs.com/google_containers ; K=registry.k8s.io/sig-storage
+for t in csi-provisioner:v5.1.0 csi-node-driver-registrar:v2.12.0 livenessprobe:v2.14.0; do
+  docker pull --platform linux/arm64 $M/$t && docker tag $M/$t $K/$t
+done
+docker save $K/csi-provisioner:v5.1.0 $K/csi-node-driver-registrar:v2.12.0 $K/livenessprobe:v2.14.0 -o csi-sidecars.tar
+```
+
+### Deploy + point the CSI at the controller
+
+`kubectl apply -f deploy/k8s/`. Edit `00-sds-controller-endpoint.yaml` to carry the
+real controller IP/VIP (selectorless Service + manual Endpoints make
+`sds-controller:3374` resolve to the external controller). Set the StorageClass
+`pool` to the real pool name (`vg0`).
+
+**★ The node DaemonSet uses `hostNetwork: true` and therefore needs
+`dnsPolicy: ClusterFirstWithHostNet`** (fixed in `30-node.yaml`). Without it the
+hostNetwork pod uses the node's resolv.conf, cannot resolve the `sds-controller`
+Service name, and every `MountDevice` fails with a gRPC `EOF` — while the CSI
+*controller* (not hostNetwork) works, so provisioning succeeds but mounting hangs.
+
+### Cross-node PV behavior (the point of DRBD-CSI)
+
+A PV is a DRBD volume replicated on `replicas` nodes. When a pod moves to another
+node, the node plugin promotes the **local** replica to Primary and mounts it — the
+data is already there, so the container restarts on a different node with its data
+intact (verified: wrote on node B, re-read the same bytes from a pod pinned to node
+A). Constraints: **RWO** = one node mounts at a time (move = demote here, promote
+there); **topology** = the pod only schedules onto a node that holds a replica
+(`WaitForFirstConsumer` + `--strict-topology` enforce this). This is the advantage
+over k3s local-path, whose data is pinned to a single node.
+
+### Smoke test
+
+`scripts/csi-e2e.sh` (PVC on StorageClass `sds-drbd` + a pod that writes a marker,
+then verifies the write landed and the pod scheduled onto a replica node).

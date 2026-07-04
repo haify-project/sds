@@ -10,6 +10,13 @@ spec:
     spec:
       serviceAccountName: sds-csi-node
       hostNetwork: true
+      # With hostNetwork the pod otherwise uses the node's resolv.conf and cannot
+      # resolve the in-cluster `sds-controller` Service name. ClusterFirstWithHostNet
+      # makes it use cluster DNS (CoreDNS) so `--sds-controller=sds-controller:3374`
+      # resolves; without it the node plugin fails to reach the controller and every
+      # MountDevice errors with a gRPC "EOF" (the controller Deployment is unaffected
+      # because it does not use hostNetwork).
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: node-driver-registrar
           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
