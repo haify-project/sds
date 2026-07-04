@@ -80,7 +80,7 @@ export function MainLayout() {
         </nav>
         <div className="border-t border-sidebar-border px-4 py-3">
           <span className="font-mono text-[0.7rem] text-muted-foreground">
-            v1.4.0
+            v1.8.1
           </span>
         </div>
       </aside>
