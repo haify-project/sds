@@ -235,6 +235,19 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
     const n = s ? Number(s) : NaN;
     return Number.isFinite(n) ? n : 400;
   });
+  // On phones (< md) the Copilot is a full-screen overlay, so the fixed pixel
+  // width (and the drag-to-resize handle) only apply from md up.
+  const [isDesktop, setIsDesktop] = useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(min-width: 768px)').matches
+      : true,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = () => setIsDesktop(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
   const dragging = useRef(false);
   useEffect(() => {
     const clamp = (w: number) => Math.min(Math.max(w, 320), Math.round(window.innerWidth * 0.7));
@@ -351,10 +364,14 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
 
   return (
     <aside
-      style={{ width }}
-      className="relative flex shrink-0 flex-col border-l border-border bg-background"
+      style={isDesktop ? { width } : undefined}
+      className={cn(
+        'flex shrink-0 flex-col border-l border-border bg-background',
+        // Phone: full-screen overlay. md+: in-flow resizable side panel.
+        'fixed inset-0 z-50 w-full md:relative md:inset-auto md:z-auto md:w-auto',
+      )}
     >
-      {/* Drag handle to resize the panel */}
+      {/* Drag handle to resize the panel — desktop only. */}
       <div
         onMouseDown={() => {
           dragging.current = true;
@@ -362,7 +379,7 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
           document.body.style.cursor = 'col-resize';
         }}
         title="Drag to resize"
-        className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-primary/30"
+        className="absolute -left-1 top-0 z-10 hidden h-full w-2 cursor-col-resize hover:bg-primary/30 md:block"
       />
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">

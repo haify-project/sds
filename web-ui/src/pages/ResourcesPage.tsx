@@ -701,7 +701,7 @@ function ScheduleDialog({
               placeholder="0 * * * *"
             />
           </div>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {KEEP_FIELDS.map((f) => (
               <div key={f.key} className="space-y-1">
                 <Label htmlFor={`keep-${f.key}`} className="text-xs">

@@ -1,7 +1,7 @@
-// API base URL - use relative path for embedded UI
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://orange1:3375/v1'
-  : `${window.location.protocol}//${window.location.hostname}:3375/v1`;
+// API base URL - derive from the host the UI is served from. The controller's
+// REST/grpc-gateway listens on :3375, so the UI always talks to the same host it
+// was loaded from (works for the embedded UI on any node/VIP, and via tunnels).
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:3375/v1`;
 
 export interface ApiResponse<T = unknown> {
   success: boolean;

@@ -20,6 +20,17 @@ distros.
 If missing, install DRBD 9 + drbd-utils + drbd-reactor from LINBIT's repo (or the
 distro package). This cluster already had these on all nodes.
 
+> **★ drbd-reactor and drbd-utils versions must match.** drbd-reactor runs
+> `drbdsetup status --json <res>` and deserializes the output; a **drbd-utils that
+> is too old emits a JSON shape reactor cannot parse**, so reactor logs
+> `IGNORING resource '<res>': expected ',' or '}' at line NN` and **silently stops
+> managing that resource** — the promoter never fails over. Seen on arm64 with
+> drbd-utils **9.31.0** vs drbd-reactor **1.11.0**; installing drbd-utils
+> **9.34.0** (the version the rest of this cluster runs) fixed it (`IGNORING` → 0).
+> Diagnosis: it looks like a systemd problem (foreground reactor "works") but it is
+> purely the utils version. Match `drbd-reactor --version` / `drbdadm --version`
+> across all nodes.
+
 ### DRBD boot unit (auto-up on reboot) — installed automatically
 
 If nothing runs `drbdadm up all` at boot, a rebooted node brings up **none** of
@@ -123,11 +134,12 @@ a separate Go project (not a distro package):
 - Adds/removes a VIP on the auto-detected interface + sends Gratuitous ARP,
   OCF-style exit codes, `Type=oneshot` unit that stays `active (exited)`.
 
-Build and install on every node:
+Build and install on every node (set `GOARCH` to the node arch — `amd64` for
+orange, `arm64` for the Lima/信创 clusters):
 
 ```bash
 cd ~/Things/dev/storage/service-ip
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/service-ip .
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/service-ip .   # or GOARCH=arm64
 scp bin/service-ip <node>:/tmp/ && ssh <node> 'sudo install -m755 /tmp/service-ip /usr/local/bin/service-ip'
 scp deployment/service-ip@.service <node>:/tmp/ && ssh <node> 'sudo mv /tmp/service-ip@.service /etc/systemd/system/service-ip@.service && sudo systemctl daemon-reload'
 ```
@@ -135,6 +147,9 @@ scp deployment/service-ip@.service <node>:/tmp/ && ssh <node> 'sudo mv /tmp/serv
 sds pre-flight-checks `/usr/local/bin/service-ip` before writing an HA VIP
 config, so a missing helper now fails with a clear message instead of a silently
 broken promoter.
+
+The reactor promoter references the unit as `service-ip@<IP>-<MASK>.service`
+(e.g. `service-ip@192.168.104.101-24.service` for VIP `192.168.104.101/24`).
 
 Symptom when missing: promoter fails with `Unit service-ip@<vip>.service not
 found`; VIP never comes up.
@@ -192,13 +207,68 @@ Symptom when missing: node operations fail / "Permission denied (publickey)";
   (default gRPC port **3374**; REST 3375, UI 3376, metrics per config).
 - **All nodes** (convenience): `sds-cli` at `/usr/local/bin/sds-cli`.
 
-Cross-compile for the nodes (linux/amd64) since the build host is often
-darwin/arm64:
+Cross-compile for the nodes since the build host is often darwin/arm64 (set
+`GOARCH` to the node arch — `amd64` for orange, `arm64` for Lima/信创):
 
 ```bash
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sds-controller ./cmd/controller
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sds-cli ./cmd/cli
 ```
+
+> **★ With controller Self-HA enabled**, the reactor-managed controller unit runs
+> **`/usr/local/bin/sds-controller`** (Self-HA distributes the binary there so any
+> node can host the controller), *not* `/opt/sds/bin/sds-controller`. To ship a
+> new build you must overwrite `/usr/local/bin/sds-controller` on **every** node
+> (all are potential active nodes) and restart the active one. Overwriting a
+> running binary fails with `Text file busy` — `mv` the old one aside first, then
+> `cp` the new one, then `systemctl restart sds-controller`.
+
+### The embedded Web UI derives its API host at runtime
+
+The controller embeds the built `web-ui` (`go:embed ui/dist`). The SPA computes
+its API base from `window.location.hostname` (REST on `:3375`, AI Copilot on
+`:7634`) — so the UI works from any node/VIP/tunnel with no rebuild. Do **not**
+hardcode a specific host (an earlier `api.ts` special-cased `localhost` →
+`http://orange1:3375`, which broke every non-orange deployment reached via
+`localhost`/an SSH tunnel: the shell loaded but all data calls hit `orange1` and
+failed with `ERR_EMPTY_RESPONSE`). Rebuild flow after a UI change:
+`cd web-ui && npm run build` → `make ui-sync` (copies `web-ui/dist` → `ui/dist`
+for the embed) → rebuild `sds-controller`.
+
+---
+
+## 8a. sds-ai — AI Copilot (optional; rides controller Self-HA)
+
+`sds-ai` is a separate Go **submodule** (`cmd/sds-ai`, its own `go.mod`, depends
+on `oss-agent`) that serves the Copilot the Web UI talks to. It also needs
+`sds-mcp` (built from `cmd/mcp`) as its MCP tool backend.
+
+- Binaries on every node (any may become the active controller):
+  `/opt/sds/bin/{sds-ai,sds-mcp}`.
+
+  ```bash
+  cd cmd/sds-ai && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/sds-ai .   # or GOARCH=amd64
+  GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/sds-mcp ./cmd/mcp
+  ```
+- Config + knowledge live on the **Self-HA DRBD mount** so they follow failover:
+  `/var/lib/sds/ai/` with `sds-ai.env` and `domain.toml`. Key env:
+  `OSS_LLM_API_KEY` / `OSS_LLM_BASE_URL` / `OSS_LLM_MODEL` (e.g. DashScope
+  `https://dashscope.aliyuncs.com/compatible-mode/v1` + `deepseek-v4-flash`),
+  `SDS_AI_CONTROLLER=127.0.0.1:3374`, `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`,
+  `SDS_AI_ADDR=:7634`. Routes: `GET /ai/health`, `POST /ai/chat/stream` (NDJSON).
+- Unit `/etc/systemd/system/sds-ai.service` (`EnvironmentFile`/`WorkingDirectory`/
+  `HOME` = `/var/lib/sds/ai`, `ExecStart=/opt/sds/bin/sds-ai`) installed on every
+  node but left **`disabled`** — like `sds-controller`/`service-ip`, it is started
+  only by the reactor promoter target, not at boot.
+- **Make it follow the controller**: set `[self_ha] extra_services =
+  ["sds-ai.service"]` in `controller.toml`; Self-HA appends it to the sds-meta
+  promoter's start list so `sds-ai` starts/stops with the controller on the active
+  node. (On an already-enabled cluster, add `"sds-ai.service"` after
+  `"sds-controller.service"` in `/etc/drbd-reactor.d/sds-ha-sds-meta.toml` on all
+  nodes and `systemctl reload drbd-reactor`; reactor then generates the
+  `PartOf=drbd-services@sds-meta.target` / `BindsTo=drbd-promote@sds-meta.service`
+  / `Requires=sds-controller.service` drop-in.) Verified: an `sds-cli ha evict
+  sds-meta` moved controller + VIP + `sds-ai` together to the standby node.
 
 ---
 
@@ -211,6 +281,30 @@ the resource with `disk none` and stores no data.
 ```bash
 sds-cli pool create --name vg0 --node <node> --disks /dev/sdc   # -> VG "sds_vg0"
 ```
+
+---
+
+## 10. Reaching the UI/REST from a workstation
+
+The controller listens on `0.0.0.0` (UI `3376`, REST `3375`, AI `7634`), so on a
+**routable** network you just browse `http://<node-or-VIP>:3376/`.
+
+On **Lima** the VMs sit on the `user-v2` network (`192.168.104.0/24` + the Self-HA
+VIP), which is **reachable only VM-to-VM, not from the macOS host** (a host
+`curl` to the VIP just fails). From the host you must SSH-tunnel — and forward
+**all three** ports, because the SPA derives REST/AI from `window.location`
+(`:3375` / `:7634`); forwarding only `3376` loads the shell with no data:
+
+```bash
+ssh -F ~/.lima/<vm>/ssh.config lima-<vm> -N -f \
+  -L 34176:192.168.104.101:3376 \   # UI
+  -L 3375:192.168.104.101:3375  \   # REST
+  -L 7634:192.168.104.101:7634      # AI Copilot
+# then open http://127.0.0.1:34176/
+```
+
+Tunnel to the **VIP** (not a node IP) through any up node, so the tunnel keeps
+working after the controller fails over to another node.
 
 ---
 
@@ -227,7 +321,11 @@ sds-cli pool create --name vg0 --node <node> --disks /dev/sdc   # -> VG "sds_vg0
 | root SSH trust + dispatch config | | ✅ | | | |
 | `sds-controller` | | ✅ | | | |
 | `sds-cli` | ✅ | ✅ | | | |
+| `sds-ai` + `sds-mcp` (optional Copilot) | ✅¹ | | | | |
 | storage pool (`sds_vg0`) | diskful only | | ✅ | ✅ | ✅ |
+
+¹ Only if the AI Copilot is deployed; on every node so it can ride controller
+Self-HA failover (section 8a).
 
 ## Verify a node is gateway/HA-ready
 
