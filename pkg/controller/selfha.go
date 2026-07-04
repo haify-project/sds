@@ -42,6 +42,17 @@ var (
 	controllerUnitPath   = "/etc/systemd/system/sds-controller.service"
 )
 
+// selfHaExtraServices returns the configured systemd units that should ride the
+// controller's Self-HA promoter (config [self_ha] extra_services). Empty unless a
+// deployment opts in — e.g. "sds-ai.service" to make the AI Copilot follow the
+// controller across failover.
+func (rm *ResourceManager) selfHaExtraServices() []string {
+	if rm.controller == nil || rm.controller.config == nil {
+		return nil
+	}
+	return rm.controller.config.SelfHA.ExtraServices
+}
+
 // EnableSelfHa makes the controller itself highly available. It provisions
 // the metadata DRBD resource, distributes the controller artifacts and a
 // DISABLED reactor promoter config to all nodes, then launches a detached
@@ -128,7 +139,12 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 	// only activated by the handoff script after the database copy: enabling
 	// it earlier could let a standby promote an empty filesystem and start a
 	// second controller with an empty database.
-	promoterCfg := rm.generatePromoterConfig(SelfHaResource, []string{selfHaControllerSvc}, selfHaMountPoint, vip, nil)
+	//
+	// Extra services from config (e.g. "sds-ai.service") ride the same promoter,
+	// so they start/stop with the controller on the active node — the AI Copilot
+	// follows the controller's failover.
+	services := append([]string{selfHaControllerSvc}, rm.selfHaExtraServices()...)
+	promoterCfg := rm.generatePromoterConfig(SelfHaResource, services, selfHaMountPoint, vip, nil)
 	if err := rm.distributeToAll(ctx, nodeAddrs, promoterCfg, selfHaReactorConfig+".disabled", ""); err != nil {
 		return "", fmt.Errorf("failed to distribute reactor config: %w", err)
 	}
@@ -139,7 +155,7 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 		VIP:        vip,
 		MountPoint: selfHaMountPoint,
 		FsType:     selfHaFsType,
-		Services:   []string{selfHaControllerSvc},
+		Services:   services,
 	}); err != nil {
 		return "", fmt.Errorf("failed to persist HA config: %w", err)
 	}

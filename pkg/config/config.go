@@ -21,6 +21,16 @@ type Config struct {
 	Gateway  GatewayConfig  `mapstructure:"gateway"`
 	Resource ResourceConfig `mapstructure:"resource"`
 	Schedule ScheduleConfig `mapstructure:"schedule"`
+	SelfHA   SelfHAConfig   `mapstructure:"self_ha"`
+}
+
+// SelfHAConfig configures controller Self-HA.
+type SelfHAConfig struct {
+	// ExtraServices are additional systemd units started/stopped alongside the
+	// controller on the active node (appended to the Self-HA promoter start
+	// list), so they follow the controller across failover. Empty by default;
+	// e.g. ["sds-ai.service"] to make the AI Copilot follow the controller.
+	ExtraServices []string `mapstructure:"extra_services"`
 }
 
 // ScheduleConfig is the master switch for the snapshot scheduler. When enabled,
