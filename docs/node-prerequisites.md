@@ -181,14 +181,15 @@ sudo cat /root/.ssh/id_ed25519.pub
 # append that pubkey to /root/.ssh/authorized_keys on EVERY node (incl. the controller itself)
 ```
 
-dispatch config `/root/.dispatch/config.toml` on the controller (auto-adds host
-keys, so no known_hosts pre-seed needed):
+dispatch config `/root/.dispatch/config.toml` on the controller:
 
 ```toml
 [ssh]
 user = "root"
 port = 22
 key_path = "/root/.ssh/id_ed25519"
+strict_host_key = false
+known_hosts = ""          # ★ REQUIRED — see below
 timeout = "30s"
 
 [hosts.all]
@@ -197,6 +198,18 @@ addresses = ["<node1-ip>", "<node2-ip>", "<node3-ip>"]
 
 Symptom when missing: node operations fail / "Permission denied (publickey)";
 `sds-cli node register` shows nodes but health checks / resource ops error.
+
+> **★ Set BOTH `strict_host_key = false` AND `known_hosts = ""`.** A node's SSH
+> **host key changes when it reboots** (especially a hard power-off, e.g. HA
+> failover testing with `limactl stop --force`). If the dispatch layer keeps a
+> known_hosts with the node's old key, it silently rejects the new key — and it
+> reports this as a **per-host failure with EMPTY output**, so the controller
+> surfaces an opaque error like `backing volume ... creation failed on <ip>:`
+> (nothing after the colon), while `ssh root@<ip>` from a shell still works
+> (OpenSSH accepted the new key). `strict_host_key = false` alone is not enough if
+> a stale known_hosts file is consulted; `known_hosts = ""` disables the file.
+> Recovery for a node that already rotated its key: `rm /root/.ssh/known_hosts` on
+> the controller + `systemctl restart sds-controller`.
 
 ---
 
@@ -424,6 +437,18 @@ A). Constraints: **RWO** = one node mounts at a time (move = demote here, promot
 there); **topology** = the pod only schedules onto a node that holds a replica
 (`WaitForFirstConsumer` + `--strict-topology` enforce this). This is the advantage
 over k3s local-path, whose data is pinned to a single node.
+
+### HA under a hard node failure (validated with PostgreSQL)
+
+A `postgres:16-alpine` Deployment (RWO PVC, `strategy: Recreate`,
+`PGDATA=/var/lib/postgresql/data/pgdata` so it does not trip on the volume's
+`lost+found`) survived a `limactl stop --force` of the node running it: the DRBD
+volume kept quorum via the diskless tiebreaker (2/3), auto-promoted on a survivor,
+and k8s recreated the pod on another node with all committed rows intact and the
+DB writable again — ~80s end to end. Speed-up: set the pod's
+`node.kubernetes.io/unreachable` + `not-ready` tolerations to a short
+`tolerationSeconds` (default is 300s / 5 min). A bare Pod does NOT reschedule — a
+workload controller (Deployment/StatefulSet) is required.
 
 ### Smoke test
 
