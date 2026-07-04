@@ -795,6 +795,27 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 		return fmt.Errorf("resource up failed on hosts: %v", upResult.FailedHosts())
 	}
 
+	// 5a. Establish the initial UpToDate generation. A freshly created resource
+	// comes up Inconsistent on EVERY volume of EVERY node with no UpToDate copy
+	// anywhere, so it cannot be promoted (a normal `drbdsetup primary` fails with
+	// "Need access to UpToDate data", exit 17) and it never resyncs — there is no
+	// sync source. Force-promote the first diskful node once, then demote it back
+	// to Secondary: that marks its volumes UpToDate and gives peers a source to
+	// sync from, leaving the resource in a neutral Secondary+UpToDate state.
+	//
+	// Doing it HERE (before any gateway state volume is added) is what makes the
+	// later gateway promote a plain non-forced promote: otherwise the auto-added
+	// state volume becomes UpToDate on its own while the data volume stays
+	// Inconsistent, and the promote fails on the data volume. This mirrors the
+	// initial force the CSI/filesystem path already performs. It is safe because
+	// create-md (step 4) just wiped all metadata: every replica is Inconsistent,
+	// so there is no data anywhere to lose. This path only ever runs for a
+	// brand-new resource — adopting an existing resource goes through
+	// AdoptResource, which never reaches here.
+	if err := rm.establishInitialSync(ctx, name, nodeIPs[0]); err != nil {
+		return fmt.Errorf("failed to establish initial sync for %s: %w", name, err)
+	}
+
 	// 5b. Ensure a DRBD boot unit is installed and enabled on every
 	// participating node so a rebooted node re-runs `drbdadm adjust all` on boot
 	// and auto-rejoins replication without a manual `drbdadm adjust`. The
@@ -1504,6 +1525,22 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 	return resources, nil
 }
 
+// drbdConfigReferencesDisk reports whether a DRBD .res config already contains a
+// volume whose backing disk is diskRef (e.g. "/dev/vg0/res_state1;"). Used to
+// keep volume adds idempotent: appending a second volume block for a disk that
+// is already referenced makes drbdadm reject the config with "conflicting use
+// of disk". The "meta-disk" line is skipped so only real backing-disk lines
+// match.
+func drbdConfigReferencesDisk(config, diskRef string) bool {
+	for _, line := range strings.Split(config, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "disk") && strings.Contains(trimmed, diskRef) {
+			return true
+		}
+	}
+	return false
+}
+
 // AddVolume adds a volume to an existing DRBD resource
 func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool string, sizeGB uint32) error {
 	rm.controller.logger.Info("Adding volume to resource",
@@ -1568,6 +1605,22 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	}
 	newVolNum := maxVolNum + 1
 
+	// Idempotency guard: if a volume already references this backing LV in the
+	// resource config, a previous add already created it. Appending a SECOND
+	// volume block for the same disk makes drbdadm reject the whole config with
+	// "conflicting use of disk ... first used here" and every create-md on the
+	// duplicate minor fails. This is exactly what a retried gateway state-volume
+	// provision used to do — each attempt appended another volume N pointing at
+	// the same <res>_state1 LV. Treat an already-referenced disk as done.
+	diskRef := fmt.Sprintf("/dev/%s/%s;", pool, volume)
+	if drbdConfigReferencesDisk(hostResult.Output, diskRef) {
+		rm.controller.logger.Info("Volume already present in resource config; skipping duplicate add",
+			zap.String("resource", resource),
+			zap.String("volume", volume),
+			zap.String("disk", diskRef))
+		return nil
+	}
+
 	// Device minors are GLOBAL on a node: scanning only this resource's
 	// config hands out minors already claimed by other resources and
 	// drbdadm rejects the whole config with "conflicting use of
@@ -1584,6 +1637,26 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	// calling `drbdadm adjust <resource>` to let DRBD enable the new volume.
 	volumeBlock := fmt.Sprintf("    volume %d {\n        device    minor %d;\n        disk      /dev/%s/%s;\n        meta-disk internal;\n    }",
 		newVolNum, newMinor, pool, volume)
+
+	// Roll back partial state if a later step fails. Without this, a retry of a
+	// failed add (e.g. create-md errored) re-reads the .res that still carries
+	// the half-added volume block and appends ANOTHER block for the same LV,
+	// which DRBD then rejects for "conflicting use of disk". On failure restore
+	// the pre-add config on every node and remove the LV we created here.
+	originalConfig := hostResult.Output
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		rm.controller.logger.Warn("Volume add failed; rolling back appended volume block and backing LV",
+			zap.String("resource", resource),
+			zap.String("volume", volume))
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_, _ = rm.deployment.DistributeConfig(cleanupCtx, hosts, originalConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource))
+		_, _ = rm.deployment.LVRemove(cleanupCtx, hosts, fmt.Sprintf("/dev/%s/%s", pool, volume))
+	}()
 
 	// Create LVs on all nodes
 	for _, host := range hosts {
@@ -1640,6 +1713,11 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		"failed to initialize new volume sync state"); err != nil {
 		return err
 	}
+
+	// The volume is now fully attached and UpToDate. Persisting to the database
+	// is best-effort below, so a save failure must NOT roll back the working
+	// volume — mark the add committed here.
+	committed = true
 
 	rm.controller.logger.Info("Volume added successfully",
 		zap.String("resource", resource),
@@ -1818,6 +1896,29 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 				rm.controller.logger.Warn("Failed to remove backing volume (force: continuing)",
 					zap.String("resource", name),
 					zap.String("volume", volume.VolumeName),
+					zap.Error(err))
+			}
+		}
+
+		// Sweep any orphaned gateway state-volume LVs. A gateway auto-provisions
+		// cluster-private volumes named "<res>_state<N>". If such an add did not
+		// finish (or its DB record was lost), the volume above cannot see it and
+		// its LV would leak on the diskful nodes. Enumerate each backing pool for
+		// leftover "<res>_state*" LVs and remove them. Best-effort: a failure
+		// here must not block the delete.
+		poolsSwept := make(map[string]bool)
+		for _, volume := range volumes {
+			if volume.Pool == "" || poolsSwept[volume.Pool] || strings.HasPrefix(volume.Device, "/dev/zvol/") {
+				continue
+			}
+			poolsSwept[volume.Pool] = true
+			sweepCmd := fmt.Sprintf(
+				"for lv in $(sudo lvs --noheadings -o lv_name %s 2>/dev/null | tr -d ' ' | grep -E '^%s_state[0-9]+$'); do sudo lvremove -f %s/$lv; done; true",
+				volume.Pool, name, volume.Pool)
+			if _, err := rm.deployment.Exec(ctx, hosts, sweepCmd); err != nil {
+				rm.controller.logger.Warn("Best-effort gateway state-volume LV sweep failed",
+					zap.String("resource", name),
+					zap.String("pool", volume.Pool),
 					zap.Error(err))
 			}
 		}
@@ -2067,14 +2168,163 @@ func (rm *ResourceManager) SetPrimary(ctx context.Context, resource, node string
 	}
 
 	result, err := rm.deployment.DRBDPrimary(ctx, address, resource, force)
+	if err == nil && result.Success {
+		return nil
+	}
+
+	// A brand-new resource comes up Inconsistent on every node with NO UpToDate
+	// replica anywhere, so a normal `drbdsetup primary` fails with "Need access
+	// to UpToDate data" (exit 17). This is the initial-sync case: there is no
+	// good data to lose, so force-promote ONCE to establish the first UpToDate
+	// copy and kick off the initial sync — after which the resource can be
+	// demoted/managed normally. A resource created for a gateway never gets a
+	// filesystem step (which is where the CSI path already force-primaries), so
+	// without this its promote would always fail. The force is strictly scoped
+	// to the no-UpToDate-anywhere case: a normal failover (some replica still
+	// UpToDate) is never force-promoted here, preserving the split-brain guards
+	// in PromoteForNode.
+	if !force {
+		needsForce, ferr := rm.resourceNeedsInitialForce(ctx, resource, address)
+		if ferr != nil {
+			rm.controller.logger.Warn("Could not determine initial-sync state after a failed promote; not forcing",
+				zap.String("resource", resource), zap.String("node", node), zap.Error(ferr))
+		} else if needsForce {
+			rm.controller.logger.Warn("Resource has a volume with no UpToDate copy anywhere (fresh initial sync); force-promoting to establish UpToDate",
+				zap.String("resource", resource), zap.String("node", node))
+			forced, fErr := rm.deployment.DRBDPrimary(ctx, address, resource, true)
+			if fErr != nil {
+				return fmt.Errorf("failed to force-promote initial-sync resource on %s: %w", node, fErr)
+			}
+			if !forced.Success {
+				return fmt.Errorf("failed to force-promote initial-sync resource on %s: %s", node, forced.Output)
+			}
+			return nil
+		}
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to set primary: %w", err)
 	}
+	return fmt.Errorf("failed to set primary on %s: %s", node, result.Output)
+}
 
-	if !result.Success {
-		return fmt.Errorf("failed to set primary on %s: %s", node, result.Output)
+// resourceNeedsInitialForce reports whether a failed non-forced promote should
+// be escalated to `drbdadm primary --force`, decided PER VOLUME from
+// `drbdsetup status <res> --json` on the given node address. It returns true
+// only when the resource is in the fresh initial-sync state — at least one local
+// volume is not UpToDate AND has no UpToDate copy on any peer — AND forcing is
+// safe for every volume (no volume is locally non-UpToDate while a peer holds a
+// real UpToDate copy, which a blanket force would overwrite). Any failure to
+// read or parse returns an error so the caller fails closed (never forces on
+// uncertainty).
+func (rm *ResourceManager) resourceNeedsInitialForce(ctx context.Context, resource, address string) (bool, error) {
+	if rm.deployment == nil {
+		return false, fmt.Errorf("deployment client not set")
+	}
+	res, err := rm.deployment.DRBDStatusJSON(ctx, []string{address}, resource)
+	if err != nil {
+		return false, fmt.Errorf("read drbd status on %s: %w", address, err)
+	}
+	for _, r := range res.Hosts {
+		if !r.Success {
+			return false, fmt.Errorf("drbd status on %s failed: %s", address, r.Output)
+		}
+		return safeToForceInitialSync(r.Output)
+	}
+	return false, fmt.Errorf("no drbd status result returned for %s", address)
+}
+
+// safeToForceInitialSync parses `drbdsetup status <res> --json` (an array of
+// resources, each with per-volume devices[] and per-connection peer_devices[])
+// and decides, per volume, whether a resource-level force-promote is BOTH
+// needed and safe.
+//
+// The check is per volume — crucially, a single UpToDate volume must NOT mask a
+// sibling volume that has no UpToDate data. A gateway auto-adds a state volume
+// (volume 1) that becomes UpToDate during its add, while the data volume
+// (volume 0) is still Inconsistent everywhere; a resource-level "is any replica
+// UpToDate" test is fooled by volume 1 and wrongly refuses the force that
+// volume 0 needs. For each LOCAL device:
+//   - already UpToDate    -> a force cannot harm it; ignore.
+//   - not UpToDate, a peer holds an UpToDate copy of THIS volume -> forcing
+//     would overwrite that peer's real data from our stale copy: UNSAFE, so
+//     refuse the force entirely (normal failover / resync, not initial sync).
+//   - not UpToDate, no peer holds an UpToDate copy of THIS volume -> a fresh
+//     unsynced volume with no data to lose: force is needed and safe for it.
+//
+// Returns true only if at least one volume needs the force and NO volume made it
+// unsafe. Empty/unparseable input returns an error so callers fail closed.
+func safeToForceInitialSync(output string) (bool, error) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return false, fmt.Errorf("empty drbdsetup status json")
+	}
+	var resources []drbdsetupStatus
+	if err := json.Unmarshal([]byte(trimmed), &resources); err != nil {
+		return false, fmt.Errorf("decode drbdsetup status json: %w", err)
+	}
+	if len(resources) == 0 {
+		return false, fmt.Errorf("drbdsetup status json contained no resources")
+	}
+	res := resources[0]
+	if len(res.Devices) == 0 {
+		return false, fmt.Errorf("drbdsetup status json reported no local devices")
 	}
 
+	// Per volume: does any peer hold an UpToDate copy?
+	peerUpToDate := make(map[int]bool)
+	for _, conn := range res.Connections {
+		for _, pd := range conn.PeerDevices {
+			if pd.PeerDiskState == "UpToDate" {
+				peerUpToDate[pd.Volume] = true
+			}
+		}
+	}
+
+	needForce := false
+	for _, dev := range res.Devices {
+		if dev.DiskState == "UpToDate" {
+			continue
+		}
+		if peerUpToDate[dev.Volume] {
+			// A peer has real UpToDate data for this volume that a blanket
+			// force-primary would destroy: refuse to force the whole resource.
+			return false, nil
+		}
+		// This volume has no UpToDate copy anywhere: fresh, nothing to lose.
+		needForce = true
+	}
+	return needForce, nil
+}
+
+// establishInitialSync force-promotes a brand-new resource on the given diskful
+// node address and immediately demotes it, so all of its volumes reach UpToDate
+// and its peers get a sync source. It is only ever called right after a fresh
+// create-md + up, where every replica is Inconsistent and forcing loses no data.
+// After it returns, the resource is Secondary+UpToDate and can be promoted with
+// a plain, non-forced promote.
+func (rm *ResourceManager) establishInitialSync(ctx context.Context, resource, address string) error {
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+	rm.controller.logger.Info("Establishing initial UpToDate generation (force-primary then demote)",
+		zap.String("resource", resource), zap.String("address", address))
+
+	forced, err := rm.deployment.DRBDPrimary(ctx, address, resource, true)
+	if err != nil {
+		return fmt.Errorf("force-promote for initial sync: %w", err)
+	}
+	if !forced.Success {
+		return fmt.Errorf("force-promote for initial sync on %s: %s", address, forced.Output)
+	}
+
+	demoted, err := rm.deployment.DRBDSecondary(ctx, address, resource)
+	if err != nil {
+		return fmt.Errorf("demote after initial sync: %w", err)
+	}
+	if !demoted.Success {
+		return fmt.Errorf("demote after initial sync on %s: %s", address, demoted.Output)
+	}
 	return nil
 }
 

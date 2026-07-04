@@ -94,6 +94,10 @@ type fakeDeploymentClient struct {
 		hosts    []string
 		resource string
 	}
+	lvRemoveCalls []struct {
+		hosts  []string
+		lvPath string
+	}
 }
 
 func cloneStrings(values []string) []string {
@@ -313,6 +317,10 @@ func (f *fakeDeploymentClient) DRBDDown(ctx context.Context, hosts []string, res
 }
 
 func (f *fakeDeploymentClient) LVRemove(ctx context.Context, hosts []string, lvPath string) (*deployment.ExecResult, error) {
+	f.lvRemoveCalls = append(f.lvRemoveCalls, struct {
+		hosts  []string
+		lvPath string
+	}{hosts: cloneStrings(hosts), lvPath: lvPath})
 	return successExecResult(hosts, ""), nil
 }
 
