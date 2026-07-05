@@ -3148,7 +3148,14 @@ type CreateResourceRequest struct {
 	DrbdOptions map[string]string      `protobuf:"bytes,8,rep,name=drbd_options,json=drbdOptions,proto3" json:"drbd_options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// volumes lists one or more DRBD volumes to create atomically (volume 0..N).
 	// When empty, a single volume is created from size_gb/pool for back-compat.
-	Volumes       []*VolumeSpec `protobuf:"bytes,9,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	Volumes []*VolumeSpec `protobuf:"bytes,9,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	// WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as
+	// before. `wan` is the master switch; without it the dr_* fields are rejected.
+	// See docs/2026-07-05-wan-replication-design.md.
+	Wan           bool   `protobuf:"varint,10,opt,name=wan,proto3" json:"wan,omitempty"`                                // route this resource over the internet via a per-resource sds-proxy pair
+	DrNode        string `protobuf:"bytes,11,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`             // the DR-site node (must be a registered node); WAN only
+	DrEndpoint    string `protobuf:"bytes,12,opt,name=dr_endpoint,json=drEndpoint,proto3" json:"dr_endpoint,omitempty"` // the DR site's public WAN address the primary dials; WAN only
+	WanPort       uint32 `protobuf:"varint,13,opt,name=wan_port,json=wanPort,proto3" json:"wan_port,omitempty"`         // WAN mTLS port (default a random >3000 per resource); WAN only
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3244,6 +3251,34 @@ func (x *CreateResourceRequest) GetVolumes() []*VolumeSpec {
 		return x.Volumes
 	}
 	return nil
+}
+
+func (x *CreateResourceRequest) GetWan() bool {
+	if x != nil {
+		return x.Wan
+	}
+	return false
+}
+
+func (x *CreateResourceRequest) GetDrNode() string {
+	if x != nil {
+		return x.DrNode
+	}
+	return ""
+}
+
+func (x *CreateResourceRequest) GetDrEndpoint() string {
+	if x != nil {
+		return x.DrEndpoint
+	}
+	return ""
+}
+
+func (x *CreateResourceRequest) GetWanPort() uint32 {
+	if x != nil {
+		return x.WanPort
+	}
+	return 0
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the
@@ -11183,7 +11218,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x14drbd_reactor_version\x18\x04 \x01(\tR\x12drbdReactorVersion\x120\n" +
 	"\x14drbd_reactor_running\x18\x05 \x01(\bR\x12drbdReactorRunning\x12:\n" +
 	"\x19resource_agents_installed\x18\x06 \x01(\bR\x17resourceAgentsInstalled\x12)\n" +
-	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\xfa\x02\n" +
+	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\xe1\x03\n" +
 	"\x15CreateResourceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x14\n" +
@@ -11193,7 +11228,13 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04pool\x18\x06 \x01(\tR\x04pool\x12!\n" +
 	"\fstorage_type\x18\a \x01(\tR\vstorageType\x12M\n" +
 	"\fdrbd_options\x18\b \x03(\v2*.v1.CreateResourceRequest.DrbdOptionsEntryR\vdrbdOptions\x12(\n" +
-	"\avolumes\x18\t \x03(\v2\x0e.v1.VolumeSpecR\avolumes\x1a>\n" +
+	"\avolumes\x18\t \x03(\v2\x0e.v1.VolumeSpecR\avolumes\x12\x10\n" +
+	"\x03wan\x18\n" +
+	" \x01(\bR\x03wan\x12\x17\n" +
+	"\adr_node\x18\v \x01(\tR\x06drNode\x12\x1f\n" +
+	"\vdr_endpoint\x18\f \x01(\tR\n" +
+	"drEndpoint\x12\x19\n" +
+	"\bwan_port\x18\r \x01(\rR\awanPort\x1a>\n" +
 	"\x10DrbdOptionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"9\n" +

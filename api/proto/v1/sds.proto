@@ -651,6 +651,14 @@ message CreateResourceRequest {
   // volumes lists one or more DRBD volumes to create atomically (volume 0..N).
   // When empty, a single volume is created from size_gb/pool for back-compat.
   repeated VolumeSpec volumes = 9;
+
+  // WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as
+  // before. `wan` is the master switch; without it the dr_* fields are rejected.
+  // See docs/2026-07-05-wan-replication-design.md.
+  bool wan = 10;            // route this resource over the internet via a per-resource sds-proxy pair
+  string dr_node = 11;      // the DR-site node (must be a registered node); WAN only
+  string dr_endpoint = 12;  // the DR site's public WAN address the primary dials; WAN only
+  uint32 wan_port = 13;     // WAN mTLS port (default a random >3000 per resource); WAN only
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the

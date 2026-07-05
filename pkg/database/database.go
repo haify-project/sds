@@ -287,8 +287,15 @@ type Resource struct {
 	// in the resource as diskless quorum tiebreakers (they vote in quorum but
 	// store no data). Empty for ordinary all-diskful resources.
 	DisklessNodes string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// WAN replication (opt-in). All zero-valued for an ordinary LAN resource, so
+	// existing records deserialize as LAN and every WAN code path stays gated
+	// behind WANMode. See docs/2026-07-05-wan-replication-design.md.
+	WANMode    bool   // false = LAN (default); true routes DRBD via a per-resource sds-proxy pair
+	DRNode     string // the DR-site node name (WAN only)
+	DREndpoint string // the DR site's public WAN address the primary dials (WAN only)
+	WANPort    int    // WAN mTLS port the DR acceptor listens on (WAN only)
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // SaveResource saves or updates a resource
