@@ -1267,6 +1267,67 @@ func (rm *ResourceManager) wanEndpointAddrs(dbRes *database.Resource) (primaryAd
 	return primaryAddr, drAddr
 }
 
+// WANStatusInfo carries a WAN resource's DR endpoints and the live
+// sds-proxy@<resource> unit state on each WAN node (keyed by node name).
+type WANStatusInfo struct {
+	DRNode     string
+	DREndpoint string
+	WANPort    int
+	// ProxyState maps a node name to its `systemctl is-active sds-proxy@<res>`
+	// result ("active" / "inactive" / "failed" / "unknown").
+	ProxyState map[string]string
+}
+
+// WANStatus returns the WAN replication view for a resource, or (nil, nil) for a
+// LAN resource (WANMode false / no record). It probes the sds-proxy unit on the
+// primary and DR nodes so `resource status` can surface proxy health.
+func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStatusInfo, error) {
+	if rm.controller.db == nil {
+		return nil, nil
+	}
+	dbRes, err := rm.controller.db.GetResource(ctx, name)
+	if err != nil || dbRes == nil || !dbRes.WANMode {
+		return nil, nil
+	}
+	info := &WANStatusInfo{
+		DRNode:     dbRes.DRNode,
+		DREndpoint: dbRes.DREndpoint,
+		WANPort:    dbRes.WANPort,
+		ProxyState: map[string]string{},
+	}
+	primaryAddr, drAddr := rm.wanEndpointAddrs(dbRes)
+	unit := wanproxy.UnitInstance(name)
+	primaryNode := ""
+	for _, n := range strings.Split(dbRes.Nodes, ",") {
+		n = strings.TrimSpace(n)
+		if n != "" && n != dbRes.DRNode {
+			primaryNode = n
+			break
+		}
+	}
+	probe := func(nodeName, addr string) {
+		if nodeName == "" {
+			return
+		}
+		state := "unknown"
+		if addr != "" && rm.deployment != nil {
+			// `|| true` so an inactive unit (non-zero exit) still yields its state.
+			if res, err := rm.deployment.Exec(ctx, []string{addr},
+				"systemctl is-active "+unit+" 2>/dev/null || true"); err == nil && res != nil {
+				if hr, ok := res.Hosts[addr]; ok {
+					if s := strings.TrimSpace(hr.Output); s != "" {
+						state = s
+					}
+				}
+			}
+		}
+		info.ProxyState[nodeName] = state
+	}
+	probe(primaryNode, primaryAddr)
+	probe(dbRes.DRNode, drAddr)
+	return info, nil
+}
+
 // randomWANPort picks a random TCP port in [3001, 65535] for a WAN proxy when
 // the caller does not specify one, matching the project convention of using
 // high, non-well-known ports.

@@ -5429,6 +5429,26 @@
             "type": "object",
             "$ref": "#/definitions/v1VolumeInfo"
           }
+        },
+        "wan": {
+          "type": "boolean",
+          "description": "WAN replication (all empty/false for an ordinary LAN resource). When wan is\ntrue this resource replicates over the internet via a per-resource sds-proxy\npair (protocol A / async), so the DR peer can lag; wan_proxy reports each\nWAN node's `sds-proxy@\u003cresource\u003e` unit state (active/inactive/...)."
+        },
+        "drNode": {
+          "type": "string"
+        },
+        "drEndpoint": {
+          "type": "string"
+        },
+        "wanPort": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "wanProxy": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

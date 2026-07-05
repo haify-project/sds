@@ -38,6 +38,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceResizeVolume())
 	cmd.AddCommand(resourceSetOptions())
 	cmd.AddCommand(resourcePrimary())
+	cmd.AddCommand(resourceDRFailover())
 	cmd.AddCommand(resourceSecondary())
 	cmd.AddCommand(resourceFs())
 	cmd.AddCommand(resourceStatus())
@@ -596,6 +597,64 @@ func resourcePrimary() *cobra.Command {
 	return cmd
 }
 
+// resourceDRFailover promotes a WAN resource's DR node — a MANUAL disaster-recovery
+// action. WAN is protocol A (async), so the DR peer can lag: promoting it may lose
+// the writes still in the WAN buffer. This is never automatic (auto-promoting a
+// possibly-behind secondary risks data loss); the operator invokes it knowingly.
+func resourceDRFailover() *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "dr-failover <resource>",
+		Short: "Promote a WAN resource's DR node (manual disaster recovery)",
+		Long: "Force-promote the DR node of a WAN (async) resource. Use when the primary\n" +
+			"site is lost. Because replication is asynchronous, any writes still buffered\n" +
+			"in the WAN link at failure time are lost. This action is deliberately manual.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			status, err := sdsClient.ResourceStatus(ctx, resource)
+			if err != nil {
+				return fmt.Errorf("failed to get resource status: %w", err)
+			}
+			if !status.GetWan() {
+				return fmt.Errorf("%q is not a WAN resource; use `resource primary` for LAN promotion", resource)
+			}
+			drNode := status.GetDrNode()
+			if drNode == "" {
+				return fmt.Errorf("%q has no DR node recorded", resource)
+			}
+
+			fmt.Printf("DR failover: promote %q on DR node %q.\n", resource, drNode)
+			fmt.Printf("WARNING: WAN replication is asynchronous — writes still in the WAN\n")
+			fmt.Printf("buffer at failure time will be LOST.\n")
+			if !yes {
+				fmt.Printf("Re-run with --yes to proceed.\n")
+				return nil
+			}
+
+			// Force is required: the DR peer may not be UpToDate relative to a lost
+			// primary, and a plain promote would refuse.
+			if err := sdsClient.SetPrimary(ctx, resource, drNode, true); err != nil {
+				return fmt.Errorf("DR failover failed: %w", err)
+			}
+			fmt.Printf("Resource %q promoted on DR node %q. Mount its volume(s) and resume service there.\n", resource, drNode)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&yes, "yes", false, "Confirm the (lossy) DR failover")
+	return cmd
+}
+
 func resourceSecondary() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "secondary <resource> <node>",
@@ -700,6 +759,28 @@ func resourceStatus() *cobra.Command {
 					fmt.Printf("    %d: %s (%d GB)\n",
 						vol.GetVolumeId(), vol.GetDevice(), vol.GetSizeGb())
 				}
+			}
+
+			if ns := status.GetNodeStates(); len(ns) > 0 {
+				fmt.Printf("\n  Node states:\n")
+				for node, st := range ns {
+					fmt.Printf("    %s: role=%s disk=%s repl=%s\n",
+						node, st.GetRole(), st.GetDiskState(), st.GetReplicationState())
+				}
+			}
+
+			if status.GetWan() {
+				fmt.Printf("\n  WAN replication (protocol A / async):\n")
+				fmt.Printf("    DR node:     %s\n", status.GetDrNode())
+				fmt.Printf("    DR endpoint: %s\n", status.GetDrEndpoint())
+				if p := status.GetWanPort(); p != 0 {
+					fmt.Printf("    WAN port:    %d\n", p)
+				}
+				for node, st := range status.GetWanProxy() {
+					fmt.Printf("    sds-proxy@%s: %s\n", node, st)
+				}
+				fmt.Printf("    NOTE: the DR peer can lag (async). Failover is a manual DR action:\n")
+				fmt.Printf("          sds-cli resource dr-failover %s\n", status.GetName())
 			}
 
 			return nil

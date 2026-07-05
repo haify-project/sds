@@ -990,6 +990,15 @@ message ResourceStatus {
   repeated string nodes = 3;
   map<string, NodeResourceState> node_states = 4;
   repeated VolumeInfo volumes = 5;
+  // WAN replication (all empty/false for an ordinary LAN resource). When wan is
+  // true this resource replicates over the internet via a per-resource sds-proxy
+  // pair (protocol A / async), so the DR peer can lag; wan_proxy reports each
+  // WAN node's `sds-proxy@<resource>` unit state (active/inactive/...).
+  bool wan = 6;
+  string dr_node = 7;
+  string dr_endpoint = 8;
+  uint32 wan_port = 9;
+  map<string, string> wan_proxy = 10;
 }
 
 message NodeResourceState {

@@ -507,6 +507,15 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		})
 	}
 
+	// WAN replication view (nil for a LAN resource, so the fields stay zero).
+	if wan, werr := s.resources.WANStatus(ctx, req.Name); werr == nil && wan != nil {
+		status.Wan = true
+		status.DrNode = wan.DRNode
+		status.DrEndpoint = wan.DREndpoint
+		status.WanPort = uint32(wan.WANPort)
+		status.WanProxy = wan.ProxyState
+	}
+
 	return &sdspb.ResourceStatusResponse{
 		Success: true,
 		Message: "Resource status retrieved",

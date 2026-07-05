@@ -6346,12 +6346,21 @@ func (x *ResourceInfo) GetQuorumRisk() bool {
 }
 
 type ResourceStatus struct {
-	state         protoimpl.MessageState        `protogen:"open.v1"`
-	Name          string                        `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Role          string                        `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
-	Nodes         []string                      `protobuf:"bytes,3,rep,name=nodes,proto3" json:"nodes,omitempty"`
-	NodeStates    map[string]*NodeResourceState `protobuf:"bytes,4,rep,name=node_states,json=nodeStates,proto3" json:"node_states,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Volumes       []*VolumeInfo                 `protobuf:"bytes,5,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	state      protoimpl.MessageState        `protogen:"open.v1"`
+	Name       string                        `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Role       string                        `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	Nodes      []string                      `protobuf:"bytes,3,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	NodeStates map[string]*NodeResourceState `protobuf:"bytes,4,rep,name=node_states,json=nodeStates,proto3" json:"node_states,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Volumes    []*VolumeInfo                 `protobuf:"bytes,5,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	// WAN replication (all empty/false for an ordinary LAN resource). When wan is
+	// true this resource replicates over the internet via a per-resource sds-proxy
+	// pair (protocol A / async), so the DR peer can lag; wan_proxy reports each
+	// WAN node's `sds-proxy@<resource>` unit state (active/inactive/...).
+	Wan           bool              `protobuf:"varint,6,opt,name=wan,proto3" json:"wan,omitempty"`
+	DrNode        string            `protobuf:"bytes,7,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`
+	DrEndpoint    string            `protobuf:"bytes,8,opt,name=dr_endpoint,json=drEndpoint,proto3" json:"dr_endpoint,omitempty"`
+	WanPort       uint32            `protobuf:"varint,9,opt,name=wan_port,json=wanPort,proto3" json:"wan_port,omitempty"`
+	WanProxy      map[string]string `protobuf:"bytes,10,rep,name=wan_proxy,json=wanProxy,proto3" json:"wan_proxy,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6417,6 +6426,41 @@ func (x *ResourceStatus) GetNodeStates() map[string]*NodeResourceState {
 func (x *ResourceStatus) GetVolumes() []*VolumeInfo {
 	if x != nil {
 		return x.Volumes
+	}
+	return nil
+}
+
+func (x *ResourceStatus) GetWan() bool {
+	if x != nil {
+		return x.Wan
+	}
+	return false
+}
+
+func (x *ResourceStatus) GetDrNode() string {
+	if x != nil {
+		return x.DrNode
+	}
+	return ""
+}
+
+func (x *ResourceStatus) GetDrEndpoint() string {
+	if x != nil {
+		return x.DrEndpoint
+	}
+	return ""
+}
+
+func (x *ResourceStatus) GetWanPort() uint32 {
+	if x != nil {
+		return x.WanPort
+	}
+	return 0
+}
+
+func (x *ResourceStatus) GetWanProxy() map[string]string {
+	if x != nil {
+		return x.WanProxy
 	}
 	return nil
 }
@@ -11454,17 +11498,27 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"quorumRisk\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
-	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\"\x93\x02\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\"\xf6\x03\n" +
 	"\x0eResourceStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x14\n" +
 	"\x05nodes\x18\x03 \x03(\tR\x05nodes\x12C\n" +
 	"\vnode_states\x18\x04 \x03(\v2\".v1.ResourceStatus.NodeStatesEntryR\n" +
 	"nodeStates\x12(\n" +
-	"\avolumes\x18\x05 \x03(\v2\x0e.v1.VolumeInfoR\avolumes\x1aT\n" +
+	"\avolumes\x18\x05 \x03(\v2\x0e.v1.VolumeInfoR\avolumes\x12\x10\n" +
+	"\x03wan\x18\x06 \x01(\bR\x03wan\x12\x17\n" +
+	"\adr_node\x18\a \x01(\tR\x06drNode\x12\x1f\n" +
+	"\vdr_endpoint\x18\b \x01(\tR\n" +
+	"drEndpoint\x12\x19\n" +
+	"\bwan_port\x18\t \x01(\rR\awanPort\x12=\n" +
+	"\twan_proxy\x18\n" +
+	" \x03(\v2 .v1.ResourceStatus.WanProxyEntryR\bwanProxy\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
-	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\"\x96\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\x1a;\n" +
+	"\rWanProxyEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x01\n" +
 	"\x11NodeResourceState\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x1d\n" +
 	"\n" +
@@ -11897,7 +11951,7 @@ func file_api_proto_v1_sds_proto_rawDescGZIP() []byte {
 	return file_api_proto_v1_sds_proto_rawDescData
 }
 
-var file_api_proto_v1_sds_proto_msgTypes = make([]protoimpl.MessageInfo, 198)
+var file_api_proto_v1_sds_proto_msgTypes = make([]protoimpl.MessageInfo, 199)
 var file_api_proto_v1_sds_proto_goTypes = []any{
 	(*CreatePoolRequest)(nil),                // 0: v1.CreatePoolRequest
 	(*CreatePoolResponse)(nil),               // 1: v1.CreatePoolResponse
@@ -12093,10 +12147,11 @@ var file_api_proto_v1_sds_proto_goTypes = []any{
 	nil,                                      // 191: v1.OcfAgent.ParamsEntry
 	nil,                                      // 192: v1.ResourceInfo.NodeStatesEntry
 	nil,                                      // 193: v1.ResourceStatus.NodeStatesEntry
-	nil,                                      // 194: v1.CreateNFSGatewayRequest.OptionsEntry
-	nil,                                      // 195: v1.CreateISCSIGatewayRequest.OptionsEntry
-	nil,                                      // 196: v1.CreateNVMeGatewayRequest.OptionsEntry
-	nil,                                      // 197: v1.GatewayInfo.OptionsEntry
+	nil,                                      // 194: v1.ResourceStatus.WanProxyEntry
+	nil,                                      // 195: v1.CreateNFSGatewayRequest.OptionsEntry
+	nil,                                      // 196: v1.CreateISCSIGatewayRequest.OptionsEntry
+	nil,                                      // 197: v1.CreateNVMeGatewayRequest.OptionsEntry
+	nil,                                      // 198: v1.GatewayInfo.OptionsEntry
 }
 var file_api_proto_v1_sds_proto_depIdxs = []int32{
 	10,  // 0: v1.GetPoolResponse.pool:type_name -> v1.PoolInfo
@@ -12122,198 +12177,199 @@ var file_api_proto_v1_sds_proto_depIdxs = []int32{
 	192, // 20: v1.ResourceInfo.node_states:type_name -> v1.ResourceInfo.NodeStatesEntry
 	193, // 21: v1.ResourceStatus.node_states:type_name -> v1.ResourceStatus.NodeStatesEntry
 	110, // 22: v1.ResourceStatus.volumes:type_name -> v1.VolumeInfo
-	119, // 23: v1.ListSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
-	120, // 24: v1.SnapshotScheduleInfo.keep:type_name -> v1.GFSRetention
-	120, // 25: v1.CreateSnapshotScheduleRequest.keep:type_name -> v1.GFSRetention
-	121, // 26: v1.ListSnapshotSchedulesResponse.schedules:type_name -> v1.SnapshotScheduleInfo
-	194, // 27: v1.CreateNFSGatewayRequest.options:type_name -> v1.CreateNFSGatewayRequest.OptionsEntry
-	195, // 28: v1.CreateISCSIGatewayRequest.options:type_name -> v1.CreateISCSIGatewayRequest.OptionsEntry
-	196, // 29: v1.CreateNVMeGatewayRequest.options:type_name -> v1.CreateNVMeGatewayRequest.OptionsEntry
-	144, // 30: v1.GetGatewayResponse.gateway:type_name -> v1.GatewayInfo
-	144, // 31: v1.ListGatewaysResponse.gateways:type_name -> v1.GatewayInfo
-	197, // 32: v1.GatewayInfo.options:type_name -> v1.GatewayInfo.OptionsEntry
-	145, // 33: v1.ListNFSExportsResponse.exports:type_name -> v1.NFSExportInfo
-	152, // 34: v1.ListISCSILUNsResponse.luns:type_name -> v1.ISCSILUNInfo
-	169, // 35: v1.ListNVMeNamespacesResponse.namespaces:type_name -> v1.NVMeNamespaceInfo
-	188, // 36: v1.GetHaResponse.config:type_name -> v1.HaConfigInfo
-	188, // 37: v1.ListHaResponse.configs:type_name -> v1.HaConfigInfo
-	109, // 38: v1.ResourceInfo.NodeStatesEntry.value:type_name -> v1.NodeResourceState
-	109, // 39: v1.ResourceStatus.NodeStatesEntry.value:type_name -> v1.NodeResourceState
-	0,   // 40: v1.SDSController.CreatePool:input_type -> v1.CreatePoolRequest
-	2,   // 41: v1.SDSController.DeletePool:input_type -> v1.DeletePoolRequest
-	4,   // 42: v1.SDSController.GetPool:input_type -> v1.GetPoolRequest
-	6,   // 43: v1.SDSController.ListPools:input_type -> v1.ListPoolsRequest
-	8,   // 44: v1.SDSController.AddDiskToPool:input_type -> v1.AddDiskToPoolRequest
-	43,  // 45: v1.SDSController.RegisterNode:input_type -> v1.RegisterNodeRequest
-	45,  // 46: v1.SDSController.UnregisterNode:input_type -> v1.UnregisterNodeRequest
-	47,  // 47: v1.SDSController.GetNode:input_type -> v1.GetNodeRequest
-	49,  // 48: v1.SDSController.ListNodes:input_type -> v1.ListNodesRequest
-	52,  // 49: v1.SDSController.HealthCheck:input_type -> v1.HealthCheckRequest
-	55,  // 50: v1.SDSController.CreateResource:input_type -> v1.CreateResourceRequest
-	58,  // 51: v1.SDSController.AdoptResource:input_type -> v1.AdoptResourceRequest
-	60,  // 52: v1.SDSController.DeleteResource:input_type -> v1.DeleteResourceRequest
-	62,  // 53: v1.SDSController.GetResource:input_type -> v1.GetResourceRequest
-	64,  // 54: v1.SDSController.ListResources:input_type -> v1.ListResourcesRequest
-	66,  // 55: v1.SDSController.AddVolume:input_type -> v1.AddVolumeRequest
-	70,  // 56: v1.SDSController.RemoveVolume:input_type -> v1.RemoveVolumeRequest
-	72,  // 57: v1.SDSController.ResizeVolume:input_type -> v1.ResizeVolumeRequest
-	68,  // 58: v1.SDSController.UpdateResourceOptions:input_type -> v1.UpdateResourceOptionsRequest
-	74,  // 59: v1.SDSController.ResourceStatus:input_type -> v1.ResourceStatusRequest
-	76,  // 60: v1.SDSController.SetPrimary:input_type -> v1.SetPrimaryRequest
-	78,  // 61: v1.SDSController.SetSecondary:input_type -> v1.SetSecondaryRequest
-	80,  // 62: v1.SDSController.CreateFilesystem:input_type -> v1.CreateFilesystemRequest
-	82,  // 63: v1.SDSController.MountResource:input_type -> v1.MountResourceRequest
-	84,  // 64: v1.SDSController.UnmountResource:input_type -> v1.UnmountResourceRequest
-	87,  // 65: v1.SDSController.MakeHa:input_type -> v1.MakeHaRequest
-	99,  // 66: v1.SDSController.EvictHa:input_type -> v1.EvictHaRequest
-	182, // 67: v1.SDSController.DeleteHa:input_type -> v1.DeleteHaRequest
-	184, // 68: v1.SDSController.GetHa:input_type -> v1.GetHaRequest
-	186, // 69: v1.SDSController.ListHa:input_type -> v1.ListHaRequest
-	89,  // 70: v1.SDSController.ListResourceAgents:input_type -> v1.ListResourceAgentsRequest
-	92,  // 71: v1.SDSController.GetResourceAgentMetadata:input_type -> v1.GetResourceAgentMetadataRequest
-	94,  // 72: v1.SDSController.GetHaToml:input_type -> v1.GetHaTomlRequest
-	96,  // 73: v1.SDSController.SyncHaToml:input_type -> v1.SyncHaTomlRequest
-	101, // 74: v1.SDSController.EnableSelfHa:input_type -> v1.EnableSelfHaRequest
-	103, // 75: v1.SDSController.DisableSelfHa:input_type -> v1.DisableSelfHaRequest
-	105, // 76: v1.SDSController.GetSelfHaStatus:input_type -> v1.GetSelfHaStatusRequest
-	111, // 77: v1.SDSController.CreateSnapshot:input_type -> v1.CreateSnapshotRequest
-	113, // 78: v1.SDSController.DeleteSnapshot:input_type -> v1.DeleteSnapshotRequest
-	115, // 79: v1.SDSController.RestoreSnapshot:input_type -> v1.RestoreSnapshotRequest
-	117, // 80: v1.SDSController.ListSnapshots:input_type -> v1.ListSnapshotsRequest
-	122, // 81: v1.SDSController.CreateSnapshotSchedule:input_type -> v1.CreateSnapshotScheduleRequest
-	124, // 82: v1.SDSController.ListSnapshotSchedules:input_type -> v1.ListSnapshotSchedulesRequest
-	126, // 83: v1.SDSController.DeleteSnapshotSchedule:input_type -> v1.DeleteSnapshotScheduleRequest
-	128, // 84: v1.SDSController.CreateNFSGateway:input_type -> v1.CreateNFSGatewayRequest
-	130, // 85: v1.SDSController.CreateISCSIGateway:input_type -> v1.CreateISCSIGatewayRequest
-	132, // 86: v1.SDSController.CreateNVMeGateway:input_type -> v1.CreateNVMeGatewayRequest
-	134, // 87: v1.SDSController.DeleteGateway:input_type -> v1.DeleteGatewayRequest
-	136, // 88: v1.SDSController.GetGateway:input_type -> v1.GetGatewayRequest
-	138, // 89: v1.SDSController.ListGateways:input_type -> v1.ListGatewaysRequest
-	140, // 90: v1.SDSController.StartGateway:input_type -> v1.StartGatewayRequest
-	142, // 91: v1.SDSController.StopGateway:input_type -> v1.StopGatewayRequest
-	146, // 92: v1.SDSController.AddNFSExport:input_type -> v1.AddNFSExportRequest
-	148, // 93: v1.SDSController.RemoveNFSExport:input_type -> v1.RemoveNFSExportRequest
-	150, // 94: v1.SDSController.ListNFSExports:input_type -> v1.ListNFSExportsRequest
-	153, // 95: v1.SDSController.AddISCSILUN:input_type -> v1.AddISCSILUNRequest
-	155, // 96: v1.SDSController.RemoveISCSILUN:input_type -> v1.RemoveISCSILUNRequest
-	157, // 97: v1.SDSController.ListISCSILUNs:input_type -> v1.ListISCSILUNsRequest
-	159, // 98: v1.SDSController.AddISCSIInitiator:input_type -> v1.AddISCSIInitiatorRequest
-	161, // 99: v1.SDSController.RemoveISCSIInitiator:input_type -> v1.RemoveISCSIInitiatorRequest
-	163, // 100: v1.SDSController.ListISCSIInitiators:input_type -> v1.ListISCSIInitiatorsRequest
-	165, // 101: v1.SDSController.SetISCSIChap:input_type -> v1.SetISCSIChapRequest
-	167, // 102: v1.SDSController.GetISCSIChap:input_type -> v1.GetISCSIChapRequest
-	170, // 103: v1.SDSController.AddNVMeNamespace:input_type -> v1.AddNVMeNamespaceRequest
-	172, // 104: v1.SDSController.RemoveNVMeNamespace:input_type -> v1.RemoveNVMeNamespaceRequest
-	174, // 105: v1.SDSController.ListNVMeNamespaces:input_type -> v1.ListNVMeNamespacesRequest
-	176, // 106: v1.SDSController.AddNVMeHost:input_type -> v1.AddNVMeHostRequest
-	178, // 107: v1.SDSController.RemoveNVMeHost:input_type -> v1.RemoveNVMeHostRequest
-	180, // 108: v1.SDSController.ListNVMeHosts:input_type -> v1.ListNVMeHostsRequest
-	11,  // 109: v1.SDSController.CreateZFSPool:input_type -> v1.CreateZFSPoolRequest
-	13,  // 110: v1.SDSController.DeleteZFSPool:input_type -> v1.DeleteZFSPoolRequest
-	15,  // 111: v1.SDSController.ListZFSpools:input_type -> v1.ListZFSPoolsRequest
-	17,  // 112: v1.SDSController.CreateZFSDataset:input_type -> v1.CreateZFSDatasetRequest
-	19,  // 113: v1.SDSController.CreateZFSVolume:input_type -> v1.CreateZFSVolumeRequest
-	21,  // 114: v1.SDSController.ResizeZFSVolume:input_type -> v1.ResizeZFSVolumeRequest
-	23,  // 115: v1.SDSController.DeleteZFSDataset:input_type -> v1.DeleteZFSDatasetRequest
-	25,  // 116: v1.SDSController.CreateZFSSnapshot:input_type -> v1.CreateZFSSnapshotRequest
-	27,  // 117: v1.SDSController.DeleteZFSSnapshot:input_type -> v1.DeleteZFSSnapshotRequest
-	29,  // 118: v1.SDSController.ListZFSSnapshots:input_type -> v1.ListZFSSnapshotsRequest
-	31,  // 119: v1.SDSController.RestoreZFSSnapshot:input_type -> v1.RestoreZFSSnapshotRequest
-	33,  // 120: v1.SDSController.CloneZFSSnapshot:input_type -> v1.CloneZFSSnapshotRequest
-	35,  // 121: v1.SDSController.CreateLvmSnapshot:input_type -> v1.CreateLvmSnapshotRequest
-	37,  // 122: v1.SDSController.DeleteLvmSnapshot:input_type -> v1.DeleteLvmSnapshotRequest
-	39,  // 123: v1.SDSController.ListLvmSnapshots:input_type -> v1.ListLvmSnapshotsRequest
-	41,  // 124: v1.SDSController.RestoreLvmSnapshot:input_type -> v1.RestoreLvmSnapshotRequest
-	1,   // 125: v1.SDSController.CreatePool:output_type -> v1.CreatePoolResponse
-	3,   // 126: v1.SDSController.DeletePool:output_type -> v1.DeletePoolResponse
-	5,   // 127: v1.SDSController.GetPool:output_type -> v1.GetPoolResponse
-	7,   // 128: v1.SDSController.ListPools:output_type -> v1.ListPoolsResponse
-	9,   // 129: v1.SDSController.AddDiskToPool:output_type -> v1.AddDiskToPoolResponse
-	44,  // 130: v1.SDSController.RegisterNode:output_type -> v1.RegisterNodeResponse
-	46,  // 131: v1.SDSController.UnregisterNode:output_type -> v1.UnregisterNodeResponse
-	48,  // 132: v1.SDSController.GetNode:output_type -> v1.GetNodeResponse
-	50,  // 133: v1.SDSController.ListNodes:output_type -> v1.ListNodesResponse
-	53,  // 134: v1.SDSController.HealthCheck:output_type -> v1.HealthCheckResponse
-	57,  // 135: v1.SDSController.CreateResource:output_type -> v1.CreateResourceResponse
-	59,  // 136: v1.SDSController.AdoptResource:output_type -> v1.AdoptResourceResponse
-	61,  // 137: v1.SDSController.DeleteResource:output_type -> v1.DeleteResourceResponse
-	63,  // 138: v1.SDSController.GetResource:output_type -> v1.GetResourceResponse
-	65,  // 139: v1.SDSController.ListResources:output_type -> v1.ListResourcesResponse
-	67,  // 140: v1.SDSController.AddVolume:output_type -> v1.AddVolumeResponse
-	71,  // 141: v1.SDSController.RemoveVolume:output_type -> v1.RemoveVolumeResponse
-	73,  // 142: v1.SDSController.ResizeVolume:output_type -> v1.ResizeVolumeResponse
-	69,  // 143: v1.SDSController.UpdateResourceOptions:output_type -> v1.UpdateResourceOptionsResponse
-	75,  // 144: v1.SDSController.ResourceStatus:output_type -> v1.ResourceStatusResponse
-	77,  // 145: v1.SDSController.SetPrimary:output_type -> v1.SetPrimaryResponse
-	79,  // 146: v1.SDSController.SetSecondary:output_type -> v1.SetSecondaryResponse
-	81,  // 147: v1.SDSController.CreateFilesystem:output_type -> v1.CreateFilesystemResponse
-	83,  // 148: v1.SDSController.MountResource:output_type -> v1.MountResourceResponse
-	85,  // 149: v1.SDSController.UnmountResource:output_type -> v1.UnmountResourceResponse
-	98,  // 150: v1.SDSController.MakeHa:output_type -> v1.MakeHaResponse
-	100, // 151: v1.SDSController.EvictHa:output_type -> v1.EvictHaResponse
-	183, // 152: v1.SDSController.DeleteHa:output_type -> v1.DeleteHaResponse
-	185, // 153: v1.SDSController.GetHa:output_type -> v1.GetHaResponse
-	187, // 154: v1.SDSController.ListHa:output_type -> v1.ListHaResponse
-	90,  // 155: v1.SDSController.ListResourceAgents:output_type -> v1.ListResourceAgentsResponse
-	93,  // 156: v1.SDSController.GetResourceAgentMetadata:output_type -> v1.GetResourceAgentMetadataResponse
-	95,  // 157: v1.SDSController.GetHaToml:output_type -> v1.GetHaTomlResponse
-	97,  // 158: v1.SDSController.SyncHaToml:output_type -> v1.SyncHaTomlResponse
-	102, // 159: v1.SDSController.EnableSelfHa:output_type -> v1.EnableSelfHaResponse
-	104, // 160: v1.SDSController.DisableSelfHa:output_type -> v1.DisableSelfHaResponse
-	106, // 161: v1.SDSController.GetSelfHaStatus:output_type -> v1.GetSelfHaStatusResponse
-	112, // 162: v1.SDSController.CreateSnapshot:output_type -> v1.CreateSnapshotResponse
-	114, // 163: v1.SDSController.DeleteSnapshot:output_type -> v1.DeleteSnapshotResponse
-	116, // 164: v1.SDSController.RestoreSnapshot:output_type -> v1.RestoreSnapshotResponse
-	118, // 165: v1.SDSController.ListSnapshots:output_type -> v1.ListSnapshotsResponse
-	123, // 166: v1.SDSController.CreateSnapshotSchedule:output_type -> v1.CreateSnapshotScheduleResponse
-	125, // 167: v1.SDSController.ListSnapshotSchedules:output_type -> v1.ListSnapshotSchedulesResponse
-	127, // 168: v1.SDSController.DeleteSnapshotSchedule:output_type -> v1.DeleteSnapshotScheduleResponse
-	129, // 169: v1.SDSController.CreateNFSGateway:output_type -> v1.CreateNFSGatewayResponse
-	131, // 170: v1.SDSController.CreateISCSIGateway:output_type -> v1.CreateISCSIGatewayResponse
-	133, // 171: v1.SDSController.CreateNVMeGateway:output_type -> v1.CreateNVMeGatewayResponse
-	135, // 172: v1.SDSController.DeleteGateway:output_type -> v1.DeleteGatewayResponse
-	137, // 173: v1.SDSController.GetGateway:output_type -> v1.GetGatewayResponse
-	139, // 174: v1.SDSController.ListGateways:output_type -> v1.ListGatewaysResponse
-	141, // 175: v1.SDSController.StartGateway:output_type -> v1.StartGatewayResponse
-	143, // 176: v1.SDSController.StopGateway:output_type -> v1.StopGatewayResponse
-	147, // 177: v1.SDSController.AddNFSExport:output_type -> v1.AddNFSExportResponse
-	149, // 178: v1.SDSController.RemoveNFSExport:output_type -> v1.RemoveNFSExportResponse
-	151, // 179: v1.SDSController.ListNFSExports:output_type -> v1.ListNFSExportsResponse
-	154, // 180: v1.SDSController.AddISCSILUN:output_type -> v1.AddISCSILUNResponse
-	156, // 181: v1.SDSController.RemoveISCSILUN:output_type -> v1.RemoveISCSILUNResponse
-	158, // 182: v1.SDSController.ListISCSILUNs:output_type -> v1.ListISCSILUNsResponse
-	160, // 183: v1.SDSController.AddISCSIInitiator:output_type -> v1.AddISCSIInitiatorResponse
-	162, // 184: v1.SDSController.RemoveISCSIInitiator:output_type -> v1.RemoveISCSIInitiatorResponse
-	164, // 185: v1.SDSController.ListISCSIInitiators:output_type -> v1.ListISCSIInitiatorsResponse
-	166, // 186: v1.SDSController.SetISCSIChap:output_type -> v1.SetISCSIChapResponse
-	168, // 187: v1.SDSController.GetISCSIChap:output_type -> v1.GetISCSIChapResponse
-	171, // 188: v1.SDSController.AddNVMeNamespace:output_type -> v1.AddNVMeNamespaceResponse
-	173, // 189: v1.SDSController.RemoveNVMeNamespace:output_type -> v1.RemoveNVMeNamespaceResponse
-	175, // 190: v1.SDSController.ListNVMeNamespaces:output_type -> v1.ListNVMeNamespacesResponse
-	177, // 191: v1.SDSController.AddNVMeHost:output_type -> v1.AddNVMeHostResponse
-	179, // 192: v1.SDSController.RemoveNVMeHost:output_type -> v1.RemoveNVMeHostResponse
-	181, // 193: v1.SDSController.ListNVMeHosts:output_type -> v1.ListNVMeHostsResponse
-	12,  // 194: v1.SDSController.CreateZFSPool:output_type -> v1.CreateZFSPoolResponse
-	14,  // 195: v1.SDSController.DeleteZFSPool:output_type -> v1.DeleteZFSPoolResponse
-	16,  // 196: v1.SDSController.ListZFSpools:output_type -> v1.ListZFSPoolsResponse
-	18,  // 197: v1.SDSController.CreateZFSDataset:output_type -> v1.CreateZFSDatasetResponse
-	20,  // 198: v1.SDSController.CreateZFSVolume:output_type -> v1.CreateZFSVolumeResponse
-	22,  // 199: v1.SDSController.ResizeZFSVolume:output_type -> v1.ResizeZFSVolumeResponse
-	24,  // 200: v1.SDSController.DeleteZFSDataset:output_type -> v1.DeleteZFSDatasetResponse
-	26,  // 201: v1.SDSController.CreateZFSSnapshot:output_type -> v1.CreateZFSSnapshotResponse
-	28,  // 202: v1.SDSController.DeleteZFSSnapshot:output_type -> v1.DeleteZFSSnapshotResponse
-	30,  // 203: v1.SDSController.ListZFSSnapshots:output_type -> v1.ListZFSSnapshotsResponse
-	32,  // 204: v1.SDSController.RestoreZFSSnapshot:output_type -> v1.RestoreZFSSnapshotResponse
-	34,  // 205: v1.SDSController.CloneZFSSnapshot:output_type -> v1.CloneZFSSnapshotResponse
-	36,  // 206: v1.SDSController.CreateLvmSnapshot:output_type -> v1.CreateLvmSnapshotResponse
-	38,  // 207: v1.SDSController.DeleteLvmSnapshot:output_type -> v1.DeleteLvmSnapshotResponse
-	40,  // 208: v1.SDSController.ListLvmSnapshots:output_type -> v1.ListLvmSnapshotsResponse
-	42,  // 209: v1.SDSController.RestoreLvmSnapshot:output_type -> v1.RestoreLvmSnapshotResponse
-	125, // [125:210] is the sub-list for method output_type
-	40,  // [40:125] is the sub-list for method input_type
-	40,  // [40:40] is the sub-list for extension type_name
-	40,  // [40:40] is the sub-list for extension extendee
-	0,   // [0:40] is the sub-list for field type_name
+	194, // 23: v1.ResourceStatus.wan_proxy:type_name -> v1.ResourceStatus.WanProxyEntry
+	119, // 24: v1.ListSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
+	120, // 25: v1.SnapshotScheduleInfo.keep:type_name -> v1.GFSRetention
+	120, // 26: v1.CreateSnapshotScheduleRequest.keep:type_name -> v1.GFSRetention
+	121, // 27: v1.ListSnapshotSchedulesResponse.schedules:type_name -> v1.SnapshotScheduleInfo
+	195, // 28: v1.CreateNFSGatewayRequest.options:type_name -> v1.CreateNFSGatewayRequest.OptionsEntry
+	196, // 29: v1.CreateISCSIGatewayRequest.options:type_name -> v1.CreateISCSIGatewayRequest.OptionsEntry
+	197, // 30: v1.CreateNVMeGatewayRequest.options:type_name -> v1.CreateNVMeGatewayRequest.OptionsEntry
+	144, // 31: v1.GetGatewayResponse.gateway:type_name -> v1.GatewayInfo
+	144, // 32: v1.ListGatewaysResponse.gateways:type_name -> v1.GatewayInfo
+	198, // 33: v1.GatewayInfo.options:type_name -> v1.GatewayInfo.OptionsEntry
+	145, // 34: v1.ListNFSExportsResponse.exports:type_name -> v1.NFSExportInfo
+	152, // 35: v1.ListISCSILUNsResponse.luns:type_name -> v1.ISCSILUNInfo
+	169, // 36: v1.ListNVMeNamespacesResponse.namespaces:type_name -> v1.NVMeNamespaceInfo
+	188, // 37: v1.GetHaResponse.config:type_name -> v1.HaConfigInfo
+	188, // 38: v1.ListHaResponse.configs:type_name -> v1.HaConfigInfo
+	109, // 39: v1.ResourceInfo.NodeStatesEntry.value:type_name -> v1.NodeResourceState
+	109, // 40: v1.ResourceStatus.NodeStatesEntry.value:type_name -> v1.NodeResourceState
+	0,   // 41: v1.SDSController.CreatePool:input_type -> v1.CreatePoolRequest
+	2,   // 42: v1.SDSController.DeletePool:input_type -> v1.DeletePoolRequest
+	4,   // 43: v1.SDSController.GetPool:input_type -> v1.GetPoolRequest
+	6,   // 44: v1.SDSController.ListPools:input_type -> v1.ListPoolsRequest
+	8,   // 45: v1.SDSController.AddDiskToPool:input_type -> v1.AddDiskToPoolRequest
+	43,  // 46: v1.SDSController.RegisterNode:input_type -> v1.RegisterNodeRequest
+	45,  // 47: v1.SDSController.UnregisterNode:input_type -> v1.UnregisterNodeRequest
+	47,  // 48: v1.SDSController.GetNode:input_type -> v1.GetNodeRequest
+	49,  // 49: v1.SDSController.ListNodes:input_type -> v1.ListNodesRequest
+	52,  // 50: v1.SDSController.HealthCheck:input_type -> v1.HealthCheckRequest
+	55,  // 51: v1.SDSController.CreateResource:input_type -> v1.CreateResourceRequest
+	58,  // 52: v1.SDSController.AdoptResource:input_type -> v1.AdoptResourceRequest
+	60,  // 53: v1.SDSController.DeleteResource:input_type -> v1.DeleteResourceRequest
+	62,  // 54: v1.SDSController.GetResource:input_type -> v1.GetResourceRequest
+	64,  // 55: v1.SDSController.ListResources:input_type -> v1.ListResourcesRequest
+	66,  // 56: v1.SDSController.AddVolume:input_type -> v1.AddVolumeRequest
+	70,  // 57: v1.SDSController.RemoveVolume:input_type -> v1.RemoveVolumeRequest
+	72,  // 58: v1.SDSController.ResizeVolume:input_type -> v1.ResizeVolumeRequest
+	68,  // 59: v1.SDSController.UpdateResourceOptions:input_type -> v1.UpdateResourceOptionsRequest
+	74,  // 60: v1.SDSController.ResourceStatus:input_type -> v1.ResourceStatusRequest
+	76,  // 61: v1.SDSController.SetPrimary:input_type -> v1.SetPrimaryRequest
+	78,  // 62: v1.SDSController.SetSecondary:input_type -> v1.SetSecondaryRequest
+	80,  // 63: v1.SDSController.CreateFilesystem:input_type -> v1.CreateFilesystemRequest
+	82,  // 64: v1.SDSController.MountResource:input_type -> v1.MountResourceRequest
+	84,  // 65: v1.SDSController.UnmountResource:input_type -> v1.UnmountResourceRequest
+	87,  // 66: v1.SDSController.MakeHa:input_type -> v1.MakeHaRequest
+	99,  // 67: v1.SDSController.EvictHa:input_type -> v1.EvictHaRequest
+	182, // 68: v1.SDSController.DeleteHa:input_type -> v1.DeleteHaRequest
+	184, // 69: v1.SDSController.GetHa:input_type -> v1.GetHaRequest
+	186, // 70: v1.SDSController.ListHa:input_type -> v1.ListHaRequest
+	89,  // 71: v1.SDSController.ListResourceAgents:input_type -> v1.ListResourceAgentsRequest
+	92,  // 72: v1.SDSController.GetResourceAgentMetadata:input_type -> v1.GetResourceAgentMetadataRequest
+	94,  // 73: v1.SDSController.GetHaToml:input_type -> v1.GetHaTomlRequest
+	96,  // 74: v1.SDSController.SyncHaToml:input_type -> v1.SyncHaTomlRequest
+	101, // 75: v1.SDSController.EnableSelfHa:input_type -> v1.EnableSelfHaRequest
+	103, // 76: v1.SDSController.DisableSelfHa:input_type -> v1.DisableSelfHaRequest
+	105, // 77: v1.SDSController.GetSelfHaStatus:input_type -> v1.GetSelfHaStatusRequest
+	111, // 78: v1.SDSController.CreateSnapshot:input_type -> v1.CreateSnapshotRequest
+	113, // 79: v1.SDSController.DeleteSnapshot:input_type -> v1.DeleteSnapshotRequest
+	115, // 80: v1.SDSController.RestoreSnapshot:input_type -> v1.RestoreSnapshotRequest
+	117, // 81: v1.SDSController.ListSnapshots:input_type -> v1.ListSnapshotsRequest
+	122, // 82: v1.SDSController.CreateSnapshotSchedule:input_type -> v1.CreateSnapshotScheduleRequest
+	124, // 83: v1.SDSController.ListSnapshotSchedules:input_type -> v1.ListSnapshotSchedulesRequest
+	126, // 84: v1.SDSController.DeleteSnapshotSchedule:input_type -> v1.DeleteSnapshotScheduleRequest
+	128, // 85: v1.SDSController.CreateNFSGateway:input_type -> v1.CreateNFSGatewayRequest
+	130, // 86: v1.SDSController.CreateISCSIGateway:input_type -> v1.CreateISCSIGatewayRequest
+	132, // 87: v1.SDSController.CreateNVMeGateway:input_type -> v1.CreateNVMeGatewayRequest
+	134, // 88: v1.SDSController.DeleteGateway:input_type -> v1.DeleteGatewayRequest
+	136, // 89: v1.SDSController.GetGateway:input_type -> v1.GetGatewayRequest
+	138, // 90: v1.SDSController.ListGateways:input_type -> v1.ListGatewaysRequest
+	140, // 91: v1.SDSController.StartGateway:input_type -> v1.StartGatewayRequest
+	142, // 92: v1.SDSController.StopGateway:input_type -> v1.StopGatewayRequest
+	146, // 93: v1.SDSController.AddNFSExport:input_type -> v1.AddNFSExportRequest
+	148, // 94: v1.SDSController.RemoveNFSExport:input_type -> v1.RemoveNFSExportRequest
+	150, // 95: v1.SDSController.ListNFSExports:input_type -> v1.ListNFSExportsRequest
+	153, // 96: v1.SDSController.AddISCSILUN:input_type -> v1.AddISCSILUNRequest
+	155, // 97: v1.SDSController.RemoveISCSILUN:input_type -> v1.RemoveISCSILUNRequest
+	157, // 98: v1.SDSController.ListISCSILUNs:input_type -> v1.ListISCSILUNsRequest
+	159, // 99: v1.SDSController.AddISCSIInitiator:input_type -> v1.AddISCSIInitiatorRequest
+	161, // 100: v1.SDSController.RemoveISCSIInitiator:input_type -> v1.RemoveISCSIInitiatorRequest
+	163, // 101: v1.SDSController.ListISCSIInitiators:input_type -> v1.ListISCSIInitiatorsRequest
+	165, // 102: v1.SDSController.SetISCSIChap:input_type -> v1.SetISCSIChapRequest
+	167, // 103: v1.SDSController.GetISCSIChap:input_type -> v1.GetISCSIChapRequest
+	170, // 104: v1.SDSController.AddNVMeNamespace:input_type -> v1.AddNVMeNamespaceRequest
+	172, // 105: v1.SDSController.RemoveNVMeNamespace:input_type -> v1.RemoveNVMeNamespaceRequest
+	174, // 106: v1.SDSController.ListNVMeNamespaces:input_type -> v1.ListNVMeNamespacesRequest
+	176, // 107: v1.SDSController.AddNVMeHost:input_type -> v1.AddNVMeHostRequest
+	178, // 108: v1.SDSController.RemoveNVMeHost:input_type -> v1.RemoveNVMeHostRequest
+	180, // 109: v1.SDSController.ListNVMeHosts:input_type -> v1.ListNVMeHostsRequest
+	11,  // 110: v1.SDSController.CreateZFSPool:input_type -> v1.CreateZFSPoolRequest
+	13,  // 111: v1.SDSController.DeleteZFSPool:input_type -> v1.DeleteZFSPoolRequest
+	15,  // 112: v1.SDSController.ListZFSpools:input_type -> v1.ListZFSPoolsRequest
+	17,  // 113: v1.SDSController.CreateZFSDataset:input_type -> v1.CreateZFSDatasetRequest
+	19,  // 114: v1.SDSController.CreateZFSVolume:input_type -> v1.CreateZFSVolumeRequest
+	21,  // 115: v1.SDSController.ResizeZFSVolume:input_type -> v1.ResizeZFSVolumeRequest
+	23,  // 116: v1.SDSController.DeleteZFSDataset:input_type -> v1.DeleteZFSDatasetRequest
+	25,  // 117: v1.SDSController.CreateZFSSnapshot:input_type -> v1.CreateZFSSnapshotRequest
+	27,  // 118: v1.SDSController.DeleteZFSSnapshot:input_type -> v1.DeleteZFSSnapshotRequest
+	29,  // 119: v1.SDSController.ListZFSSnapshots:input_type -> v1.ListZFSSnapshotsRequest
+	31,  // 120: v1.SDSController.RestoreZFSSnapshot:input_type -> v1.RestoreZFSSnapshotRequest
+	33,  // 121: v1.SDSController.CloneZFSSnapshot:input_type -> v1.CloneZFSSnapshotRequest
+	35,  // 122: v1.SDSController.CreateLvmSnapshot:input_type -> v1.CreateLvmSnapshotRequest
+	37,  // 123: v1.SDSController.DeleteLvmSnapshot:input_type -> v1.DeleteLvmSnapshotRequest
+	39,  // 124: v1.SDSController.ListLvmSnapshots:input_type -> v1.ListLvmSnapshotsRequest
+	41,  // 125: v1.SDSController.RestoreLvmSnapshot:input_type -> v1.RestoreLvmSnapshotRequest
+	1,   // 126: v1.SDSController.CreatePool:output_type -> v1.CreatePoolResponse
+	3,   // 127: v1.SDSController.DeletePool:output_type -> v1.DeletePoolResponse
+	5,   // 128: v1.SDSController.GetPool:output_type -> v1.GetPoolResponse
+	7,   // 129: v1.SDSController.ListPools:output_type -> v1.ListPoolsResponse
+	9,   // 130: v1.SDSController.AddDiskToPool:output_type -> v1.AddDiskToPoolResponse
+	44,  // 131: v1.SDSController.RegisterNode:output_type -> v1.RegisterNodeResponse
+	46,  // 132: v1.SDSController.UnregisterNode:output_type -> v1.UnregisterNodeResponse
+	48,  // 133: v1.SDSController.GetNode:output_type -> v1.GetNodeResponse
+	50,  // 134: v1.SDSController.ListNodes:output_type -> v1.ListNodesResponse
+	53,  // 135: v1.SDSController.HealthCheck:output_type -> v1.HealthCheckResponse
+	57,  // 136: v1.SDSController.CreateResource:output_type -> v1.CreateResourceResponse
+	59,  // 137: v1.SDSController.AdoptResource:output_type -> v1.AdoptResourceResponse
+	61,  // 138: v1.SDSController.DeleteResource:output_type -> v1.DeleteResourceResponse
+	63,  // 139: v1.SDSController.GetResource:output_type -> v1.GetResourceResponse
+	65,  // 140: v1.SDSController.ListResources:output_type -> v1.ListResourcesResponse
+	67,  // 141: v1.SDSController.AddVolume:output_type -> v1.AddVolumeResponse
+	71,  // 142: v1.SDSController.RemoveVolume:output_type -> v1.RemoveVolumeResponse
+	73,  // 143: v1.SDSController.ResizeVolume:output_type -> v1.ResizeVolumeResponse
+	69,  // 144: v1.SDSController.UpdateResourceOptions:output_type -> v1.UpdateResourceOptionsResponse
+	75,  // 145: v1.SDSController.ResourceStatus:output_type -> v1.ResourceStatusResponse
+	77,  // 146: v1.SDSController.SetPrimary:output_type -> v1.SetPrimaryResponse
+	79,  // 147: v1.SDSController.SetSecondary:output_type -> v1.SetSecondaryResponse
+	81,  // 148: v1.SDSController.CreateFilesystem:output_type -> v1.CreateFilesystemResponse
+	83,  // 149: v1.SDSController.MountResource:output_type -> v1.MountResourceResponse
+	85,  // 150: v1.SDSController.UnmountResource:output_type -> v1.UnmountResourceResponse
+	98,  // 151: v1.SDSController.MakeHa:output_type -> v1.MakeHaResponse
+	100, // 152: v1.SDSController.EvictHa:output_type -> v1.EvictHaResponse
+	183, // 153: v1.SDSController.DeleteHa:output_type -> v1.DeleteHaResponse
+	185, // 154: v1.SDSController.GetHa:output_type -> v1.GetHaResponse
+	187, // 155: v1.SDSController.ListHa:output_type -> v1.ListHaResponse
+	90,  // 156: v1.SDSController.ListResourceAgents:output_type -> v1.ListResourceAgentsResponse
+	93,  // 157: v1.SDSController.GetResourceAgentMetadata:output_type -> v1.GetResourceAgentMetadataResponse
+	95,  // 158: v1.SDSController.GetHaToml:output_type -> v1.GetHaTomlResponse
+	97,  // 159: v1.SDSController.SyncHaToml:output_type -> v1.SyncHaTomlResponse
+	102, // 160: v1.SDSController.EnableSelfHa:output_type -> v1.EnableSelfHaResponse
+	104, // 161: v1.SDSController.DisableSelfHa:output_type -> v1.DisableSelfHaResponse
+	106, // 162: v1.SDSController.GetSelfHaStatus:output_type -> v1.GetSelfHaStatusResponse
+	112, // 163: v1.SDSController.CreateSnapshot:output_type -> v1.CreateSnapshotResponse
+	114, // 164: v1.SDSController.DeleteSnapshot:output_type -> v1.DeleteSnapshotResponse
+	116, // 165: v1.SDSController.RestoreSnapshot:output_type -> v1.RestoreSnapshotResponse
+	118, // 166: v1.SDSController.ListSnapshots:output_type -> v1.ListSnapshotsResponse
+	123, // 167: v1.SDSController.CreateSnapshotSchedule:output_type -> v1.CreateSnapshotScheduleResponse
+	125, // 168: v1.SDSController.ListSnapshotSchedules:output_type -> v1.ListSnapshotSchedulesResponse
+	127, // 169: v1.SDSController.DeleteSnapshotSchedule:output_type -> v1.DeleteSnapshotScheduleResponse
+	129, // 170: v1.SDSController.CreateNFSGateway:output_type -> v1.CreateNFSGatewayResponse
+	131, // 171: v1.SDSController.CreateISCSIGateway:output_type -> v1.CreateISCSIGatewayResponse
+	133, // 172: v1.SDSController.CreateNVMeGateway:output_type -> v1.CreateNVMeGatewayResponse
+	135, // 173: v1.SDSController.DeleteGateway:output_type -> v1.DeleteGatewayResponse
+	137, // 174: v1.SDSController.GetGateway:output_type -> v1.GetGatewayResponse
+	139, // 175: v1.SDSController.ListGateways:output_type -> v1.ListGatewaysResponse
+	141, // 176: v1.SDSController.StartGateway:output_type -> v1.StartGatewayResponse
+	143, // 177: v1.SDSController.StopGateway:output_type -> v1.StopGatewayResponse
+	147, // 178: v1.SDSController.AddNFSExport:output_type -> v1.AddNFSExportResponse
+	149, // 179: v1.SDSController.RemoveNFSExport:output_type -> v1.RemoveNFSExportResponse
+	151, // 180: v1.SDSController.ListNFSExports:output_type -> v1.ListNFSExportsResponse
+	154, // 181: v1.SDSController.AddISCSILUN:output_type -> v1.AddISCSILUNResponse
+	156, // 182: v1.SDSController.RemoveISCSILUN:output_type -> v1.RemoveISCSILUNResponse
+	158, // 183: v1.SDSController.ListISCSILUNs:output_type -> v1.ListISCSILUNsResponse
+	160, // 184: v1.SDSController.AddISCSIInitiator:output_type -> v1.AddISCSIInitiatorResponse
+	162, // 185: v1.SDSController.RemoveISCSIInitiator:output_type -> v1.RemoveISCSIInitiatorResponse
+	164, // 186: v1.SDSController.ListISCSIInitiators:output_type -> v1.ListISCSIInitiatorsResponse
+	166, // 187: v1.SDSController.SetISCSIChap:output_type -> v1.SetISCSIChapResponse
+	168, // 188: v1.SDSController.GetISCSIChap:output_type -> v1.GetISCSIChapResponse
+	171, // 189: v1.SDSController.AddNVMeNamespace:output_type -> v1.AddNVMeNamespaceResponse
+	173, // 190: v1.SDSController.RemoveNVMeNamespace:output_type -> v1.RemoveNVMeNamespaceResponse
+	175, // 191: v1.SDSController.ListNVMeNamespaces:output_type -> v1.ListNVMeNamespacesResponse
+	177, // 192: v1.SDSController.AddNVMeHost:output_type -> v1.AddNVMeHostResponse
+	179, // 193: v1.SDSController.RemoveNVMeHost:output_type -> v1.RemoveNVMeHostResponse
+	181, // 194: v1.SDSController.ListNVMeHosts:output_type -> v1.ListNVMeHostsResponse
+	12,  // 195: v1.SDSController.CreateZFSPool:output_type -> v1.CreateZFSPoolResponse
+	14,  // 196: v1.SDSController.DeleteZFSPool:output_type -> v1.DeleteZFSPoolResponse
+	16,  // 197: v1.SDSController.ListZFSpools:output_type -> v1.ListZFSPoolsResponse
+	18,  // 198: v1.SDSController.CreateZFSDataset:output_type -> v1.CreateZFSDatasetResponse
+	20,  // 199: v1.SDSController.CreateZFSVolume:output_type -> v1.CreateZFSVolumeResponse
+	22,  // 200: v1.SDSController.ResizeZFSVolume:output_type -> v1.ResizeZFSVolumeResponse
+	24,  // 201: v1.SDSController.DeleteZFSDataset:output_type -> v1.DeleteZFSDatasetResponse
+	26,  // 202: v1.SDSController.CreateZFSSnapshot:output_type -> v1.CreateZFSSnapshotResponse
+	28,  // 203: v1.SDSController.DeleteZFSSnapshot:output_type -> v1.DeleteZFSSnapshotResponse
+	30,  // 204: v1.SDSController.ListZFSSnapshots:output_type -> v1.ListZFSSnapshotsResponse
+	32,  // 205: v1.SDSController.RestoreZFSSnapshot:output_type -> v1.RestoreZFSSnapshotResponse
+	34,  // 206: v1.SDSController.CloneZFSSnapshot:output_type -> v1.CloneZFSSnapshotResponse
+	36,  // 207: v1.SDSController.CreateLvmSnapshot:output_type -> v1.CreateLvmSnapshotResponse
+	38,  // 208: v1.SDSController.DeleteLvmSnapshot:output_type -> v1.DeleteLvmSnapshotResponse
+	40,  // 209: v1.SDSController.ListLvmSnapshots:output_type -> v1.ListLvmSnapshotsResponse
+	42,  // 210: v1.SDSController.RestoreLvmSnapshot:output_type -> v1.RestoreLvmSnapshotResponse
+	126, // [126:211] is the sub-list for method output_type
+	41,  // [41:126] is the sub-list for method input_type
+	41,  // [41:41] is the sub-list for extension type_name
+	41,  // [41:41] is the sub-list for extension extendee
+	0,   // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_v1_sds_proto_init() }
@@ -12327,7 +12383,7 @@ func file_api_proto_v1_sds_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_sds_proto_rawDesc), len(file_api_proto_v1_sds_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   198,
+			NumMessages:   199,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
