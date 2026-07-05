@@ -216,25 +216,33 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 				continue
 			}
 
-			// Use base64 encoding to safely transfer content
-			encodedContent := fmt.Sprintf("echo %s | base64 -d | sudo tee %s > /dev/null",
-				fmt.Sprintf("%q", base64.StdEncoding.EncodeToString(fileContent)), remotePath)
-			copyResult, err := c.Exec(ctx, []string{host}, encodedContent)
-			if err != nil {
-				c.logger.Error("Failed to copy config", zap.String("host", host), zap.Error(err))
-				configResult.Hosts[host] = &HostResult{
-					Host:    host,
-					Success: false,
-					Error:   err,
+			// Transfer via base64 so binary content survives intact. A single
+			// `echo <base64>` breaks for large files: one shell argument is
+			// capped at MAX_ARG_STRLEN (128 KiB on Linux), so a multi-MB binary
+			// (e.g. the sds-proxy WAN binary) fails with "Argument list too long"
+			// and the file is never written. Small content keeps the fast single
+			// command; large content is streamed in sub-128 KiB base64 chunks.
+			encoded := base64.StdEncoding.EncodeToString(fileContent)
+			var copyErr error
+			if len(encoded) <= maxInlineB64Len {
+				cmd := fmt.Sprintf("echo %s | base64 -d | sudo tee %s > /dev/null",
+					fmt.Sprintf("%q", encoded), remotePath)
+				r, err := c.Exec(ctx, []string{host}, cmd)
+				switch {
+				case err != nil:
+					copyErr = err
+				case !r.AllSuccess():
+					copyErr = fmt.Errorf("copy failed")
 				}
-				configResult.Success = false
-				continue
+			} else {
+				copyErr = c.writeRemoteFileChunked(ctx, host, remotePath, encoded)
 			}
-			if !copyResult.AllSuccess() {
+			if copyErr != nil {
+				c.logger.Error("Failed to copy config", zap.String("host", host), zap.Error(copyErr))
 				configResult.Hosts[host] = &HostResult{
 					Host:    host,
 					Success: false,
-					Error:   fmt.Errorf("copy failed"),
+					Error:   copyErr,
 				}
 				configResult.Success = false
 				continue
@@ -255,6 +263,47 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 	}
 
 	return configResult, nil
+}
+
+// maxInlineB64Len bounds the base64 payload sent as a single `echo` argument.
+// Linux caps one argument at MAX_ARG_STRLEN (128 KiB); stay well under it so the
+// fast single-command path never trips "Argument list too long".
+const maxInlineB64Len = 100 * 1024
+
+// writeRemoteFileChunked writes base64-encoded content to remotePath on host by
+// streaming it in sub-128 KiB chunks (each a single safe argument), then decoding
+// once server-side. This is what lets DistributeConfig ship multi-MB binaries
+// (e.g. sds-proxy) that overflow a single-argument echo. base64's alphabet
+// (A-Za-z0-9+/=) contains no single-quote, so each chunk is quote-safe.
+func (c *Client) writeRemoteFileChunked(ctx context.Context, host, remotePath, encoded string) error {
+	tmp := remotePath + ".b64.part"
+	// Start from an empty temp file.
+	if r, err := c.Exec(ctx, []string{host}, fmt.Sprintf("sudo sh -c ': > %s'", tmp)); err != nil {
+		return fmt.Errorf("init temp file: %w", err)
+	} else if !r.AllSuccess() {
+		return fmt.Errorf("init temp file on %s failed", host)
+	}
+	const chunk = maxInlineB64Len
+	for i := 0; i < len(encoded); i += chunk {
+		end := i + chunk
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		cmd := fmt.Sprintf("printf '%%s' '%s' | sudo tee -a %s > /dev/null", encoded[i:end], tmp)
+		if r, err := c.Exec(ctx, []string{host}, cmd); err != nil {
+			return fmt.Errorf("append chunk: %w", err)
+		} else if !r.AllSuccess() {
+			return fmt.Errorf("append chunk on %s failed", host)
+		}
+	}
+	// Decode into place and drop the temp file.
+	cmd := fmt.Sprintf("sudo sh -c 'base64 -d %s | tee %s > /dev/null && rm -f %s'", tmp, remotePath, tmp)
+	if r, err := c.Exec(ctx, []string{host}, cmd); err != nil {
+		return fmt.Errorf("decode remote file: %w", err)
+	} else if !r.AllSuccess() {
+		return fmt.Errorf("decode remote file on %s failed", host)
+	}
+	return nil
 }
 
 // isLocalHost checks if a host is the local machine
