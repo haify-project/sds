@@ -16,9 +16,16 @@ Implemented (Phase 1a–1d):
   CLI `--wan/--dr-node/--dr-endpoint/--wan-port`.
 
 Validated: LAN create/delete unchanged (real IPs, protocol C) on the arm64 cluster;
-all WAN validation rejections; `go test ./...` green. **Not yet exercised:** the
-actual cross-WAN DRBD-over-sds-proxy loop — that needs a two-site environment (e.g.
-aliyun↔orange) with the arm64 `sds-proxy` binary staged at `/usr/local/bin/sds-proxy`.
+all WAN validation rejections; `go test ./...` green. **Cross-WAN loop exercised
+end-to-end** on a 2-node arm64 setup (one node as the DR site, its IP as
+`--dr-endpoint`, arm64 `sds-proxy` staged at `/usr/local/bin/sds-proxy`): `resource
+create --wan` provisioned the dialer/acceptor pair, the mTLS WAN link and both DRBD
+legs came up, DRBD reached Connected/UpToDate through the proxy, and data written on
+the primary read back identically on the DR node. Two fixes came out of it:
+`DistributeConfig` now chunks large files (the ~7 MB proxy binary overflowed a
+single `echo` arg), and sds-proxy backs off on instant reconnects (a zero-latency
+reconnect flood had delayed the initial connection). A real WAN (e.g. aliyun↔orange)
+adds the network latency that naturally paces establishment.
 
 ## Guiding principle
 
