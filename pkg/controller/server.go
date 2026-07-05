@@ -256,7 +256,25 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	if len(volumes) == 0 {
 		volumes = append(volumes, VolumeSpec{SizeGB: req.SizeGb, Pool: req.Pool})
 	}
-	err := s.resources.CreateResourceWithVolumes(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes)
+
+	// WAN master switch: the dr_* / wan_port fields only apply when --wan is set.
+	// Reject a partial request clearly instead of silently ignoring the DR
+	// fields; when --wan is off we pass nil so the LAN path is unchanged.
+	var wan *WANSpec
+	if req.Wan {
+		wan = &WANSpec{
+			DRNode:     req.DrNode,
+			DREndpoint: req.DrEndpoint,
+			WANPort:    req.WanPort,
+		}
+	} else if req.DrNode != "" || req.DrEndpoint != "" || req.WanPort != 0 {
+		return &sdspb.CreateResourceResponse{
+			Success: false,
+			Message: "dr_node/dr_endpoint/wan_port require --wan (WAN mode is off)",
+		}, nil
+	}
+
+	err := s.resources.CreateResourceWithVolumes(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes, wan)
 	if err != nil {
 		return &sdspb.CreateResourceResponse{
 			Success: false,

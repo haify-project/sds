@@ -356,6 +356,39 @@ func (c *SDSClient) CreateZFSResource(ctx context.Context, name string, port uin
 	return c.CreateResourceWithPoolAndType(ctx, name, port, nodes, protocol, sizeGB, pool, "zfs", drbdOptions)
 }
 
+// CreateResourceWAN creates an opt-in WAN-replicated DRBD resource: it
+// replicates between the single primary node and drNode across the internet via
+// a per-resource sds-proxy pair. WAN forces protocol A; wanPort 0 lets the
+// controller pick a random high port. Absent WAN flags, callers use the plain
+// Create* methods above (which leave Wan=false ⇒ an unchanged LAN request).
+func (c *SDSClient) CreateResourceWAN(ctx context.Context, name string, port uint32, primaryNode string, sizeGB uint32, pool, storageType string, drbdOptions map[string]string, drNode, drEndpoint string, wanPort uint32) error {
+	req := &sdspb.CreateResourceRequest{
+		Name:        name,
+		Port:        port,
+		Nodes:       []string{primaryNode},
+		Protocol:    "A",
+		SizeGb:      sizeGB,
+		Pool:        pool,
+		StorageType: storageType,
+		DrbdOptions: drbdOptions,
+		Wan:         true,
+		DrNode:      drNode,
+		DrEndpoint:  drEndpoint,
+		WanPort:     wanPort,
+	}
+
+	resp, err := c.client.CreateResource(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+
+	return nil
+}
+
 // AdoptResource imports an already-existing (foreign) DRBD resource into SDS
 // management by recording its metadata. nodes/port/protocol may be left empty
 // (nil/0/"") to auto-discover them from the live .res on a node. It never

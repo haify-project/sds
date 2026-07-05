@@ -3991,6 +3991,23 @@
             "$ref": "#/definitions/v1VolumeSpec"
           },
           "description": "volumes lists one or more DRBD volumes to create atomically (volume 0..N).\nWhen empty, a single volume is created from size_gb/pool for back-compat."
+        },
+        "wan": {
+          "type": "boolean",
+          "description": "WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as\nbefore. `wan` is the master switch; without it the dr_* fields are rejected.\nSee docs/2026-07-05-wan-replication-design.md.\n\nroute this resource over the internet via a per-resource sds-proxy pair"
+        },
+        "drNode": {
+          "type": "string",
+          "title": "the DR-site node (must be a registered node); WAN only"
+        },
+        "drEndpoint": {
+          "type": "string",
+          "title": "the DR site's public WAN address the primary dials; WAN only"
+        },
+        "wanPort": {
+          "type": "integer",
+          "format": "int64",
+          "title": "WAN mTLS port (default a random \u003e3000 per resource); WAN only"
         }
       },
       "title": "Resource messages"

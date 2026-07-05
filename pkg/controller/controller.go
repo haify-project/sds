@@ -26,6 +26,7 @@ import (
 	"github.com/liliang-cn/sds/pkg/gateway"
 	"github.com/liliang-cn/sds/pkg/metrics"
 	"github.com/liliang-cn/sds/pkg/rbac"
+	"github.com/liliang-cn/sds/pkg/wanproxy"
 )
 
 // Controller represents the SDS controller
@@ -648,6 +649,67 @@ func (a *GatewayDeploymentClient) Exec(ctx context.Context, hosts []string, cmd 
 		}
 	}
 	return nil
+}
+
+// WanproxyDeploymentClient adapts the controller's deploymentClient to the
+// wanproxy.DeploymentClient interface, converting deployment result types into
+// wanproxy.Result. It mirrors GatewayDeploymentClient (the gateway adapter) and
+// wraps the same interface, so the WAN provisioner runs over the exact SSH
+// transport the rest of the controller uses (and is trivially fakeable in tests).
+type WanproxyDeploymentClient struct {
+	dc deploymentClient
+}
+
+// NewWanproxyDeploymentClient creates a wanproxy deployment client adapter over
+// the controller's deployment client.
+func NewWanproxyDeploymentClient(dc deploymentClient) wanproxy.DeploymentClient {
+	return &WanproxyDeploymentClient{dc: dc}
+}
+
+func (a *WanproxyDeploymentClient) DistributeConfig(ctx context.Context, hosts []string, content, remotePath string) (*wanproxy.Result, error) {
+	res, err := a.dc.DistributeConfig(ctx, hosts, content, remotePath)
+	if err != nil {
+		return nil, err
+	}
+	return configResultToWanproxy(res), nil
+}
+
+func (a *WanproxyDeploymentClient) Exec(ctx context.Context, hosts []string, cmd string) (*wanproxy.Result, error) {
+	res, err := a.dc.Exec(ctx, hosts, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return execResultToWanproxy(res), nil
+}
+
+// execResultToWanproxy converts a deployment.ExecResult into a wanproxy.Result.
+func execResultToWanproxy(res *deployment.ExecResult) *wanproxy.Result {
+	out := &wanproxy.Result{Hosts: make(map[string]*wanproxy.HostResult)}
+	if res == nil {
+		return out
+	}
+	for host, hr := range res.Hosts {
+		out.Hosts[host] = &wanproxy.HostResult{Host: hr.Host, Output: hr.Output, Success: hr.Success, Err: hr.Error}
+	}
+	return out
+}
+
+// configResultToWanproxy converts a deployment.ConfigResult into a
+// wanproxy.Result. ConfigResult carries a top-level Success flag that may be set
+// with an empty per-host map (a fully-successful distribute), so when the map is
+// empty we reflect the aggregate flag to keep Result.AllSuccess() accurate.
+func configResultToWanproxy(res *deployment.ConfigResult) *wanproxy.Result {
+	out := &wanproxy.Result{Hosts: make(map[string]*wanproxy.HostResult)}
+	if res == nil {
+		return out
+	}
+	for host, hr := range res.Hosts {
+		out.Hosts[host] = &wanproxy.HostResult{Host: hr.Host, Output: hr.Output, Success: hr.Success, Err: hr.Error}
+	}
+	if len(out.Hosts) == 0 {
+		out.Hosts["_"] = &wanproxy.HostResult{Host: "_", Success: res.Success}
+	}
+	return out
 }
 
 // ==================== DATABASE ====================

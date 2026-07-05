@@ -2,9 +2,12 @@ package controller
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -16,6 +19,7 @@ import (
 
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/liliang-cn/sds/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 
@@ -336,8 +340,25 @@ type resolvedVolume struct {
 // over CreateResourceWithVolumes retained for existing callers (CLI, self-HA,
 // CSI) that only ever create one volume.
 func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, storageType string, drbdOptions map[string]string) error {
+	// LAN path: WAN is nil, so the resource is created exactly as before.
 	return rm.CreateResourceWithVolumes(ctx, name, port, nodes, protocol, storageType, drbdOptions,
-		[]VolumeSpec{{SizeGB: sizeGB, Pool: pool}})
+		[]VolumeSpec{{SizeGB: sizeGB, Pool: pool}}, nil)
+}
+
+// WANSpec carries the opt-in WAN-replication parameters supplied to
+// CreateResourceWithVolumes. Nil ⇒ an ordinary LAN resource (behavior
+// unchanged). When set, the resource replicates between the single primary node
+// in `nodes` and DRNode across the internet via a per-resource sds-proxy pair
+// (protocol A + loopback-routed DRBD). See docs/2026-07-05-wan-replication-design.md.
+type WANSpec struct {
+	// DRNode is the DR-site node name. It must be a registered node and distinct
+	// from the primary; it becomes the resource's second (and only) peer.
+	DRNode string
+	// DREndpoint is the DR site's public WAN address the primary dials.
+	DREndpoint string
+	// WANPort is the WAN mTLS port the DR acceptor binds. Zero ⇒ the controller
+	// picks a random high port (> 3000).
+	WANPort uint32
 }
 
 // AdoptResult summarizes what AdoptResource recorded, so callers can display it.
@@ -602,7 +623,7 @@ func volumeNameAndPoolFromDiskPath(diskPath string) (volumeName, pool string) {
 // CreateResourceWithVolumes creates a DRBD resource with one or more volumes
 // (volume 0..N) atomically across the given nodes. All volumes share the
 // resource's storage type; each may target its own pool.
-func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name string, port uint32, nodes []string, protocol string, storageType string, drbdOptions map[string]string, volumes []VolumeSpec) error {
+func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name string, port uint32, nodes []string, protocol string, storageType string, drbdOptions map[string]string, volumes []VolumeSpec, wan *WANSpec) error {
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
@@ -615,6 +636,43 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 	}
 	if protocol == "" {
 		protocol = "C"
+	}
+
+	// WAN mode is opt-in and strictly gated: when wan == nil the entire block
+	// below is skipped and the LAN path stays byte-for-byte unchanged. When set,
+	// the resource becomes a two-endpoint (primary + DR) async replica routed
+	// through a per-resource sds-proxy pair.
+	var wanCfg *wanConfig
+	if wan != nil {
+		if len(nodes) != 1 {
+			return fmt.Errorf("WAN resource %q requires exactly one primary node in --nodes, got %d", name, len(nodes))
+		}
+		primary := strings.TrimSpace(nodes[0])
+		drNode := strings.TrimSpace(wan.DRNode)
+		if primary == "" {
+			return fmt.Errorf("WAN resource %q requires a primary node", name)
+		}
+		if drNode == "" {
+			return fmt.Errorf("WAN resource %q requires a DR node (--dr-node)", name)
+		}
+		if drNode == primary {
+			return fmt.Errorf("WAN DR node %q must differ from the primary node %q", drNode, primary)
+		}
+		if rm.controller.nodes.GetNodeAddressByName(drNode) == "" {
+			return fmt.Errorf("WAN DR node %q is not a registered node", drNode)
+		}
+		if strings.TrimSpace(wan.DREndpoint) == "" {
+			return fmt.Errorf("WAN resource %q requires a DR endpoint (--dr-endpoint)", name)
+		}
+		if wan.WANPort == 0 {
+			wan.WANPort = randomWANPort()
+			rm.controller.logger.Info("auto-allocated WAN proxy port",
+				zap.String("resource", name), zap.Uint32("wan_port", wan.WANPort))
+		}
+		// WAN forces async protocol A and the DR node joins as the sole peer.
+		protocol = "A"
+		nodes = []string{primary, drNode}
+		wanCfg = &wanConfig{DRNode: drNode}
 	}
 
 	// Resolve every volume: auto-select+normalize its pool and derive a backing
@@ -664,8 +722,11 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 	// majority through any single-node failure. Mirrors LINSTOR's
 	// auto-add-quorum-tiebreaker. If no spare node exists we proceed with a
 	// bare 2-node resource but flag the quorum risk loudly.
+	// WAN resources are strictly two-endpoint (primary + DR); a diskless
+	// tiebreaker would need a third mesh connection the sds-proxy pair does not
+	// carry, so the auto-tiebreaker is skipped entirely for WAN.
 	var disklessNodes []string
-	if len(nodes) == 2 {
+	if len(nodes) == 2 && wan == nil {
 		if rm.controller.config != nil && rm.controller.config.Resource.AutoTiebreaker {
 			if tb := rm.selectTiebreaker(ctx, nodes); tb != "" {
 				disklessNodes = []string{tb}
@@ -736,6 +797,12 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 		defer cancel()
 		_, _ = rm.deployment.DRBDDown(cleanupCtx, allIPs, name)
 		_, _ = rm.deployment.Exec(cleanupCtx, allIPs, fmt.Sprintf("sudo rm -f /etc/drbd.d/%s.res", name))
+		// A WAN create may have provisioned the sds-proxy pair before failing;
+		// tear it down too so a retry starts clean. Best-effort (idempotent at
+		// the shell level). nodeIPs is [primaryIP, drIP] for a WAN resource.
+		if wan != nil && len(nodeIPs) == 2 {
+			_ = wanproxy.Deprovision(cleanupCtx, rm.wanproxyDeployClient(), name, nodeIPs[0], nodeIPs[1])
+		}
 		// Backing volumes exist on diskful nodes only.
 		for _, v := range resolved {
 			if storageType == "zfs" || storageType == "zfs-thin" {
@@ -764,9 +831,9 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 	for i := range resolved {
 		resolved[i].minor = baseMinor + i
 	}
-	// wan is nil here: the LAN path is unchanged. WAN resource creation threads a
-	// non-nil *wanConfig through in the WAN wiring phase.
-	drbdConfig := rm.generateDrbdConfig(name, port, resolved, nodes, disklessNodes, protocol, storageType, drbdOptions, nil)
+	// wanCfg is nil for a LAN resource (output unchanged); non-nil renders the
+	// WAN variant (protocol A + pull-ahead + loopback addresses).
+	drbdConfig := rm.generateDrbdConfig(name, port, resolved, nodes, disklessNodes, protocol, storageType, drbdOptions, wanCfg)
 
 	// 3. Distribute config to all nodes (diskful + diskless tiebreaker)
 	configResult, err := rm.deployment.DistributeConfig(ctx, allIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
@@ -785,6 +852,32 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 	}
 	if !mdResult.AllSuccess() {
 		return fmt.Errorf("metadata creation failed on hosts: %v", mdResult.FailedHosts())
+	}
+
+	// 4a. WAN only: bring up the per-resource sds-proxy pair BEFORE `drbdadm up`.
+	// In WAN mode DRBD connects to 127.0.0.1:<port> (the local proxy), so the
+	// loopback proxy must be listening first — otherwise the resource comes up
+	// with nothing to connect to. The rollback defer deprovisions on any later
+	// failure. This step is entirely gated behind wan != nil.
+	if wan != nil {
+		spec := wanproxy.ProxySpec{
+			Resource:         name,
+			PrimaryNodeAddr:  nodeIPs[0],
+			DRNodeAddr:       nodeIPs[1],
+			DRPublicEndpoint: wan.DREndpoint,
+			WANPort:          int(wan.WANPort),
+			DRBDPort:         int(port),
+			BinaryPath:       rm.wanproxyBinaryPath(),
+		}
+		rm.controller.logger.Info("Provisioning WAN replication proxy before DRBD up",
+			zap.String("resource", name),
+			zap.String("primary", nodeIPs[0]),
+			zap.String("dr", nodeIPs[1]),
+			zap.String("dr_endpoint", wan.DREndpoint),
+			zap.Int("wan_port", int(wan.WANPort)))
+		if err := wanproxy.Provision(ctx, rm.wanproxyDeployClient(), spec); err != nil {
+			return fmt.Errorf("provision WAN proxy for %s: %w", name, err)
+		}
 	}
 
 	// 5. Bring up resource on all nodes. The diskless node comes up Diskless
@@ -841,6 +934,14 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 			Protocol:      protocol,
 			Replicas:      len(nodes),
 			DisklessNodes: strings.Join(disklessNodes, ","),
+		}
+		// Persist WAN metadata so DeleteResource can deprovision the proxy pair
+		// and the UI/CLI can show the resource is WAN-replicated.
+		if wan != nil {
+			dbRes.WANMode = true
+			dbRes.DRNode = wan.DRNode
+			dbRes.DREndpoint = wan.DREndpoint
+			dbRes.WANPort = int(wan.WANPort)
 		}
 		if err := rm.controller.db.SaveResource(ctx, dbRes); err != nil {
 			rm.controller.logger.Warn("Failed to save resource to database", zap.Error(err))
@@ -1122,6 +1223,62 @@ func getFirstNonLoopbackIP() string {
 // config (unchanged). See docs/2026-07-05-wan-replication-design.md.
 type wanConfig struct {
 	DRNode string // the DR-site node; the other participating node is the primary
+}
+
+// wanproxyLocalBinaryPath is the controller-local path to the sds-proxy binary
+// the WAN provisioner pushes to both nodes. We follow the same convention as
+// the service-ip / sds-controller helpers: a well-known /usr/local/bin path.
+const wanproxyLocalBinaryPath = "/usr/local/bin/sds-proxy"
+
+// wanproxyBinaryPath returns the controller-local sds-proxy binary to push to
+// the WAN nodes, or "" when it is not present locally. Returning "" makes
+// wanproxy.Provision skip the binary push and assume the binary was pre-staged
+// on the nodes (a warning is logged) rather than failing the create outright —
+// most fleets stage sds-proxy alongside drbd-utils via their image/package.
+func (rm *ResourceManager) wanproxyBinaryPath() string {
+	if _, err := os.Stat(wanproxyLocalBinaryPath); err != nil {
+		rm.controller.logger.Warn("sds-proxy binary not found on controller; assuming it is pre-staged on WAN nodes",
+			zap.String("path", wanproxyLocalBinaryPath))
+		return ""
+	}
+	return wanproxyLocalBinaryPath
+}
+
+// wanproxyDeployClient adapts the resource manager's deployment client to the
+// wanproxy.DeploymentClient interface used by the WAN provisioning path.
+func (rm *ResourceManager) wanproxyDeployClient() wanproxy.DeploymentClient {
+	return NewWanproxyDeploymentClient(rm.deployment)
+}
+
+// wanEndpointAddrs resolves a stored WAN resource's primary and DR node
+// addresses (used by the delete path to deprovision the proxy). The DR node is
+// dbRes.DRNode; the primary is the other node in dbRes.Nodes.
+func (rm *ResourceManager) wanEndpointAddrs(dbRes *database.Resource) (primaryAddr, drAddr string) {
+	drNode := strings.TrimSpace(dbRes.DRNode)
+	drAddr = rm.controller.ResolveHost(drNode)
+	for _, n := range strings.Split(dbRes.Nodes, ",") {
+		n = strings.TrimSpace(n)
+		if n == "" || n == drNode {
+			continue
+		}
+		primaryAddr = rm.controller.ResolveHost(n)
+		break
+	}
+	return primaryAddr, drAddr
+}
+
+// randomWANPort picks a random TCP port in [3001, 65535] for a WAN proxy when
+// the caller does not specify one, matching the project convention of using
+// high, non-well-known ports.
+func randomWANPort() uint32 {
+	const lo, hi = 3001, 65535
+	n, err := crand.Int(crand.Reader, big.NewInt(int64(hi-lo+1)))
+	if err != nil {
+		// crypto/rand should never fail; fall back to a time-derived port so we
+		// still return a usable high port rather than aborting the create.
+		return uint32(lo + int(time.Now().UnixNano()%(hi-lo+1)))
+	}
+	return uint32(lo) + uint32(n.Int64())
 }
 
 // generateDrbdConfig generates a DRBD resource configuration file for one or
@@ -1907,6 +2064,23 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 
 	if !downResult.AllSuccess() && !force {
 		return fmt.Errorf("resource down failed on hosts: %v", downResult.FailedHosts())
+	}
+
+	// 1a. WAN only: tear down the per-resource sds-proxy pair AFTER `drbdadm
+	// down` (the proxy must outlive DRBD's connection, mirroring the
+	// Provision-before-up ordering). Best-effort: a failure here must not block
+	// the delete, matching the state-LV sweep below. Gated behind WANMode.
+	if rm.controller.db != nil {
+		if dbRes, derr := rm.controller.db.GetResource(ctx, name); derr == nil && dbRes != nil && dbRes.WANMode {
+			primaryAddr, drAddr := rm.wanEndpointAddrs(dbRes)
+			if derr := wanproxy.Deprovision(ctx, rm.wanproxyDeployClient(), name, primaryAddr, drAddr); derr != nil {
+				rm.controller.logger.Warn("Best-effort WAN proxy deprovision failed during resource delete",
+					zap.String("resource", name), zap.Error(derr))
+			} else {
+				rm.controller.logger.Info("Deprovisioned WAN replication proxy",
+					zap.String("resource", name))
+			}
+		}
 	}
 
 	// 2. Delete config file from all nodes

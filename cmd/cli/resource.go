@@ -92,6 +92,10 @@ func resourceCreate() *cobra.Command {
 	var protocol string
 	var size string
 	var drbdOptions map[string]string
+	var wan bool
+	var drNode string
+	var drEndpoint string
+	var wanPort uint32
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -109,11 +113,29 @@ func resourceCreate() *cobra.Command {
 				return fmt.Errorf("size is required (use --size)")
 			}
 
+			// WAN master switch (mirrors the server guard): the --dr-* / --wan-port
+			// flags only apply with --wan.
+			if !wan && (drNode != "" || drEndpoint != "" || wanPort != 0) {
+				return fmt.Errorf("--dr-node/--dr-endpoint/--wan-port require --wan")
+			}
+
 			var nodeList []string
 			if nodes != "" {
 				nodeList = strings.Split(nodes, ",")
 			} else {
 				return fmt.Errorf("nodes are required (use --nodes)")
+			}
+
+			if wan {
+				if len(nodeList) != 1 {
+					return fmt.Errorf("WAN resource requires exactly one primary node in --nodes, got %d", len(nodeList))
+				}
+				if drNode == "" {
+					return fmt.Errorf("WAN resource requires --dr-node")
+				}
+				if drEndpoint == "" {
+					return fmt.Errorf("WAN resource requires --dr-endpoint")
+				}
 			}
 
 			if pool == "" {
@@ -143,8 +165,14 @@ func resourceCreate() *cobra.Command {
 			}
 			defer sdsClient.Close()
 
-			// Use unified method for all storage types
-			err = sdsClient.CreateResourceWithPoolAndType(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
+			// WAN mode routes replication through a per-resource sds-proxy pair
+			// (protocol A + loopback DRBD). Otherwise use the unified LAN path
+			// for all storage types (behavior unchanged).
+			if wan {
+				err = sdsClient.CreateResourceWAN(ctx, name, port, nodeList[0], uint32(sizeGiB), pool, storageType, drbdOptions, drNode, drEndpoint, wanPort)
+			} else {
+				err = sdsClient.CreateResourceWithPoolAndType(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
+			}
 			if err != nil {
 				return fmt.Errorf("failed to create resource: %w", err)
 			}
@@ -155,7 +183,18 @@ func resourceCreate() *cobra.Command {
 			fmt.Printf("  Storage:     %s\n", storageType)
 			fmt.Printf("  Pool:        %s\n", pool)
 			fmt.Printf("  Nodes:       %v\n", nodeList)
-			fmt.Printf("  Protocol:    %s\n", protocol)
+			if wan {
+				fmt.Printf("  Protocol:    A (WAN)\n")
+				fmt.Printf("  DR node:     %s\n", drNode)
+				fmt.Printf("  DR endpoint: %s\n", drEndpoint)
+				if wanPort != 0 {
+					fmt.Printf("  WAN port:    %d\n", wanPort)
+				} else {
+					fmt.Printf("  WAN port:    auto (random >3000)\n")
+				}
+			} else {
+				fmt.Printf("  Protocol:    %s\n", protocol)
+			}
 			fmt.Printf("  Size:        %d GiB (%s)\n", sizeGiB, util.FormatBytes(sizeBytes))
 			if len(drbdOptions) > 0 {
 				fmt.Printf("  Options:     %v\n", drbdOptions)
@@ -176,6 +215,10 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")
 	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required)")
 	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
+	cmd.Flags().BoolVar(&wan, "wan", false, "Enable opt-in WAN replication (protocol A via a per-resource sds-proxy pair)")
+	cmd.Flags().StringVar(&drNode, "dr-node", "", "DR-site node name (requires --wan; must be a registered node)")
+	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "DR site's public WAN address the primary dials (requires --wan)")
+	cmd.Flags().Uint32Var(&wanPort, "wan-port", 0, "WAN mTLS port (requires --wan; 0 = auto-pick a random port >3000)")
 
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("port")
