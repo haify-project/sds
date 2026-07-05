@@ -14,6 +14,11 @@ Implemented (Phase 1a–1d):
   `drbdadm up`.
 - Wiring: `CreateResourceWithVolumes(... *WANSpec)`, gRPC master-switch validation,
   CLI `--wan/--dr-node/--dr-endpoint/--wan-port`.
+- Operations: `resource status` surfaces WAN mode, DR endpoint, per-node
+  `sds-proxy@<res>` health and DRBD replication state; `resource dr-failover
+  <res> [--yes]` does a guarded MANUAL DR promotion (async-data-loss warning +
+  confirmation). Auto cross-WAN failover is intentionally NOT built (auto-promoting
+  a lagging async secondary risks data loss).
 
 Validated: LAN create/delete unchanged (real IPs, protocol C) on the arm64 cluster;
 all WAN validation rejections; `go test ./...` green. **Cross-WAN loop exercised
