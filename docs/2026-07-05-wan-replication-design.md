@@ -1,7 +1,24 @@
 # SDS × sds-proxy — optional WAN replication (design)
 
 Date: 2026-07-04
-Status: design. **Opt-in only; the LAN default path is untouched.**
+Status: **Phase 1 (MVP) implemented.** **Opt-in only; the LAN default path is
+untouched.**
+
+Implemented (Phase 1a–1d):
+- Data model + proto: `database.Resource` and `CreateResourceRequest` carry
+  `WANMode/DRNode/DREndpoint/WANPort` (all zero ⇒ LAN).
+- DRBD config WAN branch in `generateDrbdConfig`: protocol A + pull-ahead +
+  loopback routing (pinned LAN output with `TestGenerateDrbdConfigLANUnchanged`).
+- `pkg/wanproxy`: shared-CA PKI, dialer/acceptor TOML matching sds-proxy's schema,
+  and `Provision`/`Deprovision` (systemd `sds-proxy@<resource>`), Provision before
+  `drbdadm up`.
+- Wiring: `CreateResourceWithVolumes(... *WANSpec)`, gRPC master-switch validation,
+  CLI `--wan/--dr-node/--dr-endpoint/--wan-port`.
+
+Validated: LAN create/delete unchanged (real IPs, protocol C) on the arm64 cluster;
+all WAN validation rejections; `go test ./...` green. **Not yet exercised:** the
+actual cross-WAN DRBD-over-sds-proxy loop — that needs a two-site environment (e.g.
+aliyun↔orange) with the arm64 `sds-proxy` binary staged at `/usr/local/bin/sds-proxy`.
 
 ## Guiding principle
 
