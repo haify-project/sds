@@ -36,7 +36,7 @@ func TestGenerateDrbdConfigDisklessTiebreaker(t *testing.T) {
 		"res1", 7001,
 		[]resolvedVolume{{id: 0, minor: 0, pool: "vg0", volumeName: "res1_data"}},
 		[]string{"node1", "node2"}, []string{"node3"},
-		"C", "lvm", nil)
+		"C", "lvm", nil, nil)
 
 	// The diskful nodes share the resource-level data disk.
 	assert.Equal(t, 1, strings.Count(cfg, "disk      /dev/vg0/res1_data;"),
@@ -71,7 +71,7 @@ func TestGenerateDrbdConfigMultipleVolumes(t *testing.T) {
 			{id: 1, minor: 6, pool: "vg1", volumeName: "res1_vol1"},
 		},
 		[]string{"node1", "node2"}, nil,
-		"C", "lvm", nil)
+		"C", "lvm", nil, nil)
 
 	// Both volume blocks are present with their own minor and backing disk.
 	assert.Contains(t, cfg, "volume 0 {")
@@ -102,7 +102,7 @@ func TestGenerateDrbdConfigMultiVolumeDisklessOverridesEach(t *testing.T) {
 			{id: 1, minor: 1, pool: "vg0", volumeName: "res1_vol1"},
 		},
 		[]string{"node1", "node2"}, []string{"node3"},
-		"C", "lvm", nil)
+		"C", "lvm", nil, nil)
 
 	// The diskless tiebreaker must override BOTH volumes with disk none, or it
 	// would try to attach a backing disk it does not have.

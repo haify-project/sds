@@ -764,7 +764,9 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 	for i := range resolved {
 		resolved[i].minor = baseMinor + i
 	}
-	drbdConfig := rm.generateDrbdConfig(name, port, resolved, nodes, disklessNodes, protocol, storageType, drbdOptions)
+	// wan is nil here: the LAN path is unchanged. WAN resource creation threads a
+	// non-nil *wanConfig through in the WAN wiring phase.
+	drbdConfig := rm.generateDrbdConfig(name, port, resolved, nodes, disklessNodes, protocol, storageType, drbdOptions, nil)
 
 	// 3. Distribute config to all nodes (diskful + diskless tiebreaker)
 	configResult, err := rm.deployment.DistributeConfig(ctx, allIPs, drbdConfig, fmt.Sprintf("/etc/drbd.d/%s.res", name))
@@ -1113,10 +1115,22 @@ func getFirstNonLoopbackIP() string {
 	return "127.0.0.1"
 }
 
+// wanConfig carries the WAN-replication parameters for a resource. When non-nil,
+// generateDrbdConfig emits the opt-in WAN variant: protocol A, DRBD-level
+// pull-ahead, and loopback-routed addresses so DRBD talks to the local
+// per-resource sds-proxy instead of the peer's real IP. Nil ⇒ ordinary LAN
+// config (unchanged). See docs/2026-07-05-wan-replication-design.md.
+type wanConfig struct {
+	DRNode string // the DR-site node; the other participating node is the primary
+}
+
 // generateDrbdConfig generates a DRBD resource configuration file for one or
 // more volumes (volume 0..N). Diskful nodes share the resource-level volume
 // blocks; diskless tiebreaker nodes override each with `disk none`.
-func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes []resolvedVolume, nodes, disklessNodes []string, protocol, storageType string, options map[string]string) string {
+//
+// wan is nil for a normal LAN resource (output unchanged). When set, the config
+// is rendered in WAN mode (protocol A + pull-ahead + loopback addresses).
+func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes []resolvedVolume, nodes, disklessNodes []string, protocol, storageType string, options map[string]string, wan *wanConfig) string {
 	var config strings.Builder
 
 	// Organize options by section -> key -> value
@@ -1138,6 +1152,18 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 	setOption("options", "on-suspended-primary-outdated", "force-secondary")
 
 	setOption("net", "rr-conflict", "retry-connect")
+
+	// WAN mode: force async protocol A and enable DRBD's own congestion
+	// pull-ahead so the primary goes Ahead (keeps writing) instead of blocking
+	// when the WAN buffer fills. These are defaults — the user-options loop below
+	// still overrides any of them. See the design doc for the rationale.
+	if wan != nil {
+		protocol = "A"
+		setOption("net", "on-congestion", "pull-ahead")
+		setOption("net", "congestion-fill", "2M")
+		setOption("net", "congestion-extents", "500")
+		setOption("net", "ping-timeout", "20")
+	}
 
 	// Process user options
 	for k, v := range options {
@@ -1289,7 +1315,20 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		ip = resolveToIP(ip)
 
 		config.WriteString(fmt.Sprintf("\n    on %s {\n", node))
-		config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
+		if wan != nil {
+			// WAN: route through the local per-resource sds-proxy on loopback
+			// instead of the peer's real IP. The DR node binds `port` (the
+			// acceptor dials it there); the primary binds `port+9` and connects
+			// out to `port` = the local dialer's drbd_listen. Both addresses are
+			// loopback so each node reaches its own local proxy.
+			addrPort := port + 9
+			if node == wan.DRNode {
+				addrPort = port
+			}
+			config.WriteString(fmt.Sprintf("        address   127.0.0.1:%d;\n", addrPort))
+		} else {
+			config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
+		}
 		config.WriteString(fmt.Sprintf("        node-id   %d;\n", i))
 		if diskless[node] {
 			for _, v := range volumes {
