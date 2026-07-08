@@ -87,6 +87,8 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "mcp": ag.MCPStatus()})
 	})
 	mux.HandleFunc("/ai/chat/stream", streamHandler(ag))
+	// Knowledge-base update surface (POST /ai/kb/{doc,ingest,refresh,purge}).
+	registerKBRoutes(mux, ag)
 
 	log.Printf("sds-ai listening on %s (knowledge=%s)", addr, knowledgeDB)
 	if err := http.ListenAndServe(addr, withCORS(allowOrigin, mux)); err != nil {
