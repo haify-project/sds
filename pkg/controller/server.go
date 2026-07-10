@@ -317,7 +317,7 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		if replicas == 0 {
 			replicas = 2
 		}
-		placed, perr := s.resources.selectPlacementNodes(ctx, pool, total, replicas, req.ReplicasOnDifferent)
+		placed, perr := s.resources.selectPlacementNodes(ctx, pool, total, replicas, req.ReplicasOnDifferent, req.ReplicasOnSame, req.DoNotPlaceWith)
 		if perr != nil {
 			return &sdspb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
 		}

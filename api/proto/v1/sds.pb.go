@@ -3294,13 +3294,22 @@ type CreateResourceRequest struct {
 	// when `nodes` is set. 0 means "not auto-placing" unless nodes is also empty,
 	// in which case the controller defaults to 2.
 	Replicas uint32 `protobuf:"varint,14,opt,name=replicas,proto3" json:"replicas,omitempty"`
-	// replicas_on_different names a node-label key (e.g. "rack"); during
-	// auto-placement each replica is put in a distinct value of that label, so a
-	// single fault domain never holds two replicas. Only nodes carrying the label
-	// participate. Empty = capacity-only placement. Ignored when `nodes` is set.
-	ReplicasOnDifferent string `protobuf:"bytes,15,opt,name=replicas_on_different,json=replicasOnDifferent,proto3" json:"replicas_on_different,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// replicas_on_different names node-label keys (e.g. "rack"); during
+	// auto-placement each replica is put in a distinct value of every listed
+	// label, so a single fault domain never holds two replicas. Only nodes
+	// carrying the labels participate. Empty = capacity-only. Ignored when `nodes`
+	// is set. (Wire-compatible successor of the earlier singular string field.)
+	ReplicasOnDifferent []string `protobuf:"bytes,15,rep,name=replicas_on_different,json=replicasOnDifferent,proto3" json:"replicas_on_different,omitempty"`
+	// replicas_on_same names node-label keys whose value must be IDENTICAL across
+	// all replicas (e.g. keep every copy in one zone). Composable with
+	// replicas_on_different. Ignored when `nodes` is set.
+	ReplicasOnSame []string `protobuf:"bytes,16,rep,name=replicas_on_same,json=replicasOnSame,proto3" json:"replicas_on_same,omitempty"`
+	// do_not_place_with names other resources; auto-placement will not put a
+	// replica on any node already holding a replica of them (cross-resource
+	// anti-affinity). Ignored when `nodes` is set.
+	DoNotPlaceWith []string `protobuf:"bytes,17,rep,name=do_not_place_with,json=doNotPlaceWith,proto3" json:"do_not_place_with,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateResourceRequest) Reset() {
@@ -3431,11 +3440,25 @@ func (x *CreateResourceRequest) GetReplicas() uint32 {
 	return 0
 }
 
-func (x *CreateResourceRequest) GetReplicasOnDifferent() string {
+func (x *CreateResourceRequest) GetReplicasOnDifferent() []string {
 	if x != nil {
 		return x.ReplicasOnDifferent
 	}
-	return ""
+	return nil
+}
+
+func (x *CreateResourceRequest) GetReplicasOnSame() []string {
+	if x != nil {
+		return x.ReplicasOnSame
+	}
+	return nil
+}
+
+func (x *CreateResourceRequest) GetDoNotPlaceWith() []string {
+	if x != nil {
+		return x.DoNotPlaceWith
+	}
+	return nil
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the
@@ -11659,7 +11682,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x14drbd_reactor_version\x18\x04 \x01(\tR\x12drbdReactorVersion\x120\n" +
 	"\x14drbd_reactor_running\x18\x05 \x01(\bR\x12drbdReactorRunning\x12:\n" +
 	"\x19resource_agents_installed\x18\x06 \x01(\bR\x17resourceAgentsInstalled\x12)\n" +
-	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\xb1\x04\n" +
+	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\x86\x05\n" +
 	"\x15CreateResourceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x14\n" +
@@ -11677,7 +11700,9 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"drEndpoint\x12\x19\n" +
 	"\bwan_port\x18\r \x01(\rR\awanPort\x12\x1a\n" +
 	"\breplicas\x18\x0e \x01(\rR\breplicas\x122\n" +
-	"\x15replicas_on_different\x18\x0f \x01(\tR\x13replicasOnDifferent\x1a>\n" +
+	"\x15replicas_on_different\x18\x0f \x03(\tR\x13replicasOnDifferent\x12(\n" +
+	"\x10replicas_on_same\x18\x10 \x03(\tR\x0ereplicasOnSame\x12)\n" +
+	"\x11do_not_place_with\x18\x11 \x03(\tR\x0edoNotPlaceWith\x1a>\n" +
 	"\x10DrbdOptionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"9\n" +

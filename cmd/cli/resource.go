@@ -90,7 +90,9 @@ func resourceCreate() *cobra.Command {
 	var port uint32
 	var nodes string
 	var replicas uint32
-	var replicasOnDifferent string
+	var replicasOnDifferent []string
+	var replicasOnSame []string
+	var doNotPlaceWith []string
 	var pool string
 	var storageType string
 	var protocol string
@@ -180,7 +182,7 @@ func resourceCreate() *cobra.Command {
 			case wan:
 				err = sdsClient.CreateResourceWAN(ctx, name, port, nodeList[0], uint32(sizeGiB), pool, storageType, drbdOptions, drNode, drEndpoint, wanPort)
 			case len(nodeList) == 0:
-				err = sdsClient.CreateResourceAutoPlace(ctx, name, port, replicas, replicasOnDifferent, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
+				err = sdsClient.CreateResourceAutoPlace(ctx, name, port, replicas, replicasOnDifferent, replicasOnSame, doNotPlaceWith, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
 			default:
 				err = sdsClient.CreateResourceWithPoolAndType(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
 			}
@@ -226,7 +228,9 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().Uint32Var(&port, "port", 0, "DRBD port (required)")
 	cmd.Flags().StringVar(&nodes, "nodes", "", "Node names (comma-separated); omit to auto-place by free space")
 	cmd.Flags().Uint32Var(&replicas, "replicas", 2, "Replica count for auto-placement (used only when --nodes is omitted)")
-	cmd.Flags().StringVar(&replicasOnDifferent, "replicas-on-different", "", "Node-label key to spread replicas across (e.g. rack); each replica lands in a distinct value. Auto-placement only")
+	cmd.Flags().StringSliceVar(&replicasOnDifferent, "replicas-on-different", nil, "Node-label key(s) to spread replicas across (e.g. rack); each replica gets a distinct value. Repeatable. Auto-placement only")
+	cmd.Flags().StringSliceVar(&replicasOnSame, "replicas-on-same", nil, "Node-label key(s) all replicas must share (e.g. zone). Repeatable. Auto-placement only")
+	cmd.Flags().StringSliceVar(&doNotPlaceWith, "do-not-place-with", nil, "Resource name(s) whose nodes to avoid (anti-affinity). Repeatable. Auto-placement only")
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: data-pool)")
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")

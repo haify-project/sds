@@ -4163,8 +4163,25 @@
           "description": "replicas requests auto-placement: when `nodes` is empty the controller\npicks this many nodes (most free space in the target pool first). Ignored\nwhen `nodes` is set. 0 means \"not auto-placing\" unless nodes is also empty,\nin which case the controller defaults to 2."
         },
         "replicasOnDifferent": {
-          "type": "string",
-          "description": "replicas_on_different names a node-label key (e.g. \"rack\"); during\nauto-placement each replica is put in a distinct value of that label, so a\nsingle fault domain never holds two replicas. Only nodes carrying the label\nparticipate. Empty = capacity-only placement. Ignored when `nodes` is set."
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "replicas_on_different names node-label keys (e.g. \"rack\"); during\nauto-placement each replica is put in a distinct value of every listed\nlabel, so a single fault domain never holds two replicas. Only nodes\ncarrying the labels participate. Empty = capacity-only. Ignored when `nodes`\nis set. (Wire-compatible successor of the earlier singular string field.)"
+        },
+        "replicasOnSame": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "replicas_on_same names node-label keys whose value must be IDENTICAL across\nall replicas (e.g. keep every copy in one zone). Composable with\nreplicas_on_different. Ignored when `nodes` is set."
+        },
+        "doNotPlaceWith": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "do_not_place_with names other resources; auto-placement will not put a\nreplica on any node already holding a replica of them (cross-resource\nanti-affinity). Ignored when `nodes` is set."
         }
       },
       "title": "Resource messages"

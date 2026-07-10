@@ -692,11 +692,20 @@ message CreateResourceRequest {
   // when `nodes` is set. 0 means "not auto-placing" unless nodes is also empty,
   // in which case the controller defaults to 2.
   uint32 replicas = 14;
-  // replicas_on_different names a node-label key (e.g. "rack"); during
-  // auto-placement each replica is put in a distinct value of that label, so a
-  // single fault domain never holds two replicas. Only nodes carrying the label
-  // participate. Empty = capacity-only placement. Ignored when `nodes` is set.
-  string replicas_on_different = 15;
+  // replicas_on_different names node-label keys (e.g. "rack"); during
+  // auto-placement each replica is put in a distinct value of every listed
+  // label, so a single fault domain never holds two replicas. Only nodes
+  // carrying the labels participate. Empty = capacity-only. Ignored when `nodes`
+  // is set. (Wire-compatible successor of the earlier singular string field.)
+  repeated string replicas_on_different = 15;
+  // replicas_on_same names node-label keys whose value must be IDENTICAL across
+  // all replicas (e.g. keep every copy in one zone). Composable with
+  // replicas_on_different. Ignored when `nodes` is set.
+  repeated string replicas_on_same = 16;
+  // do_not_place_with names other resources; auto-placement will not put a
+  // replica on any node already holding a replica of them (cross-resource
+  // anti-affinity). Ignored when `nodes` is set.
+  repeated string do_not_place_with = 17;
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the

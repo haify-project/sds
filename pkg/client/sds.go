@@ -345,12 +345,14 @@ func (c *SDSClient) CreateResourceWithPoolAndType(ctx context.Context, name stri
 // CreateResourceAutoPlace creates a DRBD resource without naming nodes: the
 // controller auto-places `replicas` copies on the nodes with the most free
 // space in the target pool. LAN-only (WAN needs an explicit primary).
-func (c *SDSClient) CreateResourceAutoPlace(ctx context.Context, name string, port uint32, replicas uint32, replicasOnDifferent string, protocol string, sizeGB uint32, pool, storageType string, drbdOptions map[string]string) error {
+func (c *SDSClient) CreateResourceAutoPlace(ctx context.Context, name string, port uint32, replicas uint32, replicasOnDifferent, replicasOnSame, doNotPlaceWith []string, protocol string, sizeGB uint32, pool, storageType string, drbdOptions map[string]string) error {
 	resp, err := c.client.CreateResource(ctx, &sdspb.CreateResourceRequest{
 		Name:                name,
 		Port:                port,
 		Replicas:            replicas,
 		ReplicasOnDifferent: replicasOnDifferent,
+		ReplicasOnSame:      replicasOnSame,
+		DoNotPlaceWith:      doNotPlaceWith,
 		Protocol:            protocol,
 		SizeGb:              sizeGB,
 		Pool:                pool,
