@@ -48,6 +48,26 @@ func (s *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return nil, status.Error(codes.InvalidArgument, "volume capability is required")
 	}
 
+	// If this node holds no local replica, the volume cannot be promoted here
+	// until the node joins the resource. When the StorageClass opted the volume
+	// into remote access, attach a diskless client first (idempotent): the node
+	// joins over DRBD with no local storage and becomes promotable, serving I/O
+	// over the network. Without that opt-in a non-replica node is an error — the
+	// scheduler should never have placed the Pod here.
+	isReplica, err := s.nodeHoldsReplica(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+	if !isReplica {
+		if !allowsRemoteAccess(req.GetVolumeContext()) {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"node %q holds no replica of %q and the volume does not allow remote access (set allowRemoteVolumeAccess on the StorageClass)", s.nodeName, res)
+		}
+		if err := s.backend.AttachDisklessClient(ctx, res, s.nodeName); err != nil {
+			return nil, status.Errorf(codes.Internal, "attach diskless client: %v", err)
+		}
+	}
+
 	// Promote this node to DRBD Primary using a quorum-guarded promote.
 	//
 	// A graceful move (old node demoted first) succeeds via the normal
@@ -101,7 +121,39 @@ func (s *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	if err := s.backend.SetSecondary(ctx, res, s.nodeName); err != nil {
 		return nil, status.Errorf(codes.Internal, "set secondary: %v", err)
 	}
+	// A node with no local replica only participates because a diskless client
+	// was attached at stage time; detach it now so the resource sheds the stale
+	// connection once the Pod leaves. A replica node is left in place. Detach is
+	// idempotent and best-effort — a stale client is harmless and the next stage
+	// re-attaches, so a detach error must not fail unstage.
+	if isReplica, err := s.nodeHoldsReplica(ctx, res); err == nil && !isReplica {
+		if err := s.backend.DetachDisklessClient(ctx, res, s.nodeName); err != nil {
+			s.log.Warn("detach diskless client on unstage failed (leaving it in place)",
+				zap.String("resource", res), zap.String("node", s.nodeName), zap.Error(err))
+		}
+	}
 	return &csi.NodeUnstageVolumeResponse{}, nil
+}
+
+// nodeHoldsReplica reports whether this node is one of the resource's diskful
+// replica nodes (as opposed to a diskless client or an unrelated node).
+func (s *nodeServer) nodeHoldsReplica(ctx context.Context, resource string) (bool, error) {
+	r, err := s.backend.GetResource(ctx, resource)
+	if err != nil {
+		return false, status.Errorf(codes.NotFound, "get resource %q: %v", resource, err)
+	}
+	for _, n := range r.GetNodes() {
+		if n == s.nodeName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// allowsRemoteAccess reads the remote-access flag propagated from the volume's
+// StorageClass parameters into its VolumeContext.
+func allowsRemoteAccess(volumeContext map[string]string) bool {
+	return volumeContext[paramAllowRemoteVolumeAccess] == "true"
 }
 
 func (s *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {

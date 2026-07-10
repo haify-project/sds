@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -19,6 +20,7 @@ func nodeCommand() *cobra.Command {
 	cmd.AddCommand(nodeGet())
 	cmd.AddCommand(nodeRegister())
 	cmd.AddCommand(nodeUnregister())
+	cmd.AddCommand(nodeLabel())
 
 	return cmd
 }
@@ -101,12 +103,72 @@ func nodeGet() *cobra.Command {
 			fmt.Printf("State:     %s\n", foundNode.State)
 			fmt.Printf("Version:   %s\n", foundNode.Version)
 			fmt.Printf("Last Seen: %d\n", foundNode.LastSeen)
+			if len(foundNode.Labels) > 0 {
+				fmt.Printf("Labels:    %s\n", formatLabels(foundNode.Labels))
+			}
 
 			return nil
 		},
 	}
 
 	return cmd
+}
+
+// nodeLabel sets key=value labels on a node, used by placement constraints such
+// as `resource create --replicas-on-different rack`. An empty value (key=)
+// deletes that label.
+func nodeLabel() *cobra.Command {
+	var replace bool
+	cmd := &cobra.Command{
+		Use:   "label <node> <key=value> [<key=value>...]",
+		Short: "Set labels on a node (e.g. rack=A zone=east); key= deletes a label",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			nodeRef := args[0]
+			labels := make(map[string]string, len(args)-1)
+			for _, kv := range args[1:] {
+				k, v, ok := strings.Cut(kv, "=")
+				k = strings.TrimSpace(k)
+				if !ok || k == "" {
+					return fmt.Errorf("invalid label %q (want key=value)", kv)
+				}
+				labels[k] = strings.TrimSpace(v)
+			}
+
+			ctx := cmd.Context()
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			node, err := sdsClient.SetNodeLabels(ctx, nodeRef, labels, replace)
+			if err != nil {
+				return fmt.Errorf("failed to set node labels: %w", err)
+			}
+			fmt.Printf("Node '%s' labels: %s\n", node.Name, formatLabels(node.Labels))
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&replace, "replace", false, "Replace all labels instead of merging")
+	return cmd
+}
+
+// formatLabels renders a label map as a stable, comma-separated key=value list.
+func formatLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return "(none)"
+	}
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+labels[k])
+	}
+	return strings.Join(parts, ", ")
 }
 
 func nodeRegister() *cobra.Command {

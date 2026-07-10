@@ -5,11 +5,21 @@ import (
 	"strconv"
 )
 
+// paramAllowRemoteVolumeAccess is the StorageClass parameter (LINSTOR-style)
+// that opts a volume into diskless-client access. It is also carried forward in
+// the volume's VolumeContext so the node service knows a Pod scheduled onto a
+// non-replica node may attach the volume diskless instead of being rejected.
+const paramAllowRemoteVolumeAccess = "allowRemoteVolumeAccess"
+
 // VolumeParams is the parsed StorageClass.parameters for CreateVolume.
 type VolumeParams struct {
 	Pool        string // VG (lvm) or zpool (zfs) name; required
 	Replicas    int    // diskful copies; default 2
 	StorageType string // "lvm" or "zfs"; default "lvm"
+	// AllowRemoteVolumeAccess lets a Pod mount the volume from a node with no
+	// local replica via a diskless client (I/O then flows over the DRBD
+	// network). Default false: Pods are pinned to replica nodes for local I/O.
+	AllowRemoteVolumeAccess bool
 }
 
 // ParseVolumeParams validates and defaults the StorageClass parameters.
@@ -30,6 +40,13 @@ func ParseVolumeParams(p map[string]string) (VolumeParams, error) {
 			return out, fmt.Errorf("invalid storageType %q (want lvm or zfs)", v)
 		}
 		out.StorageType = v
+	}
+	if v, ok := p[paramAllowRemoteVolumeAccess]; ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return out, fmt.Errorf("invalid %s %q (want true or false)", paramAllowRemoteVolumeAccess, v)
+		}
+		out.AllowRemoteVolumeAccess = b
 	}
 	return out, nil
 }

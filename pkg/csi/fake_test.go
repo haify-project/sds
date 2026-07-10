@@ -20,6 +20,10 @@ type fakeBackend struct {
 	promoteCalls  []string // resources passed to PromoteForNode
 	setPrimaryErr error
 
+	attachErr   error
+	attachCalls []string // "resource/node" passed to AttachDisklessClient
+	detachCalls []string // "resource/node" passed to DetachDisklessClient
+
 	createCalls []createCall
 }
 
@@ -90,6 +94,22 @@ func (f *fakeBackend) PromoteForNode(_ context.Context, resource, node string) e
 
 func (f *fakeBackend) SetSecondary(_ context.Context, resource, _ string) error {
 	delete(f.primary, resource)
+	return nil
+}
+
+func (f *fakeBackend) AttachDisklessClient(_ context.Context, resource, node string) error {
+	if f.attachErr != nil {
+		return f.attachErr
+	}
+	f.attachCalls = append(f.attachCalls, resource+"/"+node)
+	// A diskless client deliberately does NOT join the diskful Nodes set, mirroring
+	// the real controller (GetResource.Nodes is diskful-only), so a later replica
+	// check still treats this node as remote.
+	return nil
+}
+
+func (f *fakeBackend) DetachDisklessClient(_ context.Context, resource, node string) error {
+	f.detachCalls = append(f.detachCalls, resource+"/"+node)
 	return nil
 }
 

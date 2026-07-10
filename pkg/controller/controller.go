@@ -4,6 +4,7 @@ package controller
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -723,6 +724,13 @@ func (c *Controller) loadFromDatabase(ctx context.Context) error {
 	}
 
 	for _, dbNode := range dbNodes {
+		var labels map[string]string
+		if dbNode.Labels != "" {
+			if err := json.Unmarshal([]byte(dbNode.Labels), &labels); err != nil {
+				c.logger.Warn("Failed to decode node labels; ignoring",
+					zap.String("node", dbNode.Name), zap.Error(err))
+			}
+		}
 		c.nodes.mu.Lock()
 		c.nodes.nodes[dbNode.Address] = &NodeInfo{
 			Name:     dbNode.Name,
@@ -732,6 +740,7 @@ func (c *Controller) loadFromDatabase(ctx context.Context) error {
 			LastSeen: dbNode.LastSeen,
 			Version:  dbNode.Version,
 			Capacity: make(map[string]interface{}),
+			Labels:   labels,
 		}
 		c.nodes.mu.Unlock()
 

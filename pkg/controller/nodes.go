@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -29,6 +30,9 @@ type NodeInfo struct {
 	LastSeen time.Time              `json:"last_seen"`
 	Capacity map[string]interface{} `json:"capacity"`
 	Version  string                 `json:"version"`
+	// Labels are arbitrary key=value tags (e.g. rack=A) used by placement
+	// constraints such as replicas-on-different.
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // NodeManager manages cluster nodes
@@ -69,6 +73,18 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 		}
 	}
 
+	// Preserve any labels a prior registration set, so re-registering a node
+	// (e.g. after a restart or address refresh) does not wipe its rack/zone tags.
+	nm.mu.RLock()
+	var labels map[string]string
+	if existing := nm.nodes[address]; existing != nil && len(existing.Labels) > 0 {
+		labels = make(map[string]string, len(existing.Labels))
+		for k, v := range existing.Labels {
+			labels[k] = v
+		}
+	}
+	nm.mu.RUnlock()
+
 	// Create node info
 	nodeInfo := &NodeInfo{
 		Name:     name,
@@ -78,6 +94,7 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 		LastSeen: time.Now(),
 		Version:  nm.detectNodeVersion(ctx, address),
 		Capacity: make(map[string]interface{}),
+		Labels:   labels,
 	}
 
 	// Save to in-memory cache
@@ -118,6 +135,11 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 			LastSeen: nodeInfo.LastSeen,
 			Version:  nodeInfo.Version,
 		}
+		if len(nodeInfo.Labels) > 0 {
+			if encoded, err := json.Marshal(nodeInfo.Labels); err == nil {
+				dbNode.Labels = string(encoded)
+			}
+		}
 		if err := nm.controller.db.SaveNode(ctx, dbNode); err != nil {
 			nm.controller.logger.Error("Failed to save node to database", zap.Error(err))
 		}
@@ -129,6 +151,77 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 		zap.String("hostname", hostname))
 
 	return nodeInfo, nil
+}
+
+// SetNodeLabels sets or merges labels on a node (by name or address) and
+// persists them. With replace=true the label set is replaced wholesale;
+// otherwise labels are merged in and a key with an empty value is deleted.
+func (nm *NodeManager) SetNodeLabels(ctx context.Context, nodeRef string, labels map[string]string, replace bool) (*NodeInfo, error) {
+	resolved := nm.controller.ResolveHost(nodeRef)
+
+	nm.mu.Lock()
+	node := nm.nodes[resolved]
+	if node == nil {
+		// nodeRef may be a name/hostname that ResolveHost did not map.
+		for addr, n := range nm.nodes {
+			if n.Name == nodeRef || n.Hostname == nodeRef || addr == nodeRef {
+				node, resolved = n, addr
+				break
+			}
+		}
+	}
+	if node == nil {
+		nm.mu.Unlock()
+		return nil, fmt.Errorf("node not found: %s", nodeRef)
+	}
+
+	// replace starts from an empty set; merge keeps the existing one (lazily
+	// created). The provided labels are then applied on top.
+	if replace || node.Labels == nil {
+		node.Labels = make(map[string]string, len(labels))
+	}
+	for k, v := range labels {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		if v == "" {
+			delete(node.Labels, k) // empty value deletes the key
+			continue
+		}
+		node.Labels[k] = v
+	}
+	// Copy for return + persistence outside the lock.
+	labelsCopy := make(map[string]string, len(node.Labels))
+	for k, v := range node.Labels {
+		labelsCopy[k] = v
+	}
+	snapshot := *node
+	nm.mu.Unlock()
+
+	if nm.controller.db != nil {
+		encoded, err := json.Marshal(labelsCopy)
+		if err != nil {
+			return nil, fmt.Errorf("encode labels: %w", err)
+		}
+		dbNode := &database.Node{
+			Name:     snapshot.Name,
+			Address:  snapshot.Address,
+			Hostname: snapshot.Hostname,
+			State:    string(snapshot.State),
+			LastSeen: snapshot.LastSeen,
+			Version:  snapshot.Version,
+			Labels:   string(encoded),
+		}
+		if err := nm.controller.db.SaveNode(ctx, dbNode); err != nil {
+			return nil, fmt.Errorf("persist node labels: %w", err)
+		}
+	}
+
+	nm.controller.logger.Info("Set node labels",
+		zap.String("node", snapshot.Name), zap.Any("labels", labelsCopy), zap.Bool("replace", replace))
+	snapshot.Labels = labelsCopy
+	return &snapshot, nil
 }
 
 // UnregisterNode unregisters a node

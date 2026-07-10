@@ -35,6 +35,10 @@ type ResourceInfo struct {
 	// DisklessNodes are nodes that join the resource purely as quorum
 	// tiebreakers: they vote but store no data.
 	DisklessNodes []string
+	// DisklessClients are nodes attached as diskless data clients: no local
+	// replica, but connected over DRBD and promotable to serve the volume over
+	// the network. Distinct from DisklessNodes (quorum-only tiebreakers).
+	DisklessClients []string
 	// QuorumRisk is true when the resource has exactly two diskful nodes and
 	// no tiebreaker, so losing either node suspends I/O (no quorum majority).
 	QuorumRisk bool
@@ -1704,14 +1708,15 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 	}
 
 	info := &ResourceInfo{
-		Name:          dbRes.Name,
-		Port:          uint32(dbRes.Port),
-		Protocol:      dbRes.Protocol,
-		Nodes:         nodeAddresses,
-		Role:          localRole, // Local node's role
-		Volumes:       volumes,
-		NodeStates:    nodeStates,
-		DisklessNodes: disklessNodes,
+		Name:            dbRes.Name,
+		Port:            uint32(dbRes.Port),
+		Protocol:        dbRes.Protocol,
+		Nodes:           nodeAddresses,
+		Role:            localRole, // Local node's role
+		Volumes:         volumes,
+		NodeStates:      nodeStates,
+		DisklessNodes:   disklessNodes,
+		DisklessClients: splitCSV(dbRes.DisklessClients),
 		// Two diskful nodes with no tiebreaker means a single failure drops
 		// below quorum majority and suspends I/O.
 		QuorumRisk: len(nodeAddresses) == 2 && len(disklessNodes) == 0,

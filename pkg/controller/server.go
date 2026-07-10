@@ -152,6 +152,7 @@ func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeReques
 			State:    string(node.State),
 			LastSeen: node.LastSeen.Unix(),
 			Version:  node.Version,
+			Labels:   node.Labels,
 		},
 	}, nil
 }
@@ -188,6 +189,27 @@ func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb
 			State:    string(node.State),
 			LastSeen: node.LastSeen.Unix(),
 			Version:  node.Version,
+			Labels:   node.Labels,
+		},
+	}, nil
+}
+
+func (s *Server) SetNodeLabels(ctx context.Context, req *sdspb.SetNodeLabelsRequest) (*sdspb.SetNodeLabelsResponse, error) {
+	node, err := s.nodes.SetNodeLabels(ctx, req.Node, req.Labels, req.Replace)
+	if err != nil {
+		return &sdspb.SetNodeLabelsResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.SetNodeLabelsResponse{
+		Success: true,
+		Message: "Node labels updated",
+		Node: &sdspb.NodeInfo{
+			Name:     node.Name,
+			Address:  node.Address,
+			Hostname: node.Hostname,
+			State:    string(node.State),
+			LastSeen: node.LastSeen.Unix(),
+			Version:  node.Version,
+			Labels:   node.Labels,
 		},
 	}, nil
 }
@@ -210,6 +232,7 @@ func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*s
 			State:    string(n.State),
 			LastSeen: n.LastSeen.Unix(),
 			Version:  n.Version,
+			Labels:   n.Labels,
 		})
 	}
 
@@ -274,7 +297,34 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		}, nil
 	}
 
-	err := s.resources.CreateResourceWithVolumes(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes, wan)
+	// Auto-placement: no explicit node list means "pick for me". Choose the
+	// nodes with the most free space in the target pool. Not available for WAN
+	// (which needs an explicit primary + DR endpoint), and all volumes must
+	// share one pool so there is a single capacity target to place against.
+	nodes := req.Nodes
+	if len(nodes) == 0 {
+		if wan != nil {
+			return &sdspb.CreateResourceResponse{
+				Success: false,
+				Message: "WAN resources require an explicit --nodes primary; auto-placement is LAN-only",
+			}, nil
+		}
+		pool, total, perr := singlePoolTotal(volumes)
+		if perr != nil {
+			return &sdspb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
+		}
+		replicas := int(req.Replicas)
+		if replicas == 0 {
+			replicas = 2
+		}
+		placed, perr := s.resources.selectPlacementNodes(ctx, pool, total, replicas, req.ReplicasOnDifferent)
+		if perr != nil {
+			return &sdspb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
+		}
+		nodes = placed
+	}
+
+	err := s.resources.CreateResourceWithVolumes(ctx, req.Name, req.Port, nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes, wan)
 	if err != nil {
 		return &sdspb.CreateResourceResponse{
 			Success: false,
@@ -285,6 +335,25 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		Success: true,
 		Message: "Resource created successfully",
 	}, nil
+}
+
+// singlePoolTotal returns the shared pool and total size of the volumes, or an
+// error if they do not all target one pool (auto-placement needs a single
+// capacity target). An empty per-volume pool is allowed only when every volume
+// omits it — the controller's own default pool selection then applies.
+func singlePoolTotal(volumes []VolumeSpec) (string, uint32, error) {
+	if len(volumes) == 0 {
+		return "", 0, fmt.Errorf("no volumes to place")
+	}
+	pool := volumes[0].Pool
+	var total uint32
+	for _, v := range volumes {
+		if v.Pool != pool {
+			return "", 0, fmt.Errorf("auto-placement requires all volumes in one pool (got %q and %q); pass --nodes to place manually", pool, v.Pool)
+		}
+		total += v.SizeGB
+	}
+	return pool, total, nil
 }
 
 func (s *Server) AdoptResource(ctx context.Context, req *sdspb.AdoptResourceRequest) (*sdspb.AdoptResourceResponse, error) {
@@ -354,15 +423,16 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 		Success: true,
 		Message: "Resource found",
 		Resource: &sdspb.ResourceInfo{
-			Name:          resource.Name,
-			Port:          resource.Port,
-			Protocol:      resource.Protocol,
-			Nodes:         resource.Nodes,
-			Role:          resource.Role,
-			Volumes:       pbVolumes,
-			NodeStates:    nodeStates,
-			DisklessNodes: resource.DisklessNodes,
-			QuorumRisk:    resource.QuorumRisk,
+			Name:            resource.Name,
+			Port:            resource.Port,
+			Protocol:        resource.Protocol,
+			Nodes:           resource.Nodes,
+			Role:            resource.Role,
+			Volumes:         pbVolumes,
+			NodeStates:      nodeStates,
+			DisklessNodes:   resource.DisklessNodes,
+			DisklessClients: resource.DisklessClients,
+			QuorumRisk:      resource.QuorumRisk,
 		},
 	}, nil
 }
@@ -389,14 +459,15 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 			})
 		}
 		pbResources = append(pbResources, &sdspb.ResourceInfo{
-			Name:          r.Name,
-			Port:          r.Port,
-			Protocol:      r.Protocol,
-			Nodes:         r.Nodes,
-			Role:          r.Role,
-			Volumes:       pbVolumes,
-			DisklessNodes: r.DisklessNodes,
-			QuorumRisk:    r.QuorumRisk,
+			Name:            r.Name,
+			Port:            r.Port,
+			Protocol:        r.Protocol,
+			Nodes:           r.Nodes,
+			Role:            r.Role,
+			Volumes:         pbVolumes,
+			DisklessNodes:   r.DisklessNodes,
+			DisklessClients: r.DisklessClients,
+			QuorumRisk:      r.QuorumRisk,
 		})
 	}
 
@@ -555,6 +626,26 @@ func (s *Server) SetSecondary(ctx context.Context, req *sdspb.SetSecondaryReques
 	return &sdspb.SetSecondaryResponse{
 		Success: true,
 		Message: "Resource set to Secondary successfully",
+	}, nil
+}
+
+func (s *Server) AttachDisklessClient(ctx context.Context, req *sdspb.AttachDisklessClientRequest) (*sdspb.AttachDisklessClientResponse, error) {
+	if err := s.resources.AttachDisklessClient(ctx, req.Resource, req.Node); err != nil {
+		return &sdspb.AttachDisklessClientResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.AttachDisklessClientResponse{
+		Success: true,
+		Message: "Diskless client attached successfully",
+	}, nil
+}
+
+func (s *Server) DetachDisklessClient(ctx context.Context, req *sdspb.DetachDisklessClientRequest) (*sdspb.DetachDisklessClientResponse, error) {
+	if err := s.resources.DetachDisklessClient(ctx, req.Resource, req.Node); err != nil {
+		return &sdspb.DetachDisklessClientResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.DetachDisklessClientResponse{
+		Success: true,
+		Message: "Diskless client detached successfully",
 	}, nil
 }
 

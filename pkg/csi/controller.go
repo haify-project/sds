@@ -75,8 +75,30 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	return &csi.CreateVolumeResponse{Volume: &csi.Volume{
 		VolumeId:           name,
 		CapacityBytes:      int64(sizeGB) * giB,
-		AccessibleTopology: accessibleTopology(replicaNodes),
+		AccessibleTopology: topologyFor(replicaNodes, params.AllowRemoteVolumeAccess),
+		VolumeContext:      volumeContextFor(params.AllowRemoteVolumeAccess),
 	}}, nil
+}
+
+// topologyFor decides where the CO may schedule Pods that use the volume. By
+// default it pins them to the replica nodes (local I/O). With remote access
+// enabled the volume is reachable from every node via a diskless client, so we
+// impose no topology constraint and let the scheduler place the Pod anywhere.
+func topologyFor(replicaNodes []string, allowRemote bool) []*csi.Topology {
+	if allowRemote {
+		return nil
+	}
+	return accessibleTopology(replicaNodes)
+}
+
+// volumeContextFor carries the remote-access flag into the volume's context so
+// the node service can tell, at stage time, whether a Pod on a non-replica node
+// is allowed to attach the volume diskless.
+func volumeContextFor(allowRemote bool) map[string]string {
+	if !allowRemote {
+		return nil
+	}
+	return map[string]string{paramAllowRemoteVolumeAccess: "true"}
 }
 
 func (s *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {

@@ -75,9 +75,11 @@ func (b *sanityBackend) RegisterNode(_ context.Context, name, address string) (*
 	return &sdspb.NodeInfo{Name: name, Address: address}, nil
 }
 
-func (b *sanityBackend) SetPrimary(_ context.Context, _, _ string, _ bool) error { return nil }
-func (b *sanityBackend) PromoteForNode(_ context.Context, _, _ string) error     { return nil }
-func (b *sanityBackend) SetSecondary(_ context.Context, _, _ string) error       { return nil }
+func (b *sanityBackend) SetPrimary(_ context.Context, _, _ string, _ bool) error   { return nil }
+func (b *sanityBackend) PromoteForNode(_ context.Context, _, _ string) error       { return nil }
+func (b *sanityBackend) SetSecondary(_ context.Context, _, _ string) error         { return nil }
+func (b *sanityBackend) AttachDisklessClient(_ context.Context, _, _ string) error { return nil }
+func (b *sanityBackend) DetachDisklessClient(_ context.Context, _, _ string) error { return nil }
 
 var _ SDSBackend = (*sanityBackend)(nil)
 

@@ -100,12 +100,16 @@ func (db *DB) Close() error {
 
 // Node represents a stored node
 type Node struct {
-	Name      string
-	Address   string
-	Hostname  string
-	State     string
-	LastSeen  time.Time
-	Version   string
+	Name     string
+	Address  string
+	Hostname string
+	State    string
+	LastSeen time.Time
+	Version  string
+	// Labels is a JSON-encoded map[string]string of arbitrary node tags (e.g.
+	// {"rack":"A","zone":"east"}) used by placement constraints. Empty for nodes
+	// registered before labels existed — deserializes as no labels.
+	Labels    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -287,6 +291,13 @@ type Resource struct {
 	// in the resource as diskless quorum tiebreakers (they vote in quorum but
 	// store no data). Empty for ordinary all-diskful resources.
 	DisklessNodes string
+	// DisklessClients is a comma-separated list of node names attached to the
+	// resource as diskless data clients: they carry no local replica but connect
+	// over DRBD and can be promoted Primary to read/write the volume over the
+	// network (LINSTOR's "diskless client"). Distinct from DisklessNodes, which
+	// are quorum-only tiebreakers that must never be promoted or mounted. Empty
+	// for resources with no diskless clients.
+	DisklessClients string
 	// WAN replication (opt-in). All zero-valued for an ordinary LAN resource, so
 	// existing records deserialize as LAN and every WAN code path stays gated
 	// behind WANMode. See docs/2026-07-05-wan-replication-design.md.

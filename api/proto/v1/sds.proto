@@ -32,6 +32,9 @@ service SDSController {
   rpc UnregisterNode(UnregisterNodeRequest) returns (UnregisterNodeResponse) {
     option (google.api.http) = { delete: "/v1/nodes/{address}"; };
   }
+  rpc SetNodeLabels(SetNodeLabelsRequest) returns (SetNodeLabelsResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/labels"; body: "*"; };
+  }
   rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {
     option (google.api.http) = { get: "/v1/nodes/{address}"; };
   }
@@ -78,6 +81,12 @@ service SDSController {
   }
   rpc SetSecondary(SetSecondaryRequest) returns (SetSecondaryResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/secondary"; body: "*"; };
+  }
+  rpc AttachDisklessClient(AttachDisklessClientRequest) returns (AttachDisklessClientResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/diskless-clients"; body: "*"; };
+  }
+  rpc DetachDisklessClient(DetachDisklessClientRequest) returns (DetachDisklessClientResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/diskless-clients/{node}"; };
   }
   rpc CreateFilesystem(CreateFilesystemRequest) returns (CreateFilesystemResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/filesystem"; body: "*"; };
@@ -581,6 +590,21 @@ message RegisterNodeResponse {
   NodeInfo node = 3;
 }
 
+// SetNodeLabels sets or merges key=value labels on a node. When replace is
+// true the node's labels are replaced wholesale; otherwise the given labels are
+// merged in (a label with an empty value deletes that key).
+message SetNodeLabelsRequest {
+  string node = 1; // node name or address
+  map<string, string> labels = 2;
+  bool replace = 3;
+}
+
+message SetNodeLabelsResponse {
+  bool success = 1;
+  string message = 2;
+  NodeInfo node = 3;
+}
+
 message UnregisterNodeRequest {
   string address = 1;
 }
@@ -615,6 +639,9 @@ message NodeInfo {
   string state = 4;
   int64 last_seen = 5;
   string version = 6;
+  // labels are arbitrary key=value tags on the node (e.g. rack=A, zone=east)
+  // used by placement constraints like replicas_on_different.
+  map<string, string> labels = 7;
 }
 
 // Health check messages
@@ -659,6 +686,17 @@ message CreateResourceRequest {
   string dr_node = 11;      // the DR-site node (must be a registered node); WAN only
   string dr_endpoint = 12;  // the DR site's public WAN address the primary dials; WAN only
   uint32 wan_port = 13;     // WAN mTLS port (default a random >3000 per resource); WAN only
+
+  // replicas requests auto-placement: when `nodes` is empty the controller
+  // picks this many nodes (most free space in the target pool first). Ignored
+  // when `nodes` is set. 0 means "not auto-placing" unless nodes is also empty,
+  // in which case the controller defaults to 2.
+  uint32 replicas = 14;
+  // replicas_on_different names a node-label key (e.g. "rack"); during
+  // auto-placement each replica is put in a distinct value of that label, so a
+  // single fault domain never holds two replicas. Only nodes carrying the label
+  // participate. Empty = capacity-only placement. Ignored when `nodes` is set.
+  string replicas_on_different = 15;
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the
@@ -803,6 +841,32 @@ message SetSecondaryRequest {
 }
 
 message SetSecondaryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// AttachDisklessClient adds a node to a resource as a diskless data client: it
+// stores no local replica but connects over DRBD and can be promoted Primary to
+// read/write the volume over the network. Distinct from a quorum tiebreaker,
+// which is never promoted. Idempotent.
+message AttachDisklessClientRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message AttachDisklessClientResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// DetachDisklessClient removes a diskless client previously added via
+// AttachDisklessClient. Idempotent.
+message DetachDisklessClientRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message DetachDisklessClientResponse {
   bool success = 1;
   string message = 2;
 }
@@ -982,6 +1046,10 @@ message ResourceInfo {
   // True when the resource has two diskful nodes and no tiebreaker, so a
   // single node failure suspends I/O (no quorum majority).
   bool quorum_risk = 9;
+  // Nodes attached as diskless data clients: no local replica, but connected
+  // over DRBD and promotable to serve the volume over the network. Distinct
+  // from diskless_nodes (quorum-only tiebreakers).
+  repeated string diskless_clients = 10;
 }
 
 message ResourceStatus {

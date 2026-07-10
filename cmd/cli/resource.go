@@ -46,6 +46,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceUnmount())
 	cmd.AddCommand(resourcePromote())
 	cmd.AddCommand(resourceDemote())
+	cmd.AddCommand(resourceDiskless())
 	cmd.AddCommand(resourceSnapshot())
 
 	return cmd
@@ -88,6 +89,8 @@ func resourceCreate() *cobra.Command {
 	var name string
 	var port uint32
 	var nodes string
+	var replicas uint32
+	var replicasOnDifferent string
 	var pool string
 	var storageType string
 	var protocol string
@@ -123,8 +126,12 @@ func resourceCreate() *cobra.Command {
 			var nodeList []string
 			if nodes != "" {
 				nodeList = strings.Split(nodes, ",")
-			} else {
-				return fmt.Errorf("nodes are required (use --nodes)")
+			}
+			// No --nodes ⇒ auto-placement: the controller picks the nodes with the
+			// most free space in --pool. WAN needs an explicit primary, so require
+			// --nodes there.
+			if len(nodeList) == 0 && wan {
+				return fmt.Errorf("WAN resource requires an explicit --nodes primary")
 			}
 
 			if wan {
@@ -169,9 +176,12 @@ func resourceCreate() *cobra.Command {
 			// WAN mode routes replication through a per-resource sds-proxy pair
 			// (protocol A + loopback DRBD). Otherwise use the unified LAN path
 			// for all storage types (behavior unchanged).
-			if wan {
+			switch {
+			case wan:
 				err = sdsClient.CreateResourceWAN(ctx, name, port, nodeList[0], uint32(sizeGiB), pool, storageType, drbdOptions, drNode, drEndpoint, wanPort)
-			} else {
+			case len(nodeList) == 0:
+				err = sdsClient.CreateResourceAutoPlace(ctx, name, port, replicas, replicasOnDifferent, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
+			default:
 				err = sdsClient.CreateResourceWithPoolAndType(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
 			}
 			if err != nil {
@@ -183,7 +193,11 @@ func resourceCreate() *cobra.Command {
 			fmt.Printf("  Port:        %d\n", port)
 			fmt.Printf("  Storage:     %s\n", storageType)
 			fmt.Printf("  Pool:        %s\n", pool)
-			fmt.Printf("  Nodes:       %v\n", nodeList)
+			if len(nodeList) == 0 {
+				fmt.Printf("  Nodes:       auto-placed (%d replicas by free space; see 'resource get %s')\n", replicas, name)
+			} else {
+				fmt.Printf("  Nodes:       %v\n", nodeList)
+			}
 			if wan {
 				fmt.Printf("  Protocol:    A (WAN)\n")
 				fmt.Printf("  DR node:     %s\n", drNode)
@@ -210,7 +224,9 @@ func resourceCreate() *cobra.Command {
 
 	cmd.Flags().StringVar(&name, "name", "", "Resource name (required)")
 	cmd.Flags().Uint32Var(&port, "port", 0, "DRBD port (required)")
-	cmd.Flags().StringVar(&nodes, "nodes", "", "Node names (comma-separated, required)")
+	cmd.Flags().StringVar(&nodes, "nodes", "", "Node names (comma-separated); omit to auto-place by free space")
+	cmd.Flags().Uint32Var(&replicas, "replicas", 2, "Replica count for auto-placement (used only when --nodes is omitted)")
+	cmd.Flags().StringVar(&replicasOnDifferent, "replicas-on-different", "", "Node-label key to spread replicas across (e.g. rack); each replica lands in a distinct value. Auto-placement only")
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: data-pool)")
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")
@@ -223,7 +239,7 @@ func resourceCreate() *cobra.Command {
 
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("port")
-	_ = cmd.MarkFlagRequired("nodes")
+	// --nodes is intentionally NOT required: omitting it triggers auto-placement.
 	_ = cmd.MarkFlagRequired("size")
 
 	return cmd
@@ -323,6 +339,9 @@ func resourceGet() *cobra.Command {
 			}
 			for _, node := range resource.DisklessNodes {
 				fmt.Printf("    %s: diskless (quorum tiebreaker)\n", node)
+			}
+			for _, node := range resource.DisklessClients {
+				fmt.Printf("    %s: diskless (data client)\n", node)
 			}
 			if resource.QuorumRisk {
 				fmt.Printf("  Quorum:   ⚠ 2-node, no tiebreaker — a single node failure suspends I/O\n")
@@ -684,6 +703,70 @@ func resourceSecondary() *cobra.Command {
 	}
 
 	return cmd
+}
+
+// resourceDiskless groups attach/detach of diskless data clients — nodes that
+// mount a resource with no local replica, accessing it over the DRBD network.
+func resourceDiskless() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "diskless",
+		Short: "Manage diskless data clients (mount a resource with no local replica)",
+	}
+	cmd.AddCommand(resourceDisklessAttach())
+	cmd.AddCommand(resourceDisklessDetach())
+	return cmd
+}
+
+func resourceDisklessAttach() *cobra.Command {
+	return &cobra.Command{
+		Use:   "attach <resource> <node>",
+		Short: "Attach a node as a diskless client so it can mount the resource over the network",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource, node := args[0], args[1]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.AttachDisklessClient(ctx, resource, node); err != nil {
+				return fmt.Errorf("failed to attach diskless client: %w", err)
+			}
+			fmt.Printf("Node '%s' attached to '%s' as a diskless client\n", node, resource)
+			return nil
+		},
+	}
+}
+
+func resourceDisklessDetach() *cobra.Command {
+	return &cobra.Command{
+		Use:   "detach <resource> <node>",
+		Short: "Detach a diskless client from the resource",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource, node := args[0], args[1]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.DetachDisklessClient(ctx, resource, node); err != nil {
+				return fmt.Errorf("failed to detach diskless client: %w", err)
+			}
+			fmt.Printf("Node '%s' detached from '%s'\n", node, resource)
+			return nil
+		},
+	}
 }
 
 func resourceFs() *cobra.Command {

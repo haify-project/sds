@@ -26,6 +26,7 @@ const (
 	SDSController_AddDiskToPool_FullMethodName            = "/v1.SDSController/AddDiskToPool"
 	SDSController_RegisterNode_FullMethodName             = "/v1.SDSController/RegisterNode"
 	SDSController_UnregisterNode_FullMethodName           = "/v1.SDSController/UnregisterNode"
+	SDSController_SetNodeLabels_FullMethodName            = "/v1.SDSController/SetNodeLabels"
 	SDSController_GetNode_FullMethodName                  = "/v1.SDSController/GetNode"
 	SDSController_ListNodes_FullMethodName                = "/v1.SDSController/ListNodes"
 	SDSController_HealthCheck_FullMethodName              = "/v1.SDSController/HealthCheck"
@@ -41,6 +42,8 @@ const (
 	SDSController_ResourceStatus_FullMethodName           = "/v1.SDSController/ResourceStatus"
 	SDSController_SetPrimary_FullMethodName               = "/v1.SDSController/SetPrimary"
 	SDSController_SetSecondary_FullMethodName             = "/v1.SDSController/SetSecondary"
+	SDSController_AttachDisklessClient_FullMethodName     = "/v1.SDSController/AttachDisklessClient"
+	SDSController_DetachDisklessClient_FullMethodName     = "/v1.SDSController/DetachDisklessClient"
 	SDSController_CreateFilesystem_FullMethodName         = "/v1.SDSController/CreateFilesystem"
 	SDSController_MountResource_FullMethodName            = "/v1.SDSController/MountResource"
 	SDSController_UnmountResource_FullMethodName          = "/v1.SDSController/UnmountResource"
@@ -121,6 +124,7 @@ type SDSControllerClient interface {
 	// Node operations
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
 	UnregisterNode(ctx context.Context, in *UnregisterNodeRequest, opts ...grpc.CallOption) (*UnregisterNodeResponse, error)
+	SetNodeLabels(ctx context.Context, in *SetNodeLabelsRequest, opts ...grpc.CallOption) (*SetNodeLabelsResponse, error)
 	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
@@ -137,6 +141,8 @@ type SDSControllerClient interface {
 	ResourceStatus(ctx context.Context, in *ResourceStatusRequest, opts ...grpc.CallOption) (*ResourceStatusResponse, error)
 	SetPrimary(ctx context.Context, in *SetPrimaryRequest, opts ...grpc.CallOption) (*SetPrimaryResponse, error)
 	SetSecondary(ctx context.Context, in *SetSecondaryRequest, opts ...grpc.CallOption) (*SetSecondaryResponse, error)
+	AttachDisklessClient(ctx context.Context, in *AttachDisklessClientRequest, opts ...grpc.CallOption) (*AttachDisklessClientResponse, error)
+	DetachDisklessClient(ctx context.Context, in *DetachDisklessClientRequest, opts ...grpc.CallOption) (*DetachDisklessClientResponse, error)
 	CreateFilesystem(ctx context.Context, in *CreateFilesystemRequest, opts ...grpc.CallOption) (*CreateFilesystemResponse, error)
 	MountResource(ctx context.Context, in *MountResourceRequest, opts ...grpc.CallOption) (*MountResourceResponse, error)
 	UnmountResource(ctx context.Context, in *UnmountResourceRequest, opts ...grpc.CallOption) (*UnmountResourceResponse, error)
@@ -296,6 +302,16 @@ func (c *sDSControllerClient) UnregisterNode(ctx context.Context, in *Unregister
 	return out, nil
 }
 
+func (c *sDSControllerClient) SetNodeLabels(ctx context.Context, in *SetNodeLabelsRequest, opts ...grpc.CallOption) (*SetNodeLabelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeLabelsResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetNodeLabels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetNodeResponse)
@@ -440,6 +456,26 @@ func (c *sDSControllerClient) SetSecondary(ctx context.Context, in *SetSecondary
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetSecondaryResponse)
 	err := c.cc.Invoke(ctx, SDSController_SetSecondary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) AttachDisklessClient(ctx context.Context, in *AttachDisklessClientRequest, opts ...grpc.CallOption) (*AttachDisklessClientResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachDisklessClientResponse)
+	err := c.cc.Invoke(ctx, SDSController_AttachDisklessClient_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DetachDisklessClient(ctx context.Context, in *DetachDisklessClientRequest, opts ...grpc.CallOption) (*DetachDisklessClientResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachDisklessClientResponse)
+	err := c.cc.Invoke(ctx, SDSController_DetachDisklessClient_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1091,6 +1127,7 @@ type SDSControllerServer interface {
 	// Node operations
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
 	UnregisterNode(context.Context, *UnregisterNodeRequest) (*UnregisterNodeResponse, error)
+	SetNodeLabels(context.Context, *SetNodeLabelsRequest) (*SetNodeLabelsResponse, error)
 	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
@@ -1107,6 +1144,8 @@ type SDSControllerServer interface {
 	ResourceStatus(context.Context, *ResourceStatusRequest) (*ResourceStatusResponse, error)
 	SetPrimary(context.Context, *SetPrimaryRequest) (*SetPrimaryResponse, error)
 	SetSecondary(context.Context, *SetSecondaryRequest) (*SetSecondaryResponse, error)
+	AttachDisklessClient(context.Context, *AttachDisklessClientRequest) (*AttachDisklessClientResponse, error)
+	DetachDisklessClient(context.Context, *DetachDisklessClientRequest) (*DetachDisklessClientResponse, error)
 	CreateFilesystem(context.Context, *CreateFilesystemRequest) (*CreateFilesystemResponse, error)
 	MountResource(context.Context, *MountResourceRequest) (*MountResourceResponse, error)
 	UnmountResource(context.Context, *UnmountResourceRequest) (*UnmountResourceResponse, error)
@@ -1217,6 +1256,9 @@ func (UnimplementedSDSControllerServer) RegisterNode(context.Context, *RegisterN
 func (UnimplementedSDSControllerServer) UnregisterNode(context.Context, *UnregisterNodeRequest) (*UnregisterNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnregisterNode not implemented")
 }
+func (UnimplementedSDSControllerServer) SetNodeLabels(context.Context, *SetNodeLabelsRequest) (*SetNodeLabelsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetNodeLabels not implemented")
+}
 func (UnimplementedSDSControllerServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNode not implemented")
 }
@@ -1261,6 +1303,12 @@ func (UnimplementedSDSControllerServer) SetPrimary(context.Context, *SetPrimaryR
 }
 func (UnimplementedSDSControllerServer) SetSecondary(context.Context, *SetSecondaryRequest) (*SetSecondaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetSecondary not implemented")
+}
+func (UnimplementedSDSControllerServer) AttachDisklessClient(context.Context, *AttachDisklessClientRequest) (*AttachDisklessClientResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AttachDisklessClient not implemented")
+}
+func (UnimplementedSDSControllerServer) DetachDisklessClient(context.Context, *DetachDisklessClientRequest) (*DetachDisklessClientResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DetachDisklessClient not implemented")
 }
 func (UnimplementedSDSControllerServer) CreateFilesystem(context.Context, *CreateFilesystemRequest) (*CreateFilesystemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateFilesystem not implemented")
@@ -1598,6 +1646,24 @@ func _SDSController_UnregisterNode_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_SetNodeLabels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeLabelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetNodeLabels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetNodeLabels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetNodeLabels(ctx, req.(*SetNodeLabelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetNodeRequest)
 	if err := dec(in); err != nil {
@@ -1864,6 +1930,42 @@ func _SDSController_SetSecondary_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).SetSecondary(ctx, req.(*SetSecondaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_AttachDisklessClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachDisklessClientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).AttachDisklessClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_AttachDisklessClient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).AttachDisklessClient(ctx, req.(*AttachDisklessClientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DetachDisklessClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachDisklessClientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DetachDisklessClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DetachDisklessClient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DetachDisklessClient(ctx, req.(*DetachDisklessClientRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3038,6 +3140,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SDSController_UnregisterNode_Handler,
 		},
 		{
+			MethodName: "SetNodeLabels",
+			Handler:    _SDSController_SetNodeLabels_Handler,
+		},
+		{
 			MethodName: "GetNode",
 			Handler:    _SDSController_GetNode_Handler,
 		},
@@ -3096,6 +3202,14 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetSecondary",
 			Handler:    _SDSController_SetSecondary_Handler,
+		},
+		{
+			MethodName: "AttachDisklessClient",
+			Handler:    _SDSController_AttachDisklessClient_Handler,
+		},
+		{
+			MethodName: "DetachDisklessClient",
+			Handler:    _SDSController_DetachDisklessClient_Handler,
 		},
 		{
 			MethodName: "CreateFilesystem",

@@ -36,6 +36,13 @@ type SDSBackend interface {
 	// holds DRBD quorum, refusing otherwise to avoid split-brain.
 	PromoteForNode(ctx context.Context, resource, node string) error
 	SetSecondary(ctx context.Context, resource, node string) error
+	// AttachDisklessClient adds node to resource as a diskless data client so a
+	// Pod on a node with no local replica can still mount the volume (I/O over
+	// the DRBD network). Idempotent.
+	AttachDisklessClient(ctx context.Context, resource, node string) error
+	// DetachDisklessClient removes a diskless client added via
+	// AttachDisklessClient. Idempotent.
+	DetachDisklessClient(ctx context.Context, resource, node string) error
 }
 
 // Driver wires the CSI services onto a gRPC server over a unix socket.

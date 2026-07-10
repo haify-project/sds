@@ -1260,6 +1260,45 @@
         ]
       }
     },
+    "/v1/nodes/{node}/labels": {
+      "post": {
+        "operationId": "SDSController_SetNodeLabels",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetNodeLabelsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node",
+            "description": "node name or address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetNodeLabelsBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/pools": {
       "get": {
         "operationId": "SDSController_ListPools",
@@ -1628,6 +1667,80 @@
         "parameters": [
           {
             "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/diskless-clients": {
+      "post": {
+        "operationId": "SDSController_AttachDisklessClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AttachDisklessClientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerAttachDisklessClientBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/diskless-clients/{node}": {
+      "delete": {
+        "operationId": "SDSController_DetachDisklessClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DetachDisklessClientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "node",
             "in": "path",
             "required": true,
             "type": "string"
@@ -3308,6 +3421,15 @@
       },
       "description": "AdoptResourceRequest imports an already-existing (foreign) DRBD resource into\nSDS management by recording its metadata in the SDS database. It never\ncreates or modifies the actual DRBD resource or its data. Every field except\nname is optional and auto-discovered from the live .res on a node when\nomitted; a provided value overrides discovery."
     },
+    "SDSControllerAttachDisklessClientBody": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        }
+      },
+      "description": "AttachDisklessClient adds a node to a resource as a diskless data client: it\nstores no local replica but connects over DRBD and can be promoted Primary to\nread/write the volume over the network. Distinct from a quorum tiebreaker,\nwhich is never promoted. Idempotent."
+    },
     "SDSControllerCloneZFSSnapshotBody": {
       "type": "object",
       "properties": {
@@ -3464,6 +3586,21 @@
           "type": "string"
         }
       }
+    },
+    "SDSControllerSetNodeLabelsBody": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "replace": {
+          "type": "boolean"
+        }
+      },
+      "description": "SetNodeLabels sets or merges key=value labels on a node. When replace is\ntrue the node's labels are replaced wholesale; otherwise the given labels are\nmerged in (a label with an empty value deletes that key)."
     },
     "SDSControllerSetPrimaryBody": {
       "type": "object",
@@ -3722,6 +3859,17 @@
         "volumes": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "v1AttachDisklessClientResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
         }
       }
     },
@@ -4008,6 +4156,15 @@
           "type": "integer",
           "format": "int64",
           "title": "WAN mTLS port (default a random \u003e3000 per resource); WAN only"
+        },
+        "replicas": {
+          "type": "integer",
+          "format": "int64",
+          "description": "replicas requests auto-placement: when `nodes` is empty the controller\npicks this many nodes (most free space in the target pool first). Ignored\nwhen `nodes` is set. 0 means \"not auto-placing\" unless nodes is also empty,\nin which case the controller defaults to 2."
+        },
+        "replicasOnDifferent": {
+          "type": "string",
+          "description": "replicas_on_different names a node-label key (e.g. \"rack\"); during\nauto-placement each replica is put in a distinct value of that label, so a\nsingle fault domain never holds two replicas. Only nodes carrying the label\nparticipate. Empty = capacity-only placement. Ignored when `nodes` is set."
         }
       },
       "title": "Resource messages"
@@ -4252,6 +4409,17 @@
       }
     },
     "v1DeleteZFSSnapshotResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DetachDisklessClientResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -5062,6 +5230,13 @@
         },
         "version": {
           "type": "string"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "labels are arbitrary key=value tags on the node (e.g. rack=A, zone=east)\nused by placement constraints like replicas_on_different."
         }
       }
     },
@@ -5399,6 +5574,13 @@
         "quorumRisk": {
           "type": "boolean",
           "description": "True when the resource has two diskful nodes and no tiebreaker, so a\nsingle node failure suspends I/O (no quorum majority)."
+        },
+        "disklessClients": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Nodes attached as diskless data clients: no local replica, but connected\nover DRBD and promotable to serve the volume over the network. Distinct\nfrom diskless_nodes (quorum-only tiebreakers)."
         }
       }
     },
@@ -5524,6 +5706,20 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1SetNodeLabelsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "node": {
+          "$ref": "#/definitions/v1NodeInfo"
         }
       }
     },

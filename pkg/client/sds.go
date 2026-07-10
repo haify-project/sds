@@ -198,6 +198,24 @@ func (c *SDSClient) RegisterNode(ctx context.Context, name, address string) (*sd
 	return resp.Node, nil
 }
 
+// SetNodeLabels sets or merges labels on a node (by name or address). With
+// replace=true the label set is replaced wholesale; otherwise labels are merged
+// (an empty value deletes that key).
+func (c *SDSClient) SetNodeLabels(ctx context.Context, node string, labels map[string]string, replace bool) (*sdspb.NodeInfo, error) {
+	resp, err := c.client.SetNodeLabels(ctx, &sdspb.SetNodeLabelsRequest{
+		Node:    node,
+		Labels:  labels,
+		Replace: replace,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Node, nil
+}
+
 // ListNodes lists all nodes
 func (c *SDSClient) ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error) {
 	req := &sdspb.ListNodesRequest{}
@@ -321,6 +339,30 @@ func (c *SDSClient) CreateResourceWithPoolAndType(ctx context.Context, name stri
 		return fmt.Errorf("%s", resp.Message)
 	}
 
+	return nil
+}
+
+// CreateResourceAutoPlace creates a DRBD resource without naming nodes: the
+// controller auto-places `replicas` copies on the nodes with the most free
+// space in the target pool. LAN-only (WAN needs an explicit primary).
+func (c *SDSClient) CreateResourceAutoPlace(ctx context.Context, name string, port uint32, replicas uint32, replicasOnDifferent string, protocol string, sizeGB uint32, pool, storageType string, drbdOptions map[string]string) error {
+	resp, err := c.client.CreateResource(ctx, &sdspb.CreateResourceRequest{
+		Name:                name,
+		Port:                port,
+		Replicas:            replicas,
+		ReplicasOnDifferent: replicasOnDifferent,
+		Protocol:            protocol,
+		SizeGb:              sizeGB,
+		Pool:                pool,
+		StorageType:         storageType,
+		DrbdOptions:         drbdOptions,
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
 	return nil
 }
 
@@ -621,6 +663,39 @@ func (c *SDSClient) SetSecondary(ctx context.Context, resource, node string) err
 		return fmt.Errorf("%s", resp.Message)
 	}
 
+	return nil
+}
+
+// AttachDisklessClient adds a node to a resource as a diskless data client: it
+// carries no local replica but connects over DRBD and can be promoted Primary
+// to serve the volume over the network. Idempotent.
+func (c *SDSClient) AttachDisklessClient(ctx context.Context, resource, node string) error {
+	resp, err := c.client.AttachDisklessClient(ctx, &sdspb.AttachDisklessClientRequest{
+		Resource: resource,
+		Node:     node,
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
+// DetachDisklessClient removes a diskless client added via AttachDisklessClient.
+// Idempotent.
+func (c *SDSClient) DetachDisklessClient(ctx context.Context, resource, node string) error {
+	resp, err := c.client.DetachDisklessClient(ctx, &sdspb.DetachDisklessClientRequest{
+		Resource: resource,
+		Node:     node,
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
 	return nil
 }
 
