@@ -91,7 +91,7 @@ type ControllerClient interface {
 	ListNVMeHosts(ctx context.Context, resource string) ([]string, error)
 
 	// HA
-	MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string, ocfAgents []*sdspb.OcfAgent) (string, error)
+	MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string, ocfAgents []*sdspb.OcfAgent, startItems []*sdspb.HaStartItem) (string, error)
 	ListHa(ctx context.Context) ([]*sdspb.HaConfigInfo, error)
 	GetHa(ctx context.Context, resource string) (*sdspb.HaConfigInfo, error)
 	EvictHa(ctx context.Context, resource string) error

@@ -57,6 +57,25 @@ type OcfAgentSpec struct {
 	Params   map[string]string
 }
 
+// HaStartItem is one entry in an ordered promoter start[] list. Exactly one of
+// SystemdUnit or Ocf is set. systemd/mount units and OCF agents are peers, so a
+// slice of these preserves the exact order the user arranged (e.g. portblock ->
+// Filesystem -> IPaddr2 -> nfsserver -> exportfs -> portunblock).
+type HaStartItem struct {
+	SystemdUnit string        // a systemd/mount unit name, e.g. "mysql.service"
+	Ocf         *OcfAgentSpec // an OCF resource agent
+}
+
+// renderStartItem renders one ordered start item as a promoter start[] entry:
+// a bare systemd unit name, or an "ocf:..." agent line. Returns "" for an empty
+// item (skipped by the caller).
+func renderStartItem(it HaStartItem) string {
+	if it.Ocf != nil {
+		return renderOcfStartEntry(*it.Ocf)
+	}
+	return strings.TrimSpace(it.SystemdUnit)
+}
+
 // ---- OCF meta-data XML (encoding/xml) ----
 
 type ocfXMLDesc struct {

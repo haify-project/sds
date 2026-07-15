@@ -5443,21 +5443,113 @@ func (x *OcfAgent) GetParams() map[string]string {
 	return nil
 }
 
+// HaStartItem is one entry in the promoter start[] list. systemd/mount units and
+// OCF resource agents are PEERS: the list is a single ordered sequence and each
+// item is exactly one of the fields below. This is what lets a correct stack be
+// expressed (e.g. portblock -> Filesystem -> IPaddr2 -> nfsserver -> exportfs ->
+// portunblock) instead of forcing all OCF agents after all systemd units.
+type HaStartItem struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Item:
+	//
+	//	*HaStartItem_SystemdUnit
+	//	*HaStartItem_Ocf
+	Item          isHaStartItem_Item `protobuf_oneof:"item"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HaStartItem) Reset() {
+	*x = HaStartItem{}
+	mi := &file_api_proto_v1_sds_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HaStartItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HaStartItem) ProtoMessage() {}
+
+func (x *HaStartItem) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_sds_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HaStartItem.ProtoReflect.Descriptor instead.
+func (*HaStartItem) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *HaStartItem) GetItem() isHaStartItem_Item {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+func (x *HaStartItem) GetSystemdUnit() string {
+	if x != nil {
+		if x, ok := x.Item.(*HaStartItem_SystemdUnit); ok {
+			return x.SystemdUnit
+		}
+	}
+	return ""
+}
+
+func (x *HaStartItem) GetOcf() *OcfAgent {
+	if x != nil {
+		if x, ok := x.Item.(*HaStartItem_Ocf); ok {
+			return x.Ocf
+		}
+	}
+	return nil
+}
+
+type isHaStartItem_Item interface {
+	isHaStartItem_Item()
+}
+
+type HaStartItem_SystemdUnit struct {
+	SystemdUnit string `protobuf:"bytes,1,opt,name=systemd_unit,json=systemdUnit,proto3,oneof"` // a systemd/mount unit, e.g. "mysql.service" or "mnt-data.mount"
+}
+
+type HaStartItem_Ocf struct {
+	Ocf *OcfAgent `protobuf:"bytes,2,opt,name=ocf,proto3,oneof"` // an OCF resource agent
+}
+
+func (*HaStartItem_SystemdUnit) isHaStartItem_Item() {}
+
+func (*HaStartItem_Ocf) isHaStartItem_Item() {}
+
 type MakeHaRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Resource      string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
-	Services      []string               `protobuf:"bytes,2,rep,name=services,proto3" json:"services,omitempty"`                       // systemd services to start/stop
-	MountPoint    string                 `protobuf:"bytes,3,opt,name=mount_point,json=mountPoint,proto3" json:"mount_point,omitempty"` // optional mount point
-	Fstype        string                 `protobuf:"bytes,4,opt,name=fstype,proto3" json:"fstype,omitempty"`                           // filesystem type (if mount_point specified)
-	Vip           string                 `protobuf:"bytes,5,opt,name=vip,proto3" json:"vip,omitempty"`                                 // optional virtual IP (CIDR, e.g., "192.168.1.100/24")
-	OcfAgents     []*OcfAgent            `protobuf:"bytes,6,rep,name=ocf_agents,json=ocfAgents,proto3" json:"ocf_agents,omitempty"`    // optional OCF agents appended to promoter start[]
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Resource   string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	Services   []string               `protobuf:"bytes,2,rep,name=services,proto3" json:"services,omitempty"`                       // systemd services to start/stop
+	MountPoint string                 `protobuf:"bytes,3,opt,name=mount_point,json=mountPoint,proto3" json:"mount_point,omitempty"` // optional mount point
+	Fstype     string                 `protobuf:"bytes,4,opt,name=fstype,proto3" json:"fstype,omitempty"`                           // filesystem type (if mount_point specified)
+	Vip        string                 `protobuf:"bytes,5,opt,name=vip,proto3" json:"vip,omitempty"`                                 // optional virtual IP (CIDR, e.g., "192.168.1.100/24")
+	OcfAgents  []*OcfAgent            `protobuf:"bytes,6,rep,name=ocf_agents,json=ocfAgents,proto3" json:"ocf_agents,omitempty"`    // optional OCF agents appended to promoter start[]
+	// start_items, when non-empty, defines the promoter start[] list verbatim and
+	// in order (systemd units and OCF agents interleaved). The legacy fields
+	// 2/3/5/6 above are then used only for provisioning side effects (mount unit
+	// generation, VIP service-ip precondition) and NOT for start[] ordering.
+	StartItems    []*HaStartItem `protobuf:"bytes,7,rep,name=start_items,json=startItems,proto3" json:"start_items,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MakeHaRequest) Reset() {
 	*x = MakeHaRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[93]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5469,7 +5561,7 @@ func (x *MakeHaRequest) String() string {
 func (*MakeHaRequest) ProtoMessage() {}
 
 func (x *MakeHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[93]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5482,7 +5574,7 @@ func (x *MakeHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MakeHaRequest.ProtoReflect.Descriptor instead.
 func (*MakeHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{93}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *MakeHaRequest) GetResource() string {
@@ -5527,6 +5619,13 @@ func (x *MakeHaRequest) GetOcfAgents() []*OcfAgent {
 	return nil
 }
 
+func (x *MakeHaRequest) GetStartItems() []*HaStartItem {
+	if x != nil {
+		return x.StartItems
+	}
+	return nil
+}
+
 type ResourceAgentInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
@@ -5538,7 +5637,7 @@ type ResourceAgentInfo struct {
 
 func (x *ResourceAgentInfo) Reset() {
 	*x = ResourceAgentInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[94]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5550,7 +5649,7 @@ func (x *ResourceAgentInfo) String() string {
 func (*ResourceAgentInfo) ProtoMessage() {}
 
 func (x *ResourceAgentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[94]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5563,7 +5662,7 @@ func (x *ResourceAgentInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceAgentInfo.ProtoReflect.Descriptor instead.
 func (*ResourceAgentInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{94}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *ResourceAgentInfo) GetProvider() string {
@@ -5595,7 +5694,7 @@ type ListResourceAgentsRequest struct {
 
 func (x *ListResourceAgentsRequest) Reset() {
 	*x = ListResourceAgentsRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[95]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5607,7 +5706,7 @@ func (x *ListResourceAgentsRequest) String() string {
 func (*ListResourceAgentsRequest) ProtoMessage() {}
 
 func (x *ListResourceAgentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[95]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5620,7 +5719,7 @@ func (x *ListResourceAgentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourceAgentsRequest.ProtoReflect.Descriptor instead.
 func (*ListResourceAgentsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{95}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{96}
 }
 
 type ListResourceAgentsResponse struct {
@@ -5632,7 +5731,7 @@ type ListResourceAgentsResponse struct {
 
 func (x *ListResourceAgentsResponse) Reset() {
 	*x = ListResourceAgentsResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[96]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5644,7 +5743,7 @@ func (x *ListResourceAgentsResponse) String() string {
 func (*ListResourceAgentsResponse) ProtoMessage() {}
 
 func (x *ListResourceAgentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[96]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5657,7 +5756,7 @@ func (x *ListResourceAgentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourceAgentsResponse.ProtoReflect.Descriptor instead.
 func (*ListResourceAgentsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{96}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *ListResourceAgentsResponse) GetAgents() []*ResourceAgentInfo {
@@ -5682,7 +5781,7 @@ type ResourceAgentParameter struct {
 
 func (x *ResourceAgentParameter) Reset() {
 	*x = ResourceAgentParameter{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[97]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5694,7 +5793,7 @@ func (x *ResourceAgentParameter) String() string {
 func (*ResourceAgentParameter) ProtoMessage() {}
 
 func (x *ResourceAgentParameter) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[97]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5707,7 +5806,7 @@ func (x *ResourceAgentParameter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceAgentParameter.ProtoReflect.Descriptor instead.
 func (*ResourceAgentParameter) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{97}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *ResourceAgentParameter) GetName() string {
@@ -5769,7 +5868,7 @@ type GetResourceAgentMetadataRequest struct {
 
 func (x *GetResourceAgentMetadataRequest) Reset() {
 	*x = GetResourceAgentMetadataRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[98]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5781,7 +5880,7 @@ func (x *GetResourceAgentMetadataRequest) String() string {
 func (*GetResourceAgentMetadataRequest) ProtoMessage() {}
 
 func (x *GetResourceAgentMetadataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[98]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5794,7 +5893,7 @@ func (x *GetResourceAgentMetadataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceAgentMetadataRequest.ProtoReflect.Descriptor instead.
 func (*GetResourceAgentMetadataRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{98}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *GetResourceAgentMetadataRequest) GetProvider() string {
@@ -5825,7 +5924,7 @@ type GetResourceAgentMetadataResponse struct {
 
 func (x *GetResourceAgentMetadataResponse) Reset() {
 	*x = GetResourceAgentMetadataResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[99]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5837,7 +5936,7 @@ func (x *GetResourceAgentMetadataResponse) String() string {
 func (*GetResourceAgentMetadataResponse) ProtoMessage() {}
 
 func (x *GetResourceAgentMetadataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[99]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5850,7 +5949,7 @@ func (x *GetResourceAgentMetadataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceAgentMetadataResponse.ProtoReflect.Descriptor instead.
 func (*GetResourceAgentMetadataResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{99}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *GetResourceAgentMetadataResponse) GetProvider() string {
@@ -5904,7 +6003,7 @@ type GetHaTomlRequest struct {
 
 func (x *GetHaTomlRequest) Reset() {
 	*x = GetHaTomlRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[100]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5916,7 +6015,7 @@ func (x *GetHaTomlRequest) String() string {
 func (*GetHaTomlRequest) ProtoMessage() {}
 
 func (x *GetHaTomlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[100]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5929,7 +6028,7 @@ func (x *GetHaTomlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaTomlRequest.ProtoReflect.Descriptor instead.
 func (*GetHaTomlRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{100}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *GetHaTomlRequest) GetResource() string {
@@ -5950,7 +6049,7 @@ type GetHaTomlResponse struct {
 
 func (x *GetHaTomlResponse) Reset() {
 	*x = GetHaTomlResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[101]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5962,7 +6061,7 @@ func (x *GetHaTomlResponse) String() string {
 func (*GetHaTomlResponse) ProtoMessage() {}
 
 func (x *GetHaTomlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[101]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5975,7 +6074,7 @@ func (x *GetHaTomlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaTomlResponse.ProtoReflect.Descriptor instead.
 func (*GetHaTomlResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{101}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *GetHaTomlResponse) GetResource() string {
@@ -6009,7 +6108,7 @@ type SyncHaTomlRequest struct {
 
 func (x *SyncHaTomlRequest) Reset() {
 	*x = SyncHaTomlRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[102]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6021,7 +6120,7 @@ func (x *SyncHaTomlRequest) String() string {
 func (*SyncHaTomlRequest) ProtoMessage() {}
 
 func (x *SyncHaTomlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[102]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6034,7 +6133,7 @@ func (x *SyncHaTomlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncHaTomlRequest.ProtoReflect.Descriptor instead.
 func (*SyncHaTomlRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{102}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *SyncHaTomlRequest) GetResource() string {
@@ -6061,7 +6160,7 @@ type SyncHaTomlResponse struct {
 
 func (x *SyncHaTomlResponse) Reset() {
 	*x = SyncHaTomlResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[103]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6073,7 +6172,7 @@ func (x *SyncHaTomlResponse) String() string {
 func (*SyncHaTomlResponse) ProtoMessage() {}
 
 func (x *SyncHaTomlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[103]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6086,7 +6185,7 @@ func (x *SyncHaTomlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncHaTomlResponse.ProtoReflect.Descriptor instead.
 func (*SyncHaTomlResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{103}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *SyncHaTomlResponse) GetSuccess() bool {
@@ -6114,7 +6213,7 @@ type MakeHaResponse struct {
 
 func (x *MakeHaResponse) Reset() {
 	*x = MakeHaResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[104]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6126,7 +6225,7 @@ func (x *MakeHaResponse) String() string {
 func (*MakeHaResponse) ProtoMessage() {}
 
 func (x *MakeHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[104]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6139,7 +6238,7 @@ func (x *MakeHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MakeHaResponse.ProtoReflect.Descriptor instead.
 func (*MakeHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{104}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *MakeHaResponse) GetSuccess() bool {
@@ -6172,7 +6271,7 @@ type EvictHaRequest struct {
 
 func (x *EvictHaRequest) Reset() {
 	*x = EvictHaRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[105]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6184,7 +6283,7 @@ func (x *EvictHaRequest) String() string {
 func (*EvictHaRequest) ProtoMessage() {}
 
 func (x *EvictHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[105]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6197,7 +6296,7 @@ func (x *EvictHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvictHaRequest.ProtoReflect.Descriptor instead.
 func (*EvictHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{105}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *EvictHaRequest) GetResource() string {
@@ -6217,7 +6316,7 @@ type EvictHaResponse struct {
 
 func (x *EvictHaResponse) Reset() {
 	*x = EvictHaResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[106]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6229,7 +6328,7 @@ func (x *EvictHaResponse) String() string {
 func (*EvictHaResponse) ProtoMessage() {}
 
 func (x *EvictHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[106]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6242,7 +6341,7 @@ func (x *EvictHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvictHaResponse.ProtoReflect.Descriptor instead.
 func (*EvictHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{106}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *EvictHaResponse) GetSuccess() bool {
@@ -6273,7 +6372,7 @@ type EnableSelfHaRequest struct {
 
 func (x *EnableSelfHaRequest) Reset() {
 	*x = EnableSelfHaRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[107]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6285,7 +6384,7 @@ func (x *EnableSelfHaRequest) String() string {
 func (*EnableSelfHaRequest) ProtoMessage() {}
 
 func (x *EnableSelfHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[107]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6298,7 +6397,7 @@ func (x *EnableSelfHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnableSelfHaRequest.ProtoReflect.Descriptor instead.
 func (*EnableSelfHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{107}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *EnableSelfHaRequest) GetVip() string {
@@ -6348,7 +6447,7 @@ type EnableSelfHaResponse struct {
 
 func (x *EnableSelfHaResponse) Reset() {
 	*x = EnableSelfHaResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[108]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6360,7 +6459,7 @@ func (x *EnableSelfHaResponse) String() string {
 func (*EnableSelfHaResponse) ProtoMessage() {}
 
 func (x *EnableSelfHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[108]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6373,7 +6472,7 @@ func (x *EnableSelfHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnableSelfHaResponse.ProtoReflect.Descriptor instead.
 func (*EnableSelfHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{108}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *EnableSelfHaResponse) GetSuccess() bool {
@@ -6413,7 +6512,7 @@ type DisableSelfHaRequest struct {
 
 func (x *DisableSelfHaRequest) Reset() {
 	*x = DisableSelfHaRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[109]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6425,7 +6524,7 @@ func (x *DisableSelfHaRequest) String() string {
 func (*DisableSelfHaRequest) ProtoMessage() {}
 
 func (x *DisableSelfHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[109]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6438,7 +6537,7 @@ func (x *DisableSelfHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableSelfHaRequest.ProtoReflect.Descriptor instead.
 func (*DisableSelfHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{109}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *DisableSelfHaRequest) GetNode() string {
@@ -6458,7 +6557,7 @@ type DisableSelfHaResponse struct {
 
 func (x *DisableSelfHaResponse) Reset() {
 	*x = DisableSelfHaResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[110]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6470,7 +6569,7 @@ func (x *DisableSelfHaResponse) String() string {
 func (*DisableSelfHaResponse) ProtoMessage() {}
 
 func (x *DisableSelfHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[110]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6483,7 +6582,7 @@ func (x *DisableSelfHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableSelfHaResponse.ProtoReflect.Descriptor instead.
 func (*DisableSelfHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{110}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *DisableSelfHaResponse) GetSuccess() bool {
@@ -6508,7 +6607,7 @@ type GetSelfHaStatusRequest struct {
 
 func (x *GetSelfHaStatusRequest) Reset() {
 	*x = GetSelfHaStatusRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[111]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6520,7 +6619,7 @@ func (x *GetSelfHaStatusRequest) String() string {
 func (*GetSelfHaStatusRequest) ProtoMessage() {}
 
 func (x *GetSelfHaStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[111]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6533,7 +6632,7 @@ func (x *GetSelfHaStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSelfHaStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetSelfHaStatusRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{111}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{112}
 }
 
 type GetSelfHaStatusResponse struct {
@@ -6551,7 +6650,7 @@ type GetSelfHaStatusResponse struct {
 
 func (x *GetSelfHaStatusResponse) Reset() {
 	*x = GetSelfHaStatusResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[112]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6563,7 +6662,7 @@ func (x *GetSelfHaStatusResponse) String() string {
 func (*GetSelfHaStatusResponse) ProtoMessage() {}
 
 func (x *GetSelfHaStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[112]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6576,7 +6675,7 @@ func (x *GetSelfHaStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSelfHaStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetSelfHaStatusResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{112}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *GetSelfHaStatusResponse) GetSuccess() bool {
@@ -6652,7 +6751,7 @@ type ResourceInfo struct {
 
 func (x *ResourceInfo) Reset() {
 	*x = ResourceInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[113]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6664,7 +6763,7 @@ func (x *ResourceInfo) String() string {
 func (*ResourceInfo) ProtoMessage() {}
 
 func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[113]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6677,7 +6776,7 @@ func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceInfo.ProtoReflect.Descriptor instead.
 func (*ResourceInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{113}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *ResourceInfo) GetName() string {
@@ -6772,7 +6871,7 @@ type ResourceStatus struct {
 
 func (x *ResourceStatus) Reset() {
 	*x = ResourceStatus{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[114]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6784,7 +6883,7 @@ func (x *ResourceStatus) String() string {
 func (*ResourceStatus) ProtoMessage() {}
 
 func (x *ResourceStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[114]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6797,7 +6896,7 @@ func (x *ResourceStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceStatus.ProtoReflect.Descriptor instead.
 func (*ResourceStatus) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{114}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *ResourceStatus) GetName() string {
@@ -6885,7 +6984,7 @@ type NodeResourceState struct {
 
 func (x *NodeResourceState) Reset() {
 	*x = NodeResourceState{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[115]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6897,7 +6996,7 @@ func (x *NodeResourceState) String() string {
 func (*NodeResourceState) ProtoMessage() {}
 
 func (x *NodeResourceState) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[115]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6910,7 +7009,7 @@ func (x *NodeResourceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeResourceState.ProtoReflect.Descriptor instead.
 func (*NodeResourceState) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{115}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *NodeResourceState) GetRole() string {
@@ -6957,7 +7056,7 @@ type VolumeInfo struct {
 
 func (x *VolumeInfo) Reset() {
 	*x = VolumeInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[116]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6969,7 +7068,7 @@ func (x *VolumeInfo) String() string {
 func (*VolumeInfo) ProtoMessage() {}
 
 func (x *VolumeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[116]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6982,7 +7081,7 @@ func (x *VolumeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VolumeInfo.ProtoReflect.Descriptor instead.
 func (*VolumeInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{116}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *VolumeInfo) GetVolumeId() uint32 {
@@ -7032,7 +7131,7 @@ type CreateSnapshotRequest struct {
 
 func (x *CreateSnapshotRequest) Reset() {
 	*x = CreateSnapshotRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[117]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7044,7 +7143,7 @@ func (x *CreateSnapshotRequest) String() string {
 func (*CreateSnapshotRequest) ProtoMessage() {}
 
 func (x *CreateSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[117]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7057,7 +7156,7 @@ func (x *CreateSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{117}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *CreateSnapshotRequest) GetVolume() string {
@@ -7091,7 +7190,7 @@ type CreateSnapshotResponse struct {
 
 func (x *CreateSnapshotResponse) Reset() {
 	*x = CreateSnapshotResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[118]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7103,7 +7202,7 @@ func (x *CreateSnapshotResponse) String() string {
 func (*CreateSnapshotResponse) ProtoMessage() {}
 
 func (x *CreateSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[118]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7116,7 +7215,7 @@ func (x *CreateSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{118}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *CreateSnapshotResponse) GetSuccess() bool {
@@ -7144,7 +7243,7 @@ type DeleteSnapshotRequest struct {
 
 func (x *DeleteSnapshotRequest) Reset() {
 	*x = DeleteSnapshotRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[119]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7156,7 +7255,7 @@ func (x *DeleteSnapshotRequest) String() string {
 func (*DeleteSnapshotRequest) ProtoMessage() {}
 
 func (x *DeleteSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[119]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7169,7 +7268,7 @@ func (x *DeleteSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{119}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *DeleteSnapshotRequest) GetVolume() string {
@@ -7203,7 +7302,7 @@ type DeleteSnapshotResponse struct {
 
 func (x *DeleteSnapshotResponse) Reset() {
 	*x = DeleteSnapshotResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[120]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7215,7 +7314,7 @@ func (x *DeleteSnapshotResponse) String() string {
 func (*DeleteSnapshotResponse) ProtoMessage() {}
 
 func (x *DeleteSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[120]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7228,7 +7327,7 @@ func (x *DeleteSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{120}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *DeleteSnapshotResponse) GetSuccess() bool {
@@ -7256,7 +7355,7 @@ type RestoreSnapshotRequest struct {
 
 func (x *RestoreSnapshotRequest) Reset() {
 	*x = RestoreSnapshotRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[121]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7268,7 +7367,7 @@ func (x *RestoreSnapshotRequest) String() string {
 func (*RestoreSnapshotRequest) ProtoMessage() {}
 
 func (x *RestoreSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[121]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7281,7 +7380,7 @@ func (x *RestoreSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*RestoreSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{121}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *RestoreSnapshotRequest) GetVolume() string {
@@ -7315,7 +7414,7 @@ type RestoreSnapshotResponse struct {
 
 func (x *RestoreSnapshotResponse) Reset() {
 	*x = RestoreSnapshotResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[122]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7327,7 +7426,7 @@ func (x *RestoreSnapshotResponse) String() string {
 func (*RestoreSnapshotResponse) ProtoMessage() {}
 
 func (x *RestoreSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[122]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7340,7 +7439,7 @@ func (x *RestoreSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*RestoreSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{122}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *RestoreSnapshotResponse) GetSuccess() bool {
@@ -7367,7 +7466,7 @@ type ListSnapshotsRequest struct {
 
 func (x *ListSnapshotsRequest) Reset() {
 	*x = ListSnapshotsRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[123]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7379,7 +7478,7 @@ func (x *ListSnapshotsRequest) String() string {
 func (*ListSnapshotsRequest) ProtoMessage() {}
 
 func (x *ListSnapshotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[123]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7392,7 +7491,7 @@ func (x *ListSnapshotsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotsRequest.ProtoReflect.Descriptor instead.
 func (*ListSnapshotsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{123}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *ListSnapshotsRequest) GetVolume() string {
@@ -7420,7 +7519,7 @@ type ListSnapshotsResponse struct {
 
 func (x *ListSnapshotsResponse) Reset() {
 	*x = ListSnapshotsResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[124]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7432,7 +7531,7 @@ func (x *ListSnapshotsResponse) String() string {
 func (*ListSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[124]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7445,7 +7544,7 @@ func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{124}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *ListSnapshotsResponse) GetSuccess() bool {
@@ -7481,7 +7580,7 @@ type SnapshotInfo struct {
 
 func (x *SnapshotInfo) Reset() {
 	*x = SnapshotInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[125]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7493,7 +7592,7 @@ func (x *SnapshotInfo) String() string {
 func (*SnapshotInfo) ProtoMessage() {}
 
 func (x *SnapshotInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[125]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7506,7 +7605,7 @@ func (x *SnapshotInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotInfo.ProtoReflect.Descriptor instead.
 func (*SnapshotInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{125}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *SnapshotInfo) GetName() string {
@@ -7552,7 +7651,7 @@ type GFSRetention struct {
 
 func (x *GFSRetention) Reset() {
 	*x = GFSRetention{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[126]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7564,7 +7663,7 @@ func (x *GFSRetention) String() string {
 func (*GFSRetention) ProtoMessage() {}
 
 func (x *GFSRetention) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[126]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7577,7 +7676,7 @@ func (x *GFSRetention) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GFSRetention.ProtoReflect.Descriptor instead.
 func (*GFSRetention) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{126}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *GFSRetention) GetHourly() int32 {
@@ -7630,7 +7729,7 @@ type SnapshotScheduleInfo struct {
 
 func (x *SnapshotScheduleInfo) Reset() {
 	*x = SnapshotScheduleInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[127]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7642,7 +7741,7 @@ func (x *SnapshotScheduleInfo) String() string {
 func (*SnapshotScheduleInfo) ProtoMessage() {}
 
 func (x *SnapshotScheduleInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[127]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7655,7 +7754,7 @@ func (x *SnapshotScheduleInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotScheduleInfo.ProtoReflect.Descriptor instead.
 func (*SnapshotScheduleInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{127}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *SnapshotScheduleInfo) GetName() string {
@@ -7719,7 +7818,7 @@ type CreateSnapshotScheduleRequest struct {
 
 func (x *CreateSnapshotScheduleRequest) Reset() {
 	*x = CreateSnapshotScheduleRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[128]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7731,7 +7830,7 @@ func (x *CreateSnapshotScheduleRequest) String() string {
 func (*CreateSnapshotScheduleRequest) ProtoMessage() {}
 
 func (x *CreateSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[128]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7744,7 +7843,7 @@ func (x *CreateSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotScheduleRequest.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{128}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *CreateSnapshotScheduleRequest) GetResource() string {
@@ -7785,7 +7884,7 @@ type CreateSnapshotScheduleResponse struct {
 
 func (x *CreateSnapshotScheduleResponse) Reset() {
 	*x = CreateSnapshotScheduleResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[129]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7797,7 +7896,7 @@ func (x *CreateSnapshotScheduleResponse) String() string {
 func (*CreateSnapshotScheduleResponse) ProtoMessage() {}
 
 func (x *CreateSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[129]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7810,7 +7909,7 @@ func (x *CreateSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotScheduleResponse.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{129}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *CreateSnapshotScheduleResponse) GetSuccess() bool {
@@ -7835,7 +7934,7 @@ type ListSnapshotSchedulesRequest struct {
 
 func (x *ListSnapshotSchedulesRequest) Reset() {
 	*x = ListSnapshotSchedulesRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[130]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7847,7 +7946,7 @@ func (x *ListSnapshotSchedulesRequest) String() string {
 func (*ListSnapshotSchedulesRequest) ProtoMessage() {}
 
 func (x *ListSnapshotSchedulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[130]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7860,7 +7959,7 @@ func (x *ListSnapshotSchedulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotSchedulesRequest.ProtoReflect.Descriptor instead.
 func (*ListSnapshotSchedulesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{130}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{131}
 }
 
 type ListSnapshotSchedulesResponse struct {
@@ -7874,7 +7973,7 @@ type ListSnapshotSchedulesResponse struct {
 
 func (x *ListSnapshotSchedulesResponse) Reset() {
 	*x = ListSnapshotSchedulesResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[131]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7886,7 +7985,7 @@ func (x *ListSnapshotSchedulesResponse) String() string {
 func (*ListSnapshotSchedulesResponse) ProtoMessage() {}
 
 func (x *ListSnapshotSchedulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[131]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7899,7 +7998,7 @@ func (x *ListSnapshotSchedulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotSchedulesResponse.ProtoReflect.Descriptor instead.
 func (*ListSnapshotSchedulesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{131}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *ListSnapshotSchedulesResponse) GetSuccess() bool {
@@ -7932,7 +8031,7 @@ type DeleteSnapshotScheduleRequest struct {
 
 func (x *DeleteSnapshotScheduleRequest) Reset() {
 	*x = DeleteSnapshotScheduleRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[132]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7944,7 +8043,7 @@ func (x *DeleteSnapshotScheduleRequest) String() string {
 func (*DeleteSnapshotScheduleRequest) ProtoMessage() {}
 
 func (x *DeleteSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[132]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7957,7 +8056,7 @@ func (x *DeleteSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotScheduleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{132}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *DeleteSnapshotScheduleRequest) GetName() string {
@@ -7977,7 +8076,7 @@ type DeleteSnapshotScheduleResponse struct {
 
 func (x *DeleteSnapshotScheduleResponse) Reset() {
 	*x = DeleteSnapshotScheduleResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[133]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7989,7 +8088,7 @@ func (x *DeleteSnapshotScheduleResponse) String() string {
 func (*DeleteSnapshotScheduleResponse) ProtoMessage() {}
 
 func (x *DeleteSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[133]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8002,7 +8101,7 @@ func (x *DeleteSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotScheduleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{133}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *DeleteSnapshotScheduleResponse) GetSuccess() bool {
@@ -8034,7 +8133,7 @@ type CreateNFSGatewayRequest struct {
 
 func (x *CreateNFSGatewayRequest) Reset() {
 	*x = CreateNFSGatewayRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[134]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8046,7 +8145,7 @@ func (x *CreateNFSGatewayRequest) String() string {
 func (*CreateNFSGatewayRequest) ProtoMessage() {}
 
 func (x *CreateNFSGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[134]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8059,7 +8158,7 @@ func (x *CreateNFSGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNFSGatewayRequest.ProtoReflect.Descriptor instead.
 func (*CreateNFSGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{134}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *CreateNFSGatewayRequest) GetResource() string {
@@ -8115,7 +8214,7 @@ type CreateNFSGatewayResponse struct {
 
 func (x *CreateNFSGatewayResponse) Reset() {
 	*x = CreateNFSGatewayResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[135]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8127,7 +8226,7 @@ func (x *CreateNFSGatewayResponse) String() string {
 func (*CreateNFSGatewayResponse) ProtoMessage() {}
 
 func (x *CreateNFSGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[135]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8140,7 +8239,7 @@ func (x *CreateNFSGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNFSGatewayResponse.ProtoReflect.Descriptor instead.
 func (*CreateNFSGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{135}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *CreateNFSGatewayResponse) GetSuccess() bool {
@@ -8180,7 +8279,7 @@ type CreateISCSIGatewayRequest struct {
 
 func (x *CreateISCSIGatewayRequest) Reset() {
 	*x = CreateISCSIGatewayRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[136]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8192,7 +8291,7 @@ func (x *CreateISCSIGatewayRequest) String() string {
 func (*CreateISCSIGatewayRequest) ProtoMessage() {}
 
 func (x *CreateISCSIGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[136]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8205,7 +8304,7 @@ func (x *CreateISCSIGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateISCSIGatewayRequest.ProtoReflect.Descriptor instead.
 func (*CreateISCSIGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{136}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *CreateISCSIGatewayRequest) GetResource() string {
@@ -8275,7 +8374,7 @@ type CreateISCSIGatewayResponse struct {
 
 func (x *CreateISCSIGatewayResponse) Reset() {
 	*x = CreateISCSIGatewayResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[137]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8287,7 +8386,7 @@ func (x *CreateISCSIGatewayResponse) String() string {
 func (*CreateISCSIGatewayResponse) ProtoMessage() {}
 
 func (x *CreateISCSIGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[137]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8300,7 +8399,7 @@ func (x *CreateISCSIGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateISCSIGatewayResponse.ProtoReflect.Descriptor instead.
 func (*CreateISCSIGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{137}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *CreateISCSIGatewayResponse) GetSuccess() bool {
@@ -8337,7 +8436,7 @@ type CreateNVMeGatewayRequest struct {
 
 func (x *CreateNVMeGatewayRequest) Reset() {
 	*x = CreateNVMeGatewayRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[138]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8349,7 +8448,7 @@ func (x *CreateNVMeGatewayRequest) String() string {
 func (*CreateNVMeGatewayRequest) ProtoMessage() {}
 
 func (x *CreateNVMeGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[138]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8362,7 +8461,7 @@ func (x *CreateNVMeGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNVMeGatewayRequest.ProtoReflect.Descriptor instead.
 func (*CreateNVMeGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{138}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *CreateNVMeGatewayRequest) GetResource() string {
@@ -8411,7 +8510,7 @@ type CreateNVMeGatewayResponse struct {
 
 func (x *CreateNVMeGatewayResponse) Reset() {
 	*x = CreateNVMeGatewayResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[139]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8423,7 +8522,7 @@ func (x *CreateNVMeGatewayResponse) String() string {
 func (*CreateNVMeGatewayResponse) ProtoMessage() {}
 
 func (x *CreateNVMeGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[139]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8436,7 +8535,7 @@ func (x *CreateNVMeGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNVMeGatewayResponse.ProtoReflect.Descriptor instead.
 func (*CreateNVMeGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{139}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *CreateNVMeGatewayResponse) GetSuccess() bool {
@@ -8469,7 +8568,7 @@ type DeleteGatewayRequest struct {
 
 func (x *DeleteGatewayRequest) Reset() {
 	*x = DeleteGatewayRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[140]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8481,7 +8580,7 @@ func (x *DeleteGatewayRequest) String() string {
 func (*DeleteGatewayRequest) ProtoMessage() {}
 
 func (x *DeleteGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[140]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8494,7 +8593,7 @@ func (x *DeleteGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGatewayRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{140}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *DeleteGatewayRequest) GetId() string {
@@ -8514,7 +8613,7 @@ type DeleteGatewayResponse struct {
 
 func (x *DeleteGatewayResponse) Reset() {
 	*x = DeleteGatewayResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[141]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8526,7 +8625,7 @@ func (x *DeleteGatewayResponse) String() string {
 func (*DeleteGatewayResponse) ProtoMessage() {}
 
 func (x *DeleteGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[141]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8539,7 +8638,7 @@ func (x *DeleteGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGatewayResponse.ProtoReflect.Descriptor instead.
 func (*DeleteGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{141}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *DeleteGatewayResponse) GetSuccess() bool {
@@ -8565,7 +8664,7 @@ type GetGatewayRequest struct {
 
 func (x *GetGatewayRequest) Reset() {
 	*x = GetGatewayRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[142]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8577,7 +8676,7 @@ func (x *GetGatewayRequest) String() string {
 func (*GetGatewayRequest) ProtoMessage() {}
 
 func (x *GetGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[142]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8590,7 +8689,7 @@ func (x *GetGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayRequest.ProtoReflect.Descriptor instead.
 func (*GetGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{142}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *GetGatewayRequest) GetId() string {
@@ -8611,7 +8710,7 @@ type GetGatewayResponse struct {
 
 func (x *GetGatewayResponse) Reset() {
 	*x = GetGatewayResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[143]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8623,7 +8722,7 @@ func (x *GetGatewayResponse) String() string {
 func (*GetGatewayResponse) ProtoMessage() {}
 
 func (x *GetGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[143]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8636,7 +8735,7 @@ func (x *GetGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayResponse.ProtoReflect.Descriptor instead.
 func (*GetGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{143}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *GetGatewayResponse) GetSuccess() bool {
@@ -8668,7 +8767,7 @@ type ListGatewaysRequest struct {
 
 func (x *ListGatewaysRequest) Reset() {
 	*x = ListGatewaysRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[144]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8680,7 +8779,7 @@ func (x *ListGatewaysRequest) String() string {
 func (*ListGatewaysRequest) ProtoMessage() {}
 
 func (x *ListGatewaysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[144]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8693,7 +8792,7 @@ func (x *ListGatewaysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGatewaysRequest.ProtoReflect.Descriptor instead.
 func (*ListGatewaysRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{144}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{145}
 }
 
 type ListGatewaysResponse struct {
@@ -8707,7 +8806,7 @@ type ListGatewaysResponse struct {
 
 func (x *ListGatewaysResponse) Reset() {
 	*x = ListGatewaysResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[145]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8719,7 +8818,7 @@ func (x *ListGatewaysResponse) String() string {
 func (*ListGatewaysResponse) ProtoMessage() {}
 
 func (x *ListGatewaysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[145]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8732,7 +8831,7 @@ func (x *ListGatewaysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGatewaysResponse.ProtoReflect.Descriptor instead.
 func (*ListGatewaysResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{145}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *ListGatewaysResponse) GetSuccess() bool {
@@ -8765,7 +8864,7 @@ type StartGatewayRequest struct {
 
 func (x *StartGatewayRequest) Reset() {
 	*x = StartGatewayRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[146]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8777,7 +8876,7 @@ func (x *StartGatewayRequest) String() string {
 func (*StartGatewayRequest) ProtoMessage() {}
 
 func (x *StartGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[146]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8790,7 +8889,7 @@ func (x *StartGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartGatewayRequest.ProtoReflect.Descriptor instead.
 func (*StartGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{146}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *StartGatewayRequest) GetId() string {
@@ -8810,7 +8909,7 @@ type StartGatewayResponse struct {
 
 func (x *StartGatewayResponse) Reset() {
 	*x = StartGatewayResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[147]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8822,7 +8921,7 @@ func (x *StartGatewayResponse) String() string {
 func (*StartGatewayResponse) ProtoMessage() {}
 
 func (x *StartGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[147]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8835,7 +8934,7 @@ func (x *StartGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartGatewayResponse.ProtoReflect.Descriptor instead.
 func (*StartGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{147}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *StartGatewayResponse) GetSuccess() bool {
@@ -8861,7 +8960,7 @@ type StopGatewayRequest struct {
 
 func (x *StopGatewayRequest) Reset() {
 	*x = StopGatewayRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[148]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8873,7 +8972,7 @@ func (x *StopGatewayRequest) String() string {
 func (*StopGatewayRequest) ProtoMessage() {}
 
 func (x *StopGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[148]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8886,7 +8985,7 @@ func (x *StopGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopGatewayRequest.ProtoReflect.Descriptor instead.
 func (*StopGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{148}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *StopGatewayRequest) GetId() string {
@@ -8906,7 +9005,7 @@ type StopGatewayResponse struct {
 
 func (x *StopGatewayResponse) Reset() {
 	*x = StopGatewayResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[149]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8918,7 +9017,7 @@ func (x *StopGatewayResponse) String() string {
 func (*StopGatewayResponse) ProtoMessage() {}
 
 func (x *StopGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[149]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8931,7 +9030,7 @@ func (x *StopGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopGatewayResponse.ProtoReflect.Descriptor instead.
 func (*StopGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{149}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *StopGatewayResponse) GetSuccess() bool {
@@ -8965,7 +9064,7 @@ type GatewayInfo struct {
 
 func (x *GatewayInfo) Reset() {
 	*x = GatewayInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[150]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8977,7 +9076,7 @@ func (x *GatewayInfo) String() string {
 func (*GatewayInfo) ProtoMessage() {}
 
 func (x *GatewayInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[150]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8990,7 +9089,7 @@ func (x *GatewayInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatewayInfo.ProtoReflect.Descriptor instead.
 func (*GatewayInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{150}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *GatewayInfo) GetId() string {
@@ -9068,7 +9167,7 @@ type NFSExportInfo struct {
 
 func (x *NFSExportInfo) Reset() {
 	*x = NFSExportInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[151]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9080,7 +9179,7 @@ func (x *NFSExportInfo) String() string {
 func (*NFSExportInfo) ProtoMessage() {}
 
 func (x *NFSExportInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[151]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9093,7 +9192,7 @@ func (x *NFSExportInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NFSExportInfo.ProtoReflect.Descriptor instead.
 func (*NFSExportInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{151}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *NFSExportInfo) GetDirectory() string {
@@ -9137,7 +9236,7 @@ type AddNFSExportRequest struct {
 
 func (x *AddNFSExportRequest) Reset() {
 	*x = AddNFSExportRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[152]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9149,7 +9248,7 @@ func (x *AddNFSExportRequest) String() string {
 func (*AddNFSExportRequest) ProtoMessage() {}
 
 func (x *AddNFSExportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[152]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9162,7 +9261,7 @@ func (x *AddNFSExportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNFSExportRequest.ProtoReflect.Descriptor instead.
 func (*AddNFSExportRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{152}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *AddNFSExportRequest) GetResource() string {
@@ -9210,7 +9309,7 @@ type AddNFSExportResponse struct {
 
 func (x *AddNFSExportResponse) Reset() {
 	*x = AddNFSExportResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[153]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9222,7 +9321,7 @@ func (x *AddNFSExportResponse) String() string {
 func (*AddNFSExportResponse) ProtoMessage() {}
 
 func (x *AddNFSExportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[153]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9235,7 +9334,7 @@ func (x *AddNFSExportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNFSExportResponse.ProtoReflect.Descriptor instead.
 func (*AddNFSExportResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{153}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *AddNFSExportResponse) GetSuccess() bool {
@@ -9262,7 +9361,7 @@ type RemoveNFSExportRequest struct {
 
 func (x *RemoveNFSExportRequest) Reset() {
 	*x = RemoveNFSExportRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[154]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9274,7 +9373,7 @@ func (x *RemoveNFSExportRequest) String() string {
 func (*RemoveNFSExportRequest) ProtoMessage() {}
 
 func (x *RemoveNFSExportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[154]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9287,7 +9386,7 @@ func (x *RemoveNFSExportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNFSExportRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNFSExportRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{154}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *RemoveNFSExportRequest) GetResource() string {
@@ -9314,7 +9413,7 @@ type RemoveNFSExportResponse struct {
 
 func (x *RemoveNFSExportResponse) Reset() {
 	*x = RemoveNFSExportResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[155]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9326,7 +9425,7 @@ func (x *RemoveNFSExportResponse) String() string {
 func (*RemoveNFSExportResponse) ProtoMessage() {}
 
 func (x *RemoveNFSExportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[155]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9339,7 +9438,7 @@ func (x *RemoveNFSExportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNFSExportResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNFSExportResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{155}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *RemoveNFSExportResponse) GetSuccess() bool {
@@ -9365,7 +9464,7 @@ type ListNFSExportsRequest struct {
 
 func (x *ListNFSExportsRequest) Reset() {
 	*x = ListNFSExportsRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[156]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9377,7 +9476,7 @@ func (x *ListNFSExportsRequest) String() string {
 func (*ListNFSExportsRequest) ProtoMessage() {}
 
 func (x *ListNFSExportsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[156]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9390,7 +9489,7 @@ func (x *ListNFSExportsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNFSExportsRequest.ProtoReflect.Descriptor instead.
 func (*ListNFSExportsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{156}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *ListNFSExportsRequest) GetResource() string {
@@ -9411,7 +9510,7 @@ type ListNFSExportsResponse struct {
 
 func (x *ListNFSExportsResponse) Reset() {
 	*x = ListNFSExportsResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[157]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9423,7 +9522,7 @@ func (x *ListNFSExportsResponse) String() string {
 func (*ListNFSExportsResponse) ProtoMessage() {}
 
 func (x *ListNFSExportsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[157]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9436,7 +9535,7 @@ func (x *ListNFSExportsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNFSExportsResponse.ProtoReflect.Descriptor instead.
 func (*ListNFSExportsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{157}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *ListNFSExportsResponse) GetSuccess() bool {
@@ -9471,7 +9570,7 @@ type ISCSILUNInfo struct {
 
 func (x *ISCSILUNInfo) Reset() {
 	*x = ISCSILUNInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[158]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9483,7 +9582,7 @@ func (x *ISCSILUNInfo) String() string {
 func (*ISCSILUNInfo) ProtoMessage() {}
 
 func (x *ISCSILUNInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[158]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9496,7 +9595,7 @@ func (x *ISCSILUNInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ISCSILUNInfo.ProtoReflect.Descriptor instead.
 func (*ISCSILUNInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{158}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *ISCSILUNInfo) GetLun() int32 {
@@ -9531,7 +9630,7 @@ type AddISCSILUNRequest struct {
 
 func (x *AddISCSILUNRequest) Reset() {
 	*x = AddISCSILUNRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[159]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9543,7 +9642,7 @@ func (x *AddISCSILUNRequest) String() string {
 func (*AddISCSILUNRequest) ProtoMessage() {}
 
 func (x *AddISCSILUNRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[159]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9556,7 +9655,7 @@ func (x *AddISCSILUNRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSILUNRequest.ProtoReflect.Descriptor instead.
 func (*AddISCSILUNRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{159}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *AddISCSILUNRequest) GetResource() string {
@@ -9590,7 +9689,7 @@ type AddISCSILUNResponse struct {
 
 func (x *AddISCSILUNResponse) Reset() {
 	*x = AddISCSILUNResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[160]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9602,7 +9701,7 @@ func (x *AddISCSILUNResponse) String() string {
 func (*AddISCSILUNResponse) ProtoMessage() {}
 
 func (x *AddISCSILUNResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[160]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9615,7 +9714,7 @@ func (x *AddISCSILUNResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSILUNResponse.ProtoReflect.Descriptor instead.
 func (*AddISCSILUNResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{160}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *AddISCSILUNResponse) GetSuccess() bool {
@@ -9642,7 +9741,7 @@ type RemoveISCSILUNRequest struct {
 
 func (x *RemoveISCSILUNRequest) Reset() {
 	*x = RemoveISCSILUNRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[161]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9654,7 +9753,7 @@ func (x *RemoveISCSILUNRequest) String() string {
 func (*RemoveISCSILUNRequest) ProtoMessage() {}
 
 func (x *RemoveISCSILUNRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[161]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9667,7 +9766,7 @@ func (x *RemoveISCSILUNRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSILUNRequest.ProtoReflect.Descriptor instead.
 func (*RemoveISCSILUNRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{161}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *RemoveISCSILUNRequest) GetResource() string {
@@ -9694,7 +9793,7 @@ type RemoveISCSILUNResponse struct {
 
 func (x *RemoveISCSILUNResponse) Reset() {
 	*x = RemoveISCSILUNResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[162]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9706,7 +9805,7 @@ func (x *RemoveISCSILUNResponse) String() string {
 func (*RemoveISCSILUNResponse) ProtoMessage() {}
 
 func (x *RemoveISCSILUNResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[162]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9719,7 +9818,7 @@ func (x *RemoveISCSILUNResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSILUNResponse.ProtoReflect.Descriptor instead.
 func (*RemoveISCSILUNResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{162}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *RemoveISCSILUNResponse) GetSuccess() bool {
@@ -9745,7 +9844,7 @@ type ListISCSILUNsRequest struct {
 
 func (x *ListISCSILUNsRequest) Reset() {
 	*x = ListISCSILUNsRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[163]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9757,7 +9856,7 @@ func (x *ListISCSILUNsRequest) String() string {
 func (*ListISCSILUNsRequest) ProtoMessage() {}
 
 func (x *ListISCSILUNsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[163]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9770,7 +9869,7 @@ func (x *ListISCSILUNsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSILUNsRequest.ProtoReflect.Descriptor instead.
 func (*ListISCSILUNsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{163}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *ListISCSILUNsRequest) GetResource() string {
@@ -9791,7 +9890,7 @@ type ListISCSILUNsResponse struct {
 
 func (x *ListISCSILUNsResponse) Reset() {
 	*x = ListISCSILUNsResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[164]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9803,7 +9902,7 @@ func (x *ListISCSILUNsResponse) String() string {
 func (*ListISCSILUNsResponse) ProtoMessage() {}
 
 func (x *ListISCSILUNsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[164]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9816,7 +9915,7 @@ func (x *ListISCSILUNsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSILUNsResponse.ProtoReflect.Descriptor instead.
 func (*ListISCSILUNsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{164}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *ListISCSILUNsResponse) GetSuccess() bool {
@@ -9850,7 +9949,7 @@ type AddISCSIInitiatorRequest struct {
 
 func (x *AddISCSIInitiatorRequest) Reset() {
 	*x = AddISCSIInitiatorRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[165]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9862,7 +9961,7 @@ func (x *AddISCSIInitiatorRequest) String() string {
 func (*AddISCSIInitiatorRequest) ProtoMessage() {}
 
 func (x *AddISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[165]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9875,7 +9974,7 @@ func (x *AddISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSIInitiatorRequest.ProtoReflect.Descriptor instead.
 func (*AddISCSIInitiatorRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{165}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *AddISCSIInitiatorRequest) GetResource() string {
@@ -9902,7 +10001,7 @@ type AddISCSIInitiatorResponse struct {
 
 func (x *AddISCSIInitiatorResponse) Reset() {
 	*x = AddISCSIInitiatorResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[166]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9914,7 +10013,7 @@ func (x *AddISCSIInitiatorResponse) String() string {
 func (*AddISCSIInitiatorResponse) ProtoMessage() {}
 
 func (x *AddISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[166]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9927,7 +10026,7 @@ func (x *AddISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSIInitiatorResponse.ProtoReflect.Descriptor instead.
 func (*AddISCSIInitiatorResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{166}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *AddISCSIInitiatorResponse) GetSuccess() bool {
@@ -9954,7 +10053,7 @@ type RemoveISCSIInitiatorRequest struct {
 
 func (x *RemoveISCSIInitiatorRequest) Reset() {
 	*x = RemoveISCSIInitiatorRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[167]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9966,7 +10065,7 @@ func (x *RemoveISCSIInitiatorRequest) String() string {
 func (*RemoveISCSIInitiatorRequest) ProtoMessage() {}
 
 func (x *RemoveISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[167]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9979,7 +10078,7 @@ func (x *RemoveISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSIInitiatorRequest.ProtoReflect.Descriptor instead.
 func (*RemoveISCSIInitiatorRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{167}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *RemoveISCSIInitiatorRequest) GetResource() string {
@@ -10006,7 +10105,7 @@ type RemoveISCSIInitiatorResponse struct {
 
 func (x *RemoveISCSIInitiatorResponse) Reset() {
 	*x = RemoveISCSIInitiatorResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[168]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10018,7 +10117,7 @@ func (x *RemoveISCSIInitiatorResponse) String() string {
 func (*RemoveISCSIInitiatorResponse) ProtoMessage() {}
 
 func (x *RemoveISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[168]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10031,7 +10130,7 @@ func (x *RemoveISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSIInitiatorResponse.ProtoReflect.Descriptor instead.
 func (*RemoveISCSIInitiatorResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{168}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *RemoveISCSIInitiatorResponse) GetSuccess() bool {
@@ -10057,7 +10156,7 @@ type ListISCSIInitiatorsRequest struct {
 
 func (x *ListISCSIInitiatorsRequest) Reset() {
 	*x = ListISCSIInitiatorsRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[169]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10069,7 +10168,7 @@ func (x *ListISCSIInitiatorsRequest) String() string {
 func (*ListISCSIInitiatorsRequest) ProtoMessage() {}
 
 func (x *ListISCSIInitiatorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[169]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10082,7 +10181,7 @@ func (x *ListISCSIInitiatorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSIInitiatorsRequest.ProtoReflect.Descriptor instead.
 func (*ListISCSIInitiatorsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{169}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *ListISCSIInitiatorsRequest) GetResource() string {
@@ -10103,7 +10202,7 @@ type ListISCSIInitiatorsResponse struct {
 
 func (x *ListISCSIInitiatorsResponse) Reset() {
 	*x = ListISCSIInitiatorsResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[170]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10115,7 +10214,7 @@ func (x *ListISCSIInitiatorsResponse) String() string {
 func (*ListISCSIInitiatorsResponse) ProtoMessage() {}
 
 func (x *ListISCSIInitiatorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[170]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10128,7 +10227,7 @@ func (x *ListISCSIInitiatorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSIInitiatorsResponse.ProtoReflect.Descriptor instead.
 func (*ListISCSIInitiatorsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{170}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *ListISCSIInitiatorsResponse) GetSuccess() bool {
@@ -10164,7 +10263,7 @@ type SetISCSIChapRequest struct {
 
 func (x *SetISCSIChapRequest) Reset() {
 	*x = SetISCSIChapRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[171]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10176,7 +10275,7 @@ func (x *SetISCSIChapRequest) String() string {
 func (*SetISCSIChapRequest) ProtoMessage() {}
 
 func (x *SetISCSIChapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[171]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10189,7 +10288,7 @@ func (x *SetISCSIChapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetISCSIChapRequest.ProtoReflect.Descriptor instead.
 func (*SetISCSIChapRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{171}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *SetISCSIChapRequest) GetResource() string {
@@ -10230,7 +10329,7 @@ type SetISCSIChapResponse struct {
 
 func (x *SetISCSIChapResponse) Reset() {
 	*x = SetISCSIChapResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[172]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10242,7 +10341,7 @@ func (x *SetISCSIChapResponse) String() string {
 func (*SetISCSIChapResponse) ProtoMessage() {}
 
 func (x *SetISCSIChapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[172]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10255,7 +10354,7 @@ func (x *SetISCSIChapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetISCSIChapResponse.ProtoReflect.Descriptor instead.
 func (*SetISCSIChapResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{172}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *SetISCSIChapResponse) GetSuccess() bool {
@@ -10281,7 +10380,7 @@ type GetISCSIChapRequest struct {
 
 func (x *GetISCSIChapRequest) Reset() {
 	*x = GetISCSIChapRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[173]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10293,7 +10392,7 @@ func (x *GetISCSIChapRequest) String() string {
 func (*GetISCSIChapRequest) ProtoMessage() {}
 
 func (x *GetISCSIChapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[173]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10306,7 +10405,7 @@ func (x *GetISCSIChapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetISCSIChapRequest.ProtoReflect.Descriptor instead.
 func (*GetISCSIChapRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{173}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *GetISCSIChapRequest) GetResource() string {
@@ -10329,7 +10428,7 @@ type GetISCSIChapResponse struct {
 
 func (x *GetISCSIChapResponse) Reset() {
 	*x = GetISCSIChapResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[174]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10341,7 +10440,7 @@ func (x *GetISCSIChapResponse) String() string {
 func (*GetISCSIChapResponse) ProtoMessage() {}
 
 func (x *GetISCSIChapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[174]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10354,7 +10453,7 @@ func (x *GetISCSIChapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetISCSIChapResponse.ProtoReflect.Descriptor instead.
 func (*GetISCSIChapResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{174}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *GetISCSIChapResponse) GetSuccess() bool {
@@ -10405,7 +10504,7 @@ type NVMeNamespaceInfo struct {
 
 func (x *NVMeNamespaceInfo) Reset() {
 	*x = NVMeNamespaceInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[175]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10417,7 +10516,7 @@ func (x *NVMeNamespaceInfo) String() string {
 func (*NVMeNamespaceInfo) ProtoMessage() {}
 
 func (x *NVMeNamespaceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[175]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10430,7 +10529,7 @@ func (x *NVMeNamespaceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NVMeNamespaceInfo.ProtoReflect.Descriptor instead.
 func (*NVMeNamespaceInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{175}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *NVMeNamespaceInfo) GetNamespaceId() int32 {
@@ -10478,7 +10577,7 @@ type AddNVMeNamespaceRequest struct {
 
 func (x *AddNVMeNamespaceRequest) Reset() {
 	*x = AddNVMeNamespaceRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[176]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10490,7 +10589,7 @@ func (x *AddNVMeNamespaceRequest) String() string {
 func (*AddNVMeNamespaceRequest) ProtoMessage() {}
 
 func (x *AddNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[176]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10503,7 +10602,7 @@ func (x *AddNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeNamespaceRequest.ProtoReflect.Descriptor instead.
 func (*AddNVMeNamespaceRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{176}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *AddNVMeNamespaceRequest) GetResource() string {
@@ -10530,7 +10629,7 @@ type AddNVMeNamespaceResponse struct {
 
 func (x *AddNVMeNamespaceResponse) Reset() {
 	*x = AddNVMeNamespaceResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[177]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10542,7 +10641,7 @@ func (x *AddNVMeNamespaceResponse) String() string {
 func (*AddNVMeNamespaceResponse) ProtoMessage() {}
 
 func (x *AddNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[177]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10555,7 +10654,7 @@ func (x *AddNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeNamespaceResponse.ProtoReflect.Descriptor instead.
 func (*AddNVMeNamespaceResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{177}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *AddNVMeNamespaceResponse) GetSuccess() bool {
@@ -10582,7 +10681,7 @@ type RemoveNVMeNamespaceRequest struct {
 
 func (x *RemoveNVMeNamespaceRequest) Reset() {
 	*x = RemoveNVMeNamespaceRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[178]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10594,7 +10693,7 @@ func (x *RemoveNVMeNamespaceRequest) String() string {
 func (*RemoveNVMeNamespaceRequest) ProtoMessage() {}
 
 func (x *RemoveNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[178]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10607,7 +10706,7 @@ func (x *RemoveNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeNamespaceRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeNamespaceRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{178}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *RemoveNVMeNamespaceRequest) GetResource() string {
@@ -10634,7 +10733,7 @@ type RemoveNVMeNamespaceResponse struct {
 
 func (x *RemoveNVMeNamespaceResponse) Reset() {
 	*x = RemoveNVMeNamespaceResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[179]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10646,7 +10745,7 @@ func (x *RemoveNVMeNamespaceResponse) String() string {
 func (*RemoveNVMeNamespaceResponse) ProtoMessage() {}
 
 func (x *RemoveNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[179]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10659,7 +10758,7 @@ func (x *RemoveNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeNamespaceResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeNamespaceResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{179}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *RemoveNVMeNamespaceResponse) GetSuccess() bool {
@@ -10685,7 +10784,7 @@ type ListNVMeNamespacesRequest struct {
 
 func (x *ListNVMeNamespacesRequest) Reset() {
 	*x = ListNVMeNamespacesRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[180]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10697,7 +10796,7 @@ func (x *ListNVMeNamespacesRequest) String() string {
 func (*ListNVMeNamespacesRequest) ProtoMessage() {}
 
 func (x *ListNVMeNamespacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[180]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10710,7 +10809,7 @@ func (x *ListNVMeNamespacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeNamespacesRequest.ProtoReflect.Descriptor instead.
 func (*ListNVMeNamespacesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{180}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *ListNVMeNamespacesRequest) GetResource() string {
@@ -10731,7 +10830,7 @@ type ListNVMeNamespacesResponse struct {
 
 func (x *ListNVMeNamespacesResponse) Reset() {
 	*x = ListNVMeNamespacesResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[181]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10743,7 +10842,7 @@ func (x *ListNVMeNamespacesResponse) String() string {
 func (*ListNVMeNamespacesResponse) ProtoMessage() {}
 
 func (x *ListNVMeNamespacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[181]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10756,7 +10855,7 @@ func (x *ListNVMeNamespacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeNamespacesResponse.ProtoReflect.Descriptor instead.
 func (*ListNVMeNamespacesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{181}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *ListNVMeNamespacesResponse) GetSuccess() bool {
@@ -10790,7 +10889,7 @@ type AddNVMeHostRequest struct {
 
 func (x *AddNVMeHostRequest) Reset() {
 	*x = AddNVMeHostRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[182]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10802,7 +10901,7 @@ func (x *AddNVMeHostRequest) String() string {
 func (*AddNVMeHostRequest) ProtoMessage() {}
 
 func (x *AddNVMeHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[182]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10815,7 +10914,7 @@ func (x *AddNVMeHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeHostRequest.ProtoReflect.Descriptor instead.
 func (*AddNVMeHostRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{182}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *AddNVMeHostRequest) GetResource() string {
@@ -10842,7 +10941,7 @@ type AddNVMeHostResponse struct {
 
 func (x *AddNVMeHostResponse) Reset() {
 	*x = AddNVMeHostResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[183]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10854,7 +10953,7 @@ func (x *AddNVMeHostResponse) String() string {
 func (*AddNVMeHostResponse) ProtoMessage() {}
 
 func (x *AddNVMeHostResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[183]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10867,7 +10966,7 @@ func (x *AddNVMeHostResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeHostResponse.ProtoReflect.Descriptor instead.
 func (*AddNVMeHostResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{183}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *AddNVMeHostResponse) GetSuccess() bool {
@@ -10894,7 +10993,7 @@ type RemoveNVMeHostRequest struct {
 
 func (x *RemoveNVMeHostRequest) Reset() {
 	*x = RemoveNVMeHostRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[184]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10906,7 +11005,7 @@ func (x *RemoveNVMeHostRequest) String() string {
 func (*RemoveNVMeHostRequest) ProtoMessage() {}
 
 func (x *RemoveNVMeHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[184]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10919,7 +11018,7 @@ func (x *RemoveNVMeHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeHostRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeHostRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{184}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *RemoveNVMeHostRequest) GetResource() string {
@@ -10946,7 +11045,7 @@ type RemoveNVMeHostResponse struct {
 
 func (x *RemoveNVMeHostResponse) Reset() {
 	*x = RemoveNVMeHostResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[185]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10958,7 +11057,7 @@ func (x *RemoveNVMeHostResponse) String() string {
 func (*RemoveNVMeHostResponse) ProtoMessage() {}
 
 func (x *RemoveNVMeHostResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[185]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10971,7 +11070,7 @@ func (x *RemoveNVMeHostResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeHostResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeHostResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{185}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *RemoveNVMeHostResponse) GetSuccess() bool {
@@ -10997,7 +11096,7 @@ type ListNVMeHostsRequest struct {
 
 func (x *ListNVMeHostsRequest) Reset() {
 	*x = ListNVMeHostsRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[186]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11009,7 +11108,7 @@ func (x *ListNVMeHostsRequest) String() string {
 func (*ListNVMeHostsRequest) ProtoMessage() {}
 
 func (x *ListNVMeHostsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[186]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11022,7 +11121,7 @@ func (x *ListNVMeHostsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeHostsRequest.ProtoReflect.Descriptor instead.
 func (*ListNVMeHostsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{186}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *ListNVMeHostsRequest) GetResource() string {
@@ -11043,7 +11142,7 @@ type ListNVMeHostsResponse struct {
 
 func (x *ListNVMeHostsResponse) Reset() {
 	*x = ListNVMeHostsResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[187]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11055,7 +11154,7 @@ func (x *ListNVMeHostsResponse) String() string {
 func (*ListNVMeHostsResponse) ProtoMessage() {}
 
 func (x *ListNVMeHostsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[187]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11068,7 +11167,7 @@ func (x *ListNVMeHostsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeHostsResponse.ProtoReflect.Descriptor instead.
 func (*ListNVMeHostsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{187}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{188}
 }
 
 func (x *ListNVMeHostsResponse) GetSuccess() bool {
@@ -11101,7 +11200,7 @@ type DeleteHaRequest struct {
 
 func (x *DeleteHaRequest) Reset() {
 	*x = DeleteHaRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[188]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11113,7 +11212,7 @@ func (x *DeleteHaRequest) String() string {
 func (*DeleteHaRequest) ProtoMessage() {}
 
 func (x *DeleteHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[188]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11126,7 +11225,7 @@ func (x *DeleteHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteHaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{188}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *DeleteHaRequest) GetResource() string {
@@ -11146,7 +11245,7 @@ type DeleteHaResponse struct {
 
 func (x *DeleteHaResponse) Reset() {
 	*x = DeleteHaResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[189]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11158,7 +11257,7 @@ func (x *DeleteHaResponse) String() string {
 func (*DeleteHaResponse) ProtoMessage() {}
 
 func (x *DeleteHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[189]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11171,7 +11270,7 @@ func (x *DeleteHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteHaResponse.ProtoReflect.Descriptor instead.
 func (*DeleteHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{189}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{190}
 }
 
 func (x *DeleteHaResponse) GetSuccess() bool {
@@ -11197,7 +11296,7 @@ type GetHaRequest struct {
 
 func (x *GetHaRequest) Reset() {
 	*x = GetHaRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[190]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11209,7 +11308,7 @@ func (x *GetHaRequest) String() string {
 func (*GetHaRequest) ProtoMessage() {}
 
 func (x *GetHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[190]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11222,7 +11321,7 @@ func (x *GetHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaRequest.ProtoReflect.Descriptor instead.
 func (*GetHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{190}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *GetHaRequest) GetResource() string {
@@ -11243,7 +11342,7 @@ type GetHaResponse struct {
 
 func (x *GetHaResponse) Reset() {
 	*x = GetHaResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[191]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11255,7 +11354,7 @@ func (x *GetHaResponse) String() string {
 func (*GetHaResponse) ProtoMessage() {}
 
 func (x *GetHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[191]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11268,7 +11367,7 @@ func (x *GetHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaResponse.ProtoReflect.Descriptor instead.
 func (*GetHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{191}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *GetHaResponse) GetSuccess() bool {
@@ -11300,7 +11399,7 @@ type ListHaRequest struct {
 
 func (x *ListHaRequest) Reset() {
 	*x = ListHaRequest{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[192]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11312,7 +11411,7 @@ func (x *ListHaRequest) String() string {
 func (*ListHaRequest) ProtoMessage() {}
 
 func (x *ListHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[192]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11325,7 +11424,7 @@ func (x *ListHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHaRequest.ProtoReflect.Descriptor instead.
 func (*ListHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{192}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{193}
 }
 
 type ListHaResponse struct {
@@ -11339,7 +11438,7 @@ type ListHaResponse struct {
 
 func (x *ListHaResponse) Reset() {
 	*x = ListHaResponse{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[193]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11351,7 +11450,7 @@ func (x *ListHaResponse) String() string {
 func (*ListHaResponse) ProtoMessage() {}
 
 func (x *ListHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[193]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11364,7 +11463,7 @@ func (x *ListHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHaResponse.ProtoReflect.Descriptor instead.
 func (*ListHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{193}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{194}
 }
 
 func (x *ListHaResponse) GetSuccess() bool {
@@ -11401,7 +11500,7 @@ type HaConfigInfo struct {
 
 func (x *HaConfigInfo) Reset() {
 	*x = HaConfigInfo{}
-	mi := &file_api_proto_v1_sds_proto_msgTypes[194]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11413,7 +11512,7 @@ func (x *HaConfigInfo) String() string {
 func (*HaConfigInfo) ProtoMessage() {}
 
 func (x *HaConfigInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_sds_proto_msgTypes[194]
+	mi := &file_api_proto_v1_sds_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11426,7 +11525,7 @@ func (x *HaConfigInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HaConfigInfo.ProtoReflect.Descriptor instead.
 func (*HaConfigInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{194}
+	return file_api_proto_v1_sds_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *HaConfigInfo) GetResource() string {
@@ -11834,7 +11933,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x06params\x18\x04 \x03(\v2\x18.v1.OcfAgent.ParamsEntryR\x06params\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbf\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\\\n" +
+	"\vHaStartItem\x12#\n" +
+	"\fsystemd_unit\x18\x01 \x01(\tH\x00R\vsystemdUnit\x12 \n" +
+	"\x03ocf\x18\x02 \x01(\v2\f.v1.OcfAgentH\x00R\x03ocfB\x06\n" +
+	"\x04item\"\xf1\x01\n" +
 	"\rMakeHaRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x1a\n" +
 	"\bservices\x18\x02 \x03(\tR\bservices\x12\x1f\n" +
@@ -11843,7 +11946,9 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x06fstype\x18\x04 \x01(\tR\x06fstype\x12\x10\n" +
 	"\x03vip\x18\x05 \x01(\tR\x03vip\x12+\n" +
 	"\n" +
-	"ocf_agents\x18\x06 \x03(\v2\f.v1.OcfAgentR\tocfAgents\"a\n" +
+	"ocf_agents\x18\x06 \x03(\v2\f.v1.OcfAgentR\tocfAgents\x120\n" +
+	"\vstart_items\x18\a \x03(\v2\x0f.v1.HaStartItemR\n" +
+	"startItems\"a\n" +
 	"\x11ResourceAgentInfo\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
@@ -12392,7 +12497,7 @@ func file_api_proto_v1_sds_proto_rawDescGZIP() []byte {
 	return file_api_proto_v1_sds_proto_rawDescData
 }
 
-var file_api_proto_v1_sds_proto_msgTypes = make([]protoimpl.MessageInfo, 207)
+var file_api_proto_v1_sds_proto_msgTypes = make([]protoimpl.MessageInfo, 208)
 var file_api_proto_v1_sds_proto_goTypes = []any{
 	(*CreatePoolRequest)(nil),                // 0: v1.CreatePoolRequest
 	(*CreatePoolResponse)(nil),               // 1: v1.CreatePoolResponse
@@ -12487,347 +12592,350 @@ var file_api_proto_v1_sds_proto_goTypes = []any{
 	(*UnmountResourceRequest)(nil),           // 90: v1.UnmountResourceRequest
 	(*UnmountResourceResponse)(nil),          // 91: v1.UnmountResourceResponse
 	(*OcfAgent)(nil),                         // 92: v1.OcfAgent
-	(*MakeHaRequest)(nil),                    // 93: v1.MakeHaRequest
-	(*ResourceAgentInfo)(nil),                // 94: v1.ResourceAgentInfo
-	(*ListResourceAgentsRequest)(nil),        // 95: v1.ListResourceAgentsRequest
-	(*ListResourceAgentsResponse)(nil),       // 96: v1.ListResourceAgentsResponse
-	(*ResourceAgentParameter)(nil),           // 97: v1.ResourceAgentParameter
-	(*GetResourceAgentMetadataRequest)(nil),  // 98: v1.GetResourceAgentMetadataRequest
-	(*GetResourceAgentMetadataResponse)(nil), // 99: v1.GetResourceAgentMetadataResponse
-	(*GetHaTomlRequest)(nil),                 // 100: v1.GetHaTomlRequest
-	(*GetHaTomlResponse)(nil),                // 101: v1.GetHaTomlResponse
-	(*SyncHaTomlRequest)(nil),                // 102: v1.SyncHaTomlRequest
-	(*SyncHaTomlResponse)(nil),               // 103: v1.SyncHaTomlResponse
-	(*MakeHaResponse)(nil),                   // 104: v1.MakeHaResponse
-	(*EvictHaRequest)(nil),                   // 105: v1.EvictHaRequest
-	(*EvictHaResponse)(nil),                  // 106: v1.EvictHaResponse
-	(*EnableSelfHaRequest)(nil),              // 107: v1.EnableSelfHaRequest
-	(*EnableSelfHaResponse)(nil),             // 108: v1.EnableSelfHaResponse
-	(*DisableSelfHaRequest)(nil),             // 109: v1.DisableSelfHaRequest
-	(*DisableSelfHaResponse)(nil),            // 110: v1.DisableSelfHaResponse
-	(*GetSelfHaStatusRequest)(nil),           // 111: v1.GetSelfHaStatusRequest
-	(*GetSelfHaStatusResponse)(nil),          // 112: v1.GetSelfHaStatusResponse
-	(*ResourceInfo)(nil),                     // 113: v1.ResourceInfo
-	(*ResourceStatus)(nil),                   // 114: v1.ResourceStatus
-	(*NodeResourceState)(nil),                // 115: v1.NodeResourceState
-	(*VolumeInfo)(nil),                       // 116: v1.VolumeInfo
-	(*CreateSnapshotRequest)(nil),            // 117: v1.CreateSnapshotRequest
-	(*CreateSnapshotResponse)(nil),           // 118: v1.CreateSnapshotResponse
-	(*DeleteSnapshotRequest)(nil),            // 119: v1.DeleteSnapshotRequest
-	(*DeleteSnapshotResponse)(nil),           // 120: v1.DeleteSnapshotResponse
-	(*RestoreSnapshotRequest)(nil),           // 121: v1.RestoreSnapshotRequest
-	(*RestoreSnapshotResponse)(nil),          // 122: v1.RestoreSnapshotResponse
-	(*ListSnapshotsRequest)(nil),             // 123: v1.ListSnapshotsRequest
-	(*ListSnapshotsResponse)(nil),            // 124: v1.ListSnapshotsResponse
-	(*SnapshotInfo)(nil),                     // 125: v1.SnapshotInfo
-	(*GFSRetention)(nil),                     // 126: v1.GFSRetention
-	(*SnapshotScheduleInfo)(nil),             // 127: v1.SnapshotScheduleInfo
-	(*CreateSnapshotScheduleRequest)(nil),    // 128: v1.CreateSnapshotScheduleRequest
-	(*CreateSnapshotScheduleResponse)(nil),   // 129: v1.CreateSnapshotScheduleResponse
-	(*ListSnapshotSchedulesRequest)(nil),     // 130: v1.ListSnapshotSchedulesRequest
-	(*ListSnapshotSchedulesResponse)(nil),    // 131: v1.ListSnapshotSchedulesResponse
-	(*DeleteSnapshotScheduleRequest)(nil),    // 132: v1.DeleteSnapshotScheduleRequest
-	(*DeleteSnapshotScheduleResponse)(nil),   // 133: v1.DeleteSnapshotScheduleResponse
-	(*CreateNFSGatewayRequest)(nil),          // 134: v1.CreateNFSGatewayRequest
-	(*CreateNFSGatewayResponse)(nil),         // 135: v1.CreateNFSGatewayResponse
-	(*CreateISCSIGatewayRequest)(nil),        // 136: v1.CreateISCSIGatewayRequest
-	(*CreateISCSIGatewayResponse)(nil),       // 137: v1.CreateISCSIGatewayResponse
-	(*CreateNVMeGatewayRequest)(nil),         // 138: v1.CreateNVMeGatewayRequest
-	(*CreateNVMeGatewayResponse)(nil),        // 139: v1.CreateNVMeGatewayResponse
-	(*DeleteGatewayRequest)(nil),             // 140: v1.DeleteGatewayRequest
-	(*DeleteGatewayResponse)(nil),            // 141: v1.DeleteGatewayResponse
-	(*GetGatewayRequest)(nil),                // 142: v1.GetGatewayRequest
-	(*GetGatewayResponse)(nil),               // 143: v1.GetGatewayResponse
-	(*ListGatewaysRequest)(nil),              // 144: v1.ListGatewaysRequest
-	(*ListGatewaysResponse)(nil),             // 145: v1.ListGatewaysResponse
-	(*StartGatewayRequest)(nil),              // 146: v1.StartGatewayRequest
-	(*StartGatewayResponse)(nil),             // 147: v1.StartGatewayResponse
-	(*StopGatewayRequest)(nil),               // 148: v1.StopGatewayRequest
-	(*StopGatewayResponse)(nil),              // 149: v1.StopGatewayResponse
-	(*GatewayInfo)(nil),                      // 150: v1.GatewayInfo
-	(*NFSExportInfo)(nil),                    // 151: v1.NFSExportInfo
-	(*AddNFSExportRequest)(nil),              // 152: v1.AddNFSExportRequest
-	(*AddNFSExportResponse)(nil),             // 153: v1.AddNFSExportResponse
-	(*RemoveNFSExportRequest)(nil),           // 154: v1.RemoveNFSExportRequest
-	(*RemoveNFSExportResponse)(nil),          // 155: v1.RemoveNFSExportResponse
-	(*ListNFSExportsRequest)(nil),            // 156: v1.ListNFSExportsRequest
-	(*ListNFSExportsResponse)(nil),           // 157: v1.ListNFSExportsResponse
-	(*ISCSILUNInfo)(nil),                     // 158: v1.ISCSILUNInfo
-	(*AddISCSILUNRequest)(nil),               // 159: v1.AddISCSILUNRequest
-	(*AddISCSILUNResponse)(nil),              // 160: v1.AddISCSILUNResponse
-	(*RemoveISCSILUNRequest)(nil),            // 161: v1.RemoveISCSILUNRequest
-	(*RemoveISCSILUNResponse)(nil),           // 162: v1.RemoveISCSILUNResponse
-	(*ListISCSILUNsRequest)(nil),             // 163: v1.ListISCSILUNsRequest
-	(*ListISCSILUNsResponse)(nil),            // 164: v1.ListISCSILUNsResponse
-	(*AddISCSIInitiatorRequest)(nil),         // 165: v1.AddISCSIInitiatorRequest
-	(*AddISCSIInitiatorResponse)(nil),        // 166: v1.AddISCSIInitiatorResponse
-	(*RemoveISCSIInitiatorRequest)(nil),      // 167: v1.RemoveISCSIInitiatorRequest
-	(*RemoveISCSIInitiatorResponse)(nil),     // 168: v1.RemoveISCSIInitiatorResponse
-	(*ListISCSIInitiatorsRequest)(nil),       // 169: v1.ListISCSIInitiatorsRequest
-	(*ListISCSIInitiatorsResponse)(nil),      // 170: v1.ListISCSIInitiatorsResponse
-	(*SetISCSIChapRequest)(nil),              // 171: v1.SetISCSIChapRequest
-	(*SetISCSIChapResponse)(nil),             // 172: v1.SetISCSIChapResponse
-	(*GetISCSIChapRequest)(nil),              // 173: v1.GetISCSIChapRequest
-	(*GetISCSIChapResponse)(nil),             // 174: v1.GetISCSIChapResponse
-	(*NVMeNamespaceInfo)(nil),                // 175: v1.NVMeNamespaceInfo
-	(*AddNVMeNamespaceRequest)(nil),          // 176: v1.AddNVMeNamespaceRequest
-	(*AddNVMeNamespaceResponse)(nil),         // 177: v1.AddNVMeNamespaceResponse
-	(*RemoveNVMeNamespaceRequest)(nil),       // 178: v1.RemoveNVMeNamespaceRequest
-	(*RemoveNVMeNamespaceResponse)(nil),      // 179: v1.RemoveNVMeNamespaceResponse
-	(*ListNVMeNamespacesRequest)(nil),        // 180: v1.ListNVMeNamespacesRequest
-	(*ListNVMeNamespacesResponse)(nil),       // 181: v1.ListNVMeNamespacesResponse
-	(*AddNVMeHostRequest)(nil),               // 182: v1.AddNVMeHostRequest
-	(*AddNVMeHostResponse)(nil),              // 183: v1.AddNVMeHostResponse
-	(*RemoveNVMeHostRequest)(nil),            // 184: v1.RemoveNVMeHostRequest
-	(*RemoveNVMeHostResponse)(nil),           // 185: v1.RemoveNVMeHostResponse
-	(*ListNVMeHostsRequest)(nil),             // 186: v1.ListNVMeHostsRequest
-	(*ListNVMeHostsResponse)(nil),            // 187: v1.ListNVMeHostsResponse
-	(*DeleteHaRequest)(nil),                  // 188: v1.DeleteHaRequest
-	(*DeleteHaResponse)(nil),                 // 189: v1.DeleteHaResponse
-	(*GetHaRequest)(nil),                     // 190: v1.GetHaRequest
-	(*GetHaResponse)(nil),                    // 191: v1.GetHaResponse
-	(*ListHaRequest)(nil),                    // 192: v1.ListHaRequest
-	(*ListHaResponse)(nil),                   // 193: v1.ListHaResponse
-	(*HaConfigInfo)(nil),                     // 194: v1.HaConfigInfo
-	nil,                                      // 195: v1.SetNodeLabelsRequest.LabelsEntry
-	nil,                                      // 196: v1.NodeInfo.LabelsEntry
-	nil,                                      // 197: v1.CreateResourceRequest.DrbdOptionsEntry
-	nil,                                      // 198: v1.UpdateResourceOptionsRequest.OptionsEntry
-	nil,                                      // 199: v1.OcfAgent.ParamsEntry
-	nil,                                      // 200: v1.ResourceInfo.NodeStatesEntry
-	nil,                                      // 201: v1.ResourceStatus.NodeStatesEntry
-	nil,                                      // 202: v1.ResourceStatus.WanProxyEntry
-	nil,                                      // 203: v1.CreateNFSGatewayRequest.OptionsEntry
-	nil,                                      // 204: v1.CreateISCSIGatewayRequest.OptionsEntry
-	nil,                                      // 205: v1.CreateNVMeGatewayRequest.OptionsEntry
-	nil,                                      // 206: v1.GatewayInfo.OptionsEntry
+	(*HaStartItem)(nil),                      // 93: v1.HaStartItem
+	(*MakeHaRequest)(nil),                    // 94: v1.MakeHaRequest
+	(*ResourceAgentInfo)(nil),                // 95: v1.ResourceAgentInfo
+	(*ListResourceAgentsRequest)(nil),        // 96: v1.ListResourceAgentsRequest
+	(*ListResourceAgentsResponse)(nil),       // 97: v1.ListResourceAgentsResponse
+	(*ResourceAgentParameter)(nil),           // 98: v1.ResourceAgentParameter
+	(*GetResourceAgentMetadataRequest)(nil),  // 99: v1.GetResourceAgentMetadataRequest
+	(*GetResourceAgentMetadataResponse)(nil), // 100: v1.GetResourceAgentMetadataResponse
+	(*GetHaTomlRequest)(nil),                 // 101: v1.GetHaTomlRequest
+	(*GetHaTomlResponse)(nil),                // 102: v1.GetHaTomlResponse
+	(*SyncHaTomlRequest)(nil),                // 103: v1.SyncHaTomlRequest
+	(*SyncHaTomlResponse)(nil),               // 104: v1.SyncHaTomlResponse
+	(*MakeHaResponse)(nil),                   // 105: v1.MakeHaResponse
+	(*EvictHaRequest)(nil),                   // 106: v1.EvictHaRequest
+	(*EvictHaResponse)(nil),                  // 107: v1.EvictHaResponse
+	(*EnableSelfHaRequest)(nil),              // 108: v1.EnableSelfHaRequest
+	(*EnableSelfHaResponse)(nil),             // 109: v1.EnableSelfHaResponse
+	(*DisableSelfHaRequest)(nil),             // 110: v1.DisableSelfHaRequest
+	(*DisableSelfHaResponse)(nil),            // 111: v1.DisableSelfHaResponse
+	(*GetSelfHaStatusRequest)(nil),           // 112: v1.GetSelfHaStatusRequest
+	(*GetSelfHaStatusResponse)(nil),          // 113: v1.GetSelfHaStatusResponse
+	(*ResourceInfo)(nil),                     // 114: v1.ResourceInfo
+	(*ResourceStatus)(nil),                   // 115: v1.ResourceStatus
+	(*NodeResourceState)(nil),                // 116: v1.NodeResourceState
+	(*VolumeInfo)(nil),                       // 117: v1.VolumeInfo
+	(*CreateSnapshotRequest)(nil),            // 118: v1.CreateSnapshotRequest
+	(*CreateSnapshotResponse)(nil),           // 119: v1.CreateSnapshotResponse
+	(*DeleteSnapshotRequest)(nil),            // 120: v1.DeleteSnapshotRequest
+	(*DeleteSnapshotResponse)(nil),           // 121: v1.DeleteSnapshotResponse
+	(*RestoreSnapshotRequest)(nil),           // 122: v1.RestoreSnapshotRequest
+	(*RestoreSnapshotResponse)(nil),          // 123: v1.RestoreSnapshotResponse
+	(*ListSnapshotsRequest)(nil),             // 124: v1.ListSnapshotsRequest
+	(*ListSnapshotsResponse)(nil),            // 125: v1.ListSnapshotsResponse
+	(*SnapshotInfo)(nil),                     // 126: v1.SnapshotInfo
+	(*GFSRetention)(nil),                     // 127: v1.GFSRetention
+	(*SnapshotScheduleInfo)(nil),             // 128: v1.SnapshotScheduleInfo
+	(*CreateSnapshotScheduleRequest)(nil),    // 129: v1.CreateSnapshotScheduleRequest
+	(*CreateSnapshotScheduleResponse)(nil),   // 130: v1.CreateSnapshotScheduleResponse
+	(*ListSnapshotSchedulesRequest)(nil),     // 131: v1.ListSnapshotSchedulesRequest
+	(*ListSnapshotSchedulesResponse)(nil),    // 132: v1.ListSnapshotSchedulesResponse
+	(*DeleteSnapshotScheduleRequest)(nil),    // 133: v1.DeleteSnapshotScheduleRequest
+	(*DeleteSnapshotScheduleResponse)(nil),   // 134: v1.DeleteSnapshotScheduleResponse
+	(*CreateNFSGatewayRequest)(nil),          // 135: v1.CreateNFSGatewayRequest
+	(*CreateNFSGatewayResponse)(nil),         // 136: v1.CreateNFSGatewayResponse
+	(*CreateISCSIGatewayRequest)(nil),        // 137: v1.CreateISCSIGatewayRequest
+	(*CreateISCSIGatewayResponse)(nil),       // 138: v1.CreateISCSIGatewayResponse
+	(*CreateNVMeGatewayRequest)(nil),         // 139: v1.CreateNVMeGatewayRequest
+	(*CreateNVMeGatewayResponse)(nil),        // 140: v1.CreateNVMeGatewayResponse
+	(*DeleteGatewayRequest)(nil),             // 141: v1.DeleteGatewayRequest
+	(*DeleteGatewayResponse)(nil),            // 142: v1.DeleteGatewayResponse
+	(*GetGatewayRequest)(nil),                // 143: v1.GetGatewayRequest
+	(*GetGatewayResponse)(nil),               // 144: v1.GetGatewayResponse
+	(*ListGatewaysRequest)(nil),              // 145: v1.ListGatewaysRequest
+	(*ListGatewaysResponse)(nil),             // 146: v1.ListGatewaysResponse
+	(*StartGatewayRequest)(nil),              // 147: v1.StartGatewayRequest
+	(*StartGatewayResponse)(nil),             // 148: v1.StartGatewayResponse
+	(*StopGatewayRequest)(nil),               // 149: v1.StopGatewayRequest
+	(*StopGatewayResponse)(nil),              // 150: v1.StopGatewayResponse
+	(*GatewayInfo)(nil),                      // 151: v1.GatewayInfo
+	(*NFSExportInfo)(nil),                    // 152: v1.NFSExportInfo
+	(*AddNFSExportRequest)(nil),              // 153: v1.AddNFSExportRequest
+	(*AddNFSExportResponse)(nil),             // 154: v1.AddNFSExportResponse
+	(*RemoveNFSExportRequest)(nil),           // 155: v1.RemoveNFSExportRequest
+	(*RemoveNFSExportResponse)(nil),          // 156: v1.RemoveNFSExportResponse
+	(*ListNFSExportsRequest)(nil),            // 157: v1.ListNFSExportsRequest
+	(*ListNFSExportsResponse)(nil),           // 158: v1.ListNFSExportsResponse
+	(*ISCSILUNInfo)(nil),                     // 159: v1.ISCSILUNInfo
+	(*AddISCSILUNRequest)(nil),               // 160: v1.AddISCSILUNRequest
+	(*AddISCSILUNResponse)(nil),              // 161: v1.AddISCSILUNResponse
+	(*RemoveISCSILUNRequest)(nil),            // 162: v1.RemoveISCSILUNRequest
+	(*RemoveISCSILUNResponse)(nil),           // 163: v1.RemoveISCSILUNResponse
+	(*ListISCSILUNsRequest)(nil),             // 164: v1.ListISCSILUNsRequest
+	(*ListISCSILUNsResponse)(nil),            // 165: v1.ListISCSILUNsResponse
+	(*AddISCSIInitiatorRequest)(nil),         // 166: v1.AddISCSIInitiatorRequest
+	(*AddISCSIInitiatorResponse)(nil),        // 167: v1.AddISCSIInitiatorResponse
+	(*RemoveISCSIInitiatorRequest)(nil),      // 168: v1.RemoveISCSIInitiatorRequest
+	(*RemoveISCSIInitiatorResponse)(nil),     // 169: v1.RemoveISCSIInitiatorResponse
+	(*ListISCSIInitiatorsRequest)(nil),       // 170: v1.ListISCSIInitiatorsRequest
+	(*ListISCSIInitiatorsResponse)(nil),      // 171: v1.ListISCSIInitiatorsResponse
+	(*SetISCSIChapRequest)(nil),              // 172: v1.SetISCSIChapRequest
+	(*SetISCSIChapResponse)(nil),             // 173: v1.SetISCSIChapResponse
+	(*GetISCSIChapRequest)(nil),              // 174: v1.GetISCSIChapRequest
+	(*GetISCSIChapResponse)(nil),             // 175: v1.GetISCSIChapResponse
+	(*NVMeNamespaceInfo)(nil),                // 176: v1.NVMeNamespaceInfo
+	(*AddNVMeNamespaceRequest)(nil),          // 177: v1.AddNVMeNamespaceRequest
+	(*AddNVMeNamespaceResponse)(nil),         // 178: v1.AddNVMeNamespaceResponse
+	(*RemoveNVMeNamespaceRequest)(nil),       // 179: v1.RemoveNVMeNamespaceRequest
+	(*RemoveNVMeNamespaceResponse)(nil),      // 180: v1.RemoveNVMeNamespaceResponse
+	(*ListNVMeNamespacesRequest)(nil),        // 181: v1.ListNVMeNamespacesRequest
+	(*ListNVMeNamespacesResponse)(nil),       // 182: v1.ListNVMeNamespacesResponse
+	(*AddNVMeHostRequest)(nil),               // 183: v1.AddNVMeHostRequest
+	(*AddNVMeHostResponse)(nil),              // 184: v1.AddNVMeHostResponse
+	(*RemoveNVMeHostRequest)(nil),            // 185: v1.RemoveNVMeHostRequest
+	(*RemoveNVMeHostResponse)(nil),           // 186: v1.RemoveNVMeHostResponse
+	(*ListNVMeHostsRequest)(nil),             // 187: v1.ListNVMeHostsRequest
+	(*ListNVMeHostsResponse)(nil),            // 188: v1.ListNVMeHostsResponse
+	(*DeleteHaRequest)(nil),                  // 189: v1.DeleteHaRequest
+	(*DeleteHaResponse)(nil),                 // 190: v1.DeleteHaResponse
+	(*GetHaRequest)(nil),                     // 191: v1.GetHaRequest
+	(*GetHaResponse)(nil),                    // 192: v1.GetHaResponse
+	(*ListHaRequest)(nil),                    // 193: v1.ListHaRequest
+	(*ListHaResponse)(nil),                   // 194: v1.ListHaResponse
+	(*HaConfigInfo)(nil),                     // 195: v1.HaConfigInfo
+	nil,                                      // 196: v1.SetNodeLabelsRequest.LabelsEntry
+	nil,                                      // 197: v1.NodeInfo.LabelsEntry
+	nil,                                      // 198: v1.CreateResourceRequest.DrbdOptionsEntry
+	nil,                                      // 199: v1.UpdateResourceOptionsRequest.OptionsEntry
+	nil,                                      // 200: v1.OcfAgent.ParamsEntry
+	nil,                                      // 201: v1.ResourceInfo.NodeStatesEntry
+	nil,                                      // 202: v1.ResourceStatus.NodeStatesEntry
+	nil,                                      // 203: v1.ResourceStatus.WanProxyEntry
+	nil,                                      // 204: v1.CreateNFSGatewayRequest.OptionsEntry
+	nil,                                      // 205: v1.CreateISCSIGatewayRequest.OptionsEntry
+	nil,                                      // 206: v1.CreateNVMeGatewayRequest.OptionsEntry
+	nil,                                      // 207: v1.GatewayInfo.OptionsEntry
 }
 var file_api_proto_v1_sds_proto_depIdxs = []int32{
 	10,  // 0: v1.GetPoolResponse.pool:type_name -> v1.PoolInfo
 	10,  // 1: v1.ListPoolsResponse.pools:type_name -> v1.PoolInfo
 	10,  // 2: v1.ListZFSPoolsResponse.pools:type_name -> v1.PoolInfo
-	125, // 3: v1.ListZFSSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
-	125, // 4: v1.ListLvmSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
+	126, // 3: v1.ListZFSSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
+	126, // 4: v1.ListLvmSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
 	53,  // 5: v1.RegisterNodeResponse.node:type_name -> v1.NodeInfo
-	195, // 6: v1.SetNodeLabelsRequest.labels:type_name -> v1.SetNodeLabelsRequest.LabelsEntry
+	196, // 6: v1.SetNodeLabelsRequest.labels:type_name -> v1.SetNodeLabelsRequest.LabelsEntry
 	53,  // 7: v1.SetNodeLabelsResponse.node:type_name -> v1.NodeInfo
 	53,  // 8: v1.GetNodeResponse.node:type_name -> v1.NodeInfo
 	53,  // 9: v1.ListNodesResponse.nodes:type_name -> v1.NodeInfo
-	196, // 10: v1.NodeInfo.labels:type_name -> v1.NodeInfo.LabelsEntry
+	197, // 10: v1.NodeInfo.labels:type_name -> v1.NodeInfo.LabelsEntry
 	56,  // 11: v1.HealthCheckResponse.health:type_name -> v1.NodeHealthInfo
-	197, // 12: v1.CreateResourceRequest.drbd_options:type_name -> v1.CreateResourceRequest.DrbdOptionsEntry
+	198, // 12: v1.CreateResourceRequest.drbd_options:type_name -> v1.CreateResourceRequest.DrbdOptionsEntry
 	58,  // 13: v1.CreateResourceRequest.volumes:type_name -> v1.VolumeSpec
-	113, // 14: v1.GetResourceResponse.resource:type_name -> v1.ResourceInfo
-	113, // 15: v1.ListResourcesResponse.resources:type_name -> v1.ResourceInfo
-	198, // 16: v1.UpdateResourceOptionsRequest.options:type_name -> v1.UpdateResourceOptionsRequest.OptionsEntry
-	114, // 17: v1.ResourceStatusResponse.status:type_name -> v1.ResourceStatus
-	199, // 18: v1.OcfAgent.params:type_name -> v1.OcfAgent.ParamsEntry
-	92,  // 19: v1.MakeHaRequest.ocf_agents:type_name -> v1.OcfAgent
-	94,  // 20: v1.ListResourceAgentsResponse.agents:type_name -> v1.ResourceAgentInfo
-	97,  // 21: v1.GetResourceAgentMetadataResponse.parameters:type_name -> v1.ResourceAgentParameter
-	116, // 22: v1.ResourceInfo.volumes:type_name -> v1.VolumeInfo
-	200, // 23: v1.ResourceInfo.node_states:type_name -> v1.ResourceInfo.NodeStatesEntry
-	201, // 24: v1.ResourceStatus.node_states:type_name -> v1.ResourceStatus.NodeStatesEntry
-	116, // 25: v1.ResourceStatus.volumes:type_name -> v1.VolumeInfo
-	202, // 26: v1.ResourceStatus.wan_proxy:type_name -> v1.ResourceStatus.WanProxyEntry
-	125, // 27: v1.ListSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
-	126, // 28: v1.SnapshotScheduleInfo.keep:type_name -> v1.GFSRetention
-	126, // 29: v1.CreateSnapshotScheduleRequest.keep:type_name -> v1.GFSRetention
-	127, // 30: v1.ListSnapshotSchedulesResponse.schedules:type_name -> v1.SnapshotScheduleInfo
-	203, // 31: v1.CreateNFSGatewayRequest.options:type_name -> v1.CreateNFSGatewayRequest.OptionsEntry
-	204, // 32: v1.CreateISCSIGatewayRequest.options:type_name -> v1.CreateISCSIGatewayRequest.OptionsEntry
-	205, // 33: v1.CreateNVMeGatewayRequest.options:type_name -> v1.CreateNVMeGatewayRequest.OptionsEntry
-	150, // 34: v1.GetGatewayResponse.gateway:type_name -> v1.GatewayInfo
-	150, // 35: v1.ListGatewaysResponse.gateways:type_name -> v1.GatewayInfo
-	206, // 36: v1.GatewayInfo.options:type_name -> v1.GatewayInfo.OptionsEntry
-	151, // 37: v1.ListNFSExportsResponse.exports:type_name -> v1.NFSExportInfo
-	158, // 38: v1.ListISCSILUNsResponse.luns:type_name -> v1.ISCSILUNInfo
-	175, // 39: v1.ListNVMeNamespacesResponse.namespaces:type_name -> v1.NVMeNamespaceInfo
-	194, // 40: v1.GetHaResponse.config:type_name -> v1.HaConfigInfo
-	194, // 41: v1.ListHaResponse.configs:type_name -> v1.HaConfigInfo
-	115, // 42: v1.ResourceInfo.NodeStatesEntry.value:type_name -> v1.NodeResourceState
-	115, // 43: v1.ResourceStatus.NodeStatesEntry.value:type_name -> v1.NodeResourceState
-	0,   // 44: v1.SDSController.CreatePool:input_type -> v1.CreatePoolRequest
-	2,   // 45: v1.SDSController.DeletePool:input_type -> v1.DeletePoolRequest
-	4,   // 46: v1.SDSController.GetPool:input_type -> v1.GetPoolRequest
-	6,   // 47: v1.SDSController.ListPools:input_type -> v1.ListPoolsRequest
-	8,   // 48: v1.SDSController.AddDiskToPool:input_type -> v1.AddDiskToPoolRequest
-	43,  // 49: v1.SDSController.RegisterNode:input_type -> v1.RegisterNodeRequest
-	47,  // 50: v1.SDSController.UnregisterNode:input_type -> v1.UnregisterNodeRequest
-	45,  // 51: v1.SDSController.SetNodeLabels:input_type -> v1.SetNodeLabelsRequest
-	49,  // 52: v1.SDSController.GetNode:input_type -> v1.GetNodeRequest
-	51,  // 53: v1.SDSController.ListNodes:input_type -> v1.ListNodesRequest
-	54,  // 54: v1.SDSController.HealthCheck:input_type -> v1.HealthCheckRequest
-	57,  // 55: v1.SDSController.CreateResource:input_type -> v1.CreateResourceRequest
-	60,  // 56: v1.SDSController.AdoptResource:input_type -> v1.AdoptResourceRequest
-	62,  // 57: v1.SDSController.DeleteResource:input_type -> v1.DeleteResourceRequest
-	64,  // 58: v1.SDSController.GetResource:input_type -> v1.GetResourceRequest
-	66,  // 59: v1.SDSController.ListResources:input_type -> v1.ListResourcesRequest
-	68,  // 60: v1.SDSController.AddVolume:input_type -> v1.AddVolumeRequest
-	72,  // 61: v1.SDSController.RemoveVolume:input_type -> v1.RemoveVolumeRequest
-	74,  // 62: v1.SDSController.ResizeVolume:input_type -> v1.ResizeVolumeRequest
-	70,  // 63: v1.SDSController.UpdateResourceOptions:input_type -> v1.UpdateResourceOptionsRequest
-	76,  // 64: v1.SDSController.ResourceStatus:input_type -> v1.ResourceStatusRequest
-	78,  // 65: v1.SDSController.SetPrimary:input_type -> v1.SetPrimaryRequest
-	80,  // 66: v1.SDSController.SetSecondary:input_type -> v1.SetSecondaryRequest
-	82,  // 67: v1.SDSController.AttachDisklessClient:input_type -> v1.AttachDisklessClientRequest
-	84,  // 68: v1.SDSController.DetachDisklessClient:input_type -> v1.DetachDisklessClientRequest
-	86,  // 69: v1.SDSController.CreateFilesystem:input_type -> v1.CreateFilesystemRequest
-	88,  // 70: v1.SDSController.MountResource:input_type -> v1.MountResourceRequest
-	90,  // 71: v1.SDSController.UnmountResource:input_type -> v1.UnmountResourceRequest
-	93,  // 72: v1.SDSController.MakeHa:input_type -> v1.MakeHaRequest
-	105, // 73: v1.SDSController.EvictHa:input_type -> v1.EvictHaRequest
-	188, // 74: v1.SDSController.DeleteHa:input_type -> v1.DeleteHaRequest
-	190, // 75: v1.SDSController.GetHa:input_type -> v1.GetHaRequest
-	192, // 76: v1.SDSController.ListHa:input_type -> v1.ListHaRequest
-	95,  // 77: v1.SDSController.ListResourceAgents:input_type -> v1.ListResourceAgentsRequest
-	98,  // 78: v1.SDSController.GetResourceAgentMetadata:input_type -> v1.GetResourceAgentMetadataRequest
-	100, // 79: v1.SDSController.GetHaToml:input_type -> v1.GetHaTomlRequest
-	102, // 80: v1.SDSController.SyncHaToml:input_type -> v1.SyncHaTomlRequest
-	107, // 81: v1.SDSController.EnableSelfHa:input_type -> v1.EnableSelfHaRequest
-	109, // 82: v1.SDSController.DisableSelfHa:input_type -> v1.DisableSelfHaRequest
-	111, // 83: v1.SDSController.GetSelfHaStatus:input_type -> v1.GetSelfHaStatusRequest
-	117, // 84: v1.SDSController.CreateSnapshot:input_type -> v1.CreateSnapshotRequest
-	119, // 85: v1.SDSController.DeleteSnapshot:input_type -> v1.DeleteSnapshotRequest
-	121, // 86: v1.SDSController.RestoreSnapshot:input_type -> v1.RestoreSnapshotRequest
-	123, // 87: v1.SDSController.ListSnapshots:input_type -> v1.ListSnapshotsRequest
-	128, // 88: v1.SDSController.CreateSnapshotSchedule:input_type -> v1.CreateSnapshotScheduleRequest
-	130, // 89: v1.SDSController.ListSnapshotSchedules:input_type -> v1.ListSnapshotSchedulesRequest
-	132, // 90: v1.SDSController.DeleteSnapshotSchedule:input_type -> v1.DeleteSnapshotScheduleRequest
-	134, // 91: v1.SDSController.CreateNFSGateway:input_type -> v1.CreateNFSGatewayRequest
-	136, // 92: v1.SDSController.CreateISCSIGateway:input_type -> v1.CreateISCSIGatewayRequest
-	138, // 93: v1.SDSController.CreateNVMeGateway:input_type -> v1.CreateNVMeGatewayRequest
-	140, // 94: v1.SDSController.DeleteGateway:input_type -> v1.DeleteGatewayRequest
-	142, // 95: v1.SDSController.GetGateway:input_type -> v1.GetGatewayRequest
-	144, // 96: v1.SDSController.ListGateways:input_type -> v1.ListGatewaysRequest
-	146, // 97: v1.SDSController.StartGateway:input_type -> v1.StartGatewayRequest
-	148, // 98: v1.SDSController.StopGateway:input_type -> v1.StopGatewayRequest
-	152, // 99: v1.SDSController.AddNFSExport:input_type -> v1.AddNFSExportRequest
-	154, // 100: v1.SDSController.RemoveNFSExport:input_type -> v1.RemoveNFSExportRequest
-	156, // 101: v1.SDSController.ListNFSExports:input_type -> v1.ListNFSExportsRequest
-	159, // 102: v1.SDSController.AddISCSILUN:input_type -> v1.AddISCSILUNRequest
-	161, // 103: v1.SDSController.RemoveISCSILUN:input_type -> v1.RemoveISCSILUNRequest
-	163, // 104: v1.SDSController.ListISCSILUNs:input_type -> v1.ListISCSILUNsRequest
-	165, // 105: v1.SDSController.AddISCSIInitiator:input_type -> v1.AddISCSIInitiatorRequest
-	167, // 106: v1.SDSController.RemoveISCSIInitiator:input_type -> v1.RemoveISCSIInitiatorRequest
-	169, // 107: v1.SDSController.ListISCSIInitiators:input_type -> v1.ListISCSIInitiatorsRequest
-	171, // 108: v1.SDSController.SetISCSIChap:input_type -> v1.SetISCSIChapRequest
-	173, // 109: v1.SDSController.GetISCSIChap:input_type -> v1.GetISCSIChapRequest
-	176, // 110: v1.SDSController.AddNVMeNamespace:input_type -> v1.AddNVMeNamespaceRequest
-	178, // 111: v1.SDSController.RemoveNVMeNamespace:input_type -> v1.RemoveNVMeNamespaceRequest
-	180, // 112: v1.SDSController.ListNVMeNamespaces:input_type -> v1.ListNVMeNamespacesRequest
-	182, // 113: v1.SDSController.AddNVMeHost:input_type -> v1.AddNVMeHostRequest
-	184, // 114: v1.SDSController.RemoveNVMeHost:input_type -> v1.RemoveNVMeHostRequest
-	186, // 115: v1.SDSController.ListNVMeHosts:input_type -> v1.ListNVMeHostsRequest
-	11,  // 116: v1.SDSController.CreateZFSPool:input_type -> v1.CreateZFSPoolRequest
-	13,  // 117: v1.SDSController.DeleteZFSPool:input_type -> v1.DeleteZFSPoolRequest
-	15,  // 118: v1.SDSController.ListZFSpools:input_type -> v1.ListZFSPoolsRequest
-	17,  // 119: v1.SDSController.CreateZFSDataset:input_type -> v1.CreateZFSDatasetRequest
-	19,  // 120: v1.SDSController.CreateZFSVolume:input_type -> v1.CreateZFSVolumeRequest
-	21,  // 121: v1.SDSController.ResizeZFSVolume:input_type -> v1.ResizeZFSVolumeRequest
-	23,  // 122: v1.SDSController.DeleteZFSDataset:input_type -> v1.DeleteZFSDatasetRequest
-	25,  // 123: v1.SDSController.CreateZFSSnapshot:input_type -> v1.CreateZFSSnapshotRequest
-	27,  // 124: v1.SDSController.DeleteZFSSnapshot:input_type -> v1.DeleteZFSSnapshotRequest
-	29,  // 125: v1.SDSController.ListZFSSnapshots:input_type -> v1.ListZFSSnapshotsRequest
-	31,  // 126: v1.SDSController.RestoreZFSSnapshot:input_type -> v1.RestoreZFSSnapshotRequest
-	33,  // 127: v1.SDSController.CloneZFSSnapshot:input_type -> v1.CloneZFSSnapshotRequest
-	35,  // 128: v1.SDSController.CreateLvmSnapshot:input_type -> v1.CreateLvmSnapshotRequest
-	37,  // 129: v1.SDSController.DeleteLvmSnapshot:input_type -> v1.DeleteLvmSnapshotRequest
-	39,  // 130: v1.SDSController.ListLvmSnapshots:input_type -> v1.ListLvmSnapshotsRequest
-	41,  // 131: v1.SDSController.RestoreLvmSnapshot:input_type -> v1.RestoreLvmSnapshotRequest
-	1,   // 132: v1.SDSController.CreatePool:output_type -> v1.CreatePoolResponse
-	3,   // 133: v1.SDSController.DeletePool:output_type -> v1.DeletePoolResponse
-	5,   // 134: v1.SDSController.GetPool:output_type -> v1.GetPoolResponse
-	7,   // 135: v1.SDSController.ListPools:output_type -> v1.ListPoolsResponse
-	9,   // 136: v1.SDSController.AddDiskToPool:output_type -> v1.AddDiskToPoolResponse
-	44,  // 137: v1.SDSController.RegisterNode:output_type -> v1.RegisterNodeResponse
-	48,  // 138: v1.SDSController.UnregisterNode:output_type -> v1.UnregisterNodeResponse
-	46,  // 139: v1.SDSController.SetNodeLabels:output_type -> v1.SetNodeLabelsResponse
-	50,  // 140: v1.SDSController.GetNode:output_type -> v1.GetNodeResponse
-	52,  // 141: v1.SDSController.ListNodes:output_type -> v1.ListNodesResponse
-	55,  // 142: v1.SDSController.HealthCheck:output_type -> v1.HealthCheckResponse
-	59,  // 143: v1.SDSController.CreateResource:output_type -> v1.CreateResourceResponse
-	61,  // 144: v1.SDSController.AdoptResource:output_type -> v1.AdoptResourceResponse
-	63,  // 145: v1.SDSController.DeleteResource:output_type -> v1.DeleteResourceResponse
-	65,  // 146: v1.SDSController.GetResource:output_type -> v1.GetResourceResponse
-	67,  // 147: v1.SDSController.ListResources:output_type -> v1.ListResourcesResponse
-	69,  // 148: v1.SDSController.AddVolume:output_type -> v1.AddVolumeResponse
-	73,  // 149: v1.SDSController.RemoveVolume:output_type -> v1.RemoveVolumeResponse
-	75,  // 150: v1.SDSController.ResizeVolume:output_type -> v1.ResizeVolumeResponse
-	71,  // 151: v1.SDSController.UpdateResourceOptions:output_type -> v1.UpdateResourceOptionsResponse
-	77,  // 152: v1.SDSController.ResourceStatus:output_type -> v1.ResourceStatusResponse
-	79,  // 153: v1.SDSController.SetPrimary:output_type -> v1.SetPrimaryResponse
-	81,  // 154: v1.SDSController.SetSecondary:output_type -> v1.SetSecondaryResponse
-	83,  // 155: v1.SDSController.AttachDisklessClient:output_type -> v1.AttachDisklessClientResponse
-	85,  // 156: v1.SDSController.DetachDisklessClient:output_type -> v1.DetachDisklessClientResponse
-	87,  // 157: v1.SDSController.CreateFilesystem:output_type -> v1.CreateFilesystemResponse
-	89,  // 158: v1.SDSController.MountResource:output_type -> v1.MountResourceResponse
-	91,  // 159: v1.SDSController.UnmountResource:output_type -> v1.UnmountResourceResponse
-	104, // 160: v1.SDSController.MakeHa:output_type -> v1.MakeHaResponse
-	106, // 161: v1.SDSController.EvictHa:output_type -> v1.EvictHaResponse
-	189, // 162: v1.SDSController.DeleteHa:output_type -> v1.DeleteHaResponse
-	191, // 163: v1.SDSController.GetHa:output_type -> v1.GetHaResponse
-	193, // 164: v1.SDSController.ListHa:output_type -> v1.ListHaResponse
-	96,  // 165: v1.SDSController.ListResourceAgents:output_type -> v1.ListResourceAgentsResponse
-	99,  // 166: v1.SDSController.GetResourceAgentMetadata:output_type -> v1.GetResourceAgentMetadataResponse
-	101, // 167: v1.SDSController.GetHaToml:output_type -> v1.GetHaTomlResponse
-	103, // 168: v1.SDSController.SyncHaToml:output_type -> v1.SyncHaTomlResponse
-	108, // 169: v1.SDSController.EnableSelfHa:output_type -> v1.EnableSelfHaResponse
-	110, // 170: v1.SDSController.DisableSelfHa:output_type -> v1.DisableSelfHaResponse
-	112, // 171: v1.SDSController.GetSelfHaStatus:output_type -> v1.GetSelfHaStatusResponse
-	118, // 172: v1.SDSController.CreateSnapshot:output_type -> v1.CreateSnapshotResponse
-	120, // 173: v1.SDSController.DeleteSnapshot:output_type -> v1.DeleteSnapshotResponse
-	122, // 174: v1.SDSController.RestoreSnapshot:output_type -> v1.RestoreSnapshotResponse
-	124, // 175: v1.SDSController.ListSnapshots:output_type -> v1.ListSnapshotsResponse
-	129, // 176: v1.SDSController.CreateSnapshotSchedule:output_type -> v1.CreateSnapshotScheduleResponse
-	131, // 177: v1.SDSController.ListSnapshotSchedules:output_type -> v1.ListSnapshotSchedulesResponse
-	133, // 178: v1.SDSController.DeleteSnapshotSchedule:output_type -> v1.DeleteSnapshotScheduleResponse
-	135, // 179: v1.SDSController.CreateNFSGateway:output_type -> v1.CreateNFSGatewayResponse
-	137, // 180: v1.SDSController.CreateISCSIGateway:output_type -> v1.CreateISCSIGatewayResponse
-	139, // 181: v1.SDSController.CreateNVMeGateway:output_type -> v1.CreateNVMeGatewayResponse
-	141, // 182: v1.SDSController.DeleteGateway:output_type -> v1.DeleteGatewayResponse
-	143, // 183: v1.SDSController.GetGateway:output_type -> v1.GetGatewayResponse
-	145, // 184: v1.SDSController.ListGateways:output_type -> v1.ListGatewaysResponse
-	147, // 185: v1.SDSController.StartGateway:output_type -> v1.StartGatewayResponse
-	149, // 186: v1.SDSController.StopGateway:output_type -> v1.StopGatewayResponse
-	153, // 187: v1.SDSController.AddNFSExport:output_type -> v1.AddNFSExportResponse
-	155, // 188: v1.SDSController.RemoveNFSExport:output_type -> v1.RemoveNFSExportResponse
-	157, // 189: v1.SDSController.ListNFSExports:output_type -> v1.ListNFSExportsResponse
-	160, // 190: v1.SDSController.AddISCSILUN:output_type -> v1.AddISCSILUNResponse
-	162, // 191: v1.SDSController.RemoveISCSILUN:output_type -> v1.RemoveISCSILUNResponse
-	164, // 192: v1.SDSController.ListISCSILUNs:output_type -> v1.ListISCSILUNsResponse
-	166, // 193: v1.SDSController.AddISCSIInitiator:output_type -> v1.AddISCSIInitiatorResponse
-	168, // 194: v1.SDSController.RemoveISCSIInitiator:output_type -> v1.RemoveISCSIInitiatorResponse
-	170, // 195: v1.SDSController.ListISCSIInitiators:output_type -> v1.ListISCSIInitiatorsResponse
-	172, // 196: v1.SDSController.SetISCSIChap:output_type -> v1.SetISCSIChapResponse
-	174, // 197: v1.SDSController.GetISCSIChap:output_type -> v1.GetISCSIChapResponse
-	177, // 198: v1.SDSController.AddNVMeNamespace:output_type -> v1.AddNVMeNamespaceResponse
-	179, // 199: v1.SDSController.RemoveNVMeNamespace:output_type -> v1.RemoveNVMeNamespaceResponse
-	181, // 200: v1.SDSController.ListNVMeNamespaces:output_type -> v1.ListNVMeNamespacesResponse
-	183, // 201: v1.SDSController.AddNVMeHost:output_type -> v1.AddNVMeHostResponse
-	185, // 202: v1.SDSController.RemoveNVMeHost:output_type -> v1.RemoveNVMeHostResponse
-	187, // 203: v1.SDSController.ListNVMeHosts:output_type -> v1.ListNVMeHostsResponse
-	12,  // 204: v1.SDSController.CreateZFSPool:output_type -> v1.CreateZFSPoolResponse
-	14,  // 205: v1.SDSController.DeleteZFSPool:output_type -> v1.DeleteZFSPoolResponse
-	16,  // 206: v1.SDSController.ListZFSpools:output_type -> v1.ListZFSPoolsResponse
-	18,  // 207: v1.SDSController.CreateZFSDataset:output_type -> v1.CreateZFSDatasetResponse
-	20,  // 208: v1.SDSController.CreateZFSVolume:output_type -> v1.CreateZFSVolumeResponse
-	22,  // 209: v1.SDSController.ResizeZFSVolume:output_type -> v1.ResizeZFSVolumeResponse
-	24,  // 210: v1.SDSController.DeleteZFSDataset:output_type -> v1.DeleteZFSDatasetResponse
-	26,  // 211: v1.SDSController.CreateZFSSnapshot:output_type -> v1.CreateZFSSnapshotResponse
-	28,  // 212: v1.SDSController.DeleteZFSSnapshot:output_type -> v1.DeleteZFSSnapshotResponse
-	30,  // 213: v1.SDSController.ListZFSSnapshots:output_type -> v1.ListZFSSnapshotsResponse
-	32,  // 214: v1.SDSController.RestoreZFSSnapshot:output_type -> v1.RestoreZFSSnapshotResponse
-	34,  // 215: v1.SDSController.CloneZFSSnapshot:output_type -> v1.CloneZFSSnapshotResponse
-	36,  // 216: v1.SDSController.CreateLvmSnapshot:output_type -> v1.CreateLvmSnapshotResponse
-	38,  // 217: v1.SDSController.DeleteLvmSnapshot:output_type -> v1.DeleteLvmSnapshotResponse
-	40,  // 218: v1.SDSController.ListLvmSnapshots:output_type -> v1.ListLvmSnapshotsResponse
-	42,  // 219: v1.SDSController.RestoreLvmSnapshot:output_type -> v1.RestoreLvmSnapshotResponse
-	132, // [132:220] is the sub-list for method output_type
-	44,  // [44:132] is the sub-list for method input_type
-	44,  // [44:44] is the sub-list for extension type_name
-	44,  // [44:44] is the sub-list for extension extendee
-	0,   // [0:44] is the sub-list for field type_name
+	114, // 14: v1.GetResourceResponse.resource:type_name -> v1.ResourceInfo
+	114, // 15: v1.ListResourcesResponse.resources:type_name -> v1.ResourceInfo
+	199, // 16: v1.UpdateResourceOptionsRequest.options:type_name -> v1.UpdateResourceOptionsRequest.OptionsEntry
+	115, // 17: v1.ResourceStatusResponse.status:type_name -> v1.ResourceStatus
+	200, // 18: v1.OcfAgent.params:type_name -> v1.OcfAgent.ParamsEntry
+	92,  // 19: v1.HaStartItem.ocf:type_name -> v1.OcfAgent
+	92,  // 20: v1.MakeHaRequest.ocf_agents:type_name -> v1.OcfAgent
+	93,  // 21: v1.MakeHaRequest.start_items:type_name -> v1.HaStartItem
+	95,  // 22: v1.ListResourceAgentsResponse.agents:type_name -> v1.ResourceAgentInfo
+	98,  // 23: v1.GetResourceAgentMetadataResponse.parameters:type_name -> v1.ResourceAgentParameter
+	117, // 24: v1.ResourceInfo.volumes:type_name -> v1.VolumeInfo
+	201, // 25: v1.ResourceInfo.node_states:type_name -> v1.ResourceInfo.NodeStatesEntry
+	202, // 26: v1.ResourceStatus.node_states:type_name -> v1.ResourceStatus.NodeStatesEntry
+	117, // 27: v1.ResourceStatus.volumes:type_name -> v1.VolumeInfo
+	203, // 28: v1.ResourceStatus.wan_proxy:type_name -> v1.ResourceStatus.WanProxyEntry
+	126, // 29: v1.ListSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
+	127, // 30: v1.SnapshotScheduleInfo.keep:type_name -> v1.GFSRetention
+	127, // 31: v1.CreateSnapshotScheduleRequest.keep:type_name -> v1.GFSRetention
+	128, // 32: v1.ListSnapshotSchedulesResponse.schedules:type_name -> v1.SnapshotScheduleInfo
+	204, // 33: v1.CreateNFSGatewayRequest.options:type_name -> v1.CreateNFSGatewayRequest.OptionsEntry
+	205, // 34: v1.CreateISCSIGatewayRequest.options:type_name -> v1.CreateISCSIGatewayRequest.OptionsEntry
+	206, // 35: v1.CreateNVMeGatewayRequest.options:type_name -> v1.CreateNVMeGatewayRequest.OptionsEntry
+	151, // 36: v1.GetGatewayResponse.gateway:type_name -> v1.GatewayInfo
+	151, // 37: v1.ListGatewaysResponse.gateways:type_name -> v1.GatewayInfo
+	207, // 38: v1.GatewayInfo.options:type_name -> v1.GatewayInfo.OptionsEntry
+	152, // 39: v1.ListNFSExportsResponse.exports:type_name -> v1.NFSExportInfo
+	159, // 40: v1.ListISCSILUNsResponse.luns:type_name -> v1.ISCSILUNInfo
+	176, // 41: v1.ListNVMeNamespacesResponse.namespaces:type_name -> v1.NVMeNamespaceInfo
+	195, // 42: v1.GetHaResponse.config:type_name -> v1.HaConfigInfo
+	195, // 43: v1.ListHaResponse.configs:type_name -> v1.HaConfigInfo
+	116, // 44: v1.ResourceInfo.NodeStatesEntry.value:type_name -> v1.NodeResourceState
+	116, // 45: v1.ResourceStatus.NodeStatesEntry.value:type_name -> v1.NodeResourceState
+	0,   // 46: v1.SDSController.CreatePool:input_type -> v1.CreatePoolRequest
+	2,   // 47: v1.SDSController.DeletePool:input_type -> v1.DeletePoolRequest
+	4,   // 48: v1.SDSController.GetPool:input_type -> v1.GetPoolRequest
+	6,   // 49: v1.SDSController.ListPools:input_type -> v1.ListPoolsRequest
+	8,   // 50: v1.SDSController.AddDiskToPool:input_type -> v1.AddDiskToPoolRequest
+	43,  // 51: v1.SDSController.RegisterNode:input_type -> v1.RegisterNodeRequest
+	47,  // 52: v1.SDSController.UnregisterNode:input_type -> v1.UnregisterNodeRequest
+	45,  // 53: v1.SDSController.SetNodeLabels:input_type -> v1.SetNodeLabelsRequest
+	49,  // 54: v1.SDSController.GetNode:input_type -> v1.GetNodeRequest
+	51,  // 55: v1.SDSController.ListNodes:input_type -> v1.ListNodesRequest
+	54,  // 56: v1.SDSController.HealthCheck:input_type -> v1.HealthCheckRequest
+	57,  // 57: v1.SDSController.CreateResource:input_type -> v1.CreateResourceRequest
+	60,  // 58: v1.SDSController.AdoptResource:input_type -> v1.AdoptResourceRequest
+	62,  // 59: v1.SDSController.DeleteResource:input_type -> v1.DeleteResourceRequest
+	64,  // 60: v1.SDSController.GetResource:input_type -> v1.GetResourceRequest
+	66,  // 61: v1.SDSController.ListResources:input_type -> v1.ListResourcesRequest
+	68,  // 62: v1.SDSController.AddVolume:input_type -> v1.AddVolumeRequest
+	72,  // 63: v1.SDSController.RemoveVolume:input_type -> v1.RemoveVolumeRequest
+	74,  // 64: v1.SDSController.ResizeVolume:input_type -> v1.ResizeVolumeRequest
+	70,  // 65: v1.SDSController.UpdateResourceOptions:input_type -> v1.UpdateResourceOptionsRequest
+	76,  // 66: v1.SDSController.ResourceStatus:input_type -> v1.ResourceStatusRequest
+	78,  // 67: v1.SDSController.SetPrimary:input_type -> v1.SetPrimaryRequest
+	80,  // 68: v1.SDSController.SetSecondary:input_type -> v1.SetSecondaryRequest
+	82,  // 69: v1.SDSController.AttachDisklessClient:input_type -> v1.AttachDisklessClientRequest
+	84,  // 70: v1.SDSController.DetachDisklessClient:input_type -> v1.DetachDisklessClientRequest
+	86,  // 71: v1.SDSController.CreateFilesystem:input_type -> v1.CreateFilesystemRequest
+	88,  // 72: v1.SDSController.MountResource:input_type -> v1.MountResourceRequest
+	90,  // 73: v1.SDSController.UnmountResource:input_type -> v1.UnmountResourceRequest
+	94,  // 74: v1.SDSController.MakeHa:input_type -> v1.MakeHaRequest
+	106, // 75: v1.SDSController.EvictHa:input_type -> v1.EvictHaRequest
+	189, // 76: v1.SDSController.DeleteHa:input_type -> v1.DeleteHaRequest
+	191, // 77: v1.SDSController.GetHa:input_type -> v1.GetHaRequest
+	193, // 78: v1.SDSController.ListHa:input_type -> v1.ListHaRequest
+	96,  // 79: v1.SDSController.ListResourceAgents:input_type -> v1.ListResourceAgentsRequest
+	99,  // 80: v1.SDSController.GetResourceAgentMetadata:input_type -> v1.GetResourceAgentMetadataRequest
+	101, // 81: v1.SDSController.GetHaToml:input_type -> v1.GetHaTomlRequest
+	103, // 82: v1.SDSController.SyncHaToml:input_type -> v1.SyncHaTomlRequest
+	108, // 83: v1.SDSController.EnableSelfHa:input_type -> v1.EnableSelfHaRequest
+	110, // 84: v1.SDSController.DisableSelfHa:input_type -> v1.DisableSelfHaRequest
+	112, // 85: v1.SDSController.GetSelfHaStatus:input_type -> v1.GetSelfHaStatusRequest
+	118, // 86: v1.SDSController.CreateSnapshot:input_type -> v1.CreateSnapshotRequest
+	120, // 87: v1.SDSController.DeleteSnapshot:input_type -> v1.DeleteSnapshotRequest
+	122, // 88: v1.SDSController.RestoreSnapshot:input_type -> v1.RestoreSnapshotRequest
+	124, // 89: v1.SDSController.ListSnapshots:input_type -> v1.ListSnapshotsRequest
+	129, // 90: v1.SDSController.CreateSnapshotSchedule:input_type -> v1.CreateSnapshotScheduleRequest
+	131, // 91: v1.SDSController.ListSnapshotSchedules:input_type -> v1.ListSnapshotSchedulesRequest
+	133, // 92: v1.SDSController.DeleteSnapshotSchedule:input_type -> v1.DeleteSnapshotScheduleRequest
+	135, // 93: v1.SDSController.CreateNFSGateway:input_type -> v1.CreateNFSGatewayRequest
+	137, // 94: v1.SDSController.CreateISCSIGateway:input_type -> v1.CreateISCSIGatewayRequest
+	139, // 95: v1.SDSController.CreateNVMeGateway:input_type -> v1.CreateNVMeGatewayRequest
+	141, // 96: v1.SDSController.DeleteGateway:input_type -> v1.DeleteGatewayRequest
+	143, // 97: v1.SDSController.GetGateway:input_type -> v1.GetGatewayRequest
+	145, // 98: v1.SDSController.ListGateways:input_type -> v1.ListGatewaysRequest
+	147, // 99: v1.SDSController.StartGateway:input_type -> v1.StartGatewayRequest
+	149, // 100: v1.SDSController.StopGateway:input_type -> v1.StopGatewayRequest
+	153, // 101: v1.SDSController.AddNFSExport:input_type -> v1.AddNFSExportRequest
+	155, // 102: v1.SDSController.RemoveNFSExport:input_type -> v1.RemoveNFSExportRequest
+	157, // 103: v1.SDSController.ListNFSExports:input_type -> v1.ListNFSExportsRequest
+	160, // 104: v1.SDSController.AddISCSILUN:input_type -> v1.AddISCSILUNRequest
+	162, // 105: v1.SDSController.RemoveISCSILUN:input_type -> v1.RemoveISCSILUNRequest
+	164, // 106: v1.SDSController.ListISCSILUNs:input_type -> v1.ListISCSILUNsRequest
+	166, // 107: v1.SDSController.AddISCSIInitiator:input_type -> v1.AddISCSIInitiatorRequest
+	168, // 108: v1.SDSController.RemoveISCSIInitiator:input_type -> v1.RemoveISCSIInitiatorRequest
+	170, // 109: v1.SDSController.ListISCSIInitiators:input_type -> v1.ListISCSIInitiatorsRequest
+	172, // 110: v1.SDSController.SetISCSIChap:input_type -> v1.SetISCSIChapRequest
+	174, // 111: v1.SDSController.GetISCSIChap:input_type -> v1.GetISCSIChapRequest
+	177, // 112: v1.SDSController.AddNVMeNamespace:input_type -> v1.AddNVMeNamespaceRequest
+	179, // 113: v1.SDSController.RemoveNVMeNamespace:input_type -> v1.RemoveNVMeNamespaceRequest
+	181, // 114: v1.SDSController.ListNVMeNamespaces:input_type -> v1.ListNVMeNamespacesRequest
+	183, // 115: v1.SDSController.AddNVMeHost:input_type -> v1.AddNVMeHostRequest
+	185, // 116: v1.SDSController.RemoveNVMeHost:input_type -> v1.RemoveNVMeHostRequest
+	187, // 117: v1.SDSController.ListNVMeHosts:input_type -> v1.ListNVMeHostsRequest
+	11,  // 118: v1.SDSController.CreateZFSPool:input_type -> v1.CreateZFSPoolRequest
+	13,  // 119: v1.SDSController.DeleteZFSPool:input_type -> v1.DeleteZFSPoolRequest
+	15,  // 120: v1.SDSController.ListZFSpools:input_type -> v1.ListZFSPoolsRequest
+	17,  // 121: v1.SDSController.CreateZFSDataset:input_type -> v1.CreateZFSDatasetRequest
+	19,  // 122: v1.SDSController.CreateZFSVolume:input_type -> v1.CreateZFSVolumeRequest
+	21,  // 123: v1.SDSController.ResizeZFSVolume:input_type -> v1.ResizeZFSVolumeRequest
+	23,  // 124: v1.SDSController.DeleteZFSDataset:input_type -> v1.DeleteZFSDatasetRequest
+	25,  // 125: v1.SDSController.CreateZFSSnapshot:input_type -> v1.CreateZFSSnapshotRequest
+	27,  // 126: v1.SDSController.DeleteZFSSnapshot:input_type -> v1.DeleteZFSSnapshotRequest
+	29,  // 127: v1.SDSController.ListZFSSnapshots:input_type -> v1.ListZFSSnapshotsRequest
+	31,  // 128: v1.SDSController.RestoreZFSSnapshot:input_type -> v1.RestoreZFSSnapshotRequest
+	33,  // 129: v1.SDSController.CloneZFSSnapshot:input_type -> v1.CloneZFSSnapshotRequest
+	35,  // 130: v1.SDSController.CreateLvmSnapshot:input_type -> v1.CreateLvmSnapshotRequest
+	37,  // 131: v1.SDSController.DeleteLvmSnapshot:input_type -> v1.DeleteLvmSnapshotRequest
+	39,  // 132: v1.SDSController.ListLvmSnapshots:input_type -> v1.ListLvmSnapshotsRequest
+	41,  // 133: v1.SDSController.RestoreLvmSnapshot:input_type -> v1.RestoreLvmSnapshotRequest
+	1,   // 134: v1.SDSController.CreatePool:output_type -> v1.CreatePoolResponse
+	3,   // 135: v1.SDSController.DeletePool:output_type -> v1.DeletePoolResponse
+	5,   // 136: v1.SDSController.GetPool:output_type -> v1.GetPoolResponse
+	7,   // 137: v1.SDSController.ListPools:output_type -> v1.ListPoolsResponse
+	9,   // 138: v1.SDSController.AddDiskToPool:output_type -> v1.AddDiskToPoolResponse
+	44,  // 139: v1.SDSController.RegisterNode:output_type -> v1.RegisterNodeResponse
+	48,  // 140: v1.SDSController.UnregisterNode:output_type -> v1.UnregisterNodeResponse
+	46,  // 141: v1.SDSController.SetNodeLabels:output_type -> v1.SetNodeLabelsResponse
+	50,  // 142: v1.SDSController.GetNode:output_type -> v1.GetNodeResponse
+	52,  // 143: v1.SDSController.ListNodes:output_type -> v1.ListNodesResponse
+	55,  // 144: v1.SDSController.HealthCheck:output_type -> v1.HealthCheckResponse
+	59,  // 145: v1.SDSController.CreateResource:output_type -> v1.CreateResourceResponse
+	61,  // 146: v1.SDSController.AdoptResource:output_type -> v1.AdoptResourceResponse
+	63,  // 147: v1.SDSController.DeleteResource:output_type -> v1.DeleteResourceResponse
+	65,  // 148: v1.SDSController.GetResource:output_type -> v1.GetResourceResponse
+	67,  // 149: v1.SDSController.ListResources:output_type -> v1.ListResourcesResponse
+	69,  // 150: v1.SDSController.AddVolume:output_type -> v1.AddVolumeResponse
+	73,  // 151: v1.SDSController.RemoveVolume:output_type -> v1.RemoveVolumeResponse
+	75,  // 152: v1.SDSController.ResizeVolume:output_type -> v1.ResizeVolumeResponse
+	71,  // 153: v1.SDSController.UpdateResourceOptions:output_type -> v1.UpdateResourceOptionsResponse
+	77,  // 154: v1.SDSController.ResourceStatus:output_type -> v1.ResourceStatusResponse
+	79,  // 155: v1.SDSController.SetPrimary:output_type -> v1.SetPrimaryResponse
+	81,  // 156: v1.SDSController.SetSecondary:output_type -> v1.SetSecondaryResponse
+	83,  // 157: v1.SDSController.AttachDisklessClient:output_type -> v1.AttachDisklessClientResponse
+	85,  // 158: v1.SDSController.DetachDisklessClient:output_type -> v1.DetachDisklessClientResponse
+	87,  // 159: v1.SDSController.CreateFilesystem:output_type -> v1.CreateFilesystemResponse
+	89,  // 160: v1.SDSController.MountResource:output_type -> v1.MountResourceResponse
+	91,  // 161: v1.SDSController.UnmountResource:output_type -> v1.UnmountResourceResponse
+	105, // 162: v1.SDSController.MakeHa:output_type -> v1.MakeHaResponse
+	107, // 163: v1.SDSController.EvictHa:output_type -> v1.EvictHaResponse
+	190, // 164: v1.SDSController.DeleteHa:output_type -> v1.DeleteHaResponse
+	192, // 165: v1.SDSController.GetHa:output_type -> v1.GetHaResponse
+	194, // 166: v1.SDSController.ListHa:output_type -> v1.ListHaResponse
+	97,  // 167: v1.SDSController.ListResourceAgents:output_type -> v1.ListResourceAgentsResponse
+	100, // 168: v1.SDSController.GetResourceAgentMetadata:output_type -> v1.GetResourceAgentMetadataResponse
+	102, // 169: v1.SDSController.GetHaToml:output_type -> v1.GetHaTomlResponse
+	104, // 170: v1.SDSController.SyncHaToml:output_type -> v1.SyncHaTomlResponse
+	109, // 171: v1.SDSController.EnableSelfHa:output_type -> v1.EnableSelfHaResponse
+	111, // 172: v1.SDSController.DisableSelfHa:output_type -> v1.DisableSelfHaResponse
+	113, // 173: v1.SDSController.GetSelfHaStatus:output_type -> v1.GetSelfHaStatusResponse
+	119, // 174: v1.SDSController.CreateSnapshot:output_type -> v1.CreateSnapshotResponse
+	121, // 175: v1.SDSController.DeleteSnapshot:output_type -> v1.DeleteSnapshotResponse
+	123, // 176: v1.SDSController.RestoreSnapshot:output_type -> v1.RestoreSnapshotResponse
+	125, // 177: v1.SDSController.ListSnapshots:output_type -> v1.ListSnapshotsResponse
+	130, // 178: v1.SDSController.CreateSnapshotSchedule:output_type -> v1.CreateSnapshotScheduleResponse
+	132, // 179: v1.SDSController.ListSnapshotSchedules:output_type -> v1.ListSnapshotSchedulesResponse
+	134, // 180: v1.SDSController.DeleteSnapshotSchedule:output_type -> v1.DeleteSnapshotScheduleResponse
+	136, // 181: v1.SDSController.CreateNFSGateway:output_type -> v1.CreateNFSGatewayResponse
+	138, // 182: v1.SDSController.CreateISCSIGateway:output_type -> v1.CreateISCSIGatewayResponse
+	140, // 183: v1.SDSController.CreateNVMeGateway:output_type -> v1.CreateNVMeGatewayResponse
+	142, // 184: v1.SDSController.DeleteGateway:output_type -> v1.DeleteGatewayResponse
+	144, // 185: v1.SDSController.GetGateway:output_type -> v1.GetGatewayResponse
+	146, // 186: v1.SDSController.ListGateways:output_type -> v1.ListGatewaysResponse
+	148, // 187: v1.SDSController.StartGateway:output_type -> v1.StartGatewayResponse
+	150, // 188: v1.SDSController.StopGateway:output_type -> v1.StopGatewayResponse
+	154, // 189: v1.SDSController.AddNFSExport:output_type -> v1.AddNFSExportResponse
+	156, // 190: v1.SDSController.RemoveNFSExport:output_type -> v1.RemoveNFSExportResponse
+	158, // 191: v1.SDSController.ListNFSExports:output_type -> v1.ListNFSExportsResponse
+	161, // 192: v1.SDSController.AddISCSILUN:output_type -> v1.AddISCSILUNResponse
+	163, // 193: v1.SDSController.RemoveISCSILUN:output_type -> v1.RemoveISCSILUNResponse
+	165, // 194: v1.SDSController.ListISCSILUNs:output_type -> v1.ListISCSILUNsResponse
+	167, // 195: v1.SDSController.AddISCSIInitiator:output_type -> v1.AddISCSIInitiatorResponse
+	169, // 196: v1.SDSController.RemoveISCSIInitiator:output_type -> v1.RemoveISCSIInitiatorResponse
+	171, // 197: v1.SDSController.ListISCSIInitiators:output_type -> v1.ListISCSIInitiatorsResponse
+	173, // 198: v1.SDSController.SetISCSIChap:output_type -> v1.SetISCSIChapResponse
+	175, // 199: v1.SDSController.GetISCSIChap:output_type -> v1.GetISCSIChapResponse
+	178, // 200: v1.SDSController.AddNVMeNamespace:output_type -> v1.AddNVMeNamespaceResponse
+	180, // 201: v1.SDSController.RemoveNVMeNamespace:output_type -> v1.RemoveNVMeNamespaceResponse
+	182, // 202: v1.SDSController.ListNVMeNamespaces:output_type -> v1.ListNVMeNamespacesResponse
+	184, // 203: v1.SDSController.AddNVMeHost:output_type -> v1.AddNVMeHostResponse
+	186, // 204: v1.SDSController.RemoveNVMeHost:output_type -> v1.RemoveNVMeHostResponse
+	188, // 205: v1.SDSController.ListNVMeHosts:output_type -> v1.ListNVMeHostsResponse
+	12,  // 206: v1.SDSController.CreateZFSPool:output_type -> v1.CreateZFSPoolResponse
+	14,  // 207: v1.SDSController.DeleteZFSPool:output_type -> v1.DeleteZFSPoolResponse
+	16,  // 208: v1.SDSController.ListZFSpools:output_type -> v1.ListZFSPoolsResponse
+	18,  // 209: v1.SDSController.CreateZFSDataset:output_type -> v1.CreateZFSDatasetResponse
+	20,  // 210: v1.SDSController.CreateZFSVolume:output_type -> v1.CreateZFSVolumeResponse
+	22,  // 211: v1.SDSController.ResizeZFSVolume:output_type -> v1.ResizeZFSVolumeResponse
+	24,  // 212: v1.SDSController.DeleteZFSDataset:output_type -> v1.DeleteZFSDatasetResponse
+	26,  // 213: v1.SDSController.CreateZFSSnapshot:output_type -> v1.CreateZFSSnapshotResponse
+	28,  // 214: v1.SDSController.DeleteZFSSnapshot:output_type -> v1.DeleteZFSSnapshotResponse
+	30,  // 215: v1.SDSController.ListZFSSnapshots:output_type -> v1.ListZFSSnapshotsResponse
+	32,  // 216: v1.SDSController.RestoreZFSSnapshot:output_type -> v1.RestoreZFSSnapshotResponse
+	34,  // 217: v1.SDSController.CloneZFSSnapshot:output_type -> v1.CloneZFSSnapshotResponse
+	36,  // 218: v1.SDSController.CreateLvmSnapshot:output_type -> v1.CreateLvmSnapshotResponse
+	38,  // 219: v1.SDSController.DeleteLvmSnapshot:output_type -> v1.DeleteLvmSnapshotResponse
+	40,  // 220: v1.SDSController.ListLvmSnapshots:output_type -> v1.ListLvmSnapshotsResponse
+	42,  // 221: v1.SDSController.RestoreLvmSnapshot:output_type -> v1.RestoreLvmSnapshotResponse
+	134, // [134:222] is the sub-list for method output_type
+	46,  // [46:134] is the sub-list for method input_type
+	46,  // [46:46] is the sub-list for extension type_name
+	46,  // [46:46] is the sub-list for extension extendee
+	0,   // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_v1_sds_proto_init() }
@@ -12835,13 +12943,17 @@ func file_api_proto_v1_sds_proto_init() {
 	if File_api_proto_v1_sds_proto != nil {
 		return
 	}
+	file_api_proto_v1_sds_proto_msgTypes[93].OneofWrappers = []any{
+		(*HaStartItem_SystemdUnit)(nil),
+		(*HaStartItem_Ocf)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_sds_proto_rawDesc), len(file_api_proto_v1_sds_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   207,
+			NumMessages:   208,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -3526,6 +3526,14 @@
             "$ref": "#/definitions/v1OcfAgent"
           },
           "title": "optional OCF agents appended to promoter start[]"
+        },
+        "startItems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HaStartItem"
+          },
+          "description": "start_items, when non-empty, defines the promoter start[] list verbatim and\nin order (systemd units and OCF agents interleaved). The legacy fields\n2/3/5/6 above are then used only for provisioning side effects (mount unit\ngeneration, VIP service-ip precondition) and NOT for start[] ordering."
         }
       }
     },
@@ -4783,6 +4791,20 @@
           }
         }
       }
+    },
+    "v1HaStartItem": {
+      "type": "object",
+      "properties": {
+        "systemdUnit": {
+          "type": "string",
+          "title": "a systemd/mount unit, e.g. \"mysql.service\" or \"mnt-data.mount\""
+        },
+        "ocf": {
+          "$ref": "#/definitions/v1OcfAgent",
+          "title": "an OCF resource agent"
+        }
+      },
+      "description": "HaStartItem is one entry in the promoter start[] list. systemd/mount units and\nOCF resource agents are PEERS: the list is a single ordered sequence and each\nitem is exactly one of the fields below. This is what lets a correct stack be\nexpressed (e.g. portblock -\u003e Filesystem -\u003e IPaddr2 -\u003e nfsserver -\u003e exportfs -\u003e\nportunblock) instead of forcing all OCF agents after all systemd units."
     },
     "v1HealthCheckResponse": {
       "type": "object",

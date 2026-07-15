@@ -1,11 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { api, OcfAgentSpec } from '@/services/api';
+import { api, HaStartItem, OcfAgentSpec } from '@/services/api';
 import { OcfAgentBuilder } from '@/components/OcfAgentBuilder';
-import { buildPromoterTomlPreview } from '@/lib/toml';
+import {
+  buildPromoterTomlPreviewOrdered,
+  mountUnitFor,
+  vipUnitFor,
+  type PreviewStartItem,
+} from '@/lib/toml';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -15,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
   Select,
@@ -23,6 +29,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// One entry in the ordered start[] editor. systemd/mount units (service, mount,
+// vip) and OCF resource agents are PEERS in one list — the order is exactly what
+// the promoter runs, so a correct stack (e.g. Filesystem -> IPaddr2 -> service)
+// is expressible. Each item carries a stable id for drag-and-drop.
+type StartItem =
+  | { id: string; kind: 'service'; unit: string }
+  | { id: string; kind: 'mount'; path: string; fstype: string }
+  | { id: string; kind: 'vip'; cidr: string }
+  | { id: string; kind: 'ocf'; agent: OcfAgentSpec };
 
 export function CreateHAPage() {
   const navigate = useNavigate();
@@ -31,65 +64,111 @@ export function CreateHAPage() {
     queryKey: ['ha'],
     queryFn: () => api.getHaConfigs(),
   });
-
   const { data: resources } = useQuery({
     queryKey: ['resources'],
     queryFn: () => api.getResources(),
   });
 
   const configs = haConfigs?.configs ?? [];
-
-  // Resources without an existing HA config are eligible for creation.
   const resourcesWithoutHA = (resources?.resources ?? []).filter(
-    (r) => !configs.some((ha) => ha.resource === r.name)
+    (r) => !configs.some((ha) => ha.resource === r.name),
   );
 
   const [resource, setResource] = useState('');
-  const [vip, setVip] = useState('');
-  const [mountPoint, setMountPoint] = useState('');
-  const [fstype, setFstype] = useState('ext4');
-  const [services, setServices] = useState('');
-  const [ocfAgents, setOcfAgents] = useState<OcfAgentSpec[]>([]);
+  const [items, setItems] = useState<StartItem[]>([]);
 
-  // Parsed the same way makeHa sends it, so the preview matches what the
-  // backend actually receives.
-  const parsedServices = useMemo(
-    () => services.split(',').map((s) => s.trim()).filter(Boolean),
-    [services],
+  const idSeq = useRef(0);
+  const newId = () => `start-item-${idSeq.current++}`;
+
+  const addItem = (item: StartItem) => setItems((prev) => [...prev, item]);
+  const removeItem = (id: string) =>
+    setItems((prev) => prev.filter((it) => it.id !== id));
+  const patchItem = (id: string, patch: Partial<StartItem>) =>
+    setItems((prev) =>
+      prev.map((it) => (it.id === id ? ({ ...it, ...patch } as StartItem) : it)),
+    );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setItems((prev) => {
+      const oldIndex = prev.findIndex((it) => it.id === active.id);
+      const newIndex = prev.findIndex((it) => it.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  };
 
-  // Live drbd-reactor promoter TOML preview, rebuilt from the current form
-  // state. Mirrors the backend generatePromoterConfig output exactly.
-  const promoterPreview = useMemo(
+  // Resolve each editor item to its promoter start[] entry for the live preview.
+  const previewItems: PreviewStartItem[] = useMemo(
     () =>
-      buildPromoterTomlPreview({
-        resource,
-        vip,
-        mountPoint,
-        services: parsedServices,
-        ocfAgents,
+      items.map((it): PreviewStartItem => {
+        switch (it.kind) {
+          case 'service':
+            return { kind: 'unit', unit: it.unit };
+          case 'mount':
+            return { kind: 'unit', unit: it.path ? mountUnitFor(it.path) : '' };
+          case 'vip':
+            return { kind: 'unit', unit: it.cidr ? vipUnitFor(it.cidr) : '' };
+          case 'ocf':
+            return { kind: 'ocf', agent: it.agent };
+        }
       }),
-    [resource, vip, mountPoint, parsedServices, ocfAgents],
+    [items],
+  );
+  const promoterPreview = useMemo(
+    () => buildPromoterTomlPreviewOrdered(resource, previewItems),
+    [resource, previewItems],
   );
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.makeHa(resource, {
-        vip,
-        mountPoint: mountPoint || undefined,
-        fstype: mountPoint ? fstype : undefined,
-        services: services
-          ? services.split(',').map((s) => s.trim()).filter(Boolean)
-          : undefined,
-        ocfAgents: ocfAgents.length > 0 ? ocfAgents : undefined,
-      }),
+    mutationFn: () => {
+      // start_items defines the ordered start[] verbatim. vip/mount are also sent
+      // so the backend runs provisioning (service-ip precondition, .mount unit).
+      const firstMount = items.find((it) => it.kind === 'mount') as
+        | Extract<StartItem, { kind: 'mount' }>
+        | undefined;
+      const firstVip = items.find((it) => it.kind === 'vip') as
+        | Extract<StartItem, { kind: 'vip' }>
+        | undefined;
+
+      const startItems: HaStartItem[] = [];
+      for (const it of items) {
+        if (it.kind === 'ocf') {
+          startItems.push({ ocf: it.agent });
+        } else {
+          const unit =
+            it.kind === 'service'
+              ? it.unit.trim()
+              : it.kind === 'mount'
+                ? (it.path ? mountUnitFor(it.path) : '')
+                : it.cidr
+                  ? vipUnitFor(it.cidr)
+                  : '';
+          if (unit) startItems.push({ systemdUnit: unit });
+        }
+      }
+
+      return api.makeHa(resource, {
+        vip: firstVip?.cidr || undefined,
+        mountPoint: firstMount?.path || undefined,
+        fstype: firstMount?.path ? firstMount.fstype : undefined,
+        startItems,
+      });
+    },
     onSuccess: () => {
       toast.success('HA configuration created');
-      setOcfAgents([]);
+      setItems([]);
       navigate('/ha');
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const canSubmit = Boolean(resource) && items.length > 0;
 
   return (
     <div className="space-y-6">
@@ -100,7 +179,8 @@ export function CreateHAPage() {
         <div>
           <h3 className="text-lg font-semibold">Create HA Configuration</h3>
           <p className="text-sm text-muted-foreground">
-            Attach a floating VIP and automatic failover to a DRBD resource.
+            Compose the promoter start sequence. systemd/mount units and OCF
+            resource agents are peers — drag to set the exact start order.
           </p>
         </div>
       </div>
@@ -119,95 +199,110 @@ export function CreateHAPage() {
             mutation.mutate();
           }}
         >
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Resource &amp; VIP</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label>DRBD Resource</Label>
-                  <Select value={resource} onValueChange={setResource}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a resource..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {resourcesWithoutHA.map((r) => (
-                        <SelectItem key={r.name} value={r.name}>
-                          {r.name} ({r.nodes.join(', ')})
-                        </SelectItem>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Resource</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="max-w-md space-y-1.5">
+                <Label>DRBD Resource</Label>
+                <Select value={resource} onValueChange={setResource}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a resource..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {resourcesWithoutHA.map((r) => (
+                      <SelectItem key={r.name} value={r.name}>
+                        {r.name} ({r.nodes.join(', ')})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base">Start sequence</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Items start top-to-bottom and stop in reverse. A service that
+                needs the data and VIP must sit after the Mount and VIP entries.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {items.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={items.map((it) => it.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {items.map((it, idx) => (
+                        <SortableStartRow
+                          key={it.id}
+                          index={idx}
+                          item={it}
+                          onRemove={() => removeItem(it.id)}
+                          onPatch={(patch) => patchItem(it.id, patch)}
+                        />
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Virtual IP (CIDR)</Label>
-                  <Input
-                    value={vip}
-                    onChange={(e) => setVip(e.target.value)}
-                    placeholder="192.168.1.100/24"
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The VIP that will float between nodes.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Mount Point (optional)</Label>
-                  <Input
-                    value={mountPoint}
-                    onChange={(e) => setMountPoint(e.target.value)}
-                    placeholder="/mnt/data"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Path where the DRBD device will be mounted.
-                  </p>
-                </div>
-
-                {mountPoint && (
-                  <div className="space-y-1.5">
-                    <Label>Filesystem Type</Label>
-                    <Select value={fstype} onValueChange={setFstype}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ext4">ext4</SelectItem>
-                        <SelectItem value="xfs">XFS</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <Label>Services (comma-separated, optional)</Label>
-                  <Input
-                    value={services}
-                    onChange={(e) => setServices(e.target.value)}
-                    placeholder="mysql.service, nginx.service"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Systemd services to start/stop with the resource.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">OCF Agents (optional)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">
-                  Extra OCF resource agents appended to the promoter start list
-                  after the built-in mount/VIP items.
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
+                  Empty — add systemd/mount units and OCF resource agents below.
                 </p>
-                <OcfAgentBuilder agents={ocfAgents} onChange={setOcfAgents} />
-              </CardContent>
-            </Card>
-          </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addItem({ id: newId(), kind: 'service', unit: '' })}
+                >
+                  <Plus className="mr-1 h-4 w-4" /> Systemd service
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    addItem({ id: newId(), kind: 'mount', path: '', fstype: 'ext4' })
+                  }
+                >
+                  <Plus className="mr-1 h-4 w-4" /> Mount
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addItem({ id: newId(), kind: 'vip', cidr: '' })}
+                >
+                  <Plus className="mr-1 h-4 w-4" /> VIP
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-1.5">
+                <Label>Add OCF Resource Agent</Label>
+                <OcfAgentBuilder
+                  agents={[]}
+                  onChange={(arr) => {
+                    const spec = arr[arr.length - 1];
+                    if (spec) addItem({ id: newId(), kind: 'ocf', agent: spec });
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
           <Card className="mt-6">
             <CardHeader>
@@ -225,22 +320,159 @@ export function CreateHAPage() {
           <Separator className="my-6" />
 
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/ha')}
-            >
+            <Button type="button" variant="outline" onClick={() => navigate('/ha')}>
               Cancel
             </Button>
-            <Button type="submit" disabled={mutation.isPending || !resource || !vip}>
-              {mutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
+            <Button type="submit" disabled={mutation.isPending || !canSubmit}>
+              {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create
             </Button>
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+/**
+ * One draggable row in the ordered start sequence. The grip is the only drag
+ * target so the inline editors stay interactive. The editor shown depends on the
+ * item kind; OCF items are read-only (add via the builder, reorder/remove here).
+ */
+function SortableStartRow({
+  index,
+  item,
+  onRemove,
+  onPatch,
+}: {
+  index: number;
+  item: StartItem;
+  onRemove: () => void;
+  onPatch: (patch: Partial<StartItem>) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  const kindLabel =
+    item.kind === 'service'
+      ? 'systemd'
+      : item.kind === 'mount'
+        ? 'mount'
+        : item.kind === 'vip'
+          ? 'vip'
+          : 'ocf';
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-start gap-2 rounded-md border bg-background p-2"
+    >
+      <button
+        type="button"
+        className="mt-1 flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
+        title="Drag to reorder"
+        aria-label="Drag to reorder"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+
+      <span className="mt-1 w-6 shrink-0 text-center text-xs text-muted-foreground">
+        {index + 1}
+      </span>
+      <Badge variant="secondary" className="mt-0.5 shrink-0 font-mono">
+        {kindLabel}
+      </Badge>
+
+      <div className="min-w-0 flex-1">
+        {item.kind === 'service' && (
+          <Input
+            value={item.unit}
+            onChange={(e) => onPatch({ unit: e.target.value })}
+            placeholder="mysql.service"
+            className="font-mono"
+          />
+        )}
+        {item.kind === 'mount' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={item.path}
+              onChange={(e) => onPatch({ path: e.target.value })}
+              placeholder="/mnt/data"
+              className="min-w-[10rem] flex-1 font-mono"
+            />
+            <Select
+              value={item.fstype}
+              onValueChange={(v) => onPatch({ fstype: v })}
+            >
+              <SelectTrigger className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ext4">ext4</SelectItem>
+                <SelectItem value="xfs">xfs</SelectItem>
+              </SelectContent>
+            </Select>
+            {item.path && (
+              <span className="font-mono text-xs text-muted-foreground">
+                → {mountUnitFor(item.path)}
+              </span>
+            )}
+          </div>
+        )}
+        {item.kind === 'vip' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={item.cidr}
+              onChange={(e) => onPatch({ cidr: e.target.value })}
+              placeholder="192.168.1.100/24"
+              className="min-w-[10rem] flex-1 font-mono"
+            />
+            {item.cidr && vipUnitFor(item.cidr) && (
+              <span className="font-mono text-xs text-muted-foreground">
+                → {vipUnitFor(item.cidr)}
+              </span>
+            )}
+          </div>
+        )}
+        {item.kind === 'ocf' && (
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="font-mono">
+                ocf:{item.agent.provider}:{item.agent.name}
+              </Badge>
+              <span className="truncate font-mono text-xs text-muted-foreground">
+                {item.agent.instance}
+              </span>
+            </div>
+            {Object.keys(item.agent.params).length > 0 && (
+              <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                {Object.entries(item.agent.params)
+                  .map(([k, v]) => `${k}=${v}`)
+                  .join(' ')}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0"
+        onClick={onRemove}
+        title="Remove"
+      >
+        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+      </Button>
     </div>
   );
 }

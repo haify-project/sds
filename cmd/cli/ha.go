@@ -89,7 +89,7 @@ func haCreate() *cobra.Command {
 				serviceList = strings.Split(services, ",")
 			}
 
-			configPath, err := sdsClient.MakeHa(ctx, resource, serviceList, mountPoint, fsType, vip, nil)
+			configPath, err := sdsClient.MakeHa(ctx, resource, serviceList, mountPoint, fsType, vip, nil, nil)
 			if err != nil {
 				return fmt.Errorf("failed to create HA config: %w", err)
 			}

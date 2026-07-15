@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
@@ -706,7 +707,24 @@ func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.M
 			Params:   a.Params,
 		})
 	}
-	configPath, err := s.resources.MakeHa(ctx, req.Resource, req.Services, req.MountPoint, req.Fstype, req.Vip, ocfAgents)
+	// Ordered start[] list: systemd units and OCF agents interleaved as peers.
+	var startItems []HaStartItem
+	for _, it := range req.StartItems {
+		if it == nil {
+			continue
+		}
+		if ocf := it.GetOcf(); ocf != nil {
+			startItems = append(startItems, HaStartItem{Ocf: &OcfAgentSpec{
+				Provider: ocf.Provider,
+				Name:     ocf.Name,
+				Instance: ocf.Instance,
+				Params:   ocf.Params,
+			}})
+		} else if unit := strings.TrimSpace(it.GetSystemdUnit()); unit != "" {
+			startItems = append(startItems, HaStartItem{SystemdUnit: unit})
+		}
+	}
+	configPath, err := s.resources.MakeHa(ctx, req.Resource, req.Services, req.MountPoint, req.Fstype, req.Vip, ocfAgents, startItems)
 	if err != nil {
 		return &sdspb.MakeHaResponse{
 			Success: false,

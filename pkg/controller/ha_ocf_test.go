@@ -112,6 +112,37 @@ func TestGeneratePromoterConfigComposesOcfAgents(t *testing.T) {
 	assert.Contains(t, cfg, `"ocf:heartbeat:IPaddr2 vip_pgha cidr_netmask=24 ip=192.168.1.50"`)
 }
 
+// TestGeneratePromoterConfigOrdered verifies the ordered renderer emits start[]
+// in the exact given order with systemd units and OCF agents as peers — the
+// thing the legacy bucketed generator cannot express. Mirrors a correct NFS
+// stack: portblock -> Filesystem -> IPaddr2 -> nfsserver -> exportfs -> portunblock.
+func TestGeneratePromoterConfigOrdered(t *testing.T) {
+	rm := NewResourceManager(newBasicTestController(&fakeDeploymentClient{}))
+	ocf := func(name, inst string, p map[string]string) HaStartItem {
+		return HaStartItem{Ocf: &OcfAgentSpec{Provider: "heartbeat", Name: name, Instance: inst, Params: p}}
+	}
+	cfg := rm.generatePromoterConfigOrdered("nfs1", []HaStartItem{
+		ocf("portblock", "pb_pre", map[string]string{"action": "block", "portno": "2049", "protocol": "tcp"}),
+		ocf("Filesystem", "fs_1", map[string]string{"directory": "/srv/nfs", "fstype": "ext4"}),
+		ocf("IPaddr2", "vip", map[string]string{"ip": "192.168.1.50", "cidr_netmask": "24"}),
+		{SystemdUnit: "nfs-server.service"},
+		ocf("exportfs", "exp_1", map[string]string{"directory": "/srv/nfs"}),
+		ocf("portblock", "pb_post", map[string]string{"action": "unblock", "portno": "2049", "protocol": "tcp"}),
+	})
+
+	// The start[] items must appear in the exact order supplied — a systemd unit
+	// sitting BETWEEN OCF agents, which the bucketed generator could never do.
+	fsIdx := strings.Index(cfg, "fs_1")
+	vipIdx := strings.Index(cfg, "vip cidr_netmask")
+	svcIdx := strings.Index(cfg, "nfs-server.service")
+	expIdx := strings.Index(cfg, "exp_1")
+	assert.Greater(t, vipIdx, fsIdx, "IPaddr2 must come after Filesystem")
+	assert.Greater(t, svcIdx, vipIdx, "the systemd service must come after the VIP")
+	assert.Greater(t, expIdx, svcIdx, "exportfs must come after the service")
+	assert.Contains(t, cfg, `"nfs-server.service"`)
+	assert.Contains(t, cfg, `"ocf:heartbeat:portblock pb_pre action=block portno=2049 protocol=tcp"`)
+}
+
 func makeHaTestController(t *testing.T, dep *fakeDeploymentClient) *Controller {
 	t.Helper()
 	ctrl := newBasicTestController(dep)
@@ -147,7 +178,7 @@ func TestMakeHaComposesOcfAgentsIntoStartList(t *testing.T) {
 
 	_, err := ctrl.resources.MakeHa(context.Background(), "res1", nil, "", "", "", []OcfAgentSpec{
 		{Provider: "heartbeat", Name: "IPaddr2", Instance: "vip_res1", Params: map[string]string{"ip": "192.168.1.50", "cidr_netmask": "24"}},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	var promoter string

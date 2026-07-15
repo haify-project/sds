@@ -925,6 +925,18 @@ message OcfAgent {
   map<string, string> params = 4;    // OCF parameters (rendered with sorted keys)
 }
 
+// HaStartItem is one entry in the promoter start[] list. systemd/mount units and
+// OCF resource agents are PEERS: the list is a single ordered sequence and each
+// item is exactly one of the fields below. This is what lets a correct stack be
+// expressed (e.g. portblock -> Filesystem -> IPaddr2 -> nfsserver -> exportfs ->
+// portunblock) instead of forcing all OCF agents after all systemd units.
+message HaStartItem {
+  oneof item {
+    string systemd_unit = 1;  // a systemd/mount unit, e.g. "mysql.service" or "mnt-data.mount"
+    OcfAgent ocf = 2;         // an OCF resource agent
+  }
+}
+
 message MakeHaRequest {
   string resource = 1;
   repeated string services = 2;      // systemd services to start/stop
@@ -932,6 +944,11 @@ message MakeHaRequest {
   string fstype = 4;                 // filesystem type (if mount_point specified)
   string vip = 5;                    // optional virtual IP (CIDR, e.g., "192.168.1.100/24")
   repeated OcfAgent ocf_agents = 6;  // optional OCF agents appended to promoter start[]
+  // start_items, when non-empty, defines the promoter start[] list verbatim and
+  // in order (systemd units and OCF agents interleaved). The legacy fields
+  // 2/3/5/6 above are then used only for provisioning side effects (mount unit
+  // generation, VIP service-ip precondition) and NOT for start[] ordering.
+  repeated HaStartItem start_items = 7;
 }
 
 message ResourceAgentInfo {

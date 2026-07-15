@@ -109,6 +109,13 @@ export interface OcfAgentSpec {
   params: Record<string, string>;
 }
 
+// One entry in the ordered promoter start[] list. Exactly one field is set:
+// systemd/mount units and OCF agents are peers in a single ordered sequence.
+export interface HaStartItem {
+  systemdUnit?: string;
+  ocf?: OcfAgentSpec;
+}
+
 // Summary entry from GET /ha/resource-agents.
 export interface ResourceAgentSummary {
   provider: string;
@@ -458,6 +465,10 @@ class ApiClient {
     // Extra OCF resource agents appended to the promoter start[] after the
     // built-in mount/vip items (order preserved). Composed by the OCF builder.
     ocfAgents?: OcfAgentSpec[];
+    // Ordered start[] list where systemd/mount units and OCF agents are peers.
+    // When set, it defines the promoter start[] verbatim; vip/mountPoint/fstype
+    // above are still sent for provisioning side effects only.
+    startItems?: HaStartItem[];
   }) =>
     this.request<ApiResponse & { configPath: string }>(`/resources/${resource}/ha`, {
       method: 'POST',

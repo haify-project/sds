@@ -767,7 +767,7 @@ func (c *SDSClient) UnmountResource(ctx context.Context, resource string, volume
 // MakeHa creates a drbd-reactor promoter config for HA failover. Optional
 // ocfAgents are appended, in order, to the promoter start[] list; pass nil to
 // keep the historical behavior.
-func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string, ocfAgents []*sdspb.OcfAgent) (string, error) {
+func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string, ocfAgents []*sdspb.OcfAgent, startItems []*sdspb.HaStartItem) (string, error) {
 	req := &sdspb.MakeHaRequest{
 		Resource:   resource,
 		Services:   services,
@@ -775,6 +775,7 @@ func (c *SDSClient) MakeHa(ctx context.Context, resource string, services []stri
 		Fstype:     fsType,
 		Vip:        vip,
 		OcfAgents:  ocfAgents,
+		StartItems: startItems,
 	}
 
 	resp, err := c.client.MakeHa(ctx, req)
