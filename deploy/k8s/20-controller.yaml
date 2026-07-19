@@ -9,6 +9,10 @@ spec:
   template:
     metadata: { labels: { app: sds-csi-controller } }
     spec:
+      # Reach the external sds-controller VIP over the host network (a
+      # flannel pod cannot hairpin to a VIP on its own node). DNS via CoreDNS.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: sds-csi-controller
       containers:
         - name: csi-provisioner
@@ -18,6 +22,10 @@ spec:
             - "--feature-gates=Topology=true"
             - "--strict-topology"
             - "--immediate-topology=false"
+            # DRBD CreateResource (LV + create-md + up + initial sync) can take
+            # well over the 15s default; give it room so provisioning doesn't
+            # deadline-exceed on slower storage.
+            - "--timeout=120s"
             - "--v=2"
           volumeMounts:
             - { name: socket-dir, mountPath: /csi }
