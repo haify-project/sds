@@ -894,6 +894,37 @@
         ]
       }
     },
+    "/v1/ha/{resource}/status": {
+      "get": {
+        "operationId": "SDSController_GetHaStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetHaStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "description": "empty = all resources",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/ha/{resource}/toml": {
       "get": {
         "operationId": "SDSController_GetHaToml",
@@ -4626,6 +4657,24 @@
         }
       }
     },
+    "v1GetHaStatusResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "promoters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HaPromoterStatus"
+          }
+        }
+      }
+    },
     "v1GetHaTomlResponse": {
       "type": "object",
       "properties": {
@@ -4789,6 +4838,41 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "v1HaPromoterStatus": {
+      "type": "object",
+      "properties": {
+        "drbdResource": {
+          "type": "string"
+        },
+        "primaryOn": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/definitions/v1HaServiceStatus"
+        },
+        "deps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HaServiceStatus"
+          }
+        }
+      }
+    },
+    "v1HaServiceStatus": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
         }
       }
     },

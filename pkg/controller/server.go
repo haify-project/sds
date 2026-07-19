@@ -935,6 +935,34 @@ func (s *Server) ListHa(ctx context.Context, req *sdspb.ListHaRequest) (*sdspb.L
 	}, nil
 }
 
+
+func (s *Server) GetHaStatus(ctx context.Context, req *sdspb.GetHaStatusRequest) (*sdspb.GetHaStatusResponse, error) {
+	promoters, err := s.resources.GetHaStatus(ctx, req.Resource)
+	if err != nil {
+		return &sdspb.GetHaStatusResponse{Success: false, Message: err.Error()}, nil
+	}
+
+	var pbPromoters []*sdspb.HaPromoterStatus
+	for _, p := range promoters {
+		pb := &sdspb.HaPromoterStatus{
+			DrbdResource: p.DRBDResource,
+			PrimaryOn:    p.PrimaryOn,
+			Status:       p.Status,
+			Target:       &sdspb.HaServiceStatus{Name: p.Target.Name, Status: p.Target.Status},
+		}
+		for _, d := range p.Deps {
+			pb.Deps = append(pb.Deps, &sdspb.HaServiceStatus{Name: d.Name, Status: d.Status})
+		}
+		pbPromoters = append(pbPromoters, pb)
+	}
+
+	return &sdspb.GetHaStatusResponse{
+		Success:   true,
+		Message:   "HA status retrieved successfully",
+		Promoters: pbPromoters,
+	}, nil
+}
+
 // ==================== SNAPSHOT OPERATIONS ====================
 
 func (s *Server) CreateSnapshot(ctx context.Context, req *sdspb.CreateSnapshotRequest) (*sdspb.CreateSnapshotResponse, error) {

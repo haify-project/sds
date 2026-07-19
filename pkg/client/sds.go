@@ -918,6 +918,20 @@ func (c *SDSClient) ListHa(ctx context.Context) ([]*sdspb.HaConfigInfo, error) {
 	return resp.Configs, nil
 }
 
+
+// GetHaStatus retrieves drbd-reactor promoter status for one or all HA
+// resources by querying the primary node via the controller's SSH dispatch.
+func (c *SDSClient) GetHaStatus(ctx context.Context, resource string) ([]*sdspb.HaPromoterStatus, error) {
+	resp, err := c.client.GetHaStatus(ctx, &sdspb.GetHaStatusRequest{Resource: resource})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Promoters, nil
+}
+
 // ListResourceAgents lists the OCF resource agents available on the nodes.
 func (c *SDSClient) ListResourceAgents(ctx context.Context) ([]*sdspb.ResourceAgentInfo, error) {
 	resp, err := c.client.ListResourceAgents(ctx, &sdspb.ListResourceAgentsRequest{})

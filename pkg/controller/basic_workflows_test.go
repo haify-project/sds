@@ -383,6 +383,10 @@ func (f *fakeDeploymentClient) ReactorPromoterStatusByResource(ctx context.Conte
 	return nil, assert.AnError
 }
 
+func (f *fakeDeploymentClient) ReactorStatusJSON(ctx context.Context, host string) (*deployment.ReactorStatus, error) {
+	return nil, assert.AnError
+}
+
 func newBasicTestController(dep deploymentClient) *Controller {
 	ctrl := &Controller{
 		logger:     zap.NewNop(),

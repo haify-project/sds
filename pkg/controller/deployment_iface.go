@@ -47,6 +47,7 @@ type deploymentClient interface {
 	DRBDStatusJSON(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	ReactorReload(ctx context.Context, hosts []string) (*deployment.ExecResult, error)
 	ReactorPromoterStatusByResource(ctx context.Context, host, resource string) (*deployment.ReactorPromoterStatus, error)
+	ReactorStatusJSON(ctx context.Context, host string) (*deployment.ReactorStatus, error)
 }
 
 var _ deploymentClient = (*deployment.Client)(nil)

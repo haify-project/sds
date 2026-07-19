@@ -113,6 +113,11 @@ service SDSController {
     option (google.api.http) = { get: "/v1/ha"; };
   }
 
+  rpc GetHaStatus(GetHaStatusRequest) returns (GetHaStatusResponse) {
+    option (google.api.http) = { get: "/v1/ha/{resource}/status"; };
+  }
+
+
   // HA OCF resource-agent discovery and drbd-reactor promoter TOML editing.
   rpc ListResourceAgents(ListResourceAgentsRequest) returns (ListResourceAgentsResponse) {
     option (google.api.http) = { get: "/v1/ha/resource-agents"; };
@@ -1555,4 +1560,27 @@ message HaConfigInfo {
   string mount_point = 3;
   string fs_type = 4;
   repeated string services = 5;
+}
+
+message HaServiceStatus {
+  string name    = 1;
+  string status  = 2;
+}
+
+message HaPromoterStatus {
+  string drbd_resource              = 1;
+  string primary_on                 = 2;
+  string status                     = 3;
+  HaServiceStatus target            = 4;
+  repeated HaServiceStatus deps     = 5;
+}
+
+message GetHaStatusRequest {
+  string resource = 1;  // empty = all resources
+}
+
+message GetHaStatusResponse {
+  bool success                        = 1;
+  string message                      = 2;
+  repeated HaPromoterStatus promoters = 3;
 }

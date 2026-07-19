@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -209,25 +206,38 @@ func haList() *cobra.Command {
 				return nil
 			}
 
-			fmt.Printf("HA Configurations (%d):\n", len(configs))
-			reactorStatus, reactorErr := getReactorStatus()
-			promoterMap := make(map[string]*ReactorPromoterStatus)
-			if reactorErr == nil && reactorStatus != nil {
-				for i := range reactorStatus.Promoter {
-					p := &reactorStatus.Promoter[i]
-					promoterMap[p.DRBDResource] = p
+			// Fetch reactor status via the controller so we always query the
+			// primary node, not the machine running sds-cli.
+			type promoterInfo struct {
+				status, primaryOn string
+				targetName, targetStatus string
+			}
+			pm := make(map[string]promoterInfo)
+			haStatuses, statusErr := sdsClient.GetHaStatus(ctx, "")
+			if statusErr == nil {
+				for _, p := range haStatuses {
+					pi := promoterInfo{
+						status:    p.GetStatus(),
+						primaryOn: p.GetPrimaryOn(),
+					}
+					if t := p.GetTarget(); t != nil {
+						pi.targetName = t.GetName()
+						pi.targetStatus = t.GetStatus()
+					}
+					pm[p.GetDrbdResource()] = pi
 				}
 			}
 
+			fmt.Printf("HA Configurations (%d):\n", len(configs))
 			for _, cfg := range configs {
 				fmt.Printf("  - %s\n", cfg.GetResource())
-				if promoter, ok := promoterMap[cfg.GetResource()]; ok {
-					fmt.Printf("      Status:    %s %s\n", statusIcon(promoter.Status), promoter.Status)
-					if promoter.PrimaryOn != "" {
-						fmt.Printf("      Primary:   %s\n", promoter.PrimaryOn)
+				if p, ok := pm[cfg.GetResource()]; ok {
+					fmt.Printf("      Status:    %s %s\n", statusIcon(p.status), p.status)
+					if p.primaryOn != "" {
+						fmt.Printf("      Primary:   %s\n", p.primaryOn)
 					}
-					if promoter.Target.Name != "" {
-						fmt.Printf("      Target:    %s (%s)\n", promoter.Target.Name, promoter.Target.Status)
+					if p.targetName != "" {
+						fmt.Printf("      Target:    %s (%s)\n", p.targetName, p.targetStatus)
 					}
 				}
 				if status, err := sdsClient.ResourceStatus(ctx, cfg.GetResource()); err == nil {
@@ -256,8 +266,8 @@ func haList() *cobra.Command {
 				fmt.Println()
 			}
 
-			if reactorErr != nil {
-				fmt.Printf("Warning: failed to read local drbd-reactor status JSON: %v\n", reactorErr)
+			if statusErr != nil {
+				fmt.Printf("Warning: failed to fetch HA status from controller: %v\n", statusErr)
 			}
 
 			return nil
@@ -289,7 +299,35 @@ func haStatus() *cobra.Command {
 			}
 
 			resourceStatus, statusErr := sdsClient.ResourceStatus(ctx, resource)
-			promoter, promoterErr := getReactorPromoterStatus(resource)
+
+			// Fetch reactor status from the primary node via the controller.
+			haStatuses, haStatusErr := sdsClient.GetHaStatus(ctx, resource)
+			var promoter interface {
+				GetStatus() string
+				GetPrimaryOn() string
+				GetTarget() interface{ GetName() string; GetStatus() string }
+			}
+			_ = promoter
+			type pbPromoter struct {
+				status, primaryOn string
+				targetName, targetStatus string
+				deps []struct{ name, status string }
+			}
+			var pb *pbPromoter
+			if haStatusErr == nil && len(haStatuses) > 0 {
+				p := haStatuses[0]
+				pb = &pbPromoter{
+					status:    p.GetStatus(),
+					primaryOn: p.GetPrimaryOn(),
+				}
+				if t := p.GetTarget(); t != nil {
+					pb.targetName = t.GetName()
+					pb.targetStatus = t.GetStatus()
+				}
+				for _, d := range p.GetDeps() {
+					pb.deps = append(pb.deps, struct{ name, status string }{d.GetName(), d.GetStatus()})
+				}
+			}
 
 			fmt.Printf("HA Configuration: %s\n", resource)
 			fmt.Printf("  Config:  controller database\n")
@@ -307,11 +345,13 @@ func haStatus() *cobra.Command {
 				fmt.Printf("  Role:    %s\n", resourceStatus.GetRole())
 				fmt.Printf("  Nodes:   %v\n", resourceStatus.GetNodes())
 			}
-			if promoterErr == nil && promoter != nil {
-				fmt.Printf("  Status:  %s %s\n", statusIcon(promoter.Status), promoter.Status)
-				if promoter.PrimaryOn != "" {
-					fmt.Printf("  Primary: %s\n", promoter.PrimaryOn)
+			if pb != nil {
+				fmt.Printf("  Status:  %s %s\n", statusIcon(pb.status), pb.status)
+				if pb.primaryOn != "" {
+					fmt.Printf("  Primary: %s\n", pb.primaryOn)
 				}
+			} else if haStatusErr != nil {
+				fmt.Printf("  Reactor: unavailable (%v)\n", haStatusErr)
 			}
 
 			if cfg.GetMountPoint() != "" {
@@ -333,23 +373,21 @@ func haStatus() *cobra.Command {
 						nodeState.GetReplicationState())
 				}
 			}
-			if promoterErr == nil && promoter != nil {
+			if pb != nil && pb.targetName != "" {
 				fmt.Printf("  Promoter Target:\n")
 				fmt.Printf("    - %s %s (%s)\n",
-					statusIcon(promoter.Target.Status),
-					promoter.Target.Name,
-					promoter.Target.Status)
-				if len(promoter.Dependencies) > 0 {
+					statusIcon(pb.targetStatus),
+					pb.targetName,
+					pb.targetStatus)
+				if len(pb.deps) > 0 {
 					fmt.Printf("  Dependencies:\n")
-					for _, dep := range promoter.Dependencies {
+					for _, dep := range pb.deps {
 						fmt.Printf("    - %s %s (%s)\n",
-							statusIcon(dep.Status),
-							dep.Name,
-							dep.Status)
+							statusIcon(dep.status),
+							dep.name,
+							dep.status)
 					}
 				}
-			} else if promoterErr != nil {
-				fmt.Printf("  Reactor: local promoter status unavailable (%v)\n", promoterErr)
 			}
 
 			return nil
@@ -359,153 +397,7 @@ func haStatus() *cobra.Command {
 	return cmd
 }
 
-// HAConfig represents a parsed HA configuration
-type HAConfig struct {
-	Resource   string
-	MountPoint string
-	FSType     string
-	Services   []string
-	VIP        string
-	Nodes      []string
-}
-
-// listHAConfigs lists all HA configurations in the directory
-func listHAConfigs(configDir string) ([]*HAConfig, error) {
-	var configs []*HAConfig
-
-	files, err := os.ReadDir(configDir)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, file := range files {
-		if !strings.HasPrefix(file.Name(), "sds-ha-") || !strings.HasSuffix(file.Name(), ".toml") {
-			continue
-		}
-
-		configPath := fmt.Sprintf("%s/%s", configDir, file.Name())
-		cfg, err := readHAConfig(configPath)
-		if err != nil {
-			continue
-		}
-		configs = append(configs, cfg)
-	}
-
-	return configs, nil
-}
-
-// readHAConfig reads and parses an HA configuration file
-func readHAConfig(configPath string) (*HAConfig, error) {
-	content, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg := &HAConfig{
-		FSType: "ext4", // default
-	}
-
-	lines := strings.Split(string(content), "\n")
-
-	// Extract resource name from filename
-	parts := strings.Split(configPath, "/")
-	lastPart := parts[len(parts)-1]
-	cfg.Resource = strings.TrimPrefix(lastPart, "sds-ha-")
-	cfg.Resource = strings.TrimSuffix(cfg.Resource, ".toml")
-
-	// Parse TOML content
-	inResourceBlock := false
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		// Check for resource block
-		if strings.HasPrefix(line, "[promoter.resources.") {
-			inResourceBlock = true
-			continue
-		}
-		if inResourceBlock && strings.HasPrefix(line, "]") {
-			inResourceBlock = false
-			continue
-		}
-
-		// Parse start array
-		if strings.HasPrefix(line, "start = [") {
-			// Multi-line start array
-			continue
-		}
-
-		// Parse mount unit (e.g., "var-lib-sds.mount")
-		if strings.Contains(line, ".mount") {
-			mountUnit := strings.TrimSpace(line)
-			mountUnit = strings.TrimPrefix(mountUnit, `"`)
-			mountUnit = strings.TrimSuffix(mountUnit, `"`)
-			mountUnit = strings.TrimSuffix(mountUnit, ",")
-			cfg.MountPoint = mountUnit
-			// Convert mount unit back to path
-			cfg.MountPoint = strings.ReplaceAll(mountUnit, "-", "/")
-		}
-
-		// Parse service
-		if strings.Contains(line, ".service") {
-			svc := strings.TrimSpace(line)
-			svc = strings.TrimPrefix(svc, `"`)
-			svc = strings.TrimSuffix(svc, `",`)
-			svc = strings.TrimSuffix(svc, `"`)
-			cfg.Services = append(cfg.Services, svc)
-		}
-
-		// Parse preferred-nodes
-		if strings.HasPrefix(line, "preferred-nodes = [") {
-			nodesStr := strings.TrimPrefix(line, "preferred-nodes = [")
-			nodesStr = strings.TrimSuffix(nodesStr, "]")
-			nodes := strings.Split(nodesStr, ",")
-			for _, node := range nodes {
-				node = strings.TrimSpace(node)
-				node = strings.TrimPrefix(node, `"`)
-				node = strings.TrimSuffix(node, `"`)
-				if node != "" {
-					cfg.Nodes = append(cfg.Nodes, node)
-				}
-			}
-		}
-	}
-
-	return cfg, nil
-}
-
-// getReactorStatus gets the reactor status using JSON output
-func getReactorStatus() (*ReactorStatus, error) {
-	cmd := exec.Command("sudo", "drbd-reactorctl", "status", "--json")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get reactor status: %w", err)
-	}
-
-	var status ReactorStatus
-	if err := json.Unmarshal(output, &status); err != nil {
-		return nil, fmt.Errorf("failed to parse reactor status JSON: %w", err)
-	}
-
-	return &status, nil
-}
-
-// getReactorPromoterStatus gets the promoter status for a specific resource
-func getReactorPromoterStatus(resource string) (*ReactorPromoterStatus, error) {
-	status, err := getReactorStatus()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, promoter := range status.Promoter {
-		if promoter.DRBDResource == resource {
-			return &promoter, nil
-		}
-	}
-
-	return nil, fmt.Errorf("promoter status for resource %s not found", resource)
-}
-
-// statusIcon returns a visual indicator for service status
+// statusIcon returns a visual indicator for service status.
 func statusIcon(status string) string {
 	switch status {
 	case "active":
