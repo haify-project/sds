@@ -15,17 +15,21 @@ type sanityBackend struct {
 	mu        sync.Mutex
 	resources map[string]*sdspb.ResourceInfo
 	nodes     []*sdspb.NodeInfo
+	pools     []*sdspb.PoolInfo
 }
 
 // NewSanityFakeBackend builds a fake backend seeded with the given node names.
+// Every node hosts the "vg0" pool the sanity suite provisions against.
 func NewSanityFakeBackend(nodeNames ...string) SDSBackend {
 	b := &sanityBackend{resources: map[string]*sdspb.ResourceInfo{}}
 	for i, n := range nodeNames {
+		addr := fmt.Sprintf("10.0.0.%d", i+1)
 		b.nodes = append(b.nodes, &sdspb.NodeInfo{
 			Name:    n,
-			Address: fmt.Sprintf("10.0.0.%d", i+1),
+			Address: addr,
 			State:   "online",
 		})
+		b.pools = append(b.pools, &sdspb.PoolInfo{Name: "sds_vg0", Node: addr})
 	}
 	return b
 }
@@ -68,6 +72,14 @@ func (b *sanityBackend) ListNodes(_ context.Context) ([]*sdspb.NodeInfo, error) 
 	defer b.mu.Unlock()
 	out := make([]*sdspb.NodeInfo, len(b.nodes))
 	copy(out, b.nodes)
+	return out, nil
+}
+
+func (b *sanityBackend) ListPools(_ context.Context) ([]*sdspb.PoolInfo, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]*sdspb.PoolInfo, len(b.pools))
+	copy(out, b.pools)
 	return out, nil
 }
 

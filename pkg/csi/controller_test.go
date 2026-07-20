@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func newTestController(b SDSBackend) *controllerServer {
@@ -54,6 +56,43 @@ func TestCreateVolumeHonorsRequisiteTopology(t *testing.T) {
 	_, err := newTestController(b).CreateVolume(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, "n3", b.createCalls[0].nodes[0])
+}
+
+func TestCreateVolumeOnlyPlacesOnPoolNodes(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.onlyPoolOnNodes("n1", "n2") // n3 has no backing pool
+	_, err := newTestController(b).CreateVolume(context.Background(), validCreateReq("pvc-pool"))
+	require.NoError(t, err)
+	require.Len(t, b.createCalls, 1)
+	for _, n := range b.createCalls[0].nodes {
+		assert.NotEqual(t, "n3", n, "must not place a replica on a node without the pool")
+	}
+	assert.Len(t, b.createCalls[0].nodes, 2)
+}
+
+func TestCreateVolumeSkipsPoollessRequisiteNode(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.onlyPoolOnNodes("n1", "n2")
+	req := validCreateReq("pvc-req")
+	// The scheduler prefers n3, but n3 lacks the pool: it must be dropped, not
+	// placed on and failed at LV-creation time.
+	req.AccessibilityRequirements = &csi.TopologyRequirement{
+		Preferred: []*csi.Topology{{Segments: map[string]string{TopologyKeyNode: "n3"}}},
+	}
+	_, err := newTestController(b).CreateVolume(context.Background(), req)
+	require.NoError(t, err)
+	for _, n := range b.createCalls[0].nodes {
+		assert.NotEqual(t, "n3", n)
+	}
+}
+
+func TestCreateVolumeInsufficientPoolNodes(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.onlyPoolOnNodes("n1") // only one node has the pool, but replicas default to 2
+	_, err := newTestController(b).CreateVolume(context.Background(), validCreateReq("pvc-few"))
+	require.Error(t, err)
+	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+	assert.Empty(t, b.createCalls, "no resource must be created when the pool lacks enough nodes")
 }
 
 func TestDeleteVolumeIdempotent(t *testing.T) {

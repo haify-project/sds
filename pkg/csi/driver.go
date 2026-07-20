@@ -29,6 +29,11 @@ type SDSBackend interface {
 	GetResource(ctx context.Context, name string) (*sdspb.ResourceInfo, error)
 	DeleteResource(ctx context.Context, name string) error
 	ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error)
+	// ListPools returns every storage pool known to the controller (one entry
+	// per node hosting the pool). CreateVolume uses it to keep replica
+	// placement pool-aware: a volume only lands on nodes that actually have the
+	// requested backing pool.
+	ListPools(ctx context.Context) ([]*sdspb.PoolInfo, error)
 	RegisterNode(ctx context.Context, name, address string) (*sdspb.NodeInfo, error)
 	SetPrimary(ctx context.Context, resource, node string, force bool) error
 	// PromoteForNode performs a quorum-guarded promote for hard-failover: the

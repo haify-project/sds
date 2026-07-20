@@ -11,6 +11,7 @@ import (
 type fakeBackend struct {
 	resources map[string]*sdspb.ResourceInfo
 	nodes     []*sdspb.NodeInfo
+	pools     []*sdspb.PoolInfo // one entry per node hosting a pool
 	primary   map[string]string // resource -> node
 	createErr error
 
@@ -39,9 +40,36 @@ type createCall struct {
 func newFakeBackend(nodeNames ...string) *fakeBackend {
 	f := &fakeBackend{resources: map[string]*sdspb.ResourceInfo{}, primary: map[string]string{}}
 	for i, n := range nodeNames {
-		f.nodes = append(f.nodes, &sdspb.NodeInfo{Name: n, Address: fmt.Sprintf("10.0.0.%d", i+1), State: "online"})
+		addr := fmt.Sprintf("10.0.0.%d", i+1)
+		f.nodes = append(f.nodes, &sdspb.NodeInfo{Name: n, Address: addr, State: "online"})
+		// By default every node hosts the pool used in tests ("vg0" -> "sds_vg0"),
+		// so pool-aware placement sees all nodes as candidates. Tests that need a
+		// node without the pool trim f.pools directly.
+		f.pools = append(f.pools, &sdspb.PoolInfo{Name: "sds_vg0", Node: addr})
 	}
 	return f
+}
+
+// onlyPoolOnNodes restricts the fake's pool so it exists only on the named
+// nodes, letting a test exercise pool-aware replica placement.
+func (f *fakeBackend) onlyPoolOnNodes(names ...string) {
+	keep := map[string]bool{}
+	for _, n := range names {
+		keep[n] = true
+	}
+	var addrs map[string]bool = map[string]bool{}
+	for _, n := range f.nodes {
+		if keep[n.GetName()] {
+			addrs[n.GetAddress()] = true
+		}
+	}
+	var pruned []*sdspb.PoolInfo
+	for _, p := range f.pools {
+		if addrs[p.GetNode()] {
+			pruned = append(pruned, p)
+		}
+	}
+	f.pools = pruned
 }
 
 func (f *fakeBackend) CreateResourceWithPoolAndType(_ context.Context, name string, port uint32, nodes []string, _ string, sizeGB uint32, pool, storageType string, _ map[string]string) error {
@@ -68,6 +96,8 @@ func (f *fakeBackend) DeleteResource(_ context.Context, name string) error {
 }
 
 func (f *fakeBackend) ListNodes(context.Context) ([]*sdspb.NodeInfo, error) { return f.nodes, nil }
+
+func (f *fakeBackend) ListPools(context.Context) ([]*sdspb.PoolInfo, error) { return f.pools, nil }
 
 func (f *fakeBackend) RegisterNode(_ context.Context, name, address string) (*sdspb.NodeInfo, error) {
 	n := &sdspb.NodeInfo{Name: name, Address: address, State: "online"}

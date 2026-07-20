@@ -59,13 +59,16 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list nodes: %v", err)
 	}
-	var nodeNames []string
-	for _, n := range nodes {
-		nodeNames = append(nodeNames, n.GetName())
-	}
-	replicaNodes, err := selectReplicaNodes(nodeNames, requisiteNodes(req.GetAccessibilityRequirements()), params.Replicas)
+	pools, err := s.backend.ListPools(ctx)
 	if err != nil {
-		return nil, status.Error(codes.ResourceExhausted, err.Error())
+		return nil, status.Errorf(codes.Internal, "list pools: %v", err)
+	}
+	// Only consider nodes that actually host the requested pool: replicas
+	// placed on a node without the backing pool fail at LV-creation time.
+	candidates := nodesWithPool(nodes, pools, params.Pool)
+	replicaNodes, err := selectReplicaNodes(candidates, requisiteNodes(req.GetAccessibilityRequirements()), params.Replicas)
+	if err != nil {
+		return nil, status.Errorf(codes.ResourceExhausted, "pool %q: %v", params.Pool, err)
 	}
 
 	if err := s.backend.CreateResourceWithPoolAndType(ctx, name, 0, replicaNodes, "C", sizeGB, params.Pool, params.StorageType, nil); err != nil {
