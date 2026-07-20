@@ -1781,6 +1781,11 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 			Role:       "Unknown", // Live role comes from GetResource/ResourceStatus
 			Volumes:    volumes,
 			NodeStates: make(map[string]*ResourceNodeState),
+			// Persisted diskless membership so the list view (and the web UI)
+			// can distinguish quorum tiebreakers from diskless data clients
+			// without a per-resource status fan-out.
+			DisklessNodes:   splitCSV(dbRes.DisklessNodes),
+			DisklessClients: splitCSV(dbRes.DisklessClients),
 		})
 	}
 

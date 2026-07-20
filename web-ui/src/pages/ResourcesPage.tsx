@@ -77,6 +77,7 @@ import {
   SlidersHorizontal,
   X,
   CalendarClock,
+  Network,
 } from 'lucide-react';
 
 interface NodeOpt {
@@ -299,12 +300,32 @@ function ResourceRow({
           })}
           {resource.disklessNodes?.map((node) => (
             <span key={node} className="inline-flex items-center gap-1">
-              <Badge variant="outline" title="Diskless quorum tiebreaker">
+              <Badge variant="outline" title="Diskless quorum tiebreaker (votes for quorum only, never promoted or mounted)">
                 tiebreaker
               </Badge>
               <span className="text-xs text-muted-foreground">{node}</span>
             </span>
           ))}
+          {resource.disklessClients?.map((node) => {
+            const state = resource.nodeStates?.[node];
+            const isPrimary = state?.role === 'Primary';
+            return (
+              <span key={node} className="inline-flex items-center gap-1">
+                {isPrimary && (
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                )}
+                <Badge
+                  variant="outline"
+                  className="border-sky-500/40 text-sky-600 dark:text-sky-400"
+                  title="Diskless data client: no local replica, mounts the volume over the DRBD network (e.g. a Kubernetes/CSI Pod on a non-replica node)"
+                >
+                  <Network className="mr-1 h-3 w-3" />
+                  data client
+                </Badge>
+                <span className="text-xs text-muted-foreground">{node}</span>
+              </span>
+            );
+          })}
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">

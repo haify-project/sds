@@ -36,7 +36,11 @@ export interface Resource {
   role: string;
   volumes: Volume[];
   nodeStates: Record<string, NodeState>;
+  // Diskless nodes joined purely as quorum tiebreakers (never promoted/mounted).
   disklessNodes?: string[];
+  // Diskless data clients: nodes with no local replica that mount the volume
+  // over the DRBD network (e.g. a CSI Pod scheduled onto a non-replica node).
+  disklessClients?: string[];
   quorumRisk?: boolean;
 }
 
