@@ -143,4 +143,8 @@ func (f *fakeBackend) DetachDisklessClient(_ context.Context, resource, node str
 	return nil
 }
 
+func (f *fakeBackend) ResizeVolume(_ context.Context, resource string, volumeID uint32, sizeGB uint32) error {
+	return nil
+}
+
 var _ SDSBackend = (*fakeBackend)(nil)

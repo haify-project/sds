@@ -19,6 +19,8 @@ type Mounter interface {
 	IsMountPoint(target string) (bool, error)
 	// EnsureDir makes target (and parents) if absent.
 	EnsureDir(target string) error
+	// ResizeFS expands the filesystem at mountPath to fill the underlying block device.
+	ResizeFS(devicePath, mountPath string) error
 }
 
 type safeMounter struct {
@@ -61,4 +63,10 @@ func (s *safeMounter) IsMountPoint(target string) (bool, error) {
 
 func (s *safeMounter) EnsureDir(target string) error {
 	return os.MkdirAll(target, 0o750)
+}
+
+func (s *safeMounter) ResizeFS(devicePath, mountPath string) error {
+	r := mount.NewResizeFs(utilexec.New())
+	_, err := r.Resize(devicePath, mountPath)
+	return err
 }

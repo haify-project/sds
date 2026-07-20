@@ -108,6 +108,8 @@ const (
 	SDSController_DeleteLvmSnapshot_FullMethodName        = "/v1.SDSController/DeleteLvmSnapshot"
 	SDSController_ListLvmSnapshots_FullMethodName         = "/v1.SDSController/ListLvmSnapshots"
 	SDSController_RestoreLvmSnapshot_FullMethodName       = "/v1.SDSController/RestoreLvmSnapshot"
+	SDSController_DrainNode_FullMethodName                = "/v1.SDSController/DrainNode"
+	SDSController_UndrainNode_FullMethodName              = "/v1.SDSController/UndrainNode"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -224,6 +226,8 @@ type SDSControllerClient interface {
 	DeleteLvmSnapshot(ctx context.Context, in *DeleteLvmSnapshotRequest, opts ...grpc.CallOption) (*DeleteLvmSnapshotResponse, error)
 	ListLvmSnapshots(ctx context.Context, in *ListLvmSnapshotsRequest, opts ...grpc.CallOption) (*ListLvmSnapshotsResponse, error)
 	RestoreLvmSnapshot(ctx context.Context, in *RestoreLvmSnapshotRequest, opts ...grpc.CallOption) (*RestoreLvmSnapshotResponse, error)
+	DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error)
+	UndrainNode(ctx context.Context, in *UndrainNodeRequest, opts ...grpc.CallOption) (*UndrainNodeResponse, error)
 }
 
 type sDSControllerClient struct {
@@ -1124,6 +1128,26 @@ func (c *sDSControllerClient) RestoreLvmSnapshot(ctx context.Context, in *Restor
 	return out, nil
 }
 
+func (c *sDSControllerClient) DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DrainNodeResponse)
+	err := c.cc.Invoke(ctx, SDSController_DrainNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) UndrainNode(ctx context.Context, in *UndrainNodeRequest, opts ...grpc.CallOption) (*UndrainNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UndrainNodeResponse)
+	err := c.cc.Invoke(ctx, SDSController_UndrainNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SDSControllerServer is the server API for SDSController service.
 // All implementations must embed UnimplementedSDSControllerServer
 // for forward compatibility.
@@ -1238,6 +1262,8 @@ type SDSControllerServer interface {
 	DeleteLvmSnapshot(context.Context, *DeleteLvmSnapshotRequest) (*DeleteLvmSnapshotResponse, error)
 	ListLvmSnapshots(context.Context, *ListLvmSnapshotsRequest) (*ListLvmSnapshotsResponse, error)
 	RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error)
+	DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error)
+	UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error)
 	mustEmbedUnimplementedSDSControllerServer()
 }
 
@@ -1514,6 +1540,12 @@ func (UnimplementedSDSControllerServer) ListLvmSnapshots(context.Context, *ListL
 }
 func (UnimplementedSDSControllerServer) RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RestoreLvmSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DrainNode not implemented")
+}
+func (UnimplementedSDSControllerServer) UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UndrainNode not implemented")
 }
 func (UnimplementedSDSControllerServer) mustEmbedUnimplementedSDSControllerServer() {}
 func (UnimplementedSDSControllerServer) testEmbeddedByValue()                       {}
@@ -3138,6 +3170,42 @@ func _SDSController_RestoreLvmSnapshot_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_DrainNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DrainNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DrainNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DrainNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DrainNode(ctx, req.(*DrainNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_UndrainNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UndrainNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).UndrainNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_UndrainNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).UndrainNode(ctx, req.(*UndrainNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SDSController_ServiceDesc is the grpc.ServiceDesc for SDSController service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3500,6 +3568,14 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RestoreLvmSnapshot",
 			Handler:    _SDSController_RestoreLvmSnapshot_Handler,
+		},
+		{
+			MethodName: "DrainNode",
+			Handler:    _SDSController_DrainNode_Handler,
+		},
+		{
+			MethodName: "UndrainNode",
+			Handler:    _SDSController_UndrainNode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

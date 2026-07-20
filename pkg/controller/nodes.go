@@ -16,9 +16,10 @@ import (
 type NodeState string
 
 const (
-	NodeStateOnline   NodeState = "online"
-	NodeStateOffline  NodeState = "offline"
-	NodeStateDegraded NodeState = "degraded"
+	NodeStateOnline       NodeState = "online"
+	NodeStateOffline      NodeState = "offline"
+	NodeStateDegraded     NodeState = "degraded"
+	NodeStateMaintenance  NodeState = "maintenance"
 )
 
 // NodeInfo represents node information

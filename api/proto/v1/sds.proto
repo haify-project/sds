@@ -337,6 +337,13 @@ service SDSController {
   rpc RestoreLvmSnapshot(RestoreLvmSnapshotRequest) returns (RestoreLvmSnapshotResponse) {
     option (google.api.http) = { post: "/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}/restore"; body: "*"; };
   }
+  rpc DrainNode(DrainNodeRequest) returns (DrainNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{name}/drain"; };
+  }
+  rpc UndrainNode(UndrainNodeRequest) returns (UndrainNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{name}/undrain"; };
+  }
+
 }
 
 // Pool messages
@@ -1583,4 +1590,24 @@ message GetHaStatusResponse {
   bool success                        = 1;
   string message                      = 2;
   repeated HaPromoterStatus promoters = 3;
+}
+
+message DrainNodeRequest {
+  string name = 1;
+}
+
+message DrainNodeResponse {
+  bool success = 1;
+  string message = 2;
+  // resources_moved lists the DRBD resources whose Primary was moved off the node.
+  repeated string resources_moved = 3;
+}
+
+message UndrainNodeRequest {
+  string name = 1;
+}
+
+message UndrainNodeResponse {
+  bool success = 1;
+  string message = 2;
 }

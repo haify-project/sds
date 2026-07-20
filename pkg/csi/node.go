@@ -35,6 +35,8 @@ func (s *nodeServer) NodeGetCapabilities(context.Context, *csi.NodeGetCapabiliti
 	return &csi.NodeGetCapabilitiesResponse{Capabilities: []*csi.NodeServiceCapability{
 		{Type: &csi.NodeServiceCapability_Rpc{Rpc: &csi.NodeServiceCapability_RPC{
 			Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME}}},
+		{Type: &csi.NodeServiceCapability_Rpc{Rpc: &csi.NodeServiceCapability_RPC{
+			Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME}}},
 	}}, nil
 }
 
@@ -198,6 +200,29 @@ func (s *nodeServer) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpubli
 		return nil, status.Errorf(codes.Internal, "remove target: %v", err)
 	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
+}
+
+// NodeExpandVolume resizes the filesystem at the staging path to fill the
+// expanded block device. Called by kubelet after ControllerExpandVolume
+// succeeds and the volume is re-staged on this node.
+func (s *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	if req.GetVolumeId() == "" || req.GetVolumePath() == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume id and volume path are required")
+	}
+
+	// Resolve the block device for this resource so resize2fs / xfs_growfs
+	// knows which device backs the mount.
+	devicePath, err := s.deviceFor(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.mounter.ResizeFS(devicePath, req.GetVolumePath()); err != nil {
+		return nil, status.Errorf(codes.Internal, "resize filesystem: %v", err)
+	}
+
+	newSize := req.GetCapacityRange().GetRequiredBytes()
+	return &csi.NodeExpandVolumeResponse{CapacityBytes: newSize}, nil
 }
 
 // deviceFor returns the /dev/drbdX path of a resource's first volume.

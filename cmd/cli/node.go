@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,8 @@ func nodeCommand() *cobra.Command {
 	cmd.AddCommand(nodeRegister())
 	cmd.AddCommand(nodeUnregister())
 	cmd.AddCommand(nodeLabel())
+	cmd.AddCommand(nodeDrain())
+	cmd.AddCommand(nodeUndrain())
 
 	return cmd
 }
@@ -255,4 +259,65 @@ This removes the node from the database but does not affect the node itself.`,
 	_ = cmd.MarkFlagRequired("address")
 
 	return cmd
+}
+
+func nodeDrain() *cobra.Command {
+	return &cobra.Command{
+		Use:   "drain <node>",
+		Short: "Move all Primary resources off a node and mark it maintenance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			node := args[0]
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			moved, err := sdsClient.DrainNode(ctx, node)
+			if err != nil {
+				return fmt.Errorf("drain failed: %w", err)
+			}
+
+			if len(moved) == 0 {
+				fmt.Printf("✓ Node %q drained (no active primaries to move)\n", node)
+			} else {
+				fmt.Printf("✓ Node %q drained — %d resource(s) moved:\n", node, len(moved))
+				for _, r := range moved {
+					fmt.Printf("  - %s\n", r)
+				}
+			}
+			fmt.Printf("  Node is now in maintenance mode. Run \"sds node undrain %s\" when ready.\n", node)
+			return nil
+		},
+	}
+}
+
+func nodeUndrain() *cobra.Command {
+	return &cobra.Command{
+		Use:   "undrain <node>",
+		Short: "Return a drained node to active service",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			node := args[0]
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.UndrainNode(ctx, node); err != nil {
+				return fmt.Errorf("undrain failed: %w", err)
+			}
+
+			fmt.Printf("✓ Node %q returned to service\n", node)
+			return nil
+		},
+	}
 }

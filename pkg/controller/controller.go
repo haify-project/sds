@@ -14,6 +14,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go.uber.org/zap"
+	"github.com/liliang-cn/sds/pkg/alert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -47,6 +48,7 @@ type Controller struct {
 	metricsServer *http.Server
 	// UI
 	uiServer *UIServer
+	alertMonitor *alert.Monitor
 	// Managers
 	storage   *StorageManager
 	resources *ResourceManager
@@ -197,6 +199,14 @@ func (c *Controller) Start() error {
 		}
 	}
 
+	// Start Alert Monitor if enabled
+	if c.config.Alert.Enabled && c.config.Alert.WebhookURL != "" {
+		interval := time.Duration(c.config.Alert.CheckIntervalSec) * time.Second
+		c.alertMonitor = alert.NewMonitor(c.config.Alert.WebhookURL, interval, c.resources, c.logger)
+		c.alertMonitor.Start(c.ctx)
+		c.logger.Info("Alert monitor started", zap.String("webhook", c.config.Alert.WebhookURL))
+	}
+
 	// Start gRPC server
 	if err := c.startGRPCServer(); err != nil {
 		return fmt.Errorf("failed to start gRPC server: %w", err)
@@ -269,6 +279,14 @@ func (c *Controller) Stop() {
 
 // startGRPCServer starts the gRPC server with gRPC-Gateway on separate ports
 func (c *Controller) startGRPCServer() error {
+	// Start Alert Monitor if enabled
+	if c.config.Alert.Enabled && c.config.Alert.WebhookURL != "" {
+		interval := time.Duration(c.config.Alert.CheckIntervalSec) * time.Second
+		c.alertMonitor = alert.NewMonitor(c.config.Alert.WebhookURL, interval, c.resources, c.logger)
+		c.alertMonitor.Start(c.ctx)
+		c.logger.Info("Alert monitor started", zap.String("webhook", c.config.Alert.WebhookURL))
+	}
+
 	// Start gRPC server on the configured port
 	grpcAddr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, c.config.Server.Port)
 	grpcLis, err := net.Listen("tcp", grpcAddr)
@@ -353,6 +371,14 @@ func (c *Controller) startGRPCServer() error {
 	sdspb.RegisterSDSControllerServer(c.server, sdsServer)
 
 	c.logger.Info("Registered SDS controller service")
+
+	// Start Alert Monitor if enabled
+	if c.config.Alert.Enabled && c.config.Alert.WebhookURL != "" {
+		interval := time.Duration(c.config.Alert.CheckIntervalSec) * time.Second
+		c.alertMonitor = alert.NewMonitor(c.config.Alert.WebhookURL, interval, c.resources, c.logger)
+		c.alertMonitor.Start(c.ctx)
+		c.logger.Info("Alert monitor started", zap.String("webhook", c.config.Alert.WebhookURL))
+	}
 
 	// Start gRPC server
 	go func() {

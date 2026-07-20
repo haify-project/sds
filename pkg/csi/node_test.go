@@ -38,6 +38,7 @@ func (m *recordingMounter) Unmount(target string) error {
 }
 func (m *recordingMounter) IsMountPoint(target string) (bool, error) { return m.mounted[target], nil }
 func (m *recordingMounter) EnsureDir(string) error                   { return nil }
+func (m *recordingMounter) ResizeFS(_, _ string) error              { return nil }
 
 func newTestNode(b SDSBackend, m Mounter) *nodeServer {
 	return NewNodeServer(b, m, "n1", "10.0.0.1", zap.NewNop()).(*nodeServer)

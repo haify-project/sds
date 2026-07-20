@@ -125,6 +125,7 @@ func (s *controllerServer) ControllerGetCapabilities(context.Context, *csi.Contr
 	}
 	return &csi.ControllerGetCapabilitiesResponse{Capabilities: []*csi.ControllerServiceCapability{
 		cap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME),
+		cap(csi.ControllerServiceCapability_RPC_EXPAND_VOLUME),
 	}}, nil
 }
 
@@ -146,6 +147,25 @@ func (s *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 	return &csi.ValidateVolumeCapabilitiesResponse{Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
 		VolumeCapabilities: req.GetVolumeCapabilities(),
 	}}, nil
+}
+
+// ControllerExpandVolume resizes the backing DRBD+LVM/ZFS volume on all
+// replica nodes. The node plugin follows up with NodeExpandVolume to grow
+// the filesystem online.
+func (s *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	if req.GetVolumeId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume id is required")
+	}
+	newSizeGB := bytesToGiB(req.GetCapacityRange().GetRequiredBytes())
+
+	if err := s.backend.ResizeVolume(ctx, req.GetVolumeId(), 0, newSizeGB); err != nil {
+		return nil, status.Errorf(codes.Internal, "resize volume: %v", err)
+	}
+
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         int64(newSizeGB) * giB,
+		NodeExpansionRequired: true, // filesystem resize needed on the node
+	}, nil
 }
 
 // bytesToGiB converts a byte count to whole GiB, rounding up; minimum 1.

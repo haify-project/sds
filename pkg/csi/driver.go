@@ -48,6 +48,9 @@ type SDSBackend interface {
 	// DetachDisklessClient removes a diskless client added via
 	// AttachDisklessClient. Idempotent.
 	DetachDisklessClient(ctx context.Context, resource, node string) error
+	// ResizeVolume expands the backing DRBD+LVM/ZFS volume to newSizeGB on
+	// all replica nodes. Called by ControllerExpandVolume.
+	ResizeVolume(ctx context.Context, resource string, volumeID uint32, sizeGB uint32) error
 }
 
 // Driver wires the CSI services onto a gRPC server over a unix socket.

@@ -8,5 +8,5 @@ parameters:
   replicas: "2"
   storageType: "lvm"
 reclaimPolicy: Delete
-allowVolumeExpansion: false
+allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer

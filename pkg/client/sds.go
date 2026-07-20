@@ -268,6 +268,31 @@ func (c *SDSClient) UnregisterNode(ctx context.Context, address string) error {
 	return nil
 }
 
+
+// DrainNode moves all Primary DRBD resources off the node and marks it maintenance.
+func (c *SDSClient) DrainNode(ctx context.Context, name string) ([]string, error) {
+	resp, err := c.client.DrainNode(ctx, &sdspb.DrainNodeRequest{Name: name})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return resp.ResourcesMoved, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.ResourcesMoved, nil
+}
+
+// UndrainNode returns a drained node to active service.
+func (c *SDSClient) UndrainNode(ctx context.Context, name string) error {
+	resp, err := c.client.UndrainNode(ctx, &sdspb.UndrainNodeRequest{Name: name})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 // HealthCheck performs a health check on a node
 func (c *SDSClient) HealthCheck(ctx context.Context, node string) (*NodeHealthInfo, error) {
 	req := &sdspb.HealthCheckRequest{

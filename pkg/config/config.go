@@ -22,6 +22,16 @@ type Config struct {
 	Resource ResourceConfig `mapstructure:"resource"`
 	Schedule ScheduleConfig `mapstructure:"schedule"`
 	SelfHA   SelfHAConfig   `mapstructure:"self_ha"`
+	Alert    AlertConfig    `mapstructure:"alert"`
+}
+
+
+// AlertConfig controls background health polling and Webhook notifications for
+// DRBD degraded states (StandAlone, Diskless, Syncing, Loss of Quorum).
+type AlertConfig struct {
+	Enabled          bool   `mapstructure:"enabled"`
+	WebhookURL       string `mapstructure:"webhook_url"`
+	CheckIntervalSec int    `mapstructure:"check_interval_sec"`
 }
 
 // SelfHAConfig configures controller Self-HA.
@@ -239,6 +249,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.state_volume_size_gb", 1)
 	viper.SetDefault("resource.auto_tiebreaker", true)
 	viper.SetDefault("schedule.enabled", true)
+	viper.SetDefault("alert.enabled", false)
+	viper.SetDefault("alert.check_interval_sec", 30)
 }
 
 // Save saves configuration to file
@@ -256,6 +268,7 @@ func (c *Config) Save(path string) error {
 	config.Set("gateway", c.Gateway)
 	config.Set("resource", c.Resource)
 	config.Set("schedule", c.Schedule)
+	config.Set("alert", c.Alert)
 
 	return config.WriteConfigAs(path)
 }

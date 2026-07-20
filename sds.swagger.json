@@ -1261,6 +1261,66 @@
         ]
       }
     },
+    "/v1/nodes/{name}/drain": {
+      "post": {
+        "operationId": "SDSController_DrainNode",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DrainNodeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/nodes/{name}/undrain": {
+      "post": {
+        "operationId": "SDSController_UndrainNode",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UndrainNodeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/nodes/{node}/health": {
       "get": {
         "operationId": "SDSController_HealthCheck",
@@ -4506,6 +4566,24 @@
         }
       }
     },
+    "v1DrainNodeResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "resourcesMoved": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "resources_moved lists the DRBD resources whose Primary was moved off the node."
+        }
+      }
+    },
     "v1EnableSelfHaRequest": {
       "type": "object",
       "properties": {
@@ -5935,6 +6013,17 @@
       }
     },
     "v1SyncHaTomlResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UndrainNodeResponse": {
       "type": "object",
       "properties": {
         "success": {

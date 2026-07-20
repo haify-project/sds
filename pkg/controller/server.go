@@ -172,6 +172,26 @@ func (s *Server) UnregisterNode(ctx context.Context, req *sdspb.UnregisterNodeRe
 	}, nil
 }
 
+
+func (s *Server) DrainNode(ctx context.Context, req *sdspb.DrainNodeRequest) (*sdspb.DrainNodeResponse, error) {
+	moved, err := s.resources.DrainNode(ctx, req.Name)
+	if err != nil {
+		return &sdspb.DrainNodeResponse{Success: false, Message: err.Error(), ResourcesMoved: moved}, nil
+	}
+	return &sdspb.DrainNodeResponse{
+		Success:        true,
+		Message:        fmt.Sprintf("node %q drained; %d resource(s) moved", req.Name, len(moved)),
+		ResourcesMoved: moved,
+	}, nil
+}
+
+func (s *Server) UndrainNode(ctx context.Context, req *sdspb.UndrainNodeRequest) (*sdspb.UndrainNodeResponse, error) {
+	if err := s.resources.UndrainNode(ctx, req.Name); err != nil {
+		return &sdspb.UndrainNodeResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.UndrainNodeResponse{Success: true, Message: fmt.Sprintf("node %q returned to service", req.Name)}, nil
+}
+
 func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb.GetNodeResponse, error) {
 	node, err := s.nodes.GetNode(ctx, req.Address)
 	if err != nil {

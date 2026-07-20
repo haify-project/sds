@@ -92,6 +92,7 @@ func (b *sanityBackend) PromoteForNode(_ context.Context, _, _ string) error    
 func (b *sanityBackend) SetSecondary(_ context.Context, _, _ string) error         { return nil }
 func (b *sanityBackend) AttachDisklessClient(_ context.Context, _, _ string) error { return nil }
 func (b *sanityBackend) DetachDisklessClient(_ context.Context, _, _ string) error { return nil }
+func (b *sanityBackend) ResizeVolume(_ context.Context, _ string, _ uint32, _ uint32) error { return nil }
 
 var _ SDSBackend = (*sanityBackend)(nil)
 
@@ -137,5 +138,7 @@ func (m *nopMounter) IsMountPoint(target string) (bool, error) {
 func (m *nopMounter) EnsureDir(target string) error {
 	return os.MkdirAll(target, 0o750)
 }
+
+func (m *nopMounter) ResizeFS(_, _ string) error { return nil }
 
 var _ Mounter = (*nopMounter)(nil)
