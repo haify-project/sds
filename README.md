@@ -1,16 +1,20 @@
 # SDS - Software Defined Storage
 
-Based on DRBD & LINSTOR concepts, a lightweight Software Defined Storage controller written in Go.
+Based on DRBD & LINSTOR concepts, a lightweight Software Defined Storage controller written in Go. It manages storage pools, replicated DRBD volumes, storage gateways (iSCSI/NFS/NVMe-oF) and high availability, and integrates with Kubernetes via a native CSI driver.
 
 English | [简体中文](README_cn.md)
 
 ## Architecture
 
-SDS adopts a controller-less agent architecture for storage nodes. The controller communicates with storage nodes via SSH (using the `dispatch` library) to execute commands (`drbdadm`, `lvm`, `zfs`, etc.) and manage configurations.
+SDS uses an agent-less architecture for storage nodes. A single controller drives every node over SSH (via the `dispatch` library) to run `drbdadm`, `lvm`, `zfs` and `drbd-reactor` commands and distribute configuration. State is persisted in an embedded BoltDB. Clients talk to the controller over gRPC (`sds-cli`), a REST gateway, an embedded web UI, an MCP server (for AI assistants), and the Kubernetes CSI driver.
 
 ```mermaid
 graph TD
-    CLI[sds-cli] -->|gRPC| CTRL[sds-controller]
+    CLI[sds-cli] -->|gRPC :3374| CTRL[sds-controller]
+    UI[Web UI :3376] --> REST[REST gateway :3375]
+    REST -->|gRPC| CTRL
+    MCP[sds-mcp / AI assistant] -->|gRPC| CTRL
+    K8S[Kubernetes CSI driver] -->|gRPC| CTRL
 
     subgraph Controller Host
     CTRL
@@ -24,31 +28,54 @@ graph TD
     subgraph Storage Node
     Node1
     LVM[LVM / ZFS]
-    DRBD[DRBD Kernel Module]
+    DRBD[DRBD 9 Kernel Module]
     Reactor[drbd-reactor]
     end
 ```
 
 ## Features
 
-- **Storage Management**:
-  - **LVM**: Volume Group (VG) and Logical Volume (LV) management.
-  - **ZFS**: ZPool and Zvol management.
-- **DRBD Resource Management**:
-  - Automated resource creation and configuration distribution.
-  - Support for advanced DRBD options (e.g., `on-no-quorum`, `c-plan-ahead`).
-- **High Availability (HA)**:
-  - Integration with `drbd-reactor` for automatic service failover.
-  - Support for Virtual IP (VIP) and systemd service management.
-- **Gateways**:
-  - **iSCSI**: LIO-based iSCSI target management with HA.
-  - **NFS**: NFSv4 export management with HA.
-  - **NVMe-oF**: NVMe over Fabrics target management.
-- **Snapshots**:
-  - Support for both LVM and ZFS snapshots.
-- **AI Integration (MCP)**:
-  - `sds-mcp` exposes all storage operations as Model Context Protocol tools
-    for AI assistants (Claude Code, Claude Desktop, and other MCP clients).
+- **Storage pools**: LVM (VG), LVM-thin, and ZFS (zpool / thin) pool management.
+- **DRBD resources**:
+  - Automated resource creation, config distribution, and adjustment.
+  - Advanced DRBD options (`on-no-quorum`, `c-plan-ahead`, quorum, etc.).
+  - Online volume expansion; add / remove / resize volumes.
+- **Placement**: capacity-first automatic replica placement with LINSTOR-style
+  constraints — rack/zone-aware (`replicas-on-different`), `replicas-on-same`,
+  and `do-not-place-with`. Give `--nodes` to place manually or omit it to
+  auto-place.
+- **Diskless clients**: a node with no local replica can attach a resource and
+  do I/O over the DRBD network (`resource diskless attach`), plus automatic
+  quorum tiebreakers.
+- **High Availability**:
+  - `drbd-reactor` promoter integration for automatic service failover.
+  - Floating Virtual IP (VIP) + systemd service ordering.
+  - **Self-HA**: the controller itself can run behind a floating VIP.
+- **Gateways** (DRBD resource + drbd-reactor promoter config):
+  - **iSCSI** (LIO): targets, LUNs, initiator ACLs, CHAP.
+  - **NFS** (NFSv4): exports management.
+  - **NVMe-oF**: subsystems, namespaces, host ACLs.
+- **Kubernetes (CSI)**: dynamic provisioning of DRBD volumes, pool-aware replica
+  placement, `WaitForFirstConsumer` topology, and opt-in diskless remote access
+  (`allowRemoteVolumeAccess`) so Pods can run on non-replica nodes.
+- **Snapshots**: LVM and ZFS snapshots, plus GFS (grandfather-father-son)
+  retention schedules.
+- **Cross-DC (WAN)**: a TCP proxy for running DRBD replication across NAT/WAN
+  where inbound UDP is blocked.
+- **Security & Ops**: token auth, RBAC, audit logging, optional TLS, Prometheus
+  metrics, and a webhook-based health/alert monitor.
+- **Web UI**: an embedded single-page UI served by the controller.
+- **AI Integration (MCP)**: `sds-mcp` exposes 44 management tools over the Model
+  Context Protocol for AI assistants (Claude Code, Claude Desktop, etc.).
+
+## Interfaces & default ports
+
+| Interface        | Default port | Notes                                   |
+| ---------------- | ------------ | --------------------------------------- |
+| gRPC API         | 3374         | `sds-cli`, CSI, MCP                     |
+| REST gateway     | 3375         | grpc-gateway JSON API                    |
+| Web UI           | 3376         | embedded SPA                             |
+| Prometheus       | 9433         | `metrics.enabled`                        |
 
 ## Project Structure
 
@@ -57,17 +84,29 @@ sds/
 ├── cmd/
 │   ├── cli/              # Command line interface (sds-cli)
 │   ├── controller/       # Controller service (sds-controller)
-│   └── mcp/              # MCP server for AI assistants (sds-mcp)
+│   ├── csi-controller/   # Kubernetes CSI controller plugin
+│   ├── csi-node/         # Kubernetes CSI node plugin
+│   ├── mcp/              # MCP server for AI assistants (sds-mcp)
+│   └── sds-ai/           # AI Copilot service
 ├── pkg/
 │   ├── client/           # gRPC client library
-│   ├── controller/       # Core controller logic
+│   ├── controller/       # Core controller logic + gRPC/REST/UI servers
+│   ├── csi/              # CSI driver (controller + node services)
 │   ├── database/         # BoltDB persistence layer
 │   ├── deployment/       # SSH execution engine (wraps dispatch)
-│   ├── gateway/          # Gateway (iSCSI/NFS/NVMe) managers
+│   ├── gateway/          # Gateway (iSCSI/NFS/NVMe-oF) managers
+│   ├── reactor/          # drbd-reactor promoter config generation
 │   ├── mcpserver/        # MCP tool definitions and handlers
+│   ├── wanproxy/         # Cross-DC DRBD-over-TCP proxy
+│   ├── alert/            # Health/alert monitor (webhook)
+│   ├── rbac/             # Role-based access control
+│   ├── metrics/          # Prometheus metrics
 │   ├── config/           # Configuration parsing
 │   └── util/             # Utilities
 ├── api/proto/v1/         # gRPC Protocol Buffers definitions
+├── ui/                   # Embedded web UI (go:embed of the built SPA)
+├── web-ui/               # Web UI source (React/TypeScript)
+├── deploy/k8s/           # Kubernetes CSI manifests
 ├── configs/              # Configuration examples and systemd units
 └── scripts/              # Deployment scripts
 ```
@@ -76,119 +115,174 @@ sds/
 
 ### Prerequisites
 
-- **Controller Node**: Go 1.22+, `make`, `protoc`.
+- **Controller Node**: Go 1.25+, `make`, `protoc` (only needed to regenerate protobufs).
 - **Storage Nodes**:
-  - Linux (Ubuntu/Debian/RHEL).
-  - SSH access from Controller (root user recommended for management).
-  - **LVM2** installed (for LVM pools).
-  - **ZFS** installed (for ZFS pools, e.g., `zfsutils-linux`).
-  - **DRBD 9** kernel module and **drbd-utils** installed.
-  - **drbd-reactor** installed (for HA/Gateway features).
-  - **resource-agents-extra** installed (for VIP and service management).
+  - Linux (Ubuntu/Debian/RHEL), reachable over SSH from the controller (root recommended).
+  - **LVM2** (for LVM pools) and/or **ZFS** (`zfsutils-linux`, for ZFS pools).
+  - **DRBD 9** kernel module and **drbd-utils**.
+  - **drbd-reactor** (for HA / gateways).
+  - **resource-agents** / `resource-agents-extra` (for VIP and service OCF agents).
 
 ### Installation
 
-1.  **Build**:
+1. **Build**:
 
-    ```bash
-    make build
-    ```
+   ```bash
+   make build
+   ```
 
-2.  **Deploy**:
-    Use the automated deployment script to deploy to the controller node (`orange1` in this example) and distribute the CLI.
-    ```bash
-    ./scripts/deploy-all.sh --hosts "orange1,orange2,orange3"
-    ```
+2. **Deploy** to the controller and distribute the CLI:
 
-### Configuration
+   ```bash
+   ./scripts/deploy-all.sh --hosts "orange1,orange2,orange3"
+   ```
 
-The controller configuration is located at `/etc/sds/controller.toml`.
+## Configuration
+
+The controller configuration lives at `/etc/sds/controller.toml`:
 
 ```toml
 [server]
 listen_address = "0.0.0.0"
-port = 3374
-
-[dispatch]
-# SSH configuration for connecting to storage nodes
-ssh_user = "root"
-ssh_key_path = "/root/.ssh/id_rsa"
-parallel = 10
-# Initial hosts list (can also be managed via 'sds-cli node register')
-hosts = ["orange1", "orange2", "orange3"]
+port = 3374              # gRPC (REST 3375 and UI 3376 are derived)
 
 [database]
 path = "/var/lib/sds/sds.db"
 
+[auth]
+enabled = true
+token = "change-me"     # bearer token; also read from /etc/sds/token
+
 [storage]
 default_pool_type = "vg"
+
+[metrics]
+enabled = true
+listen_address = "0.0.0.0"
+port = 9433
+
+[resource]
+auto_tiebreaker = true  # auto-add a diskless quorum tiebreaker for 2-replica resources
+
+# Optional: run the controller behind a floating VIP
+[self_ha]
+enabled = false
+
+# Optional: webhook health/alert monitor
+[alert]
+enabled = false
+webhook_url = ""
+check_interval_sec = 60
 ```
+
+SSH access to storage nodes is **not** configured here — the `dispatch` library
+reads its own `~/.dispatch/config.toml` (SSH user, key, and host→address map).
+Hosts can also be managed at runtime with `sds-cli node register`.
 
 ## Usage Examples
 
 ### 1. Node Management
 
 ```bash
-# Register storage nodes
 sds-cli node register --name orange1 --address 192.168.123.214
 sds-cli node register --name orange2 --address 192.168.123.215
-
-# List nodes
 sds-cli node list
+sds-cli health-check
 ```
 
 ### 2. Storage Pool Management
 
 ```bash
-# Create LVM pool (VG)
-sds-cli pool create --name data-pool --type lvm --nodes orange1 --devices /dev/sdb
-
-# Create LVM Thin pool
+# LVM VG / thin / ZFS
+sds-cli pool create --name data-pool --type lvm      --nodes orange1 --devices /dev/sdb
 sds-cli pool create --name thin-pool --type lvm-thin --nodes orange1 --devices /dev/sdc
-
-# Create ZFS pool
-sds-cli pool create --name tank --type zfs --nodes orange1 --devices /dev/sdd
-
-# Create ZFS Thin pool (sparse)
-sds-cli pool create --name tank-thin --type zfs-thin --nodes orange1 --devices /dev/sde
+sds-cli pool create --name tank      --type zfs      --nodes orange1 --devices /dev/sdd
+sds-cli pool list
 ```
 
 ### 3. Resource Management
 
 ```bash
-# Create a DRBD resource backed by LVM
+# Create a replicated DRBD resource (omit --nodes to auto-place by free space)
 sds-cli resource create --name res01 --port 7001 --size 10G --nodes orange1,orange2 --pool data-pool
 
-# Create a DRBD resource backed by ZFS
+# ZFS-backed resource
 sds-cli resource create --name res-zfs --port 7002 --size 10G --nodes orange1,orange2 --pool tank --storage-type zfs
 
-# Set Primary
+# Promote, make a filesystem, mount
 sds-cli resource primary res01 orange1 --force
-
-# Create Filesystem and Mount
 sds-cli resource fs res01 0 ext4 --node orange1
 sds-cli resource mount res01 0 /mnt/res01 --node orange1
+
+# Online expansion
+sds-cli resource resize-volume res01 0 20G
 ```
 
-### 4. Gateway & HA Management
+### 4. Diskless Clients
 
 ```bash
-# Create an iSCSI Gateway with HA
+# Let a node with no local replica mount the resource over the network
+sds-cli resource diskless attach res01 orange3
+sds-cli resource diskless detach res01 orange3
+```
+
+### 5. Gateways & HA
+
+```bash
+# iSCSI gateway with HA
 sds-cli gateway iscsi create \
     --resource iscsi-gw \
     --service-ip 192.168.123.200/24 \
     --iqn iqn.2024-01.com.example:storage.target01
 
-# Create an NFS Gateway with HA
+# NFS gateway with HA
 sds-cli gateway nfs create \
     --resource nfs-gw \
     --service-ip 192.168.123.201/24 \
     --export-path /data/share
+
+# NVMe-oF gateway
+sds-cli gateway nvme create \
+    --resource nvme-gw \
+    --service-ip 192.168.123.202/24 \
+    --nqn nqn.2024-01.com.example:storage.subsys01
 ```
 
-### 5. AI Assistants (MCP)
+### 6. Snapshots
 
-`sds-mcp` serves the full management surface (45 tools: pools, resources,
+```bash
+sds-cli resource snapshot create --resource res01 --name res01_snap --node orange1
+sds-cli resource snapshot list   --resource res01 --node orange1
+# GFS-retention schedule
+sds-cli resource snapshot schedule create --resource res01 --cron "0 * * * *" --keep-hourly 6 --keep-daily 7
+```
+
+### 7. Kubernetes (CSI)
+
+The CSI driver provisions DRBD volumes as PersistentVolumes. Apply the manifests
+in `deploy/k8s/` (set the endpoint to your controller's address), then use the
+`sds-drbd` StorageClass:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata: { name: sds-drbd }
+provisioner: sds.csi.liliang-cn.com
+parameters:
+  pool: "vg0"
+  replicas: "2"
+  storageType: "lvm"
+  # allowRemoteVolumeAccess: "true"   # opt-in: run Pods on non-replica nodes (diskless)
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+```
+
+Replica placement is pool-aware: volumes only land on nodes that host the
+requested pool.
+
+### 8. AI Assistants (MCP)
+
+`sds-mcp` serves the full management surface (44 tools: pools, resources,
 snapshots, gateways, HA) over the Model Context Protocol on stdio. Destructive
 operations are annotated so MCP clients ask for confirmation, and `--read-only`
 restricts the server to list/status/health tools.
