@@ -73,3 +73,51 @@ func TestAlertMonitorFiresWebhook(t *testing.T) {
 	assert.Equal(t, "n2", received[1].Node)
 	mu.Unlock()
 }
+
+func TestAlertMonitorStartStop(t *testing.T) {
+	lister := &mockLister{}
+	mon := NewMonitor("http://localhost:9999", 10*time.Millisecond, lister, nil)
+	mon.Start(context.Background())
+	time.Sleep(30 * time.Millisecond)
+	mon.Stop()
+}
+
+func TestAlertMonitorHTTPError(t *testing.T) {
+	// Server returning 500 error
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	lister := &mockLister{
+		list: []ResourceStatusInfo{
+			{
+				Name: "res1",
+				NodeStates: map[string]NodeStateInfo{
+					"n1": {DiskState: "Diskless", ReplicationState: "StandAlone"},
+				},
+			},
+		},
+	}
+
+	mon := NewMonitor(ts.URL, 50*time.Millisecond, lister, nil)
+	mon.poll(context.Background())
+}
+
+func TestIsDegradedStates(t *testing.T) {
+	deg, reason := isDegraded(NodeStateInfo{DiskState: "Failed"})
+	assert.True(t, deg)
+	assert.Contains(t, reason, "Failed")
+
+	deg, reason = isDegraded(NodeStateInfo{DiskState: "Detached"})
+	assert.True(t, deg)
+	assert.Contains(t, reason, "Detached")
+
+	deg, reason = isDegraded(NodeStateInfo{DiskState: "UpToDate", ReplicationState: "Disconnecting"})
+	assert.True(t, deg)
+	assert.Contains(t, reason, "Disconnecting")
+
+	deg, reason = isDegraded(NodeStateInfo{DiskState: "UpToDate", ReplicationState: "Unconnected"})
+	assert.True(t, deg)
+	assert.Contains(t, reason, "Unconnected")
+}

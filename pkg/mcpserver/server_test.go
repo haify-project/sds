@@ -31,6 +31,7 @@ type mockClient struct {
 	adoptFn            func(ctx context.Context, name string, nodes []string, port uint32, protocol string) (*sdspb.AdoptResourceResponse, error)
 }
 
+func (m *mockClient) UnregisterNode(ctx context.Context, address string) error { return nil }
 func (m *mockClient) ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error) {
 	return m.listNodesFn(ctx)
 }
