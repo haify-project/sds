@@ -6860,11 +6860,16 @@ type ResourceStatus struct {
 	// true this resource replicates over the internet via a per-resource sds-proxy
 	// pair (protocol A / async), so the DR peer can lag; wan_proxy reports each
 	// WAN node's `sds-proxy@<resource>` unit state (active/inactive/...).
-	Wan           bool              `protobuf:"varint,6,opt,name=wan,proto3" json:"wan,omitempty"`
-	DrNode        string            `protobuf:"bytes,7,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`
-	DrEndpoint    string            `protobuf:"bytes,8,opt,name=dr_endpoint,json=drEndpoint,proto3" json:"dr_endpoint,omitempty"`
-	WanPort       uint32            `protobuf:"varint,9,opt,name=wan_port,json=wanPort,proto3" json:"wan_port,omitempty"`
-	WanProxy      map[string]string `protobuf:"bytes,10,rep,name=wan_proxy,json=wanProxy,proto3" json:"wan_proxy,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Wan        bool              `protobuf:"varint,6,opt,name=wan,proto3" json:"wan,omitempty"`
+	DrNode     string            `protobuf:"bytes,7,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`
+	DrEndpoint string            `protobuf:"bytes,8,opt,name=dr_endpoint,json=drEndpoint,proto3" json:"dr_endpoint,omitempty"`
+	WanPort    uint32            `protobuf:"varint,9,opt,name=wan_port,json=wanPort,proto3" json:"wan_port,omitempty"`
+	WanProxy   map[string]string `protobuf:"bytes,10,rep,name=wan_proxy,json=wanProxy,proto3" json:"wan_proxy,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// wan_reachable is true when the primary node can currently open a TCP
+	// connection to the DR WAN endpoint (i.e. the DR firewall/security group
+	// permits the mTLS port). False here explains a WAN resource that is up
+	// locally but not replicating.
+	WanReachable  bool `protobuf:"varint,11,opt,name=wan_reachable,json=wanReachable,proto3" json:"wan_reachable,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6967,6 +6972,13 @@ func (x *ResourceStatus) GetWanProxy() map[string]string {
 		return x.WanProxy
 	}
 	return nil
+}
+
+func (x *ResourceStatus) GetWanReachable() bool {
+	if x != nil {
+		return x.WanReachable
+	}
+	return false
 }
 
 type NodeResourceState struct {
@@ -12474,7 +12486,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	" \x03(\tR\x0fdisklessClients\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
-	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\"\xf6\x03\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\"\x9b\x04\n" +
 	"\x0eResourceStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x14\n" +
@@ -12488,7 +12500,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"drEndpoint\x12\x19\n" +
 	"\bwan_port\x18\t \x01(\rR\awanPort\x12=\n" +
 	"\twan_proxy\x18\n" +
-	" \x03(\v2 .v1.ResourceStatus.WanProxyEntryR\bwanProxy\x1aT\n" +
+	" \x03(\v2 .v1.ResourceStatus.WanProxyEntryR\bwanProxy\x12#\n" +
+	"\rwan_reachable\x18\v \x01(\bR\fwanReachable\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
 	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\x1a;\n" +

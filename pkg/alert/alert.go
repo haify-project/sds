@@ -24,6 +24,12 @@ type NodeStateInfo struct {
 type ResourceStatusInfo struct {
 	Name       string
 	NodeStates map[string]NodeStateInfo
+	// WAN replication health (only meaningful when WANEnabled). WANHealthy is
+	// true when both sds-proxy instances are active and the DR WAN endpoint is
+	// reachable; WANMessage describes the fault otherwise.
+	WANEnabled bool
+	WANHealthy bool
+	WANMessage string
 }
 
 type ResourceLister interface {
@@ -137,6 +143,38 @@ func (m *Monitor) poll(ctx context.Context) {
 					DiskState: state.DiskState,
 					ReplState: state.ReplicationState,
 					Message:   fmt.Sprintf("resource %s on %s recovered to normal state", res.Name, node),
+					Timestamp: time.Now(),
+				})
+			} else {
+				m.mu.Unlock()
+			}
+		}
+
+		// WAN replication health is tracked as a per-resource alert (keyed
+		// "<resource>/wan") separate from the per-node DRBD states, so a broken
+		// cross-site link is surfaced even when every local replica looks fine.
+		if res.WANEnabled {
+			key := res.Name + "/wan"
+			m.mu.Lock()
+			wasFiring := m.firing[key]
+			if !res.WANHealthy && !wasFiring {
+				m.firing[key] = true
+				m.mu.Unlock()
+				m.sendAlert(AlertPayload{
+					Event:     "degraded",
+					Resource:  res.Name,
+					Node:      "wan",
+					Message:   fmt.Sprintf("resource %s WAN replication degraded: %s", res.Name, res.WANMessage),
+					Timestamp: time.Now(),
+				})
+			} else if res.WANHealthy && wasFiring {
+				delete(m.firing, key)
+				m.mu.Unlock()
+				m.sendAlert(AlertPayload{
+					Event:     "resolved",
+					Resource:  res.Name,
+					Node:      "wan",
+					Message:   fmt.Sprintf("resource %s WAN replication recovered", res.Name),
 					Timestamp: time.Now(),
 				})
 			} else {

@@ -1281,6 +1281,9 @@ type WANStatusInfo struct {
 	// ProxyState maps a node name to its `systemctl is-active sds-proxy@<res>`
 	// result ("active" / "inactive" / "failed" / "unknown").
 	ProxyState map[string]string
+	// WANReachable is true when the primary can currently reach the DR WAN
+	// endpoint over TCP (firewall/security group permits the mTLS port).
+	WANReachable bool
 }
 
 // WANStatus returns the WAN replication view for a resource, or (nil, nil) for a
@@ -1330,6 +1333,7 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 	}
 	probe(primaryNode, primaryAddr)
 	probe(dbRes.DRNode, drAddr)
+	info.WANReachable = wanproxy.Reachable(ctx, rm.wanproxyDeployClient(), rm.wanProxySpecFor(dbRes))
 	return info, nil
 }
 
@@ -4464,7 +4468,63 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 				ReplicationState: st.Replication,
 			}
 		}
+
+		// For WAN resources, fold the sds-proxy pair's health into the status so
+		// the alert monitor can surface a broken cross-site link.
+		if dbRes.WANMode {
+			item.WANEnabled = true
+			st, err := wanproxy.Status(ctx, rm.wanproxyDeployClient(), rm.wanProxySpecFor(dbRes))
+			switch {
+			case err != nil:
+				item.WANHealthy = false
+				item.WANMessage = err.Error()
+			default:
+				item.WANHealthy = st.Healthy()
+				item.WANMessage = wanStatusMessage(st)
+			}
+		}
+
 		result = append(result, item)
 	}
 	return result, nil
+}
+
+// wanProxySpecFor rebuilds the sds-proxy spec for a stored WAN resource so its
+// live status can be queried. The primary is the resource node that is not the
+// DR node.
+func (rm *ResourceManager) wanProxySpecFor(dbRes *database.Resource) wanproxy.ProxySpec {
+	primary := ""
+	for _, n := range splitCSV(dbRes.Nodes) {
+		if n != dbRes.DRNode {
+			primary = n
+			break
+		}
+	}
+	return wanproxy.ProxySpec{
+		Resource:         dbRes.Name,
+		PrimaryNodeAddr:  rm.controller.ResolveHost(primary),
+		DRNodeAddr:       rm.controller.ResolveHost(dbRes.DRNode),
+		DRPublicEndpoint: dbRes.DREndpoint,
+		WANPort:          dbRes.WANPort,
+		DRBDPort:         dbRes.Port,
+	}
+}
+
+// wanStatusMessage renders a short human description of an unhealthy WAN proxy
+// pair; it returns "" when the pair is healthy.
+func wanStatusMessage(st *wanproxy.ProxyStatus) string {
+	if st == nil {
+		return "WAN status unavailable"
+	}
+	var problems []string
+	if !st.Primary.Active {
+		problems = append(problems, "primary proxy inactive")
+	}
+	if !st.DR.Active {
+		problems = append(problems, "DR proxy inactive")
+	}
+	if !st.WANReachable {
+		problems = append(problems, "DR WAN endpoint unreachable")
+	}
+	return strings.Join(problems, "; ")
 }

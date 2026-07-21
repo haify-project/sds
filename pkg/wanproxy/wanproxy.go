@@ -432,11 +432,20 @@ func Status(ctx context.Context, deploy DeploymentClient, spec ProxySpec) (*Prox
 	}
 
 	// Single-shot reachability: a status query must not block on the retry loop.
-	if r, err := deploy.Exec(ctx, []string{spec.PrimaryNodeAddr}, reachCmd(spec.DRPublicEndpoint, spec.WANPort)); err == nil && r != nil {
-		st.WANReachable = r.AllSuccess()
-	}
+	st.WANReachable = Reachable(ctx, deploy, spec)
 
 	return st, nil
+}
+
+// Reachable does a single TCP reachability probe from the primary node to the
+// DR WAN endpoint and reports whether it succeeded. Unlike VerifyReachability it
+// never retries or blocks, so it is safe on a hot status path.
+func Reachable(ctx context.Context, deploy DeploymentClient, spec ProxySpec) bool {
+	if deploy == nil {
+		return false
+	}
+	r, err := deploy.Exec(ctx, []string{spec.PrimaryNodeAddr}, reachCmd(spec.DRPublicEndpoint, spec.WANPort))
+	return err == nil && r != nil && r.AllSuccess()
 }
 
 // Deprovision tears down the per-resource proxy: it stops+disables

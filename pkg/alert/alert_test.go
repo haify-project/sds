@@ -74,6 +74,66 @@ func TestAlertMonitorFiresWebhook(t *testing.T) {
 	mu.Unlock()
 }
 
+func TestAlertMonitorFiresOnWANDegraded(t *testing.T) {
+	var mu sync.Mutex
+	var received []AlertPayload
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var p AlertPayload
+		if err := json.NewDecoder(r.Body).Decode(&p); err == nil {
+			mu.Lock()
+			received = append(received, p)
+			mu.Unlock()
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	// All local replicas are healthy, but the WAN leg is down.
+	lister := &mockLister{
+		list: []ResourceStatusInfo{
+			{
+				Name: "res1",
+				NodeStates: map[string]NodeStateInfo{
+					"n1": {DiskState: "UpToDate", ReplicationState: "Established"},
+				},
+				WANEnabled: true,
+				WANHealthy: false,
+				WANMessage: "DR WAN endpoint unreachable",
+			},
+		},
+	}
+
+	mon := NewMonitor(ts.URL, 50*time.Millisecond, lister, nil)
+	mon.poll(context.Background())
+
+	mu.Lock()
+	require.Len(t, received, 1)
+	assert.Equal(t, "degraded", received[0].Event)
+	assert.Equal(t, "res1", received[0].Resource)
+	assert.Equal(t, "wan", received[0].Node)
+	assert.Contains(t, received[0].Message, "WAN replication degraded")
+	assert.Contains(t, received[0].Message, "unreachable")
+	mu.Unlock()
+
+	// A second poll while still degraded must NOT re-fire (edge-triggered).
+	mon.poll(context.Background())
+	mu.Lock()
+	require.Len(t, received, 1, "degraded alert must fire only on the edge")
+	mu.Unlock()
+
+	// Recover the WAN link -> a single "resolved" alert.
+	lister.list[0].WANHealthy = true
+	lister.list[0].WANMessage = ""
+	mon.poll(context.Background())
+
+	mu.Lock()
+	require.Len(t, received, 2)
+	assert.Equal(t, "resolved", received[1].Event)
+	assert.Equal(t, "wan", received[1].Node)
+	mu.Unlock()
+}
+
 func TestAlertMonitorStartStop(t *testing.T) {
 	lister := &mockLister{}
 	mon := NewMonitor("http://localhost:9999", 10*time.Millisecond, lister, nil)

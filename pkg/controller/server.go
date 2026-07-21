@@ -606,6 +606,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		status.DrEndpoint = wan.DREndpoint
 		status.WanPort = uint32(wan.WANPort)
 		status.WanProxy = wan.ProxyState
+		status.WanReachable = wan.WANReachable
 	}
 
 	return &sdspb.ResourceStatusResponse{

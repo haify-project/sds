@@ -1105,6 +1105,11 @@ message ResourceStatus {
   string dr_endpoint = 8;
   uint32 wan_port = 9;
   map<string, string> wan_proxy = 10;
+  // wan_reachable is true when the primary node can currently open a TCP
+  // connection to the DR WAN endpoint (i.e. the DR firewall/security group
+  // permits the mTLS port). False here explains a WAN resource that is up
+  // locally but not replicating.
+  bool wan_reachable = 11;
 }
 
 message NodeResourceState {

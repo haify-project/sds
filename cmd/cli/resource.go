@@ -863,6 +863,11 @@ func resourceStatus() *cobra.Command {
 				if p := status.GetWanPort(); p != 0 {
 					fmt.Printf("    WAN port:    %d\n", p)
 				}
+				reach := "unreachable ⚠"
+				if status.GetWanReachable() {
+					reach = "reachable"
+				}
+				fmt.Printf("    DR link:     %s (primary → %s)\n", reach, status.GetDrEndpoint())
 				for node, st := range status.GetWanProxy() {
 					fmt.Printf("    sds-proxy@%s: %s\n", node, st)
 				}
