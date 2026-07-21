@@ -46,6 +46,19 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
+)
+
+// Reachability-probe tuning. These are package vars (not consts) so tests can
+// shrink the retry window; production keeps the defaults.
+var (
+	// reachAttempts is how many times VerifyReachability retries before failing,
+	// absorbing the acceptor's bind race after enable --now.
+	reachAttempts = 5
+	// reachRetryDelay is the wait between reachability attempts.
+	reachRetryDelay = 2 * time.Second
+	// reachTimeoutSecs bounds each individual TCP connect attempt on the node.
+	reachTimeoutSecs = 5
 )
 
 // On-node filesystem layout. These are the canonical paths the sds-proxy binary,
@@ -196,6 +209,13 @@ type ProxySpec struct {
 	// both nodes (installed at NodeBinaryPath). When empty the binary push is
 	// skipped, assuming it was pre-staged on the nodes.
 	BinaryPath string
+
+	// SkipReachabilityCheck disables the post-start preflight that confirms the
+	// DR WAN port is reachable from the primary. Default false: the check runs,
+	// so a blocked firewall/security group fails Provision fast instead of
+	// surfacing later as a DRBD resource that silently never syncs. Set true only
+	// when the DR endpoint is legitimately not reachable at provision time.
+	SkipReachabilityCheck bool
 }
 
 // Validate checks the spec is internally consistent before any node is touched.
@@ -297,7 +317,126 @@ func Provision(ctx context.Context, deploy DeploymentClient, spec ProxySpec) err
 		return err
 	}
 
+	// 8. Preflight: confirm the DR WAN port is actually reachable from the
+	//    primary now that the acceptor is listening. A blocked firewall/security
+	//    group fails fast here, instead of surfacing later as a DRBD resource
+	//    that comes up but silently never syncs.
+	if !spec.SkipReachabilityCheck {
+		if err := VerifyReachability(ctx, deploy, spec); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// reachCmd builds a node-side command that succeeds (exit 0) iff a TCP
+// connection to host:port can be opened within reachTimeoutSecs. It uses bash's
+// /dev/tcp pseudo-device (present on all supported distros) guarded by timeout,
+// so no extra tooling (nc/ncat) is required on the node.
+func reachCmd(host string, port int) string {
+	return fmt.Sprintf("timeout %d bash -c 'exec 3<>/dev/tcp/%s/%d'", reachTimeoutSecs, host, port)
+}
+
+// VerifyReachability confirms the primary node can open a TCP connection to the
+// DR site's public WAN endpoint — i.e. the DR firewall / cloud security group
+// actually permits the inbound mTLS port. It retries to absorb the acceptor's
+// bind race after enable --now. Returning an error here is the intended
+// fail-fast: without this probe a blocked port lets Provision "succeed" while
+// the DRBD resource never reaches Connected.
+func VerifyReachability(ctx context.Context, deploy DeploymentClient, spec ProxySpec) error {
+	if deploy == nil {
+		return fmt.Errorf("wanproxy: deployment client is nil")
+	}
+	if err := spec.Validate(); err != nil {
+		return err
+	}
+
+	cmd := reachCmd(spec.DRPublicEndpoint, spec.WANPort)
+	var last string
+	for attempt := 1; attempt <= reachAttempts; attempt++ {
+		res, err := deploy.Exec(ctx, []string{spec.PrimaryNodeAddr}, cmd)
+		switch {
+		case err != nil:
+			last = err.Error()
+		case res != nil && res.AllSuccess():
+			return nil
+		default:
+			last = "connection refused or timed out"
+		}
+		if attempt < reachAttempts {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(reachRetryDelay):
+			}
+		}
+	}
+	return fmt.Errorf(
+		"wanproxy: DR endpoint %s:%d is not reachable over TCP from the primary node %s after %d attempts — open inbound TCP :%d on the DR firewall/security group (last error: %s)",
+		spec.DRPublicEndpoint, spec.WANPort, spec.PrimaryNodeAddr, reachAttempts, spec.WANPort, last)
+}
+
+// NodeProxyState is one node's view of its sds-proxy instance.
+type NodeProxyState struct {
+	Host   string
+	Active bool // systemd reports the per-resource unit as active
+}
+
+// ProxyStatus is the health of one WAN resource's proxy pair, suitable for
+// surfacing in `resource status`, the alert monitor and the UI.
+type ProxyStatus struct {
+	Resource     string
+	Primary      NodeProxyState
+	DR           NodeProxyState
+	WANReachable bool // the primary can currently reach the DR WAN endpoint
+}
+
+// Healthy reports whether both proxy instances are active and the WAN leg is
+// reachable — the condition for the WAN resource to actually replicate.
+func (s *ProxyStatus) Healthy() bool {
+	return s != nil && s.Primary.Active && s.DR.Active && s.WANReachable
+}
+
+// Status reports the live health of a WAN resource's proxy pair: whether the
+// sds-proxy@<resource> unit is active on each node, and whether the primary can
+// currently reach the DR WAN endpoint. It is read-only (no sudo) and does a
+// single reachability attempt so a status query never blocks on retries.
+func Status(ctx context.Context, deploy DeploymentClient, spec ProxySpec) (*ProxyStatus, error) {
+	if deploy == nil {
+		return nil, fmt.Errorf("wanproxy: deployment client is nil")
+	}
+	if err := spec.Validate(); err != nil {
+		return nil, err
+	}
+
+	instance := UnitInstance(spec.Resource)
+	st := &ProxyStatus{
+		Resource: spec.Resource,
+		Primary:  NodeProxyState{Host: spec.PrimaryNodeAddr},
+		DR:       NodeProxyState{Host: spec.DRNodeAddr},
+	}
+
+	res, err := deploy.Exec(ctx, []string{spec.PrimaryNodeAddr, spec.DRNodeAddr},
+		fmt.Sprintf("systemctl is-active %s", instance))
+	if err != nil {
+		return nil, fmt.Errorf("wanproxy: query proxy status: %w", err)
+	}
+	if res != nil {
+		if h := res.Hosts[spec.PrimaryNodeAddr]; h != nil {
+			st.Primary.Active = h.Success
+		}
+		if h := res.Hosts[spec.DRNodeAddr]; h != nil {
+			st.DR.Active = h.Success
+		}
+	}
+
+	// Single-shot reachability: a status query must not block on the retry loop.
+	if r, err := deploy.Exec(ctx, []string{spec.PrimaryNodeAddr}, reachCmd(spec.DRPublicEndpoint, spec.WANPort)); err == nil && r != nil {
+		st.WANReachable = r.AllSuccess()
+	}
+
+	return st, nil
 }
 
 // Deprovision tears down the per-resource proxy: it stops+disables

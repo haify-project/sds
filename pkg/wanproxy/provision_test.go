@@ -27,6 +27,9 @@ type fakeDeploy struct {
 	// set and matched, to exercise the error paths.
 	failDistributePath string
 	failExecSubstr     string
+	// failAll makes every exec return a per-host failure (used to model a node
+	// where the proxy is down and the WAN port is unreachable).
+	failAll bool
 }
 
 func (f *fakeDeploy) DistributeConfig(_ context.Context, hosts []string, content, remotePath string) (*Result, error) {
@@ -36,7 +39,7 @@ func (f *fakeDeploy) DistributeConfig(_ context.Context, hosts []string, content
 
 func (f *fakeDeploy) Exec(_ context.Context, hosts []string, cmd string) (*Result, error) {
 	f.events = append(f.events, event{kind: "exec", hosts: append([]string(nil), hosts...), cmd: cmd})
-	return f.result(hosts, f.failExecSubstr != "" && strings.Contains(cmd, f.failExecSubstr)), nil
+	return f.result(hosts, f.failAll || (f.failExecSubstr != "" && strings.Contains(cmd, f.failExecSubstr))), nil
 }
 
 func (f *fakeDeploy) result(hosts []string, fail bool) *Result {
@@ -81,6 +84,8 @@ func TestProvisionSequence(t *testing.T) {
 		{kind: "distribute", hosts: []string{dr}, path: cfgPath},      // acceptor
 		{kind: "exec", hosts: both, cmd: "sudo systemctl daemon-reload"},
 		{kind: "exec", hosts: both, cmd: "sudo systemctl enable --now " + instance},
+		// Preflight reachability probe from the primary to the DR WAN endpoint.
+		{kind: "exec", hosts: []string{primary}, cmd: reachCmd(spec.DRPublicEndpoint, spec.WANPort)},
 	}
 
 	if len(f.events) != len(want) {
