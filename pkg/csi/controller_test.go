@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -108,4 +109,19 @@ func TestCreateVolumeMissingPool(t *testing.T) {
 	req.Parameters = map[string]string{}
 	_, err := newTestController(b).CreateVolume(context.Background(), req)
 	assert.Error(t, err)
+}
+
+func TestCreateVolumeUsesProfilePlacementDefaults(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.profiles["production"] = &sdspb.ResourceProfile{
+		Name: "production", Pool: "vg0", StorageType: "lvm", Replicas: 3,
+	}
+	req := validCreateReq("pvc-profile")
+	req.Parameters = map[string]string{"resourceProfile": "production"}
+
+	_, err := newTestController(b).CreateVolume(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, b.createCalls, 1)
+	assert.Len(t, b.createCalls[0].nodes, 3)
+	assert.Equal(t, "vg0", b.createCalls[0].pool)
 }

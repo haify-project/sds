@@ -3,6 +3,7 @@ package csi
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // paramAllowRemoteVolumeAccess is the StorageClass parameter (LINSTOR-style)
@@ -20,12 +21,15 @@ type VolumeParams struct {
 	// local replica via a diskless client (I/O then flows over the DRBD
 	// network). Default false: Pods are pinned to replica nodes for local I/O.
 	AllowRemoteVolumeAccess bool
+	ResourceProfile         string
+	ResourceLabels          map[string]string
 }
 
 // ParseVolumeParams validates and defaults the StorageClass parameters.
 func ParseVolumeParams(p map[string]string) (VolumeParams, error) {
 	out := VolumeParams{Pool: p["pool"], Replicas: 2, StorageType: "lvm"}
-	if out.Pool == "" {
+	out.ResourceProfile = strings.TrimSpace(p["resourceProfile"])
+	if out.Pool == "" && out.ResourceProfile == "" {
 		return out, fmt.Errorf("storageclass parameter \"pool\" is required")
 	}
 	if v, ok := p["replicas"]; ok {
@@ -47,6 +51,18 @@ func ParseVolumeParams(p map[string]string) (VolumeParams, error) {
 			return out, fmt.Errorf("invalid %s %q (want true or false)", paramAllowRemoteVolumeAccess, v)
 		}
 		out.AllowRemoteVolumeAccess = b
+	}
+	if raw := strings.TrimSpace(p["resourceLabels"]); raw != "" {
+		out.ResourceLabels = make(map[string]string)
+		for _, item := range strings.Split(raw, ",") {
+			key, value, ok := strings.Cut(strings.TrimSpace(item), "=")
+			key = strings.TrimSpace(key)
+			value = strings.TrimSpace(value)
+			if !ok || key == "" || value == "" {
+				return out, fmt.Errorf("invalid resourceLabels entry %q (want key=value)", item)
+			}
+			out.ResourceLabels[key] = value
+		}
 	}
 	return out, nil
 }

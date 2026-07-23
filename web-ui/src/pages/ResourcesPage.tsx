@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   api,
   Resource,
+  ResourceProfile,
   Volume,
   ResourceStatus,
   NodeResourceState,
@@ -149,6 +150,11 @@ export function ResourcesPage() {
     queryFn: () => api.getNodes(),
   });
 
+  const { data: profiles } = useQuery({
+    queryKey: ['resource-profiles'],
+    queryFn: () => api.getResourceProfiles(),
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -156,6 +162,7 @@ export function ResourcesPage() {
         <CreateResourceDialog
           nodes={nodes?.nodes ?? []}
           pools={pools?.pools ?? []}
+          profiles={profiles?.profiles ?? []}
         />
       </div>
 
@@ -257,24 +264,29 @@ function ResourceRow({
   return (
     <TableRow>
       <TableCell>
-        <div className="flex items-center gap-2">
+        <div className="flex items-start gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded bg-primary/10">
             <Database className="h-4 w-4 text-primary" />
           </span>
-          <span className="font-medium">{resource.name}</span>
-          {resource.quorumRisk && (
-            <Badge
-              variant="outline"
-              className="border-amber-500 text-amber-600"
-              title="2-node resource with no quorum tiebreaker: a single node failure suspends I/O"
-            >
-              quorum risk
-            </Badge>
-          )}
-          <SyncIndicator
-            resourceName={resource.name}
-            localNode={resource.nodes[0]}
-          />
+          <div className="min-w-0 space-y-1 whitespace-normal">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{resource.name}</span>
+              {resource.quorumRisk && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500 text-amber-600"
+                  title="2-node resource with no quorum tiebreaker: a single node failure suspends I/O"
+                >
+                  quorum risk
+                </Badge>
+              )}
+              <SyncIndicator
+                resourceName={resource.name}
+                localNode={resource.nodes[0]}
+              />
+            </div>
+            <ResourceMetadata resource={resource} compact />
+          </div>
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">{resource.port}</TableCell>
@@ -333,7 +345,7 @@ function ResourceRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-1">
-          <StatusDialog resourceName={resource.name} />
+          <StatusDialog resource={resource} />
           <ResourceActionsMenu
             resource={resource}
             pools={pools}
@@ -342,6 +354,47 @@ function ResourceRow({
         </div>
       </TableCell>
     </TableRow>
+  );
+}
+
+function ResourceMetadata({
+  resource,
+  compact = false,
+}: {
+  resource: Resource;
+  compact?: boolean;
+}) {
+  const labels = Object.entries(resource.labels ?? {}).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  if (!resource.profile && labels.length === 0) return null;
+
+  const visibleLabels = compact ? labels.slice(0, 3) : labels;
+  const allLabels = labels.map(([key, value]) => `${key}=${value}`).join(', ');
+
+  return (
+    <div className="flex max-w-full flex-wrap items-center gap-1 text-xs text-muted-foreground">
+      {resource.profile && (
+        <Badge variant="outline" className="max-w-48 truncate font-normal">
+          profile: {resource.profile}
+        </Badge>
+      )}
+      {visibleLabels.map(([key, value]) => (
+        <Badge
+          key={key}
+          variant="secondary"
+          className="max-w-48 truncate font-mono font-normal"
+          title={`${key}=${value}`}
+        >
+          {key}={value}
+        </Badge>
+      ))}
+      {compact && labels.length > visibleLabels.length && (
+        <Badge variant="secondary" title={allLabels}>
+          +{labels.length - visibleLabels.length}
+        </Badge>
+      )}
+    </div>
   );
 }
 
@@ -762,12 +815,12 @@ function ScheduleDialog({
   );
 }
 
-function StatusDialog({ resourceName }: { resourceName: string }) {
+function StatusDialog({ resource }: { resource: Resource }) {
   const [open, setOpen] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['resource-status', resourceName],
-    queryFn: () => api.resourceStatus(resourceName),
+    queryKey: ['resource-status', resource.name],
+    queryFn: () => api.resourceStatus(resource.name),
     enabled: open,
     // Poll 2s while any peer is resyncing; stop the moment it settles.
     refetchInterval: syncPollInterval,
@@ -785,7 +838,7 @@ function StatusDialog({ resourceName }: { resourceName: string }) {
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Resource Status: {resourceName}</DialogTitle>
+          <DialogTitle>Resource Status: {resource.name}</DialogTitle>
           <DialogDescription>Live DRBD status for this resource.</DialogDescription>
         </DialogHeader>
 
@@ -805,6 +858,13 @@ function StatusDialog({ resourceName }: { resourceName: string }) {
               <span className="text-sm text-muted-foreground">Overall Role</span>
               <StatusBadge status={status.role} />
             </div>
+
+            {(resource.profile || Object.keys(resource.labels ?? {}).length > 0) && (
+              <div>
+                <h4 className="mb-2 text-sm font-medium">Metadata</h4>
+                <ResourceMetadata resource={resource} />
+              </div>
+            )}
 
             <div>
               <h4 className="mb-2 text-sm font-medium">Node States</h4>
@@ -1552,9 +1612,11 @@ function DeleteResourceDialog({
 function CreateResourceDialog({
   nodes,
   pools,
+  profiles,
 }: {
   nodes: NodeOpt[];
   pools: PoolOpt[];
+  profiles: ResourceProfile[];
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -1563,6 +1625,8 @@ function CreateResourceDialog({
   const [protocol, setProtocol] = useState('C');
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [storageType, setStorageType] = useState('lvm');
+  const [profile, setProfile] = useState('');
+  const [labelsInput, setLabelsInput] = useState('');
   // One or more DRBD volumes (volume 0..N). Each has its own size and pool.
   const [volumes, setVolumes] = useState<{ sizeGb: string; pool: string }[]>([
     { sizeGb: '10', pool: '' },
@@ -1605,6 +1669,7 @@ function CreateResourceDialog({
   const matchingPools = pools.filter(
     (p) => p.type === poolTypeFor[storageType],
   );
+  const selectedProfile = profiles.find((item) => item.name === profile);
 
   const reset = () => {
     setName('');
@@ -1612,6 +1677,8 @@ function CreateResourceDialog({
     setProtocol('C');
     setSelectedNodes([]);
     setStorageType('lvm');
+    setProfile('');
+    setLabelsInput('');
     setVolumes([{ sizeGb: '10', pool: '' }]);
     setOptionRows([]);
     setShowOptions(false);
@@ -1637,6 +1704,21 @@ function CreateResourceDialog({
     );
   };
 
+  const selectProfile = (value: string) => {
+    if (value === noneValue) {
+      setProfile('');
+      return;
+    }
+    setProfile(value);
+    const selected = profiles.find((item) => item.name === value);
+    if (!selected) return;
+    if (selected.protocol) setProtocol(selected.protocol);
+    if (selected.storageType) setStorageType(selected.storageType);
+    if (selected.pool) {
+      setVolumes((prev) => prev.map((volume) => ({ ...volume, pool: selected.pool })));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedNodes.length < 1) {
@@ -1657,6 +1739,23 @@ function CreateResourceDialog({
       const key = r.key.trim();
       if (key) drbdOptions[key] = r.value.trim();
     }
+    const labels: Record<string, string> = {};
+    for (const part of labelsInput.split(',')) {
+      const entry = part.trim();
+      if (!entry) continue;
+      const separator = entry.indexOf('=');
+      if (separator < 1) {
+        toast.error(`Invalid label "${entry}". Use key=value.`);
+        return;
+      }
+      const key = entry.slice(0, separator).trim();
+      const value = entry.slice(separator + 1).trim();
+      if (!key) {
+        toast.error(`Invalid label "${entry}". Label keys cannot be empty.`);
+        return;
+      }
+      labels[key] = value;
+    }
     createMutation.mutate({
       name,
       port: parseInt(port, 10),
@@ -1665,6 +1764,8 @@ function CreateResourceDialog({
       storageType,
       volumes: parsedVolumes,
       drbdOptions: Object.keys(drbdOptions).length ? drbdOptions : undefined,
+      profile: profile || undefined,
+      labels: Object.keys(labels).length ? labels : undefined,
     });
   };
 
@@ -1695,6 +1796,45 @@ function CreateResourceDialog({
                 placeholder="e.g., data"
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Profile (optional)</Label>
+              <Select
+                value={profile || noneValue}
+                onValueChange={selectProfile}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="No profile" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={noneValue}>No profile</SelectItem>
+                  {profiles.map((item) => (
+                    <SelectItem key={item.name} value={item.name}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {profiles.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No resource profiles are configured.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="res-labels">Labels (optional)</Label>
+              <Input
+                id="res-labels"
+                value={labelsInput}
+                onChange={(e) => setLabelsInput(e.target.value)}
+                placeholder="environment=prod, team=storage"
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated key=value pairs. Explicit labels override profile labels.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1794,7 +1934,9 @@ function CreateResourceDialog({
                 </Button>
               </div>
               <div className="space-y-2 rounded-lg border p-3">
-                {volumes.map((vol, i) => (
+                {volumes.map((vol, i) => {
+                  const effectivePool = vol.pool || selectedProfile?.pool || '';
+                  return (
                   <div key={i} className="flex items-end gap-2">
                     <div className="w-24 space-y-1">
                       <Label className="text-xs text-muted-foreground">
@@ -1813,7 +1955,7 @@ function CreateResourceDialog({
                         Pool (optional)
                       </Label>
                       <Select
-                        value={vol.pool || noneValue}
+                        value={effectivePool || noneValue}
                         onValueChange={(v) =>
                           setVolume(i, { pool: v === noneValue ? '' : v })
                         }
@@ -1823,6 +1965,11 @@ function CreateResourceDialog({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={noneValue}>Auto-select</SelectItem>
+                          {effectivePool && !matchingPools.some((p) => p.name === effectivePool) && (
+                            <SelectItem value={effectivePool}>
+                              {effectivePool} (profile)
+                            </SelectItem>
+                          )}
                           {matchingPools.map((p) => (
                             <SelectItem
                               key={`${p.node}-${p.name}`}
@@ -1846,7 +1993,8 @@ function CreateResourceDialog({
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

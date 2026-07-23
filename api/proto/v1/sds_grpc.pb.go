@@ -35,6 +35,10 @@ const (
 	SDSController_DeleteResource_FullMethodName           = "/v1.SDSController/DeleteResource"
 	SDSController_GetResource_FullMethodName              = "/v1.SDSController/GetResource"
 	SDSController_ListResources_FullMethodName            = "/v1.SDSController/ListResources"
+	SDSController_CreateResourceProfile_FullMethodName    = "/v1.SDSController/CreateResourceProfile"
+	SDSController_GetResourceProfile_FullMethodName       = "/v1.SDSController/GetResourceProfile"
+	SDSController_ListResourceProfiles_FullMethodName     = "/v1.SDSController/ListResourceProfiles"
+	SDSController_DeleteResourceProfile_FullMethodName    = "/v1.SDSController/DeleteResourceProfile"
 	SDSController_AddVolume_FullMethodName                = "/v1.SDSController/AddVolume"
 	SDSController_RemoveVolume_FullMethodName             = "/v1.SDSController/RemoveVolume"
 	SDSController_ResizeVolume_FullMethodName             = "/v1.SDSController/ResizeVolume"
@@ -137,6 +141,10 @@ type SDSControllerClient interface {
 	DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error)
 	GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error)
 	ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error)
+	CreateResourceProfile(ctx context.Context, in *CreateResourceProfileRequest, opts ...grpc.CallOption) (*CreateResourceProfileResponse, error)
+	GetResourceProfile(ctx context.Context, in *GetResourceProfileRequest, opts ...grpc.CallOption) (*GetResourceProfileResponse, error)
+	ListResourceProfiles(ctx context.Context, in *ListResourceProfilesRequest, opts ...grpc.CallOption) (*ListResourceProfilesResponse, error)
+	DeleteResourceProfile(ctx context.Context, in *DeleteResourceProfileRequest, opts ...grpc.CallOption) (*DeleteResourceProfileResponse, error)
 	AddVolume(ctx context.Context, in *AddVolumeRequest, opts ...grpc.CallOption) (*AddVolumeResponse, error)
 	RemoveVolume(ctx context.Context, in *RemoveVolumeRequest, opts ...grpc.CallOption) (*RemoveVolumeResponse, error)
 	ResizeVolume(ctx context.Context, in *ResizeVolumeRequest, opts ...grpc.CallOption) (*ResizeVolumeResponse, error)
@@ -392,6 +400,46 @@ func (c *sDSControllerClient) ListResources(ctx context.Context, in *ListResourc
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListResourcesResponse)
 	err := c.cc.Invoke(ctx, SDSController_ListResources_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateResourceProfile(ctx context.Context, in *CreateResourceProfileRequest, opts ...grpc.CallOption) (*CreateResourceProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateResourceProfileResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateResourceProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetResourceProfile(ctx context.Context, in *GetResourceProfileRequest, opts ...grpc.CallOption) (*GetResourceProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetResourceProfileResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetResourceProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListResourceProfiles(ctx context.Context, in *ListResourceProfilesRequest, opts ...grpc.CallOption) (*ListResourceProfilesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResourceProfilesResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListResourceProfiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteResourceProfile(ctx context.Context, in *DeleteResourceProfileRequest, opts ...grpc.CallOption) (*DeleteResourceProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteResourceProfileResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteResourceProfile_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1173,6 +1221,10 @@ type SDSControllerServer interface {
 	DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error)
 	GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error)
 	ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error)
+	CreateResourceProfile(context.Context, *CreateResourceProfileRequest) (*CreateResourceProfileResponse, error)
+	GetResourceProfile(context.Context, *GetResourceProfileRequest) (*GetResourceProfileResponse, error)
+	ListResourceProfiles(context.Context, *ListResourceProfilesRequest) (*ListResourceProfilesResponse, error)
+	DeleteResourceProfile(context.Context, *DeleteResourceProfileRequest) (*DeleteResourceProfileResponse, error)
 	AddVolume(context.Context, *AddVolumeRequest) (*AddVolumeResponse, error)
 	RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error)
 	ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error)
@@ -1321,6 +1373,18 @@ func (UnimplementedSDSControllerServer) GetResource(context.Context, *GetResourc
 }
 func (UnimplementedSDSControllerServer) ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListResources not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateResourceProfile(context.Context, *CreateResourceProfileRequest) (*CreateResourceProfileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateResourceProfile not implemented")
+}
+func (UnimplementedSDSControllerServer) GetResourceProfile(context.Context, *GetResourceProfileRequest) (*GetResourceProfileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetResourceProfile not implemented")
+}
+func (UnimplementedSDSControllerServer) ListResourceProfiles(context.Context, *ListResourceProfilesRequest) (*ListResourceProfilesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListResourceProfiles not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteResourceProfile(context.Context, *DeleteResourceProfileRequest) (*DeleteResourceProfileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteResourceProfile not implemented")
 }
 func (UnimplementedSDSControllerServer) AddVolume(context.Context, *AddVolumeRequest) (*AddVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddVolume not implemented")
@@ -1852,6 +1916,78 @@ func _SDSController_ListResources_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).ListResources(ctx, req.(*ListResourcesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateResourceProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateResourceProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateResourceProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateResourceProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateResourceProfile(ctx, req.(*CreateResourceProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetResourceProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResourceProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetResourceProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetResourceProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetResourceProfile(ctx, req.(*GetResourceProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListResourceProfiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListResourceProfilesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListResourceProfiles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListResourceProfiles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListResourceProfiles(ctx, req.(*ListResourceProfilesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteResourceProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteResourceProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteResourceProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteResourceProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteResourceProfile(ctx, req.(*DeleteResourceProfileRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3276,6 +3412,22 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListResources",
 			Handler:    _SDSController_ListResources_Handler,
+		},
+		{
+			MethodName: "CreateResourceProfile",
+			Handler:    _SDSController_CreateResourceProfile_Handler,
+		},
+		{
+			MethodName: "GetResourceProfile",
+			Handler:    _SDSController_GetResourceProfile_Handler,
+		},
+		{
+			MethodName: "ListResourceProfiles",
+			Handler:    _SDSController_ListResourceProfiles_Handler,
+		},
+		{
+			MethodName: "DeleteResourceProfile",
+			Handler:    _SDSController_DeleteResourceProfile_Handler,
 		},
 		{
 			MethodName: "AddVolume",

@@ -14,6 +14,7 @@ type fakeBackend struct {
 	pools     []*sdspb.PoolInfo // one entry per node hosting a pool
 	primary   map[string]string // resource -> node
 	createErr error
+	profiles  map[string]*sdspb.ResourceProfile
 
 	// promoteErr, when set, makes PromoteForNode fail (e.g. simulating a
 	// controller that refused to force-promote because the node lacks quorum).
@@ -38,7 +39,7 @@ type createCall struct {
 }
 
 func newFakeBackend(nodeNames ...string) *fakeBackend {
-	f := &fakeBackend{resources: map[string]*sdspb.ResourceInfo{}, primary: map[string]string{}}
+	f := &fakeBackend{resources: map[string]*sdspb.ResourceInfo{}, primary: map[string]string{}, profiles: map[string]*sdspb.ResourceProfile{}}
 	for i, n := range nodeNames {
 		addr := fmt.Sprintf("10.0.0.%d", i+1)
 		f.nodes = append(f.nodes, &sdspb.NodeInfo{Name: n, Address: addr, State: "online"})
@@ -48,6 +49,18 @@ func newFakeBackend(nodeNames ...string) *fakeBackend {
 		f.pools = append(f.pools, &sdspb.PoolInfo{Name: "sds_vg0", Node: addr})
 	}
 	return f
+}
+
+func (f *fakeBackend) CreateResourceRequest(ctx context.Context, req *sdspb.CreateResourceRequest) error {
+	return f.CreateResourceWithPoolAndType(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool, req.StorageType, req.DrbdOptions)
+}
+
+func (f *fakeBackend) GetResourceProfile(_ context.Context, name string) (*sdspb.ResourceProfile, error) {
+	profile, ok := f.profiles[name]
+	if !ok {
+		return nil, fmt.Errorf("profile %q not found", name)
+	}
+	return profile, nil
 }
 
 // onlyPoolOnNodes restricts the fake's pool so it exists only on the named

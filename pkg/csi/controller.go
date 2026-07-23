@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -54,6 +55,30 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	if params.ResourceProfile != "" {
+		profileClient, ok := s.backend.(interface {
+			GetResourceProfile(context.Context, string) (*sdspb.ResourceProfile, error)
+		})
+		if !ok {
+			return nil, status.Error(codes.Internal, "SDS backend does not support resource profiles")
+		}
+		profile, profileErr := profileClient.GetResourceProfile(ctx, params.ResourceProfile)
+		if profileErr != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "resource profile %q: %v", params.ResourceProfile, profileErr)
+		}
+		if _, explicit := req.GetParameters()["pool"]; !explicit {
+			params.Pool = profile.Pool
+		}
+		if _, explicit := req.GetParameters()["replicas"]; !explicit && profile.Replicas > 0 {
+			params.Replicas = int(profile.Replicas)
+		}
+		if _, explicit := req.GetParameters()["storageType"]; !explicit && profile.StorageType != "" {
+			params.StorageType = profile.StorageType
+		}
+		if params.Pool == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "resource profile %q does not define a pool", params.ResourceProfile)
+		}
+	}
 
 	nodes, err := s.backend.ListNodes(ctx)
 	if err != nil {
@@ -71,7 +96,30 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Errorf(codes.ResourceExhausted, "pool %q: %v", params.Pool, err)
 	}
 
-	if err := s.backend.CreateResourceWithPoolAndType(ctx, name, 0, replicaNodes, "C", sizeGB, params.Pool, params.StorageType, nil); err != nil {
+	labels := make(map[string]string, len(params.ResourceLabels)+1)
+	for key, value := range params.ResourceLabels {
+		labels[key] = value
+	}
+	labels["sds.csi/managed-by"] = "csi"
+	if backend, ok := s.backend.(interface {
+		CreateResourceRequest(context.Context, *sdspb.CreateResourceRequest) error
+	}); ok {
+		err = backend.CreateResourceRequest(ctx, &sdspb.CreateResourceRequest{
+			Name:        name,
+			Nodes:       replicaNodes,
+			Protocol:    "C",
+			SizeGb:      sizeGB,
+			Pool:        params.Pool,
+			StorageType: params.StorageType,
+			Profile:     params.ResourceProfile,
+			Labels:      labels,
+		})
+	} else if params.ResourceProfile != "" || len(params.ResourceLabels) > 0 {
+		return nil, status.Error(codes.Internal, "SDS backend does not support resource profiles or labels")
+	} else {
+		err = s.backend.CreateResourceWithPoolAndType(ctx, name, 0, replicaNodes, "C", sizeGB, params.Pool, params.StorageType, nil)
+	}
+	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create resource: %v", err)
 	}
 

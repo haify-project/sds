@@ -172,7 +172,6 @@ func (s *Server) UnregisterNode(ctx context.Context, req *sdspb.UnregisterNodeRe
 	}, nil
 }
 
-
 func (s *Server) DrainNode(ctx context.Context, req *sdspb.DrainNodeRequest) (*sdspb.DrainNodeResponse, error) {
 	moved, err := s.resources.DrainNode(ctx, req.Name)
 	if err != nil {
@@ -291,6 +290,17 @@ func (s *Server) HealthCheck(ctx context.Context, req *sdspb.HealthCheckRequest)
 // ==================== RESOURCE OPERATIONS ====================
 
 func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRequest) (*sdspb.CreateResourceResponse, error) {
+	if req.Profile != "" {
+		if s.ctrl == nil || s.ctrl.db == nil {
+			return &sdspb.CreateResourceResponse{Success: false, Message: "database not available"}, nil
+		}
+		profile, err := s.ctrl.db.GetResourceProfile(ctx, req.Profile)
+		if err != nil {
+			return &sdspb.CreateResourceResponse{Success: false, Message: err.Error()}, nil
+		}
+		applyResourceProfile(req, profile)
+	}
+
 	// Prefer the explicit multi-volume list; fall back to the single-volume
 	// size_gb/pool shorthand when it is empty (older clients, CLI).
 	volumes := make([]VolumeSpec, 0, len(req.Volumes))
@@ -345,7 +355,10 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		nodes = placed
 	}
 
-	err := s.resources.CreateResourceWithVolumes(ctx, req.Name, req.Port, nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes, wan)
+	err := s.resources.CreateResourceWithVolumesMetadata(ctx, req.Name, req.Port, nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes, wan, ResourceMetadata{
+		Labels:  req.Labels,
+		Profile: req.Profile,
+	})
 	if err != nil {
 		return &sdspb.CreateResourceResponse{
 			Success: false,
@@ -356,6 +369,49 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		Success: true,
 		Message: "Resource created successfully",
 	}, nil
+}
+
+func applyResourceProfile(req *sdspb.CreateResourceRequest, profile *database.ResourceProfile) {
+	if req.Protocol == "" {
+		req.Protocol = profile.Protocol
+	}
+	if req.StorageType == "" {
+		req.StorageType = profile.StorageType
+	}
+	if req.Pool == "" {
+		req.Pool = profile.Pool
+	}
+	for _, volume := range req.Volumes {
+		if volume.Pool == "" {
+			volume.Pool = profile.Pool
+		}
+	}
+	if req.Replicas == 0 {
+		req.Replicas = uint32(profile.Replicas)
+	}
+	if len(req.ReplicasOnDifferent) == 0 {
+		req.ReplicasOnDifferent = append([]string(nil), profile.OnDifferent...)
+	}
+	if len(req.ReplicasOnSame) == 0 {
+		req.ReplicasOnSame = append([]string(nil), profile.OnSame...)
+	}
+	req.DrbdOptions = mergeStringMaps(profile.DRBDOptions, req.DrbdOptions)
+	req.Labels = mergeStringMaps(profile.Labels, req.Labels)
+	req.Profile = profile.Name
+}
+
+func mergeStringMaps(defaults, overrides map[string]string) map[string]string {
+	if len(defaults) == 0 && len(overrides) == 0 {
+		return nil
+	}
+	merged := make(map[string]string, len(defaults)+len(overrides))
+	for key, value := range defaults {
+		merged[key] = value
+	}
+	for key, value := range overrides {
+		merged[key] = value
+	}
+	return merged
 }
 
 // singlePoolTotal returns the shared pool and total size of the volumes, or an
@@ -454,6 +510,8 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 			DisklessNodes:   resource.DisklessNodes,
 			DisklessClients: resource.DisklessClients,
 			QuorumRisk:      resource.QuorumRisk,
+			Labels:          resource.Labels,
+			Profile:         resource.Profile,
 		},
 	}, nil
 }
@@ -489,6 +547,8 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 			DisklessNodes:   r.DisklessNodes,
 			DisklessClients: r.DisklessClients,
 			QuorumRisk:      r.QuorumRisk,
+			Labels:          r.Labels,
+			Profile:         r.Profile,
 		})
 	}
 
@@ -497,6 +557,90 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 		Message:   "Resources listed successfully",
 		Resources: pbResources,
 	}, nil
+}
+
+func profileToProto(profile *database.ResourceProfile) *sdspb.ResourceProfile {
+	if profile == nil {
+		return nil
+	}
+	return &sdspb.ResourceProfile{
+		Name:                profile.Name,
+		Protocol:            profile.Protocol,
+		StorageType:         profile.StorageType,
+		Pool:                profile.Pool,
+		Replicas:            uint32(profile.Replicas),
+		ReplicasOnDifferent: append([]string(nil), profile.OnDifferent...),
+		ReplicasOnSame:      append([]string(nil), profile.OnSame...),
+		DrbdOptions:         cloneStringMap(profile.DRBDOptions),
+		Labels:              cloneStringMap(profile.Labels),
+	}
+}
+
+func profileFromProto(profile *sdspb.ResourceProfile) *database.ResourceProfile {
+	if profile == nil {
+		return nil
+	}
+	return &database.ResourceProfile{
+		Name:        strings.TrimSpace(profile.Name),
+		Protocol:    profile.Protocol,
+		StorageType: profile.StorageType,
+		Pool:        profile.Pool,
+		Replicas:    int(profile.Replicas),
+		OnDifferent: append([]string(nil), profile.ReplicasOnDifferent...),
+		OnSame:      append([]string(nil), profile.ReplicasOnSame...),
+		DRBDOptions: cloneStringMap(profile.DrbdOptions),
+		Labels:      cloneStringMap(profile.Labels),
+	}
+}
+
+func (s *Server) CreateResourceProfile(ctx context.Context, req *sdspb.CreateResourceProfileRequest) (*sdspb.CreateResourceProfileResponse, error) {
+	if s.ctrl == nil || s.ctrl.db == nil {
+		return &sdspb.CreateResourceProfileResponse{Success: false, Message: "database not available"}, nil
+	}
+	profile := profileFromProto(req.Profile)
+	if profile == nil || profile.Name == "" {
+		return &sdspb.CreateResourceProfileResponse{Success: false, Message: "profile name is required"}, nil
+	}
+	if err := s.ctrl.db.SaveResourceProfile(ctx, profile); err != nil {
+		return &sdspb.CreateResourceProfileResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.CreateResourceProfileResponse{Success: true, Message: "Resource profile saved", Profile: profileToProto(profile)}, nil
+}
+
+func (s *Server) GetResourceProfile(ctx context.Context, req *sdspb.GetResourceProfileRequest) (*sdspb.GetResourceProfileResponse, error) {
+	if s.ctrl == nil || s.ctrl.db == nil {
+		return &sdspb.GetResourceProfileResponse{Success: false, Message: "database not available"}, nil
+	}
+	profile, err := s.ctrl.db.GetResourceProfile(ctx, req.Name)
+	if err != nil {
+		return &sdspb.GetResourceProfileResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.GetResourceProfileResponse{Success: true, Message: "Resource profile found", Profile: profileToProto(profile)}, nil
+}
+
+func (s *Server) ListResourceProfiles(ctx context.Context, _ *sdspb.ListResourceProfilesRequest) (*sdspb.ListResourceProfilesResponse, error) {
+	if s.ctrl == nil || s.ctrl.db == nil {
+		return &sdspb.ListResourceProfilesResponse{Success: false, Message: "database not available"}, nil
+	}
+	profiles, err := s.ctrl.db.ListResourceProfiles(ctx)
+	if err != nil {
+		return &sdspb.ListResourceProfilesResponse{Success: false, Message: err.Error()}, nil
+	}
+	result := make([]*sdspb.ResourceProfile, 0, len(profiles))
+	for _, profile := range profiles {
+		result = append(result, profileToProto(profile))
+	}
+	return &sdspb.ListResourceProfilesResponse{Success: true, Message: "Resource profiles listed", Profiles: result}, nil
+}
+
+func (s *Server) DeleteResourceProfile(ctx context.Context, req *sdspb.DeleteResourceProfileRequest) (*sdspb.DeleteResourceProfileResponse, error) {
+	if s.ctrl == nil || s.ctrl.db == nil {
+		return &sdspb.DeleteResourceProfileResponse{Success: false, Message: "database not available"}, nil
+	}
+	if err := s.ctrl.db.DeleteResourceProfile(ctx, req.Name); err != nil {
+		return &sdspb.DeleteResourceProfileResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.DeleteResourceProfileResponse{Success: true, Message: "Resource profile deleted"}, nil
 }
 
 func (s *Server) AddVolume(ctx context.Context, req *sdspb.AddVolumeRequest) (*sdspb.AddVolumeResponse, error) {
@@ -955,7 +1099,6 @@ func (s *Server) ListHa(ctx context.Context, req *sdspb.ListHaRequest) (*sdspb.L
 		Configs: pbConfigs,
 	}, nil
 }
-
 
 func (s *Server) GetHaStatus(ctx context.Context, req *sdspb.GetHaStatusRequest) (*sdspb.GetHaStatusResponse, error) {
 	promoters, err := s.resources.GetHaStatus(ctx, req.Resource)

@@ -1551,6 +1551,116 @@
         ]
       }
     },
+    "/v1/resource-profiles": {
+      "get": {
+        "operationId": "SDSController_ListResourceProfiles",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListResourceProfilesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "operationId": "SDSController_CreateResourceProfile",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateResourceProfileResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateResourceProfileRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resource-profiles/{name}": {
+      "get": {
+        "operationId": "SDSController_GetResourceProfile",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetResourceProfileResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "delete": {
+        "operationId": "SDSController_DeleteResourceProfile",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteResourceProfileResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources": {
       "get": {
         "operationId": "SDSController_ListResources",
@@ -3508,6 +3618,15 @@
         },
         "protocol": {
           "type": "string"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "profile": {
+          "type": "string"
         }
       },
       "description": "AdoptResourceRequest imports an already-existing (foreign) DRBD resource into\nSDS management by recording its metadata in the SDS database. It never\ncreates or modifies the actual DRBD resource or its data. Every field except\nname is optional and auto-discovered from the live .res on a node when\nomitted; a provided value overrides discovery."
@@ -4193,6 +4312,28 @@
         }
       }
     },
+    "v1CreateResourceProfileRequest": {
+      "type": "object",
+      "properties": {
+        "profile": {
+          "$ref": "#/definitions/v1ResourceProfile"
+        }
+      }
+    },
+    "v1CreateResourceProfileResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/definitions/v1ResourceProfile"
+        }
+      }
+    },
     "v1CreateResourceRequest": {
       "type": "object",
       "properties": {
@@ -4281,6 +4422,15 @@
             "type": "string"
           },
           "description": "do_not_place_with names other resources; auto-placement will not put a\nreplica on any node already holding a replica of them (cross-resource\nanti-affinity). Ignored when `nodes` is set."
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "profile": {
+          "type": "string"
         }
       },
       "title": "Resource messages"
@@ -4459,6 +4609,17 @@
       }
     },
     "v1DeletePoolResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DeleteResourceProfileResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -4850,6 +5011,20 @@
         }
       }
     },
+    "v1GetResourceProfileResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/definitions/v1ResourceProfile"
+        }
+      }
+    },
     "v1GetResourceResponse": {
       "type": "object",
       "properties": {
@@ -5223,6 +5398,24 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ResourceAgentInfo"
+          }
+        }
+      }
+    },
+    "v1ListResourceProfilesResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceProfile"
           }
         }
       }
@@ -5782,6 +5975,60 @@
             "type": "string"
           },
           "description": "Nodes attached as diskless data clients: no local replica, but connected\nover DRBD and promotable to serve the volume over the network. Distinct\nfrom diskless_nodes (quorum-only tiebreakers)."
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "profile": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ResourceProfile": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "storageType": {
+          "type": "string"
+        },
+        "pool": {
+          "type": "string"
+        },
+        "replicas": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "replicasOnDifferent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "replicasOnSame": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "drbdOptions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -5832,6 +6079,10 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "wanReachable": {
+          "type": "boolean",
+          "description": "wan_reachable is true when the primary node can currently open a TCP\nconnection to the DR WAN endpoint (i.e. the DR firewall/security group\npermits the mTLS port). False here explains a WAN resource that is up\nlocally but not replicating."
         }
       }
     },

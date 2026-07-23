@@ -3,12 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/liliang-cn/sds/pkg/util"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 // formatSize formats a size in GB to human-readable string
@@ -48,6 +53,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceDemote())
 	cmd.AddCommand(resourceDiskless())
 	cmd.AddCommand(resourceSnapshot())
+	cmd.AddCommand(resourceProfileCommand())
 
 	return cmd
 }
@@ -102,6 +108,8 @@ func resourceCreate() *cobra.Command {
 	var drNode string
 	var drEndpoint string
 	var wanPort uint32
+	var profile string
+	var labels map[string]string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -148,16 +156,8 @@ func resourceCreate() *cobra.Command {
 				}
 			}
 
-			if pool == "" {
+			if pool == "" && profile == "" {
 				pool = "data-pool"
-			}
-
-			if storageType == "" {
-				storageType = "lvm"
-			}
-
-			if protocol == "" {
-				protocol = "C"
 			}
 
 			sizeBytes, err := util.ParseSize(size)
@@ -169,34 +169,71 @@ func resourceCreate() *cobra.Command {
 				return fmt.Errorf("size too small (minimum 1 GiB)")
 			}
 
-			sdsClient, err := newSDSClient()
+			grpcClient, conn, err := newResourceGRPCClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer conn.Close()
 
-			// WAN mode routes replication through a per-resource sds-proxy pair
-			// (protocol A + loopback DRBD). Otherwise use the unified LAN path
-			// for all storage types (behavior unchanged).
-			switch {
-			case wan:
-				err = sdsClient.CreateResourceWAN(ctx, name, port, nodeList[0], uint32(sizeGiB), pool, storageType, drbdOptions, drNode, drEndpoint, wanPort)
-			case len(nodeList) == 0:
-				err = sdsClient.CreateResourceAutoPlace(ctx, name, port, replicas, replicasOnDifferent, replicasOnSame, doNotPlaceWith, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
-			default:
-				err = sdsClient.CreateResourceWithPoolAndType(ctx, name, port, nodeList, protocol, uint32(sizeGiB), pool, storageType, drbdOptions)
+			requestReplicas := replicas
+			if profile != "" && !cmd.Flags().Changed("replicas") {
+				requestReplicas = 0
 			}
+			requestPool := pool
+			requestStorageType := storageType
+			requestProtocol := protocol
+			if profile != "" {
+				if !cmd.Flags().Changed("pool") {
+					requestPool = ""
+				}
+				if !cmd.Flags().Changed("storage-type") {
+					requestStorageType = ""
+				}
+				if !cmd.Flags().Changed("protocol") {
+					requestProtocol = ""
+				}
+			}
+			if wan {
+				requestProtocol = "A"
+			}
+			resp, err := grpcClient.CreateResource(ctx, &sdspb.CreateResourceRequest{
+				Name:                name,
+				Port:                port,
+				Nodes:               nodeList,
+				Protocol:            requestProtocol,
+				SizeGb:              uint32(sizeGiB),
+				Pool:                requestPool,
+				StorageType:         requestStorageType,
+				DrbdOptions:         drbdOptions,
+				Wan:                 wan,
+				DrNode:              drNode,
+				DrEndpoint:          drEndpoint,
+				WanPort:             wanPort,
+				Replicas:            requestReplicas,
+				ReplicasOnDifferent: replicasOnDifferent,
+				ReplicasOnSame:      replicasOnSame,
+				DoNotPlaceWith:      doNotPlaceWith,
+				Labels:              labels,
+				Profile:             profile,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to create resource: %w", err)
+			}
+			if !resp.Success {
+				return fmt.Errorf("failed to create resource: %s", resp.Message)
 			}
 
 			fmt.Printf("Resource created successfully\n")
 			fmt.Printf("  Name:        %s\n", name)
 			fmt.Printf("  Port:        %d\n", port)
-			fmt.Printf("  Storage:     %s\n", storageType)
-			fmt.Printf("  Pool:        %s\n", pool)
+			fmt.Printf("  Storage:     %s\n", profileCreateValue(requestStorageType, profile))
+			fmt.Printf("  Pool:        %s\n", profileCreateValue(requestPool, profile))
 			if len(nodeList) == 0 {
-				fmt.Printf("  Nodes:       auto-placed (%d replicas by free space; see 'resource get %s')\n", replicas, name)
+				if requestReplicas == 0 {
+					fmt.Printf("  Nodes:       auto-placed (replicas from profile; see 'resource get %s')\n", name)
+				} else {
+					fmt.Printf("  Nodes:       auto-placed (%d replicas by free space; see 'resource get %s')\n", requestReplicas, name)
+				}
 			} else {
 				fmt.Printf("  Nodes:       %v\n", nodeList)
 			}
@@ -210,11 +247,17 @@ func resourceCreate() *cobra.Command {
 					fmt.Printf("  WAN port:    auto (random >3000)\n")
 				}
 			} else {
-				fmt.Printf("  Protocol:    %s\n", protocol)
+				fmt.Printf("  Protocol:    %s\n", profileCreateValue(requestProtocol, profile))
 			}
 			fmt.Printf("  Size:        %d GiB (%s)\n", sizeGiB, util.FormatBytes(sizeBytes))
 			if len(drbdOptions) > 0 {
 				fmt.Printf("  Options:     %v\n", drbdOptions)
+			}
+			if profile != "" {
+				fmt.Printf("  Profile:     %s\n", profile)
+			}
+			if len(labels) > 0 {
+				fmt.Printf("  Labels:      %s\n", formatLabels(labels))
 			}
 			fmt.Printf("\nNext steps:\n")
 			fmt.Printf("  1. sds-cli resource get %s\n", name)
@@ -232,10 +275,12 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringSliceVar(&replicasOnSame, "replicas-on-same", nil, "Node-label key(s) all replicas must share (e.g. zone). Repeatable. Auto-placement only")
 	cmd.Flags().StringSliceVar(&doNotPlaceWith, "do-not-place-with", nil, "Resource name(s) whose nodes to avoid (anti-affinity). Repeatable. Auto-placement only")
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: data-pool)")
-	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
+	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm, lvm-thin, or zfs")
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")
 	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required)")
 	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Resource profile name")
+	cmd.Flags().StringToStringVar(&labels, "label", nil, "Resource label as key=value (repeatable)")
 	cmd.Flags().BoolVar(&wan, "wan", false, "Enable opt-in WAN replication (protocol A via a per-resource sds-proxy pair)")
 	cmd.Flags().StringVar(&drNode, "dr-node", "", "DR-site node name (requires --wan; must be a registered node)")
 	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "DR site's public WAN address the primary dials (requires --wan)")
@@ -329,6 +374,8 @@ func resourceGet() *cobra.Command {
 			fmt.Printf("Resource: %s\n", resource.Name)
 			fmt.Printf("  Port:     %d\n", resource.Port)
 			fmt.Printf("  Protocol: %s\n", resource.Protocol)
+			fmt.Printf("  Profile:  %s\n", displayValue(resource.Profile))
+			fmt.Printf("  Labels:   %s\n", formatLabels(resource.Labels))
 			fmt.Printf("  Nodes:\n")
 			for _, node := range resource.Nodes {
 				state := "Unknown"
@@ -420,6 +467,7 @@ func resourceList() *cobra.Command {
 
 			for _, r := range resources {
 				line := fmt.Sprintf("%s (port=%d, protocol=%s, nodes=%v)", r.Name, r.Port, r.Protocol, r.Nodes)
+				line += fmt.Sprintf(" profile=%s labels=%s", displayValue(r.Profile), formatLabels(r.Labels))
 				if len(r.DisklessNodes) > 0 {
 					line += fmt.Sprintf(" tiebreaker=%v", r.DisklessNodes)
 				}
@@ -434,6 +482,197 @@ func resourceList() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func newResourceGRPCClient() (sdspb.SDSControllerClient, *grpc.ClientConn, error) {
+	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	if token := client.ResolveToken(tokenFlag); token != "" {
+		dialOpts = append(dialOpts, grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}))
+	}
+	conn, err := grpc.NewClient(controllerAddr, dialOpts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sdspb.NewSDSControllerClient(conn), conn, nil
+}
+
+func displayValue(value string) string {
+	if value == "" {
+		return "(none)"
+	}
+	return value
+}
+
+func profileCreateValue(value, profile string) string {
+	if value == "" && profile != "" {
+		return "from profile " + profile
+	}
+	return displayValue(value)
+}
+
+func resourceProfileCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "profile",
+		Short: "Resource profile management",
+	}
+	cmd.AddCommand(resourceProfileCreate())
+	cmd.AddCommand(resourceProfileGet())
+	cmd.AddCommand(resourceProfileList())
+	cmd.AddCommand(resourceProfileDelete())
+	return cmd
+}
+
+func resourceProfileCreate() *cobra.Command {
+	profile := &sdspb.ResourceProfile{}
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create or replace a resource profile",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(profile.Name) == "" {
+				return fmt.Errorf("profile name is required")
+			}
+			grpcClient, conn, err := newResourceGRPCClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer conn.Close()
+			resp, err := grpcClient.CreateResourceProfile(cmd.Context(), &sdspb.CreateResourceProfileRequest{Profile: profile})
+			if err != nil {
+				return fmt.Errorf("failed to create resource profile: %w", err)
+			}
+			if !resp.Success {
+				return fmt.Errorf("failed to create resource profile: %s", resp.Message)
+			}
+			fmt.Printf("Resource profile '%s' saved\n", profile.Name)
+			printResourceProfile(resp.Profile)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&profile.Name, "name", "", "Profile name (required)")
+	cmd.Flags().StringVar(&profile.Protocol, "protocol", "", "Default DRBD protocol (A, B, or C)")
+	cmd.Flags().StringVar(&profile.StorageType, "storage-type", "", "Default storage type: lvm, lvm-thin, or zfs")
+	cmd.Flags().StringVar(&profile.Pool, "pool", "", "Default storage pool")
+	cmd.Flags().Uint32Var(&profile.Replicas, "replicas", 0, "Default replica count")
+	cmd.Flags().StringSliceVar(&profile.ReplicasOnDifferent, "replicas-on-different", nil, "Node-label key(s) to spread replicas across (repeatable)")
+	cmd.Flags().StringSliceVar(&profile.ReplicasOnSame, "replicas-on-same", nil, "Node-label key(s) all replicas must share (repeatable)")
+	cmd.Flags().StringToStringVar(&profile.DrbdOptions, "drbd-options", nil, "Default DRBD options as key=value pairs")
+	cmd.Flags().StringToStringVar(&profile.Labels, "label", nil, "Default resource label as key=value (repeatable)")
+	_ = cmd.MarkFlagRequired("name")
+	return cmd
+}
+
+func resourceProfileGet() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <name>",
+		Short: "Get a resource profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			grpcClient, conn, err := newResourceGRPCClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer conn.Close()
+			resp, err := grpcClient.GetResourceProfile(cmd.Context(), &sdspb.GetResourceProfileRequest{Name: args[0]})
+			if err != nil {
+				return fmt.Errorf("failed to get resource profile: %w", err)
+			}
+			if !resp.Success {
+				return fmt.Errorf("failed to get resource profile: %s", resp.Message)
+			}
+			printResourceProfile(resp.Profile)
+			return nil
+		},
+	}
+}
+
+func resourceProfileList() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List resource profiles",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			grpcClient, conn, err := newResourceGRPCClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer conn.Close()
+			resp, err := grpcClient.ListResourceProfiles(cmd.Context(), &sdspb.ListResourceProfilesRequest{})
+			if err != nil {
+				return fmt.Errorf("failed to list resource profiles: %w", err)
+			}
+			if !resp.Success {
+				return fmt.Errorf("failed to list resource profiles: %s", resp.Message)
+			}
+			if len(resp.Profiles) == 0 {
+				fmt.Println("No resource profiles found")
+				return nil
+			}
+			sort.Slice(resp.Profiles, func(i, j int) bool { return resp.Profiles[i].Name < resp.Profiles[j].Name })
+			for _, profile := range resp.Profiles {
+				fmt.Println(formatResourceProfile(profile))
+			}
+			return nil
+		},
+	}
+}
+
+func resourceProfileDelete() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete a resource profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			grpcClient, conn, err := newResourceGRPCClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer conn.Close()
+			resp, err := grpcClient.DeleteResourceProfile(cmd.Context(), &sdspb.DeleteResourceProfileRequest{Name: args[0]})
+			if err != nil {
+				return fmt.Errorf("failed to delete resource profile: %w", err)
+			}
+			if !resp.Success {
+				return fmt.Errorf("failed to delete resource profile: %s", resp.Message)
+			}
+			fmt.Printf("Resource profile '%s' deleted successfully\n", args[0])
+			return nil
+		},
+	}
+}
+
+func printResourceProfile(profile *sdspb.ResourceProfile) {
+	if profile == nil {
+		return
+	}
+	fmt.Printf("Profile: %s\n", profile.Name)
+	fmt.Printf("  Protocol:              %s\n", displayValue(profile.Protocol))
+	fmt.Printf("  Storage type:          %s\n", displayValue(profile.StorageType))
+	fmt.Printf("  Pool:                  %s\n", displayValue(profile.Pool))
+	fmt.Printf("  Replicas:              %d\n", profile.Replicas)
+	fmt.Printf("  Replicas on different: %s\n", formatStringSlice(profile.ReplicasOnDifferent))
+	fmt.Printf("  Replicas on same:      %s\n", formatStringSlice(profile.ReplicasOnSame))
+	fmt.Printf("  DRBD options:          %s\n", formatLabels(profile.DrbdOptions))
+	fmt.Printf("  Labels:                %s\n", formatLabels(profile.Labels))
+}
+
+func formatResourceProfile(profile *sdspb.ResourceProfile) string {
+	if profile == nil {
+		return "(invalid profile)"
+	}
+	return fmt.Sprintf("%s (protocol=%s, storage-type=%s, pool=%s, replicas=%d, replicas-on-different=%s, replicas-on-same=%s, drbd-options=%s, labels=%s)",
+		profile.Name, displayValue(profile.Protocol), displayValue(profile.StorageType), displayValue(profile.Pool), profile.Replicas,
+		formatStringSlice(profile.ReplicasOnDifferent), formatStringSlice(profile.ReplicasOnSame), formatLabels(profile.DrbdOptions), formatLabels(profile.Labels))
+}
+
+func formatStringSlice(values []string) string {
+	if len(values) == 0 {
+		return "(none)"
+	}
+	result := append([]string(nil), values...)
+	sort.Strings(result)
+	return strings.Join(result, ", ")
 }
 
 func resourceAddVolume() *cobra.Command {

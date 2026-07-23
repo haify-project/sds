@@ -18,6 +18,7 @@ const (
 	nodesBucket     = "nodes"
 	poolsBucket     = "pools"
 	resourcesBucket = "resources"
+	profilesBucket  = "resource_profiles"
 	volumesBucket   = "volumes"
 	gatewaysBucket  = "gateways"
 	haConfigsBucket = "ha_configs"
@@ -65,7 +66,7 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 
 	// Initialize buckets
 	if err := db.Update(func(tx *bolt.Tx) error {
-		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket}
+		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, profilesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket}
 		for _, bucket := range buckets {
 			_, err := tx.CreateBucketIfNotExists([]byte(bucket))
 			if err != nil {
@@ -287,6 +288,11 @@ type Resource struct {
 	Nodes    string
 	Protocol string
 	Replicas int
+	// Profile records the creation profile for attribution only. Existing
+	// resources do not depend on the profile continuing to exist.
+	Profile string
+	// Labels are arbitrary resource metadata used for organization and search.
+	Labels map[string]string
 	// DisklessNodes is a comma-separated list of node names that participate
 	// in the resource as diskless quorum tiebreakers (they vote in quorum but
 	// store no data). Empty for ordinary all-diskful resources.
@@ -307,6 +313,93 @@ type Resource struct {
 	WANPort    int    // WAN mTLS port the DR acceptor listens on (WAN only)
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+// ResourceProfile contains defaults applied when a resource is created.
+type ResourceProfile struct {
+	Name        string
+	Protocol    string
+	StorageType string
+	Pool        string
+	Replicas    int
+	OnDifferent []string
+	OnSame      []string
+	DRBDOptions map[string]string
+	Labels      map[string]string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// SaveResourceProfile saves or updates a resource profile.
+func (db *DB) SaveResourceProfile(ctx context.Context, profile *ResourceProfile) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	now := time.Now()
+	if profile.CreatedAt.IsZero() {
+		profile.CreatedAt = now
+	}
+	profile.UpdatedAt = now
+
+	data, err := json.Marshal(profile)
+	if err != nil {
+		return fmt.Errorf("failed to marshal resource profile: %w", err)
+	}
+
+	return db.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte(profilesBucket)).Put([]byte(profile.Name), data)
+	})
+}
+
+// GetResourceProfile retrieves a resource profile by name.
+func (db *DB) GetResourceProfile(ctx context.Context, name string) (*ResourceProfile, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var profile ResourceProfile
+	err := db.db.View(func(tx *bolt.Tx) error {
+		data := tx.Bucket([]byte(profilesBucket)).Get([]byte(name))
+		if data == nil {
+			return fmt.Errorf("resource profile not found")
+		}
+		return json.Unmarshal(data, &profile)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &profile, nil
+}
+
+// ListResourceProfiles lists all resource profiles.
+func (db *DB) ListResourceProfiles(ctx context.Context) ([]*ResourceProfile, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	profiles := make([]*ResourceProfile, 0)
+	err := db.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte(profilesBucket)).ForEach(func(_, value []byte) error {
+			var profile ResourceProfile
+			if err := json.Unmarshal(value, &profile); err != nil {
+				return err
+			}
+			profiles = append(profiles, &profile)
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return profiles, nil
+}
+
+// DeleteResourceProfile deletes a resource profile by name.
+func (db *DB) DeleteResourceProfile(ctx context.Context, name string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	return db.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte(profilesBucket)).Delete([]byte(name))
+	})
 }
 
 // SaveResource saves or updates a resource

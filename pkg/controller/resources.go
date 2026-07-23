@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/liliang-cn/sds/pkg/alert"
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/liliang-cn/sds/pkg/wanproxy"
-	"github.com/liliang-cn/sds/pkg/alert"
 	"go.uber.org/zap"
 )
 
@@ -43,6 +43,8 @@ type ResourceInfo struct {
 	// QuorumRisk is true when the resource has exactly two diskful nodes and
 	// no tiebreaker, so losing either node suspends I/O (no quorum majority).
 	QuorumRisk bool
+	Labels     map[string]string
+	Profile    string
 }
 
 // ResourceNodeState represents detailed state of a node for a resource
@@ -366,6 +368,13 @@ type WANSpec struct {
 	WANPort uint32
 }
 
+// ResourceMetadata is persisted with a resource but does not affect DRBD
+// runtime behavior after creation.
+type ResourceMetadata struct {
+	Labels  map[string]string
+	Profile string
+}
+
 // AdoptResult summarizes what AdoptResource recorded, so callers can display it.
 type AdoptResult struct {
 	Name     string
@@ -448,6 +457,11 @@ func (rm *ResourceManager) AdoptResource(ctx context.Context, name string, nodes
 		Port:     int(port),
 		Protocol: protocol,
 		Replicas: len(adoptNodes),
+	}
+	if existing, err := rm.controller.db.GetResource(ctx, name); err == nil {
+		resRecord.Profile = existing.Profile
+		resRecord.Labels = cloneStringMap(existing.Labels)
+		resRecord.CreatedAt = existing.CreatedAt
 	}
 	if err := rm.controller.db.SaveResource(ctx, resRecord); err != nil {
 		return nil, fmt.Errorf("record adopted resource %q: %w", name, err)
@@ -629,6 +643,12 @@ func volumeNameAndPoolFromDiskPath(diskPath string) (volumeName, pool string) {
 // (volume 0..N) atomically across the given nodes. All volumes share the
 // resource's storage type; each may target its own pool.
 func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name string, port uint32, nodes []string, protocol string, storageType string, drbdOptions map[string]string, volumes []VolumeSpec, wan *WANSpec) error {
+	return rm.CreateResourceWithVolumesMetadata(ctx, name, port, nodes, protocol, storageType, drbdOptions, volumes, wan, ResourceMetadata{})
+}
+
+// CreateResourceWithVolumesMetadata creates a resource and persists its
+// organizational metadata with the resolved resource configuration.
+func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context, name string, port uint32, nodes []string, protocol string, storageType string, drbdOptions map[string]string, volumes []VolumeSpec, wan *WANSpec, metadata ResourceMetadata) error {
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
@@ -939,6 +959,8 @@ func (rm *ResourceManager) CreateResourceWithVolumes(ctx context.Context, name s
 			Protocol:      protocol,
 			Replicas:      len(nodes),
 			DisklessNodes: strings.Join(disklessNodes, ","),
+			Labels:        cloneStringMap(metadata.Labels),
+			Profile:       metadata.Profile,
 		}
 		// Persist WAN metadata so DeleteResource can deprovision the proxy pair
 		// and the UI/CLI can show the resource is WAN-replicated.
@@ -1725,6 +1747,8 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		// Two diskful nodes with no tiebreaker means a single failure drops
 		// below quorum majority and suspends I/O.
 		QuorumRisk: len(nodeAddresses) == 2 && len(disklessNodes) == 0,
+		Labels:     cloneStringMap(dbRes.Labels),
+		Profile:    dbRes.Profile,
 	}
 
 	if len(info.Volumes) == 0 && len(dbVolumes) > 0 {
@@ -1791,10 +1815,23 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 			// without a per-resource status fan-out.
 			DisklessNodes:   splitCSV(dbRes.DisklessNodes),
 			DisklessClients: splitCSV(dbRes.DisklessClients),
+			Labels:          cloneStringMap(dbRes.Labels),
+			Profile:         dbRes.Profile,
 		})
 	}
 
 	return resources, nil
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 // drbdConfigReferencesDisk reports whether a DRBD .res config already contains a

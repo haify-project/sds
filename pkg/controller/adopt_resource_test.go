@@ -174,10 +174,19 @@ func TestResourceManagerAdoptResourceIsIdempotent(t *testing.T) {
 
 	_, err = ctrl.resources.AdoptResource(context.Background(), "kaiwudb", nil, 0, "")
 	require.NoError(t, err)
+	stored, err := ctrl.db.GetResource(context.Background(), "kaiwudb")
+	require.NoError(t, err)
+	stored.Profile = "legacy"
+	stored.Labels = map[string]string{"owner": "database"}
+	require.NoError(t, ctrl.db.SaveResource(context.Background(), stored))
 	// Re-adopting updates the record rather than erroring, and does not
 	// accumulate duplicate volume records.
 	_, err = ctrl.resources.AdoptResource(context.Background(), "kaiwudb", nil, 0, "")
 	require.NoError(t, err)
+	stored, err = ctrl.db.GetResource(context.Background(), "kaiwudb")
+	require.NoError(t, err)
+	assert.Equal(t, "legacy", stored.Profile)
+	assert.Equal(t, map[string]string{"owner": "database"}, stored.Labels)
 
 	volumes, err := ctrl.db.ListVolumes(context.Background(), "kaiwudb")
 	require.NoError(t, err)

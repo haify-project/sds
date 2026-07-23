@@ -61,6 +61,18 @@ service SDSController {
   rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {
     option (google.api.http) = { get: "/v1/resources"; };
   }
+  rpc CreateResourceProfile(CreateResourceProfileRequest) returns (CreateResourceProfileResponse) {
+    option (google.api.http) = { post: "/v1/resource-profiles"; body: "*"; };
+  }
+  rpc GetResourceProfile(GetResourceProfileRequest) returns (GetResourceProfileResponse) {
+    option (google.api.http) = { get: "/v1/resource-profiles/{name}"; };
+  }
+  rpc ListResourceProfiles(ListResourceProfilesRequest) returns (ListResourceProfilesResponse) {
+    option (google.api.http) = { get: "/v1/resource-profiles"; };
+  }
+  rpc DeleteResourceProfile(DeleteResourceProfileRequest) returns (DeleteResourceProfileResponse) {
+    option (google.api.http) = { delete: "/v1/resource-profiles/{name}"; };
+  }
   rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/volumes"; body: "*"; };
   }
@@ -718,6 +730,8 @@ message CreateResourceRequest {
   // replica on any node already holding a replica of them (cross-resource
   // anti-affinity). Ignored when `nodes` is set.
   repeated string do_not_place_with = 17;
+  map<string, string> labels = 18;
+  string profile = 19;
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the
@@ -742,6 +756,8 @@ message AdoptResourceRequest {
   repeated string nodes = 2;
   uint32 port = 3;
   string protocol = 4;
+  map<string, string> labels = 5;
+  string profile = 6;
 }
 
 message AdoptResourceResponse {
@@ -779,6 +795,51 @@ message ListResourcesResponse {
   bool success = 1;
   string message = 2;
   repeated ResourceInfo resources = 3;
+}
+
+message ResourceProfile {
+  string name = 1;
+  string protocol = 2;
+  string storage_type = 3;
+  string pool = 4;
+  uint32 replicas = 5;
+  repeated string replicas_on_different = 6;
+  repeated string replicas_on_same = 7;
+  map<string, string> drbd_options = 8;
+  map<string, string> labels = 9;
+}
+
+message CreateResourceProfileRequest {
+  ResourceProfile profile = 1;
+}
+
+message CreateResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceProfile profile = 3;
+}
+
+message GetResourceProfileRequest { string name = 1; }
+
+message GetResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceProfile profile = 3;
+}
+
+message ListResourceProfilesRequest {}
+
+message ListResourceProfilesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ResourceProfile profiles = 3;
+}
+
+message DeleteResourceProfileRequest { string name = 1; }
+
+message DeleteResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message AddVolumeRequest {
@@ -1088,6 +1149,8 @@ message ResourceInfo {
   // over DRBD and promotable to serve the volume over the network. Distinct
   // from diskless_nodes (quorum-only tiebreakers).
   repeated string diskless_clients = 10;
+  map<string, string> labels = 11;
+  string profile = 12;
 }
 
 message ResourceStatus {

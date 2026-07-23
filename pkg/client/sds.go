@@ -268,7 +268,6 @@ func (c *SDSClient) UnregisterNode(ctx context.Context, address string) error {
 	return nil
 }
 
-
 // DrainNode moves all Primary DRBD resources off the node and marks it maintenance.
 func (c *SDSClient) DrainNode(ctx context.Context, name string) ([]string, error) {
 	resp, err := c.client.DrainNode(ctx, &sdspb.DrainNodeRequest{Name: name})
@@ -344,7 +343,7 @@ func (c *SDSClient) CreateResourceWithPool(ctx context.Context, name string, por
 
 // CreateResourceWithPoolAndType creates a DRBD resource with specified pool and storage type
 func (c *SDSClient) CreateResourceWithPoolAndType(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool string, storageType string, drbdOptions map[string]string) error {
-	req := &sdspb.CreateResourceRequest{
+	return c.CreateResourceRequest(ctx, &sdspb.CreateResourceRequest{
 		Name:        name,
 		Port:        port,
 		Nodes:       nodes,
@@ -353,8 +352,13 @@ func (c *SDSClient) CreateResourceWithPoolAndType(ctx context.Context, name stri
 		Pool:        pool,
 		StorageType: storageType,
 		DrbdOptions: drbdOptions,
-	}
+	})
+}
 
+// CreateResourceRequest creates a resource from the full API request. It is the
+// metadata-aware entry point used by CSI and MCP while legacy wrappers remain
+// source-compatible.
+func (c *SDSClient) CreateResourceRequest(ctx context.Context, req *sdspb.CreateResourceRequest) error {
 	resp, err := c.client.CreateResource(ctx, req)
 	if err != nil {
 		return err
@@ -515,6 +519,54 @@ func (c *SDSClient) ListResources(ctx context.Context) ([]*sdspb.ResourceInfo, e
 	}
 
 	return resp.Resources, nil
+}
+
+// CreateResourceProfile creates or updates a resource profile.
+func (c *SDSClient) CreateResourceProfile(ctx context.Context, profile *sdspb.ResourceProfile) (*sdspb.ResourceProfile, error) {
+	resp, err := c.client.CreateResourceProfile(ctx, &sdspb.CreateResourceProfileRequest{Profile: profile})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Profile, nil
+}
+
+// GetResourceProfile gets a resource profile by name.
+func (c *SDSClient) GetResourceProfile(ctx context.Context, name string) (*sdspb.ResourceProfile, error) {
+	resp, err := c.client.GetResourceProfile(ctx, &sdspb.GetResourceProfileRequest{Name: name})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Profile, nil
+}
+
+// ListResourceProfiles lists resource profiles.
+func (c *SDSClient) ListResourceProfiles(ctx context.Context) ([]*sdspb.ResourceProfile, error) {
+	resp, err := c.client.ListResourceProfiles(ctx, &sdspb.ListResourceProfilesRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Profiles, nil
+}
+
+// DeleteResourceProfile deletes a profile without affecting existing resources.
+func (c *SDSClient) DeleteResourceProfile(ctx context.Context, name string) error {
+	resp, err := c.client.DeleteResourceProfile(ctx, &sdspb.DeleteResourceProfileRequest{Name: name})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
 }
 
 // SetPrimary sets a node as Primary for a resource
@@ -942,7 +994,6 @@ func (c *SDSClient) ListHa(ctx context.Context) ([]*sdspb.HaConfigInfo, error) {
 
 	return resp.Configs, nil
 }
-
 
 // GetHaStatus retrieves drbd-reactor promoter status for one or all HA
 // resources by querying the primary node via the controller's SSH dispatch.

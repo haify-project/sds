@@ -838,8 +838,16 @@ func TestResourceManagerCreateResourcePersistsInitialVolume(t *testing.T) {
 	defer db.Close()
 	ctrl.db = db
 
-	err = ctrl.resources.CreateResource(context.Background(), "res1", 7001, []string{"node1", "node2"}, "", 10, "data-pool", "lvm", nil)
+	err = ctrl.resources.CreateResourceWithVolumesMetadata(context.Background(), "res1", 7001, []string{"node1", "node2"}, "", "lvm", nil,
+		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}}, nil, ResourceMetadata{
+			Profile: "production",
+			Labels:  map[string]string{"app": "postgres"},
+		})
 	require.NoError(t, err)
+	resource, err := ctrl.db.GetResource(context.Background(), "res1")
+	require.NoError(t, err)
+	assert.Equal(t, "production", resource.Profile)
+	assert.Equal(t, map[string]string{"app": "postgres"}, resource.Labels)
 
 	volumes, err := ctrl.db.ListVolumes(context.Background(), "res1")
 	require.NoError(t, err)

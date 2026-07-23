@@ -42,6 +42,20 @@ export interface Resource {
   // over the DRBD network (e.g. a CSI Pod scheduled onto a non-replica node).
   disklessClients?: string[];
   quorumRisk?: boolean;
+  labels?: Record<string, string>;
+  profile?: string;
+}
+
+export interface ResourceProfile {
+  name: string;
+  protocol: string;
+  storageType: string;
+  pool: string;
+  replicas: number;
+  replicasOnDifferent: string[];
+  replicasOnSame: string[];
+  drbdOptions: Record<string, string>;
+  labels: Record<string, string>;
 }
 
 export interface GFSRetention {
@@ -193,6 +207,10 @@ export interface PoolsResponse extends ApiResponse {
 
 export interface ResourcesResponse extends ApiResponse {
   resources: Resource[];
+}
+
+export interface ResourceProfilesResponse extends ApiResponse {
+  profiles: ResourceProfile[];
 }
 
 export interface GatewaysResponse extends ApiResponse {
@@ -369,6 +387,8 @@ class ApiClient {
     volumes?: { sizeGb: number; pool?: string }[];
     // DRBD options as "section/key" -> value (e.g. "net/max-buffers" -> "8000").
     drbdOptions?: Record<string, string>;
+    labels?: Record<string, string>;
+    profile?: string;
   }) =>
     this.request<ApiResponse>('/resources', {
       method: 'POST',
@@ -385,6 +405,27 @@ class ApiClient {
     this.request<ApiResponse>(
       `/resources/${encodeURIComponent(name)}/options`,
       { method: 'POST', body: JSON.stringify({ options }) }
+    );
+
+  // ==================== Resource profiles ====================
+  getResourceProfiles = () =>
+    this.request<ResourceProfilesResponse>('/resource-profiles');
+
+  getResourceProfile = (name: string) =>
+    this.request<ApiResponse & { profile: ResourceProfile }>(
+      `/resource-profiles/${encodeURIComponent(name)}`,
+    );
+
+  createResourceProfile = (profile: ResourceProfile) =>
+    this.request<ApiResponse & { profile: ResourceProfile }>('/resource-profiles', {
+      method: 'POST',
+      body: JSON.stringify({ profile }),
+    });
+
+  deleteResourceProfile = (name: string) =>
+    this.request<ApiResponse>(
+      `/resource-profiles/${encodeURIComponent(name)}`,
+      { method: 'DELETE' },
     );
 
   // ==================== Snapshot schedules ====================

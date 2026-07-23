@@ -27,19 +27,37 @@ type nodeStateOut struct {
 }
 
 type resourceOut struct {
-	Name          string         `json:"name"`
-	Port          uint32         `json:"port"`
-	Protocol      string         `json:"protocol,omitempty"`
-	Nodes         []string       `json:"nodes"`
-	Role          string         `json:"role,omitempty"`
-	Volumes       []volumeOut    `json:"volumes,omitempty"`
-	NodeStates    []nodeStateOut `json:"node_states,omitempty"`
-	DisklessNodes []string       `json:"diskless_nodes,omitempty"`
-	QuorumRisk    bool           `json:"quorum_risk,omitempty"`
+	Name          string            `json:"name"`
+	Port          uint32            `json:"port"`
+	Protocol      string            `json:"protocol,omitempty"`
+	Nodes         []string          `json:"nodes"`
+	Role          string            `json:"role,omitempty"`
+	Volumes       []volumeOut       `json:"volumes,omitempty"`
+	NodeStates    []nodeStateOut    `json:"node_states,omitempty"`
+	DisklessNodes []string          `json:"diskless_nodes,omitempty"`
+	QuorumRisk    bool              `json:"quorum_risk,omitempty"`
+	Profile       string            `json:"profile,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty"`
 }
 
 type resourceListOut struct {
 	Resources []resourceOut `json:"resources"`
+}
+
+type resourceProfileOut struct {
+	Name                string            `json:"name"`
+	Protocol            string            `json:"protocol,omitempty"`
+	StorageType         string            `json:"storage_type,omitempty"`
+	Pool                string            `json:"pool,omitempty"`
+	Replicas            uint32            `json:"replicas,omitempty"`
+	ReplicasOnDifferent []string          `json:"replicas_on_different,omitempty"`
+	ReplicasOnSame      []string          `json:"replicas_on_same,omitempty"`
+	DrbdOptions         map[string]string `json:"drbd_options,omitempty"`
+	Labels              map[string]string `json:"labels,omitempty"`
+}
+
+type resourceProfileListOut struct {
+	Profiles []resourceProfileOut `json:"profiles"`
 }
 
 func volumesOut(vols []*sdspb.VolumeInfo) []volumeOut {
@@ -76,6 +94,22 @@ type resourceNameIn struct {
 	Name string `json:"name" jsonschema:"DRBD resource name"`
 }
 
+type resourceProfileIn struct {
+	Name                string            `json:"name" jsonschema:"resource profile name"`
+	Protocol            string            `json:"protocol,omitempty" jsonschema:"default DRBD protocol A, B, or C"`
+	StorageType         string            `json:"storage_type,omitempty" jsonschema:"default storage type: lvm, lvm-thin, or zfs"`
+	Pool                string            `json:"pool,omitempty" jsonschema:"default storage pool"`
+	Replicas            uint32            `json:"replicas,omitempty" jsonschema:"default replica count"`
+	ReplicasOnDifferent []string          `json:"replicas_on_different,omitempty" jsonschema:"node-label keys used to spread replicas"`
+	ReplicasOnSame      []string          `json:"replicas_on_same,omitempty" jsonschema:"node-label keys replicas must share"`
+	DrbdOptions         map[string]string `json:"drbd_options,omitempty" jsonschema:"default DRBD options"`
+	Labels              map[string]string `json:"labels,omitempty" jsonschema:"default resource labels"`
+}
+
+type resourceProfileNameIn struct {
+	Name string `json:"name" jsonschema:"resource profile name"`
+}
+
 type volumeSpecIn struct {
 	SizeGB uint32 `json:"size_gb" jsonschema:"volume size in GiB"`
 	Pool   string `json:"pool,omitempty" jsonschema:"backing storage pool for this volume; auto-selected when empty"`
@@ -91,6 +125,8 @@ type resourceCreateIn struct {
 	StorageType string            `json:"storage_type,omitempty" jsonschema:"backing storage type: lvm (default), lvm-thin, or zfs (applies to all volumes)"`
 	Protocol    string            `json:"protocol,omitempty" jsonschema:"DRBD protocol A, B, or C (default C)"`
 	DrbdOptions map[string]string `json:"drbd_options,omitempty" jsonschema:"extra DRBD options, e.g. {\"options/on-no-quorum\":\"suspend-io\"}"`
+	Profile     string            `json:"profile,omitempty" jsonschema:"optional resource profile whose defaults are applied at creation"`
+	Labels      map[string]string `json:"labels,omitempty" jsonschema:"resource metadata labels"`
 }
 
 type resourceSetRoleIn struct {
@@ -163,6 +199,58 @@ type unmountIn struct {
 
 // registerResourceTools adds DRBD resource and volume tools.
 func (s *Server) registerResourceTools(srv *mcp.Server) {
+	profileClient, profilesSupported := s.client.(interface {
+		CreateResourceProfile(context.Context, *sdspb.ResourceProfile) (*sdspb.ResourceProfile, error)
+		GetResourceProfile(context.Context, string) (*sdspb.ResourceProfile, error)
+		ListResourceProfiles(context.Context) ([]*sdspb.ResourceProfile, error)
+		DeleteResourceProfile(context.Context, string) error
+	})
+	if profilesSupported {
+		addRead(s, srv, readOnlyTool("sds_resource_profile_list", "List resource profiles",
+			"List reusable resource creation profiles."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, resourceProfileListOut, error) {
+				profiles, err := profileClient.ListResourceProfiles(ctx)
+				if err != nil {
+					return nil, resourceProfileListOut{}, err
+				}
+				out := resourceProfileListOut{Profiles: make([]resourceProfileOut, 0, len(profiles))}
+				for _, profile := range profiles {
+					out.Profiles = append(out.Profiles, profileOut(profile))
+				}
+				return nil, out, nil
+			})
+		addRead(s, srv, readOnlyTool("sds_resource_profile_get", "Get resource profile",
+			"Get one reusable resource creation profile."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in resourceProfileNameIn) (*mcp.CallToolResult, resourceProfileOut, error) {
+				profile, err := profileClient.GetResourceProfile(ctx, in.Name)
+				if err != nil {
+					return nil, resourceProfileOut{}, err
+				}
+				return nil, profileOut(profile), nil
+			})
+		addWrite(s, srv, writeTool("sds_resource_profile_create", "Create resource profile",
+			"Create or replace a reusable resource creation profile. Existing resources are not changed."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in resourceProfileIn) (*mcp.CallToolResult, resourceProfileOut, error) {
+				profile, err := profileClient.CreateResourceProfile(ctx, &sdspb.ResourceProfile{
+					Name: in.Name, Protocol: in.Protocol, StorageType: in.StorageType, Pool: in.Pool,
+					Replicas: in.Replicas, ReplicasOnDifferent: in.ReplicasOnDifferent,
+					ReplicasOnSame: in.ReplicasOnSame, DrbdOptions: in.DrbdOptions, Labels: in.Labels,
+				})
+				if err != nil {
+					return nil, resourceProfileOut{}, err
+				}
+				return nil, profileOut(profile), nil
+			})
+		addWrite(s, srv, destructiveTool("sds_resource_profile_delete", "Delete resource profile",
+			"Delete a resource profile. Existing resources retain their resolved configuration and metadata."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in resourceProfileNameIn) (*mcp.CallToolResult, opResult, error) {
+				if err := profileClient.DeleteResourceProfile(ctx, in.Name); err != nil {
+					return nil, opResult{}, err
+				}
+				return nil, ok(fmt.Sprintf("resource profile %s deleted", in.Name)), nil
+			})
+	}
+
 	addRead(s, srv, readOnlyTool("sds_resource_list", "List resources",
 		"List all DRBD resources with their nodes, volumes, and replication state."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, resourceListOut, error) {
@@ -182,6 +270,8 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 					NodeStates:    nodeStatesOut(r.NodeStates),
 					DisklessNodes: r.DisklessNodes,
 					QuorumRisk:    r.QuorumRisk,
+					Profile:       r.Profile,
+					Labels:        r.Labels,
 				})
 			}
 			return nil, out, nil
@@ -220,6 +310,26 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			protocol := in.Protocol
 			if protocol == "" {
 				protocol = "C"
+			}
+			requestClient, metadataAware := s.client.(interface {
+				CreateResourceRequest(context.Context, *sdspb.CreateResourceRequest) error
+			})
+			if in.Profile != "" || len(in.Labels) > 0 {
+				if !metadataAware {
+					return nil, opResult{}, fmt.Errorf("controller client does not support resource profiles or labels")
+				}
+				volumes := make([]*sdspb.VolumeSpec, 0, len(in.Volumes))
+				for _, v := range in.Volumes {
+					volumes = append(volumes, &sdspb.VolumeSpec{SizeGb: v.SizeGB, Pool: v.Pool})
+				}
+				if err := requestClient.CreateResourceRequest(ctx, &sdspb.CreateResourceRequest{
+					Name: in.Name, Port: in.Port, Nodes: in.Nodes, Pool: in.Pool, SizeGb: in.SizeGB,
+					Volumes: volumes, StorageType: storageType, Protocol: protocol,
+					DrbdOptions: in.DrbdOptions, Profile: in.Profile, Labels: in.Labels,
+				}); err != nil {
+					return nil, opResult{}, err
+				}
+				return nil, ok(fmt.Sprintf("resource %s created with profile %s", in.Name, in.Profile)), nil
 			}
 			if len(in.Volumes) > 0 {
 				volumes := make([]*sdspb.VolumeSpec, 0, len(in.Volumes))
@@ -375,4 +485,16 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			}
 			return nil, ok(fmt.Sprintf("%s volume %d unmounted on %s", in.Resource, in.VolumeID, in.Node)), nil
 		})
+}
+
+func profileOut(profile *sdspb.ResourceProfile) resourceProfileOut {
+	if profile == nil {
+		return resourceProfileOut{}
+	}
+	return resourceProfileOut{
+		Name: profile.Name, Protocol: profile.Protocol, StorageType: profile.StorageType,
+		Pool: profile.Pool, Replicas: profile.Replicas,
+		ReplicasOnDifferent: profile.ReplicasOnDifferent, ReplicasOnSame: profile.ReplicasOnSame,
+		DrbdOptions: profile.DrbdOptions, Labels: profile.Labels,
+	}
 }
