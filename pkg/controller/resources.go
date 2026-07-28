@@ -1129,10 +1129,17 @@ func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nod
 }
 
 // selectTiebreaker picks a registered node, not already part of the resource,
-// to serve as a diskless quorum tiebreaker. Online nodes are preferred;
-// selection is deterministic (lowest node name) so repeated creations are
+// to serve as a diskless quorum tiebreaker. Selection prefers, in order:
+// online storage nodes, online compute-only nodes, then offline nodes; within
+// each tier it is deterministic (lowest node name) so repeated creations are
 // stable. Returns "" when no spare node is available — the caller then keeps
 // the resource as a bare 2-node configuration.
+//
+// The storage-node preference matters in a mixed cluster: a hypervisor
+// registered only to attach volumes as a diskless client (e.g. a Proxmox node)
+// has no storage pool of its own. Dragging such a compute-only node into every
+// 2-replica resource's quorum mesh is wrong — it should stay a pure client — so
+// a real storage node is chosen for the tiebreaker whenever one is free.
 func (rm *ResourceManager) selectTiebreaker(ctx context.Context, nodes []string) string {
 	inUse := make(map[string]bool, len(nodes))
 	for _, n := range nodes {
@@ -1145,27 +1152,67 @@ func (rm *ResourceManager) selectTiebreaker(ctx context.Context, nodes []string)
 		return ""
 	}
 
-	var online, offline []string
+	hasPool := rm.storageNodeSet(ctx)
+
+	// Four tiers, most-preferred first. Within a tier, lowest name wins.
+	var onlineStorage, onlineCompute, offlineStorage, offlineCompute []string
 	for _, n := range all {
 		if n == nil || inUse[n.Name] {
 			continue
 		}
-		if n.State == NodeStateOnline {
-			online = append(online, n.Name)
-		} else {
-			offline = append(offline, n.Name)
+		storage := hasPool[n.Name]
+		switch {
+		case n.State == NodeStateOnline && storage:
+			onlineStorage = append(onlineStorage, n.Name)
+		case n.State == NodeStateOnline:
+			onlineCompute = append(onlineCompute, n.Name)
+		case storage:
+			offlineStorage = append(offlineStorage, n.Name)
+		default:
+			offlineCompute = append(offlineCompute, n.Name)
 		}
 	}
 
-	candidates := online
-	if len(candidates) == 0 {
-		candidates = offline
+	for _, tier := range [][]string{onlineStorage, onlineCompute, offlineStorage, offlineCompute} {
+		if len(tier) > 0 {
+			sort.Strings(tier)
+			return tier[0]
+		}
 	}
-	if len(candidates) == 0 {
-		return ""
+	return ""
+}
+
+// storageNodeSet returns the set of node names that host at least one storage
+// pool, i.e. real storage nodes as opposed to compute-only clients. It uses the
+// StorageManager's authoritative pool view (live discovery with a persisted
+// fallback), because pools are not always mirrored into the resource DB — a
+// direct db.ListPools can come back empty even when nodes clearly have pools.
+// Pools record their node as either a name or an address, so both forms are
+// mapped back to the node name. An empty set (no storage manager, or no pools
+// anywhere) makes selectTiebreaker fall back to name order across all
+// candidates — the pre-existing behavior.
+func (rm *ResourceManager) storageNodeSet(ctx context.Context) map[string]bool {
+	set := make(map[string]bool)
+	if rm.controller.storage == nil {
+		return set
 	}
-	sort.Strings(candidates)
-	return candidates[0]
+	pools, err := rm.controller.storage.ListPools(ctx)
+	if err != nil {
+		rm.controller.logger.Warn("Failed to list pools for tiebreaker selection", zap.Error(err))
+		return set
+	}
+	for _, p := range pools {
+		if p == nil || strings.TrimSpace(p.Node) == "" {
+			continue
+		}
+		// p.Node may be a name or an address; record the canonical node name.
+		if name := rm.controller.nodes.GetNodeNameByAddress(p.Node); name != "" {
+			set[name] = true
+		} else {
+			set[p.Node] = true
+		}
+	}
+	return set
 }
 
 // resolveToIP resolves a hostname to an IP address. If the input is already

@@ -285,6 +285,21 @@ func (nm *NodeManager) GetNodeAddressByName(name string) string {
 	return ""
 }
 
+// GetNodeNameByAddress resolves an address (or name/hostname) to the node's
+// canonical name. Returns "" when no registered node matches. It is the inverse
+// of GetNodeAddressByName and tolerates being handed a name already.
+func (nm *NodeManager) GetNodeNameByAddress(address string) string {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+
+	for addr, node := range nm.nodes {
+		if addr == address || node.Name == address || node.Hostname == address {
+			return node.Name
+		}
+	}
+	return ""
+}
+
 // GetNode gets node information
 func (nm *NodeManager) GetNode(ctx context.Context, address string) (*NodeInfo, error) {
 	nm.mu.RLock()

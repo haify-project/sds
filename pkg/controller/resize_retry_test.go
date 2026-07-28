@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -209,6 +208,6 @@ func TestFirstFailureOutput(t *testing.T) {
 	assert.Equal(t, "no output", firstFailureOutput(res),
 		"no failures means nothing to quote")
 
-	res.Hosts["b"] = &deployment.HostResult{Host: "b", Success: false, Output: fmt.Sprintf("  boom  \n")}
+	res.Hosts["b"] = &deployment.HostResult{Host: "b", Success: false, Output: "  boom  \n"}
 	assert.Equal(t, "boom", firstFailureOutput(res))
 }

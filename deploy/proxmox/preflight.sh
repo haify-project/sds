@@ -56,7 +56,18 @@ else
     bad "DRBD kernel module cannot be loaded — install drbd-dkms (LINBIT) for kernel $(uname -r)"
 fi
 
-# 3. The controller has to be reachable over REST from this node.
+# 3. sudo. The sds-controller reaches this node over SSH and runs every
+#    privileged operation (drbdadm, lvcreate, writing /etc/drbd.d) through
+#    `sudo`. A minimal Proxmox/Debian install may not ship sudo, in which case
+#    those commands fail silently mid-operation (config never lands, DRBD never
+#    comes up) with no obvious cause — so check for it explicitly.
+if command -v sudo >/dev/null 2>&1; then
+    ok "sudo present"
+else
+    bad "sudo not found — install it (apt-get install sudo); the controller runs node commands via sudo"
+fi
+
+# 4. The controller has to be reachable over REST from this node.
 if curl -sf -m 10 -o /dev/null "http://${HOST}:${PORT}/v1/resources"; then
     ok "sds-controller REST reachable at ${HOST}:${PORT}"
 elif curl -s -m 10 -o /dev/null -w '%{http_code}' "http://${HOST}:${PORT}/v1/resources" | grep -q '^401\|^403'; then
@@ -65,7 +76,7 @@ else
     bad "sds-controller REST not reachable at ${HOST}:${PORT}"
 fi
 
-# 4. This node must be registered with SDS under its PVE node name, because the
+# 5. This node must be registered with SDS under its PVE node name, because the
 #    plugin promotes/attaches by node name. A mismatch is the subtlest failure
 #    mode here, so it is checked explicitly.
 NODENAME=$(hostname)
@@ -80,7 +91,7 @@ else
     warn "could not list sds nodes (auth?); verify '${NODENAME}' is registered manually"
 fi
 
-# 5. Perl dependencies. Both ship with PVE, so this should never fail — but if
+# 6. Perl dependencies. Both ship with PVE, so this should never fail — but if
 #    it does, the plugin would fail to load with a bare "Can't locate".
 for mod in HTTP::Tiny JSON::PP; do
     if perl -M"$mod" -e1 2>/dev/null; then

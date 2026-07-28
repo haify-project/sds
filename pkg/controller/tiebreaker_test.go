@@ -181,6 +181,38 @@ func TestSelectTiebreakerPrefersOnline(t *testing.T) {
 	assert.Equal(t, "node4", tb)
 }
 
+// A compute-only node (no storage pool — e.g. a Proxmox hypervisor registered
+// only to attach volumes as a diskless client) must NOT be chosen as a quorum
+// tiebreaker when a real storage node is free, even though it sorts first by
+// name. Regression for the real-hardware bug where "hp" (a PVE host) got pulled
+// into every 2-replica resource's quorum mesh instead of the spare orange node.
+func TestSelectTiebreakerPrefersStorageNodes(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	ctrl.db = openTestDB(t)
+	registerNodes(ctrl, map[string]string{
+		"orange1": "10.0.0.1",
+		"orange2": "10.0.0.2",
+		"orange3": "10.0.0.3",
+		"hp":      "10.0.0.9", // compute-only: no pool, and "hp" < "orange2"
+	})
+	// Pools live only on the orange nodes. One recorded by name, one by address,
+	// to prove storageNodeSet normalizes both forms.
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0-o1", Type: "vg", Node: "orange1"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0-o2", Type: "vg", Node: "10.0.0.2"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0-o3", Type: "vg", Node: "orange3"}))
+
+	// Replicas on orange1+orange3 → candidates are orange2 (storage) and hp
+	// (compute). hp sorts first, but the storage node must win.
+	tb := ctrl.resources.selectTiebreaker(context.Background(), []string{"orange1", "orange3"})
+	assert.Equal(t, "orange2", tb, "a spare storage node beats a compute-only node")
+
+	// When every storage node is a replica, fall back to the compute node —
+	// a diskless tiebreaker on it still beats a bare 2-node resource.
+	tb = ctrl.resources.selectTiebreaker(context.Background(), []string{"orange1", "orange2", "orange3"})
+	assert.Equal(t, "hp", tb, "fall back to a compute node when no storage node is free")
+}
+
 func TestCreateResourceAutoAddsTiebreaker(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
