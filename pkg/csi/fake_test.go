@@ -9,12 +9,16 @@ import (
 
 // fakeBackend is an in-memory SDSBackend for unit tests.
 type fakeBackend struct {
-	resources map[string]*sdspb.ResourceInfo
-	nodes     []*sdspb.NodeInfo
-	pools     []*sdspb.PoolInfo // one entry per node hosting a pool
-	primary   map[string]string // resource -> node
-	createErr error
-	profiles  map[string]*sdspb.ResourceProfile
+	resources    map[string]*sdspb.ResourceInfo
+	nodes        []*sdspb.NodeInfo
+	pools        []*sdspb.PoolInfo // one entry per node hosting a pool
+	primary      map[string]string // resource -> node
+	createErr    error
+	profiles     map[string]*sdspb.ResourceProfile
+	listNodesErr error
+	listPoolsErr error
+	profileErr   error
+	requestCalls []*sdspb.CreateResourceRequest
 
 	// promoteErr, when set, makes PromoteForNode fail (e.g. simulating a
 	// controller that refused to force-promote because the node lacks quorum).
@@ -52,10 +56,14 @@ func newFakeBackend(nodeNames ...string) *fakeBackend {
 }
 
 func (f *fakeBackend) CreateResourceRequest(ctx context.Context, req *sdspb.CreateResourceRequest) error {
+	f.requestCalls = append(f.requestCalls, req)
 	return f.CreateResourceWithPoolAndType(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool, req.StorageType, req.DrbdOptions)
 }
 
 func (f *fakeBackend) GetResourceProfile(_ context.Context, name string) (*sdspb.ResourceProfile, error) {
+	if f.profileErr != nil {
+		return nil, f.profileErr
+	}
 	profile, ok := f.profiles[name]
 	if !ok {
 		return nil, fmt.Errorf("profile %q not found", name)
@@ -108,9 +116,19 @@ func (f *fakeBackend) DeleteResource(_ context.Context, name string) error {
 	return nil
 }
 
-func (f *fakeBackend) ListNodes(context.Context) ([]*sdspb.NodeInfo, error) { return f.nodes, nil }
+func (f *fakeBackend) ListNodes(context.Context) ([]*sdspb.NodeInfo, error) {
+	if f.listNodesErr != nil {
+		return nil, f.listNodesErr
+	}
+	return f.nodes, nil
+}
 
-func (f *fakeBackend) ListPools(context.Context) ([]*sdspb.PoolInfo, error) { return f.pools, nil }
+func (f *fakeBackend) ListPools(context.Context) ([]*sdspb.PoolInfo, error) {
+	if f.listPoolsErr != nil {
+		return nil, f.listPoolsErr
+	}
+	return f.pools, nil
+}
 
 func (f *fakeBackend) RegisterNode(_ context.Context, name, address string) (*sdspb.NodeInfo, error) {
 	n := &sdspb.NodeInfo{Name: name, Address: address, State: "online"}
