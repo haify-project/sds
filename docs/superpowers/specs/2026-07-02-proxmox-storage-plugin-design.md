@@ -205,11 +205,30 @@ LVs and the DRBD device) → `volume_snapshot` (LVM snapshot confirmed present o
 the storage node) → `volume_snapshot_delete` → `path` → `free_image` (cascade
 teardown, LVs gone). `status` reports capacity correctly (the tightest node).
 
-**NOT verified — needs DRBD 9 on the PVE host:** `activate_volume`,
-`deactivate_volume`, booting a guest, live migration, HA restart. `dell` carries
-the in-tree DRBD **8.4.11**; version 9 must be built/installed there first.
-`dell` is also a standalone PVE node, so migration between two PVE hosts needs a
-second node joined to a PVE cluster regardless.
+**Verified 2026-07-29 on a two-node PVE 9.2.5 cluster** (`pve-a`/`pve-b`, nested
+on `dell` with `--cpu host`; DRBD 9.3.3 built from LINBIT tarball against kernel
+7.0.14-6-pve; both registered as sds nodes and attaching diskless):
+
+- `activate_volume` / `deactivate_volume` — a compute-only PVE node attaches
+  diskless and promotes, `/dev/drbdN` appears, qemu boots the guest from it.
+- **Live migration, both directions: 34 ms and 22 ms downtime**, ~217 MiB of VM
+  state each way and **zero disk copying** — the whole point of `shared 1`.
+- **The dual-primary window closes correctly.** After each migration
+  `drbdsetup show` on BOTH nodes reports no `allow-two-primaries` — the
+  plugin's finally-guard works under a real hand-off, not just in unit tests.
+- **Failover:** hard-killing `pve-a` (`qm stop` on dell) and the guest starts on
+  the surviving `pve-b` off the same SDS volume, with orange1/2/3 all UpToDate.
+
+**APIVER compatibility settled across three releases** (this was the open
+worry): PVE 8.4 = APIVER 11/AGE 2 → window [9,11]; 9.1 = 13/4 → [9,13];
+9.2.5 = 15/6 → [9,15]. The plugin's declared **11 is inside all three**, costing
+only an "older storage API" advisory. Every signature change since 11 (`$hints`
+in APIVER 13, `$snapname` in 15) **appends** parameters, which Perl ignores.
+
+**Not an SDS issue, but worth documenting:** a 2-node PVE cluster loses quorum
+when one node dies, so HA parks in `wait_for_quorum` rather than taking over —
+correct anti-split-brain behavior. Add a QDevice arbiter (`corosync-qnetd` on a
+third box, `pvecm qdevice setup <ip> -f`) to get a third vote.
 
 Three real defects were found by running this, all fixed with regression tests:
 
