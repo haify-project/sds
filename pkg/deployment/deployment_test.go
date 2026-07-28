@@ -486,3 +486,29 @@ func TestStringsContains(t *testing.T) {
 	assert.True(t, strings.Contains(s, "role:Primary"))
 	assert.False(t, strings.Contains(s, "role:Secondary"))
 }
+
+// Almost everything worth reporting from lvcreate/drbdadm/zfs is written to
+// STDERR ("already exists", "insufficient free space", "Refusing to be
+// resized"). dispatch keeps the streams apart, and Output used to carry only
+// stdout — so a failed command surfaced upward with an EMPTY message, leaving
+// operators (and the controller's own retry logic) nothing to match on.
+func TestCombineStreams(t *testing.T) {
+	tests := []struct {
+		name           string
+		stdout, stderr string
+		want           string
+	}{
+		{"both empty", "", "", ""},
+		{"stdout only", "created\n", "", "created"},
+		{"stderr only — the case that used to be lost", "", "  already exists\n", "  already exists"},
+		{"both, stdout first", "Rounding up size\n", "already exists\n", "Rounding up size\nalready exists"},
+		{"trailing newlines trimmed", "a\n\n", "b\n\n", "a\nb"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := combineStreams(tt.stdout, tt.stderr); got != tt.want {
+				t.Errorf("combineStreams(%q, %q) = %q, want %q", tt.stdout, tt.stderr, got, tt.want)
+			}
+		})
+	}
+}

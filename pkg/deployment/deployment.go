@@ -448,9 +448,15 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 			zap.String("error_msg", fmt.Sprintf("%v", r.ErrorMsg)),
 			zap.Int("output_len", len(r.Output)),
 			zap.String("output", string(r.Output)))
+		// dispatch keeps stdout and stderr apart, but almost everything worth
+		// reporting from lvcreate/drbdadm/zfs goes to STDERR — "already exists",
+		// "insufficient free space", "Refusing to be resized". Exposing only
+		// stdout is why failures used to surface as an empty message ("creation
+		// failed on 10.0.0.1: "), leaving callers nothing to act on. Callers
+		// treat Output as "what the command said", so give them both streams.
 		execResult.Hosts[host] = &HostResult{
 			Host:    host,
-			Output:  string(r.Output),
+			Output:  combineStreams(string(r.Output), string(r.Error)),
 			Success: r.Success,
 			Error:   fmt.Errorf("%s", string(r.Error)),
 		}
@@ -884,6 +890,22 @@ type HostResult struct {
 }
 
 // AllSuccess returns true if all operations succeeded
+// combineStreams joins a command's stdout and stderr into the single Output
+// field callers inspect, keeping stdout first and skipping empty streams so the
+// common (successful, silent) case stays an empty string rather than a newline.
+func combineStreams(stdout, stderr string) string {
+	out := strings.TrimRight(stdout, "\n")
+	errOut := strings.TrimRight(stderr, "\n")
+	switch {
+	case out == "":
+		return errOut
+	case errOut == "":
+		return out
+	default:
+		return out + "\n" + errOut
+	}
+}
+
 func (r *ExecResult) AllSuccess() bool {
 	for _, h := range r.Hosts {
 		if !h.Success {
