@@ -1,0 +1,67 @@
+# Example /etc/pve/storage.cfg entries for the SDS plugin.
+#
+# storage.cfg lives on the PVE cluster filesystem, so edit it on ONE node and
+# every node picks it up. The plugin module itself must be installed on each
+# node (install.sh), because pvedaemon loads it in-process.
+
+# --- Minimal: let sds place replicas by free space -------------------------
+sds: sds0
+        controller 192.168.1.10
+        sdspool vg0
+        replicas 2
+        content images,rootdir
+        shared 1
+
+# `shared 1` is what makes this worth doing: PVE then treats the disk as
+# available cluster-wide, so a live migration copies only RAM (the data is
+# already replicated) and ha-manager may restart a guest on any node.
+
+# --- Pinned replica placement ----------------------------------------------
+# Use sdsnodes when replicas must live on specific storage nodes. It takes
+# precedence over `replicas`.
+#
+#sds: sds-fast
+#        controller 192.168.1.10:3375
+#        sdspool nvme0
+#        sdsnodes storage1,storage2,storage3
+#        storagetype lvm-thin
+#        content images
+#        shared 1
+
+# --- Two PVE clusters sharing one sds cluster ------------------------------
+# Resource names are derived as <resourceprefix>-<vmid>-<disk>. VM ids are only
+# unique within a PVE cluster, so give each cluster its own prefix or their
+# resource names will collide.
+#
+#sds: sds-clusterb
+#        controller 192.168.1.10
+#        sdspool vg0
+#        resourceprefix clusterb
+#        replicas 2
+#        content images
+#        shared 1
+
+# --- With sds auth/RBAC enabled --------------------------------------------
+# storage.cfg is world-readable inside the cluster filesystem, so scope the
+# token to what the plugin needs rather than reusing an admin token.
+#
+#sds: sds0
+#        controller 192.168.1.10
+#        sdspool vg0
+#        replicas 2
+#        apitoken eyJhbGciOi...
+#        content images
+#        shared 1
+
+# Options
+#   controller      required. host or host:port; the REST port defaults to 3375.
+#   sdspool         sds pool (volume group) new volumes are carved from.
+#   sdsnodes        comma-separated nodes to place replicas on (pins placement).
+#   replicas        replica count for auto-placement; ignored with sdsnodes.
+#   storagetype     lvm | lvm-thin | zfs. Defaults to the controller's default.
+#   resourceprefix  prefix for generated resource names (default "pve").
+#   apitoken        bearer token when sds [auth]/[rbac] is enabled.
+#
+# Note: sds allocates in whole gigabytes, so a disk size is rounded UP to the
+# next GB. Volumes are always raw — snapshots come from sds (LVM/ZFS), not from
+# an image format, so qcow2 is neither supported nor needed here.
