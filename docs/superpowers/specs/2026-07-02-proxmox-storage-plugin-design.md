@@ -1,36 +1,44 @@
 # SDS Proxmox VE Storage Plugin — Design
 
-Date: 2026-07-02
-Status: **Parked** — design captured, implementation deferred (not scheduled).
+Date: 2026-07-02 (revised 2026-07-28)
+Status: **Active — implementing.** Phase 1 of the "receive VMware refugees" track;
+phase 2 (whole-VM migration off VMware) builds on this and is scoped separately
+at the end of this document.
 
-## Status & conclusions (2026-07-02)
-
-Design brainstormed and captured; **implementation intentionally deferred**.
-Key conclusions to carry forward when this is picked up:
+## Status & conclusions
 
 - **The plugin interface MUST be Perl.** Proxmox VE's `pvedaemon` loads storage
   plugins in-process as Perl modules subclassing `PVE::Storage::Plugin`; there is
   no official non-Perl plugin API. Every PVE storage plugin (LINSTOR, Ceph/rbd,
   ZFS-over-iSCSI, …) is a Perl module. Perl cannot be avoided entirely.
-- **Perl can be kept thin**, and how thin depends on the integration choice
-  (this is the one open decision — pick at implementation time):
-  - **(a) Thin Perl → sds REST directly** (a few hundred lines; Perl does the
-    HTTP+JSON itself). Only the `.pm` is installed per PVE node. *Tentatively
-    preferred during brainstorming.*
-  - **(b) Minimal Perl → shell out to `sds-cli`** (~100-line shim; nearly all
-    logic stays in Go/sds-cli). Requires `sds-cli` on every PVE node **and** a
-    stable `sds-cli --json` output. Choose this if minimizing Perl maintenance
-    is the priority.
+- **DECIDED (2026-07-28): thin Perl → sds REST directly.** The plugin speaks
+  HTTP+JSON to the controller's grpc-gateway on `:3375` using `HTTP::Tiny` +
+  `JSON::PP` — both ship with PVE, so a PVE node gains **zero new dependencies**
+  and installing the plugin means copying one `.pm`. The rejected alternative
+  (a ~100-line Perl shim shelling out to `sds-cli`) would require installing and
+  version-matching a Go binary on every PVE node *and* promoting `sds-cli`'s
+  human-readable output into a stable `--json` contract. LINSTOR's official
+  plugin takes the same REST route.
 - **HA needs no new sds work** — it reuses the quorum-guarded `PromoteForNode`
   built for the CSI hard-failover feature.
 - **The only new sds capability required is `SetDualPrimary`** (allow-two-primaries
   toggle) for the live-migration window.
-- **Live VM test needs sds running on the PVE hosts** (hyperconverged). The
-  current `orange1/2/3` are guest VMs on a PVE host, not PVE hosts, so a full
-  VM live-migration/HA test needs a separate PVE+sds environment (open item).
-
-The rest of this document is the full design as brainstormed, retained for when
-implementation resumes.
+- **REVISED (2026-07-28): activate-on-any-node now works in v1.** The original
+  design listed "migration to a non-replica node" as a later enhancement. Since
+  then `AttachDisklessClient` shipped, so `activate_volume` on a node that holds
+  no replica attaches it as a diskless client first. A PVE host that only runs
+  VMs (contributes no disks) is therefore a first-class citizen — which is
+  exactly how the validation host below is set up.
+- **RESOLVED (2026-07-28): validation environment exists.** `dell`
+  (192.168.123.98) runs real Proxmox VE 8.4.11 (kernel 6.11.11-2-pve, Debian 12)
+  and the `orange1/2/3` sds cluster is reachable. Validation is
+  PVE-host-plus-external-storage-cluster (NOT hyperconverged): `dell` joins sds
+  as a diskless node. This settles the open environment question from 2026-07-02.
+- **NEW PREREQUISITE (2026-07-28): the PVE node needs DRBD locally.** To back a
+  VM disk the PVE host must itself see `/dev/drbdN`, so it needs the DRBD 9
+  kernel module (LINBIT `drbd-dkms` on Debian 12) + `drbd-utils`, and must be
+  registered as an sds node. Unchecked, this surfaces as an inscrutable failure
+  on the first `alloc_image`, so it gets an explicit preflight script.
 
 ## Goal
 
@@ -75,9 +83,13 @@ We reuse the sds backend wholesale; the plugin adds no storage logic of its own.
 4. **New sds capability: `SetDualPrimary`** — a REST/gRPC endpoint toggling
    `allow-two-primaries` on a resource, used only for the live-migration window.
 5. **Install artifacts** — the `.pm`, an install script (copy to
-   `/usr/share/perl5/PVE/Storage/Custom/`, restart `pvedaemon`/`pveproxy`), and
-   a `storage.cfg` example. Debian packaging (`libpve-storage-sdsplugin`) is a
+   `/usr/share/perl5/PVE/Storage/Custom/`, restart `pvedaemon`/`pveproxy`), a
+   **preflight check** (DRBD 9 module loadable, `drbdadm` present, this node
+   registered with the controller, controller REST reachable), and a
+   `storage.cfg` example. Debian packaging (`libpve-storage-sdsplugin`) is a
    later nicety, not required for the first version.
+
+All of the above live in `deploy/proxmox/`, mirroring `deploy/k8s/` for CSI.
 
 ## Volume model
 
@@ -96,7 +108,7 @@ We reuse the sds backend wholesale; the plugin adds no storage logic of its own.
 | --- | --- | --- |
 | `alloc_image` | `CreateResource` (N replicas) | size, pool, replicas from `storage.cfg`; returns volid |
 | `free_image` | `DeleteResource` | reuses the cascade teardown (gateway/HA/device/LV) |
-| `activate_volume` | `PromoteForNode` (quorum-guarded) | makes `/dev/drbdN` available on this node |
+| `activate_volume` | `AttachDisklessClient` (only if this node holds no replica) then `PromoteForNode` (quorum-guarded) | makes `/dev/drbdN` available on this node, replica or not |
 | `deactivate_volume` | `SetSecondary` | after use / migration source |
 | `path` | (local) | returns `/dev/drbdN` for the volume |
 | `volume_resize` | `ResizeVolume` | online grow |
@@ -128,10 +140,22 @@ We reuse the sds backend wholesale; the plugin adds no storage logic of its own.
 ## New sds work
 
 Only one addition: **`SetDualPrimary(resource, enable)`** — proto + server +
-REST route + client. Implementation: `drbdadm net-options --allow-two-primaries={yes|no} <res>`
-(or an equivalent adjust) on the resource's nodes, with `AllSuccess()` checks.
-Everything else (create/delete/resize/promote/secondary/snapshot) already exists
-in the REST surface.
+REST route + client + MCP tool. Implementation:
+`drbdadm net-options --allow-two-primaries={yes|no} <res>` on the resource's
+nodes, with `AllSuccess()` checks. Everything else (create/delete/resize/
+promote/secondary/snapshot/diskless-attach) already exists in the REST surface.
+
+Two safety constraints on this endpoint:
+
+- **WAN resources are refused outright.** WAN mode is protocol A (async); two
+  Primaries over an async link is a data-corruption class of mistake, not a
+  performance trade-off. The guard is in the endpoint, not in the caller, so no
+  future caller can reintroduce it.
+- **`enable=false` is idempotent.** It runs in the plugin's `finally`-style
+  guard and must succeed against a resource that is already single-primary, was
+  never dual-primaried, or is mid-teardown — otherwise a failed migration leaves
+  the resource stranded in dual-primary, which is the exact state this whole
+  mechanism exists to bound.
 
 ## Error handling
 
@@ -149,21 +173,22 @@ in the REST surface.
   (assert the right sds endpoint + payload; assert dual-primary is always closed).
 - **Go unit tests**: the new `SetDualPrimary` endpoint (enable/disable issues the
   correct `net-options` command to all nodes; `AllSuccess` failure surfaces).
-- **Live test (environment caveat)**: a full VM live-migration + HA test needs a
-  Proxmox environment where **sds runs on the PVE nodes** (hyperconverged:
-  PVE host == storage node). The current `orange1/2/3` are guest VMs *on* a PVE
-  host, not PVE hosts themselves, so the full VM test requires either installing
-  PVE on the orange nodes (heavy) or a separate PVE+sds cluster. Until then we
-  validate the plugin's sds-facing calls against the real controller
-  (create/activate/resize/snapshot/dual-primary/delete round-trips) without an
-  actual guest VM. **This environment decision is deferred to the user.**
+- **Live test (environment settled 2026-07-28)**: run against `dell` (real PVE
+  8.4.11) with the `orange1/2/3` sds cluster as external storage. `dell` joins
+  sds as a node that contributes no disks and attaches volumes diskless, which
+  the `AttachDisklessClient` path now makes a supported topology rather than a
+  workaround. Round trip to validate: register node → preflight → install plugin
+  → `alloc_image` → boot a guest off the volume → live-migrate → `volume_resize`
+  → snapshot/rollback → `free_image`.
+- A single-PVE-node setup validates everything except live migration between two
+  PVE hosts (which needs a second PVE node joined to the same PVE cluster). If
+  only `dell` is available, live migration is the one item that stays unverified
+  — and it will be reported as unverified rather than assumed.
 
 ## Known nuances (noted, not blocking)
 
-- **Migration to a non-replica node**: the target must have the volume (diskful
-  or diskless). First version creates the resource on the configured node set so
-  any of them can activate; on-demand diskless-attach on an arbitrary target
-  (LINSTOR-style auto-place) is a later enhancement.
+- ~~**Migration to a non-replica node**~~ — **resolved 2026-07-28**: handled in
+  v1 via on-demand `AttachDisklessClient` in `activate_volume` (see above).
 - **Resource-name sanitization** must be reversible/collision-free across the
   cluster (VM ids are unique, so `pve-<vmid>-<n>` is safe).
 - **Auth**: when sds enables `[auth]`/`[rbac]`, the plugin sends a bearer token
@@ -171,10 +196,32 @@ in the REST surface.
 
 ## Rough build order
 
-1. sds `SetDualPrimary` endpoint (proto/server/REST/client + Go tests).
+1. sds `SetDualPrimary` endpoint (proto/server/REST/client/MCP + Go tests).
 2. Perl REST client + `SDSPlugin.pm` core (alloc/free/activate/deactivate/
    path/resize/list/status) + Perl unit tests.
 3. Snapshots in the plugin.
 4. Live-migration dual-primary bracketing + HA activate path.
-5. Install script + `storage.cfg` example + docs.
+5. Install script + preflight + `storage.cfg` example + docs.
 6. Live validation per the environment decision above.
+
+## Phase 2 — whole-VM migration off VMware (scoped, not yet designed)
+
+The driving goal behind this plugin is letting VMware users leave: guests end up
+running on Proxmox with their disks on sds.
+
+**Deliberately not self-built:** PVE 8.2+ ships an ESXi import wizard that pulls
+a VM from vSphere and `qemu-img convert`s its disks into a chosen target storage.
+Once `sds` is a valid target storage, that path exists for free. Rebuilding a
+vSphere client inside sds would duplicate work Proxmox already did.
+
+**Therefore phase 2 starts with measurement, not code:** run the PVE import
+wizard against a real vSphere VM with `sds` as the target and record what
+actually breaks or annoys. Expected gaps, to be confirmed rather than assumed:
+
+- choosing replica count / pool at import time (the wizard only knows "a storage")
+- progress + resumability for large disks (an import that dies at 400 GB should
+  not restart from zero)
+- post-import sanity: is the resource sized/named/replicated as intended
+
+Designing these before the measurement would be guesswork. This section gets
+rewritten with real findings once phase 1 is validated.
