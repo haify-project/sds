@@ -3,10 +3,15 @@
 # Sync the freshly built web UI into ui/dist for go:embed. The directory is
 # gitignored and intentionally kept around after builds so plain `go build`
 # and `go test ./...` keep working without re-running npm.
+#
+# .gitkeep is restored after the copy: it is the one tracked file in ui/dist,
+# and it is what lets go:embed resolve on a fresh clone. Dropping it would both
+# break that and show up as a spurious deletion in `git status` after a build.
 ui-sync: web-ui-build
 	@echo "Preparing UI for embedding..."
 	@rm -rf ui/dist
 	@cp -r web-ui/dist ui/
+	@touch ui/dist/.gitkeep
 
 # Ensure ui/dist exists so go:embed (ui/ui.go) compiles. Prefers the real
 # web-ui build output; falls back to a clearly marked placeholder so Go
@@ -22,6 +27,7 @@ ui-ensure:
 			echo '<!DOCTYPE html><html><body>SDS UI placeholder - run make build to embed the real UI</body></html>' > ui/dist/index.html; \
 		fi \
 	fi
+	@touch ui/dist/.gitkeep
 
 # Build binaries
 build: ui-sync

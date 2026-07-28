@@ -12,11 +12,29 @@ import (
 	"go.uber.org/zap"
 )
 
+// uiNotBuiltPage is served when the binary was built without a real web UI.
+// ui/dist is a build artifact: on a fresh checkout it holds only the tracked
+// .gitkeep, so a plain `go build` produces a controller with no UI assets. Say
+// so plainly instead of answering every request with a bare 404.
+const uiNotBuiltPage = `<!DOCTYPE html>
+<html><head><title>SDS — UI not built</title></head>
+<body style="font-family:sans-serif;max-width:40em;margin:4em auto">
+<h1>Web UI not built</h1>
+<p>This <code>sds-controller</code> was compiled without the web UI assets.
+The API and <code>sds-cli</code> are unaffected.</p>
+<p>To include the UI, build with <code>make build</code> (which compiles
+<code>web-ui/</code> and embeds it), then restart the controller.</p>
+</body></html>
+`
+
 // UIServer serves the embedded web UI
 type UIServer struct {
 	logger *zap.Logger
 	server *http.Server
 	distFS fs.FS
+	// built is false when the embedded dist holds no index.html, i.e. the
+	// binary carries the placeholder rather than a real UI.
+	built bool
 }
 
 // NewUIServer creates a new UI server
@@ -27,9 +45,16 @@ func NewUIServer(logger *zap.Logger, listenAddress string, port int) (*UIServer,
 		return nil, fmt.Errorf("failed to get UI filesystem: %w", err)
 	}
 
+	built := true
+	if _, err := fs.Stat(distFS, "index.html"); err != nil {
+		built = false
+		logger.Warn("Web UI assets are not embedded in this binary; serving a placeholder page. Build with `make build` to include the UI.")
+	}
+
 	uiServer := &UIServer{
 		logger: logger,
 		distFS: distFS,
+		built:  built,
 	}
 
 	uiAddr := fmt.Sprintf("%s:%d", listenAddress, port)
@@ -54,6 +79,14 @@ func (s *UIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// No caching
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+	// Nothing to serve: explain why rather than 404 on every path.
+	if !s.built {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(uiNotBuiltPage))
+		return
+	}
 
 	// Remove leading slash from path for filesystem lookup
 	reqPath := strings.TrimPrefix(r.URL.Path, "/")

@@ -35,8 +35,11 @@ bin/
 
 node_modules/
 
-# Embedded UI build artifact (copied from web-ui/dist during make build)
-ui/dist/
+# Embedded UI build artifact (copied from web-ui/dist during make build).
+# .gitkeep stays tracked so ui/dist always exists: go:embed (ui/ui.go) needs at
+# least one file there or `go build ./...` fails on a fresh clone.
+ui/dist/*
+!ui/dist/.gitkeep
 
 # Stray local build outputs
 /cli

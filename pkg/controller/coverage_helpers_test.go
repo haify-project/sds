@@ -206,22 +206,35 @@ func TestUIServerServeHTTP(t *testing.T) {
 	ui, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0)
 	require.NoError(t, err)
 
+	// ui/dist is a build artifact, so this test has to hold both on a machine
+	// where `make build` has embedded the real UI and on a fresh checkout where
+	// it has not. The serving behaviour differs; CORS and OPTIONS do not.
+	// (TestUIServerServesPlaceholderWhenNotBuilt covers the placeholder body.)
+	wantCode := http.StatusOK
+	if !ui.built {
+		wantCode = http.StatusServiceUnavailable
+	}
+
 	// Root -> index.html.
 	rr := httptest.NewRecorder()
 	ui.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
-	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, wantCode, rr.Code)
 	assert.Contains(t, rr.Header().Get("Content-Type"), "text/html")
 	assert.Equal(t, "*", rr.Header().Get("Access-Control-Allow-Origin"))
 
 	// Unknown path -> SPA fallback to index.html.
 	rr = httptest.NewRecorder()
 	ui.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/some/spa/route", nil))
-	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, wantCode, rr.Code)
 
-	// OPTIONS -> 204 no content.
+	// OPTIONS -> 204 no content, regardless of whether the UI was built.
 	rr = httptest.NewRecorder()
 	ui.ServeHTTP(rr, httptest.NewRequest(http.MethodOptions, "/", nil))
 	assert.Equal(t, http.StatusNoContent, rr.Code)
+
+	if !ui.built {
+		return // no assets to exercise content-type branches against
+	}
 
 	// Serve real static assets to exercise the content-type branches.
 	for ext, wantCT := range map[string]string{
