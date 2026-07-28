@@ -30,6 +30,17 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if len(req.GetVolumeCapabilities()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "volume capabilities are required")
 	}
+	// Raw block volumes (volumeMode: Block) are not implemented: the node
+	// plugin only ever formats and mounts a filesystem. Rejecting the request
+	// here, where the message reaches the PVC's events, is far kinder than
+	// letting provisioning succeed and having kubelet fail much later with an
+	// opaque "MapVolume.MapBlockVolume ... bind mount ... exit status 32".
+	for _, c := range req.GetVolumeCapabilities() {
+		if c.GetBlock() != nil {
+			return nil, status.Error(codes.InvalidArgument,
+				"volumeMode: Block is not supported by this driver; use volumeMode: Filesystem")
+		}
+	}
 	name := sanitizeResourceName(req.GetName())
 	sizeGB := bytesToGiB(req.GetCapacityRange().GetRequiredBytes())
 
@@ -190,6 +201,11 @@ func (s *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 	for _, c := range req.GetVolumeCapabilities() {
 		if c.GetAccessMode().GetMode() != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
 			return &csi.ValidateVolumeCapabilitiesResponse{}, nil // unsupported -> empty Confirmed
+		}
+		// Same reason as in CreateVolume: the node plugin only mounts
+		// filesystems, so a block capability must not be confirmed.
+		if c.GetBlock() != nil {
+			return &csi.ValidateVolumeCapabilitiesResponse{}, nil
 		}
 	}
 	return &csi.ValidateVolumeCapabilitiesResponse{Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{

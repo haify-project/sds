@@ -2,6 +2,7 @@ package csi
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -124,4 +125,147 @@ func TestCreateVolumeUsesProfilePlacementDefaults(t *testing.T) {
 	require.Len(t, b.createCalls, 1)
 	assert.Len(t, b.createCalls[0].nodes, 3)
 	assert.Equal(t, "vg0", b.createCalls[0].pool)
+}
+
+func TestCreateVolumeProfileOverridesAndMetadata(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.profiles["production"] = &sdspb.ResourceProfile{
+		Name: "production", Pool: "archive", StorageType: "zfs", Replicas: 3,
+	}
+	req := validCreateReq("pvc-profile-overrides")
+	req.Parameters = map[string]string{
+		"resourceProfile": "production",
+		"pool":            "vg0",
+		"replicas":        "2",
+		"storageType":     "lvm",
+		"resourceLabels":  "env=prod,tier=critical",
+	}
+
+	resp, err := newTestController(b).CreateVolume(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, b.requestCalls, 1)
+	created := b.requestCalls[0]
+	assert.Equal(t, "production", created.Profile)
+	assert.Equal(t, "vg0", created.Pool)
+	assert.Equal(t, "lvm", created.StorageType)
+	assert.Len(t, created.Nodes, 2)
+	assert.Equal(t, "prod", created.Labels["env"])
+	assert.Equal(t, "critical", created.Labels["tier"])
+	assert.Equal(t, "csi", created.Labels["sds.csi/managed-by"])
+	assert.Equal(t, "pvc_profile_overrides", resp.Volume.VolumeId)
+}
+
+func TestCreateVolumeProfileErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		prepare  func(*fakeBackend)
+		params   map[string]string
+		code     codes.Code
+		contains string
+	}{
+		{
+			name: "missing profile", params: map[string]string{"resourceProfile": "missing"},
+			code: codes.InvalidArgument, contains: `resource profile "missing"`,
+		},
+		{
+			name: "profile lookup failure", params: map[string]string{"resourceProfile": "production"},
+			prepare: func(b *fakeBackend) { b.profileErr = errors.New("database unavailable") },
+			code:    codes.InvalidArgument, contains: "database unavailable",
+		},
+		{
+			name: "profile lacks pool", params: map[string]string{"resourceProfile": "empty"},
+			prepare: func(b *fakeBackend) { b.profiles["empty"] = &sdspb.ResourceProfile{Name: "empty"} },
+			code:    codes.InvalidArgument, contains: "does not define a pool",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newFakeBackend("n1", "n2")
+			if tt.prepare != nil {
+				tt.prepare(b)
+			}
+			req := validCreateReq("pvc-error")
+			req.Parameters = tt.params
+			_, err := newTestController(b).CreateVolume(context.Background(), req)
+			require.Error(t, err)
+			assert.Equal(t, tt.code, status.Code(err))
+			assert.Contains(t, err.Error(), tt.contains)
+			assert.Empty(t, b.createCalls)
+		})
+	}
+}
+
+func TestCreateVolumeBackendErrors(t *testing.T) {
+	t.Run("list nodes", func(t *testing.T) {
+		b := newFakeBackend("n1", "n2")
+		b.listNodesErr = errors.New("nodes offline")
+		_, err := newTestController(b).CreateVolume(context.Background(), validCreateReq("pvc-nodes"))
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assert.Contains(t, err.Error(), "nodes offline")
+	})
+
+	t.Run("list pools", func(t *testing.T) {
+		b := newFakeBackend("n1", "n2")
+		b.listPoolsErr = errors.New("pool scan failed")
+		_, err := newTestController(b).CreateVolume(context.Background(), validCreateReq("pvc-pools"))
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assert.Contains(t, err.Error(), "pool scan failed")
+	})
+
+	t.Run("create resource", func(t *testing.T) {
+		b := newFakeBackend("n1", "n2")
+		b.createErr = errors.New("allocation failed")
+		_, err := newTestController(b).CreateVolume(context.Background(), validCreateReq("pvc-create"))
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assert.Contains(t, err.Error(), "allocation failed")
+	})
+}
+
+type legacyBackend struct{ SDSBackend }
+
+func TestCreateVolumeRejectsProfileOnLegacyBackend(t *testing.T) {
+	b := newFakeBackend("n1", "n2")
+	legacy := &legacyBackend{SDSBackend: b}
+	req := validCreateReq("pvc-legacy")
+	req.Parameters = map[string]string{"resourceProfile": "production"}
+
+	_, err := newTestController(legacy).CreateVolume(context.Background(), req)
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Contains(t, err.Error(), "does not support resource profiles")
+}
+
+// Raw block volumes are not implemented — the node plugin only formats and
+// mounts filesystems. Provisioning used to succeed for volumeMode: Block and
+// then fail deep in kubelet with "MapVolume.MapBlockVolume ... bind mount ...
+// exit status 32", which says nothing about the actual cause. Reject it up
+// front so the reason lands in the PVC's events instead.
+func TestCreateVolumeRejectsBlockMode(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	req := validCreateReq("blockvol")
+	req.VolumeCapabilities[0].AccessType = &csi.VolumeCapability_Block{
+		Block: &csi.VolumeCapability_BlockVolume{},
+	}
+
+	_, err := newTestController(b).CreateVolume(context.Background(), req)
+	require.Error(t, err, "block mode must be rejected")
+
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Contains(t, err.Error(), "Filesystem", "the error should name the supported mode")
+	assert.Empty(t, b.createCalls, "nothing should be provisioned for a rejected request")
+}
+
+// Filesystem mode — the mode the driver actually implements — must keep working.
+func TestCreateVolumeAcceptsFilesystemMode(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	req := validCreateReq("fsvol")
+	req.VolumeCapabilities[0].AccessType = &csi.VolumeCapability_Mount{
+		Mount: &csi.VolumeCapability_MountVolume{},
+	}
+
+	_, err := newTestController(b).CreateVolume(context.Background(), req)
+	require.NoError(t, err, "filesystem mode must still be accepted")
+	assert.Len(t, b.createCalls, 1)
 }
