@@ -16,7 +16,7 @@ use lib "$FindBin::Bin/lib";
 use PVEStub;
 use MockClient;
 use JSON::PP qw(encode_json);
-use Test::More tests => 18;
+use Test::More tests => 21;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P  = 'PVE::Storage::Custom::SDSPlugin';
@@ -129,27 +129,56 @@ like($@, qr/unreachable at orange1:3375/, 'an unreachable controller says so, wi
 my $info = {
     resource => {
         name    => 'pve-100-0',
-        nodes   => [ 'n1' ],
+        nodes   => [ 'n1', 'n2' ],
         volumes => [ { volumeId => 0, device => '/dev/drbd1000', pool => 'vg0',
                        backingVolume => 'pve-100-0_00' } ],
     },
 };
+my $status = { status => { nodeStates => { n1 => { role => 'Secondary' }, n2 => { role => 'Primary' } } } };
 
-my $mock = MockClient->new(routes => { 'GET /v1/resources/pve-100-0' => $info });
+my $mock = MockClient->new(routes => {
+    'GET /v1/resources/pve-100-0'        => $info,
+    'GET /v1/resources/pve-100-0/status' => $status,
+});
 $PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
 
 my $scfg = { controller => 'c' };
+$PVEStub::NODENAME = 'pve1';    # a compute-only hypervisor: holds no replica
+
 $P->volume_snapshot($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
-ok($mock->called('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots'),
-    'snapshot targets the backing <pool>/<lv> path');
+my ($snap_call) = $mock->calls_for('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots');
+ok($snap_call, 'snapshot targets the backing <pool>/<lv> path');
+
+# Found on real hardware: the snapshot is taken on the BACKING LV, which only
+# exists on nodes holding a replica. Sending our own node name made every
+# snapshot fail with "failed to create snapshot on <hypervisor>".
+is($snap_call->{payload}{node}, 'n2',
+    'snapshot runs on the Primary replica, never on the diskless hypervisor');
+
+# With no status available, fall back to a diskful node — still never ourselves.
+my $mock2 = MockClient->new(routes => {
+    'GET /v1/resources/pve-100-0'        => $info,
+    'GET /v1/resources/pve-100-0/status' => sub { die "status unavailable\n" },
+});
+$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock2 };
+$P->volume_snapshot($scfg, 'sds0', 'vm-100-disk-0', 'fallback');
+my ($fallback) = $mock2->calls_for('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots');
+is($fallback->{payload}{node}, 'n1', 'falls back to the first diskful node');
+
+$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
 
 $P->volume_snapshot_rollback($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
 ok($mock->called('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots/before-upgrade/restore'),
     'rollback restores the named snapshot');
 
+# Found on real hardware: DELETE carries no body, so grpc-gateway can only take
+# the node from a QUERY parameter. Without it the controller failed with
+# "failed to delete snapshot: []" — it had no host to run on.
 $P->volume_snapshot_delete($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
-ok($mock->called('DELETE', '/v1/volumes/vg0/pve-100-0_00/snapshots/before-upgrade'),
-    'snapshot delete');
+ok($mock->called('DELETE', '/v1/volumes/vg0/pve-100-0_00/snapshots/before-upgrade?node=n2'),
+    'snapshot delete passes the node as a query parameter');
+
+is(PVE::Storage::Custom::SDSPlugin::_uri_escape('node a/b'), 'node%20a%2Fb', 'query values are escaped');
 
 # A resource with no recorded backing volume must fail loudly rather than
 # building a nonsense path like "/v1/volumes///snapshots".

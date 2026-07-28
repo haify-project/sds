@@ -10,7 +10,7 @@ use lib "$FindBin::Bin/lib";
 
 use PVEStub;
 use MockClient;
-use Test::More tests => 22;
+use Test::More tests => 23;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -87,6 +87,17 @@ is(scalar(@$for_vm), 2, 'filtered by vmid');
 with_mock(routes => { 'GET /v1/resources' => $resources });
 my $picked = $P->list_images('sds0', $base_scfg, undef, [ 'sds0:vm-101-disk-0' ]);
 is_deeply([ map { $_->{volid} } @$picked ], [ 'sds0:vm-101-disk-0' ], 'filtered by vollist');
+
+# protojson renders uint64 as a JSON STRING (a 64-bit int is not safe as a JSON
+# number), so sizes really arrive as "2", not 2. Verified against a live
+# controller. Treating that as 0 would report every disk as empty.
+with_mock(routes => {
+    'GET /v1/resources' => {
+        resources => [ { name => 'pve-100-0', volumes => [ { sizeGb => "20" } ] } ],
+    },
+});
+my $stringy = $P->list_images('sds0', $base_scfg);
+is($stringy->[0]{size}, 20 * 1073741824, 'string-typed sizes from protojson are handled');
 
 # --- status -----------------------------------------------------------------
 #

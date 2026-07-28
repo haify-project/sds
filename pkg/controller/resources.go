@@ -2902,6 +2902,54 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 }
 
 // ResizeVolume resizes a DRBD volume
+// hostsBelowLVSize returns the subset of hosts whose logical volume at lvPath is
+// SMALLER than wantGB (or whose size could not be read). It distinguishes
+// "lvresize refused because the volume is already this big" — harmless, and the
+// normal state when retrying a resize whose DRBD step failed — from a real
+// failure, without parsing LVM's (localised) error text.
+func (rm *ResourceManager) hostsBelowLVSize(ctx context.Context, hosts []string, lvPath string, wantGB uint64) ([]string, error) {
+	if len(hosts) == 0 {
+		return nil, nil
+	}
+
+	cmd := fmt.Sprintf("sudo lvs --noheadings --nosuffix --units b -o lv_size %s", lvPath)
+	res, err := rm.deployment.Exec(ctx, hosts, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	want := wantGB * 1024 * 1024 * 1024
+	var short []string
+	for host, hr := range res.Hosts {
+		if hr == nil || !hr.Success {
+			short = append(short, host)
+			continue
+		}
+		got, perr := strconv.ParseUint(strings.TrimSpace(hr.Output), 10, 64)
+		if perr != nil || got < want {
+			short = append(short, host)
+		}
+	}
+	sort.Strings(short)
+	return short, nil
+}
+
+// firstFailureOutput returns the output of one failed host, for error messages
+// that would otherwise carry only a list of addresses.
+func firstFailureOutput(res *deployment.ExecResult) string {
+	if res == nil {
+		return ""
+	}
+	for _, host := range res.FailedHosts() {
+		if hr := res.Hosts[host]; hr != nil {
+			if out := strings.TrimSpace(hr.Output); out != "" {
+				return out
+			}
+		}
+	}
+	return "no output"
+}
+
 func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, volumeID uint32, newSizeGB uint64) error {
 	rm.controller.logger.Info("Resizing volume",
 		zap.String("resource", resource),
@@ -2960,7 +3008,25 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 			return fmt.Errorf("failed to resize LVM backing volume: %w", err)
 		}
 		if !lvRes.AllSuccess() {
-			return fmt.Errorf("LVM backing volume resize failed on %v", lvRes.FailedHosts())
+			// lvresize EXITS NON-ZERO when the LV is already the requested size.
+			// That matters because this operation is not atomic: if the DRBD
+			// step below fails (e.g. the volume is still doing its initial sync,
+			// where DRBD refuses to resize), the LVs are already grown. Without
+			// this check every later retry would fail here forever and the
+			// volume could never be resized again.
+			short, verr := rm.hostsBelowLVSize(ctx, lvRes.FailedHosts(), target.DiskPath, newSizeGB)
+			if verr != nil {
+				return fmt.Errorf("LVM backing volume resize failed on %v (size could not be verified: %w)",
+					lvRes.FailedHosts(), verr)
+			}
+			if len(short) > 0 {
+				return fmt.Errorf("LVM backing volume resize failed on %v: %s",
+					short, firstFailureOutput(lvRes))
+			}
+			rm.controller.logger.Info("LVM backing volume was already at the requested size",
+				zap.String("resource", resource),
+				zap.Uint64("size_gb", newSizeGB),
+				zap.Strings("hosts", lvRes.FailedHosts()))
 		}
 	}
 
@@ -2969,7 +3035,13 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 		return fmt.Errorf("failed to resize DRBD volume: %w", err)
 	}
 	if !drbdRes.AllSuccess() {
-		return fmt.Errorf("DRBD volume resize failed on %v", drbdRes.FailedHosts())
+		// Include the command output: the usual cause is that the volume is not
+		// UpToDate everywhere yet (DRBD refuses to resize mid-resync), and the
+		// bare host list gives the operator no way to know that waiting fixes
+		// it. The backing LVs are already grown at this point, so a retry once
+		// the resync finishes completes the resize.
+		return fmt.Errorf("DRBD volume resize failed on %v: %s",
+			drbdRes.FailedHosts(), firstFailureOutput(drbdRes))
 	}
 
 	if rm.controller.db != nil {
@@ -4418,6 +4490,9 @@ func (rm *ResourceManager) DrainNode(ctx context.Context, nodeName string) ([]st
 			continue
 		}
 		ns, ok := info.NodeStates[addr]
+		if !ok {
+			ns, ok = info.NodeStates[nodeName]
+		}
 		if !ok || ns.Role != "Primary" {
 			continue // already Secondary or not connected
 		}

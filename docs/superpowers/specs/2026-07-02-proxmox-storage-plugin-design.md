@@ -194,6 +194,40 @@ Two safety constraints on this endpoint:
 - **Auth**: when sds enables `[auth]`/`[rbac]`, the plugin sends a bearer token
   from `storage.cfg`.
 
+## Validation status (2026-07-28)
+
+Run on `dell` (PVE 8.4.11, Debian 12) against the live `orange1/2/3` sds cluster,
+driving the plugin through PVE's own storage layer (`pvesm`, `PVE::Storage`).
+
+**Verified end to end:** `alloc_image` (creates a real 2-node auto-placed DRBD
+resource) → `list_images` → `volume_resize` (2→3 GB, confirmed on the backing
+LVs and the DRBD device) → `volume_snapshot` (LVM snapshot confirmed present on
+the storage node) → `volume_snapshot_delete` → `path` → `free_image` (cascade
+teardown, LVs gone). `status` reports capacity correctly (the tightest node).
+
+**NOT verified — needs DRBD 9 on the PVE host:** `activate_volume`,
+`deactivate_volume`, booting a guest, live migration, HA restart. `dell` carries
+the in-tree DRBD **8.4.11**; version 9 must be built/installed there first.
+`dell` is also a standalone PVE node, so migration between two PVE hosts needs a
+second node joined to a PVE cluster regardless.
+
+Three real defects were found by running this, all fixed with regression tests:
+
+1. **Snapshots targeted the hypervisor.** The plugin sent its own node name, but
+   the snapshot is taken on the backing LV, which exists only on nodes holding a
+   replica — and the PVE host holds none. Now it picks a diskful node, preferring
+   the Primary.
+2. **Snapshot delete never passed a node.** `DELETE` carries no body, so
+   grpc-gateway can only take the node from a query parameter; without it the
+   controller failed with `failed to delete snapshot: []`.
+3. **A failed resize wedged the volume permanently (controller-side).**
+   `ResizeVolume` grows the LVs and then resizes DRBD, and DRBD refuses to resize
+   during the initial resync — so a resize issued right after create left the LVs
+   grown. Because `lvresize` exits non-zero when the LV is already at the target
+   size, every later retry then failed at the LVM step forever. `ResizeVolume`
+   now verifies the actual LV size before calling that a failure, and surfaces
+   the DRBD error text so "wait for the resync" is discoverable.
+
 ## Rough build order
 
 1. sds `SetDualPrimary` endpoint (proto/server/REST/client/MCP + Go tests).

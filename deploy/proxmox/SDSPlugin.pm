@@ -198,6 +198,15 @@ sub gb_to_bytes {
 
 sub _nodename { return PVE::INotify::nodename(); }
 
+# Percent-escape a value for use in a query string. Node names are tame, but a
+# silently mangled parameter here would be hard to trace back.
+sub _uri_escape {
+    my ($value) = @_;
+    $value = '' if !defined $value;
+    $value =~ s/([^A-Za-z0-9\-\._~])/sprintf("%%%02X", ord($1))/ge;
+    return $value;
+}
+
 sub _get_resource {
     my ($class, $scfg, $resname) = @_;
     my $client = $class->_client($scfg);
@@ -212,17 +221,41 @@ sub _get_status {
     return $res->{status};
 }
 
-# The volume's "<pool>/<lv>" path, which is what the snapshot API keys on.
-sub _backing_volume_path {
+# The volume's "<pool>/<lv>" path and the storage node to operate on.
+#
+# Snapshots are taken on the BACKING logical volume, which only exists on nodes
+# holding a replica. The PVE host usually holds none (it attaches diskless), so
+# passing our own node name here fails with "failed to create snapshot on
+# <hypervisor>" — pick a diskful node instead, preferring the current Primary.
+sub _backing_volume_target {
     my ($class, $scfg, $resname) = @_;
+
     my $info = $class->_get_resource($scfg, $resname);
     my $vol  = ($info->{volumes} && @{ $info->{volumes} }) ? $info->{volumes}[0] : undef;
     die "resource '$resname' has no volumes\n" if !$vol;
+
     my $pool = $vol->{pool};
     my $lv   = $vol->{backingVolume} // $vol->{backing_volume};
     die "resource '$resname' has no backing volume recorded\n"
         if !defined($pool) || !defined($lv) || !length($pool) || !length($lv);
-    return "$pool/$lv";
+
+    my $replicas = $info->{nodes} // [];
+    die "resource '$resname' has no diskful nodes to snapshot on\n" if !@$replicas;
+
+    # Prefer the Primary: its data is the copy the guest is actually writing.
+    my $node   = $replicas->[0];
+    my $status = eval { $class->_get_status($scfg, $resname) };
+    if ($status) {
+        my $states = $status->{nodeStates} // $status->{node_states} // {};
+        for my $peer (@$replicas) {
+            if (lc($states->{$peer}{role} // '') eq 'primary') {
+                $node = $peer;
+                last;
+            }
+        }
+    }
+
+    return ("$pool/$lv", $node);
 }
 
 # True when this node already participates in the resource's DRBD mesh, either
@@ -596,11 +629,11 @@ sub volume_snapshot {
 
     my ($vtype, $name) = $class->parse_volname($volname);
     my $resname = sds_resource_name($scfg, $name);
-    my $volpath = $class->_backing_volume_path($scfg, $resname);
-    my $client  = $class->_client($scfg);
+    my ($volpath, $node) = $class->_backing_volume_target($scfg, $resname);
+    my $client = $class->_client($scfg);
 
     $client->request('POST', "/v1/volumes/$volpath/snapshots",
-        { volume => $volpath, snapshotName => $snap, node => _nodename() });
+        { volume => $volpath, snapshotName => $snap, node => $node });
 
     return 1;
 }
@@ -610,11 +643,11 @@ sub volume_snapshot_rollback {
 
     my ($vtype, $name) = $class->parse_volname($volname);
     my $resname = sds_resource_name($scfg, $name);
-    my $volpath = $class->_backing_volume_path($scfg, $resname);
-    my $client  = $class->_client($scfg);
+    my ($volpath, $node) = $class->_backing_volume_target($scfg, $resname);
+    my $client = $class->_client($scfg);
 
     $client->request('POST', "/v1/volumes/$volpath/snapshots/$snap/restore",
-        { volume => $volpath, snapshotName => $snap, node => _nodename() });
+        { volume => $volpath, snapshotName => $snap, node => $node });
 
     return 1;
 }
@@ -624,10 +657,13 @@ sub volume_snapshot_delete {
 
     my ($vtype, $name) = $class->parse_volname($volname);
     my $resname = sds_resource_name($scfg, $name);
-    my $volpath = $class->_backing_volume_path($scfg, $resname);
-    my $client  = $class->_client($scfg);
+    my ($volpath, $node) = $class->_backing_volume_target($scfg, $resname);
+    my $client = $class->_client($scfg);
 
-    $client->request('DELETE', "/v1/volumes/$volpath/snapshots/$snap");
+    # DELETE has no request body, so the node cannot travel in one: grpc-gateway
+    # binds any leftover field as a query parameter. Omitting it made the
+    # controller fail with "failed to delete snapshot: []" — an empty host list.
+    $client->request('DELETE', "/v1/volumes/$volpath/snapshots/$snap?node=" . _uri_escape($node));
 
     return 1;
 }

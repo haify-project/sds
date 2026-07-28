@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"go.uber.org/zap"
 	"github.com/liliang-cn/sds/pkg/alert"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -41,13 +41,14 @@ type Controller struct {
 	hostsMap   map[string]string // hostname -> address mapping
 	hostsLock  sync.RWMutex
 	server     *grpc.Server
+	restServer *http.Server
 	ctx        context.Context
 	cancel     context.CancelFunc
 	// Metrics
 	metrics       *metrics.Metrics
 	metricsServer *http.Server
 	// UI
-	uiServer *UIServer
+	uiServer     *UIServer
 	alertMonitor *alert.Monitor
 	// Managers
 	storage   *StorageManager
@@ -265,6 +266,15 @@ func (c *Controller) Stop() {
 		c.server.GracefulStop()
 	}
 
+	// Stop REST gateway server
+	if c.restServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := c.restServer.Shutdown(ctx); err != nil {
+			c.logger.Error("Failed to shutdown REST gateway server", zap.Error(err))
+		}
+	}
+
 	// Stop UI server
 	if c.uiServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -433,6 +443,7 @@ func (c *Controller) startGRPCServer() error {
 		ReadHeaderTimeout: 5 * time.Second,
 		TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
+	c.restServer = gatewayServer
 
 	go func() {
 		c.logger.Info("HTTP REST API gateway listening", zap.String("address", restAddr))

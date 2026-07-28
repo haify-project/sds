@@ -28,6 +28,10 @@ type fakeDeploymentClient struct {
 	lvCreateThinVolumeFunc              func(ctx context.Context, hosts []string, vgName, poolName, lvName, size string) (*deployment.ExecResult, error)
 	zfsCreatePoolFunc                   func(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...deployment.ZFSOption) (*deployment.ExecResult, error)
 	zfsDestroyPoolFunc                  func(ctx context.Context, hosts []string, poolName string) (*deployment.ExecResult, error)
+	zfsListPoolsFunc                    func(ctx context.Context, hosts []string) (*deployment.ExecResult, error)
+	zfsListSnapshotsFunc                func(ctx context.Context, hosts []string, dataset string) (*deployment.ExecResult, error)
+	lvListSnapshotsFunc                 func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
+	lvMergeSnapshotFunc                 func(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error)
 	distributeConfigFunc                func(ctx context.Context, hosts []string, content, remotePath string, opts ...deployment.ConfigOption) (*deployment.ConfigResult, error)
 	drbdCreateMDFunc                    func(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	drbdUpFunc                          func(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
@@ -219,10 +223,16 @@ func (f *fakeDeploymentClient) LVRemoveSnapshot(ctx context.Context, hosts []str
 }
 
 func (f *fakeDeploymentClient) LVListSnapshots(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error) {
+	if f.lvListSnapshotsFunc != nil {
+		return f.lvListSnapshotsFunc(ctx, hosts, vgName)
+	}
 	return successExecResult(hosts, ""), nil
 }
 
 func (f *fakeDeploymentClient) LVMergeSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error) {
+	if f.lvMergeSnapshotFunc != nil {
+		return f.lvMergeSnapshotFunc(ctx, hosts, vgName, snapshotName)
+	}
 	return successExecResult(hosts, ""), nil
 }
 
@@ -251,6 +261,9 @@ func (f *fakeDeploymentClient) ZFSDestroyPool(ctx context.Context, hosts []strin
 }
 
 func (f *fakeDeploymentClient) ZFSListPools(ctx context.Context, hosts []string) (*deployment.ExecResult, error) {
+	if f.zfsListPoolsFunc != nil {
+		return f.zfsListPoolsFunc(ctx, hosts)
+	}
 	return successExecResult(hosts, ""), nil
 }
 
@@ -279,6 +292,9 @@ func (f *fakeDeploymentClient) ZFSClone(ctx context.Context, hosts []string, sna
 }
 
 func (f *fakeDeploymentClient) ZFSListSnapshots(ctx context.Context, hosts []string, dataset string) (*deployment.ExecResult, error) {
+	if f.zfsListSnapshotsFunc != nil {
+		return f.zfsListSnapshotsFunc(ctx, hosts, dataset)
+	}
 	return successExecResult(hosts, ""), nil
 }
 
