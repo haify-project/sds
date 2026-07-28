@@ -795,6 +795,26 @@ func (s *Server) SetSecondary(ctx context.Context, req *sdspb.SetSecondaryReques
 	}, nil
 }
 
+// SetDualPrimary toggles allow-two-primaries for the Proxmox live-migration
+// window. See ResourceManager.SetDualPrimary for the safety rules (WAN refused,
+// disable idempotent + verified).
+func (s *Server) SetDualPrimary(ctx context.Context, req *sdspb.SetDualPrimaryRequest) (*sdspb.SetDualPrimaryResponse, error) {
+	if err := s.resources.SetDualPrimary(ctx, req.Resource, req.Enable); err != nil {
+		return &sdspb.SetDualPrimaryResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	msg := "Dual-primary disabled"
+	if req.Enable {
+		msg = "Dual-primary enabled for the live-migration window"
+	}
+	return &sdspb.SetDualPrimaryResponse{
+		Success: true,
+		Message: msg,
+	}, nil
+}
+
 func (s *Server) AttachDisklessClient(ctx context.Context, req *sdspb.AttachDisklessClientRequest) (*sdspb.AttachDisklessClientResponse, error) {
 	if err := s.resources.AttachDisklessClient(ctx, req.Resource, req.Node); err != nil {
 		return &sdspb.AttachDisklessClientResponse{Success: false, Message: err.Error()}, nil

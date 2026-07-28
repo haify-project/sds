@@ -34,6 +34,7 @@ type ControllerClient interface {
 	SetPrimary(ctx context.Context, resource, node string, force bool) error
 	PromoteForNode(ctx context.Context, resource, node string) error
 	SetSecondary(ctx context.Context, resource, node string) error
+	SetDualPrimary(ctx context.Context, resource string, enable bool) error
 	AddVolume(ctx context.Context, resource, volume, pool string, sizeGB uint32) error
 	UpdateResourceOptions(ctx context.Context, resource string, options map[string]string) error
 	RemoveVolume(ctx context.Context, resource string, volumeID uint32) error

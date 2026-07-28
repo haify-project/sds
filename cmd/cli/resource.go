@@ -45,6 +45,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourcePrimary())
 	cmd.AddCommand(resourceDRFailover())
 	cmd.AddCommand(resourceSecondary())
+	cmd.AddCommand(resourceDualPrimary())
 	cmd.AddCommand(resourceFs())
 	cmd.AddCommand(resourceStatus())
 	cmd.AddCommand(resourceMount())
@@ -946,6 +947,57 @@ func resourceSecondary() *cobra.Command {
 	}
 
 	return cmd
+}
+
+// resourceDualPrimary exposes the allow-two-primaries toggle used to bracket a
+// hypervisor live migration. It is primarily driven by the Proxmox storage
+// plugin; the CLI form exists for operators to inspect/repair a stranded window.
+func resourceDualPrimary() *cobra.Command {
+	return &cobra.Command{
+		Use:   "dual-primary <resource> on|off",
+		Short: "Open or close a dual-primary window (live migration only)",
+		Long: "Toggle DRBD's allow-two-primaries on a resource.\n\n" +
+			"This exists so a hypervisor can live-migrate a guest: source and target both\n" +
+			"hold the disk open during the hand-off. It is NOT a way to use one volume from\n" +
+			"two machines at once — an ordinary filesystem mounted twice will corrupt.\n\n" +
+			"WAN resources are refused (their replication is asynchronous). The toggle is\n" +
+			"runtime-only, so a reboot or `drbdadm adjust` restores single-primary anyway.\n" +
+			"`off` is idempotent and verifies that no node is left dual-primary.",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			var enable bool
+			switch args[1] {
+			case "on":
+				enable = true
+			case "off":
+				enable = false
+			default:
+				return fmt.Errorf("invalid state %q (use on or off)", args[1])
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.SetDualPrimary(ctx, resource, enable); err != nil {
+				return fmt.Errorf("failed to set dual-primary: %w", err)
+			}
+
+			if enable {
+				fmt.Printf("Dual-primary window OPEN on '%s'.\n", resource)
+				fmt.Printf("Close it as soon as the migration finishes: sds-cli resource dual-primary %s off\n", resource)
+			} else {
+				fmt.Printf("Dual-primary window closed on '%s'.\n", resource)
+			}
+			return nil
+		},
+	}
 }
 
 // resourceDiskless groups attach/detach of diskless data clients — nodes that

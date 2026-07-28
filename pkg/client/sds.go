@@ -745,6 +745,27 @@ func (c *SDSClient) SetSecondary(ctx context.Context, resource, node string) err
 	return nil
 }
 
+// SetDualPrimary toggles DRBD's allow-two-primaries for a resource, bracketing
+// a hypervisor live migration (both hosts hold the disk open during hand-off).
+//
+// Enabling is refused for WAN resources; disabling is idempotent and verified,
+// so it is safe to call unconditionally from a cleanup path.
+func (c *SDSClient) SetDualPrimary(ctx context.Context, resource string, enable bool) error {
+	resp, err := c.client.SetDualPrimary(ctx, &sdspb.SetDualPrimaryRequest{
+		Resource: resource,
+		Enable:   enable,
+	})
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+
+	return nil
+}
+
 // AttachDisklessClient adds a node to a resource as a diskless data client: it
 // carries no local replica but connects over DRBD and can be promoted Primary
 // to serve the volume over the network. Idempotent.

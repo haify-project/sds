@@ -137,6 +137,11 @@ type resourceSetRoleIn struct {
 	QuorumGuarded bool   `json:"quorum_guarded,omitempty" jsonschema:"safe hard-failover promote (primary only): the controller force-promotes only if the node holds DRBD quorum and refuses otherwise, preventing split-brain. Use for taking over after a hard node failure. Ignored when role is secondary."`
 }
 
+type resourceDualPrimaryIn struct {
+	Resource string `json:"resource" jsonschema:"DRBD resource name"`
+	Enable   bool   `json:"enable" jsonschema:"true opens the dual-primary window, false closes it"`
+}
+
 type resourceAdoptIn struct {
 	Resource string   `json:"resource" jsonschema:"DRBD resource name to adopt (must already exist on the nodes)"`
 	Nodes    []string `json:"nodes,omitempty" jsonschema:"nodes the resource lives on; auto-discovered from the .res when omitted"`
@@ -386,6 +391,26 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				return nil, opResult{}, fmt.Errorf("invalid role %q (use primary or secondary)", in.Role)
 			}
 			return nil, ok(fmt.Sprintf("resource %s is now %s on %s", in.Resource, in.Role, in.Node)), nil
+		})
+
+	addWrite(s, srv, writeTool("sds_resource_dual_primary", "Toggle dual-primary",
+		"Open or close a DRBD dual-primary (allow-two-primaries) window on a resource. "+
+			"This exists for hypervisor LIVE MIGRATION, where the source and target host both "+
+			"hold the disk open during hand-off — it is not a way to share a volume between two "+
+			"machines (the filesystem on it would corrupt). WAN resources are refused because "+
+			"their replication is asynchronous. Always close the window after the migration; "+
+			"closing is idempotent and verifies no node is left dual-primary."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceDualPrimaryIn) (*mcp.CallToolResult, opResult, error) {
+			if in.Resource == "" {
+				return nil, opResult{}, fmt.Errorf("resource is required")
+			}
+			if err := s.client.SetDualPrimary(ctx, in.Resource, in.Enable); err != nil {
+				return nil, opResult{}, err
+			}
+			if in.Enable {
+				return nil, ok(fmt.Sprintf("dual-primary window OPEN on %s — close it as soon as the migration finishes", in.Resource)), nil
+			}
+			return nil, ok(fmt.Sprintf("dual-primary window closed on %s", in.Resource)), nil
 		})
 
 	addWrite(s, srv, writeTool("sds_resource_adopt", "Adopt resource",

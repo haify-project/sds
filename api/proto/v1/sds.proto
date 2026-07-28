@@ -94,6 +94,9 @@ service SDSController {
   rpc SetSecondary(SetSecondaryRequest) returns (SetSecondaryResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/secondary"; body: "*"; };
   }
+  rpc SetDualPrimary(SetDualPrimaryRequest) returns (SetDualPrimaryResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/dual-primary"; body: "*"; };
+  }
   rpc AttachDisklessClient(AttachDisklessClientRequest) returns (AttachDisklessClientResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/diskless-clients"; body: "*"; };
   }
@@ -923,6 +926,31 @@ message SetSecondaryRequest {
 }
 
 message SetSecondaryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// SetDualPrimary toggles DRBD's allow-two-primaries for a resource. It exists
+// for the live-migration hand-off in the Proxmox VE storage plugin, where the
+// source and target hypervisor both hold the disk open for a moment.
+//
+// The toggle is applied at RUNTIME only (drbdadm net-options) and never written
+// into the .res file, so a reboot or `drbdadm adjust` restores single-primary
+// on its own.
+message SetDualPrimaryRequest {
+  string resource = 1;
+  // enable=true is strict: WAN (protocol A / async) resources are REFUSED,
+  // because two Primaries over an async link corrupts data, and a failure on
+  // any node fails the call.
+  //
+  // enable=false is idempotent: it is the caller's cleanup path, so an unknown
+  // resource or a node that rejects the command is tolerated — but the
+  // effective state is verified afterwards and an error is returned if any
+  // reachable node is still dual-primary.
+  bool enable = 2;
+}
+
+message SetDualPrimaryResponse {
   bool success = 1;
   string message = 2;
 }
