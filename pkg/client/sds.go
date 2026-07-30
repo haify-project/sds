@@ -181,9 +181,17 @@ func (c *SDSClient) DeletePool(ctx context.Context, pool, node string) error {
 
 // RegisterNode registers a new node
 func (c *SDSClient) RegisterNode(ctx context.Context, name, address string) (*sdspb.NodeInfo, error) {
+	return c.RegisterNodeWithReplicationAddress(ctx, name, address, "")
+}
+
+// RegisterNodeWithReplicationAddress registers a node whose DRBD traffic should
+// use a dedicated address (NIC/subnet) instead of the management address the
+// controller SSHes to. An empty replicationAddress means they are the same.
+func (c *SDSClient) RegisterNodeWithReplicationAddress(ctx context.Context, name, address, replicationAddress string) (*sdspb.NodeInfo, error) {
 	req := &sdspb.RegisterNodeRequest{
-		Name:    name,
-		Address: address,
+		Name:               name,
+		Address:            address,
+		ReplicationAddress: replicationAddress,
 	}
 
 	resp, err := c.client.RegisterNode(ctx, req)

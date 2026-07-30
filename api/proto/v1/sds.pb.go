@@ -2447,11 +2447,16 @@ func (x *RestoreLvmSnapshotResponse) GetMessage() string {
 
 // Node messages
 type RegisterNodeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Address       string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Address string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	Name    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// replication_address is the address DRBD uses for this node in generated
+	// .res files, letting replication traffic ride a dedicated NIC/subnet while
+	// the controller keeps reaching the node over `address` (SSH/management).
+	// Empty means "same as address", which is the historical behavior.
+	ReplicationAddress string `protobuf:"bytes,3,opt,name=replication_address,json=replicationAddress,proto3" json:"replication_address,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *RegisterNodeRequest) Reset() {
@@ -2494,6 +2499,13 @@ func (x *RegisterNodeRequest) GetAddress() string {
 func (x *RegisterNodeRequest) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *RegisterNodeRequest) GetReplicationAddress() string {
+	if x != nil {
+		return x.ReplicationAddress
 	}
 	return ""
 }
@@ -2987,9 +2999,12 @@ type NodeInfo struct {
 	Version  string                 `protobuf:"bytes,6,opt,name=version,proto3" json:"version,omitempty"`
 	// labels are arbitrary key=value tags on the node (e.g. rack=A, zone=east)
 	// used by placement constraints like replicas_on_different.
-	Labels        map[string]string `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Labels map[string]string `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// replication_address is the address DRBD uses for this node. Empty means it
+	// shares `address` (the historical single-network setup).
+	ReplicationAddress string `protobuf:"bytes,8,opt,name=replication_address,json=replicationAddress,proto3" json:"replication_address,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *NodeInfo) Reset() {
@@ -3069,6 +3084,13 @@ func (x *NodeInfo) GetLabels() map[string]string {
 		return x.Labels
 	}
 	return nil
+}
+
+func (x *NodeInfo) GetReplicationAddress() string {
+	if x != nil {
+		return x.ReplicationAddress
+	}
+	return ""
 }
 
 // Health check messages
@@ -3289,6 +3311,11 @@ type CreateResourceRequest struct {
 	DrNode     string `protobuf:"bytes,11,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`             // the DR-site node (must be a registered node); WAN only
 	DrEndpoint string `protobuf:"bytes,12,opt,name=dr_endpoint,json=drEndpoint,proto3" json:"dr_endpoint,omitempty"` // the DR site's public WAN address the primary dials; WAN only
 	WanPort    uint32 `protobuf:"varint,13,opt,name=wan_port,json=wanPort,proto3" json:"wan_port,omitempty"`         // WAN mTLS port (default a random >3000 per resource); WAN only
+	// wan_egress_address optionally pins the source address the primary's proxy
+	// binds before dialing the DR site, so replication leaves over a chosen
+	// interface (e.g. a leased line) and reaches the DR firewall from a
+	// predictable source IP. Empty lets the primary's routing table decide.
+	WanEgressAddress string `protobuf:"bytes,20,opt,name=wan_egress_address,json=wanEgressAddress,proto3" json:"wan_egress_address,omitempty"`
 	// replicas requests auto-placement: when `nodes` is empty the controller
 	// picks this many nodes (most free space in the target pool first). Ignored
 	// when `nodes` is set. 0 means "not auto-placing" unless nodes is also empty,
@@ -3433,6 +3460,13 @@ func (x *CreateResourceRequest) GetWanPort() uint32 {
 		return x.WanPort
 	}
 	return 0
+}
+
+func (x *CreateResourceRequest) GetWanEgressAddress() string {
+	if x != nil {
+		return x.WanEgressAddress
+	}
+	return ""
 }
 
 func (x *CreateResourceRequest) GetReplicas() uint32 {
@@ -12988,10 +13022,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04node\x18\x03 \x01(\tR\x04node\"P\n" +
 	"\x1aRestoreLvmSnapshotResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"C\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"t\n" +
 	"\x13RegisterNodeRequest\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"l\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12/\n" +
+	"\x13replication_address\x18\x03 \x01(\tR\x12replicationAddress\"l\n" +
 	"\x14RegisterNodeResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12 \n" +
@@ -13022,7 +13057,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x11ListNodesResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\"\n" +
-	"\x05nodes\x18\x03 \x03(\v2\f.v1.NodeInfoR\x05nodes\"\x8e\x02\n" +
+	"\x05nodes\x18\x03 \x03(\v2\f.v1.NodeInfoR\x05nodes\"\xbf\x02\n" +
 	"\bNodeInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
@@ -13030,7 +13065,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x1b\n" +
 	"\tlast_seen\x18\x05 \x01(\x03R\blastSeen\x12\x18\n" +
 	"\aversion\x18\x06 \x01(\tR\aversion\x120\n" +
-	"\x06labels\x18\a \x03(\v2\x18.v1.NodeInfo.LabelsEntryR\x06labels\x1a9\n" +
+	"\x06labels\x18\a \x03(\v2\x18.v1.NodeInfo.LabelsEntryR\x06labels\x12/\n" +
+	"\x13replication_address\x18\b \x01(\tR\x12replicationAddress\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"(\n" +
@@ -13047,7 +13083,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x14drbd_reactor_version\x18\x04 \x01(\tR\x12drbdReactorVersion\x120\n" +
 	"\x14drbd_reactor_running\x18\x05 \x01(\bR\x12drbdReactorRunning\x12:\n" +
 	"\x19resource_agents_installed\x18\x06 \x01(\bR\x17resourceAgentsInstalled\x12)\n" +
-	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\x9a\x06\n" +
+	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\xc8\x06\n" +
 	"\x15CreateResourceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x14\n" +
@@ -13063,7 +13099,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\adr_node\x18\v \x01(\tR\x06drNode\x12\x1f\n" +
 	"\vdr_endpoint\x18\f \x01(\tR\n" +
 	"drEndpoint\x12\x19\n" +
-	"\bwan_port\x18\r \x01(\rR\awanPort\x12\x1a\n" +
+	"\bwan_port\x18\r \x01(\rR\awanPort\x12,\n" +
+	"\x12wan_egress_address\x18\x14 \x01(\tR\x10wanEgressAddress\x12\x1a\n" +
 	"\breplicas\x18\x0e \x01(\rR\breplicas\x122\n" +
 	"\x15replicas_on_different\x18\x0f \x03(\tR\x13replicasOnDifferent\x12(\n" +
 	"\x10replicas_on_same\x18\x10 \x03(\tR\x0ereplicasOnSame\x12)\n" +

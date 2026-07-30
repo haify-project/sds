@@ -136,6 +136,25 @@ Only invoked on WAN resource create/delete. Reuses the dispatch/SSH deploy layer
   link really achieves, reconnect count and ring-full events. An unreadable
   snapshot renders as "unknown", never as zero.
 
+## Dedicated networks (2026-07-29)
+
+Replication and management no longer have to share a link:
+
+- **LAN replication network.** `sds-cli node register --address <mgmt> [--replication-address <repl>]`.
+  The controller keeps reaching the node over `--address` for SSH; generated
+  `.res` files point DRBD at `--replication-address`. Omit it and replication
+  shares the management address, exactly as before. Adding it to an existing
+  node is safe: the management address is untouched, and only newly generated
+  configs move — existing resources keep their current `.res` until re-rendered.
+- **WAN egress.** `resource create --wan ... --wan-egress-address <ip>` pins the
+  source address the primary's proxy binds before dialing the DR site, so
+  replication leaves over a chosen uplink (a leased line rather than plain
+  internet) and reaches the DR firewall from a predictable source IP. It renders
+  as `bind_addr = "<ip>:0"`; port 0 lets the kernel pick an ephemeral port, since
+  a fixed one would fail with EADDRINUSE on reconnect during TIME_WAIT. It is
+  persisted on the resource record, because the proxy config is re-rendered from
+  there and a restart would otherwise silently drop the pinned egress.
+
 ## Firewall / reachability
 
 The DR endpoint's `wan-port` must be reachable from the primary's egress (one TCP

@@ -24,9 +24,14 @@ const (
 
 // NodeInfo represents node information
 type NodeInfo struct {
-	Name     string                 `json:"name"`
-	Address  string                 `json:"address"`
-	Hostname string                 `json:"hostname"`
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	// ReplicationAddress is where DRBD talks to this node. Empty means it shares
+	// Address. Keeping these separate is what lets replication ride a dedicated
+	// NIC/subnet while the controller still reaches the node for SSH on the
+	// management address.
+	ReplicationAddress string                 `json:"replication_address,omitempty"`
+	Hostname           string                 `json:"hostname"`
 	State    NodeState              `json:"state"`
 	LastSeen time.Time              `json:"last_seen"`
 	Capacity map[string]interface{} `json:"capacity"`
@@ -53,7 +58,23 @@ func NewNodeManager(ctrl *Controller) *NodeManager {
 
 // RegisterNode registers a new node
 func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (*NodeInfo, error) {
-	nm.controller.logger.Info("Registering node", zap.String("name", name), zap.String("address", address))
+	return nm.RegisterNodeWithReplicationAddress(ctx, name, address, "")
+}
+
+// RegisterNodeWithReplicationAddress registers a node whose DRBD replication
+// traffic should use `replicationAddress` instead of the management `address`.
+//
+// Splitting the two is what lets replication ride a dedicated NIC/subnet: the
+// controller keeps reaching the node over `address` for SSH, while generated
+// .res files point DRBD at the replication address. An empty
+// `replicationAddress` means "same as address" — the single-network behavior
+// every previously registered node keeps.
+func (nm *NodeManager) RegisterNodeWithReplicationAddress(ctx context.Context, name, address, replicationAddress string) (*NodeInfo, error) {
+	replicationAddress = strings.TrimSpace(replicationAddress)
+	nm.controller.logger.Info("Registering node",
+		zap.String("name", name),
+		zap.String("address", address),
+		zap.String("replication_address", replicationAddress))
 
 	// Check node health by executing hostname command
 	result, err := nm.controller.deployment.Exec(ctx, []string{address}, "hostname")
@@ -88,9 +109,10 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 
 	// Create node info
 	nodeInfo := &NodeInfo{
-		Name:     name,
-		Address:  address,
-		Hostname: hostname,
+		Name:               name,
+		Address:            address,
+		ReplicationAddress: replicationAddress,
+		Hostname:           hostname,
 		State:    NodeStateOnline,
 		LastSeen: time.Now(),
 		Version:  nm.detectNodeVersion(ctx, address),
@@ -129,12 +151,13 @@ func (nm *NodeManager) RegisterNode(ctx context.Context, name, address string) (
 	// Save to database
 	if nm.controller.db != nil {
 		dbNode := &database.Node{
-			Name:     nodeInfo.Name,
-			Address:  nodeInfo.Address,
-			Hostname: nodeInfo.Hostname,
-			State:    string(nodeInfo.State),
-			LastSeen: nodeInfo.LastSeen,
-			Version:  nodeInfo.Version,
+			Name:               nodeInfo.Name,
+			Address:            nodeInfo.Address,
+			ReplicationAddress: nodeInfo.ReplicationAddress,
+			Hostname:           nodeInfo.Hostname,
+			State:              string(nodeInfo.State),
+			LastSeen:           nodeInfo.LastSeen,
+			Version:            nodeInfo.Version,
 		}
 		if len(nodeInfo.Labels) > 0 {
 			if encoded, err := json.Marshal(nodeInfo.Labels); err == nil {
@@ -279,6 +302,28 @@ func (nm *NodeManager) GetNodeAddressByName(name string) string {
 
 	for addr, node := range nm.nodes {
 		if node.Name == name || node.Hostname == name || addr == name {
+			return addr
+		}
+	}
+	return ""
+}
+
+// GetReplicationAddressByName returns the address DRBD should use to reach a
+// node: its dedicated replication address when one was registered, otherwise the
+// management address.
+//
+// This is deliberately a separate lookup from GetNodeAddressByName: that one
+// answers "where do I SSH to?", this one answers "what goes in the .res file?".
+// Conflating them is what forced replication onto the management network.
+func (nm *NodeManager) GetReplicationAddressByName(name string) string {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+
+	for addr, node := range nm.nodes {
+		if node.Name == name || node.Hostname == name || addr == name {
+			if r := strings.TrimSpace(node.ReplicationAddress); r != "" {
+				return r
+			}
 			return addr
 		}
 	}

@@ -109,6 +109,7 @@ func resourceCreate() *cobra.Command {
 	var drNode string
 	var drEndpoint string
 	var wanPort uint32
+	var wanEgress string
 	var profile string
 	var labels map[string]string
 
@@ -130,8 +131,8 @@ func resourceCreate() *cobra.Command {
 
 			// WAN master switch (mirrors the server guard): the --dr-* / --wan-port
 			// flags only apply with --wan.
-			if !wan && (drNode != "" || drEndpoint != "" || wanPort != 0) {
-				return fmt.Errorf("--dr-node/--dr-endpoint/--wan-port require --wan")
+			if !wan && (drNode != "" || drEndpoint != "" || wanPort != 0 || wanEgress != "") {
+				return fmt.Errorf("--dr-node/--dr-endpoint/--wan-port/--wan-egress-address require --wan")
 			}
 
 			var nodeList []string
@@ -210,6 +211,7 @@ func resourceCreate() *cobra.Command {
 				DrNode:              drNode,
 				DrEndpoint:          drEndpoint,
 				WanPort:             wanPort,
+				WanEgressAddress:    wanEgress,
 				Replicas:            requestReplicas,
 				ReplicasOnDifferent: replicasOnDifferent,
 				ReplicasOnSame:      replicasOnSame,
@@ -286,6 +288,8 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringVar(&drNode, "dr-node", "", "DR-site node name (requires --wan; must be a registered node)")
 	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "DR site's public WAN address the primary dials (requires --wan)")
 	cmd.Flags().Uint32Var(&wanPort, "wan-port", 0, "WAN mTLS port (requires --wan; 0 = auto-pick a random port >3000)")
+	cmd.Flags().StringVar(&wanEgress, "wan-egress-address", "",
+		"source IP the primary's proxy dials out from, pinning WAN replication to one interface (requires --wan; empty = routing table decides)")
 
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("port")

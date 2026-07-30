@@ -70,6 +70,12 @@ func RenderDialerConfig(spec ProxySpec) string {
 	writeInt(&b, "zstd_min_size", DefaultZstdMinSize)
 	writeKV(&b, "on_congestion", CongestionPullAhead)
 	writeInt(&b, "overflow_grace_secs", DefaultOverflowGraceSecs)
+	// Pin the egress source when asked, so replication leaves over the intended
+	// interface. Port 0: the kernel picks an ephemeral port, which a reconnect
+	// needs (a fixed port would hit EADDRINUSE during TIME_WAIT).
+	if addr := strings.TrimSpace(spec.PrimaryEgressAddr); addr != "" {
+		writeKV(&b, "bind_addr", fmt.Sprintf("%s:0", addr))
+	}
 	// Publish runtime counters where `Status` can read them back over SSH. The
 	// backlog figure is the only way to answer how much data a protocol A
 	// failover would lose, so it is always enabled.

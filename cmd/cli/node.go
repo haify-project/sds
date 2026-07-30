@@ -178,10 +178,18 @@ func formatLabels(labels map[string]string) string {
 func nodeRegister() *cobra.Command {
 	var name string
 	var address string
+	var replicationAddress string
 
 	cmd := &cobra.Command{
-		Use:   "register --name <name> --address <ip>",
+		Use:   "register --name <name> --address <ip> [--replication-address <ip>]",
 		Short: "Register a storage node",
+		Long: "Register a storage node.\n\n" +
+			"--address is the management address: the controller reaches the node there\n" +
+			"over SSH to run drbdadm/LVM.\n\n" +
+			"--replication-address is optional and, when given, is the address DRBD uses\n" +
+			"for this node instead. Set it to put replication traffic on a dedicated NIC\n" +
+			"or subnet so it does not compete with management or client traffic. Omit it\n" +
+			"and replication shares the management address (the historical behavior).",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
@@ -200,7 +208,7 @@ func nodeRegister() *cobra.Command {
 			defer sdsClient.Close()
 
 			// Register node
-			node, err := sdsClient.RegisterNode(ctx, name, address)
+			node, err := sdsClient.RegisterNodeWithReplicationAddress(ctx, name, address, replicationAddress)
 			if err != nil {
 				return fmt.Errorf("failed to register node: %w", err)
 			}
@@ -208,13 +216,18 @@ func nodeRegister() *cobra.Command {
 			fmt.Printf("✓ Node registered successfully\n")
 			fmt.Printf("  Name:    %s\n", node.Name)
 			fmt.Printf("  Address: %s\n", node.Address)
+			if r := node.GetReplicationAddress(); r != "" {
+				fmt.Printf("  Replication address: %s (DRBD traffic)\n", r)
+			}
 
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., orange1)")
-	cmd.Flags().StringVar(&address, "address", "", "Node IP address (e.g., 192.168.1.10)")
+	cmd.Flags().StringVar(&address, "address", "", "Node management IP address, used for SSH (e.g., 192.168.1.10)")
+	cmd.Flags().StringVar(&replicationAddress, "replication-address", "",
+		"IP address DRBD should use for this node; empty = same as --address")
 
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("address")

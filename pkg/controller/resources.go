@@ -363,6 +363,10 @@ type WANSpec struct {
 	DRNode string
 	// DREndpoint is the DR site's public WAN address the primary dials.
 	DREndpoint string
+	// EgressAddress optionally pins the source address the primary's proxy binds
+	// before dialing out, putting WAN replication on a chosen interface. Empty
+	// lets the primary's routing table decide.
+	EgressAddress string
 	// WANPort is the WAN mTLS port the DR acceptor binds. Zero ⇒ the controller
 	// picks a random high port (> 3000).
 	WANPort uint32
@@ -886,13 +890,14 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// failure. This step is entirely gated behind wan != nil.
 	if wan != nil {
 		spec := wanproxy.ProxySpec{
-			Resource:         name,
-			PrimaryNodeAddr:  nodeIPs[0],
-			DRNodeAddr:       nodeIPs[1],
-			DRPublicEndpoint: wan.DREndpoint,
-			WANPort:          int(wan.WANPort),
-			DRBDPort:         int(port),
-			BinaryPath:       rm.wanproxyBinaryPath(),
+			Resource:          name,
+			PrimaryNodeAddr:   nodeIPs[0],
+			DRNodeAddr:        nodeIPs[1],
+			DRPublicEndpoint:  wan.DREndpoint,
+			WANPort:           int(wan.WANPort),
+			DRBDPort:          int(port),
+			PrimaryEgressAddr: wan.EgressAddress,
+			BinaryPath:        rm.wanproxyBinaryPath(),
 		}
 		rm.controller.logger.Info("Provisioning WAN replication proxy before DRBD up",
 			zap.String("resource", name),
@@ -969,6 +974,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 			dbRes.DRNode = wan.DRNode
 			dbRes.DREndpoint = wan.DREndpoint
 			dbRes.WANPort = int(wan.WANPort)
+			dbRes.WANEgressAddress = wan.EgressAddress
 		}
 		if err := rm.controller.db.SaveResource(ctx, dbRes); err != nil {
 			rm.controller.logger.Warn("Failed to save resource to database", zap.Error(err))
@@ -1698,8 +1704,11 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 	}
 
 	for i, node := range allNodes {
-		// Get IP address from NodeManager by node name
-		ip := rm.controller.nodes.GetNodeAddressByName(node)
+		// The REPLICATION address, which is the management address unless the node
+		// was registered with a dedicated one. Using it here (and only here) is
+		// what puts DRBD traffic on its own NIC/subnet while the controller keeps
+		// reaching the node over the management address for SSH.
+		ip := rm.controller.nodes.GetReplicationAddressByName(node)
 
 		// Fallback: try direct lookup in hostMap
 		if ip == "" {
@@ -4766,12 +4775,13 @@ func (rm *ResourceManager) wanProxySpecFor(dbRes *database.Resource) wanproxy.Pr
 		}
 	}
 	return wanproxy.ProxySpec{
-		Resource:         dbRes.Name,
-		PrimaryNodeAddr:  rm.controller.ResolveHost(primary),
-		DRNodeAddr:       rm.controller.ResolveHost(dbRes.DRNode),
-		DRPublicEndpoint: dbRes.DREndpoint,
-		WANPort:          dbRes.WANPort,
-		DRBDPort:         dbRes.Port,
+		Resource:          dbRes.Name,
+		PrimaryNodeAddr:   rm.controller.ResolveHost(primary),
+		DRNodeAddr:        rm.controller.ResolveHost(dbRes.DRNode),
+		DRPublicEndpoint:  dbRes.DREndpoint,
+		PrimaryEgressAddr: dbRes.WANEgressAddress,
+		WANPort:           dbRes.WANPort,
+		DRBDPort:          dbRes.Port,
 	}
 }
 

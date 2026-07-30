@@ -4445,6 +4445,10 @@
           "format": "int64",
           "title": "WAN mTLS port (default a random \u003e3000 per resource); WAN only"
         },
+        "wanEgressAddress": {
+          "type": "string",
+          "description": "wan_egress_address optionally pins the source address the primary's proxy\nbinds before dialing the DR site, so replication leaves over a chosen\ninterface (e.g. a leased line) and reaches the DR firewall from a\npredictable source IP. Empty lets the primary's routing table decide."
+        },
         "replicas": {
           "type": "integer",
           "format": "int64",
@@ -5679,6 +5683,10 @@
             "type": "string"
           },
           "description": "labels are arbitrary key=value tags on the node (e.g. rack=A, zone=east)\nused by placement constraints like replicas_on_different."
+        },
+        "replicationAddress": {
+          "type": "string",
+          "description": "replication_address is the address DRBD uses for this node. Empty means it\nshares `address` (the historical single-network setup)."
         }
       }
     },
@@ -5768,6 +5776,10 @@
         },
         "name": {
           "type": "string"
+        },
+        "replicationAddress": {
+          "type": "string",
+          "description": "replication_address is the address DRBD uses for this node in generated\n.res files, letting replication traffic ride a dedicated NIC/subnet while\nthe controller keeps reaching the node over `address` (SSH/management).\nEmpty means \"same as address\", which is the historical behavior."
         }
       },
       "title": "Node messages"

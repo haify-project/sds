@@ -136,7 +136,7 @@ func (s *Server) AddDiskToPool(ctx context.Context, req *sdspb.AddDiskToPoolRequ
 // ==================== NODE OPERATIONS ====================
 
 func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeRequest) (*sdspb.RegisterNodeResponse, error) {
-	node, err := s.nodes.RegisterNode(ctx, req.Name, req.Address)
+	node, err := s.nodes.RegisterNodeWithReplicationAddress(ctx, req.Name, req.Address, req.ReplicationAddress)
 	if err != nil {
 		return &sdspb.RegisterNodeResponse{
 			Success: false,
@@ -147,13 +147,14 @@ func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeReques
 		Success: true,
 		Message: "Node registered successfully",
 		Node: &sdspb.NodeInfo{
-			Name:     node.Name,
-			Address:  node.Address,
-			Hostname: node.Hostname,
-			State:    string(node.State),
-			LastSeen: node.LastSeen.Unix(),
-			Version:  node.Version,
-			Labels:   node.Labels,
+			Name:               node.Name,
+			Address:            node.Address,
+			ReplicationAddress: node.ReplicationAddress,
+			Hostname:           node.Hostname,
+			State:              string(node.State),
+			LastSeen:           node.LastSeen.Unix(),
+			Version:            node.Version,
+			Labels:             node.Labels,
 		},
 	}, nil
 }
@@ -203,13 +204,14 @@ func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb
 		Success: true,
 		Message: "Node found",
 		Node: &sdspb.NodeInfo{
-			Name:     node.Name,
-			Address:  node.Address,
-			Hostname: node.Hostname,
-			State:    string(node.State),
-			LastSeen: node.LastSeen.Unix(),
-			Version:  node.Version,
-			Labels:   node.Labels,
+			Name:               node.Name,
+			Address:            node.Address,
+			Hostname:           node.Hostname,
+			State:              string(node.State),
+			LastSeen:           node.LastSeen.Unix(),
+			Version:            node.Version,
+			Labels:             node.Labels,
+			ReplicationAddress: node.ReplicationAddress,
 		},
 	}, nil
 }
@@ -223,13 +225,14 @@ func (s *Server) SetNodeLabels(ctx context.Context, req *sdspb.SetNodeLabelsRequ
 		Success: true,
 		Message: "Node labels updated",
 		Node: &sdspb.NodeInfo{
-			Name:     node.Name,
-			Address:  node.Address,
-			Hostname: node.Hostname,
-			State:    string(node.State),
-			LastSeen: node.LastSeen.Unix(),
-			Version:  node.Version,
-			Labels:   node.Labels,
+			Name:               node.Name,
+			Address:            node.Address,
+			Hostname:           node.Hostname,
+			State:              string(node.State),
+			LastSeen:           node.LastSeen.Unix(),
+			Version:            node.Version,
+			Labels:             node.Labels,
+			ReplicationAddress: node.ReplicationAddress,
 		},
 	}, nil
 }
@@ -246,13 +249,14 @@ func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*s
 	var pbNodes []*sdspb.NodeInfo
 	for _, n := range nodes {
 		pbNodes = append(pbNodes, &sdspb.NodeInfo{
-			Name:     n.Name,
-			Address:  n.Address,
-			Hostname: n.Hostname,
-			State:    string(n.State),
-			LastSeen: n.LastSeen.Unix(),
-			Version:  n.Version,
-			Labels:   n.Labels,
+			Name:               n.Name,
+			Address:            n.Address,
+			Hostname:           n.Hostname,
+			State:              string(n.State),
+			LastSeen:           n.LastSeen.Unix(),
+			Version:            n.Version,
+			Labels:             n.Labels,
+			ReplicationAddress: n.ReplicationAddress,
 		})
 	}
 
@@ -317,9 +321,10 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	var wan *WANSpec
 	if req.Wan {
 		wan = &WANSpec{
-			DRNode:     req.DrNode,
-			DREndpoint: req.DrEndpoint,
-			WANPort:    req.WanPort,
+			DRNode:        req.DrNode,
+			DREndpoint:    req.DrEndpoint,
+			WANPort:       req.WanPort,
+			EgressAddress: strings.TrimSpace(req.WanEgressAddress),
 		}
 	} else if req.DrNode != "" || req.DrEndpoint != "" || req.WanPort != 0 {
 		return &sdspb.CreateResourceResponse{

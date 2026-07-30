@@ -609,6 +609,11 @@ message RestoreLvmSnapshotResponse {
 message RegisterNodeRequest {
   string address = 1;
   string name = 2;
+  // replication_address is the address DRBD uses for this node in generated
+  // .res files, letting replication traffic ride a dedicated NIC/subnet while
+  // the controller keeps reaching the node over `address` (SSH/management).
+  // Empty means "same as address", which is the historical behavior.
+  string replication_address = 3;
 }
 
 message RegisterNodeResponse {
@@ -669,6 +674,9 @@ message NodeInfo {
   // labels are arbitrary key=value tags on the node (e.g. rack=A, zone=east)
   // used by placement constraints like replicas_on_different.
   map<string, string> labels = 7;
+  // replication_address is the address DRBD uses for this node. Empty means it
+  // shares `address` (the historical single-network setup).
+  string replication_address = 8;
 }
 
 // Health check messages
@@ -713,6 +721,11 @@ message CreateResourceRequest {
   string dr_node = 11;      // the DR-site node (must be a registered node); WAN only
   string dr_endpoint = 12;  // the DR site's public WAN address the primary dials; WAN only
   uint32 wan_port = 13;     // WAN mTLS port (default a random >3000 per resource); WAN only
+  // wan_egress_address optionally pins the source address the primary's proxy
+  // binds before dialing the DR site, so replication leaves over a chosen
+  // interface (e.g. a leased line) and reaches the DR firewall from a
+  // predictable source IP. Empty lets the primary's routing table decide.
+  string wan_egress_address = 20;
 
   // replicas requests auto-placement: when `nodes` is empty the controller
   // picks this many nodes (most free space in the target pool first). Ignored

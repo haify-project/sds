@@ -211,6 +211,13 @@ type ProxySpec struct {
 	// to (one TCP port; must be reachable from the primary's egress).
 	WANPort int
 
+	// PrimaryEgressAddr optionally pins the source address the dialer binds
+	// before connecting out, so WAN replication leaves the primary over a chosen
+	// interface (e.g. a leased line rather than the management link) and arrives
+	// at the DR firewall from a predictable source IP. Empty lets the primary's
+	// routing table decide.
+	PrimaryEgressAddr string
+
 	// DRBDPort is the resource's DRBD port P. The dialer binds 127.0.0.1:P and
 	// accepts the primary's DRBD; the acceptor dials 127.0.0.1:P to reach the
 	// DR's DRBD. (The nodes' own DRBD binds are P and P+9 respectively; see

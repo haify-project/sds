@@ -770,9 +770,10 @@ func (c *Controller) loadFromDatabase(ctx context.Context) error {
 		}
 		c.nodes.mu.Lock()
 		c.nodes.nodes[dbNode.Address] = &NodeInfo{
-			Name:     dbNode.Name,
-			Address:  dbNode.Address,
-			Hostname: dbNode.Hostname,
+			Name:               dbNode.Name,
+			Address:            dbNode.Address,
+			ReplicationAddress: dbNode.ReplicationAddress,
+			Hostname:           dbNode.Hostname,
 			State:    NodeState(dbNode.State),
 			LastSeen: dbNode.LastSeen,
 			Version:  dbNode.Version,

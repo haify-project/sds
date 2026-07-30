@@ -101,9 +101,14 @@ func (db *DB) Close() error {
 
 // Node represents a stored node
 type Node struct {
-	Name     string
-	Address  string
-	Hostname string
+	Name    string
+	Address string
+	// ReplicationAddress is the address DRBD uses for this node in generated
+	// .res files. Empty means it shares Address — which is how every node
+	// registered before this field existed deserializes, so the single-network
+	// setup keeps working untouched.
+	ReplicationAddress string
+	Hostname           string
 	State    string
 	LastSeen time.Time
 	Version  string
@@ -311,6 +316,11 @@ type Resource struct {
 	DRNode     string // the DR-site node name (WAN only)
 	DREndpoint string // the DR site's public WAN address the primary dials (WAN only)
 	WANPort    int    // WAN mTLS port the DR acceptor listens on (WAN only)
+	// WANEgressAddress optionally pins the source address the primary's proxy
+	// binds before dialing the DR site (WAN only). Empty = routing table decides.
+	// Persisted because the proxy config is re-rendered from this record, so a
+	// controller restart would otherwise silently drop the pinned egress.
+	WANEgressAddress string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
