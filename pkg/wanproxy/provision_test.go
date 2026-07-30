@@ -30,6 +30,13 @@ type fakeDeploy struct {
 	// failAll makes every exec return a per-host failure (used to model a node
 	// where the proxy is down and the WAN port is unreachable).
 	failAll bool
+
+	// execOutput lets a test attach stdout to a matching command, so reads (e.g.
+	// `cat` of the metrics snapshot) can return a body. Keyed by substring.
+	execOutput map[string]string
+	// execFailSubstrOutput marks a matching command as failed AND gives it
+	// output, modelling e.g. `cat` of a file that does not exist.
+	execFailSubstrOutput map[string]string
 }
 
 func (f *fakeDeploy) DistributeConfig(_ context.Context, hosts []string, content, remotePath string) (*Result, error) {
@@ -39,7 +46,26 @@ func (f *fakeDeploy) DistributeConfig(_ context.Context, hosts []string, content
 
 func (f *fakeDeploy) Exec(_ context.Context, hosts []string, cmd string) (*Result, error) {
 	f.events = append(f.events, event{kind: "exec", hosts: append([]string(nil), hosts...), cmd: cmd})
+
+	for sub, out := range f.execFailSubstrOutput {
+		if strings.Contains(cmd, sub) {
+			return f.resultWithOutput(hosts, false, out), nil
+		}
+	}
+	for sub, out := range f.execOutput {
+		if strings.Contains(cmd, sub) {
+			return f.resultWithOutput(hosts, true, out), nil
+		}
+	}
 	return f.result(hosts, f.failAll || (f.failExecSubstr != "" && strings.Contains(cmd, f.failExecSubstr))), nil
+}
+
+func (f *fakeDeploy) resultWithOutput(hosts []string, success bool, out string) *Result {
+	r := &Result{Hosts: map[string]*HostResult{}}
+	for _, h := range hosts {
+		r.Hosts[h] = &HostResult{Host: h, Success: success, Output: out}
+	}
+	return r
 }
 
 func (f *fakeDeploy) result(hosts []string, fail bool) *Result {

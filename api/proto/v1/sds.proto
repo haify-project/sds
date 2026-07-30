@@ -1201,6 +1201,35 @@ message ResourceStatus {
   // permits the mTLS port). False here explains a WAN resource that is up
   // locally but not replicating.
   bool wan_reachable = 11;
+  // wan_metrics carries the counters sds-proxy publishes on the primary. Absent
+  // when they could not be read (older proxy, first tick not yet written, node
+  // unreachable) — absent means UNKNOWN, not zero.
+  WANMetrics wan_metrics = 12;
+}
+
+// WANMetrics is what the primary site's sds-proxy reports about the WAN leg.
+message WANMetrics {
+  // buffer_used_bytes is the un-replicated backlog: writes the primary's DRBD
+  // has already acknowledged to its application that have NOT yet reached the
+  // DR site. Under protocol A this IS the data-loss window of a DR failover
+  // performed right now — the question `resource status` previously could not
+  // answer.
+  uint64 buffer_used_bytes = 1;
+  uint64 buffer_cap_bytes = 2;
+  double buffer_fill_percent = 3;
+  // Payload accepted from DRBD versus bytes actually put on the WAN, and the
+  // ratio between them: the compression the link is really achieving.
+  uint64 drbd_to_wan_bytes = 4;
+  uint64 wan_wire_bytes = 5;
+  uint64 wan_to_drbd_bytes = 6;
+  uint64 frames_sent = 7;
+  double compression_ratio = 8;
+  bool wan_connected = 9;
+  // reconnects climbing on an otherwise healthy link is the signature of a
+  // flapping path; ring_full_events non-zero means the WAN could not keep up
+  // with the write workload and DRBD was pushed into Ahead.
+  uint64 reconnects = 10;
+  uint64 ring_full_events = 11;
 }
 
 message NodeResourceState {

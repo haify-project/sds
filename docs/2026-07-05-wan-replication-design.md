@@ -127,6 +127,14 @@ Only invoked on WAN resource create/delete. Reuses the dispatch/SSH deploy layer
   drbd-reactor promoter still runs **within the primary site** for local HA.
 - Two endpoints only (primary site ↔ DR site). No 3-way WAN.
 - Surface the async lag / potential data-loss window in `resource status`.
+  **Done (2026-07-29).** sds-proxy publishes a JSON snapshot per resource to
+  `/run/sds-proxy/<resource>.json` (a file, not a socket: the controller already
+  reaches these nodes over SSH, so this adds no listening port to a WAN-facing
+  host). The controller reads the PRIMARY's copy — that is the side holding the
+  backlog — and `resource status` reports `buffer_used_bytes` as exactly the
+  amount a DR failover would lose, plus throughput, the compression ratio the
+  link really achieves, reconnect count and ring-full events. An unreadable
+  snapshot renders as "unknown", never as zero.
 
 ## Firewall / reachability
 
@@ -138,8 +146,11 @@ cloud security groups itself.
 
 1. **MVP:** flags + data model + WAN-mode config gen + `pkg/wanproxy` (shared PKI,
    deploy, per-resource systemd) + docs. Manual DR failover.
-2. Later: per-resource PKI, `resource status` WAN metrics (buffer/throughput once
-   sds-proxy M3 exposes them), seamless DR-failover tooling, multi-DR.
+2. ~~`resource status` WAN metrics (buffer/throughput)~~ — **done 2026-07-29**;
+   see the HA/DR section above.
+3. Later: per-resource PKI, seamless DR-failover tooling (notably **failback**:
+   after `dr-failover` there is still no supported path back to the primary
+   site), multi-DR.
 
 ## Non-goals
 

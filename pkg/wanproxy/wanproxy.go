@@ -43,6 +43,7 @@ package wanproxy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -81,6 +82,12 @@ const (
 
 	// UnitTemplatePath is where the unit template is installed on each node.
 	UnitTemplatePath = "/etc/systemd/system/" + UnitTemplateName
+
+	// NodeMetricsDir holds the per-resource JSON snapshots sds-proxy publishes.
+	// It lives under /run because these are volatile runtime state: a reboot
+	// should not leave a stale backlog figure behind for the controller to read
+	// and report as current.
+	NodeMetricsDir = "/run/sds-proxy"
 )
 
 // PKIDir is the controller-side cache for the shared CA + leaf. EnsurePKI
@@ -96,6 +103,11 @@ func NodeConfigPath(resource string) string {
 // UnitInstance returns the systemd instance name for a resource's proxy.
 func UnitInstance(resource string) string {
 	return "sds-proxy@" + resource
+}
+
+// NodeMetricsPath returns the on-node path of a resource's metrics snapshot.
+func NodeMetricsPath(resource string) string {
+	return NodeMetricsDir + "/" + resource + ".json"
 }
 
 // unitTemplate is the per-resource systemd unit. It mirrors the templated-unit
@@ -383,6 +395,29 @@ type NodeProxyState struct {
 	Active bool // systemd reports the per-resource unit as active
 }
 
+// Metrics is the counter snapshot sds-proxy publishes. Field tags mirror the
+// JSON that `sds_proxy::metrics::Snapshot` serializes — renaming one on either
+// side breaks the contract.
+type Metrics struct {
+	// BufferUsedBytes is the un-replicated backlog: writes the local DRBD has
+	// already acknowledged upstream that have NOT reached the DR site. Under
+	// protocol A this IS the data-loss window if the primary is lost now, which
+	// is the whole reason these metrics exist.
+	BufferUsedBytes   uint64  `json:"buffer_used_bytes"`
+	BufferCapBytes    uint64  `json:"buffer_cap_bytes"`
+	BufferFillPercent float64 `json:"buffer_fill_percent"`
+
+	DRBDToWANBytes uint64  `json:"drbd_to_wan_bytes"`
+	WANWireBytes   uint64  `json:"wan_wire_bytes"`
+	WANToDRBDBytes uint64  `json:"wan_to_drbd_bytes"`
+	FramesSent     uint64  `json:"frames_sent"`
+	CompressionRat float64 `json:"compression_ratio"`
+
+	WANConnected   bool   `json:"wan_connected"`
+	Reconnects     uint64 `json:"reconnects"`
+	RingFullEvents uint64 `json:"ring_full_events"`
+}
+
 // ProxyStatus is the health of one WAN resource's proxy pair, suitable for
 // surfacing in `resource status`, the alert monitor and the UI.
 type ProxyStatus struct {
@@ -390,6 +425,13 @@ type ProxyStatus struct {
 	Primary      NodeProxyState
 	DR           NodeProxyState
 	WANReachable bool // the primary can currently reach the DR WAN endpoint
+
+	// PrimaryMetrics is the primary side's published counters, or nil when the
+	// snapshot could not be read (an older proxy build, a proxy that has not
+	// published its first tick yet, or an unreachable node). Callers must treat
+	// nil as "unknown", never as zero — reporting a zero backlog when the truth
+	// is unknown is exactly the wrong way to be wrong here.
+	PrimaryMetrics *Metrics
 }
 
 // Healthy reports whether both proxy instances are active and the WAN leg is
@@ -434,7 +476,45 @@ func Status(ctx context.Context, deploy DeploymentClient, spec ProxySpec) (*Prox
 	// Single-shot reachability: a status query must not block on the retry loop.
 	st.WANReachable = Reachable(ctx, deploy, spec)
 
+	// Counters from the primary — the side that holds the backlog. A failure here
+	// leaves PrimaryMetrics nil ("unknown") rather than failing the status call:
+	// losing observability must not make the resource look broken.
+	st.PrimaryMetrics = readMetrics(ctx, deploy, spec.PrimaryNodeAddr, spec.Resource)
+
 	return st, nil
+}
+
+// readMetrics fetches and parses a node's published snapshot. Returns nil when
+// it cannot be read or parsed — an older proxy, a first tick that has not landed
+// yet, or an unreachable node all look the same from here and all mean "unknown".
+func readMetrics(ctx context.Context, deploy DeploymentClient, host, resource string) *Metrics {
+	if deploy == nil || host == "" {
+		return nil
+	}
+	res, err := deploy.Exec(ctx, []string{host}, fmt.Sprintf("cat %s", NodeMetricsPath(resource)))
+	if err != nil || res == nil {
+		return nil
+	}
+	hres := res.Hosts[host]
+	if hres == nil || !hres.Success {
+		return nil
+	}
+	return ParseMetrics(hres.Output)
+}
+
+// ParseMetrics decodes a published snapshot. Returns nil for anything that is not
+// a usable document, so a truncated or garbage read is reported as unknown rather
+// than as a resource with no backlog.
+func ParseMetrics(s string) *Metrics {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var m Metrics
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		return nil
+	}
+	return &m
 }
 
 // Reachable does a single TCP reachability probe from the primary node to the

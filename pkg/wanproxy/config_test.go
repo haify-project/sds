@@ -26,6 +26,8 @@ zstd_level = 3
 zstd_min_size = 64
 on_congestion = "pull-ahead"
 overflow_grace_secs = 30
+metrics_path = "/run/sds-proxy/data.json"
+metrics_interval_secs = 5
 
 [tls]
 ca = "/etc/sds-proxy/ca.pem"
@@ -49,6 +51,8 @@ zstd_level = 3
 zstd_min_size = 64
 on_congestion = "pull-ahead"
 overflow_grace_secs = 30
+metrics_path = "/run/sds-proxy/data.json"
+metrics_interval_secs = 5
 acceptor_park_secs = 30
 synthesize_ping_acks = true
 

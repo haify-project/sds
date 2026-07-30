@@ -6131,6 +6131,10 @@
         "wanReachable": {
           "type": "boolean",
           "description": "wan_reachable is true when the primary node can currently open a TCP\nconnection to the DR WAN endpoint (i.e. the DR firewall/security group\npermits the mTLS port). False here explains a WAN resource that is up\nlocally but not replicating."
+        },
+        "wanMetrics": {
+          "$ref": "#/definitions/v1WANMetrics",
+          "description": "wan_metrics carries the counters sds-proxy publishes on the primary. Absent\nwhen they could not be read (older proxy, first tick not yet written, node\nunreachable) — absent means UNKNOWN, not zero."
         }
       }
     },
@@ -6414,6 +6418,58 @@
         }
       },
       "description": "VolumeSpec is one DRBD volume within a resource. storage_type comes from the\nresource; each volume may target its own pool."
+    },
+    "v1WANMetrics": {
+      "type": "object",
+      "properties": {
+        "bufferUsedBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "buffer_used_bytes is the un-replicated backlog: writes the primary's DRBD\nhas already acknowledged to its application that have NOT yet reached the\nDR site. Under protocol A this IS the data-loss window of a DR failover\nperformed right now — the question `resource status` previously could not\nanswer."
+        },
+        "bufferCapBytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "bufferFillPercent": {
+          "type": "number",
+          "format": "double"
+        },
+        "drbdToWanBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Payload accepted from DRBD versus bytes actually put on the WAN, and the\nratio between them: the compression the link is really achieving."
+        },
+        "wanWireBytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "wanToDrbdBytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "framesSent": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "compressionRatio": {
+          "type": "number",
+          "format": "double"
+        },
+        "wanConnected": {
+          "type": "boolean"
+        },
+        "reconnects": {
+          "type": "string",
+          "format": "uint64",
+          "description": "reconnects climbing on an otherwise healthy link is the signature of a\nflapping path; ring_full_events non-zero means the WAN could not keep up\nwith the write workload and DRBD was pushed into Ahead."
+        },
+        "ringFullEvents": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "description": "WANMetrics is what the primary site's sds-proxy reports about the WAN leg."
     }
   }
 }

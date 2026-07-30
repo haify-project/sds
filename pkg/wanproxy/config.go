@@ -26,6 +26,11 @@ const (
 	// across a transient WAN drop (acceptor only).
 	DefaultAcceptorParkSecs = 30
 
+	// DefaultMetricsIntervalSecs is how often the proxy republishes its counters.
+	// 5s keeps `resource status` reasonably fresh while costing one small file
+	// write per interval.
+	DefaultMetricsIntervalSecs = 5
+
 	// CongestionPullAhead keeps the local DRBD connection alive under WAN
 	// congestion so DRBD's own on-congestion pull-ahead engages. This is the WAN
 	// default and requires `on-congestion pull-ahead;` in the DRBD net {} section
@@ -65,6 +70,11 @@ func RenderDialerConfig(spec ProxySpec) string {
 	writeInt(&b, "zstd_min_size", DefaultZstdMinSize)
 	writeKV(&b, "on_congestion", CongestionPullAhead)
 	writeInt(&b, "overflow_grace_secs", DefaultOverflowGraceSecs)
+	// Publish runtime counters where `Status` can read them back over SSH. The
+	// backlog figure is the only way to answer how much data a protocol A
+	// failover would lose, so it is always enabled.
+	writeKV(&b, "metrics_path", NodeMetricsPath(spec.Resource))
+	writeInt(&b, "metrics_interval_secs", DefaultMetricsIntervalSecs)
 	writeTLS(&b)
 	return b.String()
 }
@@ -89,6 +99,11 @@ func RenderAcceptorConfig(spec ProxySpec) string {
 	writeInt(&b, "zstd_min_size", DefaultZstdMinSize)
 	writeKV(&b, "on_congestion", CongestionPullAhead)
 	writeInt(&b, "overflow_grace_secs", DefaultOverflowGraceSecs)
+	// Publish runtime counters where `Status` can read them back over SSH. The
+	// backlog figure is the only way to answer how much data a protocol A
+	// failover would lose, so it is always enabled.
+	writeKV(&b, "metrics_path", NodeMetricsPath(spec.Resource))
+	writeInt(&b, "metrics_interval_secs", DefaultMetricsIntervalSecs)
 	// Acceptor-only knobs.
 	writeInt(&b, "acceptor_park_secs", DefaultAcceptorParkSecs)
 	writeBool(&b, "synthesize_ping_acks", true)

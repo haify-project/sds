@@ -949,6 +949,61 @@ func resourceSecondary() *cobra.Command {
 	return cmd
 }
 
+// printWANMetrics renders the proxy counters under a WAN resource's status.
+//
+// The headline is the un-replicated backlog. Under protocol A those are writes
+// the primary already acknowledged that the DR site has not seen, so it is the
+// amount a DR failover would lose — the question status could not answer before
+// the proxy published these. When the snapshot is absent we say so rather than
+// print zeros, because a confident "0 lost" would be the worst possible lie here.
+func printWANMetrics(m *sdspb.WANMetrics) {
+	if m == nil {
+		fmt.Printf("    Replication lag: unknown (proxy published no metrics)\n")
+		return
+	}
+
+	fmt.Printf("    Un-replicated:   %s", humanBytes(m.GetBufferUsedBytes()))
+	if cap := m.GetBufferCapBytes(); cap > 0 {
+		fmt.Printf(" of %s buffer (%.1f%%)", humanBytes(cap), m.GetBufferFillPercent())
+	}
+	fmt.Printf("\n")
+	if m.GetBufferUsedBytes() > 0 {
+		fmt.Printf("      ⚠ a DR failover right now would lose up to this much\n")
+	}
+
+	fmt.Printf("    Replicated:      %s sent as %s on the wire",
+		humanBytes(m.GetDrbdToWanBytes()), humanBytes(m.GetWanWireBytes()))
+	if r := m.GetCompressionRatio(); r > 0 {
+		fmt.Printf(" (%.2fx compression)", r)
+	}
+	fmt.Printf("\n")
+
+	// Only worth the operator's attention when non-zero.
+	if n := m.GetReconnects(); n > 0 {
+		fmt.Printf("    WAN reconnects:  %d (a climbing count means a flapping link)\n", n)
+	}
+	if n := m.GetRingFullEvents(); n > 0 {
+		fmt.Printf("    Buffer full:     %d times (the WAN could not keep up; DRBD went Ahead)\n", n)
+	}
+}
+
+// humanBytes renders a byte count for operator eyes rather than exact accounting.
+func humanBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	units := []string{"KiB", "MiB", "GiB", "TiB", "PiB"}
+	v := float64(b)
+	for _, u := range units {
+		v /= unit
+		if v < unit {
+			return fmt.Sprintf("%.1f %s", v, u)
+		}
+	}
+	return fmt.Sprintf("%.1f EiB", v/unit)
+}
+
 // resourceDualPrimary exposes the allow-two-primaries toggle used to bracket a
 // hypervisor live migration. It is primarily driven by the Proxmox storage
 // plugin; the CLI form exists for operators to inspect/repair a stranded window.
@@ -1162,6 +1217,7 @@ func resourceStatus() *cobra.Command {
 				for node, st := range status.GetWanProxy() {
 					fmt.Printf("    sds-proxy@%s: %s\n", node, st)
 				}
+				printWANMetrics(status.GetWanMetrics())
 				fmt.Printf("    NOTE: the DR peer can lag (async). Failover is a manual DR action:\n")
 				fmt.Printf("          sds-cli resource dr-failover %s\n", status.GetName())
 			}

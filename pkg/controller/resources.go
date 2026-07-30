@@ -1448,6 +1448,11 @@ type WANStatusInfo struct {
 	// WANReachable is true when the primary can currently reach the DR WAN
 	// endpoint over TCP (firewall/security group permits the mTLS port).
 	WANReachable bool
+	// Metrics is the primary side's published proxy counters, or nil when they
+	// could not be read. Nil means UNKNOWN and must never be rendered as zero:
+	// the headline figure here is the un-replicated backlog, i.e. how much a DR
+	// failover would lose, and a confident "0" would be dangerous.
+	Metrics *wanproxy.Metrics
 }
 
 // WANStatus returns the WAN replication view for a resource, or (nil, nil) for a
@@ -1497,7 +1502,13 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 	}
 	probe(primaryNode, primaryAddr)
 	probe(dbRes.DRNode, drAddr)
-	info.WANReachable = wanproxy.Reachable(ctx, rm.wanproxyDeployClient(), rm.wanProxySpecFor(dbRes))
+	spec := rm.wanProxySpecFor(dbRes)
+	info.WANReachable = wanproxy.Reachable(ctx, rm.wanproxyDeployClient(), spec)
+	// Proxy counters from the primary (the side that holds the backlog). Best
+	// effort: an older proxy publishes nothing, and that must not fail status.
+	if st, serr := wanproxy.Status(ctx, rm.wanproxyDeployClient(), spec); serr == nil && st != nil {
+		info.Metrics = st.PrimaryMetrics
+	}
 	return info, nil
 }
 

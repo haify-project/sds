@@ -751,6 +751,23 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		status.WanPort = uint32(wan.WANPort)
 		status.WanProxy = wan.ProxyState
 		status.WanReachable = wan.WANReachable
+		// Left nil when the proxy published nothing, so the client can tell
+		// "unknown" from "no backlog".
+		if m := wan.Metrics; m != nil {
+			status.WanMetrics = &sdspb.WANMetrics{
+				BufferUsedBytes:   m.BufferUsedBytes,
+				BufferCapBytes:    m.BufferCapBytes,
+				BufferFillPercent: m.BufferFillPercent,
+				DrbdToWanBytes:    m.DRBDToWANBytes,
+				WanWireBytes:      m.WANWireBytes,
+				WanToDrbdBytes:    m.WANToDRBDBytes,
+				FramesSent:        m.FramesSent,
+				CompressionRatio:  m.CompressionRat,
+				WanConnected:      m.WANConnected,
+				Reconnects:        m.Reconnects,
+				RingFullEvents:    m.RingFullEvents,
+			}
+		}
 	}
 
 	return &sdspb.ResourceStatusResponse{
