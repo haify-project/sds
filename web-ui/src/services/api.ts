@@ -421,7 +421,13 @@ class ApiClient {
   createResource = (data: {
     name: string;
     port: number;
-    nodes: string[];
+    // Omit (or pass []) to let the controller place the replicas itself, using
+    // replicas + the fault-domain constraints — which is how a profile's
+    // placement half is meant to be used.
+    nodes?: string[];
+    replicas?: number;
+    replicasOnDifferent?: string[];
+    replicasOnSame?: string[];
     protocol?: string;
     sizeGb?: number;
     pool?: string;

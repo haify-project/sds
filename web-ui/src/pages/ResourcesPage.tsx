@@ -69,7 +69,7 @@ import { toast } from 'sonner';
 import {
   Plus,
   Star,
-  Eye,
+  ChevronDown,
   ArrowUpCircle,
   ArrowDownCircle,
   Database,
@@ -287,8 +287,14 @@ function ResourceRow({
   pools: PoolOpt[];
   nodes: NodeOpt[];
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <TableRow>
+    <>
+    <TableRow
+      data-state={expanded ? 'selected' : undefined}
+      className={expanded ? 'border-b-0' : undefined}
+    >
       <TableCell>
         <div className="flex items-start gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded bg-primary/10">
@@ -384,7 +390,18 @@ function ResourceRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-1">
-          <StatusDialog resource={resource} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Hide' : 'Show'} status for ${resource.name}`}
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+            Status
+          </Button>
           <ResourceActionsMenu
             resource={resource}
             pools={pools}
@@ -393,6 +410,20 @@ function ResourceRow({
         </div>
       </TableCell>
     </TableRow>
+    {expanded && (
+      <TableRow className="hover:bg-transparent">
+        {/* colSpan spans the whole table so the detail is not squeezed into one
+            column; the panel below lays itself out. */}
+        <TableCell colSpan={6} className="bg-muted/30 p-4">
+          {/* The detail is read top-to-bottom, so cap it at a readable measure
+              rather than letting it stretch across a wide table. */}
+          <div className="max-w-3xl">
+            <ResourceStatusPanel resource={resource} />
+          </div>
+        </TableCell>
+      </TableRow>
+    )}
+    </>
   );
 }
 
@@ -1022,33 +1053,26 @@ function formatBytes(n: number): string {
   return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
 }
 
-function StatusDialog({ resource }: { resource: Resource }) {
-  const [open, setOpen] = useState(false);
-
+// ResourceStatusPanel renders a resource's live status inline, under its row.
+//
+// It used to be a modal, which forced a choice the operator should not have to
+// make: read one resource's detail, or see the list. Comparing two resources
+// meant opening and closing dialogs and holding the first in your head. Expanded
+// rows let several be open at once and keep every one in the context of the
+// table it belongs to.
+function ResourceStatusPanel({ resource }: { resource: Resource }) {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['resource-status', resource.name],
     queryFn: () => api.resourceStatus(resource.name),
-    enabled: open,
-    // Poll 2s while any peer is resyncing; stop the moment it settles.
+    // Poll 2s while any peer is resyncing; stop the moment it settles. Only
+    // mounted panels query, so a collapsed row costs nothing.
     refetchInterval: syncPollInterval,
   });
 
   const status = data?.status;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Eye className="h-4 w-4" />
-          Status
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Resource Status: {resource.name}</DialogTitle>
-          <DialogDescription>Live DRBD status for this resource.</DialogDescription>
-        </DialogHeader>
-
+    <>
         {isLoading ? (
           <div className="space-y-3 py-2">
             <Skeleton className="h-6 w-full" />
@@ -1164,8 +1188,7 @@ function StatusDialog({ resource }: { resource: Resource }) {
             </div>
           </div>
         ) : null}
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }
 
