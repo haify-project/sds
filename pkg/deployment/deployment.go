@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -64,19 +65,65 @@ type Client struct {
 	parallel int
 }
 
-// New creates a new deployment Client
+// Options tunes how the deployment client reaches storage nodes.
+type Options struct {
+	// ConfigPath is the dispatch TOML config to use. Empty keeps dispatch's
+	// own default (~/.dispatch/config.toml, then ~/.ssh/config).
+	ConfigPath string
+	// Parallel caps the fan-out of a single dispatch call. 0 uses the default.
+	Parallel int
+}
+
+const defaultParallel = 10
+
+// New creates a new deployment Client using dispatch's default config
+// discovery (~/.dispatch/config.toml, falling back to ~/.ssh/config).
 func New(logger *zap.Logger) (*Client, error) {
-	// Create dispatch client with default config
-	// It will automatically look for ~/.dispatch/config.toml
-	client, err := dispatch.New(nil)
+	return NewWithOptions(logger, Options{})
+}
+
+// NewWithOptions creates a deployment Client honouring an explicit dispatch
+// config path and parallelism.
+//
+// Passing the config path through matters because the controller may run as a
+// user whose home directory is not where the operator put the dispatch config
+// (systemd unit with its own HOME, non-root operator, test harness). Before
+// this existed the `[dispatch] config_path` setting in controller.toml was
+// parsed by nobody and silently ignored, so the controller kept using
+// ~/.dispatch/config.toml and failed with opaque SSH auth errors.
+func NewWithOptions(logger *zap.Logger, opts Options) (*Client, error) {
+	var dispatchCfg *dispatch.Config
+	if opts.ConfigPath != "" {
+		// dispatch silently falls back to its own default config
+		// (~/.dispatch/config.toml, then ~/.ssh/config) when the path it is
+		// handed does not exist. A typo in controller.toml would therefore put
+		// the controller back on somebody else's SSH settings and fail later
+		// with an opaque "unable to authenticate" — the exact dead end wiring
+		// this path was meant to end. Refuse to start instead.
+		if _, err := os.Stat(opts.ConfigPath); err != nil {
+			return nil, fmt.Errorf("dispatch config %q: %w", opts.ConfigPath, err)
+		}
+		dispatchCfg = &dispatch.Config{ConfigPath: opts.ConfigPath}
+	}
+
+	client, err := dispatch.New(dispatchCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dispatch client: %w", err)
+	}
+
+	parallel := opts.Parallel
+	if parallel <= 0 {
+		parallel = defaultParallel
+	}
+
+	if logger != nil && opts.ConfigPath != "" {
+		logger.Info("Using dispatch config", zap.String("path", opts.ConfigPath))
 	}
 
 	return &Client{
 		dispatch: client,
 		logger:   logger,
-		parallel: 10, // Default parallelism
+		parallel: parallel,
 	}, nil
 }
 
@@ -441,13 +488,18 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 	}
 
 	for host, r := range result.Hosts {
+		// Log stderr too. drbdadm/lvcreate/zfs report their real reason there,
+		// so a stdout-only debug line shows `output_len: 0` for a command that
+		// failed with a perfectly good explanation — the exact dead end this
+		// log exists to prevent.
 		c.logger.Debug("deployment.Exec result",
 			zap.String("host", host),
 			zap.Bool("success", r.Success),
 			zap.Int("exit_code", r.ExitCode),
 			zap.String("error_msg", fmt.Sprintf("%v", r.ErrorMsg)),
 			zap.Int("output_len", len(r.Output)),
-			zap.String("output", string(r.Output)))
+			zap.String("output", string(r.Output)),
+			zap.String("stderr", string(r.Error)))
 		// dispatch keeps stdout and stderr apart, but almost everything worth
 		// reporting from lvcreate/drbdadm/zfs goes to STDERR — "already exists",
 		// "insufficient free space", "Refusing to be resized". Exposing only
@@ -876,6 +928,17 @@ type ConfigResult struct {
 	Hosts   map[string]*HostResult
 }
 
+// FailedHosts returns the hosts the config did not reach.
+func (r *ConfigResult) FailedHosts() []string {
+	return hostResultFailures(r.Hosts)
+}
+
+// FailureDetails renders failed hosts with the reason each one gave. See
+// ExecResult.FailureDetails.
+func (r *ConfigResult) FailureDetails() string {
+	return hostResultDetails(r.Hosts)
+}
+
 // ExecResult represents command execution result
 type ExecResult struct {
 	Hosts map[string]*HostResult
@@ -917,13 +980,58 @@ func (r *ExecResult) AllSuccess() bool {
 
 // FailedHosts returns list of failed hosts
 func (r *ExecResult) FailedHosts() []string {
+	return hostResultFailures(r.Hosts)
+}
+
+func hostResultFailures(hosts map[string]*HostResult) []string {
 	var failed []string
-	for host, h := range r.Hosts {
-		if !h.Success {
+	for host, h := range hosts {
+		if h != nil && !h.Success {
 			failed = append(failed, host)
 		}
 	}
 	return failed
+}
+
+func hostResultDetails(hosts map[string]*HostResult) string {
+	failed := hostResultFailures(hosts)
+	if len(failed) == 0 {
+		return ""
+	}
+	sort.Strings(failed)
+
+	parts := make([]string, 0, len(failed))
+	for _, host := range failed {
+		h := hosts[host]
+		reason := ""
+		if h != nil {
+			reason = strings.TrimSpace(h.Output)
+			if reason == "" && h.Error != nil {
+				reason = strings.TrimSpace(h.Error.Error())
+			}
+		}
+		if reason == "" {
+			reason = "no output"
+		}
+		// Keep it to one line per host so the error stays greppable.
+		reason = strings.Join(strings.Fields(reason), " ")
+		parts = append(parts, fmt.Sprintf("%s: %s", host, reason))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// FailureDetails renders the failed hosts *with what the command actually
+// said*, e.g.
+//
+//	192.168.1.10: Device '/dev/sdb' not found; 192.168.1.11: already exists
+//
+// Error strings built from FailedHosts() alone ("failed on hosts: [10.0.0.1
+// 10.0.0.2]") force whoever hit the failure to go SSH into the nodes and replay
+// the command by hand, because the reason drbdadm/lvcreate/zfs printed is
+// dropped on the floor. Prefer this in user-facing errors; hosts are sorted so
+// the message is stable across runs.
+func (r *ExecResult) FailureDetails() string {
+	return hostResultDetails(r.Hosts)
 }
 
 // ============ Options ============

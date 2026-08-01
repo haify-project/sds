@@ -11,6 +11,8 @@ import (
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
+	Dispatch DispatchConfig `mapstructure:"dispatch"`
+	WAN      WANConfig      `mapstructure:"wan"`
 	Auth     AuthConfig     `mapstructure:"auth"`
 	TLS      TLSConfig      `mapstructure:"tls"`
 	Log      LogConfig      `mapstructure:"log"`
@@ -25,6 +27,33 @@ type Config struct {
 	Alert    AlertConfig    `mapstructure:"alert"`
 }
 
+
+// WANConfig tunes opt-in WAN replication.
+//
+// PKIDir is where the controller caches the shared CA + leaf used for the
+// sds-proxy mTLS link. It defaults to /var/lib/sds/wanproxy-pki, which only a
+// root controller can create; point it somewhere writable when the controller
+// runs as an ordinary user (development, a test harness, or a packaged service
+// with its own state directory).
+type WANConfig struct {
+	PKIDir string `mapstructure:"pki_dir"`
+}
+
+// DispatchConfig points the controller at the dispatch SSH configuration it
+// uses to reach storage nodes.
+//
+// ConfigPath matters whenever the controller does NOT run as a user whose
+// `~/.dispatch/config.toml` is the intended one — a systemd unit with a
+// different HOME, a non-root operator, or a test harness keeping its config out
+// of the home directory. Leave it empty to keep the dispatch default
+// (`~/.dispatch/config.toml`, falling back to `~/.ssh/config`).
+//
+// Parallel caps how many nodes a single dispatch call fans out to; 0 keeps the
+// deployment client's built-in default.
+type DispatchConfig struct {
+	ConfigPath string `mapstructure:"config_path"`
+	Parallel   int    `mapstructure:"parallel"`
+}
 
 // AlertConfig controls background health polling and Webhook notifications for
 // DRBD degraded states (StandAlone, Diskless, Syncing, Loss of Quorum).

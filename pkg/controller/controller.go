@@ -70,8 +70,21 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 		db = nil
 	}
 
-	// Create deployment client
-	deploymentClient, err := deployment.New(logger)
+	// WAN mTLS material lives next to the rest of the controller's state.
+	// Without this the PKI cache is pinned to /var/lib/sds, so a non-root
+	// controller fails resource creation at "mkdir /var/lib/sds: permission
+	// denied" — after it has already created the backing volumes.
+	if cfg.WAN.PKIDir != "" {
+		wanproxy.PKIDir = cfg.WAN.PKIDir
+	}
+
+	// Create deployment client. The dispatch config path comes from
+	// controller.toml so a controller running under a different HOME (systemd,
+	// non-root operator) still finds the operator's SSH settings.
+	deploymentClient, err := deployment.NewWithOptions(logger, deployment.Options{
+		ConfigPath: cfg.Dispatch.ConfigPath,
+		Parallel:   cfg.Dispatch.Parallel,
+	})
 	if err != nil {
 		cancel()
 		if db != nil {

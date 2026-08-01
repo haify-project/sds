@@ -9,10 +9,20 @@ port = 3374
 path = "/var/lib/sds/sds.db"
 
 [dispatch]
-# Dispatch configuration for SSH-based operations
+# SSH configuration the controller uses to reach storage nodes.
+# config_path matters whenever the controller does NOT run as a user whose
+# ~/.dispatch/config.toml is the intended one (systemd unit with its own HOME,
+# non-root operator, test harness). Leave it empty to keep dispatch's default
+# discovery. A path that does not exist is rejected at startup.
 config_path = "/root/.dispatch/config.toml"
+# Max nodes a single dispatch call fans out to. 0 = built-in default (10).
 parallel = 10
-hosts = ["orange1", "orange2", "orange3"]
+
+[wan]
+# Controller-side cache for the shared CA + leaf used by the sds-proxy mTLS link
+# (opt-in WAN replication only). Defaults to /var/lib/sds/wanproxy-pki, which
+# only a root controller can create — point it somewhere writable otherwise.
+# pki_dir = "/var/lib/sds/wanproxy-pki"
 
 [tls]
 enabled = false
