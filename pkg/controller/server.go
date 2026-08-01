@@ -1164,6 +1164,17 @@ func (s *Server) AddDR(ctx context.Context, req *sdspb.AddDRRequest) (*sdspb.Add
 	}, nil
 }
 
+// AddReplica adds a diskful local replica to a running resource.
+func (s *Server) AddReplica(ctx context.Context, req *sdspb.AddReplicaRequest) (*sdspb.AddReplicaResponse, error) {
+	if err := s.resources.AddReplica(ctx, req.Resource, req.Node); err != nil {
+		return &sdspb.AddReplicaResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.AddReplicaResponse{
+		Success: true,
+		Message: fmt.Sprintf("replica added on %q; initial sync runs in the background", req.Node),
+	}, nil
+}
+
 func (s *Server) DeleteHa(ctx context.Context, req *sdspb.DeleteHaRequest) (*sdspb.DeleteHaResponse, error) {
 	err := s.resources.RemoveHa(ctx, req.Resource)
 	if err != nil {

@@ -16,10 +16,10 @@ import (
 type NodeState string
 
 const (
-	NodeStateOnline       NodeState = "online"
-	NodeStateOffline      NodeState = "offline"
-	NodeStateDegraded     NodeState = "degraded"
-	NodeStateMaintenance  NodeState = "maintenance"
+	NodeStateOnline      NodeState = "online"
+	NodeStateOffline     NodeState = "offline"
+	NodeStateDegraded    NodeState = "degraded"
+	NodeStateMaintenance NodeState = "maintenance"
 )
 
 // NodeInfo represents node information
@@ -32,10 +32,10 @@ type NodeInfo struct {
 	// management address.
 	ReplicationAddress string                 `json:"replication_address,omitempty"`
 	Hostname           string                 `json:"hostname"`
-	State    NodeState              `json:"state"`
-	LastSeen time.Time              `json:"last_seen"`
-	Capacity map[string]interface{} `json:"capacity"`
-	Version  string                 `json:"version"`
+	State              NodeState              `json:"state"`
+	LastSeen           time.Time              `json:"last_seen"`
+	Capacity           map[string]interface{} `json:"capacity"`
+	Version            string                 `json:"version"`
 	// Labels are arbitrary key=value tags (e.g. rack=A) used by placement
 	// constraints such as replicas-on-different.
 	Labels map[string]string `json:"labels,omitempty"`
@@ -113,11 +113,11 @@ func (nm *NodeManager) RegisterNodeWithReplicationAddress(ctx context.Context, n
 		Address:            address,
 		ReplicationAddress: replicationAddress,
 		Hostname:           hostname,
-		State:    NodeStateOnline,
-		LastSeen: time.Now(),
-		Version:  nm.detectNodeVersion(ctx, address),
-		Capacity: make(map[string]interface{}),
-		Labels:   labels,
+		State:              NodeStateOnline,
+		LastSeen:           time.Now(),
+		Version:            nm.detectNodeVersion(ctx, address),
+		Capacity:           make(map[string]interface{}),
+		Labels:             labels,
 	}
 
 	// Save to in-memory cache

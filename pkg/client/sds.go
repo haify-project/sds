@@ -993,6 +993,18 @@ func (c *SDSClient) AddDR(ctx context.Context, resource, drNode, drEndpoint stri
 	return resp.WanPort, nil
 }
 
+// AddReplica adds a diskful local replica to a running resource.
+func (c *SDSClient) AddReplica(ctx context.Context, resource, node string) error {
+	resp, err := c.client.AddReplica(ctx, &sdspb.AddReplicaRequest{Resource: resource, Node: node})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
 	req := &sdspb.EvictHaRequest{
 		Resource: resource,

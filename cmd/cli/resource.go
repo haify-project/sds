@@ -43,6 +43,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceResizeVolume())
 	cmd.AddCommand(resourceSetOptions())
 	cmd.AddCommand(resourcePrimary())
+	cmd.AddCommand(resourceAddReplica())
 	cmd.AddCommand(resourceAddDR())
 	cmd.AddCommand(resourceDRFailover())
 	cmd.AddCommand(resourceSecondary())
@@ -683,6 +684,51 @@ func formatStringSlice(values []string) string {
 	result := append([]string(nil), values...)
 	sort.Strings(result)
 	return strings.Join(result, ", ")
+}
+
+func resourceAddReplica() *cobra.Command {
+	var node string
+
+	cmd := &cobra.Command{
+		Use:   "add-replica <resource> --node <node>",
+		Short: "Add a diskful local replica to a running resource",
+		Long: `Add one more full copy of a running resource, on a node that was not in the
+cluster when the resource was created.
+
+The new node joins the synchronous mesh as a peer of every existing replica and
+resyncs in the background; the resource keeps serving throughout. On a resource
+that also has an off-site DR the new node additionally gets its own WAN leg,
+because DRBD 9 is a full mesh — a replica the DR cannot reach would silently end
+replication the moment it was promoted.
+
+  sds resource add-replica openclaw --node node-e`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			if node == "" {
+				return fmt.Errorf("--node is required")
+			}
+
+			// A full initial sync of the new copy is not quick.
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.AddReplica(ctx, resource, node); err != nil {
+				return fmt.Errorf("failed to add replica: %w", err)
+			}
+			fmt.Printf("Replica added on %q. Initial sync runs in the background:\n", node)
+			fmt.Printf("  sds resource status %s\n", resource)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&node, "node", "", "Node that will hold the new replica")
+	return cmd
 }
 
 // resourceAddDR is deliberately a resource subcommand rather than an `ha` one:

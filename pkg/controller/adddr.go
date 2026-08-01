@@ -199,6 +199,12 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 	if err := wanproxy.ProvisionMulti(ctx, rm.wanproxyDeployClient(), multi); err != nil {
 		return fmt.Errorf("provision WAN proxy for %s: %w", resource, err)
 	}
+	// After the push, not before: the controller may well have supplied the
+	// binary itself, and checking first would reject a case that works.
+	if err := rm.assertWANProxyBinary(ctx, append(append([]string{}, primaryAddrs...), drAddr),
+		append(append([]string{}, primaries...), drNode)); err != nil {
+		return err
+	}
 
 	// Rewrite the LIVE config rather than regenerating from the record: the
 	// resource row does not carry the storage type or DRBD option overrides, so

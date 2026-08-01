@@ -790,11 +790,11 @@ func (c *Controller) loadFromDatabase(ctx context.Context) error {
 			Address:            dbNode.Address,
 			ReplicationAddress: dbNode.ReplicationAddress,
 			Hostname:           dbNode.Hostname,
-			State:    NodeState(dbNode.State),
-			LastSeen: dbNode.LastSeen,
-			Version:  dbNode.Version,
-			Capacity: make(map[string]interface{}),
-			Labels:   labels,
+			State:              NodeState(dbNode.State),
+			LastSeen:           dbNode.LastSeen,
+			Version:            dbNode.Version,
+			Capacity:           make(map[string]interface{}),
+			Labels:             labels,
 		}
 		c.nodes.mu.Unlock()
 

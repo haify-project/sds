@@ -124,6 +124,9 @@ service SDSController {
   rpc AddDR(AddDRRequest) returns (AddDRResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/dr"; body: "*"; };
   }
+  rpc AddReplica(AddReplicaRequest) returns (AddReplicaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/replicas"; body: "*"; };
+  }
   rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse) {
     option (google.api.http) = { delete: "/v1/resources/{resource}/ha"; };
   }
@@ -1165,6 +1168,20 @@ message AddDRResponse {
   bool success = 1;
   string message = 2;
   uint32 wan_port = 3;
+}
+
+// AddReplicaRequest adds a diskful local replica to a running resource. On a
+// two-site resource the new node also gets its own WAN leg to the DR: DRBD 9 is
+// a full mesh, and a replica the DR cannot reach ends replication the moment it
+// is promoted.
+message AddReplicaRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message AddReplicaResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message EvictHaResponse {
