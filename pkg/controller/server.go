@@ -1105,6 +1105,27 @@ func (s *Server) SetTiebreaker(ctx context.Context, req *sdspb.SetTiebreakerRequ
 	}, nil
 }
 
+// AddDR attaches an off-site asynchronous replica to a running resource. The
+// port actually used is echoed back, since a zero request port is allocated by
+// the controller and the caller needs it to open the firewall.
+func (s *Server) AddDR(ctx context.Context, req *sdspb.AddDRRequest) (*sdspb.AddDRResponse, error) {
+	if err := s.resources.AddDR(ctx, req.Resource, req.DrNode, req.DrEndpoint, req.WanPort, req.EgressAddress); err != nil {
+		return &sdspb.AddDRResponse{Success: false, Message: err.Error()}, nil
+	}
+
+	port := req.WanPort
+	if s.ctrl.db != nil {
+		if dbRes, err := s.ctrl.db.GetResource(ctx, req.Resource); err == nil && dbRes != nil {
+			port = uint32(dbRes.WANPort)
+		}
+	}
+	return &sdspb.AddDRResponse{
+		Success: true,
+		Message: fmt.Sprintf("DR site %q attached to %q; initial sync runs in the background", req.DrNode, req.Resource),
+		WanPort: port,
+	}, nil
+}
+
 func (s *Server) DeleteHa(ctx context.Context, req *sdspb.DeleteHaRequest) (*sdspb.DeleteHaResponse, error) {
 	err := s.resources.RemoveHa(ctx, req.Resource)
 	if err != nil {

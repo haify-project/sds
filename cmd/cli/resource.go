@@ -43,6 +43,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceResizeVolume())
 	cmd.AddCommand(resourceSetOptions())
 	cmd.AddCommand(resourcePrimary())
+	cmd.AddCommand(resourceAddDR())
 	cmd.AddCommand(resourceDRFailover())
 	cmd.AddCommand(resourceSecondary())
 	cmd.AddCommand(resourceDualPrimary())
@@ -682,6 +683,68 @@ func formatStringSlice(values []string) string {
 	result := append([]string(nil), values...)
 	sort.Strings(result)
 	return strings.Join(result, ", ")
+}
+
+// resourceAddDR is deliberately a resource subcommand rather than an `ha` one:
+// it changes where the data lives, not how the service fails over.
+func resourceAddDR() *cobra.Command {
+	var drNode, drEndpoint, egress string
+	var wanPort uint32
+
+	cmd := &cobra.Command{
+		Use:   "add-dr <resource> --dr-node <node> --dr-endpoint <host-or-ip>",
+		Short: "Attach an off-site asynchronous replica to a running resource",
+		Long: `Attach an off-site asynchronous replica to a resource that is already running.
+
+Off-site DR used to be a create-time-only choice, which is backwards: it is
+exactly the thing you add after a service has proven it matters. This adds it
+in place — the existing replicas keep their synchronous LAN mesh and a promoted
+resource keeps serving while the remote copy syncs in the background.
+
+The DR node joins over one mTLS sds-proxy leg per replica, using protocol A and
+pull-ahead, so a slow or flapping WAN link cannot stall writes at the primary
+site. It does not vote: quorum stays a matter for the primary site alone.
+
+  sds resource add-dr openclaw --dr-node node-c --dr-endpoint 203.0.113.7
+  sds resource add-dr data --dr-node dr1 --dr-endpoint dr.example.com --wan-port 6612`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			if drNode == "" {
+				return fmt.Errorf("--dr-node is required")
+			}
+			if drEndpoint == "" {
+				return fmt.Errorf("--dr-endpoint is required (the address the primary site dials)")
+			}
+
+			// The DR node must lay down its own backing volumes and run a full
+			// initial sync, neither of which is quick.
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			port, err := sdsClient.AddDR(ctx, resource, drNode, drEndpoint, wanPort, egress)
+			if err != nil {
+				return fmt.Errorf("failed to add DR site: %w", err)
+			}
+
+			fmt.Printf("DR site %q attached to %q (WAN base port %d)\n", drNode, resource, port)
+			fmt.Printf("Initial sync is running in the background; check it with:\n")
+			fmt.Printf("  sds resource status %s\n", resource)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&drNode, "dr-node", "", "Registered node that will hold the off-site replica")
+	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "Public address of the DR node that the primary site dials")
+	cmd.Flags().Uint32Var(&wanPort, "wan-port", 0, "Base sds-proxy WAN port (one per replica from here; 0 auto-allocates)")
+	cmd.Flags().StringVar(&egress, "egress-address", "", "Source address the primary site dials out from (optional)")
+	return cmd
 }
 
 func resourceAddVolume() *cobra.Command {

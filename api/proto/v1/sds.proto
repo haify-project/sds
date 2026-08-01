@@ -121,6 +121,9 @@ service SDSController {
   rpc SetTiebreaker(SetTiebreakerRequest) returns (SetTiebreakerResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/ha/tiebreaker"; body: "*"; };
   }
+  rpc AddDR(AddDRRequest) returns (AddDRResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/dr"; body: "*"; };
+  }
   rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse) {
     option (google.api.http) = { delete: "/v1/resources/{resource}/ha"; };
   }
@@ -1146,6 +1149,22 @@ message SetTiebreakerResponse {
   string message = 2;
   string previous_node = 3;
   string node = 4;
+}
+
+// AddDRRequest attaches an asynchronous off-site replica to a resource that is
+// already running, turning a LAN cluster into the two-site shape in place.
+message AddDRRequest {
+  string resource = 1;
+  string dr_node = 2;           // registered node that will hold the remote copy
+  string dr_endpoint = 3;       // public address the primary site dials
+  uint32 wan_port = 4;          // base sds-proxy port; 0 auto-allocates
+  string egress_address = 5;    // optional source address for the primary site
+}
+
+message AddDRResponse {
+  bool success = 1;
+  string message = 2;
+  uint32 wan_port = 3;
 }
 
 message EvictHaResponse {

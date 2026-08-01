@@ -1,0 +1,229 @@
+package controller
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/liliang-cn/sds/pkg/database"
+)
+
+// A LAN resource as it exists on disk before any DR is attached: two diskful
+// replicas plus a diskless tiebreaker, wired by connection-mesh.
+const lanResConfig = `resource openclaw {
+    protocol C;
+
+    options {
+        quorum majority;
+        on-no-quorum io-error;
+    }
+
+    on sds-a {
+        address   192.168.1.10:7300;
+        node-id   0;
+        volume 0 {
+            device    minor 12;
+            disk      /dev/vg0/openclaw_data;
+            meta-disk internal;
+        }
+    }
+
+    on sds-b {
+        address   192.168.1.11:7300;
+        node-id   1;
+        volume 0 {
+            device    minor 12;
+            disk      /dev/vg0/openclaw_data;
+            meta-disk internal;
+        }
+    }
+
+    on sds-e {
+        address   192.168.1.20:7300;
+        node-id   2;
+        volume 0 {
+            device    minor 12;
+            disk      none;
+            meta-disk internal;
+        }
+    }
+
+    connection-mesh {
+        hosts sds-a sds-b sds-e;
+    }
+}
+`
+
+func addDRTestFixture(t *testing.T) *ResourceManager {
+	t.Helper()
+	ctrl := newBasicTestController(&fakeDeploymentClient{})
+	for _, n := range []struct{ name, addr, host string }{
+		{"node-a", "192.168.1.10", "sds-a"},
+		{"node-b", "192.168.1.11", "sds-b"},
+		{"node-e", "192.168.1.20", "sds-e"},
+		{"node-c", "203.0.113.7", "sds-c"},
+	} {
+		ctrl.nodes.nodes[n.addr] = &NodeInfo{
+			Name: n.name, Address: n.addr, Hostname: n.host, State: NodeStateOnline,
+		}
+		ctrl.hostsMap[n.name] = n.addr
+	}
+	return ctrl.resources
+}
+
+var addDRVolumes = []*database.Volume{
+	{VolumeID: 0, VolumeName: "openclaw_data", Pool: "vg0", SizeGB: 20},
+}
+
+// Attaching a DR must leave the primary site's replication untouched — its
+// addresses, its synchronous protocol, and its minors are what the running
+// resource is already using, and changing any of them mid-flight would drop the
+// connection or, worse, point a replica at the wrong device.
+func TestAddDRToConfigPreservesPrimarySite(t *testing.T) {
+	rm := addDRTestFixture(t)
+
+	out, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "address   192.168.1.10:7300;")
+	assert.Contains(t, out, "address   192.168.1.11:7300;")
+	assert.Contains(t, out, "protocol C;", "the LAN stays synchronous")
+	assert.Contains(t, out, "quorum majority;", "existing options survive the rewrite")
+	// Every replica of a resource shares one minor; the DR must reuse it, not
+	// invent one.
+	assert.Equal(t, 4, strings.Count(out, "device    minor 12;"))
+}
+
+// The DR joins as a full replica with its own node-id and backing volume, on a
+// loopback address because its only path in is the proxy leg.
+func TestAddDRToConfigAddsDRStanza(t *testing.T) {
+	rm := addDRTestFixture(t)
+
+	out, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "on sds-c {")
+	assert.Contains(t, out, "node-id   3;", "next free id after 0,1,2")
+	assert.Contains(t, out, "disk      /dev/vg0/openclaw_data;")
+	// The DR's own stanza binds the leg port; only the connection sections use
+	// the +100 offset, and only for the primaries.
+	drStanza := out[strings.Index(out, "on sds-c {"):]
+	drStanza = drStanza[:strings.Index(drStanza, "\n    }")]
+	assert.Contains(t, drStanza, "address   127.0.0.1:7300;")
+}
+
+// A mesh entry for the DR would pair it with each replica on that replica's LAN
+// address, which is unroutable from the other site. The mesh therefore has to
+// shrink to the primary site and the WAN legs be spelled out explicitly.
+func TestAddDRToConfigNarrowsMeshAndAddsLegs(t *testing.T) {
+	rm := addDRTestFixture(t)
+
+	out, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, strings.Count(out, "connection-mesh"))
+	mesh := out[strings.Index(out, "connection-mesh"):]
+	mesh = mesh[:strings.Index(mesh, ";")]
+	assert.Contains(t, mesh, "sds-a")
+	assert.Contains(t, mesh, "sds-b")
+	assert.Contains(t, mesh, "sds-e", "the tiebreaker still votes over the LAN")
+	assert.NotContains(t, mesh, "sds-c", "the DR must not join the LAN mesh")
+
+	// One leg per diskful replica: DRBD 9 is a full mesh, so whichever replica
+	// is Primary after a local failover must have a path to the DR.
+	assert.Equal(t, 2, strings.Count(out, "connection {"))
+	assert.Contains(t, out, "host sds-a address 127.0.0.1:7400;")
+	assert.Contains(t, out, "host sds-c address 127.0.0.1:7300;")
+	assert.Contains(t, out, "host sds-b address 127.0.0.1:7401;")
+	assert.Contains(t, out, "host sds-c address 127.0.0.1:7301;")
+
+	// Each leg is async and yields under congestion, so a saturated or flapping
+	// WAN link cannot stall writes in the primary site.
+	assert.Equal(t, 2, strings.Count(out, "protocol A;"))
+	assert.Equal(t, 2, strings.Count(out, "on-congestion pull-ahead;"))
+
+	// No tiebreaker leg: a diskless voter reachable only over the WAN would make
+	// quorum depend on the link.
+	assert.NotContains(t, out, "host sds-e address 127.0.0.1")
+}
+
+// The port layout must match what generateDrbdConfig produces for a resource
+// created two-site from the start, or the two paths diverge and only one works.
+func TestAddDRToConfigMatchesCreateTimeLayout(t *testing.T) {
+	rm := addDRTestFixture(t)
+
+	added, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, nil, "203.0.113.7", addDRVolumes, 7300)
+	require.NoError(t, err)
+
+	created := rm.generateDrbdConfig(
+		"openclaw", 7300,
+		[]resolvedVolume{{id: 0, volumeName: "openclaw_data", pool: "vg0", minor: 12, sizeGB: 20}},
+		[]string{"node-a", "node-b", "node-c"}, nil,
+		"C", "lvm", nil,
+		&wanConfig{DRNode: "node-c", PrimaryNodes: []string{"node-a", "node-b"}},
+	)
+
+	for _, line := range []string{
+		"host sds-a address 127.0.0.1:7400;",
+		"host sds-b address 127.0.0.1:7401;",
+		"host sds-c address 127.0.0.1:7300;",
+		"host sds-c address 127.0.0.1:7301;",
+	} {
+		assert.Contains(t, created, line, "create-time config")
+		assert.Contains(t, added, line, "add-dr config")
+	}
+}
+
+// Re-running add-dr must not silently produce a config with the DR twice.
+func TestAddDRToConfigRejectsDuplicateNode(t *testing.T) {
+	rm := addDRTestFixture(t)
+
+	once, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+	require.NoError(t, err)
+
+	_, err = rm.addDRToConfig(once, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already in the config")
+}
+
+// A resource with no mesh (two nodes wired implicitly) must still gain its legs.
+func TestAddDRToConfigWithoutExistingMesh(t *testing.T) {
+	rm := addDRTestFixture(t)
+	noMesh := lanResConfig[:strings.Index(lanResConfig, "    connection-mesh")] + "}\n"
+
+	out, err := rm.addDRToConfig(noMesh, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "on sds-c {")
+	assert.Equal(t, 2, strings.Count(out, "connection {"))
+	// The primary site is now spelled out, since the DR's arrival means the
+	// implicit all-pairs reading of the file would include it.
+	assert.Contains(t, out, "hosts sds-a sds-b sds-e;")
+}
+
+func TestMinorForVolume(t *testing.T) {
+	assert.Equal(t, 12, minorForVolume(lanResConfig, 0))
+
+	twoVol := `resource r {
+    on sds-a {
+        volume 0 {
+            device    minor 5;
+        }
+        volume 1 {
+            device    minor 6;
+        }
+    }
+}
+`
+	assert.Equal(t, 5, minorForVolume(twoVol, 0))
+	assert.Equal(t, 6, minorForVolume(twoVol, 1))
+}

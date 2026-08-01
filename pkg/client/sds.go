@@ -971,6 +971,26 @@ func (c *SDSClient) SetTiebreaker(ctx context.Context, resource, node string) (s
 	return resp.PreviousNode, nil
 }
 
+// AddDR attaches an off-site asynchronous replica to a running resource,
+// returning the base WAN port in use (the controller allocates one when the
+// caller passes 0).
+func (c *SDSClient) AddDR(ctx context.Context, resource, drNode, drEndpoint string, wanPort uint32, egressAddress string) (uint32, error) {
+	resp, err := c.client.AddDR(ctx, &sdspb.AddDRRequest{
+		Resource:      resource,
+		DrNode:        drNode,
+		DrEndpoint:    drEndpoint,
+		WanPort:       wanPort,
+		EgressAddress: egressAddress,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if !resp.Success {
+		return 0, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.WanPort, nil
+}
+
 func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
 	req := &sdspb.EvictHaRequest{
 		Resource: resource,
