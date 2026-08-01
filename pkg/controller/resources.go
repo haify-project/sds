@@ -722,6 +722,21 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		}
 		nodes = append(append([]string{}, primaries...), drNode)
 		wanCfg = &wanConfig{DRNode: drNode, PrimaryNodes: primaries}
+
+		// Each primary's DRBD needs a loopback port to bind for its WAN leg that
+		// nothing else on that host has claimed; a fixed offset collides with
+		// another resource whose DRBD port happens to sit one offset away.
+		if len(primaries) > 1 && rm.deployment != nil {
+			primaryAddrs := make([]string, 0, len(primaries))
+			for _, n := range primaries {
+				primaryAddrs = append(primaryAddrs, rm.controller.ResolveHost(n))
+			}
+			bindPorts, perr := rm.pickWANBindPorts(ctx, primaryAddrs, int(port))
+			if perr != nil {
+				return fmt.Errorf("choose WAN bind ports: %w", perr)
+			}
+			wanCfg.BindPorts = bindPorts
+		}
 	}
 
 	// Resolve every volume: auto-select+normalize its pool and derive a backing
@@ -1454,12 +1469,32 @@ type wanConfig struct {
 	// with every one of them — otherwise a failover inside the primary site
 	// lands on a node with no path to the DR and replication stops).
 	PrimaryNodes []string
+
+	// BindPorts are the loopback ports each primary's DRBD binds for its WAN
+	// leg, in the same order as PrimaryNodes. Empty means "use the default
+	// offset", which is only safe when nothing else on the host has taken those
+	// ports — see wanDRBDBindOffset.
+	BindPorts []int
 }
 
-// wanDRBDBindOffset is added to a WAN leg's port to get the loopback port DRBD
-// binds on the PRIMARY side. It has to differ from the leg port itself, which
-// the local dialer already listens on; the primary's DRBD then connects to the
-// leg port and lands on that dialer.
+// bindPort returns the loopback port primary i binds for its WAN leg.
+func (w *wanConfig) bindPort(legPort, i int) int {
+	if i < len(w.BindPorts) && w.BindPorts[i] > 0 {
+		return w.BindPorts[i]
+	}
+	return legPort + wanDRBDBindOffset
+}
+
+// wanDRBDBindOffset is the starting guess for the loopback port DRBD binds on
+// the PRIMARY side of a WAN leg. It has to differ from the leg port itself,
+// which the local dialer already listens on; the primary's DRBD then connects to
+// the leg port and lands on that dialer.
+//
+// It is only a starting point, because a fixed offset collides across resources:
+// a resource on port 7300 would bind 7400, which is exactly the leg port of a
+// second resource on 7400 — the primary's DRBD then fails to bind with
+// EADDRINUSE and the leg never comes up. Callers resolve the real port against
+// what the host is already using; see pickWANBindPorts.
 const wanDRBDBindOffset = 100
 
 // multiPrimary reports whether the primary site holds more than one replica.
@@ -1574,20 +1609,22 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 		WANPort:    dbRes.WANPort,
 		ProxyState: map[string]string{},
 	}
-	primaryAddr, drAddr := rm.wanEndpointAddrs(dbRes)
-	unit := wanproxy.UnitInstance(name)
-	primaryNode := ""
+	_, drAddr := rm.wanEndpointAddrs(dbRes)
+
+	// One leg per primary-site replica, each its own systemd instance. Probing
+	// only "sds-proxy@<resource>" reports every leg of a multi-replica resource
+	// as inactive, because that unit name only exists in the single-replica
+	// shape.
+	primaryNodes := make([]string, 0, 4)
 	for _, n := range strings.Split(dbRes.Nodes, ",") {
 		n = strings.TrimSpace(n)
 		if n != "" && n != dbRes.DRNode {
-			primaryNode = n
-			break
+			primaryNodes = append(primaryNodes, n)
 		}
 	}
-	probe := func(nodeName, addr string) {
-		if nodeName == "" {
-			return
-		}
+	single := len(primaryNodes) <= 1
+
+	probe := func(label, addr, unit string) {
 		state := "unknown"
 		if addr != "" && rm.deployment != nil {
 			// `|| true` so an inactive unit (non-zero exit) still yields its state.
@@ -1600,10 +1637,21 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 				}
 			}
 		}
-		info.ProxyState[nodeName] = state
+		info.ProxyState[label] = state
 	}
-	probe(primaryNode, primaryAddr)
-	probe(dbRes.DRNode, drAddr)
+
+	// The DR terminates every leg, so it runs one unit per primary. Report them
+	// per leg rather than collapsing to one line for the DR node, or a single
+	// dead tunnel hides behind a healthy one.
+	for _, n := range primaryNodes {
+		unit := wanproxy.UnitInstance(wanproxy.LegID(name, rm.controller.ResolveHost(n), single))
+		probe(n, rm.controller.ResolveHost(n), unit)
+		label := dbRes.DRNode
+		if !single {
+			label = dbRes.DRNode + " (leg " + n + ")"
+		}
+		probe(label, drAddr, unit)
+	}
 	spec := rm.wanProxySpecFor(dbRes)
 	info.WANReachable = wanproxy.Reachable(ctx, rm.wanproxyDeployClient(), spec)
 	// Proxy counters from the primary (the side that holds the backlog). Best
@@ -1918,7 +1966,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 			// binds legPort, where its local acceptor dials it. Both ends read
 			// the same numbers as their own loopback, which is what lets one
 			// connection stanza describe a tunnel with two different endpoints.
-			config.WriteString(fmt.Sprintf("        host %s address 127.0.0.1:%d;\n", primaryName, legPort+wanDRBDBindOffset))
+			config.WriteString(fmt.Sprintf("        host %s address 127.0.0.1:%d;\n", primaryName, wan.bindPort(int(legPort), i)))
 			config.WriteString(fmt.Sprintf("        host %s address 127.0.0.1:%d;\n", drName, legPort))
 			// Async across the WAN, whatever the LAN mesh uses. pull-ahead lets
 			// a stalled tunnel drop behind instead of blocking the primary.

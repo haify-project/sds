@@ -87,7 +87,7 @@ func TestAddDRToConfigPreservesPrimarySite(t *testing.T) {
 	rm := addDRTestFixture(t)
 
 	out, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
-		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "address   192.168.1.10:7300;")
@@ -105,7 +105,7 @@ func TestAddDRToConfigAddsDRStanza(t *testing.T) {
 	rm := addDRTestFixture(t)
 
 	out, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
-		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "on sds-c {")
@@ -125,7 +125,7 @@ func TestAddDRToConfigNarrowsMeshAndAddsLegs(t *testing.T) {
 	rm := addDRTestFixture(t)
 
 	out, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
-		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, strings.Count(out, "connection-mesh"))
@@ -160,7 +160,7 @@ func TestAddDRToConfigMatchesCreateTimeLayout(t *testing.T) {
 	rm := addDRTestFixture(t)
 
 	added, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
-		[]string{"node-a", "node-b"}, nil, "203.0.113.7", addDRVolumes, 7300)
+		[]string{"node-a", "node-b"}, nil, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
 	created := rm.generateDrbdConfig(
@@ -187,11 +187,11 @@ func TestAddDRToConfigRejectsDuplicateNode(t *testing.T) {
 	rm := addDRTestFixture(t)
 
 	once, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
-		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
 	_, err = rm.addDRToConfig(once, "openclaw", "node-c",
-		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already in the config")
 }
@@ -202,7 +202,7 @@ func TestAddDRToConfigWithoutExistingMesh(t *testing.T) {
 	noMesh := lanResConfig[:strings.Index(lanResConfig, "    connection-mesh")] + "}\n"
 
 	out, err := rm.addDRToConfig(noMesh, "openclaw", "node-c",
-		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300)
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "on sds-c {")
@@ -305,4 +305,92 @@ func TestCreateResourceReservesBitmapHeadroom(t *testing.T) {
 	require.NotEmpty(t, fake.drbdCreateMDCalls, "create should have made metadata")
 	assert.Equal(t, minMetadataPeers, fake.drbdCreateMDCalls[0].maxPeers,
 		"a two-node resource must still leave slots for a DR or a third replica")
+}
+
+// A fixed bind offset collides across resources: a resource on 7300 binds 7400,
+// which is the leg port of a resource on 7400. The probed port has to win.
+func TestAddDRToConfigHonoursProbedBindPorts(t *testing.T) {
+	rm := addDRTestFixture(t)
+
+	out, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300,
+		[]int{7900, 7901})
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "host sds-a address 127.0.0.1:7900;")
+	assert.Contains(t, out, "host sds-b address 127.0.0.1:7901;")
+	assert.NotContains(t, out, "127.0.0.1:7400", "the colliding default must not survive")
+	// The DR side is untouched: it binds the leg port, where its acceptor dials.
+	assert.Contains(t, out, "host sds-c address 127.0.0.1:7300;")
+	assert.Contains(t, out, "host sds-c address 127.0.0.1:7301;")
+}
+
+// Same requirement on the create-time path, which generates the identical shape.
+func TestGenerateDrbdConfigHonoursProbedBindPorts(t *testing.T) {
+	ctrl := newBasicTestController(&fakeDeploymentClient{})
+	registerWANNodes(ctrl)
+
+	cfg := ctrl.resources.generateDrbdConfig(
+		"data", 7300,
+		[]resolvedVolume{{id: 0, volumeName: "data_data", pool: "vg0", minor: 0, sizeGB: 1}},
+		[]string{"node-a", "node-b", "node-dr"}, nil,
+		"C", "lvm", nil,
+		&wanConfig{DRNode: "node-dr", PrimaryNodes: []string{"node-a", "node-b"}, BindPorts: []int{7900, 7901}},
+	)
+
+	assert.Contains(t, cfg, "host sds-a address 127.0.0.1:7900;")
+	assert.Contains(t, cfg, "host sds-b address 127.0.0.1:7901;")
+	assert.NotContains(t, cfg, "127.0.0.1:7400")
+}
+
+// The DR must be built to the size the primaries actually export. Metadata is
+// carved out of the same device, so a replica whose volume was extended exports
+// more than its recorded size — and DRBD refuses a peer that is even one sector
+// short.
+func TestPrimaryBackingSizesTakesLargest(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	byHost := map[string]string{
+		"192.168.1.10": "3233808384\n",
+		"192.168.1.11": "3225419776\n",
+	}
+	fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		return successExecResult(hosts, byHost[hosts[0]]), nil
+	}
+	rm := newBasicTestController(fake).resources
+
+	sizes, err := rm.primaryBackingSizes(context.Background(),
+		[]string{"192.168.1.10", "192.168.1.11"}, "openclaw", 1)
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{3233808384}, sizes)
+}
+
+func TestPrimaryBackingSizesFailsWhenUnreadable(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		return successExecResult(hosts, ""), nil
+	}
+	rm := newBasicTestController(fake).resources
+
+	_, err := rm.primaryBackingSizes(context.Background(), []string{"192.168.1.10"}, "openclaw", 1)
+	require.Error(t, err)
+}
+
+func TestPickWANBindPortsUsesProbeAndFallsBack(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		if hosts[0] == "192.168.1.10" {
+			return successExecResult(hosts, "7405\n"), nil
+		}
+		return successExecResult(hosts, ""), nil // nothing free reported
+	}
+	rm := newBasicTestController(fake).resources
+
+	ports, err := rm.pickWANBindPorts(context.Background(),
+		[]string{"192.168.1.10", "192.168.1.11"}, 7300)
+	require.NoError(t, err)
+	assert.Equal(t, 7405, ports[0], "the probe's answer wins")
+	// An unusable probe result must not abort the operation; the plain offset is
+	// what the code did before the probe existed and is right when nothing else
+	// holds the port.
+	assert.Equal(t, 7401, ports[1], "falls back to offset + leg index")
 }
