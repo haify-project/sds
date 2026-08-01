@@ -8223,7 +8223,12 @@ type NodeResourceState struct {
 	// Percent of this peer's data in sync (0..100). 100 when steady-state / not
 	// resyncing. Only meaningful for a peer whose replication_state is a resync
 	// state (SyncSource/SyncTarget/PausedSync*).
-	SyncPercent   float64 `protobuf:"fixed64,4,opt,name=sync_percent,json=syncPercent,proto3" json:"sync_percent,omitempty"`
+	SyncPercent float64 `protobuf:"fixed64,4,opt,name=sync_percent,json=syncPercent,proto3" json:"sync_percent,omitempty"`
+	// node is the SDS node name this state belongs to. The map itself is keyed by
+	// DRBD host name, which is the machine's real hostname and generally is NOT
+	// the node name the rest of the API uses — so without this a caller cannot
+	// pair a state with the entry of `nodes` it describes.
+	Node          string `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8284,6 +8289,13 @@ func (x *NodeResourceState) GetSyncPercent() float64 {
 		return x.SyncPercent
 	}
 	return 0
+}
+
+func (x *NodeResourceState) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
 }
 
 type VolumeInfo struct {
@@ -13852,13 +13864,14 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"reconnects\x18\n" +
 	" \x01(\x04R\n" +
 	"reconnects\x12(\n" +
-	"\x10ring_full_events\x18\v \x01(\x04R\x0eringFullEvents\"\x96\x01\n" +
+	"\x10ring_full_events\x18\v \x01(\x04R\x0eringFullEvents\"\xaa\x01\n" +
 	"\x11NodeResourceState\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x1d\n" +
 	"\n" +
 	"disk_state\x18\x02 \x01(\tR\tdiskState\x12+\n" +
 	"\x11replication_state\x18\x03 \x01(\tR\x10replicationState\x12!\n" +
-	"\fsync_percent\x18\x04 \x01(\x01R\vsyncPercent\"\x95\x01\n" +
+	"\fsync_percent\x18\x04 \x01(\x01R\vsyncPercent\x12\x12\n" +
+	"\x04node\x18\x05 \x01(\tR\x04node\"\x95\x01\n" +
 	"\n" +
 	"VolumeInfo\x12\x1b\n" +
 	"\tvolume_id\x18\x01 \x01(\rR\bvolumeId\x12\x16\n" +

@@ -225,6 +225,10 @@ export interface NodeResourceState {
   role: string;
   diskState: string;
   replicationState: string;
+  // The SDS node name this state belongs to. The map is keyed by DRBD host
+  // name (the machine's real hostname), which is generally not the node name
+  // the rest of the API uses.
+  node?: string;
   // Resync completion (0..100). 100 / absent when not resyncing. Only
   // meaningful for a peer whose replicationState is a resync state.
   syncPercent?: number;

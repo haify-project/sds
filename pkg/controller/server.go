@@ -734,11 +734,16 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 			hostname = nodeInfo.Hostname
 		}
 
+		nodeName := endpoint
+		if err == nil && nodeInfo.Name != "" {
+			nodeName = nodeInfo.Name
+		}
 		status.NodeStates[hostname] = &sdspb.NodeResourceState{
 			Role:             nodeState.Role,
 			DiskState:        nodeState.DiskState,
 			ReplicationState: nodeState.Replication,
 			SyncPercent:      nodeState.SyncPercent,
+			Node:             nodeName,
 		}
 	}
 

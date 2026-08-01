@@ -1319,6 +1319,11 @@ message NodeResourceState {
   // resyncing. Only meaningful for a peer whose replication_state is a resync
   // state (SyncSource/SyncTarget/PausedSync*).
   double sync_percent = 4;
+  // node is the SDS node name this state belongs to. The map itself is keyed by
+  // DRBD host name, which is the machine's real hostname and generally is NOT
+  // the node name the rest of the API uses — so without this a caller cannot
+  // pair a state with the entry of `nodes` it describes.
+  string node = 5;
 }
 
 message VolumeInfo {

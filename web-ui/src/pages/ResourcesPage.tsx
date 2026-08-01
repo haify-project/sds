@@ -10,6 +10,7 @@ import {
   QuorumInfo,
 } from '../services/api';
 import { StatusBadge } from '@/components/StatusBadge';
+import { ResourceTopology } from '@/components/ResourceTopology';
 import { SnapshotsDialog } from '@/components/SnapshotsDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -1040,6 +1041,8 @@ function StatusDialog({ resource }: { resource: Resource }) {
               <span className="text-sm text-muted-foreground">Overall Role</span>
               <StatusBadge status={status.role} />
             </div>
+
+            <ResourceTopology resource={resource} status={status} />
 
             {status.quorum && <QuorumPanel quorum={status.quorum} />}
 
