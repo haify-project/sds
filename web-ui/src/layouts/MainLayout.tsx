@@ -13,7 +13,6 @@ import {
   Loader2,
   Sparkles,
   Menu,
-  Layers3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
@@ -24,7 +23,6 @@ const navigation = [
   { name: 'Nodes', href: '/nodes', icon: Server },
   { name: 'Pools', href: '/pools', icon: Database },
   { name: 'Resources', href: '/resources', icon: Box },
-  { name: 'Profiles', href: '/resource-profiles', icon: Layers3 },
   { name: 'Gateways', href: '/gateways', icon: Network },
   { name: 'HA', href: '/ha', icon: ShieldCheck },
   { name: 'Access', href: '/access', icon: Lock },

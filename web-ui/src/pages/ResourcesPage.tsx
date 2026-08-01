@@ -11,6 +11,8 @@ import {
 } from '../services/api';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ResourceTopology } from '@/components/ResourceTopology';
+import { ResourceProfilesPage } from './ResourceProfilesPage';
+import { useSearchParams } from 'react-router-dom';
 import { SnapshotsDialog } from '@/components/SnapshotsDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -157,8 +159,29 @@ export function ResourcesPage() {
     queryFn: () => api.getResourceProfiles(),
   });
 
+  // Profiles live here rather than in their own nav entry: they are templates
+  // for resources and do nothing on their own, so they belong beside the things
+  // they create. It also matches the CLI, where the command has always been
+  // `sds resource profile`.
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'profiles' ? 'profiles' : 'resources';
+
   return (
-    <div className="space-y-6">
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setParams(v === 'profiles' ? { tab: 'profiles' } : {}, { replace: true })}
+      className="space-y-6"
+    >
+      <TabsList>
+        <TabsTrigger value="resources">Resources</TabsTrigger>
+        <TabsTrigger value="profiles">Profiles</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="profiles" className="space-y-6">
+        <ResourceProfilesPage />
+      </TabsContent>
+
+      <TabsContent value="resources" className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">DRBD Resources</h3>
         <CreateResourceDialog
@@ -205,7 +228,8 @@ export function ResourcesPage() {
           </Table>
         )}
       </Card>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 
