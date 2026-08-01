@@ -45,6 +45,12 @@ type ResourceInfo struct {
 	QuorumRisk bool
 	Labels     map[string]string
 	Profile    string
+	// WANMode marks a resource with an off-site asynchronous copy, and DRNode
+	// names which of Nodes holds it. Listing the DR as just another replica is
+	// misleading: it is a different site, replicates under protocol A, and never
+	// takes over automatically.
+	WANMode bool
+	DRNode  string
 }
 
 // ResourceNodeState represents detailed state of a node for a resource
@@ -2137,6 +2143,8 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		QuorumRisk: len(nodeAddresses) == 2 && len(disklessNodes) == 0,
 		Labels:     cloneStringMap(dbRes.Labels),
 		Profile:    dbRes.Profile,
+		WANMode:    dbRes.WANMode,
+		DRNode:     dbRes.DRNode,
 	}
 
 	if len(info.Volumes) == 0 && len(dbVolumes) > 0 {
@@ -2205,6 +2213,13 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 			DisklessClients: splitCSV(dbRes.DisklessClients),
 			Labels:          cloneStringMap(dbRes.Labels),
 			Profile:         dbRes.Profile,
+			// Same derivations the single-resource view makes. Omitting them
+			// here left the list unable to flag a two-node resource with no
+			// tiebreaker, or to tell an off-site DR from a local replica —
+			// precisely the things a list is for.
+			QuorumRisk: len(nodeAddresses) == 2 && dbRes.DisklessNodes == "",
+			WANMode:    dbRes.WANMode,
+			DRNode:     dbRes.DRNode,
 		})
 	}
 

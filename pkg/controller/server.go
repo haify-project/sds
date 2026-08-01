@@ -515,6 +515,8 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 			DisklessNodes:   resource.DisklessNodes,
 			DisklessClients: resource.DisklessClients,
 			QuorumRisk:      resource.QuorumRisk,
+			WanMode:         resource.WANMode,
+			DrNode:          resource.DRNode,
 			Labels:          resource.Labels,
 			Profile:         resource.Profile,
 		},
@@ -552,6 +554,8 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 			DisklessNodes:   r.DisklessNodes,
 			DisklessClients: r.DisklessClients,
 			QuorumRisk:      r.QuorumRisk,
+			WanMode:         r.WANMode,
+			DrNode:          r.DRNode,
 			Labels:          r.Labels,
 			Profile:         r.Profile,
 		})
@@ -746,6 +750,19 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 			Pool:          v.Pool,
 			BackingVolume: v.BackingVolume,
 		})
+	}
+
+	// Quorum arithmetic — the number that decides whether this resource keeps
+	// serving. Best effort: it is derived from a live probe, and a resource that
+	// is down should still report the rest of its status.
+	if q, qerr := s.resources.Quorum(ctx, req.Name); qerr == nil && q != nil {
+		status.Quorum = &sdspb.QuorumInfo{
+			Members:   int32(q.Members),
+			Required:  int32(q.Required),
+			Online:    int32(q.Online),
+			HasQuorum: q.HasQuorum,
+			Tolerated: int32(q.Tolerated),
+		}
 	}
 
 	// WAN replication view (nil for a LAN resource, so the fields stay zero).

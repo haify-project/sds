@@ -1228,6 +1228,12 @@ message ResourceInfo {
   repeated string diskless_clients = 10;
   map<string, string> labels = 11;
   string profile = 12;
+  // WAN replication: wan_mode marks a resource with an off-site asynchronous
+  // copy, and dr_node names which of `nodes` holds it. Without this the list
+  // shows the DR as just another replica, which is exactly wrong — it is a
+  // different site, a different protocol, and it never takes over automatically.
+  bool wan_mode = 13;
+  string dr_node = 14;
 }
 
 message ResourceStatus {
@@ -1254,6 +1260,30 @@ message ResourceStatus {
   // when they could not be read (older proxy, first tick not yet written, node
   // unreachable) — absent means UNKNOWN, not zero.
   WANMetrics wan_metrics = 12;
+  // quorum is what decides whether this resource keeps serving when nodes are
+  // lost. It is the one number that governs availability and it was previously
+  // reported nowhere: an operator had to know DRBD counts every configured node
+  // (tiebreakers and the off-site DR included) and work out the majority by hand.
+  QuorumInfo quorum = 13;
+}
+
+// QuorumInfo is the vote arithmetic behind "will this resource survive?".
+message QuorumInfo {
+  // members is every node in the resource config: diskful replicas, diskless
+  // tiebreakers and diskless clients alike. DRBD counts them all.
+  int32 members = 1;
+  // required is the majority DRBD needs to keep serving: members/2 + 1.
+  int32 required = 2;
+  // online is how many members the reporting node can currently see, itself
+  // included.
+  int32 online = 3;
+  // has_quorum is what DRBD itself reports, not a recomputation of the fields
+  // above — they can disagree while a connection is being established, and DRBD
+  // is the one that decides whether I/O proceeds.
+  bool has_quorum = 4;
+  // tolerated is how many further members can be lost before I/O suspends.
+  // Negative is not possible; zero means the next failure stops the resource.
+  int32 tolerated = 5;
 }
 
 // WANMetrics is what the primary site's sds-proxy reports about the WAN leg.

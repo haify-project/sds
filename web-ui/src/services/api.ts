@@ -44,6 +44,11 @@ export interface Resource {
   quorumRisk?: boolean;
   labels?: Record<string, string>;
   profile?: string;
+  // Off-site asynchronous replication. drNode names which entry of `nodes`
+  // lives at the DR site — it replicates under protocol A and never takes over
+  // automatically, so showing it as just another replica would mislead.
+  wanMode?: boolean;
+  drNode?: string;
 }
 
 export interface ResourceProfile {
@@ -179,6 +184,41 @@ export interface ResourceStatus {
   nodes: string[];
   nodeStates: Record<string, NodeResourceState>;
   volumes: Volume[];
+  // Quorum arithmetic: how many members the resource has, how many votes it
+  // needs, and how much margin is left. This is what decides whether the
+  // resource keeps serving as nodes are lost.
+  quorum?: QuorumInfo;
+  // WAN replication. All absent/false for an ordinary LAN resource.
+  wan?: boolean;
+  drNode?: string;
+  drEndpoint?: string;
+  wanPort?: number;
+  // Per-leg `sds-proxy@<instance>` unit state, keyed by a label that names both
+  // ends of the leg. A multi-replica resource has one leg per replica.
+  wanProxy?: Record<string, string>;
+  wanReachable?: boolean;
+  wanMetrics?: WANMetrics;
+}
+
+export interface QuorumInfo {
+  members: number;
+  required: number;
+  online: number;
+  hasQuorum: boolean;
+  // How many further members can be lost before I/O suspends.
+  tolerated: number;
+}
+
+export interface WANMetrics {
+  // The un-replicated backlog: writes already acknowledged locally that have
+  // not reached the DR. Under protocol A this IS the data-loss window of a DR
+  // failover performed right now.
+  bufferUsedBytes?: string;
+  bufferCapBytes?: string;
+  bufferFillPercent?: number;
+  compressionRatio?: number;
+  wanConnected?: boolean;
+  reconnects?: string;
 }
 
 export interface NodeResourceState {
