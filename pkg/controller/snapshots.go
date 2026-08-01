@@ -59,7 +59,7 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotN
 				return fmt.Errorf("failed to create snapshot on %s: %s", host, strings.TrimSpace(hr.Output))
 			}
 		}
-		return fmt.Errorf("failed to create snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to create snapshot: %s", result.FailureDetails())
 	}
 
 	sm.controller.logger.Info("Snapshot created successfully",
@@ -90,7 +90,7 @@ func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotN
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to delete snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to delete snapshot: %s", result.FailureDetails())
 	}
 
 	sm.controller.logger.Info("Snapshot deleted successfully",
@@ -113,7 +113,7 @@ func (sm *SnapshotManager) ListSnapshots(ctx context.Context, volume, node strin
 	}
 
 	if !result.AllSuccess() {
-		return nil, fmt.Errorf("failed to list snapshots: %v", result.FailedHosts())
+		return nil, fmt.Errorf("failed to list snapshots: %s", result.FailureDetails())
 	}
 
 	var snapshots []*SnapshotInfo
@@ -170,7 +170,7 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to restore snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to restore snapshot: %s", result.FailureDetails())
 	}
 
 	sm.controller.logger.Info("Snapshot restored successfully",

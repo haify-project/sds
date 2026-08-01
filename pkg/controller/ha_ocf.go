@@ -399,7 +399,7 @@ func (rm *ResourceManager) SyncHaToml(ctx context.Context, resource, content str
 		return "", fmt.Errorf("failed to reload drbd-reactor: %w", err)
 	}
 	if !reloadResult.AllSuccess() {
-		return "", fmt.Errorf("drbd-reactor reload failed on nodes: %v", reloadResult.FailedHosts())
+		return "", fmt.Errorf("drbd-reactor reload failed on nodes: %s", reloadResult.FailureDetails())
 	}
 	return fmt.Sprintf("toml synced to %d nodes, drbd-reactor reloaded", len(hosts)), nil
 }

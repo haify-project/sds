@@ -149,7 +149,7 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to create pool: %v", result.FailedHosts())
+		return fmt.Errorf("failed to create pool: %s", result.FailureDetails())
 	}
 
 	// If type is thin_pool, create a thin pool LV
@@ -171,7 +171,7 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 			return fmt.Errorf("failed to create thin pool: %w", err)
 		}
 		if !tpResult.AllSuccess() {
-			return fmt.Errorf("failed to create thin pool: %v", tpResult.FailedHosts())
+			return fmt.Errorf("failed to create thin pool: %s", tpResult.FailureDetails())
 		}
 	}
 
@@ -223,7 +223,7 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 		if persistedErr == nil {
 			return persisted, nil
 		}
-		return nil, fmt.Errorf("failed to get pool: %v", result.FailedHosts())
+		return nil, fmt.Errorf("failed to get pool: %s", result.FailureDetails())
 	}
 
 	// Parse VGS output
@@ -352,7 +352,7 @@ func (sm *StorageManager) AddDiskToPool(ctx context.Context, pool, disk, node st
 		return fmt.Errorf("failed to create PV: %w", err)
 	}
 	if !result.AllSuccess() {
-		return fmt.Errorf("PV creation failed: %v", result.FailedHosts())
+		return fmt.Errorf("PV creation failed: %s", result.FailureDetails())
 	}
 
 	// Extend VG
@@ -363,7 +363,7 @@ func (sm *StorageManager) AddDiskToPool(ctx context.Context, pool, disk, node st
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to add disk: %v", result.FailedHosts())
+		return fmt.Errorf("failed to add disk: %s", result.FailureDetails())
 	}
 
 	sm.controller.logger.Info("Disk added to pool",
@@ -414,7 +414,7 @@ func (sm *StorageManager) DeletePool(ctx context.Context, name, node string) err
 		if zfsErr := sm.DeleteZFSPool(ctx, name, node); zfsErr == nil {
 			return nil
 		}
-		return fmt.Errorf("failed to delete pool: %v", result.FailedHosts())
+		return fmt.Errorf("failed to delete pool: %s", result.FailureDetails())
 	}
 
 	sm.controller.logger.Info("Pool deleted successfully",
@@ -454,7 +454,7 @@ func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, 
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to create ZFS pool: %v", result.FailedHosts())
+		return fmt.Errorf("failed to create ZFS pool: %s", result.FailureDetails())
 	}
 
 	sm.controller.logger.Info("ZFS pool created successfully",
@@ -495,7 +495,7 @@ func (sm *StorageManager) GetZFSPool(ctx context.Context, poolName, node string)
 		if persisted, dbErr := sm.getPersistedPool(ctx, poolName); dbErr == nil {
 			return persisted, nil
 		}
-		return nil, fmt.Errorf("failed to get ZFS pool: %v", result.FailedHosts())
+		return nil, fmt.Errorf("failed to get ZFS pool: %s", result.FailureDetails())
 	}
 
 	for _, r := range result.Hosts {
@@ -617,7 +617,7 @@ func (sm *StorageManager) DeleteZFSPool(ctx context.Context, name, node string) 
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to delete ZFS pool: %v", result.FailedHosts())
+		return fmt.Errorf("failed to delete ZFS pool: %s", result.FailureDetails())
 	}
 
 	sm.controller.logger.Info("ZFS pool deleted successfully",
@@ -650,7 +650,7 @@ func (sm *StorageManager) CreateZFSDataset(ctx context.Context, datasetPath, nod
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to create ZFS dataset: %v", result.FailedHosts())
+		return fmt.Errorf("failed to create ZFS dataset: %s", result.FailureDetails())
 	}
 
 	return nil
@@ -699,7 +699,7 @@ func (sm *StorageManager) CreateZFSThinVolume(ctx context.Context, poolName, vol
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to create ZFS thin volume: %v", result.FailedHosts())
+		return fmt.Errorf("failed to create ZFS thin volume: %s", result.FailureDetails())
 	}
 
 	// Set quota for thin provisioning
@@ -724,7 +724,7 @@ func (sm *StorageManager) ZFSSnapshot(ctx context.Context, dataset, snapshotName
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to create ZFS snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to create ZFS snapshot: %s", result.FailureDetails())
 	}
 
 	return nil
@@ -819,7 +819,7 @@ func (sm *StorageManager) ZFSRestoreSnapshot(ctx context.Context, dataset, snaps
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to restore ZFS snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to restore ZFS snapshot: %s", result.FailureDetails())
 	}
 
 	return nil
@@ -842,7 +842,7 @@ func (sm *StorageManager) ZFSCloneSnapshot(ctx context.Context, snapshot, cloneP
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to clone ZFS snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to clone ZFS snapshot: %s", result.FailureDetails())
 	}
 
 	return nil
@@ -886,7 +886,7 @@ func (sm *StorageManager) CreateLvmSnapshot(ctx context.Context, vgName, lvName,
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to create LVM snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to create LVM snapshot: %s", result.FailureDetails())
 	}
 
 	return nil
@@ -945,7 +945,7 @@ func (sm *StorageManager) DeleteLvmSnapshot(ctx context.Context, vgName, snapsho
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to delete LVM snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to delete LVM snapshot: %s", result.FailureDetails())
 	}
 
 	return nil
@@ -969,7 +969,7 @@ func (sm *StorageManager) RestoreLvmSnapshot(ctx context.Context, vgName, snapsh
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to restore LVM snapshot: %v", result.FailedHosts())
+		return fmt.Errorf("failed to restore LVM snapshot: %s", result.FailureDetails())
 	}
 
 	return nil
@@ -991,7 +991,7 @@ func (sm *StorageManager) ZFSResizeVolume(ctx context.Context, volumePath, newSi
 	}
 
 	if !result.AllSuccess() {
-		return fmt.Errorf("failed to resize ZFS volume: %v", result.FailedHosts())
+		return fmt.Errorf("failed to resize ZFS volume: %s", result.FailureDetails())
 	}
 
 	return nil

@@ -46,6 +46,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -172,6 +173,33 @@ func (r *Result) FailedHosts() []string {
 		}
 	}
 	return failed
+}
+
+// FailureDetails renders the failed hosts with the reason each one gave, so a
+// WAN provisioning error names the problem instead of only the addresses. See
+// deployment.ExecResult.FailureDetails.
+func (r *Result) FailureDetails() string {
+	failed := r.FailedHosts()
+	if len(failed) == 0 {
+		return ""
+	}
+	sort.Strings(failed)
+
+	parts := make([]string, 0, len(failed))
+	for _, host := range failed {
+		reason := ""
+		if h := r.Hosts[host]; h != nil {
+			reason = strings.TrimSpace(h.Output)
+			if reason == "" && h.Err != nil {
+				reason = strings.TrimSpace(h.Err.Error())
+			}
+		}
+		if reason == "" {
+			reason = "no output"
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", host, strings.Join(strings.Fields(reason), " ")))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // DeploymentClient is the minimal SSH/file-distribution surface wanproxy needs.
@@ -592,7 +620,7 @@ func distribute(ctx context.Context, deploy DeploymentClient, hosts []string, co
 		return fmt.Errorf("wanproxy: %s: %w", desc, err)
 	}
 	if res != nil && !res.AllSuccess() {
-		return fmt.Errorf("wanproxy: %s failed on hosts: %v", desc, res.FailedHosts())
+		return fmt.Errorf("wanproxy: %s failed: %s", desc, res.FailureDetails())
 	}
 	return nil
 }
@@ -604,7 +632,7 @@ func run(ctx context.Context, deploy DeploymentClient, hosts []string, cmd, desc
 		return fmt.Errorf("wanproxy: %s: %w", desc, err)
 	}
 	if res != nil && !res.AllSuccess() {
-		return fmt.Errorf("wanproxy: %s failed on hosts: %v", desc, res.FailedHosts())
+		return fmt.Errorf("wanproxy: %s failed: %s", desc, res.FailureDetails())
 	}
 	return nil
 }
