@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -949,7 +950,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 			BaseWANPort:       int(wan.WANPort),
 			BaseDRBDPort:      int(port),
 			PrimaryEgressAddr: wan.EgressAddress,
-			BinaryPath:        rm.wanproxyBinaryPath(),
+			BinaryFor:         rm.wanproxyBinaryResolver(ctx, append(append([]string{}, primaryAddrs...), drAddr)),
 		}
 		rm.controller.logger.Info("Provisioning WAN replication proxy before DRBD up",
 			zap.String("resource", name),
@@ -991,6 +992,21 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// AdoptResource, which never reaches here.
 	if err := rm.establishInitialSync(ctx, name, nodeIPs[0]); err != nil {
 		return fmt.Errorf("failed to establish initial sync for %s: %w", name, err)
+	}
+
+	// 5a. WAN only: now that the resource exists and its peers are configured,
+	// narrow quorum to the primary site so the DR does not get a vote on whether
+	// home may write. This could not be done in the generated config — a numeric
+	// quorum would have blocked the force-promote above. Best effort: a resource
+	// that is otherwise created should not be failed for a tuning step, and the
+	// setting can be applied later with `resource set-options`.
+	if wan != nil {
+		// allIPs is every participant; nodeIPs is the diskful ones, the DR last.
+		localVoters := len(allIPs) - 1
+		if err := rm.applyLocalSiteQuorum(ctx, name, allIPs, localVoters); err != nil {
+			rm.controller.logger.Warn("Could not narrow quorum to the primary site; the DR still votes",
+				zap.String("resource", name), zap.Error(err))
+		}
 	}
 
 	// 5b. Ensure a DRBD boot unit is installed and enabled on every
@@ -1523,13 +1539,19 @@ func (w *wanConfig) legIndex(node string) int {
 // wanproxyLocalBinaryPath is the controller-local path to the sds-proxy binary
 // the WAN provisioner pushes to both nodes. We follow the same convention as
 // the service-ip / sds-controller helpers: a well-known /usr/local/bin path.
-const wanproxyLocalBinaryPath = "/usr/local/bin/sds-proxy"
+var wanproxyLocalBinaryPath = "/usr/local/bin/sds-proxy"
 
 // wanproxyBinaryPath returns the controller-local sds-proxy binary to push to
 // the WAN nodes, or "" when it is not present locally. Returning "" makes
 // wanproxy.Provision skip the binary push and assume the binary was pre-staged
 // on the nodes (a warning is logged) rather than failing the create outright —
 // most fleets stage sds-proxy alongside drbd-utils via their image/package.
+//
+// This is the architecture-blind answer, kept for callers that push to a single
+// known-compatible node. Anything pushing to a set of nodes should use
+// wanproxyBinaryResolver, because the two ends of a WAN leg frequently differ:
+// the off-site node is whatever the cloud rents, the primary site is whatever is
+// on the shelf.
 func (rm *ResourceManager) wanproxyBinaryPath() string {
 	if _, err := os.Stat(wanproxyLocalBinaryPath); err != nil {
 		rm.controller.logger.Warn("sds-proxy binary not found on controller; assuming it is pre-staged on WAN nodes",
@@ -1537,6 +1559,60 @@ func (rm *ResourceManager) wanproxyBinaryPath() string {
 		return ""
 	}
 	return wanproxyLocalBinaryPath
+}
+
+// nodeArchProbe reports a node's machine architecture in Go's naming.
+const nodeArchProbe = `case "$(uname -m)" in x86_64) echo amd64;; aarch64|arm64) echo arm64;; *) uname -m;; esac`
+
+// wanproxyBinaryResolver returns a function that picks the controller-local
+// sds-proxy binary appropriate to each node.
+//
+// Pushing one file to every node is right only while the fleet is uniform, and
+// a two-site cluster is the case least likely to be: an arm64 machine at home
+// replicating to whatever architecture the off-site provider rents. The same
+// push then installs an unrunnable file, and the failure surfaces nowhere near
+// the cause — systemd reports 203/EXEC on the node while the operator sees a
+// DRBD connection that never forms.
+//
+// Per-architecture binaries are looked for beside the default path, named
+// "<path>-<goarch>" (e.g. /usr/local/bin/sds-proxy-arm64). A node whose
+// architecture matches the controller's own falls back to the plain path, which
+// keeps every existing single-architecture deployment working untouched.
+func (rm *ResourceManager) wanproxyBinaryResolver(ctx context.Context, hosts []string) func(string) string {
+	arch := make(map[string]string, len(hosts))
+	for _, h := range hosts {
+		if res, err := rm.deployment.Exec(ctx, []string{h}, nodeArchProbe); err == nil && res != nil {
+			for _, r := range res.Hosts {
+				arch[h] = strings.TrimSpace(r.Output)
+				break
+			}
+		}
+	}
+
+	return func(host string) string {
+		a := arch[host]
+		if a != "" {
+			if p := wanproxyLocalBinaryPath + "-" + a; fileExists(p) {
+				return p
+			}
+		}
+		// The plain path is the controller's own architecture. Offer it only when
+		// the node agrees, or when the probe failed and there is nothing better
+		// to go on — pushing a binary of the wrong architecture is worse than
+		// pushing none, because "missing" is a failure the operator can read.
+		if (a == runtime.GOARCH || a == "") && fileExists(wanproxyLocalBinaryPath) {
+			return wanproxyLocalBinaryPath
+		}
+		rm.controller.logger.Warn("No sds-proxy binary on the controller for this node's architecture; assuming it is pre-staged",
+			zap.String("host", host), zap.String("arch", a),
+			zap.String("looked_for", wanproxyLocalBinaryPath+"-"+a))
+		return ""
+	}
+}
+
+func fileExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && !st.IsDir()
 }
 
 // wanproxyDeployClient adapts the resource manager's deployment client to the
@@ -1689,6 +1765,45 @@ func randomWANPort() uint32 {
 // wan is nil for a normal LAN resource (output unchanged). When set, the config
 // is rendered in WAN mode (protocol A + pull-ahead + loopback addresses).
 
+// applyLocalSiteQuorum narrows a running WAN resource's quorum to a majority of
+// its primary site.
+//
+// It is a separate step from config generation on purpose. A numeric quorum is
+// enforced absolutely, from the moment the resource exists — before any peer has
+// connected there is exactly one node visible, so the force-promote that
+// establishes the first UpToDate generation is refused with "No quorum". DRBD's
+// own "majority" is adaptive to the membership it has seen, so creation needs
+// it. Once the peers are up, the number is both satisfiable and the thing we
+// actually want: see localSiteQuorum for why the DR must not vote.
+func (rm *ResourceManager) applyLocalSiteQuorum(ctx context.Context, resource string, hosts []string, localVoters int) error {
+	if len(hosts) == 0 {
+		return nil
+	}
+	resPath := fmt.Sprintf("/etc/drbd.d/%s.res", resource)
+	catRes, err := rm.deployment.Exec(ctx, []string{hosts[0]}, "cat "+resPath)
+	if err != nil {
+		return fmt.Errorf("read resource config to set quorum: %w", err)
+	}
+	live, ok := "", false
+	for _, r := range catRes.Hosts {
+		live, ok = r.Output, r.Success
+		break
+	}
+	if !ok || strings.TrimSpace(live) == "" {
+		return fmt.Errorf("read resource config for %q: %s", resource, catRes.FailureDetails())
+	}
+
+	updated := setLocalSiteQuorum(live, localVoters)
+	if updated == live {
+		return nil
+	}
+	if _, err := rm.deployment.DistributeConfig(ctx, hosts, updated, resPath); err != nil {
+		return fmt.Errorf("distribute quorum change: %w", err)
+	}
+	return rm.execAllSuccess(ctx, hosts, fmt.Sprintf("sudo drbdadm adjust %s", resource),
+		"apply the primary-site quorum")
+}
+
 // localSiteQuorum returns the `quorum` setting for a resource.
 //
 // A LAN resource gets "majority", unchanged: every node can serve, so every node
@@ -1738,7 +1853,14 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 
 	// Add defaults
 	setOption("options", "auto-promote", "no")
-	setOption("options", "quorum", localSiteQuorum(nodes, disklessNodes, wan))
+	// Always "majority" here, even for a WAN resource whose steady-state quorum
+	// should exclude the DR. A fixed number is absolute from the very first
+	// moment, including before any peer has ever connected, so it blocks the
+	// force-promote that gives a brand-new resource its first UpToDate
+	// generation. `majority` is adaptive to the membership DRBD has actually
+	// seen, so it lets creation proceed. The numeric value is applied once the
+	// resource is up and its peers are connected — see applyLocalSiteQuorum.
+	setOption("options", "quorum", "majority")
 	setOption("options", "on-no-quorum", "io-error")
 	setOption("options", "on-no-data-accessible", "io-error")
 	setOption("options", "on-suspended-primary-outdated", "force-secondary")

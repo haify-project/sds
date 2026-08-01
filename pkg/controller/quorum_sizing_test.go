@@ -8,6 +8,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Generated configs always say "majority", LAN or WAN alike. A numeric quorum is
+// absolute from the moment the resource exists, so putting one in the generated
+// config blocks the force-promote that gives a brand-new resource its first
+// UpToDate generation — "1 of 1 nodes visible, need 2 for quorum". The primary-
+// site number is applied afterwards, once the peers are connected.
+func TestGeneratedConfigAlwaysUsesQuorumMajority(t *testing.T) {
+	ctrl := newBasicTestController(&fakeDeploymentClient{})
+	registerWANNodes(ctrl)
+
+	cfg := ctrl.resources.generateDrbdConfig(
+		"data", 7300,
+		[]resolvedVolume{{id: 0, volumeName: "data_data", pool: "vg0", minor: 0, sizeGB: 1}},
+		[]string{"node-a", "node-b", "node-dr"}, nil, "C", "lvm", nil,
+		&wanConfig{DRNode: "node-dr", PrimaryNodes: []string{"node-a", "node-b"}},
+	)
+	assert.Contains(t, cfg, "quorum majority;",
+		"a numeric quorum in the generated config would block the initial force-promote")
+}
+
 // The whole point of the change is that it is invisible to a LAN cluster. Every
 // node of one can take over, so every node should have a say in whether taking
 // over is safe — "majority" is right and must not move.

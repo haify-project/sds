@@ -184,7 +184,8 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 			BaseWANPort:       dbRes.WANPort,
 			BaseDRBDPort:      dbRes.Port,
 			PrimaryEgressAddr: dbRes.WANEgressAddress,
-			BinaryPath:        rm.wanproxyBinaryPath(),
+			BinaryFor: rm.wanproxyBinaryResolver(ctx,
+				append(append([]string{}, withNew...), rm.controller.ResolveHost(dbRes.DRNode))),
 		}
 		if err := wanproxy.ProvisionMulti(ctx, rm.wanproxyDeployClient(), multi); err != nil {
 			return fmt.Errorf("provision WAN leg for %q: %w", node, err)

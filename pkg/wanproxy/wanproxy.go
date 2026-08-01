@@ -279,7 +279,16 @@ type ProxySpec struct {
 	// BinaryPath is the controller-local path to the sds-proxy binary to push to
 	// both nodes (installed at NodeBinaryPath). When empty the binary push is
 	// skipped, assuming it was pre-staged on the nodes.
+	//
+	// It is only consulted when BinaryFor is nil. A fleet whose nodes do not all
+	// share the controller's architecture must use BinaryFor instead: one file
+	// pushed everywhere is, for some of those nodes, a binary that cannot run.
 	BinaryPath string
+
+	// BinaryFor resolves the controller-local binary to push to one node, by
+	// address. Returning "" skips the push for that node alone, so a fleet can
+	// be part pre-staged and part pushed. Takes precedence over BinaryPath.
+	BinaryFor func(nodeAddr string) string
 
 	// SkipReachabilityCheck disables the post-start preflight that confirms the
 	// DR WAN port is reachable from the primary. Default false: the check runs,
@@ -363,11 +372,11 @@ func Provision(ctx context.Context, deploy DeploymentClient, spec ProxySpec) err
 		return err
 	}
 
-	// 4. Binary (shared; skipped when pre-staged).
-	if spec.BinaryPath != "" {
-		if err := ensureBinary(ctx, deploy, both, spec.BinaryPath); err != nil {
-			return err
-		}
+	// 4. Binary. Resolved per node, because the two ends of a WAN leg are often
+	//    not the same architecture — an off-site node is whatever the cloud
+	//    rents, and the primary site is whatever is on the shelf.
+	if err := ensureBinaries(ctx, deploy, both, spec); err != nil {
+		return err
 	}
 
 	// 5. Per-resource configs: dialer on the primary, acceptor on the DR.
@@ -625,6 +634,35 @@ func Deprovision(ctx context.Context, deploy DeploymentClient, resource, primary
 // NodeBinaryPath on every host, then marks it executable. Distributing the same
 // bytes is idempotent, so re-provisioning simply overwrites with identical
 // content.
+// ensureBinaries pushes the right binary to each host.
+//
+// Pushing one file to every node is correct only while the fleet is uniform.
+// The moment it is not — an arm64 box at home and an x86_64 rental off-site —
+// the same push installs an unrunnable file on half of them, and the failure
+// surfaces far from the cause: systemd reports 203/EXEC on the node, while the
+// operator sees a DRBD connection that never forms.
+func ensureBinaries(ctx context.Context, deploy DeploymentClient, hosts []string, spec ProxySpec) error {
+	// Group hosts by the local file they need, so a uniform fleet still gets a
+	// single push rather than one per node.
+	byPath := map[string][]string{}
+	for _, h := range hosts {
+		path := spec.BinaryPath
+		if spec.BinaryFor != nil {
+			path = spec.BinaryFor(h)
+		}
+		if path == "" {
+			continue // pre-staged on this node
+		}
+		byPath[path] = append(byPath[path], h)
+	}
+	for path, group := range byPath {
+		if err := ensureBinary(ctx, deploy, group, path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func ensureBinary(ctx context.Context, deploy DeploymentClient, hosts []string, localPath string) error {
 	data, err := os.ReadFile(localPath)
 	if err != nil {
@@ -691,8 +729,13 @@ type MultiSpec struct {
 	// there). The two are on different machines, so they do not collide.
 	BaseDRBDPort int
 
-	PrimaryEgressAddr     string
-	BinaryPath            string
+	PrimaryEgressAddr string
+	BinaryPath        string
+
+	// BinaryFor resolves the binary per node address; see ProxySpec.BinaryFor.
+	// A fleet whose nodes do not all share one architecture must set this.
+	BinaryFor func(nodeAddr string) string
+
 	SkipReachabilityCheck bool
 }
 
@@ -710,6 +753,7 @@ func (m MultiSpec) Legs() []ProxySpec {
 			DRBDPort:              m.BaseDRBDPort + i,
 			PrimaryEgressAddr:     m.PrimaryEgressAddr,
 			BinaryPath:            m.BinaryPath,
+			BinaryFor:             m.BinaryFor,
 			SkipReachabilityCheck: m.SkipReachabilityCheck,
 		})
 	}
