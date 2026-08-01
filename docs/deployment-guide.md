@@ -135,13 +135,37 @@ strict_host_key = false
 known_hosts = ""          # ★ REQUIRED — see gotcha below
 timeout = "30s"
 
-[hosts.node1]
+# ★ Key these sections by IP ADDRESS, not by a friendly node name.
+[hosts."<node1-ip>"]
 addresses = ["<node1-ip>"]
-[hosts.node2]
+user = "root"
+key_path = "/root/.ssh/id_ed25519"
+[hosts."<node2-ip>"]
 addresses = ["<node2-ip>"]
-[hosts.node3]
+user = "root"
+key_path = "/root/.ssh/id_ed25519"
+[hosts."<node3-ip>"]
 addresses = ["<node3-ip>"]
+user = "root"
+key_path = "/root/.ssh/id_ed25519"
 ```
+
+> **★ Key `[hosts.*]` by the node's IP address.** The controller asks dispatch
+> for hosts by *address*, so a section named after a node (`[hosts.node1]`) never
+> matches and dispatch falls through to `~/.ssh/config`. Any `Host` entry there
+> whose `HostName` is that IP then supplies the user/port/key — and one address
+> commonly has several aliases (frp tunnels: `Host x-frp … Port 10022`,
+> `User someone-else`). The result is a connection with the wrong user or port
+> and an `unable to authenticate, attempted methods [none]` that looks nothing
+> like a config problem. Setting `user`/`key_path` inside the IP-keyed section
+> makes it win: dispatch resolves TOML host > TOML group > `~/.ssh/config` >
+> defaults.
+
+> **★ The controller only reads this file if `[dispatch] config_path` points at
+> it** (`controller.toml`). An unset path means dispatch's own default,
+> `~/.dispatch/config.toml` of whatever user the controller runs as — which is
+> not root's file when the controller does not run as root. A path that does not
+> exist is now rejected at startup rather than silently ignored.
 
 > **★ Set BOTH `strict_host_key = false` AND `known_hosts = ""`.** A node's SSH
 > host key changes when it reboots (especially a hard power-off). With a stale
@@ -229,6 +253,24 @@ sds-cli node register --name node2 --address <node2-ip>
 sds-cli node register --name node3 --address <node3-ip>
 sds-cli node list                              # all "online"
 ```
+
+`--name` is a label of your choosing and does **not** have to equal the node's
+hostname: registration records the real `uname -n`, and generated `.res` files
+use that for the `on <name>` sections and the connection mesh (a DRBD resource
+only applies to a host that finds itself there). Registering a host called
+`lima-sds-a` as `node-a` is therefore fine.
+
+A node that should never be picked as an automatic diskless quorum tiebreaker —
+a WAN/DR site, whose public address is usually not even configured on its own
+interface — must say so:
+
+```bash
+sds-cli node label <dr-node> sds.tiebreaker=false
+```
+
+Without it a 2-node resource can drag the DR node into its LAN connection mesh
+and fail `drbdadm up` with `IP <addr> not found on this host`, after the backing
+volumes have already been created.
 
 If a node shows offline / health-check fails right after a reboot, it's usually
 the SSH host-key gotcha (section 3): `rm /root/.ssh/known_hosts` + restart the

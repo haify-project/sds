@@ -39,10 +39,21 @@ distro package). This cluster already had these on all nodes.
 > - `/lib/systemd/system/ocf.rs@.service` — the template systemd unit reactor uses
 >   to run OCF agents. Missing → promoter start fails: `Unit ocf.rs@<...>.service
 >   not found` and it loops trying to promote.
-> - `/usr/libexec/drbd-reactor/ocf-rs-wrapper` — the (compiled) helper that
->   `ocf.rs@.service` execs.
+> - the `ocf-rs-wrapper` helper that `ocf.rs@.service` execs. **Its path is
+>   packaging-dependent** — `/usr/bin/ocf-rs-wrapper` on Ubuntu 24.04 with
+>   drbd-reactor 1.12 from LINBIT's PPA, `/usr/libexec/drbd-reactor/ocf-rs-wrapper`
+>   with other builds. Do not check a hard-coded path; read the one the unit
+>   actually uses: `grep ExecStart /lib/systemd/system/ocf.rs@.service`.
 > All three come from a proper drbd-reactor package/`make install`; if you hand-copy
 > a reactor binary between nodes, copy these too.
+
+> **★ Install drbd-reactor with `-o Dpkg::Options::=--force-confnew`** (or make
+> sure `/etc/drbd-reactor.toml` does not already exist). The package ships that
+> file; if an earlier, interrupted setup left one behind, dpkg stops at an
+> interactive conffile prompt. Over a non-interactive SSH session that fails with
+> `end of file on stdin at conffile prompt`, the whole install rolls back, and the
+> node is left with drbdadm but **no kernel module** — which `drbdadm --version`
+> reports as `DRBD_KERNEL_VERSION=0`.
 
 ### DRBD boot unit (auto-up on reboot) — installed automatically
 
