@@ -106,6 +106,30 @@ func UnitInstance(resource string) string {
 	return "sds-proxy@" + resource
 }
 
+// LegID names one primary-site node's WAN leg to the DR site.
+//
+// A DRBD 9 resource is a full mesh: the DR peers with EVERY primary-site node,
+// not just whichever one is currently Primary — otherwise a failover inside the
+// primary site would move the workload to a node that has no path to the DR and
+// replication would silently stop. Each of those legs needs its own tunnel, so
+// the proxy is instanced per (resource, primary node) rather than per resource.
+//
+// A single-replica resource keeps the historic per-resource names, so existing
+// deployments are untouched.
+func LegID(resource, primaryNode string, single bool) string {
+	if single {
+		return resource
+	}
+	return resource + "_" + sanitizeLeg(primaryNode)
+}
+
+// sanitizeLeg makes a node reference safe for a systemd instance name and a
+// filename: systemd treats "/" specially and "@" separates unit from instance.
+func sanitizeLeg(node string) string {
+	repl := strings.NewReplacer("/", "-", "@", "-", ":", "-", " ", "-", ".", "-")
+	return repl.Replace(strings.TrimSpace(node))
+}
+
 // NodeMetricsPath returns the on-node path of a resource's metrics snapshot.
 func NodeMetricsPath(resource string) string {
 	return NodeMetricsDir + "/" + resource + ".json"
@@ -635,4 +659,184 @@ func run(ctx context.Context, deploy DeploymentClient, hosts []string, cmd, desc
 		return fmt.Errorf("wanproxy: %s failed: %s", desc, res.FailureDetails())
 	}
 	return nil
+}
+
+// MultiSpec describes WAN replication from a multi-replica primary site to a
+// single DR node — the "两地三中心" shape: synchronous replicas in the
+// production site, one asynchronous copy far away.
+//
+// The primary site keeps its normal LAN mesh (real IPs, protocol C). Only the
+// legs that cross the WAN go through sds-proxy, one per primary-site node, each
+// with its own WAN port and its own loopback pair so the tunnels do not collide
+// on either end.
+type MultiSpec struct {
+	Resource string
+
+	// PrimaryNodeAddrs are the reachable addresses of every primary-site node.
+	// Each gets a dialer; each gets a matching acceptor on the DR.
+	PrimaryNodeAddrs []string
+
+	// DRNodeAddr is the DR-site node (runs every acceptor).
+	DRNodeAddr string
+
+	// DRPublicEndpoint is the DR's public WAN address the dialers connect to.
+	DRPublicEndpoint string
+
+	// BaseWANPort is the first mTLS WAN port; leg i uses BaseWANPort+i.
+	BaseWANPort int
+
+	// BaseDRBDPort is the first loopback DRBD port. Leg i uses BaseDRBDPort+i
+	// on BOTH ends: the primary's dialer listens on it (the primary's DRBD
+	// connects there) and the DR's acceptor dials it (the DR's DRBD binds
+	// there). The two are on different machines, so they do not collide.
+	BaseDRBDPort int
+
+	PrimaryEgressAddr     string
+	BinaryPath            string
+	SkipReachabilityCheck bool
+}
+
+// Legs expands a MultiSpec into the per-leg ProxySpecs, in node order.
+func (m MultiSpec) Legs() []ProxySpec {
+	single := len(m.PrimaryNodeAddrs) == 1
+	specs := make([]ProxySpec, 0, len(m.PrimaryNodeAddrs))
+	for i, primary := range m.PrimaryNodeAddrs {
+		specs = append(specs, ProxySpec{
+			Resource:              LegID(m.Resource, primary, single),
+			PrimaryNodeAddr:       primary,
+			DRNodeAddr:            m.DRNodeAddr,
+			DRPublicEndpoint:      m.DRPublicEndpoint,
+			WANPort:               m.BaseWANPort + i,
+			DRBDPort:              m.BaseDRBDPort + i,
+			PrimaryEgressAddr:     m.PrimaryEgressAddr,
+			BinaryPath:            m.BinaryPath,
+			SkipReachabilityCheck: m.SkipReachabilityCheck,
+		})
+	}
+	return specs
+}
+
+// Validate checks the multi-replica spec before anything is provisioned.
+func (m MultiSpec) Validate() error {
+	if strings.TrimSpace(m.Resource) == "" {
+		return fmt.Errorf("wanproxy: resource name is required")
+	}
+	if len(m.PrimaryNodeAddrs) == 0 {
+		return fmt.Errorf("wanproxy: at least one primary-site node is required")
+	}
+	if strings.TrimSpace(m.DRNodeAddr) == "" {
+		return fmt.Errorf("wanproxy: DR node address is required")
+	}
+	seen := make(map[string]bool, len(m.PrimaryNodeAddrs))
+	for _, p := range m.PrimaryNodeAddrs {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Errorf("wanproxy: empty primary-site node address")
+		}
+		if p == m.DRNodeAddr {
+			return fmt.Errorf("wanproxy: node %q cannot be both a primary-site replica and the DR site", p)
+		}
+		if seen[p] {
+			return fmt.Errorf("wanproxy: duplicate primary-site node %q", p)
+		}
+		seen[p] = true
+	}
+	// Each leg consumes one WAN port and two loopback ports; make sure the
+	// ranges fit and cannot overlap.
+	last := m.BaseWANPort + len(m.PrimaryNodeAddrs) - 1
+	if m.BaseWANPort <= 0 || last > 65535 {
+		return fmt.Errorf("wanproxy: WAN port range %d-%d out of range", m.BaseWANPort, last)
+	}
+	lastDRBD := m.BaseDRBDPort + len(m.PrimaryNodeAddrs) - 1
+	if m.BaseDRBDPort <= 0 || lastDRBD > 65535 {
+		return fmt.Errorf("wanproxy: DRBD loopback port range %d-%d out of range", m.BaseDRBDPort, lastDRBD)
+	}
+	return nil
+}
+
+// ProvisionMulti sets up every WAN leg of a multi-replica primary site.
+//
+// Shared material (PKI, binary, unit template) is pushed once per node; the
+// per-leg configs and systemd instances are then created leg by leg. A failure
+// part-way leaves the already-provisioned legs running — Deprovision/
+// DeprovisionMulti is the way back.
+func ProvisionMulti(ctx context.Context, deploy DeploymentClient, spec MultiSpec) error {
+	if deploy == nil {
+		return fmt.Errorf("wanproxy: deployment client is nil")
+	}
+	if err := spec.Validate(); err != nil {
+		return err
+	}
+
+	legs := spec.Legs()
+	allNodes := append(append([]string{}, spec.PrimaryNodeAddrs...), spec.DRNodeAddr)
+
+	// Shared, idempotent material first — pushing it per leg would repeat the
+	// same bytes N times to the DR node.
+	pki, err := EnsurePKI(PKIDir)
+	if err != nil {
+		return fmt.Errorf("wanproxy: ensure PKI: %w", err)
+	}
+	if err := distribute(ctx, deploy, allNodes, unitTemplate, UnitTemplatePath, "install unit template"); err != nil {
+		return err
+	}
+	if err := distribute(ctx, deploy, allNodes, string(pki.CAPEM), NodeCAPath, "distribute CA"); err != nil {
+		return err
+	}
+	if err := distribute(ctx, deploy, allNodes, string(pki.CertPEM), NodeCertPath, "distribute cert"); err != nil {
+		return err
+	}
+	if err := distribute(ctx, deploy, allNodes, string(pki.KeyPEM), NodeKeyPath, "distribute key"); err != nil {
+		return err
+	}
+	if spec.BinaryPath != "" {
+		if err := ensureBinary(ctx, deploy, allNodes, spec.BinaryPath); err != nil {
+			return err
+		}
+	}
+	if err := run(ctx, deploy, allNodes, "sudo systemctl daemon-reload", "systemd daemon-reload"); err != nil {
+		return err
+	}
+
+	for _, leg := range legs {
+		// Both ends of a leg use the same leg port on their own loopback: the
+		// dialer listens on it (the primary's DRBD connects there) and the
+		// acceptor dials it (the DR's DRBD binds there). No offset — the two
+		// numbers live on different machines.
+		acceptor := leg
+
+		if err := distribute(ctx, deploy, []string{leg.PrimaryNodeAddr},
+			RenderDialerConfig(leg), NodeConfigPath(leg.Resource), "distribute dialer config"); err != nil {
+			return err
+		}
+		if err := distribute(ctx, deploy, []string{spec.DRNodeAddr},
+			RenderAcceptorConfig(acceptor), NodeConfigPath(leg.Resource), "distribute acceptor config"); err != nil {
+			return err
+		}
+		both := []string{leg.PrimaryNodeAddr, spec.DRNodeAddr}
+		if err := run(ctx, deploy, both,
+			fmt.Sprintf("sudo systemctl enable --now %s", UnitInstance(leg.Resource)), "enable/start proxy"); err != nil {
+			return err
+		}
+		if !spec.SkipReachabilityCheck {
+			if err := VerifyReachability(ctx, deploy, leg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// DeprovisionMulti tears down every WAN leg of a multi-replica primary site.
+// It is best-effort per leg: one unreachable node must not strand the rest.
+func DeprovisionMulti(ctx context.Context, deploy DeploymentClient, spec MultiSpec) error {
+	if deploy == nil {
+		return fmt.Errorf("wanproxy: deployment client is nil")
+	}
+	var firstErr error
+	for _, leg := range spec.Legs() {
+		if err := Deprovision(ctx, deploy, leg.Resource, leg.PrimaryNodeAddr, leg.DRNodeAddr); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }

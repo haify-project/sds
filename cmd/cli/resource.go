@@ -147,8 +147,12 @@ func resourceCreate() *cobra.Command {
 			}
 
 			if wan {
-				if len(nodeList) != 1 {
-					return fmt.Errorf("WAN resource requires exactly one primary node in --nodes, got %d", len(nodeList))
+				// --nodes lists the primary SITE: one node for the historic
+				// two-endpoint resource, or several for a synchronous primary
+				// site with one asynchronous DR copy (两地三中心). The DR node
+				// is named separately with --dr-node.
+				if len(nodeList) < 1 {
+					return fmt.Errorf("WAN resource requires at least one primary-site node in --nodes")
 				}
 				if drNode == "" {
 					return fmt.Errorf("WAN resource requires --dr-node")
@@ -284,7 +288,7 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Resource profile name")
 	cmd.Flags().StringToStringVar(&labels, "label", nil, "Resource label as key=value (repeatable)")
-	cmd.Flags().BoolVar(&wan, "wan", false, "Enable opt-in WAN replication (protocol A via a per-resource sds-proxy pair)")
+	cmd.Flags().BoolVar(&wan, "wan", false, "Enable opt-in WAN replication (async protocol A to --dr-node via sds-proxy; --nodes may list several primary-site replicas)")
 	cmd.Flags().StringVar(&drNode, "dr-node", "", "DR-site node name (requires --wan; must be a registered node)")
 	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "DR site's public WAN address the primary dials (requires --wan)")
 	cmd.Flags().Uint32Var(&wanPort, "wan-port", 0, "WAN mTLS port (requires --wan; 0 = auto-pick a random port >3000)")

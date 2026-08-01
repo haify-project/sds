@@ -673,19 +673,33 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// through a per-resource sds-proxy pair.
 	var wanCfg *wanConfig
 	if wan != nil {
-		if len(nodes) != 1 {
-			return fmt.Errorf("WAN resource %q requires exactly one primary node in --nodes, got %d", name, len(nodes))
+		// The primary site may hold several synchronous replicas — the
+		// "两地三中心" shape: protocol C inside the production site, one
+		// asynchronous copy far away. Only the legs that cross the WAN go
+		// through sds-proxy.
+		primaries := make([]string, 0, len(nodes))
+		seen := make(map[string]bool, len(nodes))
+		for _, n := range nodes {
+			p := strings.TrimSpace(n)
+			if p == "" {
+				continue
+			}
+			if seen[p] {
+				return fmt.Errorf("WAN resource %q lists primary node %q twice", name, p)
+			}
+			seen[p] = true
+			primaries = append(primaries, p)
 		}
-		primary := strings.TrimSpace(nodes[0])
+		if len(primaries) == 0 {
+			return fmt.Errorf("WAN resource %q requires at least one primary-site node in --nodes", name)
+		}
+
 		drNode := strings.TrimSpace(wan.DRNode)
-		if primary == "" {
-			return fmt.Errorf("WAN resource %q requires a primary node", name)
-		}
 		if drNode == "" {
 			return fmt.Errorf("WAN resource %q requires a DR node (--dr-node)", name)
 		}
-		if drNode == primary {
-			return fmt.Errorf("WAN DR node %q must differ from the primary node %q", drNode, primary)
+		if seen[drNode] {
+			return fmt.Errorf("WAN DR node %q must not also be a primary-site node of %q", drNode, name)
 		}
 		if rm.controller.nodes.GetNodeAddressByName(drNode) == "" {
 			return fmt.Errorf("WAN DR node %q is not a registered node", drNode)
@@ -698,10 +712,16 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 			rm.controller.logger.Info("auto-allocated WAN proxy port",
 				zap.String("resource", name), zap.Uint32("wan_port", wan.WANPort))
 		}
-		// WAN forces async protocol A and the DR node joins as the sole peer.
-		protocol = "A"
-		nodes = []string{primary, drNode}
-		wanCfg = &wanConfig{DRNode: drNode}
+
+		// Protocol: a single-replica primary site is the historic two-endpoint
+		// WAN resource and is async end to end. With several replicas the LAN
+		// mesh stays synchronous (that is the point of having them) and only
+		// the WAN legs are async — expressed per connection, below.
+		if len(primaries) == 1 {
+			protocol = "A"
+		}
+		nodes = append(append([]string{}, primaries...), drNode)
+		wanCfg = &wanConfig{DRNode: drNode, PrimaryNodes: primaries}
 	}
 
 	// Resolve every volume: auto-select+normalize its pool and derive a backing
@@ -829,8 +849,14 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		// A WAN create may have provisioned the sds-proxy pair before failing;
 		// tear it down too so a retry starts clean. Best-effort (idempotent at
 		// the shell level). nodeIPs is [primaryIP, drIP] for a WAN resource.
-		if wan != nil && len(nodeIPs) == 2 {
-			_ = wanproxy.Deprovision(cleanupCtx, rm.wanproxyDeployClient(), name, nodeIPs[0], nodeIPs[1])
+		if wan != nil && len(nodeIPs) >= 2 {
+			_ = wanproxy.DeprovisionMulti(cleanupCtx, rm.wanproxyDeployClient(), wanproxy.MultiSpec{
+				Resource:         name,
+				PrimaryNodeAddrs: nodeIPs[:len(nodeIPs)-1],
+				DRNodeAddr:       nodeIPs[len(nodeIPs)-1],
+				BaseWANPort:      int(wan.WANPort),
+				BaseDRBDPort:     int(port),
+			})
 		}
 		// Backing volumes exist on diskful nodes only.
 		for _, v := range resolved {
@@ -889,23 +915,28 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// with nothing to connect to. The rollback defer deprovisions on any later
 	// failure. This step is entirely gated behind wan != nil.
 	if wan != nil {
-		spec := wanproxy.ProxySpec{
+		// nodes is [primaries..., DR]; the DR is always last (set when the WAN
+		// spec was validated), so the primary addresses are everything before it.
+		primaryAddrs := nodeIPs[:len(nodeIPs)-1]
+		drAddr := nodeIPs[len(nodeIPs)-1]
+
+		multi := wanproxy.MultiSpec{
 			Resource:          name,
-			PrimaryNodeAddr:   nodeIPs[0],
-			DRNodeAddr:        nodeIPs[1],
+			PrimaryNodeAddrs:  primaryAddrs,
+			DRNodeAddr:        drAddr,
 			DRPublicEndpoint:  wan.DREndpoint,
-			WANPort:           int(wan.WANPort),
-			DRBDPort:          int(port),
+			BaseWANPort:       int(wan.WANPort),
+			BaseDRBDPort:      int(port),
 			PrimaryEgressAddr: wan.EgressAddress,
 			BinaryPath:        rm.wanproxyBinaryPath(),
 		}
 		rm.controller.logger.Info("Provisioning WAN replication proxy before DRBD up",
 			zap.String("resource", name),
-			zap.String("primary", nodeIPs[0]),
-			zap.String("dr", nodeIPs[1]),
+			zap.Strings("primaries", primaryAddrs),
+			zap.String("dr", drAddr),
 			zap.String("dr_endpoint", wan.DREndpoint),
-			zap.Int("wan_port", int(wan.WANPort)))
-		if err := wanproxy.Provision(ctx, rm.wanproxyDeployClient(), spec); err != nil {
+			zap.Int("base_wan_port", int(wan.WANPort)))
+		if err := wanproxy.ProvisionMulti(ctx, rm.wanproxyDeployClient(), multi); err != nil {
 			return fmt.Errorf("provision WAN proxy for %s: %w", name, err)
 		}
 	}
@@ -1414,7 +1445,38 @@ func getFirstNonLoopbackIP() string {
 // per-resource sds-proxy instead of the peer's real IP. Nil ⇒ ordinary LAN
 // config (unchanged). See docs/2026-07-05-wan-replication-design.md.
 type wanConfig struct {
-	DRNode string // the DR-site node; the other participating node is the primary
+	DRNode string // the DR-site node
+
+	// PrimaryNodes are the production-site replicas, in config order. With one
+	// entry this is the historic two-endpoint WAN resource; with several it is
+	// a synchronous primary site plus one asynchronous DR copy, and each
+	// primary gets its own WAN leg (DRBD 9 is a full mesh, so the DR must peer
+	// with every one of them — otherwise a failover inside the primary site
+	// lands on a node with no path to the DR and replication stops).
+	PrimaryNodes []string
+}
+
+// wanDRBDBindOffset is added to a WAN leg's port to get the loopback port DRBD
+// binds on the PRIMARY side. It has to differ from the leg port itself, which
+// the local dialer already listens on; the primary's DRBD then connects to the
+// leg port and lands on that dialer.
+const wanDRBDBindOffset = 100
+
+// multiPrimary reports whether the primary site holds more than one replica.
+func (w *wanConfig) multiPrimary() bool { return w != nil && len(w.PrimaryNodes) > 1 }
+
+// legIndex returns the position of a primary node in the WAN leg ordering,
+// which fixes its WAN port and loopback ports. -1 for the DR node.
+func (w *wanConfig) legIndex(node string) int {
+	if w == nil {
+		return -1
+	}
+	for i, n := range w.PrimaryNodes {
+		if n == node {
+			return i
+		}
+	}
+	return -1
 }
 
 // wanproxyLocalBinaryPath is the controller-local path to the sds-proxy binary
@@ -1445,6 +1507,23 @@ func (rm *ResourceManager) wanproxyDeployClient() wanproxy.DeploymentClient {
 // wanEndpointAddrs resolves a stored WAN resource's primary and DR node
 // addresses (used by the delete path to deprovision the proxy). The DR node is
 // dbRes.DRNode; the primary is the other node in dbRes.Nodes.
+// wanPrimaryAddrs returns every primary-site node address of a WAN resource
+// plus the DR address. A multi-replica primary site has one WAN leg per
+// primary, so tearing the resource down has to reach all of them — using only
+// the first would strand the other legs' proxy units and configs on the nodes.
+func (rm *ResourceManager) wanPrimaryAddrs(dbRes *database.Resource) (primaryAddrs []string, drAddr string) {
+	drNode := strings.TrimSpace(dbRes.DRNode)
+	drAddr = rm.controller.ResolveHost(drNode)
+	for _, n := range strings.Split(dbRes.Nodes, ",") {
+		n = strings.TrimSpace(n)
+		if n == "" || n == drNode {
+			continue
+		}
+		primaryAddrs = append(primaryAddrs, rm.controller.ResolveHost(n))
+	}
+	return primaryAddrs, drAddr
+}
+
 func (rm *ResourceManager) wanEndpointAddrs(dbRes *database.Resource) (primaryAddr, drAddr string) {
 	drNode := strings.TrimSpace(dbRes.DRNode)
 	drAddr = rm.controller.ResolveHost(drNode)
@@ -1582,7 +1661,13 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 	// pull-ahead so the primary goes Ahead (keeps writing) instead of blocking
 	// when the WAN buffer fills. These are defaults — the user-options loop below
 	// still overrides any of them. See the design doc for the rationale.
-	if wan != nil {
+	//
+	// Only for the two-endpoint shape, where every connection crosses the WAN.
+	// With a multi-replica primary site these belong to the WAN legs alone and
+	// are emitted per connection: applying them at resource level would quietly
+	// downgrade the synchronous primary-site mesh to async, which is the exact
+	// guarantee those replicas exist to provide.
+	if wan != nil && !wan.multiPrimary() {
 		protocol = "A"
 		setOption("net", "on-congestion", "pull-ahead")
 		setOption("net", "congestion-fill", "2M")
@@ -1746,7 +1831,23 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		// resource to a host that finds itself in one of these sections. The
 		// SDS node name is an operator-chosen label and may differ.
 		config.WriteString(fmt.Sprintf("\n    on %s {\n", rm.controller.nodes.GetDRBDNameByRef(node)))
-		if wan != nil {
+		if wan.multiPrimary() {
+			// Multi-replica primary site: the per-node `address` is the LAN
+			// address the other replicas reach it on. The WAN legs cannot use it
+			// (they go through a loopback proxy) and are therefore written as
+			// explicit `connection` sections after the host stanzas — DRBD lets
+			// a connection override the endpoint addresses per peer pair, which
+			// is the only way one node can speak LAN to its siblings and
+			// loopback-proxy to the DR at the same time.
+			if node == wan.DRNode {
+				// The DR has no LAN peers; every one of its connections is a
+				// WAN leg, so this address is never used. Keep it on loopback
+				// so a stray direct connect cannot leave the tunnel.
+				config.WriteString(fmt.Sprintf("        address   127.0.0.1:%d;\n", port))
+			} else {
+				config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
+			}
+		} else if wan != nil {
 			// WAN: route through the local per-resource sds-proxy on loopback
 			// instead of the peer's real IP. The DR node binds `port` (the
 			// acceptor dials it there); the primary binds `port+9` and connects
@@ -1772,9 +1873,65 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		config.WriteString("    }\n")
 	}
 
-	// Add connection-mesh for multi-node DRBD 9
-	// DRBD 9 requires a full mesh of connections between all nodes
-	if len(allNodes) > 2 {
+	if wan.multiPrimary() {
+		// Two-site topology: a synchronous mesh inside the primary site, plus
+		// one asynchronous leg from every primary replica to the DR.
+		//
+		// The primary-site mesh is spelled out rather than left to
+		// connection-mesh because connection-mesh would also pair each replica
+		// with the DR using the host stanza addresses, which for a WAN peer are
+		// meaningless (the DR is only reachable through the local proxy).
+		drName := rm.controller.nodes.GetDRBDNameByRef(wan.DRNode)
+
+		if len(allNodes) > 2 {
+			// LAN mesh: every primary-site node with every other, including any
+			// diskless tiebreaker, on their real addresses.
+			lanHosts := make([]string, 0, len(allNodes))
+			for _, node := range allNodes {
+				if node == wan.DRNode {
+					continue
+				}
+				lanHosts = append(lanHosts, rm.controller.nodes.GetDRBDNameByRef(node))
+			}
+			if len(lanHosts) > 1 {
+				config.WriteString("\n    connection-mesh {\n")
+				config.WriteString("        hosts")
+				for _, h := range lanHosts {
+					config.WriteString(fmt.Sprintf(" %s", h))
+				}
+				config.WriteString(";\n")
+				config.WriteString("    }\n")
+			}
+		}
+
+		// One explicit connection per WAN leg. Leg i uses loopback port
+		// (port + wanLegPortStride*i) on the primary and the same +
+		// wanDRLoopbackOffset on the DR, matching wanproxy's leg layout: each
+		// tunnel gets a private pair of loopback endpoints so two legs cannot
+		// collide on the DR, which terminates all of them.
+		for i, primary := range wan.PrimaryNodes {
+			primaryName := rm.controller.nodes.GetDRBDNameByRef(primary)
+			legPort := port + uint32(i)
+			config.WriteString("\n    connection {\n")
+			// The primary binds a port the proxy does not use, and connects to
+			// legPort — which on its own loopback is the local dialer. The DR
+			// binds legPort, where its local acceptor dials it. Both ends read
+			// the same numbers as their own loopback, which is what lets one
+			// connection stanza describe a tunnel with two different endpoints.
+			config.WriteString(fmt.Sprintf("        host %s address 127.0.0.1:%d;\n", primaryName, legPort+wanDRBDBindOffset))
+			config.WriteString(fmt.Sprintf("        host %s address 127.0.0.1:%d;\n", drName, legPort))
+			// Async across the WAN, whatever the LAN mesh uses. pull-ahead lets
+			// a stalled tunnel drop behind instead of blocking the primary.
+			config.WriteString("        net {\n")
+			config.WriteString("            protocol A;\n")
+			config.WriteString("            on-congestion pull-ahead;\n")
+			config.WriteString("            congestion-fill 400M;\n")
+			config.WriteString("        }\n")
+			config.WriteString("    }\n")
+		}
+	} else if len(allNodes) > 2 {
+		// Add connection-mesh for multi-node DRBD 9
+		// DRBD 9 requires a full mesh of connections between all nodes
 		config.WriteString("\n    connection-mesh {\n")
 		config.WriteString("        hosts")
 		for _, node := range allNodes {
@@ -2368,8 +2525,15 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 	// the delete, matching the state-LV sweep below. Gated behind WANMode.
 	if rm.controller.db != nil {
 		if dbRes, derr := rm.controller.db.GetResource(ctx, name); derr == nil && dbRes != nil && dbRes.WANMode {
-			primaryAddr, drAddr := rm.wanEndpointAddrs(dbRes)
-			if derr := wanproxy.Deprovision(ctx, rm.wanproxyDeployClient(), name, primaryAddr, drAddr); derr != nil {
+			primaryAddrs, drAddr := rm.wanPrimaryAddrs(dbRes)
+			multi := wanproxy.MultiSpec{
+				Resource:         name,
+				PrimaryNodeAddrs: primaryAddrs,
+				DRNodeAddr:       drAddr,
+				BaseWANPort:      dbRes.WANPort,
+				BaseDRBDPort:     dbRes.Port,
+			}
+			if derr := wanproxy.DeprovisionMulti(ctx, rm.wanproxyDeployClient(), multi); derr != nil {
 				rm.controller.logger.Warn("Best-effort WAN proxy deprovision failed during resource delete",
 					zap.String("resource", name), zap.Error(derr))
 			} else {

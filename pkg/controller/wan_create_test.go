@@ -134,9 +134,9 @@ func TestCreateResourceWANRejectsUnregisteredDRNode(t *testing.T) {
 	assert.False(t, execCmdIssued(dep, "systemctl enable --now"))
 }
 
-// TestCreateResourceWANRejectsMultiplePrimaries rejects a WAN request whose
-// --nodes carries more than one node.
-func TestCreateResourceWANRejectsMultiplePrimaries(t *testing.T) {
+// --nodes lists the primary SITE; naming the DR node there too is a mistake
+// (it would ask the DR to replicate to itself), and is rejected.
+func TestCreateResourceWANRejectsDRNodeAmongPrimaries(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
@@ -147,7 +147,53 @@ func TestCreateResourceWANRejectsMultiplePrimaries(t *testing.T) {
 		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}},
 		&WANSpec{DRNode: "dr", DREndpoint: "dr.example.com", WANPort: 34567})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exactly one primary node")
+	assert.Contains(t, err.Error(), "must not also be a primary-site node")
+}
+
+// A duplicated primary would provision two WAN legs for one node, fighting over
+// the same loopback ports.
+func TestCreateResourceWANRejectsDuplicatePrimary(t *testing.T) {
+	withTempPKI(t)
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	registerNodes(ctrl, map[string]string{"a": "10.0.0.1", "dr": "10.0.0.2"})
+
+	err := ctrl.resources.CreateResourceWithVolumes(context.Background(),
+		"wanres", 7100, []string{"a", "a"}, "C", "lvm", nil,
+		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}},
+		&WANSpec{DRNode: "dr", DREndpoint: "dr.example.com", WANPort: 34567})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "twice")
+}
+
+// 两地三中心: several synchronous primary-site replicas plus one async DR copy
+// is now a supported shape, and provisions one WAN leg per primary.
+func TestCreateResourceWANMultiReplicaPrimarySite(t *testing.T) {
+	withTempPKI(t)
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	ctrl.db = openTestDB(t)
+	registerNodes(ctrl, map[string]string{"a": "10.0.0.1", "b": "10.0.0.2", "dr": "10.0.0.3"})
+
+	err := ctrl.resources.CreateResourceWithVolumes(context.Background(),
+		"wanres", 7300, []string{"a", "b"}, "C", "lvm", nil,
+		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}},
+		&WANSpec{DRNode: "dr", DREndpoint: "dr.example.com", WANPort: 34567})
+	require.NoError(t, err)
+
+	cfg, ok := findDistributedConfig(dep, "/etc/drbd.d/wanres.res")
+	require.True(t, ok, "expected the resource config to be distributed")
+	// The primary site keeps real addresses and a synchronous mesh; only the
+	// two WAN legs are async.
+	assert.Contains(t, cfg, "10.0.0.1:7300")
+	assert.Contains(t, cfg, "10.0.0.2:7300")
+	assert.Equal(t, 2, strings.Count(cfg, "connection {"), "one WAN leg per primary")
+
+	// Each leg gets its own proxy config on the DR, which terminates both.
+	_, aLeg := findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres_10-0-0-1"))
+	_, bLeg := findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres_10-0-0-2"))
+	assert.True(t, aLeg, "expected a proxy config for the first leg")
+	assert.True(t, bLeg, "expected a proxy config for the second leg")
 }
 
 // TestServerCreateResourceWANSucceeds drives the gRPC handler with a WAN request
