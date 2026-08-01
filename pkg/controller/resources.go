@@ -853,7 +853,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// Allocate node-global device minors: minors are shared across every DRBD
 	// resource on a node. nextGlobalMinor returns (max existing minor)+1, so a
 	// run of len(resolved) consecutive minors from that base is collision-free.
-	baseMinor, err := rm.nextGlobalMinor(ctx, nodeIPs[0])
+	baseMinor, err := rm.nextGlobalMinor(ctx, allIPs)
 	if err != nil {
 		return fmt.Errorf("failed to allocate device minor: %w", err)
 	}
@@ -870,7 +870,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		return fmt.Errorf("failed to distribute config: %w", err)
 	}
 	if !configResult.Success {
-		return fmt.Errorf("config distribution failed on some hosts")
+		return fmt.Errorf("config distribution failed: %s", configResult.FailureDetails())
 	}
 
 	// 4. Create metadata on diskful nodes only. A diskless tiebreaker has no
@@ -880,7 +880,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		return fmt.Errorf("failed to create metadata: %w", err)
 	}
 	if !mdResult.AllSuccess() {
-		return fmt.Errorf("metadata creation failed on hosts: %v", mdResult.FailedHosts())
+		return fmt.Errorf("metadata creation failed: %s", mdResult.FailureDetails())
 	}
 
 	// 4a. WAN only: bring up the per-resource sds-proxy pair BEFORE `drbdadm up`.
@@ -917,7 +917,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		return fmt.Errorf("failed to bring up resource: %w", err)
 	}
 	if !upResult.AllSuccess() {
-		return fmt.Errorf("resource up failed on hosts: %v", upResult.FailedHosts())
+		return fmt.Errorf("resource up failed: %s", upResult.FailureDetails())
 	}
 
 	// 5a. Establish the initial UpToDate generation. A freshly created resource
@@ -1230,6 +1230,11 @@ func (rm *ResourceManager) backingVolumeAtLeast(ctx context.Context, host, pool,
 }
 
 // selectTiebreaker picks a registered node, not already part of the resource,
+// TiebreakerLabel opts a node out of automatic diskless-tiebreaker selection
+// when set to "false" (`sds node label <node> sds.tiebreaker=false`). Use it on
+// WAN/DR nodes, which cannot join a LAN resource's DRBD connection mesh.
+const TiebreakerLabel = "sds.tiebreaker"
+
 // to serve as a diskless quorum tiebreaker. Selection prefers, in order:
 // online storage nodes, online compute-only nodes, then offline nodes; within
 // each tier it is deterministic (lowest node name) so repeated creations are
@@ -1259,6 +1264,18 @@ func (rm *ResourceManager) selectTiebreaker(ctx context.Context, nodes []string)
 	var onlineStorage, onlineCompute, offlineStorage, offlineCompute []string
 	for _, n := range all {
 		if n == nil || inUse[n.Name] {
+			continue
+		}
+		// A tiebreaker joins the resource's DRBD connection mesh, so it must sit
+		// on the replication network like any other peer. A remote/DR node does
+		// not: it is reached over a WAN and, on a cloud instance, its public
+		// address is not even configured on an interface, so `drbdadm up` fails
+		// with "IP <addr> not found on this host" — after the volumes exist.
+		// Nodes labelled sds.tiebreaker=false are therefore never auto-selected;
+		// label DR sites that way. Same spirit as the compute-only rule below.
+		if strings.EqualFold(n.Labels[TiebreakerLabel], "false") {
+			rm.controller.logger.Debug("Skipping tiebreaker candidate opted out by label",
+				zap.String("node", n.Name), zap.String("label", TiebreakerLabel))
 			continue
 		}
 		storage := hasPool[n.Name]
@@ -1725,7 +1742,10 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		// Resolve hostname to IP address if not already an IP
 		ip = resolveToIP(ip)
 
-		config.WriteString(fmt.Sprintf("\n    on %s {\n", node))
+		// `on <name>` must be the node's real hostname: drbdadm only applies a
+		// resource to a host that finds itself in one of these sections. The
+		// SDS node name is an operator-chosen label and may differ.
+		config.WriteString(fmt.Sprintf("\n    on %s {\n", rm.controller.nodes.GetDRBDNameByRef(node)))
 		if wan != nil {
 			// WAN: route through the local per-resource sds-proxy on loopback
 			// instead of the peer's real IP. The DR node binds `port` (the
@@ -1758,7 +1778,8 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		config.WriteString("\n    connection-mesh {\n")
 		config.WriteString("        hosts")
 		for _, node := range allNodes {
-			config.WriteString(fmt.Sprintf(" %s", node))
+			// Same rule as the `on` sections: the mesh lists DRBD host names.
+			config.WriteString(fmt.Sprintf(" %s", rm.controller.nodes.GetDRBDNameByRef(node)))
 		}
 		config.WriteString(";\n")
 		config.WriteString("    }\n")
@@ -2098,7 +2119,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	// device-minor". Collect minors across every resource file instead.
 	// (The previous in-file scan was additionally broken — it required 4
 	// fields on a 3-field line and always allocated minor 0.)
-	newMinor, err := rm.nextGlobalMinor(ctx, hosts[0])
+	newMinor, err := rm.nextGlobalMinor(ctx, hosts)
 	if err != nil {
 		return fmt.Errorf("failed to allocate device minor: %w", err)
 	}
@@ -2162,7 +2183,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		return fmt.Errorf("failed to create metadata for new volume: %w", err)
 	}
 	if !mdResult.AllSuccess() {
-		return fmt.Errorf("metadata creation for new volume failed on hosts: %v", mdResult.FailedHosts())
+		return fmt.Errorf("metadata creation for new volume failed: %s", mdResult.FailureDetails())
 	}
 
 	adjustCmd := fmt.Sprintf("sudo drbdadm adjust %s", resource)
@@ -2171,7 +2192,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		return fmt.Errorf("failed to adjust resource after volume add: %w", err)
 	}
 	if !adjustResult.AllSuccess() {
-		return fmt.Errorf("resource adjust failed on hosts: %v", adjustResult.FailedHosts())
+		return fmt.Errorf("resource adjust failed on hosts: %s", adjustResult.FailureDetails())
 	}
 
 	// A brand-new volume is Inconsistent on every node with no UpToDate
@@ -2338,7 +2359,7 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 	}
 
 	if !downResult.AllSuccess() && !force {
-		return fmt.Errorf("resource down failed on hosts: %v", downResult.FailedHosts())
+		return fmt.Errorf("resource down failed on hosts: %s", downResult.FailureDetails())
 	}
 
 	// 1a. WAN only: tear down the per-resource sds-proxy pair AFTER `drbdadm
@@ -2459,14 +2480,26 @@ func (rm *ResourceManager) findPortConflict(ctx context.Context, host string, po
 	return "", nil
 }
 
-func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, host string) (int, error) {
-	// Minors are a node-global namespace. Scanning only .res files misses
-	// minors still held by the kernel from a previously-removed resource: its
-	// config is gone but the /dev/drbdN node lingers and the minor stays
-	// "configured", so reusing it makes `drbdadm create-md` fail with
-	// "Device 'N' is configured". Take the max over both the configs and the
-	// live /dev/drbd* device nodes so a fresh minor never collides.
-	result, err := rm.deployment.Exec(ctx, []string{host},
+// nextGlobalMinor returns a device minor free on EVERY given host.
+//
+// Minors are a node-global namespace, and a resource's minor has to be free on
+// all of its nodes — not just the first one. Probing a single host picks a
+// minor that some *other* participating node already uses for an unrelated
+// resource, and drbdadm rejects the whole config at create-md time with
+// "conflicting use of device-minor". That is easy to miss while every resource
+// spans the same node set, and shows up as soon as one node carries a resource
+// the others do not (a WAN/DR pair, a node added later).
+//
+// Scanning only .res files also misses minors still held by the kernel from a
+// previously-removed resource: its config is gone but the /dev/drbdN node
+// lingers and the minor stays "configured", so reusing it makes create-md fail
+// with "Device 'N' is configured". Take the max over both the configs and the
+// live /dev/drbd* device nodes, across all hosts.
+func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, hosts []string) (int, error) {
+	if len(hosts) == 0 {
+		return 0, fmt.Errorf("no hosts to allocate a device minor on")
+	}
+	result, err := rm.deployment.Exec(ctx, hosts,
 		"cat /etc/drbd.d/*.res 2>/dev/null; ls -1d /dev/drbd[0-9]* 2>/dev/null || true")
 	if err != nil {
 		return 0, err
@@ -3018,7 +3051,7 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 		return fmt.Errorf("failed to adjust resource after config update: %w", err)
 	}
 	if !adjustRes.AllSuccess() {
-		return fmt.Errorf("drbdadm adjust failed on %v after removing volume %d", adjustRes.FailedHosts(), volumeID)
+		return fmt.Errorf("drbdadm adjust failed after removing volume %d: %s", volumeID, adjustRes.FailureDetails())
 	}
 
 	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {
@@ -3028,7 +3061,7 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 			return fmt.Errorf("failed to delete ZFS backing volume: %w", err)
 		}
 		if !zfsRes.AllSuccess() {
-			return fmt.Errorf("ZFS backing volume removal failed on %v", zfsRes.FailedHosts())
+			return fmt.Errorf("ZFS backing volume removal failed: %s", zfsRes.FailureDetails())
 		}
 	} else {
 		// A failed lvremove on any node leaves an orphan and a lopsided DRBD
@@ -3042,7 +3075,7 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 			return fmt.Errorf("failed to delete LVM backing volume: %w", err)
 		}
 		if !rmRes.AllSuccess() {
-			return fmt.Errorf("LVM backing volume removal failed on %v", rmRes.FailedHosts())
+			return fmt.Errorf("LVM backing volume removal failed: %s", rmRes.FailureDetails())
 		}
 	}
 
@@ -3161,7 +3194,7 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 			return fmt.Errorf("failed to resize ZFS backing volume: %w", err)
 		}
 		if !zfsRes.AllSuccess() {
-			return fmt.Errorf("ZFS backing volume resize failed on %v", zfsRes.FailedHosts())
+			return fmt.Errorf("ZFS backing volume resize failed: %s", zfsRes.FailureDetails())
 		}
 	} else {
 		resizeCmd := fmt.Sprintf("sudo lvresize -L %s -y %s", sizeArg, target.DiskPath)
@@ -3728,7 +3761,7 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 		}
 
 		if !result.AllSuccess() {
-			return fmt.Errorf("evict failed: %v", result.FailedHosts())
+			return fmt.Errorf("evict failed: %s", result.FailureDetails())
 		}
 	}
 

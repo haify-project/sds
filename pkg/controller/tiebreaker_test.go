@@ -143,7 +143,7 @@ func TestNextGlobalMinorAvoidsStaleKernelMinor(t *testing.T) {
 		},
 	}
 	ctrl := newBasicTestController(dep)
-	minor, err := ctrl.resources.nextGlobalMinor(context.Background(), "10.0.0.1")
+	minor, err := ctrl.resources.nextGlobalMinor(context.Background(), []string{"10.0.0.1"})
 	require.NoError(t, err)
 	assert.Equal(t, 2001, minor)
 }
@@ -312,4 +312,50 @@ func TestCreateResourceNoTiebreakerWhenDisabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, res.DisklessNodes)
 	assert.True(t, res.QuorumRisk, "bare 2-node resource should report quorum risk")
+}
+
+// A WAN/DR node must never be auto-selected as a quorum tiebreaker: it would
+// join the resource's DRBD connection mesh over the internet, and on a cloud
+// instance its public address is not even configured on an interface, so
+// `drbdadm up` fails with "IP <addr> not found on this host" — after the
+// volumes have already been created. Labelling it opts it out.
+func TestSelectTiebreakerSkipsLabelledNodes(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	registerNodes(ctrl, map[string]string{
+		"node1": "10.0.0.1",
+		"node2": "10.0.0.2",
+		"dr":    "203.0.113.10",
+	})
+	ctrl.nodes.nodes["203.0.113.10"].Labels = map[string]string{TiebreakerLabel: "false"}
+
+	// "dr" sorts before "node3"-style names, so without the opt-out it would win.
+	tb := ctrl.resources.selectTiebreaker(context.Background(), []string{"node1", "node2"})
+	assert.Equal(t, "", tb, "the only spare node opted out, so there is no tiebreaker")
+
+	// A second spare that has NOT opted out is still selected.
+	registerNodes(ctrl, map[string]string{"node3": "10.0.0.3"})
+	tb = ctrl.resources.selectTiebreaker(context.Background(), []string{"node1", "node2"})
+	assert.Equal(t, "node3", tb)
+}
+
+// Only "false" opts out; any other value (or none) leaves the node eligible, so
+// a stray label cannot quietly shrink the candidate pool.
+func TestSelectTiebreakerLabelOnlyExcludesFalse(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	registerNodes(ctrl, map[string]string{
+		"node1": "10.0.0.1",
+		"node2": "10.0.0.2",
+		"node3": "10.0.0.3",
+	})
+	ctrl.nodes.nodes["10.0.0.3"].Labels = map[string]string{TiebreakerLabel: "true"}
+
+	tb := ctrl.resources.selectTiebreaker(context.Background(), []string{"node1", "node2"})
+	assert.Equal(t, "node3", tb)
+
+	// Case-insensitive on the opt-out value.
+	ctrl.nodes.nodes["10.0.0.3"].Labels[TiebreakerLabel] = "False"
+	tb = ctrl.resources.selectTiebreaker(context.Background(), []string{"node1", "node2"})
+	assert.Equal(t, "", tb)
 }

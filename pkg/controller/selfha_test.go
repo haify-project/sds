@@ -404,7 +404,7 @@ func TestNextGlobalMinorScansAllResources(t *testing.T) {
 		},
 	}
 	ctrl := newBasicTestController(dep)
-	minor, err := ctrl.resources.nextGlobalMinor(context.Background(), "10.0.0.1")
+	minor, err := ctrl.resources.nextGlobalMinor(context.Background(), []string{"10.0.0.1"})
 	require.NoError(t, err)
 	assert.Equal(t, 1000, minor)
 }

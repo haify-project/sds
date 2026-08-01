@@ -308,6 +308,34 @@ func (nm *NodeManager) GetNodeAddressByName(name string) string {
 	return ""
 }
 
+// GetDRBDNameByRef returns the name DRBD must see for a node, i.e. the node's
+// real `uname -n` hostname captured at registration.
+//
+// This exists because a DRBD `.res` file only applies to a host whose hostname
+// matches one of its `on <name>` sections — drbdadm otherwise fails the whole
+// resource with "'<res>' not defined in your config (for this host)". Writing
+// the SDS node *name* there silently works only while operators happen to
+// register nodes under their hostname (orange1, orange2, ...); register the
+// same host as "node-a" while it calls itself "lima-sds-a" and every resource
+// create fails.
+//
+// Unknown refs fall back to the ref itself, so callers that already pass a
+// hostname keep working.
+func (nm *NodeManager) GetDRBDNameByRef(ref string) string {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+
+	for addr, node := range nm.nodes {
+		if node.Name == ref || node.Hostname == ref || addr == ref {
+			if node.Hostname != "" {
+				return node.Hostname
+			}
+			return ref
+		}
+	}
+	return ref
+}
+
 // GetReplicationAddressByName returns the address DRBD should use to reach a
 // node: its dedicated replication address when one was registered, otherwise the
 // management address.
@@ -531,8 +559,18 @@ func (nm *NodeManager) HealthCheck(ctx context.Context, nodeName string) (*NodeH
 			if r.Success && r.Output != "" {
 				output := strings.TrimSpace(r.Output)
 				if !strings.Contains(output, "not found") && !strings.Contains(output, "command not found") {
+					version := parseVersion(output)
+					// drbdadm reports DRBD_KERNEL_VERSION=0 when the drbd kernel
+					// module is absent — the utils package alone installs fine.
+					// Such a node cannot carry a resource at all, so calling it
+					// "DRBD installed, version 0" hides the one thing that is
+					// broken: health-check passes and `drbdadm up` then fails
+					// with "Module drbd not found".
+					if version == "" || version == "0" {
+						break
+					}
 					info.DrbdInstalled = true
-					info.DrbdVersion = parseVersion(output)
+					info.DrbdVersion = version
 					break
 				}
 			}
