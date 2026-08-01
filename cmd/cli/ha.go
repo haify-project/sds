@@ -50,6 +50,7 @@ func haCommand() *cobra.Command {
 
 	cmd.AddCommand(haCreate())
 	cmd.AddCommand(haEvict())
+	cmd.AddCommand(haSetTiebreaker())
 	cmd.AddCommand(haDelete())
 	cmd.AddCommand(haList())
 	cmd.AddCommand(haStatus())
@@ -209,7 +210,7 @@ func haList() *cobra.Command {
 			// Fetch reactor status via the controller so we always query the
 			// primary node, not the machine running sds-cli.
 			type promoterInfo struct {
-				status, primaryOn string
+				status, primaryOn        string
 				targetName, targetStatus string
 			}
 			pm := make(map[string]promoterInfo)
@@ -305,13 +306,16 @@ func haStatus() *cobra.Command {
 			var promoter interface {
 				GetStatus() string
 				GetPrimaryOn() string
-				GetTarget() interface{ GetName() string; GetStatus() string }
+				GetTarget() interface {
+					GetName() string
+					GetStatus() string
+				}
 			}
 			_ = promoter
 			type pbPromoter struct {
-				status, primaryOn string
+				status, primaryOn        string
 				targetName, targetStatus string
-				deps []struct{ name, status string }
+				deps                     []struct{ name, status string }
 			}
 			var pb *pbPromoter
 			if haStatusErr == nil && len(haStatuses) > 0 {
@@ -409,4 +413,65 @@ func statusIcon(status string) string {
 	default:
 		return "?"
 	}
+}
+
+func haSetTiebreaker() *cobra.Command {
+	var node string
+	var remove bool
+
+	cmd := &cobra.Command{
+		Use:   "set-tiebreaker <resource> --node <node>",
+		Short: "Move a resource's diskless quorum tiebreaker to another node",
+		Long: `Move a resource's diskless quorum tiebreaker to another node, live.
+
+The tiebreaker holds no data; it exists so the survivors of a node failure
+still have a quorum majority. It should therefore sit in a different failure
+domain from the diskful replicas — a tiebreaker on the same physical host as a
+replica means losing that host costs two of three votes and the survivor
+suspends I/O.
+
+The change is config-only: nothing resyncs and a promoted resource keeps
+serving through it.
+
+  sds ha set-tiebreaker data --node node-e     # move it
+  sds ha set-tiebreaker data --remove          # drop it (accepts the quorum risk)`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			if remove {
+				node = ""
+			} else if node == "" {
+				return fmt.Errorf("--node is required (or --remove to drop the tiebreaker)")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			previous, err := sdsClient.SetTiebreaker(ctx, resource, node)
+			if err != nil {
+				return fmt.Errorf("failed to set tiebreaker: %w", err)
+			}
+
+			if previous == "" {
+				previous = "(none)"
+			}
+			if node == "" {
+				fmt.Printf("Tiebreaker removed from %q (was %s)\n", resource, previous)
+				fmt.Printf("WARNING: with no tiebreaker, a single node failure leaves no quorum majority and I/O suspends.\n")
+				return nil
+			}
+			fmt.Printf("Tiebreaker for %q moved: %s -> %s\n", resource, previous, node)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&node, "node", "", "Node to host the diskless quorum tiebreaker")
+	cmd.Flags().BoolVar(&remove, "remove", false, "Remove the tiebreaker instead of moving it")
+	return cmd
 }

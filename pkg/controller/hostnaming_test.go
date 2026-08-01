@@ -155,3 +155,49 @@ func TestHealthCheckTreatsMissingKernelModuleAsNotInstalled(t *testing.T) {
 	loaded := strings.Replace(utilsOnly, "DRBD_KERNEL_VERSION=0", "DRBD_KERNEL_VERSION=9.3.2", 1)
 	assert.Equal(t, "9.3.2", parseVersion(loaded))
 }
+
+// A node joining an existing resource inherits minors allocated when the
+// resource was created — over the nodes it had *then*. If the incoming node
+// already uses one, DRBD refuses deep inside drbdsetup ("Minor or volume
+// exists already") only after the config has been distributed. The preflight
+// names the squatter instead.
+func TestAssertMinorsFreeOnDetectsConflict(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	dep.execFunc = func(_ context.Context, hosts []string, _ string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		res := &deployment.ExecResult{Hosts: map[string]*deployment.HostResult{}}
+		for _, h := range hosts {
+			res.Hosts[h] = &deployment.HostResult{
+				Host: h, Success: true,
+				Output: "/etc/drbd.d/wandr.res:        device    minor 2;\n" +
+					"/etc/drbd.d/other.res:        device    minor 5;\n",
+			}
+		}
+		return res, nil
+	}
+	ctrl := newBasicTestController(dep)
+
+	err := ctrl.resources.assertMinorsFreeOn(context.Background(), "10.0.0.9", "openclaw", []int{2})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "minor 2")
+	assert.Contains(t, err.Error(), "wandr", "must name the resource in the way")
+
+	// A free minor passes.
+	assert.NoError(t, ctrl.resources.assertMinorsFreeOn(context.Background(), "10.0.0.9", "openclaw", []int{7}))
+
+	// The resource finding its own minor is a re-run, not a conflict.
+	assert.NoError(t, ctrl.resources.assertMinorsFreeOn(context.Background(), "10.0.0.9", "wandr", []int{2}))
+}
+
+func TestResourceMinorsParsesConfig(t *testing.T) {
+	cfg := `resource data {
+    on a {
+        volume 0 { device minor 3; }
+        volume 1 { device minor 4; }
+    }
+    on b {
+        volume 0 { device minor 3; }
+    }
+}`
+	assert.Equal(t, []int{3, 4}, resourceMinors(cfg), "deduplicated, in file order")
+	assert.Empty(t, resourceMinors("resource x { }"))
+}

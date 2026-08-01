@@ -2122,6 +2122,44 @@
         ]
       }
     },
+    "/v1/resources/{resource}/ha/tiebreaker": {
+      "post": {
+        "operationId": "SDSController_SetTiebreaker",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetTiebreakerResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetTiebreakerBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{resource}/primary": {
       "post": {
         "operationId": "SDSController_SetPrimary",
@@ -3890,6 +3928,15 @@
           "type": "string"
         }
       }
+    },
+    "SDSControllerSetTiebreakerBody": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        }
+      },
+      "description": "SetTiebreakerRequest moves a resource's diskless quorum tiebreaker to\nanother node. An empty node removes the tiebreaker without adding one."
     },
     "SDSControllerStartGatewayBody": {
       "type": "object"
@@ -6268,6 +6315,23 @@
           "type": "boolean"
         },
         "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetTiebreakerResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "previousNode": {
+          "type": "string"
+        },
+        "node": {
           "type": "string"
         }
       }

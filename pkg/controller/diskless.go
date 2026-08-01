@@ -334,6 +334,14 @@ func (rm *ResourceManager) AttachDisklessClient(ctx context.Context, resource, n
 		participantHosts = append(participantHosts, rm.controller.ResolveHost(b.name))
 	}
 
+	// Same rule as the tiebreaker path: the resource's minors were allocated
+	// over the nodes it had at create time, so a node attaching later can
+	// already be using them for something else.
+	if err := rm.assertMinorsFreeOn(ctx, rm.controller.ResolveHost(node), resource,
+		resourceMinors(originalConfig)); err != nil {
+		return err
+	}
+
 	newConfig, err := addDisklessClientBlock(originalConfig, node, ip, dbRes.Port)
 	if err == errDisklessAlreadyPresent {
 		// The .res already carries the client (a prior partial attach). Make sure

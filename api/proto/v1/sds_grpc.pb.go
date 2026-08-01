@@ -54,6 +54,7 @@ const (
 	SDSController_UnmountResource_FullMethodName          = "/v1.SDSController/UnmountResource"
 	SDSController_MakeHa_FullMethodName                   = "/v1.SDSController/MakeHa"
 	SDSController_EvictHa_FullMethodName                  = "/v1.SDSController/EvictHa"
+	SDSController_SetTiebreaker_FullMethodName            = "/v1.SDSController/SetTiebreaker"
 	SDSController_DeleteHa_FullMethodName                 = "/v1.SDSController/DeleteHa"
 	SDSController_GetHa_FullMethodName                    = "/v1.SDSController/GetHa"
 	SDSController_ListHa_FullMethodName                   = "/v1.SDSController/ListHa"
@@ -161,6 +162,7 @@ type SDSControllerClient interface {
 	UnmountResource(ctx context.Context, in *UnmountResourceRequest, opts ...grpc.CallOption) (*UnmountResourceResponse, error)
 	MakeHa(ctx context.Context, in *MakeHaRequest, opts ...grpc.CallOption) (*MakeHaResponse, error)
 	EvictHa(ctx context.Context, in *EvictHaRequest, opts ...grpc.CallOption) (*EvictHaResponse, error)
+	SetTiebreaker(ctx context.Context, in *SetTiebreakerRequest, opts ...grpc.CallOption) (*SetTiebreakerResponse, error)
 	DeleteHa(ctx context.Context, in *DeleteHaRequest, opts ...grpc.CallOption) (*DeleteHaResponse, error)
 	GetHa(ctx context.Context, in *GetHaRequest, opts ...grpc.CallOption) (*GetHaResponse, error)
 	ListHa(ctx context.Context, in *ListHaRequest, opts ...grpc.CallOption) (*ListHaResponse, error)
@@ -592,6 +594,16 @@ func (c *sDSControllerClient) EvictHa(ctx context.Context, in *EvictHaRequest, o
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EvictHaResponse)
 	err := c.cc.Invoke(ctx, SDSController_EvictHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetTiebreaker(ctx context.Context, in *SetTiebreakerRequest, opts ...grpc.CallOption) (*SetTiebreakerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetTiebreakerResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetTiebreaker_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1252,6 +1264,7 @@ type SDSControllerServer interface {
 	UnmountResource(context.Context, *UnmountResourceRequest) (*UnmountResourceResponse, error)
 	MakeHa(context.Context, *MakeHaRequest) (*MakeHaResponse, error)
 	EvictHa(context.Context, *EvictHaRequest) (*EvictHaResponse, error)
+	SetTiebreaker(context.Context, *SetTiebreakerRequest) (*SetTiebreakerResponse, error)
 	DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error)
 	GetHa(context.Context, *GetHaRequest) (*GetHaResponse, error)
 	ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error)
@@ -1443,6 +1456,9 @@ func (UnimplementedSDSControllerServer) MakeHa(context.Context, *MakeHaRequest) 
 }
 func (UnimplementedSDSControllerServer) EvictHa(context.Context, *EvictHaRequest) (*EvictHaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EvictHa not implemented")
+}
+func (UnimplementedSDSControllerServer) SetTiebreaker(context.Context, *SetTiebreakerRequest) (*SetTiebreakerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetTiebreaker not implemented")
 }
 func (UnimplementedSDSControllerServer) DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteHa not implemented")
@@ -2274,6 +2290,24 @@ func _SDSController_EvictHa_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).EvictHa(ctx, req.(*EvictHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetTiebreaker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTiebreakerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetTiebreaker(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetTiebreaker_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetTiebreaker(ctx, req.(*SetTiebreakerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3522,6 +3556,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EvictHa",
 			Handler:    _SDSController_EvictHa_Handler,
+		},
+		{
+			MethodName: "SetTiebreaker",
+			Handler:    _SDSController_SetTiebreaker_Handler,
 		},
 		{
 			MethodName: "DeleteHa",

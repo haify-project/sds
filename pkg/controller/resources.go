@@ -2495,6 +2495,104 @@ func (rm *ResourceManager) findPortConflict(ctx context.Context, host string, po
 // lingers and the minor stays "configured", so reusing it makes create-md fail
 // with "Device 'N' is configured". Take the max over both the configs and the
 // live /dev/drbd* device nodes, across all hosts.
+// assertMinorsFreeOn checks that every device minor `resource` uses is free on
+// `host`, and returns a diagnosable error naming the squatter if not.
+//
+// Minors are allocated once, at create time, over the hosts the resource had
+// *then*. Every later operation that pulls an additional node in — a quorum
+// tiebreaker being moved, a diskless client attaching — inherits those minors
+// without checking whether the incoming node already uses them for something
+// else. When it does, DRBD refuses with "Minor or volume exists already
+// (delete it first)" from deep inside a drbdsetup invocation, long after the
+// config has been distributed. Failing here instead says which resource is in
+// the way, before anything is changed.
+func (rm *ResourceManager) assertMinorsFreeOn(ctx context.Context, host, resource string, minors []int) error {
+	if len(minors) == 0 {
+		return nil
+	}
+	// List every minor the node already has, with the resource that owns it.
+	// drbdsetup covers minors held by the kernel even when no .res mentions
+	// them (a removed resource whose device node lingers).
+	cmd := "grep -H -E '^[[:space:]]*device[[:space:]]+minor' /etc/drbd.d/*.res 2>/dev/null; " +
+		"sudo drbdsetup show --show-defaults 2>/dev/null | grep -E 'volume|device' || true"
+	res, err := rm.deployment.Exec(ctx, []string{host}, cmd)
+	if err != nil {
+		// A node we cannot inspect is a node we cannot vouch for, but refusing
+		// the whole operation on a transient SSH hiccup is worse than letting
+		// DRBD be the backstop.
+		rm.controller.logger.Warn("Could not verify device minors on node; proceeding",
+			zap.String("host", host), zap.String("resource", resource), zap.Error(err))
+		return nil
+	}
+
+	want := make(map[int]bool, len(minors))
+	for _, m := range minors {
+		want[m] = true
+	}
+
+	for _, hr := range res.Hosts {
+		for _, line := range strings.Split(hr.Output, "\n") {
+			minor, ok := parseAnyDeviceMinor(line)
+			if !ok || !want[minor] {
+				continue
+			}
+			// A line from `grep -H` is "<path>:<the device line>"; the path
+			// names the owning resource. Our own resource re-appearing is fine
+			// (a re-run of the same operation).
+			owner := ""
+			if idx := strings.Index(line, ".res:"); idx > 0 {
+				owner = filepath.Base(line[:idx+4])
+				owner = strings.TrimSuffix(owner, ".res")
+			}
+			if owner == resource {
+				continue
+			}
+			if owner == "" {
+				owner = "another resource or a stale device node"
+			}
+			return fmt.Errorf("device minor %d needed by %q is already used on %s by %s; "+
+				"free it there (drbdadm down + remove its .res) or recreate %q on a free minor",
+				minor, resource, host, owner, resource)
+		}
+	}
+	return nil
+}
+
+// deviceMinorRe finds a `device ... minor N` anywhere in a line.
+//
+// parseDeviceMinor only matches a line that *starts* with `device`, which is
+// true of a generated .res but not of the two forms this code has to read:
+// `grep -H` output ("<path>:        device minor 2;") and an inline volume
+// stanza ("volume 0 { device minor 3; }").
+var deviceMinorRe = regexp.MustCompile(`\bdevice\b[^;{}]*\bminor\s+(\d+)`)
+
+// parseAnyDeviceMinor extracts a device minor from anywhere in a line.
+func parseAnyDeviceMinor(line string) (int, bool) {
+	m := deviceMinorRe.FindStringSubmatch(line)
+	if m == nil {
+		return 0, false
+	}
+	minor, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return minor, true
+}
+
+// resourceMinors reports the device minors a resource's live config uses, in
+// file order, deduplicated (every node's `on` stanza repeats the same minors).
+func resourceMinors(config string) []int {
+	var minors []int
+	seen := make(map[int]bool)
+	for _, line := range strings.Split(config, "\n") {
+		if m, ok := parseAnyDeviceMinor(line); ok && !seen[m] {
+			seen[m] = true
+			minors = append(minors, m)
+		}
+	}
+	return minors
+}
+
 func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, hosts []string) (int, error) {
 	if len(hosts) == 0 {
 		return 0, fmt.Errorf("no hosts to allocate a device minor on")

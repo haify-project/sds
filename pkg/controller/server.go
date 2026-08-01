@@ -1079,6 +1079,32 @@ func (s *Server) EvictHa(ctx context.Context, req *sdspb.EvictHaRequest) (*sdspb
 	}, nil
 }
 
+// SetTiebreaker moves a resource's diskless quorum tiebreaker to another node.
+// The previous holder is reported back so the caller can show what changed.
+func (s *Server) SetTiebreaker(ctx context.Context, req *sdspb.SetTiebreakerRequest) (*sdspb.SetTiebreakerResponse, error) {
+	previous := ""
+	if s.ctrl.db != nil {
+		if dbRes, err := s.ctrl.db.GetResource(ctx, req.Resource); err == nil && dbRes != nil {
+			previous = dbRes.DisklessNodes
+		}
+	}
+
+	if err := s.resources.SetTiebreaker(ctx, req.Resource, req.Node); err != nil {
+		return &sdspb.SetTiebreakerResponse{Success: false, Message: err.Error()}, nil
+	}
+
+	msg := fmt.Sprintf("tiebreaker for %q is now %q", req.Resource, req.Node)
+	if req.Node == "" {
+		msg = fmt.Sprintf("tiebreaker removed from %q; a single node failure will now suspend I/O", req.Resource)
+	}
+	return &sdspb.SetTiebreakerResponse{
+		Success:      true,
+		Message:      msg,
+		PreviousNode: previous,
+		Node:         req.Node,
+	}, nil
+}
+
 func (s *Server) DeleteHa(ctx context.Context, req *sdspb.DeleteHaRequest) (*sdspb.DeleteHaResponse, error) {
 	err := s.resources.RemoveHa(ctx, req.Resource)
 	if err != nil {

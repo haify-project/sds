@@ -118,6 +118,9 @@ service SDSController {
   rpc EvictHa(EvictHaRequest) returns (EvictHaResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/ha/evict"; body: "*"; };
   }
+  rpc SetTiebreaker(SetTiebreakerRequest) returns (SetTiebreakerResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha/tiebreaker"; body: "*"; };
+  }
   rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse) {
     option (google.api.http) = { delete: "/v1/resources/{resource}/ha"; };
   }
@@ -1129,6 +1132,20 @@ message MakeHaResponse {
 
 message EvictHaRequest {
   string resource = 1;
+}
+
+// SetTiebreakerRequest moves a resource's diskless quorum tiebreaker to
+// another node. An empty node removes the tiebreaker without adding one.
+message SetTiebreakerRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message SetTiebreakerResponse {
+  bool success = 1;
+  string message = 2;
+  string previous_node = 3;
+  string node = 4;
 }
 
 message EvictHaResponse {

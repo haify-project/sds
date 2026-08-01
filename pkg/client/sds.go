@@ -955,6 +955,22 @@ func (c *SDSClient) GetSelfHaStatus(ctx context.Context) (*SelfHaStatus, error) 
 }
 
 // EvictHa evicts an HA resource from the active node
+// SetTiebreaker moves a resource's diskless quorum tiebreaker to node (empty
+// removes it). It returns the node that previously held it.
+func (c *SDSClient) SetTiebreaker(ctx context.Context, resource, node string) (string, error) {
+	resp, err := c.client.SetTiebreaker(ctx, &sdspb.SetTiebreakerRequest{
+		Resource: resource,
+		Node:     node,
+	})
+	if err != nil {
+		return "", err
+	}
+	if !resp.Success {
+		return "", fmt.Errorf("%s", resp.Message)
+	}
+	return resp.PreviousNode, nil
+}
+
 func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
 	req := &sdspb.EvictHaRequest{
 		Resource: resource,
