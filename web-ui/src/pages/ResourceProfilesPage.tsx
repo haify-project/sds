@@ -11,7 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, ResourceProfile } from '@/services/api';
+import { api, Node, ResourceProfile } from '@/services/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -141,20 +141,32 @@ function formToProfile(form: ProfileForm): ResourceProfile {
 // InstantiateProfileDialog creates a resource from a profile.
 //
 // A profile is only ever a set of defaults, so the useful gesture is "make me
-// one of these" — and it needs almost nothing from the operator, because the
-// profile already answers everything except what to call it and how big it is.
+// one of these", and it needs little from the operator: the profile already
+// answers everything except what to call it and how big it is.
 //
-// It deliberately does NOT offer node selection. Choosing nodes by hand is what
-// switches placement OFF: the controller ignores replicas and the fault-domain
-// constraints the moment an explicit node list arrives. Offering both here
-// would let an operator pick nodes that quietly violate the very profile they
-// selected. The general Create Resource dialog still allows explicit nodes for
-// the cases that want them.
-function InstantiateProfileDialog({ profile }: { profile: ResourceProfile }) {
+// Placement is offered as an explicit either/or because that is what it is.
+// Handing the controller a node list does not merely skip auto-placement, it
+// discards `replicas` and every fault-domain constraint the profile carries —
+// the answer has already been given, so nothing is left to solve. A dialog that
+// showed both at once would let someone pick nodes that quietly violate the very
+// profile they chose, and never say so.
+function InstantiateProfileDialog({
+  profile,
+  nodes,
+}: {
+  profile: ResourceProfile;
+  nodes: Node[];
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [port, setPort] = useState('7100');
   const [sizeGb, setSizeGb] = useState('10');
+  // Seeded from the profile but editable: the count is a fill-if-empty default
+  // like every other field, so "this template, one more copy" is a legitimate
+  // thing to ask for without editing the template.
+  const [replicas, setReplicas] = useState(String(profile.replicas || 2));
+  const [manual, setManual] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
   const create = useMutation({
@@ -164,7 +176,11 @@ function InstantiateProfileDialog({ profile }: { profile: ResourceProfile }) {
         port: Number(port),
         sizeGb: Number(sizeGb),
         profile: profile.name,
-        // No nodes: the controller places the replicas from the profile.
+        ...(manual
+          ? { nodes: picked }
+          : // No nodes: the controller places them from replicas plus the
+            // profile's constraints.
+            { replicas: Number(replicas) }),
       }),
     onSuccess: (res) => {
       if (!res.success) {
@@ -180,7 +196,6 @@ function InstantiateProfileDialog({ profile }: { profile: ResourceProfile }) {
   });
 
   const constraints = [
-    profile.replicas ? `${profile.replicas} replicas` : null,
     profile.replicasOnDifferent?.length
       ? `spread across ${profile.replicasOnDifferent.join(', ')}`
       : null,
@@ -189,6 +204,10 @@ function InstantiateProfileDialog({ profile }: { profile: ResourceProfile }) {
       : null,
   ].filter(Boolean);
 
+  const hasConstraints = constraints.length > 0;
+  const ready =
+    name.trim() && port && sizeGb && (manual ? picked.length > 0 : Number(replicas) > 0);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -196,11 +215,11 @@ function InstantiateProfileDialog({ profile }: { profile: ResourceProfile }) {
           <Plus className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create resource from "{profile.name}"</DialogTitle>
           <DialogDescription>
-            Everything except the name, port and size comes from the profile.
+            Protocol, storage, pool, DRBD options and labels all come from the profile.
           </DialogDescription>
         </DialogHeader>
 
@@ -225,17 +244,79 @@ function InstantiateProfileDialog({ profile }: { profile: ResourceProfile }) {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-            <p className="mb-1 font-medium">Placement</p>
-            <p className="text-muted-foreground">
-              {constraints.length > 0
-                ? `The controller will choose nodes: ${constraints.join(', ')}.`
-                : 'The controller will choose nodes by free space.'}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Creation is refused if no set of nodes satisfies the profile — it
-              never falls back to a placement that breaks the constraints.
-            </p>
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Placement</Label>
+              <div className="flex rounded-md border p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setManual(false)}
+                  className={`rounded px-2 py-1 ${!manual ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                >
+                  Automatic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManual(true)}
+                  className={`rounded px-2 py-1 ${manual ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                >
+                  Choose nodes
+                </button>
+              </div>
+            </div>
+
+            {manual ? (
+              <>
+                <div className="max-h-44 space-y-1 overflow-y-auto">
+                  {nodes.map((n) => (
+                    <label
+                      key={n.name}
+                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={picked.includes(n.name)}
+                        onChange={(e) =>
+                          setPicked((prev) =>
+                            e.target.checked
+                              ? [...prev, n.name]
+                              : prev.filter((x) => x !== n.name),
+                          )
+                        }
+                      />
+                      <span>{n.name}</span>
+                      <span className="text-xs text-muted-foreground">({n.address})</span>
+                    </label>
+                  ))}
+                </div>
+                {hasConstraints && (
+                  <p className="text-xs text-amber-600">
+                    Naming nodes discards this profile's placement rules (
+                    {constraints.join(', ')}). Nothing will check that your
+                    choice satisfies them.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Replicas</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={replicas}
+                    onChange={(e) => setReplicas(e.target.value)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {hasConstraints
+                    ? `The controller chooses the nodes: ${constraints.join(', ')}.`
+                    : 'The controller chooses the nodes by free space.'}{' '}
+                  Creation is refused if no set of nodes satisfies the profile —
+                  it never falls back to a placement that breaks the constraints.
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -243,10 +324,7 @@ function InstantiateProfileDialog({ profile }: { profile: ResourceProfile }) {
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={() => create.mutate()}
-            disabled={!name.trim() || !port || !sizeGb || create.isPending}
-          >
+          <Button onClick={() => create.mutate()} disabled={!ready || create.isPending}>
             {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Create
           </Button>
@@ -265,6 +343,11 @@ export function ResourceProfilesPage() {
     queryKey: ['resources'],
     queryFn: () => api.getResources(),
   });
+  const { data: nodeData } = useQuery({
+    queryKey: ['nodes'],
+    queryFn: () => api.getNodes(),
+  });
+  const nodeList = nodeData?.nodes ?? [];
 
   const usage = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -317,7 +400,12 @@ export function ResourceProfilesPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {profiles.map((profile) => (
-            <ProfileCard key={profile.name} profile={profile} resourceCount={usage[profile.name] ?? 0} />
+            <ProfileCard
+              key={profile.name}
+              profile={profile}
+              resourceCount={usage[profile.name] ?? 0}
+              nodes={nodeList}
+            />
           ))}
         </div>
       )}
@@ -325,7 +413,15 @@ export function ResourceProfilesPage() {
   );
 }
 
-function ProfileCard({ profile, resourceCount }: { profile: ResourceProfile; resourceCount: number }) {
+function ProfileCard({
+  profile,
+  resourceCount,
+  nodes,
+}: {
+  profile: ResourceProfile;
+  resourceCount: number;
+  nodes: Node[];
+}) {
   const placement = [
     ...(profile.replicasOnDifferent ?? []).map((key) => `spread:${key}`),
     ...(profile.replicasOnSame ?? []).map((key) => `same:${key}`),
@@ -349,7 +445,7 @@ function ProfileCard({ profile, resourceCount }: { profile: ResourceProfile; res
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <InstantiateProfileDialog profile={profile} />
+            <InstantiateProfileDialog profile={profile} nodes={nodes} />
             <ProfileDialog profile={profile} />
             <DeleteProfileDialog profile={profile} resourceCount={resourceCount} />
           </div>
