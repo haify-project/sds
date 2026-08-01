@@ -445,6 +445,22 @@ class ApiClient {
       body: JSON.stringify(data),
     });
 
+  // addDR attaches an off-site asynchronous replica to a resource that is
+  // already running. wanPort 0 lets the controller allocate one.
+  addDR = (
+    resource: string,
+    data: {
+      drNode: string;
+      drEndpoint: string;
+      wanPort?: number;
+      egressAddress?: string;
+    },
+  ) =>
+    this.request<ApiResponse & { wanPort: number }>(`/resources/${resource}/dr`, {
+      method: 'POST',
+      body: JSON.stringify({ resource, ...data }),
+    });
+
   deleteResource = (name: string) =>
     this.request<ApiResponse>(`/resources/${name}`, { method: 'DELETE' });
 
