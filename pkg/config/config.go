@@ -18,6 +18,7 @@ type Config struct {
 	Log      LogConfig      `mapstructure:"log"`
 	Storage  StorageConfig  `mapstructure:"storage"`
 	Metrics  MetricsConfig  `mapstructure:"metrics"`
+	UI       UIConfig       `mapstructure:"ui"`
 	Audit    AuditConfig    `mapstructure:"audit"`
 	RBAC     RBACConfig     `mapstructure:"rbac"`
 	Gateway  GatewayConfig  `mapstructure:"gateway"`
@@ -181,6 +182,37 @@ type MetricsConfig struct {
 	ListenAddress string `mapstructure:"listen_address"`
 	Port          int    `mapstructure:"port"`
 }
+
+// UIConfig controls the embedded web UI server. It was documented and written
+// into deployed controller.toml files, but nothing read it: the listener was
+// hardcoded, so a config asking for a different port bound the default instead
+// and said nothing.
+type UIConfig struct {
+	// Enabled defaults to true — the UI has always been served, and a config
+	// that omits the section must keep getting it.
+	Enabled       *bool  `mapstructure:"enabled"`
+	ListenAddress string `mapstructure:"listen_address"`
+	Port          int    `mapstructure:"port"`
+}
+
+// UIEnabled reports whether the embedded UI should be served.
+func (u UIConfig) UIEnabled() bool { return u.Enabled == nil || *u.Enabled }
+
+// UIAddress returns the address the UI should bind, falling back to the API
+// listen address and the historic port.
+func (u UIConfig) UIAddress(serverListen string) (string, int) {
+	addr, port := u.ListenAddress, u.Port
+	if addr == "" {
+		addr = serverListen
+	}
+	if port == 0 {
+		port = DefaultUIPort
+	}
+	return addr, port
+}
+
+// DefaultUIPort is the port the UI bound before [ui] was honoured.
+const DefaultUIPort = 3376
 
 // Load loads configuration from file
 func Load(configPath string) (*Config, error) {

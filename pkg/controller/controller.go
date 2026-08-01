@@ -226,14 +226,17 @@ func (c *Controller) Start() error {
 		return fmt.Errorf("failed to start gRPC server: %w", err)
 	}
 
-	// Start UI server
-	uiServer, err := NewUIServer(c.logger, c.config.Server.ListenAddress, 3376)
-	if err != nil {
-		return fmt.Errorf("failed to create UI server: %w", err)
-	}
-	c.uiServer = uiServer
-	if err := c.uiServer.Start(); err != nil {
-		return fmt.Errorf("failed to start UI server: %w", err)
+	// Start UI server on whatever [ui] asks for.
+	if c.config.UI.UIEnabled() {
+		uiAddr, uiPort := c.config.UI.UIAddress(c.config.Server.ListenAddress)
+		uiServer, err := NewUIServer(c.logger, uiAddr, uiPort)
+		if err != nil {
+			return fmt.Errorf("failed to create UI server: %w", err)
+		}
+		c.uiServer = uiServer
+		if err := c.uiServer.Start(); err != nil {
+			return fmt.Errorf("failed to start UI server: %w", err)
+		}
 	}
 
 	// Start the snapshot scheduler. Only the active controller reaches here
