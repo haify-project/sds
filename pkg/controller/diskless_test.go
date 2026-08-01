@@ -77,7 +77,7 @@ func TestParseOnBlocks(t *testing.T) {
 	if len(blocks) != 3 {
 		t.Fatalf("want 3 on-blocks, got %d: %+v", len(blocks), blocks)
 	}
-	want := []onBlock{{"node1", 0}, {"node2", 1}, {"tb1", 2}}
+	want := []onBlock{{name: "node1", nodeID: 0}, {name: "node2", nodeID: 1}, {name: "tb1", nodeID: 2}}
 	for i, b := range blocks {
 		if b != want[i] {
 			t.Errorf("block %d = %+v, want %+v", i, b, want[i])

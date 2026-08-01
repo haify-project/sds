@@ -37,6 +37,13 @@ var errDisklessNotPresent = fmt.Errorf("node not present in resource config")
 type onBlock struct {
 	name   string
 	nodeID int
+	// loopback is true when the stanza's address is 127.0.0.1, which marks a
+	// node reachable only through an sds-proxy WAN leg (the DR site, or the
+	// primary of a single-replica WAN resource). Such a node is wired by an
+	// explicit `connection` section and must never be put in a connection-mesh:
+	// the mesh would pair it with every other host on that host's LAN address,
+	// which is unroutable from the other site.
+	loopback bool
 }
 
 // parseOnBlocks extracts every `on <host>` stanza from a DRBD resource config,
@@ -53,6 +60,9 @@ func parseOnBlocks(content string) []onBlock {
 			if fields := strings.Fields(trimmed); len(fields) >= 2 {
 				cur = &onBlock{name: fields[1], nodeID: -1}
 			}
+		} else if cur != nil && strings.HasPrefix(trimmed, "address") &&
+			strings.Contains(trimmed, "127.0.0.1") {
+			cur.loopback = true
 		} else if cur != nil && strings.HasPrefix(trimmed, "node-id") {
 			if fields := strings.Fields(trimmed); len(fields) >= 2 {
 				if id, err := strconv.Atoi(strings.TrimSuffix(fields[1], ";")); err == nil {
@@ -68,6 +78,34 @@ func parseOnBlocks(content string) []onBlock {
 		}
 	}
 	return blocks
+}
+
+// meshNeeded reports whether a connection-mesh must be written for the LAN
+// hosts.
+//
+// Two LAN hosts normally need no mesh: with no explicit connection sections at
+// all, DRBD wires every pair implicitly. That stops being true the moment a
+// WAN-attached host is present, because the file then carries explicit
+// `connection` sections and the implicit pairing no longer applies — leaving
+// two replicas with no connection to each other at all.
+func meshNeeded(lan, all []string) bool {
+	if len(lan) > 2 {
+		return true
+	}
+	return len(lan) >= 2 && len(lan) < len(all)
+}
+
+// lanHostNames returns the hosts that belong in a connection-mesh: everything
+// except the WAN-attached ones, which have their own explicit connections.
+func lanHostNames(blocks []onBlock) []string {
+	names := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		if b.loopback {
+			continue
+		}
+		names = append(names, b.name)
+	}
+	return names
 }
 
 // onHostNames returns the host names of the given `on` blocks in order.
@@ -199,8 +237,10 @@ func addDisklessClientBlock(content, node, ip string, port int) (string, error) 
 		return "", err
 	}
 
-	allHosts := append(onHostNames(blocks), node)
-	if len(allHosts) > 2 {
+	// The mesh covers the LAN participants plus the newcomer; a WAN-attached
+	// host keeps its explicit connection and stays out.
+	allHosts := append(lanHostNames(blocks), node)
+	if meshNeeded(allHosts, append(onHostNames(blocks), node)) {
 		withOn, err = insertBeforeResourceClose(withOn, buildConnectionMesh(allHosts))
 		if err != nil {
 			return "", err
@@ -241,8 +281,9 @@ func removeDisklessClientBlock(content, node string) (string, error) {
 	}
 
 	stripped := stripConnectionMesh(strings.Join(out, "\n"))
-	remaining := onHostNames(parseOnBlocks(stripped))
-	if len(remaining) > 2 {
+	blocksLeft := parseOnBlocks(stripped)
+	remaining := lanHostNames(blocksLeft)
+	if meshNeeded(remaining, onHostNames(blocksLeft)) {
 		return insertBeforeResourceClose(stripped, buildConnectionMesh(remaining))
 	}
 	return stripped, nil

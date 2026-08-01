@@ -394,3 +394,50 @@ func TestPickWANBindPortsUsesProbeAndFallsBack(t *testing.T) {
 	// holds the port.
 	assert.Equal(t, 7401, ports[1], "falls back to offset + leg index")
 }
+
+// Adding or removing a diskless node must not drag the DR into the LAN mesh.
+// The tiebreaker code predates two-site resources and rebuilt the mesh from
+// every `on` stanza, which would pair the DR with each replica on that replica's
+// LAN address — unroutable from the other site, so both WAN legs drop.
+func TestDisklessMeshRebuildExcludesWANHosts(t *testing.T) {
+	rm := addDRTestFixture(t)
+	twoSite, err := rm.addDRToConfig(lanResConfig, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300,
+		[]int{7900, 7901})
+	require.NoError(t, err)
+
+	out, err := removeDisklessClientBlock(twoSite, "sds-e")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, strings.Count(out, "connection-mesh"))
+	mesh := out[strings.Index(out, "connection-mesh"):]
+	mesh = mesh[:strings.Index(mesh, ";")]
+	assert.Contains(t, mesh, "sds-a")
+	assert.Contains(t, mesh, "sds-b")
+	assert.NotContains(t, mesh, "sds-e", "the removed tiebreaker is gone")
+	assert.NotContains(t, mesh, "sds-c", "the DR must stay out of the LAN mesh")
+
+	// And the WAN legs survive untouched.
+	assert.Equal(t, 2, strings.Count(out, "connection {"))
+	assert.Contains(t, out, "host sds-a address 127.0.0.1:7900;")
+	assert.Contains(t, out, "host sds-c address 127.0.0.1:7301;")
+}
+
+func TestDisklessAddExcludesWANHostsFromMesh(t *testing.T) {
+	rm := addDRTestFixture(t)
+	// Two replicas plus a DR, no tiebreaker yet.
+	noTB := lanResConfig[:strings.Index(lanResConfig, "    on sds-e {")] +
+		lanResConfig[strings.Index(lanResConfig, "    connection-mesh"):]
+	noTB = strings.Replace(noTB, "hosts sds-a sds-b sds-e;", "hosts sds-a sds-b;", 1)
+	twoSite, err := rm.addDRToConfig(noTB, "openclaw", "node-c",
+		[]string{"node-a", "node-b"}, nil, "203.0.113.7", addDRVolumes, 7300, nil)
+	require.NoError(t, err)
+
+	out, err := addDisklessClientBlock(twoSite, "sds-e", "192.168.1.20", 7300)
+	require.NoError(t, err)
+
+	mesh := out[strings.Index(out, "connection-mesh"):]
+	mesh = mesh[:strings.Index(mesh, ";")]
+	assert.Contains(t, mesh, "sds-e", "the new tiebreaker joins the LAN mesh")
+	assert.NotContains(t, mesh, "sds-c", "the DR does not")
+}
