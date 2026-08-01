@@ -1688,6 +1688,40 @@ func randomWANPort() uint32 {
 //
 // wan is nil for a normal LAN resource (output unchanged). When set, the config
 // is rendered in WAN mode (protocol A + pull-ahead + loopback addresses).
+
+// localSiteQuorum returns the `quorum` setting for a resource.
+//
+// A LAN resource gets "majority", unchanged: every node can serve, so every node
+// should have a say in whether serving is safe.
+//
+// A resource with an off-site DR does not. DRBD counts every configured node
+// toward a majority, but the DR is an asynchronous copy that is never promoted
+// automatically — it cannot take over, so letting it vote on whether the primary
+// site may accept writes is backwards. Worse, it actively costs availability:
+// adding a DR to a 3-node resource lifts the bar from 2 votes to 3, so the site
+// that used to survive one local failure no longer does. That is how a quorum
+// tiebreaker can be added, a DR attached, and the tiebreaker's vote silently
+// cancelled out.
+//
+// So a WAN resource's quorum is sized to the primary site alone: a majority of
+// the nodes that could actually take over. The DR still replicates and still
+// counts as a member; it just does not get to decide whether home can write.
+//
+// The narrower guarantee is deliberate and bounded: the excluded node is
+// unreachable from the primary site's network by construction — it is reached
+// only through a proxy tunnel — so it cannot form a rival quorate partition with
+// any local node. This is not the same as picking a small number arbitrarily.
+func localSiteQuorum(nodes, disklessNodes []string, wan *wanConfig) string {
+	if wan == nil {
+		return "majority"
+	}
+	local := len(nodes) - 1 + len(disklessNodes) // every member except the DR
+	if local < 1 {
+		local = 1
+	}
+	return strconv.Itoa(local/2 + 1)
+}
+
 func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes []resolvedVolume, nodes, disklessNodes []string, protocol, storageType string, options map[string]string, wan *wanConfig) string {
 	var config strings.Builder
 
@@ -1704,7 +1738,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 
 	// Add defaults
 	setOption("options", "auto-promote", "no")
-	setOption("options", "quorum", "majority")
+	setOption("options", "quorum", localSiteQuorum(nodes, disklessNodes, wan))
 	setOption("options", "on-no-quorum", "io-error")
 	setOption("options", "on-no-data-accessible", "io-error")
 	setOption("options", "on-suspended-primary-outdated", "force-secondary")

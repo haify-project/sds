@@ -208,6 +208,9 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 	if err != nil {
 		return fmt.Errorf("rewrite config for DR site: %w", err)
 	}
+	// The DR replicates but does not get a vote in whether the primary site may
+	// write; see setLocalSiteQuorum.
+	newConfig = setLocalSiteQuorum(newConfig, len(primaries)+len(splitCSV(dbRes.DisklessNodes)))
 
 	if _, err := rm.deployment.DistributeConfig(ctx, allHosts, newConfig, resPath); err != nil {
 		return fmt.Errorf("distribute DR config: %w", err)
@@ -604,4 +607,28 @@ func (rm *ResourceManager) primaryBackingSizes(ctx context.Context, hosts []stri
 		}
 	}
 	return sizes, nil
+}
+
+// quorumLineRe matches the `quorum <value>;` line inside a resource's options.
+var quorumLineRe = regexp.MustCompile(`(?m)^(\s*)quorum\s+\S+;`)
+
+// setLocalSiteQuorum rewrites a config's quorum to a majority of the primary
+// site, so attaching a DR does not raise the bar the local nodes must clear.
+//
+// Without this, add-dr makes a resource LESS available: DRBD counts the new
+// member toward `majority`, so a 3-node resource that survived one local failure
+// suddenly needs 3 of 4 votes and no longer does. The operator asked for an
+// off-site copy and silently got a downgrade to local resilience.
+func setLocalSiteQuorum(content string, localVoters int) string {
+	if localVoters < 1 {
+		localVoters = 1
+	}
+	want := strconv.Itoa(localVoters/2 + 1)
+	if quorumLineRe.MatchString(content) {
+		return quorumLineRe.ReplaceAllString(content, "${1}quorum "+want+";")
+	}
+	// No explicit quorum: the resource is relying on DRBD's default, so state it
+	// rather than leaving the new member to shift a majority nobody wrote down.
+	return strings.Replace(content, "    options {",
+		"    options {\n        quorum "+want+";", 1)
 }
