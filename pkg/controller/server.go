@@ -1095,7 +1095,23 @@ func (s *Server) SetTiebreaker(ctx context.Context, req *sdspb.SetTiebreakerRequ
 
 	msg := fmt.Sprintf("tiebreaker for %q is now %q", req.Resource, req.Node)
 	if req.Node == "" {
-		msg = fmt.Sprintf("tiebreaker removed from %q; a single node failure will now suspend I/O", req.Resource)
+		// Whether that is dangerous depends on how many diskful replicas are
+		// left. Two need the tiebreaker to reach a majority; three already have
+		// one without it, and an off-site DR counts — warning regardless would
+		// train the operator to ignore the message.
+		replicas := 0
+		if s.ctrl.db != nil {
+			if dbRes, err := s.ctrl.db.GetResource(ctx, req.Resource); err == nil && dbRes != nil {
+				replicas = len(splitCSV(dbRes.Nodes))
+			}
+		}
+		if replicas >= 3 {
+			msg = fmt.Sprintf("tiebreaker removed from %q; %d replicas still give a quorum majority",
+				req.Resource, replicas)
+		} else {
+			msg = fmt.Sprintf("tiebreaker removed from %q; with %d replicas a single node failure will now suspend I/O",
+				req.Resource, replicas)
+		}
 	}
 	return &sdspb.SetTiebreakerResponse{
 		Success:      true,

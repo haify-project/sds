@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
 )
@@ -440,4 +441,41 @@ func TestDisklessAddExcludesWANHostsFromMesh(t *testing.T) {
 	mesh = mesh[:strings.Index(mesh, ";")]
 	assert.Contains(t, mesh, "sds-e", "the new tiebreaker joins the LAN mesh")
 	assert.NotContains(t, mesh, "sds-c", "the DR does not")
+}
+
+// Removing the tiebreaker is only dangerous when too few replicas are left.
+// Warning either way trains the operator to ignore the message — and on a
+// two-site resource the warning is simply false.
+func TestSetTiebreakerRemovalMessageDependsOnReplicaCount(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		nodes   string
+		wantSub string
+	}{
+		{"two replicas still need the vote", "node-a,node-b", "will now suspend I/O"},
+		{"three replicas stand on their own", "node-a,node-b,node-c", "still give a quorum majority"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeDeploymentClient{}
+			fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+				if strings.HasPrefix(cmd, "cat ") {
+					return successExecResult(hosts, lanResConfig), nil
+				}
+				return successExecResult(hosts, ""), nil
+			}
+			ctrl := addDRTestFixture(t).controller
+			ctrl.deployment = fake
+			ctrl.resources.SetDeployment(fake)
+			ctrl.db = openTestDB(t)
+			require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
+				Name: "data", Port: 7300, Nodes: tc.nodes, DisklessNodes: "node-e",
+			}))
+
+			srv := &Server{ctrl: ctrl, resources: ctrl.resources}
+			resp, err := srv.SetTiebreaker(context.Background(),
+				&sdspb.SetTiebreakerRequest{Resource: "data", Node: ""})
+			require.NoError(t, err)
+			assert.Contains(t, resp.Message, tc.wantSub)
+		})
+	}
 }

@@ -453,7 +453,7 @@ serving through it.
 			}
 			defer sdsClient.Close()
 
-			previous, err := sdsClient.SetTiebreaker(ctx, resource, node)
+			previous, message, err := sdsClient.SetTiebreaker(ctx, resource, node)
 			if err != nil {
 				return fmt.Errorf("failed to set tiebreaker: %w", err)
 			}
@@ -463,7 +463,10 @@ serving through it.
 			}
 			if node == "" {
 				fmt.Printf("Tiebreaker removed from %q (was %s)\n", resource, previous)
-				fmt.Printf("WARNING: with no tiebreaker, a single node failure leaves no quorum majority and I/O suspends.\n")
+				// Whether losing the tiebreaker matters depends on how many
+				// replicas are left, so report what the controller found rather
+				// than warning unconditionally.
+				fmt.Printf("%s\n", message)
 				return nil
 			}
 			fmt.Printf("Tiebreaker for %q moved: %s -> %s\n", resource, previous, node)

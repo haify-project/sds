@@ -217,9 +217,9 @@ func (rm *ResourceManager) SetTiebreaker(ctx context.Context, resource, newNode 
 		return fmt.Errorf("record tiebreaker change: %w", err)
 	}
 
-	if newNode == "" {
+	if newNode == "" && len(diskful) < 3 {
 		rm.controller.logger.Warn("Resource left without a quorum tiebreaker: a single node failure will suspend I/O",
-			zap.String("resource", resource))
+			zap.String("resource", resource), zap.Int("replicas", len(diskful)))
 	}
 	return nil
 }
