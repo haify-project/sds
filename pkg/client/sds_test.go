@@ -164,6 +164,31 @@ func (m *mockServer) ListResources(ctx context.Context, req *sdspb.ListResources
 	}, nil
 }
 
+func (m *mockServer) CreateResourceProfile(_ context.Context, req *sdspb.CreateResourceProfileRequest) (*sdspb.CreateResourceProfileResponse, error) {
+	if req.GetProfile().GetName() == "fail-profile" {
+		return &sdspb.CreateResourceProfileResponse{Success: false, Message: "profile invalid"}, nil
+	}
+	return &sdspb.CreateResourceProfileResponse{Success: true, Profile: req.Profile}, nil
+}
+
+func (m *mockServer) GetResourceProfile(_ context.Context, req *sdspb.GetResourceProfileRequest) (*sdspb.GetResourceProfileResponse, error) {
+	if req.Name == "missing" {
+		return &sdspb.GetResourceProfileResponse{Success: false, Message: "profile not found"}, nil
+	}
+	return &sdspb.GetResourceProfileResponse{Success: true, Profile: &sdspb.ResourceProfile{Name: req.Name, Pool: "fast"}}, nil
+}
+
+func (m *mockServer) ListResourceProfiles(context.Context, *sdspb.ListResourceProfilesRequest) (*sdspb.ListResourceProfilesResponse, error) {
+	return &sdspb.ListResourceProfilesResponse{Success: true, Profiles: []*sdspb.ResourceProfile{{Name: "production"}, {Name: "archive"}}}, nil
+}
+
+func (m *mockServer) DeleteResourceProfile(_ context.Context, req *sdspb.DeleteResourceProfileRequest) (*sdspb.DeleteResourceProfileResponse, error) {
+	if req.Name == "missing" {
+		return &sdspb.DeleteResourceProfileResponse{Success: false, Message: "profile not found"}, nil
+	}
+	return &sdspb.DeleteResourceProfileResponse{Success: true}, nil
+}
+
 func (m *mockServer) ResizeVolume(ctx context.Context, req *sdspb.ResizeVolumeRequest) (*sdspb.ResizeVolumeResponse, error) {
 	if req.Resource == "fail-res" {
 		return &sdspb.ResizeVolumeResponse{Success: false, Message: "resize fail"}, nil
@@ -905,4 +930,125 @@ func TestSDSClientRemainingAPIs(t *testing.T) {
 	_, err = c.ListLvmSnapshots(ctx, "vg0", "n1")
 	require.NoError(t, err)
 	require.NoError(t, c.RestoreLvmSnapshot(ctx, "vg0", "snap1", "n1"))
+}
+
+func TestSDSClientResourceProfiles(t *testing.T) {
+	c, cleanup := setupMockClient(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	profile := &sdspb.ResourceProfile{Name: "production", Pool: "fast", Replicas: 3}
+	created, err := c.CreateResourceProfile(ctx, profile)
+	require.NoError(t, err)
+	assert.Equal(t, profile.Name, created.Name)
+	assert.Equal(t, profile.Pool, created.Pool)
+	assert.Equal(t, profile.Replicas, created.Replicas)
+
+	got, err := c.GetResourceProfile(ctx, "production")
+	require.NoError(t, err)
+	assert.Equal(t, "fast", got.Pool)
+
+	profiles, err := c.ListResourceProfiles(ctx)
+	require.NoError(t, err)
+	require.Len(t, profiles, 2)
+	assert.Equal(t, "archive", profiles[1].Name)
+
+	require.NoError(t, c.DeleteResourceProfile(ctx, "production"))
+	_, err = c.CreateResourceProfile(ctx, &sdspb.ResourceProfile{Name: "fail-profile"})
+	assert.EqualError(t, err, "profile invalid")
+	_, err = c.GetResourceProfile(ctx, "missing")
+	assert.EqualError(t, err, "profile not found")
+	assert.EqualError(t, c.DeleteResourceProfile(ctx, "missing"), "profile not found")
+}
+
+func TestSDSClientProfileTransportErrors(t *testing.T) {
+	c, cleanup := setupMockClient(t)
+	require.NoError(t, c.Close())
+	defer cleanup()
+
+	ctx := context.Background()
+	_, err := c.CreateResourceProfile(ctx, &sdspb.ResourceProfile{Name: "production"})
+	assert.Error(t, err)
+	_, err = c.GetResourceProfile(ctx, "production")
+	assert.Error(t, err)
+	_, err = c.ListResourceProfiles(ctx)
+	assert.Error(t, err)
+	assert.Error(t, c.DeleteResourceProfile(ctx, "production"))
+}
+
+func TestSDSClientTransportErrors(t *testing.T) {
+	c, cleanup := setupMockClient(t)
+	require.NoError(t, c.Close())
+	defer cleanup()
+	ctx := context.Background()
+
+	checks := []func() error{
+		func() error { return c.CreatePool(ctx, "p", "lvm", "n", nil, 0) },
+		func() error { _, err := c.GetPool(ctx, "p", "n"); return err },
+		func() error { _, err := c.ListPools(ctx); return err },
+		func() error { return c.AddDiskToPool(ctx, "p", "/dev/sdb", "n") },
+		func() error { return c.DeletePool(ctx, "p", "n") },
+		func() error { _, err := c.RegisterNode(ctx, "n", "a"); return err },
+		func() error { _, err := c.SetNodeLabels(ctx, "n", nil, false); return err },
+		func() error { _, err := c.ListNodes(ctx); return err },
+		func() error { _, err := c.GetNode(ctx, "a"); return err },
+		func() error { return c.UnregisterNode(ctx, "a") },
+		func() error { _, err := c.DrainNode(ctx, "n"); return err },
+		func() error { return c.UndrainNode(ctx, "n") },
+		func() error { _, err := c.HealthCheck(ctx, "n"); return err },
+		func() error { return c.CreateResourceRequest(ctx, &sdspb.CreateResourceRequest{Name: "r"}) },
+		func() error { _, err := c.GetResource(ctx, "r"); return err },
+		func() error { _, err := c.ListResources(ctx); return err },
+		func() error { return c.SetPrimary(ctx, "r", "n", false) },
+		func() error { return c.PromoteForNode(ctx, "r", "n") },
+		func() error { return c.DeleteResource(ctx, "r") },
+		func() error { return c.AddVolume(ctx, "r", "v", "p", 1) },
+		func() error { return c.UpdateResourceOptions(ctx, "r", map[string]string{"a": "b"}) },
+		func() error { return c.RemoveVolume(ctx, "r", 0) },
+		func() error { return c.ResizeVolume(ctx, "r", 0, 2) },
+		func() error { _, err := c.ResourceStatus(ctx, "r"); return err },
+		func() error { return c.SetSecondary(ctx, "r", "n") },
+		func() error { return c.AttachDisklessClient(ctx, "r", "n") },
+		func() error { return c.DetachDisklessClient(ctx, "r", "n") },
+		func() error { return c.CreateFilesystem(ctx, "r", 0, "ext4", "n") },
+		func() error { return c.MountResource(ctx, "r", 0, "/mnt/r", "n", "ext4") },
+		func() error { return c.UnmountResource(ctx, "r", 0, "n") },
+		func() error { _, err := c.ListGateways(ctx); return err },
+		func() error { _, err := c.GetGateway(ctx, "g"); return err },
+		func() error { return c.StartGateway(ctx, "g") },
+		func() error { return c.StopGateway(ctx, "g") },
+		func() error { return c.DeleteGateway(ctx, "g") },
+		func() error {
+			_, err := c.CreateNFSGateway(ctx, &sdspb.CreateNFSGatewayRequest{Resource: "r"})
+			return err
+		},
+		func() error {
+			_, err := c.CreateISCSIGateway(ctx, &sdspb.CreateISCSIGatewayRequest{Resource: "r"})
+			return err
+		},
+		func() error {
+			_, err := c.CreateNVMeGateway(ctx, &sdspb.CreateNVMeGatewayRequest{Resource: "r"})
+			return err
+		},
+		func() error { return c.AddNFSExport(ctx, "g", "/data", 1, "*", "rw") },
+		func() error { return c.RemoveNFSExport(ctx, "g", "/data") },
+		func() error { _, err := c.ListNFSExports(ctx, "g"); return err },
+		func() error { return c.AddISCSILUN(ctx, "g", 1, "/dev/drbd0") },
+		func() error { return c.RemoveISCSILUN(ctx, "g", 1) },
+		func() error { _, err := c.ListISCSILUNs(ctx, "g"); return err },
+		func() error { return c.AddISCSIInitiator(ctx, "g", "iqn.test") },
+		func() error { return c.RemoveISCSIInitiator(ctx, "g", "iqn.test") },
+		func() error { _, err := c.ListISCSIInitiators(ctx, "g"); return err },
+		func() error { return c.SetISCSIChap(ctx, "g", "u", "p", false) },
+		func() error { _, err := c.GetISCSIChap(ctx, "g"); return err },
+		func() error { return c.AddNVMeNamespace(ctx, "g", "/dev/drbd0") },
+		func() error { return c.RemoveNVMeNamespace(ctx, "g", 1) },
+		func() error { _, err := c.ListNVMeNamespaces(ctx, "g"); return err },
+		func() error { return c.AddNVMeHost(ctx, "g", "nqn.test") },
+		func() error { return c.RemoveNVMeHost(ctx, "g", "nqn.test") },
+		func() error { _, err := c.ListNVMeHosts(ctx, "g"); return err },
+	}
+	for i, check := range checks {
+		assert.Errorf(t, check(), "transport check %d", i)
+	}
 }

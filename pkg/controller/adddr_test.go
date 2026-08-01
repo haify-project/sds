@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/liliang-cn/sds/pkg/deployment"
 )
 
 // A LAN resource as it exists on disk before any DR is attached: two diskful
@@ -226,4 +228,81 @@ func TestMinorForVolume(t *testing.T) {
 `
 	assert.Equal(t, 5, minorForVolume(twoVol, 0))
 	assert.Equal(t, 6, minorForVolume(twoVol, 1))
+}
+
+// The whole point of the preflight is that DRBD hands out bitmap slots once, at
+// create-md time. A resource created with two nodes has room for exactly one
+// diskful peer, so a DR is the node that does not fit.
+func TestAssertBitmapSlotFreeRejectsExhaustedMetadata(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		return successExecResult(hosts, "1\n"), nil
+	}
+	rm := newBasicTestController(fake).resources
+
+	err := rm.assertBitmapSlotFree(context.Background(),
+		[]string{"192.168.1.10", "192.168.1.11"}, []string{"node-a", "node-b"}, "openclaw")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "metadata for 1 peer(s) but 2 are needed")
+	// The message has to carry the way out: there is no online fix, and an
+	// operator who does not know that will go looking for a flag that does not
+	// exist.
+	assert.Contains(t, err.Error(), "--max-peers")
+	assert.Contains(t, err.Error(), "one node at a time")
+}
+
+func TestAssertBitmapSlotFreeAcceptsHeadroom(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		return successExecResult(hosts, "7\n"), nil
+	}
+	rm := newBasicTestController(fake).resources
+
+	require.NoError(t, rm.assertBitmapSlotFree(context.Background(),
+		[]string{"192.168.1.10", "192.168.1.11"}, []string{"node-a", "node-b"}, "openclaw"))
+}
+
+// A multi-volume resource is only as extensible as its tightest volume.
+func TestAssertBitmapSlotFreeUsesLowestVolume(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		return successExecResult(hosts, "7\n1\n7\n"), nil
+	}
+	rm := newBasicTestController(fake).resources
+
+	err := rm.assertBitmapSlotFree(context.Background(),
+		[]string{"192.168.1.10", "192.168.1.11"}, []string{"node-a", "node-b"}, "openclaw")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "metadata for 1 peer(s)")
+}
+
+// Metadata that cannot be read is not evidence of a problem; refusing on it
+// would block the operation on any node whose drbdmeta behaves differently.
+func TestAssertBitmapSlotFreeProceedsOnUnreadableMetadata(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	fake.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		return successExecResult(hosts, "open failed: Device or resource busy\n"), nil
+	}
+	rm := newBasicTestController(fake).resources
+
+	require.NoError(t, rm.assertBitmapSlotFree(context.Background(),
+		[]string{"192.168.1.10"}, []string{"node-a"}, "openclaw"))
+}
+
+// Metadata must be created with room to grow. DRBD fixes the bitmap-slot count
+// at create-md time, so sizing it to today's peer count means the first node
+// added later cannot join — the exact failure add-dr exists to avoid. The
+// backing volume is already sized for minMetadataPeers slots, so the headroom
+// costs nothing that has not already been paid for.
+func TestCreateResourceReservesBitmapHeadroom(t *testing.T) {
+	fake := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(fake)
+	registerWANNodes(ctrl)
+
+	_ = ctrl.resources.CreateResource(context.Background(), "data", 7300,
+		[]string{"node-a", "node-b"}, "C", 1, "vg0", "lvm", nil)
+
+	require.NotEmpty(t, fake.drbdCreateMDCalls, "create should have made metadata")
+	assert.Equal(t, minMetadataPeers, fake.drbdCreateMDCalls[0].maxPeers,
+		"a two-node resource must still leave slots for a DR or a third replica")
 }

@@ -42,7 +42,7 @@ type deploymentClient interface {
 	DRBDDown(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	DRBDPrimary(ctx context.Context, host, resource string, force bool) (*deployment.HostResult, error)
 	DRBDSecondary(ctx context.Context, host, resource string) (*deployment.HostResult, error)
-	DRBDCreateMD(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
+	DRBDCreateMD(ctx context.Context, hosts []string, resource string, maxPeers int) (*deployment.ExecResult, error)
 	DRBDStatus(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	DRBDStatusJSON(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	ReactorReload(ctx context.Context, hosts []string) (*deployment.ExecResult, error)

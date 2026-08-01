@@ -901,7 +901,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 
 	// 4. Create metadata on diskful nodes only. A diskless tiebreaker has no
 	// backing disk, so `drbdadm create-md` does not apply to it.
-	mdResult, err := rm.deployment.DRBDCreateMD(ctx, nodeIPs, name)
+	mdResult, err := rm.deployment.DRBDCreateMD(ctx, nodeIPs, name, minMetadataPeers)
 	if err != nil {
 		return fmt.Errorf("failed to create metadata: %w", err)
 	}

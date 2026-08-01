@@ -174,7 +174,7 @@ func TestCovDRBDBuilders(t *testing.T) {
 	}{
 		{"DRBDUp", func() (*ExecResult, error) { return c.DRBDUp(ctx, hosts, "covres") }},
 		{"DRBDDown", func() (*ExecResult, error) { return c.DRBDDown(ctx, hosts, "covres") }},
-		{"DRBDCreateMD", func() (*ExecResult, error) { return c.DRBDCreateMD(ctx, hosts, "covres") }},
+		{"DRBDCreateMD", func() (*ExecResult, error) { return c.DRBDCreateMD(ctx, hosts, "covres", 0) }},
 		{"DRBDAdjust", func() (*ExecResult, error) { return c.DRBDAdjust(ctx, hosts, "covres") }},
 		{"DRBDStatus", func() (*ExecResult, error) { return c.DRBDStatus(ctx, hosts, "covres") }},
 		{"DRBDStatusJSON", func() (*ExecResult, error) { return c.DRBDStatusJSON(ctx, hosts, "covres") }},

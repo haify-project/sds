@@ -770,10 +770,26 @@ func (c *Client) DRBDSecondary(ctx context.Context, host, resource string) (*Hos
 	return nil, fmt.Errorf("no result returned for host %s", host)
 }
 
-// DRBDCreateMD creates DRBD metadata
-func (c *Client) DRBDCreateMD(ctx context.Context, hosts []string, resource string) (*ExecResult, error) {
-	return c.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm create-md --force %s", resource))
+// DRBDCreateMD creates DRBD metadata with room for maxPeers peers.
+//
+// The peer count is not cosmetic: DRBD allocates one bitmap slot per peer when
+// metadata is created and there is no way to add slots afterwards. Sizing to the
+// peer count of the moment means the first node added later — an off-site DR, a
+// third replica, a diskless client — fails with "Not enough free bitmap slots",
+// and the only fix is to recreate metadata on every replica and resync. Passing
+// a maxPeers of 0 uses the slot floor the volume was already sized for.
+func (c *Client) DRBDCreateMD(ctx context.Context, hosts []string, resource string, maxPeers int) (*ExecResult, error) {
+	if maxPeers <= 0 {
+		maxPeers = DefaultMaxPeers
+	}
+	return c.Exec(ctx, hosts,
+		fmt.Sprintf("sudo drbdadm create-md --max-peers=%d --force %s", maxPeers, resource))
 }
+
+// DefaultMaxPeers is the bitmap-slot count metadata is created with when the
+// caller does not care. It matches the peer count backing volumes are sized for,
+// so the slots always fit in the space already reserved.
+const DefaultMaxPeers = 7
 
 // DRBDAdjust adjusts DRBD configuration
 func (c *Client) DRBDAdjust(ctx context.Context, hosts []string, resource string) (*ExecResult, error) {

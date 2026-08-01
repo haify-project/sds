@@ -85,6 +85,7 @@ type fakeDeploymentClient struct {
 	drbdCreateMDCalls []struct {
 		hosts    []string
 		resource string
+		maxPeers int
 	}
 	drbdDownCalls []struct {
 		hosts    []string
@@ -354,11 +355,12 @@ func (f *fakeDeploymentClient) DRBDSecondary(ctx context.Context, host, resource
 	return &deployment.HostResult{Host: host, Success: true}, nil
 }
 
-func (f *fakeDeploymentClient) DRBDCreateMD(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error) {
+func (f *fakeDeploymentClient) DRBDCreateMD(ctx context.Context, hosts []string, resource string, maxPeers int) (*deployment.ExecResult, error) {
 	f.drbdCreateMDCalls = append(f.drbdCreateMDCalls, struct {
 		hosts    []string
 		resource string
-	}{hosts: cloneStrings(hosts), resource: resource})
+		maxPeers int
+	}{hosts: cloneStrings(hosts), resource: resource, maxPeers: maxPeers})
 	if f.drbdCreateMDFunc != nil {
 		return f.drbdCreateMDFunc(ctx, hosts, resource)
 	}

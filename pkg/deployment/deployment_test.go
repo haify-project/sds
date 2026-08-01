@@ -228,7 +228,7 @@ func (m *MockClient) DRBDSecondary(ctx context.Context, host, resource string) (
 	return &HostResult{Host: host, Success: true}, nil
 }
 
-func (m *MockClient) DRBDCreateMD(ctx context.Context, hosts []string, resource string) (*ExecResult, error) {
+func (m *MockClient) DRBDCreateMD(ctx context.Context, hosts []string, resource string, maxPeers int) (*ExecResult, error) {
 	return &ExecResult{
 		Hosts: map[string]*HostResult{
 			"host1": {Host: "host1", Success: true},

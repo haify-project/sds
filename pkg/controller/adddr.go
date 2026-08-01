@@ -3,11 +3,14 @@ package controller
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
 
 	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/liliang-cn/sds/pkg/wanproxy"
 )
 
@@ -114,6 +117,15 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 		return err
 	}
 
+	// A diskful peer needs a bitmap slot, and slots are allocated once, when
+	// metadata is created. Check before provisioning anything: without this the
+	// failure surfaces from `drbdadm adjust` as "(162) Invalid configuration
+	// request", by which point there are LVs, proxy units and a rewritten config
+	// to unwind, and nothing in the message says what to do about it.
+	if err := rm.assertBitmapSlotFree(ctx, primaryAddrs, primaries, resource); err != nil {
+		return err
+	}
+
 	// The DR node needs backing volumes of its own: it is a full replica, not a
 	// diskless voter. Sizes and pools come from the resource record, which is
 	// where create wrote them.
@@ -124,15 +136,13 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 	if len(dbVols) == 0 {
 		return fmt.Errorf("resource %q has no recorded volumes to replicate", resource)
 	}
-	for _, v := range dbVols {
-		if err := rm.createBackingVolume(ctx, []string{drAddr}, []string{drNode},
-			"lvm", v.Pool, v.VolumeName, uint32(v.SizeGB)); err != nil {
-			return fmt.Errorf("create backing volume %s/%s on DR node %q: %w", v.Pool, v.VolumeName, drNode, err)
-		}
+	// Everyone that must end up holding the new config.
+	lanHosts := append([]string{}, primaryAddrs...)
+	for _, n := range splitCSV(dbRes.DisklessNodes) {
+		lanHosts = append(lanHosts, rm.controller.ResolveHost(n))
 	}
+	allHosts := append(append([]string{}, lanHosts...), drAddr)
 
-	// Proxy first: in WAN mode DRBD connects to a loopback port the proxy owns,
-	// so bringing DRBD up first would find nothing listening.
 	multi := wanproxy.MultiSpec{
 		Resource:          resource,
 		PrimaryNodeAddrs:  primaryAddrs,
@@ -143,6 +153,32 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 		PrimaryEgressAddr: egressAddr,
 		BinaryPath:        rm.wanproxyBinaryPath(),
 	}
+
+	// From here on the cluster is being changed, so a failure has to unwind. A
+	// half-applied DR leaves the running replicas carrying a peer they can never
+	// reach, plus orphaned volumes and proxy units on the DR — none of which is
+	// visible until something goes looking for quorum.
+	//
+	// The rollback context is detached from ctx: the most likely reason to be
+	// here is that ctx was cancelled or timed out, and unwinding with a dead
+	// context would do nothing at all.
+	succeeded := false
+	defer func() {
+		if succeeded {
+			return
+		}
+		rm.undoAddDR(context.WithoutCancel(ctx), resource, resPath, liveConfig, lanHosts, drAddr, multi, dbVols)
+	}()
+
+	for _, v := range dbVols {
+		if err := rm.createBackingVolume(ctx, []string{drAddr}, []string{drNode},
+			"lvm", v.Pool, v.VolumeName, uint32(v.SizeGB)); err != nil {
+			return fmt.Errorf("create backing volume %s/%s on DR node %q: %w", v.Pool, v.VolumeName, drNode, err)
+		}
+	}
+
+	// Proxy first: in WAN mode DRBD connects to a loopback port the proxy owns,
+	// so bringing DRBD up first would find nothing listening.
 	if err := wanproxy.ProvisionMulti(ctx, rm.wanproxyDeployClient(), multi); err != nil {
 		return fmt.Errorf("provision WAN proxy for %s: %w", resource, err)
 	}
@@ -156,17 +192,13 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 		return fmt.Errorf("rewrite config for DR site: %w", err)
 	}
 
-	allHosts := append(append([]string{}, primaryAddrs...), drAddr)
-	for _, n := range splitCSV(dbRes.DisklessNodes) {
-		allHosts = append(allHosts, rm.controller.ResolveHost(n))
-	}
 	if _, err := rm.deployment.DistributeConfig(ctx, allHosts, newConfig, resPath); err != nil {
 		return fmt.Errorf("distribute DR config: %w", err)
 	}
 
 	// Metadata on the DR only — the existing replicas keep theirs.
 	if err := rm.execAllSuccess(ctx, []string{drAddr},
-		fmt.Sprintf("sudo drbdadm create-md --force %s", resource),
+		fmt.Sprintf("sudo drbdadm create-md --max-peers=%d --force %s", deployment.DefaultMaxPeers, resource),
 		"create metadata on DR node"); err != nil {
 		return err
 	}
@@ -187,6 +219,10 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 			return fmt.Errorf("bring up DR replica on %q: %s", drNode, detail)
 		}
 	}
+
+	// The cluster now carries the DR; past this point a failure to write the
+	// record is worth reporting but not worth tearing the replica back down.
+	succeeded = true
 
 	// Record it last, so a failure above leaves the DB describing reality.
 	dbRes.WANMode = true
@@ -341,4 +377,114 @@ func minorForVolume(content string, volumeID int) int {
 		}
 	}
 	return volumeID
+}
+
+// maxPeersProbe reads the bitmap-slot capacity DRBD baked into a resource's
+// metadata, and how many of those slots are spoken for.
+//
+// The count is only in the on-disk metadata, so it has to be read with
+// drbdmeta. `--force` is needed because the device is attached; the read is
+// harmless (max-peers is written once, at create-md time, and never changes)
+// and it is the only way to learn this without detaching a live replica.
+const maxPeersProbe = `devs=$(drbdadm sh-dev %[1]s 2>/dev/null); lls=$(drbdadm sh-ll-dev %[1]s 2>/dev/null); set -- $lls; ` +
+	`for d in $devs; do m=${d#/dev/drbd}; sudo drbdmeta --force "$m" v09 "$1" internal dump-md 2>/dev/null ` +
+	`| sed -n 's/^max-peers \([0-9]*\);$/\1/p'; shift; done`
+
+var maxPeersRe = regexp.MustCompile(`^\s*(\d+)\s*$`)
+
+// assertBitmapSlotFree fails unless every existing diskful replica has a spare
+// bitmap slot for one more diskful peer.
+//
+// Diskless nodes are deliberately not counted: they hold no data, so DRBD never
+// assigns them a slot. That is why a resource with a tiebreaker can look like it
+// has three nodes and still be out of room at the second diskful one.
+func (rm *ResourceManager) assertBitmapSlotFree(ctx context.Context, hosts, nodes []string, resource string) error {
+	needed := len(hosts) // existing diskful peers-per-node, +1 for the newcomer, -1 for self
+	for i, host := range hosts {
+		res, err := rm.deployment.Exec(ctx, []string{host}, fmt.Sprintf(maxPeersProbe, resource))
+		if err != nil {
+			return fmt.Errorf("probe bitmap slots on %q: %w", nodes[i], err)
+		}
+		out := ""
+		for _, r := range res.Hosts {
+			out = r.Output
+			break
+		}
+
+		lowest := -1
+		for _, line := range strings.Split(out, "\n") {
+			m := maxPeersRe.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			n, cerr := strconv.Atoi(m[1])
+			if cerr != nil {
+				continue
+			}
+			if lowest < 0 || n < lowest {
+				lowest = n
+			}
+		}
+		if lowest < 0 {
+			// Unreadable metadata is not proof of a problem, and refusing on it
+			// would block the operation on any node whose drbdmeta behaves
+			// differently. Let `adjust` be the judge.
+			rm.controller.logger.Warn("Could not read bitmap-slot capacity; proceeding",
+				zap.String("resource", resource), zap.String("node", nodes[i]))
+			continue
+		}
+		if lowest < needed {
+			return fmt.Errorf(
+				"node %q has metadata for %d peer(s) but %d are needed to add a DR replica: "+
+					"DRBD allocates bitmap slots once, at create-md time, and they cannot be grown online. "+
+					"Recreate metadata one node at a time — on each Secondary run "+
+					"`drbdadm down %s && drbdadm create-md --max-peers=%d --force %s && drbdadm up %s` "+
+					"(it resyncs from the Primary), fail the service over, then do the last node",
+				nodes[i], lowest, needed, resource, deployment.DefaultMaxPeers, resource, resource)
+		}
+	}
+	return nil
+}
+
+// undoAddDR returns the cluster to the LAN shape after a failed AddDR.
+//
+// Order matters and is the reverse of the build: the running replicas are put
+// back on the original config first, so they stop trying to reach a peer that
+// is about to disappear, and only then is the DR dismantled. Every step is
+// best-effort and logged rather than returned — the caller is already returning
+// the failure that got us here, and a rollback that aborts halfway is worse than
+// one that keeps going.
+func (rm *ResourceManager) undoAddDR(ctx context.Context, resource, resPath, originalConfig string,
+	lanHosts []string, drAddr string, multi wanproxy.MultiSpec, vols []*database.Volume) {
+
+	log := rm.controller.logger.With(zap.String("resource", resource), zap.String("dr_node", drAddr))
+	log.Warn("Rolling back DR site")
+
+	if len(lanHosts) > 0 && strings.TrimSpace(originalConfig) != "" {
+		if _, err := rm.deployment.DistributeConfig(ctx, lanHosts, originalConfig, resPath); err != nil {
+			log.Error("Rollback: failed to restore config on the primary site", zap.Error(err))
+		} else if _, err := rm.deployment.Exec(ctx, lanHosts,
+			fmt.Sprintf("sudo drbdadm adjust %s", resource)); err != nil {
+			log.Error("Rollback: failed to re-adjust the primary site", zap.Error(err))
+		}
+	}
+
+	if _, err := rm.deployment.Exec(ctx, []string{drAddr},
+		fmt.Sprintf("sudo drbdadm down %s 2>/dev/null; sudo rm -f %s", resource, resPath)); err != nil {
+		log.Error("Rollback: failed to tear down the DR replica", zap.Error(err))
+	}
+
+	if err := wanproxy.DeprovisionMulti(ctx, rm.wanproxyDeployClient(), multi); err != nil {
+		log.Error("Rollback: failed to remove the WAN proxy legs", zap.Error(err))
+	}
+
+	// The volumes go last: while the config still names them, removing them
+	// would only produce a replica that is up and broken.
+	for _, v := range vols {
+		if _, err := rm.deployment.Exec(ctx, []string{drAddr},
+			fmt.Sprintf("sudo lvremove -f %s/%s", v.Pool, v.VolumeName)); err != nil {
+			log.Error("Rollback: failed to remove a backing volume on the DR node",
+				zap.String("volume", v.Pool+"/"+v.VolumeName), zap.Error(err))
+		}
+	}
 }

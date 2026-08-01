@@ -245,7 +245,7 @@ func TestMockClientDRBDSecondary(t *testing.T) {
 func TestMockClientDRBDCreateMD(t *testing.T) {
 	mock := &MockClient{}
 
-	result, err := mock.DRBDCreateMD(context.Background(), []string{"host1"}, "resource1")
+	result, err := mock.DRBDCreateMD(context.Background(), []string{"host1"}, "resource1", 7)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
