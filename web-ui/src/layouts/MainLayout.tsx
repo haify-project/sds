@@ -13,10 +13,32 @@ import {
   Loader2,
   Sparkles,
   Menu,
+  PanelLeft,
   ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
+
+// Collapsing the sidebar is a per-workstation preference, so it is remembered
+// across reloads. Storage can throw (private mode, disabled cookies); the
+// preference is not worth failing a render over.
+const COLLAPSE_KEY = 'sds.sidebar.collapsed';
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(value: boolean) {
+  try {
+    localStorage.setItem(COLLAPSE_KEY, value ? '1' : '0');
+  } catch {
+    /* preference simply won't persist */
+  }
+}
 
 // The Copilot pulls in the whole Markdown/streaming rendering stack — by far
 // the heaviest thing in the bundle, and most sessions never open it. Load it
@@ -55,25 +77,39 @@ const navigation = [
 // SidebarContent is the shared nav body, rendered both in the static desktop
 // sidebar and inside the mobile slide-in drawer. onNavigate lets the mobile
 // drawer close itself when a link is tapped.
+//
+// `collapsed` is desktop-only: the mobile drawer always renders full width, so
+// it never passes it.
 function SidebarContent({
   pathname,
   onNavigate,
+  collapsed = false,
 }: {
   pathname: string;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   return (
     <>
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <HardDrive className="h-5 w-5 text-primary" />
-        <div className="leading-tight">
-          <h1 className="text-sm font-semibold tracking-tight">SDS Controller</h1>
-          <p className="text-[0.7rem] text-muted-foreground">
-            Software Defined Storage
-          </p>
-        </div>
+      <div
+        className={cn(
+          'flex items-center py-5',
+          collapsed ? 'justify-center px-0' : 'gap-2.5 px-5',
+        )}
+      >
+        <HardDrive className="h-5 w-5 shrink-0 text-primary" />
+        {!collapsed && (
+          <div className="leading-tight">
+            <h1 className="text-sm font-semibold tracking-tight">
+              SDS Controller
+            </h1>
+            <p className="text-[0.7rem] text-muted-foreground">
+              Software Defined Storage
+            </p>
+          </div>
+        )}
       </div>
-      <nav className="flex-1 space-y-0.5 px-3 py-2">
+      <nav className={cn('flex-1 space-y-0.5 py-2', collapsed ? 'px-2' : 'px-3')}>
         {navigation.map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + '/');
@@ -82,22 +118,32 @@ function SidebarContent({
               key={item.name}
               to={item.href}
               onClick={onNavigate}
+              // Collapsed leaves only an icon, so the name has to survive for
+              // screen readers and as a hover hint.
+              title={collapsed ? item.name : undefined}
+              aria-label={collapsed ? item.name : undefined}
               className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                'flex items-center rounded-md py-2 text-sm transition-colors',
+                collapsed ? 'justify-center px-0' : 'gap-3 px-3',
                 isActive
                   ? 'bg-sidebar-primary font-medium text-sidebar-primary-foreground'
                   : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
               )}
             >
-              <item.icon className="h-4 w-4" />
-              {item.name}
+              <item.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && item.name}
             </Link>
           );
         })}
       </nav>
-      <div className="border-t border-sidebar-border px-4 py-3">
+      <div
+        className={cn(
+          'border-t border-sidebar-border py-3',
+          collapsed ? 'px-0 text-center' : 'px-4',
+        )}
+      >
         <span className="font-mono text-[0.7rem] text-muted-foreground">
-          v1.8.1
+          {collapsed ? 'v1.8' : 'v1.8.1'}
         </span>
       </div>
     </>
@@ -109,6 +155,14 @@ export function MainLayout() {
   const isFetching = useIsFetching();
   const [aiOpen, setAiOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+
+  function toggleCollapsed() {
+    setCollapsed((v) => {
+      writeCollapsed(!v);
+      return !v;
+    });
+  }
 
   // Nothing of the Copilot exists until the user asks for it. Once it has been
   // opened it stays mounted even while closed, so its conversation survives
@@ -137,9 +191,14 @@ export function MainLayout() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Desktop sidebar — hidden on phones (< md). */}
-      <aside className="hidden w-60 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <SidebarContent pathname={location.pathname} />
+      {/* Desktop sidebar — hidden on phones (< md), collapsible to icons. */}
+      <aside
+        className={cn(
+          'hidden flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex',
+          collapsed ? 'w-16' : 'w-60',
+        )}
+      >
+        <SidebarContent pathname={location.pathname} collapsed={collapsed} />
       </aside>
 
       {/* Mobile drawer — slides in over the content when the hamburger opens it. */}
@@ -171,6 +230,18 @@ export function MainLayout() {
               className="-ml-1 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground md:hidden"
             >
               <Menu className="h-5 w-5" />
+            </button>
+            {/* Desktop counterpart of the hamburger: collapses the sidebar to
+                icons rather than opening a drawer. */}
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-pressed={collapsed}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="-ml-1 hidden rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground md:block"
+            >
+              <PanelLeft className="h-5 w-5" />
             </button>
             <h2 className="text-sm font-semibold tracking-tight">
               {current?.name ?? 'Dashboard'}
