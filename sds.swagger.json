@@ -1952,6 +1952,44 @@
         ]
       }
     },
+    "/v1/resources/{resource}/dr": {
+      "post": {
+        "operationId": "SDSController_AddDR",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddDRResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerAddDRBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{resource}/dual-primary": {
       "post": {
         "operationId": "SDSController_SetDualPrimary",
@@ -2190,6 +2228,44 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/SDSControllerSetPrimaryBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/replicas": {
+      "post": {
+        "operationId": "SDSController_AddReplica",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddReplicaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerAddReplicaBody"
             }
           }
         ],
@@ -3653,6 +3729,29 @@
     }
   },
   "definitions": {
+    "SDSControllerAddDRBody": {
+      "type": "object",
+      "properties": {
+        "drNode": {
+          "type": "string",
+          "title": "registered node that will hold the remote copy"
+        },
+        "drEndpoint": {
+          "type": "string",
+          "title": "public address the primary site dials"
+        },
+        "wanPort": {
+          "type": "integer",
+          "format": "int64",
+          "title": "base sds-proxy port; 0 auto-allocates"
+        },
+        "egressAddress": {
+          "type": "string",
+          "title": "optional source address for the primary site"
+        }
+      },
+      "description": "AddDRRequest attaches an asynchronous off-site replica to a resource that is\nalready running, turning a LAN cluster into the two-site shape in place."
+    },
     "SDSControllerAddDiskToPoolBody": {
       "type": "object",
       "properties": {
@@ -3663,6 +3762,15 @@
           "type": "string"
         }
       }
+    },
+    "SDSControllerAddReplicaBody": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        }
+      },
+      "description": "AddReplicaRequest adds a diskful local replica to a running resource. On a\ntwo-site resource the new node also gets its own WAN leg to the DR: DRBD 9 is\na full mesh, and a replica the DR cannot reach ends replication the moment it\nis promoted."
     },
     "SDSControllerAddVolumeBody": {
       "type": "object",
@@ -4000,6 +4108,21 @@
         }
       }
     },
+    "v1AddDRResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "wanPort": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "v1AddDiskToPoolResponse": {
       "type": "object",
       "properties": {
@@ -4125,6 +4248,17 @@
       }
     },
     "v1AddNVMeNamespaceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1AddReplicaResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -5753,6 +5887,10 @@
           "type": "number",
           "format": "double",
           "description": "Percent of this peer's data in sync (0..100). 100 when steady-state / not\nresyncing. Only meaningful for a peer whose replication_state is a resync\nstate (SyncSource/SyncTarget/PausedSync*)."
+        },
+        "node": {
+          "type": "string",
+          "description": "node is the SDS node name this state belongs to. The map itself is keyed by\nDRBD host name, which is the machine's real hostname and generally is NOT\nthe node name the rest of the API uses — so without this a caller cannot\npair a state with the entry of `nodes` it describes."
         }
       }
     },
@@ -5814,6 +5952,36 @@
           "type": "string"
         }
       }
+    },
+    "v1QuorumInfo": {
+      "type": "object",
+      "properties": {
+        "members": {
+          "type": "integer",
+          "format": "int32",
+          "description": "members is every node in the resource config: diskful replicas, diskless\ntiebreakers and diskless clients alike. DRBD counts them all."
+        },
+        "required": {
+          "type": "integer",
+          "format": "int32",
+          "description": "required is the majority DRBD needs to keep serving: members/2 + 1."
+        },
+        "online": {
+          "type": "integer",
+          "format": "int32",
+          "description": "online is how many members the reporting node can currently see, itself\nincluded."
+        },
+        "hasQuorum": {
+          "type": "boolean",
+          "description": "has_quorum is what DRBD itself reports, not a recomputation of the fields\nabove — they can disagree while a connection is being established, and DRBD\nis the one that decides whether I/O proceeds."
+        },
+        "tolerated": {
+          "type": "integer",
+          "format": "int32",
+          "description": "tolerated is how many further members can be lost before I/O suspends.\nNegative is not possible; zero means the next failure stops the resource."
+        }
+      },
+      "description": "QuorumInfo is the vote arithmetic behind \"will this resource survive?\"."
     },
     "v1RegisterNodeRequest": {
       "type": "object",
@@ -6091,6 +6259,13 @@
         },
         "profile": {
           "type": "string"
+        },
+        "wanMode": {
+          "type": "boolean",
+          "description": "WAN replication: wan_mode marks a resource with an off-site asynchronous\ncopy, and dr_node names which of `nodes` holds it. Without this the list\nshows the DR as just another replica, which is exactly wrong — it is a\ndifferent site, a different protocol, and it never takes over automatically."
+        },
+        "drNode": {
+          "type": "string"
         }
       }
     },
@@ -6194,6 +6369,10 @@
         "wanMetrics": {
           "$ref": "#/definitions/v1WANMetrics",
           "description": "wan_metrics carries the counters sds-proxy publishes on the primary. Absent\nwhen they could not be read (older proxy, first tick not yet written, node\nunreachable) — absent means UNKNOWN, not zero."
+        },
+        "quorum": {
+          "$ref": "#/definitions/v1QuorumInfo",
+          "description": "quorum is what decides whether this resource keeps serving when nodes are\nlost. It is the one number that governs availability and it was previously\nreported nowhere: an operator had to know DRBD counts every configured node\n(tiebreakers and the off-site DR included) and work out the majority by hand."
         }
       }
     },

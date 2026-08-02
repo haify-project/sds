@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io/fs"
@@ -8,7 +10,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/liliang-cn/sds/ui"
 	"go.uber.org/zap"
@@ -58,6 +62,14 @@ type UIServer struct {
 	// built is false when the embedded dist holds no index.html, i.e. the
 	// binary carries the placeholder rather than a real UI.
 	built bool
+	// gz memoises the gzip encoding of each asset. The bundle is ~1.2 MB of
+	// JS and CSS, which is a second over the LAN and half a minute over a
+	// long-haul link, so shipping it raw is not an option once the UI is
+	// published. The dist is embedded and therefore immutable, so an encoding
+	// cached here can never go stale; a nil entry means gzip made the file
+	// bigger and the raw bytes should be served instead.
+	gzMu sync.RWMutex
+	gz   map[string][]byte
 }
 
 // NewUIServer creates a new UI server
@@ -87,6 +99,7 @@ func NewUIServer(logger *zap.Logger, listenAddress string, port int, restPort, a
 		built:  built,
 		api:    mkProxy(restPort),
 		ai:     mkProxy(aiPort),
+		gz:     make(map[string][]byte),
 	}
 
 	uiAddr := fmt.Sprintf("%s:%d", listenAddress, port)
@@ -120,11 +133,9 @@ func (s *UIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// No caching
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-
 	// Nothing to serve: explain why rather than 404 on every path.
 	if !s.built {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(uiNotBuiltPage))
@@ -183,7 +194,83 @@ func (s *UIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		contentType = "image/svg+xml"
 	}
 	w.Header().Set("Content-Type", contentType)
+
+	// Everything under static/ carries a content hash in its filename, so a
+	// given URL's bytes never change and the browser may keep them forever.
+	// index.html must not be cached: it is what points at the current hashes,
+	// and a stale copy pins the user to a bundle that may no longer exist.
+	if fileToServe != "index.html" && strings.HasPrefix(fileToServe, "static/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	}
+
+	// Set even when the response goes out uncompressed: a shared cache that
+	// stored those bytes without it would go on serving them to clients that
+	// could have had the compressed ones.
+	if compressible(contentType) {
+		w.Header().Set("Vary", "Accept-Encoding")
+	}
+	if enc, ok := s.encodedFor(r, fileToServe, contentType, data); ok {
+		w.Header().Set("Content-Encoding", "gzip")
+		data = enc
+	}
+	// Set explicitly so the browser can show a progress bar rather than
+	// streaming a chunked response of unknown length.
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	_, _ = w.Write(data)
+}
+
+// encodedFor returns the gzip encoding of an asset when the client accepts it
+// and compressing actually pays.
+func (s *UIServer) encodedFor(r *http.Request, name, contentType string, data []byte) ([]byte, bool) {
+	if !compressible(contentType) {
+		return nil, false
+	}
+	if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		return nil, false
+	}
+	enc, ok := s.gzipped(name, data)
+	return enc, ok
+}
+
+// compressible reports whether gzipping this content type is worth the CPU.
+// PNG, JPEG and the like are already compressed; re-encoding them burns time
+// on a storage node to save nothing.
+func compressible(contentType string) bool {
+	return strings.HasPrefix(contentType, "text/") ||
+		strings.HasPrefix(contentType, "application/javascript") ||
+		strings.HasPrefix(contentType, "application/json") ||
+		strings.HasPrefix(contentType, "image/svg+xml")
+}
+
+// gzipped compresses an asset on first use and memoises the result.
+func (s *UIServer) gzipped(name string, data []byte) ([]byte, bool) {
+	s.gzMu.RLock()
+	enc, cached := s.gz[name]
+	s.gzMu.RUnlock()
+	if cached {
+		return enc, enc != nil
+	}
+
+	var buf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err == nil {
+		if _, err = zw.Write(data); err == nil {
+			err = zw.Close()
+		}
+	}
+	enc = buf.Bytes()
+	// Storing nil records the negative result too, so a file that does not
+	// benefit is not re-compressed on every request just to be discarded.
+	if err != nil || len(enc) >= len(data) {
+		enc = nil
+	}
+
+	s.gzMu.Lock()
+	s.gz[name] = enc
+	s.gzMu.Unlock()
+	return enc, enc != nil
 }
 
 // Start starts the UI server in a goroutine

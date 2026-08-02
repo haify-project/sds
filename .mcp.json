@@ -5,7 +5,7 @@
       "command": "sds-mcp",
       "args": [
         "--controller",
-        "${SDS_CONTROLLER_ADDR:-127.0.0.1:3374}"
+        "192.168.123.250:3374"
       ],
       "env": {}
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import {
@@ -16,7 +16,29 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
-import { AICopilot } from '@/components/AICopilot';
+
+// The Copilot pulls in the whole Markdown/streaming rendering stack — by far
+// the heaviest thing in the bundle, and most sessions never open it. Load it
+// on first use instead of making every page wait for it.
+const AICopilot = lazy(() =>
+  import('@/components/AICopilot').then((m) => ({ default: m.AICopilot })),
+);
+
+// PageFallback stands in while a lazily-loaded route chunk arrives. It fills
+// the content area only: the sidebar and header are already rendered and must
+// not flicker on navigation.
+function PageFallback() {
+  return (
+    <div
+      className="flex h-full min-h-64 items-center justify-center"
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <span className="sr-only">Loading</span>
+    </div>
+  );
+}
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -85,6 +107,15 @@ export function MainLayout() {
   const isFetching = useIsFetching();
   const [aiOpen, setAiOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+
+  // Nothing of the Copilot exists until the user asks for it. Once it has been
+  // opened it stays mounted even while closed, so its conversation survives
+  // toggling the panel shut — the chunk is already downloaded by then, so this
+  // costs nothing.
+  const aiRequested = useRef(false);
+  if (aiOpen) {
+    aiRequested.current = true;
+  }
 
   // Close the mobile drawer whenever the route changes (a nav tap navigates).
   useEffect(() => {
@@ -173,11 +204,17 @@ export function MainLayout() {
           </div>
         </header>
         <main className="app-canvas flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-          <Outlet />
+          <Suspense fallback={<PageFallback />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
-      <AICopilot open={aiOpen} onClose={() => setAiOpen(false)} />
+      {aiRequested.current && (
+        <Suspense fallback={null}>
+          <AICopilot open={aiOpen} onClose={() => setAiOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

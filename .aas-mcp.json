@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "aas": {
+      "args": [
+        "mcp-bridge",
+        "--socket",
+        "/var/folders/54/d3tt9mgx2_v9ttxl6dqv3rhc0000gn/T/aw-r5.sock"
+      ],
+      "command": "/opt/homebrew/bin/anywhered"
+    }
+  }
+}
