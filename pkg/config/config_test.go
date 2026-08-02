@@ -90,7 +90,10 @@ func TestLoadDefaultValues(t *testing.T) {
 	assert.Equal(t, "0.0.0.0", cfg.Server.ListenAddress)
 	assert.Equal(t, "info", cfg.Log.Level)
 	assert.Equal(t, "json", cfg.Log.Format)
-	assert.Equal(t, "vg", cfg.Storage.DefaultPoolType)
+	// Thin, not "vg": a thick LVM pool reserves a fixed copy-on-write area per
+	// snapshot regardless of how little changes, so it cannot hold a retention
+	// history. Operators who want the old behaviour ask for it explicitly.
+	assert.Equal(t, "thin_pool", cfg.Storage.DefaultPoolType)
 }
 
 func TestLoadWithStorageConfig(t *testing.T) {
