@@ -118,6 +118,8 @@ const (
 	SDSController_RestoreLvmSnapshot_FullMethodName       = "/v1.SDSController/RestoreLvmSnapshot"
 	SDSController_DrainNode_FullMethodName                = "/v1.SDSController/DrainNode"
 	SDSController_UndrainNode_FullMethodName              = "/v1.SDSController/UndrainNode"
+	SDSController_ListAuditEvents_FullMethodName          = "/v1.SDSController/ListAuditEvents"
+	SDSController_ListControllerLogs_FullMethodName       = "/v1.SDSController/ListControllerLogs"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -244,6 +246,15 @@ type SDSControllerClient interface {
 	RestoreLvmSnapshot(ctx context.Context, in *RestoreLvmSnapshotRequest, opts ...grpc.CallOption) (*RestoreLvmSnapshotResponse, error)
 	DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error)
 	UndrainNode(ctx context.Context, in *UndrainNodeRequest, opts ...grpc.CallOption) (*UndrainNodeResponse, error)
+	// Audit trail: who called what, when, and whether it was allowed. Persisted
+	// in the database, which lives on the controller's replicated volume, so the
+	// history follows the controller across a failover instead of being split
+	// across the journals of whichever nodes happened to be active.
+	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
+	// The controller's own log output, from an in-memory ring buffer. Deliberately
+	// not persisted: this is for watching what a running controller is doing, and
+	// a controller that has moved has nothing useful to say about its old node.
+	ListControllerLogs(ctx context.Context, in *ListControllerLogsRequest, opts ...grpc.CallOption) (*ListControllerLogsResponse, error)
 }
 
 type sDSControllerClient struct {
@@ -1244,6 +1255,26 @@ func (c *sDSControllerClient) UndrainNode(ctx context.Context, in *UndrainNodeRe
 	return out, nil
 }
 
+func (c *sDSControllerClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAuditEventsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListAuditEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListControllerLogs(ctx context.Context, in *ListControllerLogsRequest, opts ...grpc.CallOption) (*ListControllerLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListControllerLogsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListControllerLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SDSControllerServer is the server API for SDSController service.
 // All implementations must embed UnimplementedSDSControllerServer
 // for forward compatibility.
@@ -1368,6 +1399,15 @@ type SDSControllerServer interface {
 	RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error)
 	DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error)
 	UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error)
+	// Audit trail: who called what, when, and whether it was allowed. Persisted
+	// in the database, which lives on the controller's replicated volume, so the
+	// history follows the controller across a failover instead of being split
+	// across the journals of whichever nodes happened to be active.
+	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
+	// The controller's own log output, from an in-memory ring buffer. Deliberately
+	// not persisted: this is for watching what a running controller is doing, and
+	// a controller that has moved has nothing useful to say about its old node.
+	ListControllerLogs(context.Context, *ListControllerLogsRequest) (*ListControllerLogsResponse, error)
 	mustEmbedUnimplementedSDSControllerServer()
 }
 
@@ -1674,6 +1714,12 @@ func (UnimplementedSDSControllerServer) DrainNode(context.Context, *DrainNodeReq
 }
 func (UnimplementedSDSControllerServer) UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UndrainNode not implemented")
+}
+func (UnimplementedSDSControllerServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAuditEvents not implemented")
+}
+func (UnimplementedSDSControllerServer) ListControllerLogs(context.Context, *ListControllerLogsRequest) (*ListControllerLogsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListControllerLogs not implemented")
 }
 func (UnimplementedSDSControllerServer) mustEmbedUnimplementedSDSControllerServer() {}
 func (UnimplementedSDSControllerServer) testEmbeddedByValue()                       {}
@@ -3478,6 +3524,42 @@ func _SDSController_UndrainNode_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAuditEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListAuditEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListAuditEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListAuditEvents(ctx, req.(*ListAuditEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListControllerLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListControllerLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListControllerLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListControllerLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListControllerLogs(ctx, req.(*ListControllerLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SDSController_ServiceDesc is the grpc.ServiceDesc for SDSController service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3880,6 +3962,14 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UndrainNode",
 			Handler:    _SDSController_UndrainNode_Handler,
+		},
+		{
+			MethodName: "ListAuditEvents",
+			Handler:    _SDSController_ListAuditEvents_Handler,
+		},
+		{
+			MethodName: "ListControllerLogs",
+			Handler:    _SDSController_ListControllerLogs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

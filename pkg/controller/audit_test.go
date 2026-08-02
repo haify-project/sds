@@ -22,7 +22,7 @@ func newObservedLogger() (*zap.Logger, *observer.ObservedLogs) {
 }
 
 func invokeUnary(log *zap.Logger, includeReads bool, fullMethod string, req interface{}, err error) {
-	interceptor := auditUnaryInterceptor(log, includeReads, nil)
+	interceptor := auditUnaryInterceptor(log, includeReads, nil, nil)
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return struct{}{}, err
 	}

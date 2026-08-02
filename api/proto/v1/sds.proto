@@ -368,6 +368,21 @@ service SDSController {
     option (google.api.http) = { post: "/v1/nodes/{name}/undrain"; };
   }
 
+  // Audit trail: who called what, when, and whether it was allowed. Persisted
+  // in the database, which lives on the controller's replicated volume, so the
+  // history follows the controller across a failover instead of being split
+  // across the journals of whichever nodes happened to be active.
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse) {
+    option (google.api.http) = { get: "/v1/audit"; };
+  }
+
+  // The controller's own log output, from an in-memory ring buffer. Deliberately
+  // not persisted: this is for watching what a running controller is doing, and
+  // a controller that has moved has nothing useful to say about its old node.
+  rpc ListControllerLogs(ListControllerLogsRequest) returns (ListControllerLogsResponse) {
+    option (google.api.http) = { get: "/v1/logs"; };
+  }
+
 }
 
 // Pool messages
@@ -1224,6 +1239,66 @@ message GetSelfHaStatusResponse {
   string vip = 5;
   repeated string nodes = 6;
   string active_node = 7;     // node currently running the controller (DRBD Primary)
+}
+
+// ==================== Logs ====================
+
+message AuditEvent {
+  int64 timestamp_unix_ms = 1;
+  string method = 2;          // short RPC name, e.g. "EvictHa"
+  string client = 3;          // caller address, forwarded client IP when proxied
+  string user = 4;            // empty when RBAC is off: no identity exists
+  string target = 5;          // resource acted on, best-effort
+  string result = 6;          // gRPC code, "OK" on success
+  bool granted = 7;           // false only for Unauthenticated / PermissionDenied
+  int64 latency_ms = 8;
+  string error = 9;
+  // Node that served the call. The controller relocates, so a trail spanning a
+  // failover is otherwise ambiguous about where each entry came from.
+  string node = 10;
+}
+
+message ListAuditEventsRequest {
+  int32 limit = 1;            // newest first; 0 means a server-chosen default
+  string method = 2;          // exact match filter, empty for all
+  string target = 3;
+  string user = 4;
+  bool failures_only = 5;     // only entries whose result is not OK
+  int64 since_unix_ms = 6;    // 0 for no lower bound
+}
+
+message ListAuditEventsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated AuditEvent events = 3;
+  // Entries held in total, so the UI can say whether it is showing everything.
+  int64 total = 4;
+}
+
+message ControllerLogEntry {
+  int64 timestamp_unix_ms = 1;
+  string level = 2;           // debug / info / warn / error
+  string logger = 3;          // zap named logger, e.g. "audit"
+  string caller = 4;
+  string message = 5;
+  // Structured zap fields, rendered as strings so the UI needs no type table.
+  map<string, string> fields = 6;
+}
+
+message ListControllerLogsRequest {
+  int32 limit = 1;            // newest first; 0 means a server-chosen default
+  string level = 2;           // minimum level, empty for all
+  string contains = 3;        // substring match on the message
+}
+
+message ListControllerLogsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ControllerLogEntry entries = 3;
+  // The node whose ring buffer this is — the active controller, whichever it is.
+  string node = 4;
+  // True when the buffer has wrapped, i.e. older lines have been discarded.
+  bool truncated = 5;
 }
 
 message ResourceInfo {

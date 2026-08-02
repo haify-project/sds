@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liliang-cn/sds/pkg/database"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -106,9 +107,15 @@ func auditTarget(req interface{}) string {
 // audit trail. It is nil when RBAC is off (no per-user identity exists).
 type userResolver func(context.Context) string
 
+// auditSink persists an audit record. The process log alone is not enough: the
+// controller relocates under Self-HA, so a journal-only trail is split across
+// whichever nodes were active. A nil sink means log-only.
+type auditSink func(ev *database.AuditEvent)
+
 // writeAuditEntry emits a single structured audit record describing the
-// outcome of an RPC.
-func writeAuditEntry(log *zap.Logger, method, addr, user, target string, start time.Time, err error) {
+// outcome of an RPC, to the process log and — when configured — to the
+// persistent trail.
+func writeAuditEntry(log *zap.Logger, sink auditSink, method, addr, user, target string, start time.Time, err error) {
 	code := codes.OK
 	if err != nil {
 		code = status.Code(err)
@@ -130,6 +137,24 @@ func writeAuditEntry(log *zap.Logger, method, addr, user, target string, start t
 		fields = append(fields, zap.String("error", status.Convert(err).Message()))
 	}
 	log.Info("api call", fields...)
+
+	if sink == nil {
+		return
+	}
+	ev := &database.AuditEvent{
+		Timestamp: start,
+		Method:    method,
+		Client:    addr,
+		User:      user,
+		Target:    target,
+		Result:    code.String(),
+		Granted:   code != codes.Unauthenticated && code != codes.PermissionDenied,
+		Latency:   time.Since(start),
+	}
+	if err != nil {
+		ev.Error = status.Convert(err).Message()
+	}
+	sink(ev)
 }
 
 func resolveUser(resolve userResolver, ctx context.Context) string {
@@ -140,7 +165,7 @@ func resolveUser(resolve userResolver, ctx context.Context) string {
 }
 
 // auditUnaryInterceptor records unary RPCs to the audit log.
-func auditUnaryInterceptor(log *zap.Logger, includeReads bool, resolve userResolver) grpc.UnaryServerInterceptor {
+func auditUnaryInterceptor(log *zap.Logger, includeReads bool, resolve userResolver, sink auditSink) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		if strings.HasPrefix(info.FullMethod, healthServicePrefix) {
 			return handler(ctx, req)
@@ -151,13 +176,13 @@ func auditUnaryInterceptor(log *zap.Logger, includeReads bool, resolve userResol
 		}
 		start := time.Now()
 		resp, err := handler(ctx, req)
-		writeAuditEntry(log, method, clientAddr(ctx), resolveUser(resolve, ctx), auditTarget(req), start, err)
+		writeAuditEntry(log, sink, method, clientAddr(ctx), resolveUser(resolve, ctx), auditTarget(req), start, err)
 		return resp, err
 	}
 }
 
 // auditStreamInterceptor records streaming RPCs to the audit log.
-func auditStreamInterceptor(log *zap.Logger, includeReads bool, resolve userResolver) grpc.StreamServerInterceptor {
+func auditStreamInterceptor(log *zap.Logger, includeReads bool, resolve userResolver, sink auditSink) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if strings.HasPrefix(info.FullMethod, healthServicePrefix) {
 			return handler(srv, ss)
@@ -168,7 +193,7 @@ func auditStreamInterceptor(log *zap.Logger, includeReads bool, resolve userReso
 		}
 		start := time.Now()
 		err := handler(srv, ss)
-		writeAuditEntry(log, method, clientAddr(ss.Context()), resolveUser(resolve, ss.Context()), "", start, err)
+		writeAuditEntry(log, sink, method, clientAddr(ss.Context()), resolveUser(resolve, ss.Context()), "", start, err)
 		return err
 	}
 }

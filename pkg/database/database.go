@@ -36,11 +36,16 @@ type DB struct {
 	path   string
 	logger *zap.Logger
 	mu     sync.RWMutex
+	// auditCap bounds the audit trail; zero means DefaultAuditRetention.
+	auditCap int
 }
 
 // Config holds database configuration
 type Config struct {
 	Path string // Database file path
+	// AuditRetention bounds the number of audit entries kept. Zero selects
+	// DefaultAuditRetention.
+	AuditRetention int
 }
 
 // Default database path
@@ -80,9 +85,10 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 	}
 
 	database := &DB{
-		db:     db,
-		path:   cfg.Path,
-		logger: logger,
+		db:       db,
+		path:     cfg.Path,
+		logger:   logger,
+		auditCap: cfg.AuditRetention,
 	}
 
 	logger.Info("Database opened", zap.String("path", cfg.Path))
@@ -109,9 +115,9 @@ type Node struct {
 	// setup keeps working untouched.
 	ReplicationAddress string
 	Hostname           string
-	State    string
-	LastSeen time.Time
-	Version  string
+	State              string
+	LastSeen           time.Time
+	Version            string
 	// Labels is a JSON-encoded map[string]string of arbitrary node tags (e.g.
 	// {"rack":"A","zone":"east"}) used by placement constraints. Empty for nodes
 	// registered before labels existed — deserializes as no labels.
@@ -321,8 +327,8 @@ type Resource struct {
 	// Persisted because the proxy config is re-rendered from this record, so a
 	// controller restart would otherwise silently drop the pinned egress.
 	WANEgressAddress string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // ResourceProfile contains defaults applied when a resource is created.

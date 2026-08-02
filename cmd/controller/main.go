@@ -12,6 +12,7 @@ import (
 
 	"github.com/liliang-cn/sds/pkg/config"
 	"github.com/liliang-cn/sds/pkg/controller"
+	"github.com/liliang-cn/sds/pkg/logbuf"
 )
 
 var (
@@ -29,8 +30,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The log ring must exist before the logger, which tees into it.
+	logRing := logbuf.New(logbuf.DefaultSize)
+
 	// Initialize logger
-	logger, err := initLogger(cfg)
+	logger, err := initLogger(cfg, logRing)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 		os.Exit(1)
@@ -48,6 +52,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to create controller", zap.Error(err))
 	}
+	ctrl.SetLogRing(logRing)
 
 	// Start controller
 	if err := ctrl.Start(); err != nil {
@@ -65,7 +70,7 @@ func main() {
 }
 
 // initLogger initializes the logger
-func initLogger(cfg *config.Config) (*zap.Logger, error) {
+func initLogger(cfg *config.Config, ring *logbuf.Ring) (*zap.Logger, error) {
 	var zapConfig zap.Config
 
 	if cfg.Log.Format == "json" {
@@ -88,5 +93,10 @@ func initLogger(cfg *config.Config) (*zap.Logger, error) {
 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
 	}
 
-	return zapConfig.Build()
+	// Tee into the ring so the API can serve recent lines, without changing
+	// where the log actually goes: stderr, and thus the journal, stays the
+	// system of record.
+	return zapConfig.Build(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
+		return zapcore.NewTee(c, ring.Core(zapConfig.Level))
+	}))
 }

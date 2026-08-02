@@ -26,6 +26,7 @@ import (
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/liliang-cn/sds/pkg/gateway"
+	"github.com/liliang-cn/sds/pkg/logbuf"
 	"github.com/liliang-cn/sds/pkg/metrics"
 	"github.com/liliang-cn/sds/pkg/rbac"
 	"github.com/liliang-cn/sds/pkg/wanproxy"
@@ -50,6 +51,10 @@ type Controller struct {
 	// UI
 	uiServer     *UIServer
 	alertMonitor *alert.Monitor
+	// logRing holds the controller's recent log output for the API to serve.
+	// Nil when the process was started without one, in which case the log view
+	// reports that rather than showing an empty buffer.
+	logRing *logbuf.Ring
 	// Managers
 	storage   *StorageManager
 	resources *ResourceManager
@@ -58,6 +63,11 @@ type Controller struct {
 	gateway   *gateway.Manager
 	schedules *ScheduleManager
 }
+
+// SetLogRing attaches the buffer the log view reads from. The ring has to exist
+// before the logger that tees into it, which happens in main, so it is handed
+// over here rather than built by New.
+func (c *Controller) SetLogRing(r *logbuf.Ring) { c.logRing = r }
 
 // New creates a new controller
 func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
@@ -349,12 +359,14 @@ func (c *Controller) startGRPCServer() error {
 
 	if c.config.Audit.Enabled {
 		auditLog := c.logger.Named("audit")
+		sink := c.auditSink()
 		unaryInterceptors = append(unaryInterceptors,
-			auditUnaryInterceptor(auditLog, c.config.Audit.IncludeReads, auditUser))
+			auditUnaryInterceptor(auditLog, c.config.Audit.IncludeReads, auditUser, sink))
 		streamInterceptors = append(streamInterceptors,
-			auditStreamInterceptor(auditLog, c.config.Audit.IncludeReads, auditUser))
+			auditStreamInterceptor(auditLog, c.config.Audit.IncludeReads, auditUser, sink))
 		c.logger.Info("API audit log enabled",
-			zap.Bool("include_reads", c.config.Audit.IncludeReads))
+			zap.Bool("include_reads", c.config.Audit.IncludeReads),
+			zap.Bool("persisted", sink != nil))
 	}
 
 	switch {

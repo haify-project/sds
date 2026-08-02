@@ -16,6 +16,73 @@
     "application/json"
   ],
   "paths": {
+    "/v1/audit": {
+      "get": {
+        "summary": "Audit trail: who called what, when, and whether it was allowed. Persisted\nin the database, which lives on the controller's replicated volume, so the\nhistory follows the controller across a failover instead of being split\nacross the journals of whichever nodes happened to be active.",
+        "operationId": "SDSController_ListAuditEvents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAuditEventsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "description": "newest first; 0 means a server-chosen default",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "method",
+            "description": "exact match filter, empty for all",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "user",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "failuresOnly",
+            "description": "only entries whose result is not OK",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "sinceUnixMs",
+            "description": "0 for no lower bound",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/gateways": {
       "get": {
         "operationId": "SDSController_ListGateways",
@@ -984,6 +1051,53 @@
             "schema": {
               "$ref": "#/definitions/SDSControllerSyncHaTomlBody"
             }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/logs": {
+      "get": {
+        "summary": "The controller's own log output, from an in-memory ring buffer. Deliberately\nnot persisted: this is for watching what a running controller is doing, and\na controller that has moved has nothing useful to say about its old node.",
+        "operationId": "SDSController_ListControllerLogs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListControllerLogsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "description": "newest first; 0 means a server-chosen default",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "level",
+            "description": "minimum level, empty for all",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "contains",
+            "description": "substring match on the message",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -4320,6 +4434,50 @@
         }
       }
     },
+    "v1AuditEvent": {
+      "type": "object",
+      "properties": {
+        "timestampUnixMs": {
+          "type": "string",
+          "format": "int64"
+        },
+        "method": {
+          "type": "string",
+          "title": "short RPC name, e.g. \"EvictHa\""
+        },
+        "client": {
+          "type": "string",
+          "title": "caller address, forwarded client IP when proxied"
+        },
+        "user": {
+          "type": "string",
+          "title": "empty when RBAC is off: no identity exists"
+        },
+        "target": {
+          "type": "string",
+          "title": "resource acted on, best-effort"
+        },
+        "result": {
+          "type": "string",
+          "title": "gRPC code, \"OK\" on success"
+        },
+        "granted": {
+          "type": "boolean",
+          "title": "false only for Unauthenticated / PermissionDenied"
+        },
+        "latencyMs": {
+          "type": "string",
+          "format": "int64"
+        },
+        "error": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string",
+          "description": "Node that served the call. The controller relocates, so a trail spanning a\nfailover is otherwise ambiguous about where each entry came from."
+        }
+      }
+    },
     "v1CloneZFSSnapshotResponse": {
       "type": "object",
       "properties": {
@@ -4328,6 +4486,36 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1ControllerLogEntry": {
+      "type": "object",
+      "properties": {
+        "timestampUnixMs": {
+          "type": "string",
+          "format": "int64"
+        },
+        "level": {
+          "type": "string",
+          "title": "debug / info / warn / error"
+        },
+        "logger": {
+          "type": "string",
+          "title": "zap named logger, e.g. \"audit\""
+        },
+        "caller": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Structured zap fields, rendered as strings so the UI needs no type table."
         }
       }
     },
@@ -5402,6 +5590,55 @@
         },
         "targetIqn": {
           "type": "string"
+        }
+      }
+    },
+    "v1ListAuditEventsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AuditEvent"
+          }
+        },
+        "total": {
+          "type": "string",
+          "format": "int64",
+          "description": "Entries held in total, so the UI can say whether it is showing everything."
+        }
+      }
+    },
+    "v1ListControllerLogsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ControllerLogEntry"
+          }
+        },
+        "node": {
+          "type": "string",
+          "description": "The node whose ring buffer this is — the active controller, whichever it is."
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "True when the buffer has wrapped, i.e. older lines have been discarded."
         }
       }
     },

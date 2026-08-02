@@ -34,6 +34,9 @@ const CreateHAPage = lazy(() =>
 const AccessPage = lazy(() =>
   import('./pages/AccessPage').then((m) => ({ default: m.AccessPage })),
 );
+const LogsPage = lazy(() =>
+  import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })),
+);
 // The Suspense boundary lives in MainLayout, around the Outlet, so the sidebar
 // and header stay put while a route's chunk arrives.
 
@@ -75,6 +78,7 @@ function App() {
               <Route path="ha" element={<HAPage />} />
               <Route path="ha/create" element={<CreateHAPage />} />
               <Route path="access" element={<AccessPage />} />
+              <Route path="logs" element={<LogsPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

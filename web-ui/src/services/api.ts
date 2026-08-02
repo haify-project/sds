@@ -816,6 +816,14 @@ class ApiClient {
       body: JSON.stringify({ resource, hostNqn }),
     });
 
+  // ==================== Logs ====================
+
+  listAuditEvents = (params: AuditQuery = {}) =>
+    this.request<AuditEventsResponse>(`/audit${queryString(params)}`);
+
+  listControllerLogs = (params: ControllerLogQuery = {}) =>
+    this.request<ControllerLogsResponse>(`/logs${queryString(params)}`);
+
   // ==================== Controller Self-HA ====================
   getSelfHaStatus = () => this.request<SelfHaStatus>('/selfha');
 
@@ -909,6 +917,72 @@ export interface NVMeNamespace {
   uuid: string;
   nguid: string;
   nqn: string;
+}
+
+// ==================== Logs ====================
+
+export interface AuditEvent {
+  timestampUnixMs: string;
+  method: string;
+  client: string;
+  user?: string;
+  target?: string;
+  result: string;
+  granted: boolean;
+  latencyMs: string;
+  error?: string;
+  node?: string;
+}
+
+export interface AuditEventsResponse {
+  success: boolean;
+  message: string;
+  events?: AuditEvent[];
+  total?: string;
+}
+
+export interface AuditQuery {
+  limit?: number;
+  method?: string;
+  target?: string;
+  user?: string;
+  failuresOnly?: boolean;
+  sinceUnixMs?: number;
+}
+
+export interface ControllerLogEntry {
+  timestampUnixMs: string;
+  level: string;
+  logger?: string;
+  caller?: string;
+  message: string;
+  fields?: Record<string, string>;
+}
+
+export interface ControllerLogsResponse {
+  success: boolean;
+  message: string;
+  entries?: ControllerLogEntry[];
+  node?: string;
+  truncated?: boolean;
+}
+
+export interface ControllerLogQuery {
+  limit?: number;
+  level?: string;
+  contains?: string;
+}
+
+// queryString renders only the parameters that were actually set. Sending
+// empty values would be read by the server as filters rather than as absence.
+function queryString(params: object): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === false) continue;
+    q.set(k, String(v));
+  }
+  const s = q.toString();
+  return s ? `?${s}` : '';
 }
 
 export interface SelfHaStatus {

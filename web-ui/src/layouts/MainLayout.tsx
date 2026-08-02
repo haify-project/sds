@@ -13,6 +13,7 @@ import {
   Loader2,
   Sparkles,
   Menu,
+  ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
@@ -48,6 +49,7 @@ const navigation = [
   { name: 'Gateways', href: '/gateways', icon: Network },
   { name: 'HA', href: '/ha', icon: ShieldCheck },
   { name: 'Access', href: '/access', icon: Lock },
+  { name: 'Logs', href: '/logs', icon: ScrollText },
 ];
 
 // SidebarContent is the shared nav body, rendered both in the static desktop
