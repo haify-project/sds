@@ -40,7 +40,13 @@ const AccessPage = lazy(() =>
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
+      // This is a console for infrastructure that moves on its own: nodes fail
+      // over, resources change primary, the controller relocates. Returning to
+      // a backgrounded tab must not show the state from before you left —
+      // acting on it is how you evict a node that is no longer the active one.
+      // staleTime keeps this from becoming a refetch storm: data younger than
+      // five seconds is left alone.
+      refetchOnWindowFocus: true,
       retry: 1,
       staleTime: 5000,
     },

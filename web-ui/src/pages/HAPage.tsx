@@ -238,11 +238,48 @@ function SelfHaCard() {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['selfha'] });
 
+  // Report where the controller actually landed. "Eviction initiated" alone is
+  // not enough to tell whether anything happened: the card may already have
+  // been showing a stale active node, and a controller that fails back to the
+  // node you thought it was on looks identical to one that never moved.
+  //
+  // The controller is the thing being relocated, so the API is unreachable for
+  // the middle of this — errors are expected and are not a failure.
+  const pollControllerMoved = async (fromNode: string) => {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const s = await api.getSelfHaStatus();
+        if (s.activeNode && s.activeNode !== fromNode) {
+          toast.success(`Controller is now active on ${s.activeNode}`);
+          invalidate();
+          return;
+        }
+      } catch {
+        // The controller is mid-move; keep waiting.
+      }
+    }
+    toast.info('Controller failover is taking longer than expected');
+  };
+
   const evictMutation = useMutation({
-    mutationFn: () => api.evictHa(SELF_HA_RESOURCE),
-    onSuccess: () => {
-      toast.success('Controller eviction initiated; failing over');
+    // Read the active node back from the server first. Evict acts on whichever
+    // node is active right now, which need not be the one on screen — this card
+    // can be showing state from before the tab was last backgrounded. Taking
+    // "from" off the card instead would report a move that did not happen.
+    mutationFn: async () => {
+      const before = await api.getSelfHaStatus();
+      toast.info(
+        before.activeNode
+          ? `Evicting controller from ${before.activeNode}; failing over`
+          : 'Controller eviction initiated; failing over',
+      );
+      await api.evictHa(SELF_HA_RESOURCE);
+      return before.activeNode ?? '';
+    },
+    onSuccess: (from) => {
       invalidate();
+      void pollControllerMoved(from);
     },
     onError: (e: Error) => toast.error(e.message),
   });
