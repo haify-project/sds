@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -27,7 +28,6 @@ type Config struct {
 	SelfHA   SelfHAConfig   `mapstructure:"self_ha"`
 	Alert    AlertConfig    `mapstructure:"alert"`
 }
-
 
 // WANConfig tunes opt-in WAN replication.
 //
@@ -298,7 +298,9 @@ func setDefaults() {
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
-	viper.SetDefault("storage.default_pool_type", "vg")
+	// Thin by default: a thick LVM pool reserves a fixed COW area per snapshot,
+	// so it cannot hold a retention history. See cmd/cli/pool.go for the numbers.
+	viper.SetDefault("storage.default_pool_type", "thin_pool")
 	viper.SetDefault("storage.default_snapshot_suffix", "_snap")
 	viper.SetDefault("metrics.enabled", true)
 	viper.SetDefault("metrics.listen_address", "0.0.0.0")
@@ -315,21 +317,34 @@ func setDefaults() {
 }
 
 // Save saves configuration to file
+// Save writes the configuration back out.
+//
+// Sections go through mapstructure rather than straight into viper.Set: viper
+// serialises a struct under its Go field names ("DefaultPoolType"), while Load
+// reads the mapstructure tags ("default_pool_type"). Setting the struct
+// directly produces a file that looks right and silently loses every value on
+// the next Load — every section, not just one. mapstructure.Decode turns the
+// struct into a map keyed by those same tags, so what is written is what is
+// read back.
 func (c *Config) Save(path string) error {
 	config := viper.New()
-	config.Set("server", c.Server)
-	config.Set("database", c.Database)
-	config.Set("auth", c.Auth)
-	config.Set("tls", c.TLS)
-	config.Set("log", c.Log)
-	config.Set("storage", c.Storage)
-	config.Set("metrics", c.Metrics)
-	config.Set("audit", c.Audit)
-	config.Set("rbac", c.RBAC)
-	config.Set("gateway", c.Gateway)
-	config.Set("resource", c.Resource)
-	config.Set("schedule", c.Schedule)
-	config.Set("alert", c.Alert)
+	sections := []struct {
+		name string
+		v    any
+	}{
+		{"server", c.Server}, {"database", c.Database}, {"auth", c.Auth},
+		{"tls", c.TLS}, {"log", c.Log}, {"storage", c.Storage},
+		{"metrics", c.Metrics}, {"audit", c.Audit}, {"rbac", c.RBAC},
+		{"gateway", c.Gateway}, {"resource", c.Resource},
+		{"schedule", c.Schedule}, {"alert", c.Alert},
+	}
+	for _, s := range sections {
+		var m map[string]any
+		if err := mapstructure.Decode(s.v, &m); err != nil {
+			return fmt.Errorf("encode %s section: %w", s.name, err)
+		}
+		config.Set(s.name, m)
+	}
 
 	return config.WriteConfigAs(path)
 }
