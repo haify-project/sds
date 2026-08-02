@@ -36,7 +36,9 @@ The API and <code>sds-cli</code> are unaffected.</p>
 // defaultRESTPort is where the grpc-gateway REST API listens, and
 // defaultAIPort where the optional AI Copilot (cmd/sds-ai) does. The UI proxies
 // to both on loopback so a single published port serves the whole app.
+// defaultGRPCPort is the fallback when the config leaves Server.Port unset.
 const (
+	defaultGRPCPort = 3374
 	defaultRESTPort = 3375
 	defaultAIPort   = 7634
 )

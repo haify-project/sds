@@ -16,7 +16,6 @@ import (
 	"github.com/liliang-cn/sds/pkg/alert"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
@@ -444,18 +443,10 @@ func (c *Controller) startGRPCServer() error {
 	// RST_STREAM PROTOCOL_ERROR.
 	gatewayMux := runtime.NewServeMux()
 
-	dialOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4 * 1024 * 1024)),
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                10 * time.Second,
-			Timeout:             time.Second,
-			PermitWithoutStream: true,
-		}),
-	}
-
-	// Register gateway handler pointing to local gRPC server
-	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(context.Background(), gatewayMux, grpcAddr, dialOpts); err != nil {
+	// Dial loopback explicitly — grpcAddr above is a LISTEN address and is
+	// normally "0.0.0.0:3374", which is not a destination. See loopbackTarget.
+	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(
+		context.Background(), gatewayMux, loopbackTarget(c.config), loopbackDialOptions()); err != nil {
 		return fmt.Errorf("failed to register gateway handler: %w", err)
 	}
 

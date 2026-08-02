@@ -5,13 +5,53 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	"github.com/liliang-cn/sds/pkg/config"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 )
+
+// loopbackTarget is the address the REST gateway dials to reach this process's
+// own gRPC server.
+//
+// It is deliberately NOT the listen address. Listening and dialling want
+// opposite things: `listen_address` is usually "0.0.0.0", meaning "every
+// interface", which is not a destination. Dialling "0.0.0.0:3374" happens to
+// work on Linux (the kernel rewrites it to loopback) and that accident held
+// until a node gained a VM-wide HTTP_PROXY: grpc-go saw a target that was not
+// in NO_PROXY and sent the call to the proxy, which hung up. The gateway then
+// answered every /v1 request with 503 "error reading server preface: EOF".
+func loopbackTarget(cfg *config.Config) string {
+	port := cfg.Server.Port
+	if port == 0 {
+		port = defaultGRPCPort
+	}
+	return fmt.Sprintf("127.0.0.1:%d", port)
+}
+
+// loopbackDialOptions are the dial options for that in-process hop.
+//
+// grpc.WithNoProxy is the load-bearing one: a call from the controller to
+// itself must never traverse an HTTP proxy, no matter how the operator
+// configured the machine. Relying on NO_PROXY listing every spelling of
+// "local" is how this broke in the first place.
+func loopbackDialOptions() []grpc.DialOption {
+	return []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithNoProxy(),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4 * 1024 * 1024)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                10 * time.Second,
+			Timeout:             time.Second,
+			PermitWithoutStream: true,
+		}),
+	}
+}
 
 // GatewayServer wraps the gRPC-Gateway HTTP server
 type GatewayServer struct {
