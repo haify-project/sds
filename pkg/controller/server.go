@@ -859,6 +859,17 @@ func (s *Server) SetDualPrimary(ctx context.Context, req *sdspb.SetDualPrimaryRe
 	}, nil
 }
 
+// ConvertPoolToThin rebuilds one node's pool as an LVM thin pool.
+func (s *Server) ConvertPoolToThin(ctx context.Context, req *sdspb.ConvertPoolToThinRequest) (*sdspb.ConvertPoolToThinResponse, error) {
+	if err := s.ctrl.resources.ConvertPoolToThin(ctx, req.GetNode(), req.GetPool()); err != nil {
+		return &sdspb.ConvertPoolToThinResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.ConvertPoolToThinResponse{
+		Success: true,
+		Message: "pool rebuilt as thin; the volumes are resyncing from their peers",
+	}, nil
+}
+
 func (s *Server) AttachDisklessClient(ctx context.Context, req *sdspb.AttachDisklessClientRequest) (*sdspb.AttachDisklessClientResponse, error) {
 	if err := s.resources.AttachDisklessClient(ctx, req.Resource, req.Node); err != nil {
 		return &sdspb.AttachDisklessClientResponse{Success: false, Message: err.Error()}, nil

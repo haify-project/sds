@@ -288,6 +288,18 @@ func (c *SDSClient) DrainNode(ctx context.Context, name string) ([]string, error
 	return resp.ResourcesMoved, nil
 }
 
+// ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.
+func (c *SDSClient) ConvertPoolToThin(ctx context.Context, node, pool string) error {
+	resp, err := c.client.ConvertPoolToThin(ctx, &sdspb.ConvertPoolToThinRequest{Node: node, Pool: pool})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 // UndrainNode returns a drained node to active service.
 func (c *SDSClient) UndrainNode(ctx context.Context, name string) error {
 	resp, err := c.client.UndrainNode(ctx, &sdspb.UndrainNodeRequest{Name: name})

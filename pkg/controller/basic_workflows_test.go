@@ -219,6 +219,26 @@ func (f *fakeDeploymentClient) LVIsThin(ctx context.Context, host, vgName, lvNam
 	return false, nil
 }
 
+func (f *fakeDeploymentClient) LVSizeBytes(ctx context.Context, host, vgName, lvName string) (uint64, error) {
+	return 6442450944, nil
+}
+
+func (f *fakeDeploymentClient) VGFreeBytes(ctx context.Context, host, vgName string) (uint64, error) {
+	return 3 << 30, nil
+}
+
+func (f *fakeDeploymentClient) LVCreateThinPoolSized(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes, metadataBytes uint64) (*deployment.ExecResult, error) {
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) DRBDDetach(ctx context.Context, host, resource string) (*deployment.ExecResult, error) {
+	return successExecResult([]string{host}, ""), nil
+}
+
+func (f *fakeDeploymentClient) DRBDAttach(ctx context.Context, host, resource string) (*deployment.ExecResult, error) {
+	return successExecResult([]string{host}, ""), nil
+}
+
 func (f *fakeDeploymentClient) LVRemoveSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error) {
 	return successExecResult(hosts, ""), nil
 }

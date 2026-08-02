@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -666,6 +667,83 @@ func (c *Client) LVCreateThinVolume(ctx context.Context, hosts []string, vgName,
 func (c *Client) LVRemove(ctx context.Context, hosts []string, lvPath string) (*ExecResult, error) {
 	cmd := fmt.Sprintf("sudo lvremove -f %s", lvPath)
 	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVCreateThinPoolSized creates a thin pool with an explicit metadata area.
+//
+// LVM's default metadata size is generous for a pool holding a couple of
+// volumes and far too small for one holding a snapshot history: a freshly
+// converted 8 GiB pool with a single volume already showed 30% of the default
+// area used. Exhausting metadata takes the whole pool read-only, which is a
+// much worse failure than running out of data space, so the size is stated
+// rather than inherited.
+func (c *Client) LVCreateThinPoolSized(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes, metadataBytes uint64) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo lvcreate -y -L %dB --poolmetadatasize %dB -T %s/%s",
+		sizeBytes, metadataBytes, vgName, poolName)
+	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVSizeBytes reports a logical volume's exact size.
+//
+// DRBD records the device size in its metadata, so a replica rebuilt from a
+// rounded "6G" is a different device and refuses to attach. Every rebuild path
+// has to carry bytes, never human sizes.
+func (c *Client) LVSizeBytes(ctx context.Context, host, vgName, lvName string) (uint64, error) {
+	res, err := c.Exec(ctx, []string{host},
+		fmt.Sprintf("sudo lvs --noheadings --nosuffix --units b -o lv_size %s/%s", vgName, lvName))
+	if err != nil {
+		return 0, err
+	}
+	out, err := singleHostOutput(res, "read size of "+vgName+"/"+lvName)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseUint(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unexpected lvs output %q for %s/%s", out, vgName, lvName)
+	}
+	return n, nil
+}
+
+// VGFreeBytes reports a volume group's unallocated space.
+func (c *Client) VGFreeBytes(ctx context.Context, host, vgName string) (uint64, error) {
+	res, err := c.Exec(ctx, []string{host},
+		fmt.Sprintf("sudo vgs --noheadings --nosuffix --units b -o vg_free %s", vgName))
+	if err != nil {
+		return 0, err
+	}
+	out, err := singleHostOutput(res, "read free space of "+vgName)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseUint(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unexpected vgs output %q for %s", out, vgName)
+	}
+	return n, nil
+}
+
+// DRBDDetach takes a node's local disk out of a resource, leaving it connected
+// but diskless. The peers keep serving throughout.
+func (c *Client) DRBDDetach(ctx context.Context, host, resource string) (*ExecResult, error) {
+	return c.Exec(ctx, []string{host}, fmt.Sprintf("sudo drbdadm detach %s", resource))
+}
+
+// DRBDAttach puts a rebuilt backing device back into a resource, which starts a
+// full resync from the peers.
+func (c *Client) DRBDAttach(ctx context.Context, host, resource string) (*ExecResult, error) {
+	return c.Exec(ctx, []string{host}, fmt.Sprintf("sudo drbdadm attach %s", resource))
+}
+
+// singleHostOutput unwraps a one-host ExecResult.
+func singleHostOutput(res *ExecResult, what string) (string, error) {
+	for _, hr := range res.Hosts {
+		if !hr.Success {
+			return "", fmt.Errorf("failed to %s: %s", what, strings.TrimSpace(hr.Output))
+		}
+		return hr.Output, nil
+	}
+	return "", fmt.Errorf("failed to %s: no result", what)
 }
 
 // LVCreateSnapshot creates a snapshot of a logical volume

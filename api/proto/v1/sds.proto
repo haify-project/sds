@@ -367,6 +367,12 @@ service SDSController {
   rpc UndrainNode(UndrainNodeRequest) returns (UndrainNodeResponse) {
     option (google.api.http) = { post: "/v1/nodes/{name}/undrain"; };
   }
+  // ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.
+  // Thick pools cannot hold a snapshot history: each snapshot reserves a fixed
+  // COW area whether anything changes or not.
+  rpc ConvertPoolToThin(ConvertPoolToThinRequest) returns (ConvertPoolToThinResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/pools/{pool}/convert-thin"; };
+  }
 
   // Audit trail: who called what, when, and whether it was allowed. Persisted
   // in the database, which lives on the controller's replicated volume, so the
@@ -1895,6 +1901,19 @@ message GetHaStatusResponse {
 
 message DrainNodeRequest {
   string name = 1;
+}
+
+message ConvertPoolToThinRequest {
+  string node = 1;
+  string pool = 2;
+}
+
+message ConvertPoolToThinResponse {
+  bool success = 1;
+  string message = 2;
+  // Volumes rebuilt on this node; each is resyncing in full from its peers
+  // when the call returns.
+  repeated string volumes = 3;
 }
 
 message DrainNodeResponse {

@@ -1504,6 +1504,43 @@
         ]
       }
     },
+    "/v1/nodes/{node}/pools/{pool}/convert-thin": {
+      "post": {
+        "summary": "ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.\nThick pools cannot hold a snapshot history: each snapshot reserves a fixed\nCOW area whether anything changes or not.",
+        "operationId": "SDSController_ConvertPoolToThin",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ConvertPoolToThinResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/pools": {
       "get": {
         "operationId": "SDSController_ListPools",
@@ -4516,6 +4553,24 @@
             "type": "string"
           },
           "description": "Structured zap fields, rendered as strings so the UI needs no type table."
+        }
+      }
+    },
+    "v1ConvertPoolToThinResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Volumes rebuilt on this node; each is resyncing in full from its peers\nwhen the call returns."
         }
       }
     },

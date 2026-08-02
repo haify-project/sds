@@ -118,6 +118,7 @@ const (
 	SDSController_RestoreLvmSnapshot_FullMethodName       = "/v1.SDSController/RestoreLvmSnapshot"
 	SDSController_DrainNode_FullMethodName                = "/v1.SDSController/DrainNode"
 	SDSController_UndrainNode_FullMethodName              = "/v1.SDSController/UndrainNode"
+	SDSController_ConvertPoolToThin_FullMethodName        = "/v1.SDSController/ConvertPoolToThin"
 	SDSController_ListAuditEvents_FullMethodName          = "/v1.SDSController/ListAuditEvents"
 	SDSController_ListControllerLogs_FullMethodName       = "/v1.SDSController/ListControllerLogs"
 )
@@ -246,6 +247,10 @@ type SDSControllerClient interface {
 	RestoreLvmSnapshot(ctx context.Context, in *RestoreLvmSnapshotRequest, opts ...grpc.CallOption) (*RestoreLvmSnapshotResponse, error)
 	DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error)
 	UndrainNode(ctx context.Context, in *UndrainNodeRequest, opts ...grpc.CallOption) (*UndrainNodeResponse, error)
+	// ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.
+	// Thick pools cannot hold a snapshot history: each snapshot reserves a fixed
+	// COW area whether anything changes or not.
+	ConvertPoolToThin(ctx context.Context, in *ConvertPoolToThinRequest, opts ...grpc.CallOption) (*ConvertPoolToThinResponse, error)
 	// Audit trail: who called what, when, and whether it was allowed. Persisted
 	// in the database, which lives on the controller's replicated volume, so the
 	// history follows the controller across a failover instead of being split
@@ -1255,6 +1260,16 @@ func (c *sDSControllerClient) UndrainNode(ctx context.Context, in *UndrainNodeRe
 	return out, nil
 }
 
+func (c *sDSControllerClient) ConvertPoolToThin(ctx context.Context, in *ConvertPoolToThinRequest, opts ...grpc.CallOption) (*ConvertPoolToThinResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConvertPoolToThinResponse)
+	err := c.cc.Invoke(ctx, SDSController_ConvertPoolToThin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAuditEventsResponse)
@@ -1399,6 +1414,10 @@ type SDSControllerServer interface {
 	RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error)
 	DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error)
 	UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error)
+	// ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.
+	// Thick pools cannot hold a snapshot history: each snapshot reserves a fixed
+	// COW area whether anything changes or not.
+	ConvertPoolToThin(context.Context, *ConvertPoolToThinRequest) (*ConvertPoolToThinResponse, error)
 	// Audit trail: who called what, when, and whether it was allowed. Persisted
 	// in the database, which lives on the controller's replicated volume, so the
 	// history follows the controller across a failover instead of being split
@@ -1714,6 +1733,9 @@ func (UnimplementedSDSControllerServer) DrainNode(context.Context, *DrainNodeReq
 }
 func (UnimplementedSDSControllerServer) UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UndrainNode not implemented")
+}
+func (UnimplementedSDSControllerServer) ConvertPoolToThin(context.Context, *ConvertPoolToThinRequest) (*ConvertPoolToThinResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConvertPoolToThin not implemented")
 }
 func (UnimplementedSDSControllerServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAuditEvents not implemented")
@@ -3524,6 +3546,24 @@ func _SDSController_UndrainNode_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_ConvertPoolToThin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConvertPoolToThinRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ConvertPoolToThin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ConvertPoolToThin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ConvertPoolToThin(ctx, req.(*ConvertPoolToThinRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAuditEventsRequest)
 	if err := dec(in); err != nil {
@@ -3962,6 +4002,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UndrainNode",
 			Handler:    _SDSController_UndrainNode_Handler,
+		},
+		{
+			MethodName: "ConvertPoolToThin",
+			Handler:    _SDSController_ConvertPoolToThin_Handler,
 		},
 		{
 			MethodName: "ListAuditEvents",
