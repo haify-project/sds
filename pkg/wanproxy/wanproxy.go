@@ -336,7 +336,8 @@ func (s ProxySpec) Validate() error {
 //  4. push the sds-proxy binary (only when spec.BinaryPath is set)
 //  5. write the dialer config to the primary and the acceptor config to the DR
 //  6. systemctl daemon-reload
-//  7. systemctl enable --now sds-proxy@<resource>
+//  7. systemctl enable + restart sds-proxy@<resource> (restart, so a leg
+//     that is already running picks up the config and PKI just written)
 func Provision(ctx context.Context, deploy DeploymentClient, spec ProxySpec) error {
 	if deploy == nil {
 		return fmt.Errorf("wanproxy: deployment client is nil")
@@ -392,8 +393,23 @@ func Provision(ctx context.Context, deploy DeploymentClient, spec ProxySpec) err
 		return err
 	}
 
-	// 7. Enable + start the per-resource instance on both nodes.
-	if err := run(ctx, deploy, both, fmt.Sprintf("sudo systemctl enable --now %s", instance), "enable/start proxy"); err != nil {
+	// 7. Enable, then RESTART the per-resource instance on both nodes.
+	//
+	// `enable --now` starts a stopped unit and does nothing to a running one, so
+	// a leg that was already up keeps whatever it loaded at startup — including
+	// its mTLS material. Rotate the PKI and the two ends end up on different
+	// certificates while the files on disk agree, which presents as
+	// "invalid peer certificate: BadSignature" on the dialer and
+	// "received fatal alert: DecryptError" on the acceptor: a failure whose
+	// evidence points at the certificates, which are provably identical. The
+	// only clue is that one process predates the others.
+	//
+	// A restart is cheap here — the DR link is asynchronous and reconnects on
+	// its own — and far cheaper than replication that is silently dead.
+	if err := run(ctx, deploy, both, fmt.Sprintf("sudo systemctl enable %s", instance), "enable proxy"); err != nil {
+		return err
+	}
+	if err := run(ctx, deploy, both, fmt.Sprintf("sudo systemctl restart %s", instance), "restart proxy"); err != nil {
 		return err
 	}
 
@@ -857,8 +873,15 @@ func ProvisionMulti(ctx context.Context, deploy DeploymentClient, spec MultiSpec
 			return err
 		}
 		both := []string{leg.PrimaryNodeAddr, spec.DRNodeAddr}
+		// Restart, not `enable --now`: a running leg ignores the config and PKI
+		// just written for it. See the same step in Provision for what that
+		// looks like when it goes wrong.
 		if err := run(ctx, deploy, both,
-			fmt.Sprintf("sudo systemctl enable --now %s", UnitInstance(leg.Resource)), "enable/start proxy"); err != nil {
+			fmt.Sprintf("sudo systemctl enable %s", UnitInstance(leg.Resource)), "enable proxy"); err != nil {
+			return err
+		}
+		if err := run(ctx, deploy, both,
+			fmt.Sprintf("sudo systemctl restart %s", UnitInstance(leg.Resource)), "restart proxy"); err != nil {
 			return err
 		}
 		if !spec.SkipReachabilityCheck {

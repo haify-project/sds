@@ -91,9 +91,13 @@ func TestCreateResourceWANProvisionsAndPersists(t *testing.T) {
 	_, ok = findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres"))
 	require.True(t, ok, "per-resource sds-proxy config was not distributed")
 
-	// The per-resource proxy unit was enabled+started (Provision ran before up).
-	assert.True(t, execCmdIssued(dep, "systemctl enable --now "+wanproxy.UnitInstance("wanres")),
+	// The per-resource proxy unit was enabled and restarted (Provision ran
+	// before up). Restart rather than `enable --now`: the latter no-ops on a
+	// running leg, which would leave it on stale config and mTLS material.
+	assert.True(t, execCmdIssued(dep, "systemctl enable "+wanproxy.UnitInstance("wanres")),
 		"sds-proxy@wanres unit was not enabled; exec calls: %+v", dep.execCalls)
+	assert.True(t, execCmdIssued(dep, "systemctl restart "+wanproxy.UnitInstance("wanres")),
+		"sds-proxy@wanres unit was not restarted; exec calls: %+v", dep.execCalls)
 }
 
 // TestCreateResourceWANAutoPort auto-picks a random high port when WANPort is 0.
@@ -225,7 +229,7 @@ func TestServerCreateResourceWANSucceeds(t *testing.T) {
 	stored, err := ctrl.db.GetResource(context.Background(), "wanres")
 	require.NoError(t, err)
 	assert.True(t, stored.WANMode)
-	assert.True(t, execCmdIssued(dep, "systemctl enable --now "+wanproxy.UnitInstance("wanres")))
+	assert.True(t, execCmdIssued(dep, "systemctl restart "+wanproxy.UnitInstance("wanres")))
 }
 
 // TestServerCreateResourceRejectsDRFieldsWithoutWan enforces the master switch:

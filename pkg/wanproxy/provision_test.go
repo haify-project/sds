@@ -109,7 +109,8 @@ func TestProvisionSequence(t *testing.T) {
 		{kind: "distribute", hosts: []string{primary}, path: cfgPath}, // dialer
 		{kind: "distribute", hosts: []string{dr}, path: cfgPath},      // acceptor
 		{kind: "exec", hosts: both, cmd: "sudo systemctl daemon-reload"},
-		{kind: "exec", hosts: both, cmd: "sudo systemctl enable --now " + instance},
+		{kind: "exec", hosts: both, cmd: "sudo systemctl enable " + instance},
+		{kind: "exec", hosts: both, cmd: "sudo systemctl restart " + instance},
 		// Preflight reachability probe from the primary to the DR WAN endpoint.
 		{kind: "exec", hosts: []string{primary}, cmd: reachCmd(spec.DRPublicEndpoint, spec.WANPort)},
 	}
@@ -141,11 +142,12 @@ func TestProvisionSequence(t *testing.T) {
 		t.Fatalf("DR did not receive the acceptor config:\n%s", got)
 	}
 
-	// enable --now must come after every config/cert push.
-	enableIdx := lastExecIndex(f.events, "enable --now")
+	// The restart must come after every config/cert push — it is what makes a
+	// leg that was already running pick them up.
+	restartIdx := lastExecIndex(f.events, "systemctl restart")
 	for i, e := range f.events {
-		if e.kind == "distribute" && i > enableIdx {
-			t.Fatalf("config push at %d happened after enable/start at %d", i, enableIdx)
+		if e.kind == "distribute" && i > restartIdx {
+			t.Fatalf("config push at %d happened after the restart at %d", i, restartIdx)
 		}
 	}
 }
@@ -201,14 +203,14 @@ func TestProvisionSurfacesDistributeFailure(t *testing.T) {
 
 func TestProvisionSurfacesExecFailure(t *testing.T) {
 	spec := newSpecWithTempPKI(t)
-	f := &fakeDeploy{failExecSubstr: "enable --now"}
+	f := &fakeDeploy{failExecSubstr: "systemctl enable"}
 
 	err := Provision(context.Background(), f, spec)
 	if err == nil {
 		t.Fatal("expected Provision to fail when enable/start fails")
 	}
-	if !strings.Contains(err.Error(), "enable/start proxy") {
-		t.Fatalf("error = %v, want it to mention enable/start", err)
+	if !strings.Contains(err.Error(), "enable proxy") {
+		t.Fatalf("error = %v, want it to name the failing step", err)
 	}
 }
 
@@ -304,4 +306,62 @@ func itoa(i int) string {
 		i /= 10
 	}
 	return string(digits)
+}
+
+// A leg that is already running must be restarted, not merely enabled.
+//
+// `enable --now` starts a stopped unit and does nothing to a running one, so an
+// existing leg keeps whatever it loaded at startup — including its mTLS
+// material. Rotate the PKI and the two ends diverge while the files on disk
+// agree: the dialer reports "invalid peer certificate: BadSignature", the
+// acceptor "received fatal alert: DecryptError", and every certificate is
+// provably identical. Nothing in that picture points at process age.
+func TestProvisionRestartsSoRotatedPKIIsPickedUp(t *testing.T) {
+	spec := newSpecWithTempPKI(t)
+	f := &fakeDeploy{}
+	if err := Provision(context.Background(), f, spec); err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+
+	instance := UnitInstance(spec.Resource)
+	if lastExecIndex(f.events, "sudo systemctl restart "+instance) < 0 {
+		t.Fatalf("no restart of %s; a running leg would keep its old certificates\n%s",
+			instance, dumpEvents(f.events))
+	}
+	// `enable --now` would mask the bug by looking like it started something.
+	for _, e := range f.events {
+		if e.kind == "exec" && strings.Contains(e.cmd, "enable --now") {
+			t.Fatalf("still using `enable --now`, which no-ops on a running unit: %q", e.cmd)
+		}
+	}
+}
+
+// The same guarantee for a multi-leg resource: every leg gets restarted, or the
+// one that was not is the one that silently stops replicating.
+func TestProvisionMultiRestartsEveryLeg(t *testing.T) {
+	prev := PKIDir
+	PKIDir = t.TempDir()
+	t.Cleanup(func() { PKIDir = prev })
+
+	f := &fakeDeploy{}
+	spec := MultiSpec{
+		Resource:              "data",
+		PrimaryNodeAddrs:      []string{"10.0.0.1", "10.0.0.2"},
+		DRNodeAddr:            "203.0.113.7",
+		DRPublicEndpoint:      "203.0.113.7",
+		BaseWANPort:           6600,
+		BaseDRBDPort:          7300,
+		SkipReachabilityCheck: true,
+	}
+	if err := ProvisionMulti(context.Background(), f, spec); err != nil {
+		t.Fatalf("ProvisionMulti: %v", err)
+	}
+
+	for _, leg := range spec.Legs() {
+		want := "sudo systemctl restart " + UnitInstance(leg.Resource)
+		if lastExecIndex(f.events, want) < 0 {
+			t.Fatalf("leg %s was never restarted; it would keep its old certificates",
+				leg.Resource)
+		}
+	}
 }
