@@ -1,7 +1,12 @@
-// API base URL - derive from the host the UI is served from. The controller's
-// REST/grpc-gateway listens on :3375, so the UI always talks to the same host it
-// was loaded from (works for the embedded UI on any node/VIP, and via tunnels).
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:3375/v1`;
+// Same-origin. The controller's UI server proxies /v1 to the REST gateway, so
+// the browser never needs to know which port that is.
+//
+// This used to build an absolute URL to :3375 from window.location.hostname.
+// That works only when the browser can reach the node directly. Put the UI
+// behind anything that terminates TLS on 443 — a tunnel, a VPS, a reverse proxy
+// — and every call goes to https://<public-name>:3375, a port that is not
+// published and should not be: the page loads and nothing on it works.
+const API_BASE = '/v1';
 
 export interface ApiResponse<T = unknown> {
   success: boolean;

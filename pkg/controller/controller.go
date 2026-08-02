@@ -229,7 +229,9 @@ func (c *Controller) Start() error {
 	// Start UI server on whatever [ui] asks for.
 	if c.config.UI.UIEnabled() {
 		uiAddr, uiPort := c.config.UI.UIAddress(c.config.Server.ListenAddress)
-		uiServer, err := NewUIServer(c.logger, uiAddr, uiPort)
+		// The UI proxies its own-origin /v1 and /ai to these, so that publishing
+		// the UI port alone is enough to use it from outside the LAN.
+		uiServer, err := NewUIServer(c.logger, uiAddr, uiPort, defaultRESTPort, defaultAIPort)
 		if err != nil {
 			return fmt.Errorf("failed to create UI server: %w", err)
 		}
@@ -414,8 +416,8 @@ func (c *Controller) startGRPCServer() error {
 		}
 	}()
 
-	// Start HTTP REST API gateway on port 3375
-	restPort := 3375
+	// Start HTTP REST API gateway
+	restPort := defaultRESTPort
 	restAddr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, restPort)
 	restLis, err := net.Listen("tcp", restAddr)
 	if err != nil {

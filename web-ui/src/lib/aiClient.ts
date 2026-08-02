@@ -12,15 +12,14 @@
 // The `suggestion` frame shape is normalized in parseSuggestion() below and will
 // be aligned to the oss-agent v0.4.0 EventSuggestion payload once it is tagged.
 
-// Base URL of the cmd/sds-ai backend. Defaults to the same host on port 7634
-// (sds-ai runs alongside). Override at runtime with localStorage['sds.ai_base']
-// (e.g. "http://127.0.0.1:7634").
+// Same-origin: the controller's UI server proxies /ai to the Copilot backend,
+// so this works behind a reverse proxy where :7634 is not published. Override
+// with localStorage['sds.ai_base'] to point at a Copilot running elsewhere.
 export function aiBase(): string {
   const override =
     typeof localStorage !== 'undefined' ? localStorage.getItem('sds.ai_base') : null;
   if (override) return override.replace(/\/$/, '');
-  const { protocol, hostname } = window.location;
-  return `${protocol}//${hostname}:7634`;
+  return '';
 }
 
 export type AISeverity = 'low' | 'medium' | 'high';

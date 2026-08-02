@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 
 	"github.com/liliang-cn/sds/ui"
@@ -27,18 +29,39 @@ The API and <code>sds-cli</code> are unaffected.</p>
 </body></html>
 `
 
+// defaultRESTPort is where the grpc-gateway REST API listens, and
+// defaultAIPort where the optional AI Copilot (cmd/sds-ai) does. The UI proxies
+// to both on loopback so a single published port serves the whole app.
+const (
+	defaultRESTPort = 3375
+	defaultAIPort   = 7634
+)
+
 // UIServer serves the embedded web UI
 type UIServer struct {
 	logger *zap.Logger
 	server *http.Server
 	distFS fs.FS
+	// api and ai proxy the SPA's own-origin calls to the REST gateway and the
+	// AI Copilot, which listen on their own ports.
+	//
+	// The UI used to build absolute URLs to those ports from
+	// window.location.hostname. That works when the browser can reach the node
+	// directly, and only then: put the UI behind a reverse proxy — a tunnel, a
+	// VPS, anything terminating TLS on 443 — and every API call goes to
+	// https://<public-name>:3375, which is not exposed and never will be. The
+	// page loads and nothing on it works.
+	//
+	// Serving the API under the UI's own origin makes one published port enough.
+	api *httputil.ReverseProxy
+	ai  *httputil.ReverseProxy
 	// built is false when the embedded dist holds no index.html, i.e. the
 	// binary carries the placeholder rather than a real UI.
 	built bool
 }
 
 // NewUIServer creates a new UI server
-func NewUIServer(logger *zap.Logger, listenAddress string, port int) (*UIServer, error) {
+func NewUIServer(logger *zap.Logger, listenAddress string, port int, restPort, aiPort int) (*UIServer, error) {
 	// Get the subdirectory from the embed
 	distFS, err := fs.Sub(ui.FS, "dist")
 	if err != nil {
@@ -51,10 +74,19 @@ func NewUIServer(logger *zap.Logger, listenAddress string, port int) (*UIServer,
 		logger.Warn("Web UI assets are not embedded in this binary; serving a placeholder page. Build with `make build` to include the UI.")
 	}
 
+	mkProxy := func(p int) *httputil.ReverseProxy {
+		// Always loopback: these are the controller's own listeners, and the
+		// hop must not depend on how the UI itself was addressed.
+		u, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", p))
+		return httputil.NewSingleHostReverseProxy(u)
+	}
+
 	uiServer := &UIServer{
 		logger: logger,
 		distFS: distFS,
 		built:  built,
+		api:    mkProxy(restPort),
+		ai:     mkProxy(aiPort),
 	}
 
 	uiAddr := fmt.Sprintf("%s:%d", listenAddress, port)
@@ -74,6 +106,17 @@ func (s *UIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// API and Copilot calls are same-origin so that publishing this one port is
+	// enough to make the UI usable from anywhere.
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/v1/"):
+		s.api.ServeHTTP(w, r)
+		return
+	case strings.HasPrefix(r.URL.Path, "/ai/"):
+		s.ai.ServeHTTP(w, r)
 		return
 	}
 
