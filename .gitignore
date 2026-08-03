@@ -52,3 +52,6 @@ sds-resource-status.png
 
 # transient subagent worktrees
 .claude/worktrees/
+
+# Compiled binaries — never commit (a 75MB sds-ai binary once bloated history)
+cmd/sds-ai/sds-ai
