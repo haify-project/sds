@@ -238,6 +238,76 @@ func TestRebuildSkipsTeardownAndPoolCreationOnResume(t *testing.T) {
 	assert.Zero(t, poolsCreated)
 }
 
+// A pool half-converted by hand has thin volumes and thick ones side by side.
+// Refusing the whole pool because one volume is already thin leaves the rest
+// permanently unconvertible — which is the state node-e sat in: openclaw_data
+// thin, sds-meta_data thick, and every conversion attempt answered "already
+// thin; nothing to convert".
+func TestConvertsTheThickVolumesInAHalfThinPool(t *testing.T) {
+	in := thickPool(t, "node-e")
+	in.Resources = append(in.Resources, &ResourceInfo{
+		Name:  "sds-meta",
+		Nodes: []string{"node-b", "node-e", "node-d"},
+		Volumes: []*ResourceVolumeInfo{{
+			VolumeID: 0, Pool: "sds_sdspool", BackingVolume: "sds-meta_data", SizeGB: 1,
+		}},
+		NodeStates: map[string]*ResourceNodeState{
+			"node-b": {Role: "Secondary", DiskState: "UpToDate", SyncPercent: 100},
+			"node-d": {Role: "Secondary", DiskState: "UpToDate", SyncPercent: 100},
+			"node-e": {Role: "Secondary", DiskState: "UpToDate", SyncPercent: 100},
+		},
+	})
+	in.BackingBytes["sds-meta_data"] = 1077936128
+	in.AlreadyThin = map[string]bool{"openclaw_data": true, "sds-meta_data": false}
+	in.ThinPoolExists = true
+	in.ThinPoolMetadataBytes = 8 << 20
+	in.VGFreeBytes = 1048576000
+
+	plan, err := planThinConversion(in)
+	require.NoError(t, err)
+	require.Len(t, plan.Volumes, 1, "only the thick one is work")
+	assert.Equal(t, "sds-meta_data", plan.Volumes[0].LV)
+	assert.False(t, plan.CreatePool, "the pool is already there")
+	assert.True(t, plan.ExtendPool, "the freed extents should go into it")
+	// 8 MiB of metadata is what LVM's default gives; it is the size that leaves
+	// a converted pool with almost no room for snapshot mappings.
+	assert.Greater(t, plan.MetadataGrowTo, uint64(8<<20), "undersized metadata must be grown")
+}
+
+func TestSaysThereIsNothingToDoWhenEveryVolumeIsAlreadyThin(t *testing.T) {
+	in := thickPool(t, "node-e")
+	in.AlreadyThin["openclaw_data"] = true
+	in.ThinPoolExists = true
+	_, err := planThinConversion(in)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already thin")
+}
+
+// Metadata has to grow before the data area does. `lvextend -l +100%FREE` on
+// the pool takes every free extent, and the metadata extension — which needs
+// extents of its own, plus as many again for its spare copy — then has nothing
+// left to take.
+func TestRebuildGrowsMetadataBeforeTheDataArea(t *testing.T) {
+	var order []string
+	dep := &fakeDeploymentClient{
+		lvExtendThinPoolMetadataFunc: func(_ context.Context, hosts []string, _, _ string, _ uint64) (*deployment.ExecResult, error) {
+			order = append(order, "metadata")
+			return successExecResult(hosts, ""), nil
+		},
+		lvExtendThinPoolAllFreeFunc: func(_ context.Context, hosts []string, _, _ string) (*deployment.ExecResult, error) {
+			order = append(order, "data")
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	plan := testConversionPlan()
+	plan.CreatePool = false
+	plan.ExtendPool = true
+	plan.MetadataGrowTo = 128 << 20
+
+	require.NoError(t, convertTestManager(dep).applyThinConversion(context.Background(), "10.0.0.1", plan))
+	assert.Equal(t, []string{"metadata", "data"}, order)
+}
+
 // LVM allocates a *second* metadata area — the pmspare LV — the same size as
 // the one asked for, so a pool sized to "everything minus one metadata area"
 // overshoots the volume group by exactly that spare. On the real cluster this
@@ -321,4 +391,19 @@ func TestPlanIgnoresVolumesInOtherPools(t *testing.T) {
 	require.NoError(t, err, "a Primary in an unrelated pool must not block this one")
 	require.Len(t, plan.Volumes, 1)
 	assert.Equal(t, "openclaw_data", plan.Volumes[0].LV)
+}
+
+// The pool that a conversion builds and the pool that `pool create` builds have
+// different names, so extending "the" thin pool by a constant name would build
+// a second pool beside the first.
+func TestExtendsWhicheverThinPoolTheNodeActuallyHas(t *testing.T) {
+	in := thickPool(t, "node-e")
+	in.ThinPoolExists = true
+	in.ExistingThinPool = "sds_sdspool_thin"
+	in.ThinPoolMetadataBytes = 128 << 20
+
+	plan, err := planThinConversion(in)
+	require.NoError(t, err)
+	assert.Equal(t, "sds_sdspool_thin", plan.ThinPoolName)
+	assert.Zero(t, plan.MetadataGrowTo, "128 MiB is already the floor")
 }

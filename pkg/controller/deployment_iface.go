@@ -25,6 +25,8 @@ type deploymentClient interface {
 	LVCreateThinPoolAllFree(ctx context.Context, hosts []string, vgName, poolName string, metadataBytes uint64) (*deployment.ExecResult, error)
 	LVExists(ctx context.Context, host, vgName, lvName string) (bool, error)
 	LVThinPoolIn(ctx context.Context, host, vgName string) (string, error)
+	LVExtendThinPoolMetadata(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes uint64) (*deployment.ExecResult, error)
+	LVExtendThinPoolAllFree(ctx context.Context, hosts []string, vgName, poolName string) (*deployment.ExecResult, error)
 	DRBDDetach(ctx context.Context, host, resource string) (*deployment.ExecResult, error)
 	DRBDAttach(ctx context.Context, host, resource string) (*deployment.ExecResult, error)
 	LVRemoveSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error)

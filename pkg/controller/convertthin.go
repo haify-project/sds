@@ -50,8 +50,17 @@ type thinConversionInput struct {
 	// map is treated as present, so callers that never lose a volume can ignore
 	// this field.
 	Present map[string]bool
-	// ThinPoolExists reports whether an earlier attempt already built the pool.
+	// ThinPoolExists reports whether the pool already has a thin pool — because
+	// an earlier attempt built it, or because the pool is half converted.
 	ThinPoolExists bool
+	// ThinPoolMetadataBytes is that pool's current metadata area, so an
+	// undersized one can be grown while the extents are free to do it with.
+	ThinPoolMetadataBytes uint64
+	// ExistingThinPool is what that pool is called. It is whatever the node
+	// reports, not a constant: a pool built by `pool create` is named
+	// "<pool>_thin" and one this code creates is named thinPoolName, and
+	// assuming either would build a second pool beside the first.
+	ExistingThinPool string
 	// DRBDName maps an SDS node name to the name DRBD reports it by. The two
 	// differ on most clusters — SDS knows "node-b", DRBD says "sds-b" — and
 	// live resource state is keyed by the latter.
@@ -77,7 +86,12 @@ type thinConversionPlan struct {
 	PoolBytes     uint64
 	MetadataBytes uint64
 	CreatePool    bool
-	Volumes       []thinVolumePlan
+	// ExtendPool folds the freed extents into a thin pool that already exists.
+	ExtendPool bool
+	// MetadataGrowTo is the size to raise an existing pool's metadata area to,
+	// or zero to leave it alone.
+	MetadataGrowTo uint64
+	Volumes        []thinVolumePlan
 }
 
 // thinPoolName is the LV the converted volumes live inside.
@@ -91,6 +105,7 @@ func planThinConversion(in *thinConversionInput) (*thinConversionPlan, error) {
 	}
 
 	var vols []thinVolumePlan
+	var alreadyThin int
 	var originTotal uint64
 	// freeable is what removing the still-present thick volumes gives back.
 	// Anything an earlier attempt already removed is counted in VGFreeBytes, and
@@ -106,8 +121,8 @@ func planThinConversion(in *thinConversionInput) (*thinConversionPlan, error) {
 				continue
 			}
 			if in.AlreadyThin[v.BackingVolume] {
-				return nil, fmt.Errorf("%s/%s is already thin; nothing to convert",
-					in.Pool, v.BackingVolume)
+				alreadyThin++
+				continue // a half-converted pool still has work in the rest of it
 			}
 			if err := checkSafeToRebuild(res, in.Node, in.DRBDName[in.Node]); err != nil {
 				return nil, err
@@ -131,16 +146,29 @@ func planThinConversion(in *thinConversionInput) (*thinConversionPlan, error) {
 		}
 	}
 	if len(vols) == 0 {
+		if alreadyThin > 0 {
+			return nil, fmt.Errorf("every volume in %s on %s is already thin; nothing to convert",
+				in.Pool, in.Node)
+		}
 		return nil, fmt.Errorf("no thick volumes of a known resource found in %s on %s", in.Pool, in.Node)
 	}
 	sort.Slice(vols, func(i, j int) bool { return vols[i].LV < vols[j].LV })
 
-	// Resuming an attempt that already built the pool: its size was settled the
-	// first time round, and building it again would simply fail.
+	// The pool is already there — either an earlier attempt built it, or this
+	// pool is half converted. Either way it is extended, not rebuilt: creating
+	// it again fails, and leaving it alone would strand the freed extents.
 	if in.ThinPoolExists {
+		var grow uint64
+		if in.ThinPoolMetadataBytes < thinMetadataFloor {
+			grow = thinMetadataFloor
+		}
+		name := in.ExistingThinPool
+		if name == "" {
+			name = thinPoolName
+		}
 		return &thinConversionPlan{
-			Node: in.Node, Pool: in.Pool, ThinPoolName: thinPoolName,
-			CreatePool: false, Volumes: vols,
+			Node: in.Node, Pool: in.Pool, ThinPoolName: name,
+			CreatePool: false, ExtendPool: true, MetadataGrowTo: grow, Volumes: vols,
 		}, nil
 	}
 
@@ -279,8 +307,16 @@ func (rm *ResourceManager) ConvertPoolToThin(ctx context.Context, nodeName, pool
 	if in.VGFreeBytes, err = rm.deployment.VGFreeBytes(ctx, host, poolName); err != nil {
 		return fmt.Errorf("inspect %s on %s: %w", poolName, nodeName, err)
 	}
-	if in.ThinPoolExists, err = rm.deployment.LVExists(ctx, host, poolName, thinPoolName); err != nil {
-		return fmt.Errorf("inspect %s/%s on %s: %w", poolName, thinPoolName, nodeName, err)
+	if in.ExistingThinPool, err = rm.deployment.LVThinPoolIn(ctx, host, poolName); err != nil {
+		return fmt.Errorf("look for a thin pool in %s on %s: %w", poolName, nodeName, err)
+	}
+	in.ThinPoolExists = in.ExistingThinPool != ""
+	if in.ThinPoolExists {
+		if in.ThinPoolMetadataBytes, err = rm.deployment.LVSizeBytes(ctx, host, poolName,
+			in.ExistingThinPool+"_tmeta"); err != nil {
+			return fmt.Errorf("read the metadata size of %s/%s on %s: %w",
+				poolName, in.ExistingThinPool, nodeName, err)
+		}
 	}
 	for _, res := range resources {
 		for _, v := range res.Volumes {
@@ -352,10 +388,25 @@ func (rm *ResourceManager) applyThinConversion(ctx context.Context, host string,
 		}
 	}
 
-	if plan.CreatePool {
+	switch {
+	case plan.CreatePool:
 		if err := execFailure(rm.deployment.LVCreateThinPoolAllFree(ctx, []string{host},
 			plan.Pool, plan.ThinPoolName, plan.MetadataBytes)); err != nil {
 			return fmt.Errorf("create thin pool %s/%s (the node is diskless; rerun to finish): %w",
+				plan.Pool, plan.ThinPoolName, err)
+		}
+	case plan.ExtendPool:
+		// Metadata first — see LVExtendThinPoolMetadata for why the order is
+		// not interchangeable.
+		if plan.MetadataGrowTo > 0 {
+			if err := execFailure(rm.deployment.LVExtendThinPoolMetadata(ctx, []string{host},
+				plan.Pool, plan.ThinPoolName, plan.MetadataGrowTo)); err != nil {
+				return fmt.Errorf("grow the metadata area of %s/%s: %w", plan.Pool, plan.ThinPoolName, err)
+			}
+		}
+		if err := execFailure(rm.deployment.LVExtendThinPoolAllFree(ctx, []string{host},
+			plan.Pool, plan.ThinPoolName)); err != nil {
+			return fmt.Errorf("grow %s/%s into the freed extents (the node is diskless; rerun to finish): %w",
 				plan.Pool, plan.ThinPoolName, err)
 		}
 	}
@@ -452,11 +503,15 @@ func (rm *ResourceManager) liveResourcesOn(ctx context.Context, nodeName string)
 // 30% of the default area was already gone. Reserve ~1% of the pool, floored
 // at 128 MiB, which LVM accepts and which leaves room for hundreds of
 // snapshots.
+// thinMetadataFloor is the smallest metadata area worth creating. LVM's own
+// default is around 8 MiB, which a single converted volume already fills to
+// 30%; exhausting metadata takes the whole pool read-only.
+const thinMetadataFloor = 128 << 20
+
 func thinMetadataBytes(poolBytes uint64) uint64 {
-	const floor = 128 << 20
 	m := poolBytes / 100
-	if m < floor {
-		return floor
+	if m < thinMetadataFloor {
+		return thinMetadataFloor
 	}
 	// LVM caps thin metadata at 16 GiB.
 	if m > 16*gib {

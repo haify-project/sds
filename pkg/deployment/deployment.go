@@ -692,6 +692,23 @@ func (c *Client) LVCreateThinPoolAllFree(ctx context.Context, hosts []string, vg
 	return c.Exec(ctx, hosts, cmd)
 }
 
+// LVExtendThinPoolMetadata raises a thin pool's metadata area.
+//
+// This must run BEFORE the data area is extended. Growing the data with
+// `-l +100%FREE` takes every free extent, and the metadata extension — which
+// needs extents of its own, and as many again for the spare copy LVM keeps
+// alongside — then has nothing left to take.
+func (c *Client) LVExtendThinPoolMetadata(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes uint64) (*ExecResult, error) {
+	return c.Exec(ctx, hosts, fmt.Sprintf("sudo lvextend -y --poolmetadatasize %dB %s/%s",
+		sizeBytes, vgName, poolName))
+}
+
+// LVExtendThinPoolAllFree grows a thin pool's data area into every free extent
+// left in the volume group.
+func (c *Client) LVExtendThinPoolAllFree(ctx context.Context, hosts []string, vgName, poolName string) (*ExecResult, error) {
+	return c.Exec(ctx, hosts, fmt.Sprintf("sudo lvextend -y -l +100%%FREE %s/%s", vgName, poolName))
+}
+
 // LVThinPoolIn returns the name of the thin pool in a volume group, or an
 // empty string if the group has none.
 //
