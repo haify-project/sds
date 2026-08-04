@@ -692,6 +692,32 @@ func (c *Client) LVCreateThinPoolAllFree(ctx context.Context, hosts []string, vg
 	return c.Exec(ctx, hosts, cmd)
 }
 
+// LVThinPoolIn returns the name of the thin pool in a volume group, or an
+// empty string if the group has none.
+//
+// The name cannot be assumed: `pool create` builds "<pool>_thin", converting a
+// thick pool in place builds something else, and a group adopted from
+// elsewhere could use any name at all. Asking is one command and removes a
+// whole class of "works on the nodes I tested" bug.
+func (c *Client) LVThinPoolIn(ctx context.Context, host, vgName string) (string, error) {
+	res, err := c.Exec(ctx, []string{host},
+		fmt.Sprintf("sudo lvs --noheadings -o lv_name,segtype %s", vgName))
+	if err != nil {
+		return "", err
+	}
+	out, err := singleHostOutput(res, "list volumes in "+vgName)
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) == 2 && f[1] == "thin-pool" {
+			return f[0], nil
+		}
+	}
+	return "", nil
+}
+
 // LVExists reports whether a logical volume is there at all.
 //
 // It distinguishes "no such volume" from "the query failed": lvs exits 5 both

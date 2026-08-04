@@ -158,14 +158,8 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 	}()
 
 	for i, v := range dbVols {
-		res, cerr := rm.deployment.LVCreate(ctx, []string{newAddr}, v.Pool, v.VolumeName,
-			fmt.Sprintf("%dB", backingSizes[i]))
-		if cerr != nil {
+		if cerr := rm.createBackingVolumeOn(ctx, newAddr, v.Pool, v.VolumeName, backingSizes[i]); cerr != nil {
 			return fmt.Errorf("create backing volume %s/%s on %q: %w", v.Pool, v.VolumeName, node, cerr)
-		}
-		if !res.AllSuccess() {
-			return fmt.Errorf("create backing volume %s/%s on %q: %s",
-				v.Pool, v.VolumeName, node, res.FailureDetails())
 		}
 	}
 

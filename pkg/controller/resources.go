@@ -1242,8 +1242,17 @@ func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nod
 		case "zfs", "zfs-thin":
 			result, err = rm.deployment.ZFSCreateThinDataset(ctx, []string{nodeIP}, pool, volumeName, size)
 		case "lvm-thin":
-			// Convention: the thin pool is named "<pool>_thin".
-			result, err = rm.deployment.LVCreateThinVolume(ctx, []string{nodeIP}, pool, pool+"_thin", volumeName, size)
+			// The thin pool's name is asked for, not assumed: `pool create`
+			// builds "<pool>_thin" but converting a thick pool in place builds
+			// a differently named one, and guessing fails on those nodes.
+			thinPool, perr := rm.deployment.LVThinPoolIn(ctx, nodeIP, pool)
+			if perr != nil {
+				return fmt.Errorf("look for a thin pool in %s on %s: %w", pool, nodes[i], perr)
+			}
+			if thinPool == "" {
+				return fmt.Errorf("pool %s on %s is recorded as lvm-thin but has no thin pool", pool, nodes[i])
+			}
+			result, err = rm.deployment.LVCreateThinVolume(ctx, []string{nodeIP}, pool, thinPool, volumeName, size)
 		default:
 			result, err = rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, volumeName, size)
 		}

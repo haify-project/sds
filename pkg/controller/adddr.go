@@ -185,14 +185,8 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 	}()
 
 	for i, v := range dbVols {
-		res, err := rm.deployment.LVCreate(ctx, []string{drAddr}, v.Pool, v.VolumeName,
-			fmt.Sprintf("%dB", backingSizes[i]))
-		if err != nil {
+		if err := rm.createBackingVolumeOn(ctx, drAddr, v.Pool, v.VolumeName, backingSizes[i]); err != nil {
 			return fmt.Errorf("create backing volume %s/%s on DR node %q: %w", v.Pool, v.VolumeName, drNode, err)
-		}
-		if !res.AllSuccess() {
-			return fmt.Errorf("create backing volume %s/%s on DR node %q: %s",
-				v.Pool, v.VolumeName, drNode, res.FailureDetails())
 		}
 	}
 

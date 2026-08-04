@@ -30,6 +30,7 @@ type fakeDeploymentClient struct {
 	drbdDetachFunc                      func(ctx context.Context, host, resource string) (*deployment.ExecResult, error)
 	lvRemoveFunc                        func(ctx context.Context, hosts []string, lvPath string) (*deployment.ExecResult, error)
 	lvExistsFunc                        func(ctx context.Context, host, vgName, lvName string) (bool, error)
+	lvThinPoolInFunc                    func(ctx context.Context, host, vgName string) (string, error)
 	drbdAttachFunc                      func(ctx context.Context, host, resource string) (*deployment.ExecResult, error)
 	zfsCreatePoolFunc                   func(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...deployment.ZFSOption) (*deployment.ExecResult, error)
 	zfsDestroyPoolFunc                  func(ctx context.Context, hosts []string, poolName string) (*deployment.ExecResult, error)
@@ -222,6 +223,13 @@ func (f *fakeDeploymentClient) LVCreateThinSnapshot(ctx context.Context, hosts [
 
 func (f *fakeDeploymentClient) LVIsThin(ctx context.Context, host, vgName, lvName string) (bool, error) {
 	return false, nil
+}
+
+func (f *fakeDeploymentClient) LVThinPoolIn(ctx context.Context, host, vgName string) (string, error) {
+	if f.lvThinPoolInFunc != nil {
+		return f.lvThinPoolInFunc(ctx, host, vgName)
+	}
+	return "", nil
 }
 
 func (f *fakeDeploymentClient) LVExists(ctx context.Context, host, vgName, lvName string) (bool, error) {
