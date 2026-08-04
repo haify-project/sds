@@ -26,6 +26,11 @@ type fakeDeploymentClient struct {
 	lvCreateFunc                        func(ctx context.Context, hosts []string, vgName, lvName, size string) (*deployment.ExecResult, error)
 	lvCreateThinPoolFunc                func(ctx context.Context, hosts []string, vgName, poolName, size string) (*deployment.ExecResult, error)
 	lvCreateThinVolumeFunc              func(ctx context.Context, hosts []string, vgName, poolName, lvName, size string) (*deployment.ExecResult, error)
+	lvCreateThinPoolAllFreeFunc         func(ctx context.Context, hosts []string, vgName, poolName string, metadataBytes uint64) (*deployment.ExecResult, error)
+	drbdDetachFunc                      func(ctx context.Context, host, resource string) (*deployment.ExecResult, error)
+	lvRemoveFunc                        func(ctx context.Context, hosts []string, lvPath string) (*deployment.ExecResult, error)
+	lvExistsFunc                        func(ctx context.Context, host, vgName, lvName string) (bool, error)
+	drbdAttachFunc                      func(ctx context.Context, host, resource string) (*deployment.ExecResult, error)
 	zfsCreatePoolFunc                   func(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...deployment.ZFSOption) (*deployment.ExecResult, error)
 	zfsDestroyPoolFunc                  func(ctx context.Context, hosts []string, poolName string) (*deployment.ExecResult, error)
 	zfsListPoolsFunc                    func(ctx context.Context, hosts []string) (*deployment.ExecResult, error)
@@ -219,6 +224,13 @@ func (f *fakeDeploymentClient) LVIsThin(ctx context.Context, host, vgName, lvNam
 	return false, nil
 }
 
+func (f *fakeDeploymentClient) LVExists(ctx context.Context, host, vgName, lvName string) (bool, error) {
+	if f.lvExistsFunc != nil {
+		return f.lvExistsFunc(ctx, host, vgName, lvName)
+	}
+	return true, nil
+}
+
 func (f *fakeDeploymentClient) LVSizeBytes(ctx context.Context, host, vgName, lvName string) (uint64, error) {
 	return 6442450944, nil
 }
@@ -227,15 +239,24 @@ func (f *fakeDeploymentClient) VGFreeBytes(ctx context.Context, host, vgName str
 	return 3 << 30, nil
 }
 
-func (f *fakeDeploymentClient) LVCreateThinPoolSized(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes, metadataBytes uint64) (*deployment.ExecResult, error) {
+func (f *fakeDeploymentClient) LVCreateThinPoolAllFree(ctx context.Context, hosts []string, vgName, poolName string, metadataBytes uint64) (*deployment.ExecResult, error) {
+	if f.lvCreateThinPoolAllFreeFunc != nil {
+		return f.lvCreateThinPoolAllFreeFunc(ctx, hosts, vgName, poolName, metadataBytes)
+	}
 	return successExecResult(hosts, ""), nil
 }
 
 func (f *fakeDeploymentClient) DRBDDetach(ctx context.Context, host, resource string) (*deployment.ExecResult, error) {
+	if f.drbdDetachFunc != nil {
+		return f.drbdDetachFunc(ctx, host, resource)
+	}
 	return successExecResult([]string{host}, ""), nil
 }
 
 func (f *fakeDeploymentClient) DRBDAttach(ctx context.Context, host, resource string) (*deployment.ExecResult, error) {
+	if f.drbdAttachFunc != nil {
+		return f.drbdAttachFunc(ctx, host, resource)
+	}
 	return successExecResult([]string{host}, ""), nil
 }
 
@@ -358,6 +379,9 @@ func (f *fakeDeploymentClient) LVRemove(ctx context.Context, hosts []string, lvP
 		hosts  []string
 		lvPath string
 	}{hosts: cloneStrings(hosts), lvPath: lvPath})
+	if f.lvRemoveFunc != nil {
+		return f.lvRemoveFunc(ctx, hosts, lvPath)
+	}
 	return successExecResult(hosts, ""), nil
 }
 

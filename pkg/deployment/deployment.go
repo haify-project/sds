@@ -669,7 +669,8 @@ func (c *Client) LVRemove(ctx context.Context, hosts []string, lvPath string) (*
 	return c.Exec(ctx, hosts, cmd)
 }
 
-// LVCreateThinPoolSized creates a thin pool with an explicit metadata area.
+// LVCreateThinPoolAllFree creates a thin pool spanning every free extent in the
+// volume group, with an explicit metadata area.
 //
 // LVM's default metadata size is generous for a pool holding a couple of
 // volumes and far too small for one holding a snapshot history: a freshly
@@ -677,10 +678,44 @@ func (c *Client) LVRemove(ctx context.Context, hosts []string, lvPath string) (*
 // area used. Exhausting metadata takes the whole pool read-only, which is a
 // much worse failure than running out of data space, so the size is stated
 // rather than inherited.
-func (c *Client) LVCreateThinPoolSized(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes, metadataBytes uint64) (*ExecResult, error) {
-	cmd := fmt.Sprintf("sudo lvcreate -y -L %dB --poolmetadatasize %dB -T %s/%s",
-		sizeBytes, metadataBytes, vgName, poolName)
+//
+// The *data* size is not stated, deliberately. Asking for an exact byte count
+// means reproducing LVM's allocator: the metadata area rounds up to an extent,
+// a spare copy of it is allocated alongside, and the data area rounds up too —
+// so "everything minus one metadata area" overshoots the group and lvcreate
+// exits 5 with "Insufficient free space". `-l 100%FREE` asks for exactly the
+// intent, "as large as the free extents allow", and leaves that arithmetic
+// where the knowledge is.
+func (c *Client) LVCreateThinPoolAllFree(ctx context.Context, hosts []string, vgName, poolName string, metadataBytes uint64) (*ExecResult, error) {
+	cmd := fmt.Sprintf("sudo lvcreate -y -l 100%%FREE --poolmetadatasize %dB -T %s/%s",
+		metadataBytes, vgName, poolName)
 	return c.Exec(ctx, hosts, cmd)
+}
+
+// LVExists reports whether a logical volume is there at all.
+//
+// It distinguishes "no such volume" from "the query failed": lvs exits 5 both
+// when the name is unknown and when LVM itself is unhappy, so the two are told
+// apart by the message rather than the status. Only the volume being absent
+// counts as absent — a missing *volume group* says `Volume group "x" not
+// found`, and reporting that as a missing volume would turn a broken node into
+// what looks like a half-finished conversion.
+func (c *Client) LVExists(ctx context.Context, host, vgName, lvName string) (bool, error) {
+	res, err := c.Exec(ctx, []string{host},
+		fmt.Sprintf("sudo lvs --noheadings -o lv_name %s/%s", vgName, lvName))
+	if err != nil {
+		return false, err
+	}
+	for _, r := range res.Hosts {
+		if r.Success {
+			return true, nil
+		}
+		if strings.Contains(strings.ToLower(r.Output), "failed to find logical volume") {
+			return false, nil
+		}
+		return false, fmt.Errorf("look for %s/%s: %s", vgName, lvName, strings.TrimSpace(r.Output))
+	}
+	return false, fmt.Errorf("look for %s/%s: no result", vgName, lvName)
 }
 
 // LVSizeBytes reports a logical volume's exact size.

@@ -92,9 +92,13 @@ func TestCovLVMBuilders(t *testing.T) {
 		{"LVCreate", func() (*ExecResult, error) { return c.LVCreate(ctx, hosts, "cov_vg", "cov_lv", "1G") }},
 		{"LVCreateThinPoolAbs", func() (*ExecResult, error) { return c.LVCreateThinPool(ctx, hosts, "cov_vg", "cov_pool", "1G") }},
 		{"LVCreateThinPoolPct", func() (*ExecResult, error) { return c.LVCreateThinPool(ctx, hosts, "cov_vg", "cov_pool", "95%FREE") }},
-		{"LVCreateThinVolume", func() (*ExecResult, error) { return c.LVCreateThinVolume(ctx, hosts, "cov_vg", "cov_pool", "cov_lv", "1G") }},
+		{"LVCreateThinVolume", func() (*ExecResult, error) {
+			return c.LVCreateThinVolume(ctx, hosts, "cov_vg", "cov_pool", "cov_lv", "1G")
+		}},
 		{"LVRemove", func() (*ExecResult, error) { return c.LVRemove(ctx, hosts, "cov_vg/cov_lv") }},
-		{"LVCreateSnapshot", func() (*ExecResult, error) { return c.LVCreateSnapshot(ctx, hosts, "cov_vg", "cov_lv", "cov_snap", "1G") }},
+		{"LVCreateSnapshot", func() (*ExecResult, error) {
+			return c.LVCreateSnapshot(ctx, hosts, "cov_vg", "cov_lv", "cov_snap", "1G")
+		}},
 		{"LVCreateThinSnapshot", func() (*ExecResult, error) { return c.LVCreateThinSnapshot(ctx, hosts, "cov_vg", "cov_lv", "cov_snap") }},
 		{"LVRemoveSnapshot", func() (*ExecResult, error) { return c.LVRemoveSnapshot(ctx, hosts, "cov_vg", "cov_snap") }},
 		{"LVListSnapshots", func() (*ExecResult, error) { return c.LVListSnapshots(ctx, hosts, "cov_vg") }},

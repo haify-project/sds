@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"context"
 	"testing"
 
+	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,6 +35,38 @@ func thickPool(t *testing.T, node string) *thinConversionInput {
 		BackingBytes: map[string]uint64{"openclaw_data": 6442450944},
 		AlreadyThin:  map[string]bool{"openclaw_data": false},
 	}
+}
+
+// NodeStates is keyed by whatever name DRBD reports, which is the node's
+// hostname — "sds-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — not the name SDS knows it by.
+// Looking it up with the SDS name found nothing for every node whose two names
+// differ, and the planner refused every one of them with "no live DRBD state".
+// It failed closed, so nothing was damaged; the feature simply never worked.
+func TestFindsLiveStateWhenDRBDKnowsTheNodeByAnotherName(t *testing.T) {
+	in := thickPool(t, "node-e")
+	// Re-key exactly as a real cluster does: DRBD hostnames, not SDS names.
+	states := in.Resources[0].NodeStates
+	in.Resources[0].NodeStates = map[string]*ResourceNodeState{
+		"lima-sds-a": states["node-a"],
+		"sds-b":      states["node-b"],
+		"sds-e":      states["node-e"],
+	}
+	in.DRBDName = map[string]string{
+		"node-a": "lima-sds-a", "node-b": "sds-b", "node-e": "sds-e",
+	}
+	plan, err := planThinConversion(in)
+	require.NoError(t, err, "the node is Secondary and its peers are UpToDate")
+	require.Len(t, plan.Volumes, 1)
+}
+
+// And the refusal must still fire when the state genuinely is missing, rather
+// than being papered over by the lookup above.
+func TestStillRefusesWhenThereIsNoStateAtAll(t *testing.T) {
+	in := thickPool(t, "node-e")
+	delete(in.Resources[0].NodeStates, "node-e")
+	_, err := planThinConversion(in)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no live DRBD state")
 }
 
 func TestRefusesToConvertTheNodeHoldingPrimary(t *testing.T) {
@@ -142,6 +176,131 @@ func TestPlanCoversEveryVolumeInThePool(t *testing.T) {
 	_, err := planThinConversion(in)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sds-meta")
+}
+
+// A conversion that dies partway leaves the node diskless with its thick volume
+// already removed, and the error tells the operator to rerun. That promise only
+// holds if a rerun can see the half-finished state: the backing LV is gone, so
+// its size has to come from a peer, and nothing may try to tear it down again.
+func TestResumesAfterTheThickVolumeIsAlreadyGone(t *testing.T) {
+	in := thickPool(t, "node-e")
+	in.Present = map[string]bool{"openclaw_data": false}
+	// The extents came back to the volume group when it was removed.
+	in.VGFreeBytes = 3*gib + 6442450944
+
+	plan, err := planThinConversion(in)
+	require.NoError(t, err, "a half-converted node must be resumable")
+	require.Len(t, plan.Volumes, 1)
+	assert.False(t, plan.Volumes[0].NeedsTeardown, "there is nothing left to detach or remove")
+	assert.True(t, plan.CreatePool)
+	// The freed extents are already counted in VGFreeBytes; counting the origin
+	// again would size the pool against space that does not exist.
+	assert.LessOrEqual(t, plan.PoolBytes+2*plan.MetadataBytes, in.VGFreeBytes)
+}
+
+// And if it died after the pool was built, the pool must not be built twice —
+// lvcreate refuses, which would wedge the resume permanently.
+func TestResumeDoesNotRebuildAnExistingThinPool(t *testing.T) {
+	in := thickPool(t, "node-e")
+	in.Present = map[string]bool{"openclaw_data": false}
+	in.ThinPoolExists = true
+	in.VGFreeBytes = 0 // the pool already holds every extent
+
+	plan, err := planThinConversion(in)
+	require.NoError(t, err)
+	assert.False(t, plan.CreatePool)
+	assert.False(t, plan.Volumes[0].NeedsTeardown)
+}
+
+func TestRebuildSkipsTeardownAndPoolCreationOnResume(t *testing.T) {
+	var detached, removed, poolsCreated int
+	dep := &fakeDeploymentClient{
+		drbdDetachFunc: func(_ context.Context, host, _ string) (*deployment.ExecResult, error) {
+			detached++
+			return successExecResult([]string{host}, ""), nil
+		},
+		lvRemoveFunc: func(_ context.Context, hosts []string, _ string) (*deployment.ExecResult, error) {
+			removed++
+			return successExecResult(hosts, ""), nil
+		},
+		lvCreateThinPoolAllFreeFunc: func(_ context.Context, hosts []string, _, _ string, _ uint64) (*deployment.ExecResult, error) {
+			poolsCreated++
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	plan := testConversionPlan()
+	plan.CreatePool = false
+	plan.Volumes[0].NeedsTeardown = false
+
+	require.NoError(t, convertTestManager(dep).applyThinConversion(context.Background(), "10.0.0.1", plan))
+	assert.Zero(t, detached)
+	assert.Zero(t, removed)
+	assert.Zero(t, poolsCreated)
+}
+
+// LVM allocates a *second* metadata area — the pmspare LV — the same size as
+// the one asked for, so a pool sized to "everything minus one metadata area"
+// overshoots the volume group by exactly that spare. On the real cluster this
+// came out as "Insufficient free space: 2559 extents needed, but only 2527
+// available", 32 extents short, the metadata size to the byte.
+func TestLeavesRoomForLVMsSpareMetadataCopy(t *testing.T) {
+	in := thickPool(t, "node-e")
+	plan, err := planThinConversion(in)
+	require.NoError(t, err)
+
+	usable := uint64(6442450944) + in.VGFreeBytes
+	assert.LessOrEqual(t, plan.PoolBytes+2*plan.MetadataBytes, usable,
+		"the data area, its metadata, and LVM's spare copy all come out of the same extents")
+}
+
+// applyThinConversion runs destructive steps in order; a step that fails after
+// the thick volume is gone leaves the node diskless. Reporting that as success
+// is worse than the failure itself — it is how a conversion "completed" on
+// node-a and left an empty volume group behind.
+func TestRebuildReportsAFailedThinPoolCreation(t *testing.T) {
+	dep := &fakeDeploymentClient{
+		lvCreateThinPoolAllFreeFunc: func(_ context.Context, hosts []string, _, _ string, _ uint64) (*deployment.ExecResult, error) {
+			// lvcreate exits 5 and says why on stderr; the SSH call itself is fine,
+			// so the error arrives in the result, never in the returned error.
+			return failedResult(hosts, "  Insufficient free space: 2559 extents needed, but only 2527 available"), nil
+		},
+	}
+	err := convertTestManager(dep).applyThinConversion(context.Background(), "10.0.0.1", testConversionPlan())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Insufficient free space")
+}
+
+// The attach is the last step, and the one whose silent failure looks healthiest
+// from the outside: the pool and volume both exist, only the replica is missing.
+func TestRebuildReportsAFailedAttach(t *testing.T) {
+	dep := &fakeDeploymentClient{
+		drbdAttachFunc: func(_ context.Context, host, _ string) (*deployment.ExecResult, error) {
+			return failedResult([]string{host}, "  Device size mismatch"), nil
+		},
+	}
+	err := convertTestManager(dep).applyThinConversion(context.Background(), "10.0.0.1", testConversionPlan())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Device size mismatch")
+}
+
+func TestRebuildSucceedsWhenEveryStepDoes(t *testing.T) {
+	require.NoError(t, convertTestManager(&fakeDeploymentClient{}).
+		applyThinConversion(context.Background(), "10.0.0.1", testConversionPlan()))
+}
+
+func testConversionPlan() *thinConversionPlan {
+	return &thinConversionPlan{
+		Node: "node-e", Pool: "sds_sdspool", ThinPoolName: thinPoolName,
+		PoolBytes: 10464788480, MetadataBytes: 134217728, CreatePool: true,
+		Volumes: []thinVolumePlan{{
+			Resource: "openclaw", LV: "openclaw_data", SizeBytes: 6442450944, NeedsTeardown: true,
+		}},
+	}
+}
+
+func convertTestManager(dep deploymentClient) *ResourceManager {
+	ctrl := newBasicTestController(dep)
+	return ctrl.resources
 }
 
 // A volume in a different pool on the same node is none of this operation's
