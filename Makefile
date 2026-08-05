@@ -1,4 +1,4 @@
-.PHONY: build test clean install-controller install-cli install-mcp run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure
+.PHONY: build test clean install-controller install-cli install-mcp run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure hooks ci
 
 # Sync the freshly built web UI into ui/dist for go:embed. The directory is
 # gitignored and intentionally kept around after builds so plain `go build`
@@ -93,6 +93,32 @@ fmt:
 # Lint
 lint:
 	golangci-lint run
+
+# Point git at the versioned hooks in .githooks (run once per clone). The
+# pre-commit hook rejects staged Go files that are not gofmt-clean, which is
+# CI's first gate and the one `go test` cannot catch.
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "git hooks installed (core.hooksPath=.githooks); bypass with --no-verify"
+
+# Run the CI pipeline exactly as .github/workflows/ci.yml does, so a red build
+# is found here rather than after a push. Note CI checks plain `gofmt -l`, NOT
+# the stricter `gofmt -s` that `make fmt` applies.
+ci: ui-ensure
+	@echo "==> gofmt"
+	@unformatted=$$(gofmt -l . | grep -vE '^(vendor|\.claude)/' || true); \
+		if [ -n "$$unformatted" ]; then \
+			echo "These files are not gofmt-clean:"; echo "$$unformatted"; exit 1; \
+		fi
+	@echo "==> go vet"
+	@go vet ./...
+	@echo "==> go build"
+	@go build ./...
+	@echo "==> go test"
+	@go test ./...
+	@echo "==> web-ui build"
+	@npm --prefix web-ui run build --silent >/dev/null
+	@echo "CI pipeline passed"
 
 # Dependencies
 deps:

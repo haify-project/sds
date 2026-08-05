@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# Blocks a commit whose staged Go files are not gofmt-clean.
+#
+# CI runs a gofmt gate BEFORE vet/build/test, so an unformatted file fails the
+# whole pipeline without ever reporting whether the code itself is healthy —
+# and `go test` passing locally says nothing about it. This catches it in the
+# second it takes, rather than after a push.
+#
+# The check mirrors CI exactly: plain `gofmt -l`, not `gofmt -s`. Using the
+# stricter -s here would reject commits that CI would happily accept.
+#
+# Install with `make hooks`. Bypass a single commit with `git commit --no-verify`.
+
+set -e
+
+# Staged Go files that still exist (Added/Copied/Modified — skip deletions and
+# generated/vendored trees, which CI's `gofmt -l .` also has no business in).
+staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' \
+  | grep -vE '^(vendor|\.claude)/' || true)
+
+[ -z "$staged" ] && exit 0
+
+# gofmt -l prints the files that differ from gofmt's output.
+unformatted=$(gofmt -l $staged 2>/dev/null || true)
+
+[ -z "$unformatted" ] && exit 0
+
+echo "commit blocked: these staged files are not gofmt-clean" >&2
+echo "$unformatted" | sed 's/^/  /' >&2
+echo >&2
+echo "fix with:" >&2
+echo "  gofmt -w $(echo "$unformatted" | tr '\n' ' ')" >&2
+echo "  git add $(echo "$unformatted" | tr '\n' ' ')" >&2
+exit 1

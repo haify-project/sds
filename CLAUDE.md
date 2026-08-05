@@ -23,7 +23,22 @@ sds-cli (client) --> sds-controller (gRPC) --> deployment --> dispatch --> SSH -
 
 ## Build and Test
 
+**Before pushing, run `make ci`** — it mirrors `.github/workflows/ci.yml`
+exactly (gofmt → vet → build → test → web-ui build). CI gates on `gofmt`
+*before* it ever runs the tests, so a green `go test` locally says nothing
+about whether CI will pass. `make hooks` installs a pre-commit hook that
+rejects staged Go files which are not gofmt-clean.
+
+Note the gofmt gate checks plain `gofmt -l`, not the stricter `gofmt -s`
+that `make fmt` applies.
+
 ```bash
+# Install the pre-commit gofmt hook (once per clone)
+make hooks
+
+# Run the full CI pipeline locally
+make ci
+
 # Build binaries
 make build
 
