@@ -30,7 +30,56 @@ type fakeBackend struct {
 	attachCalls []string // "resource/node" passed to AttachDisklessClient
 	detachCalls []string // "resource/node" passed to DetachDisklessClient
 
+	// snapshots maps "<volumePath>|<node>" to the snapshot names taken there,
+	// mirroring the backend's per-node, per-backing-volume snapshot namespace.
+	snapshots     map[string][]*sdspb.SnapshotInfo
+	snapCreateErr error
+	snapDeleteErr error
+	snapListErr   error
+	snapCreated   []string // "<volume>/<name>@<node>" passed to CreateSnapshot
+	snapDeleted   []string // "<volume>/<name>@<node>" passed to DeleteSnapshot
+
 	createCalls []createCall
+}
+
+// snapKey namespaces snapshots the way the backend does: per backing volume,
+// per node.
+func snapKey(volume, node string) string { return volume + "|" + node }
+
+func (f *fakeBackend) CreateSnapshot(_ context.Context, volume, snapshotName, node string) error {
+	if f.snapCreateErr != nil {
+		return f.snapCreateErr
+	}
+	f.snapCreated = append(f.snapCreated, volume+"/"+snapshotName+"@"+node)
+	if f.snapshots == nil {
+		f.snapshots = map[string][]*sdspb.SnapshotInfo{}
+	}
+	k := snapKey(volume, node)
+	f.snapshots[k] = append(f.snapshots[k], &sdspb.SnapshotInfo{Name: snapshotName, Volume: volume})
+	return nil
+}
+
+func (f *fakeBackend) DeleteSnapshot(_ context.Context, volume, snapshotName, node string) error {
+	if f.snapDeleteErr != nil {
+		return f.snapDeleteErr
+	}
+	f.snapDeleted = append(f.snapDeleted, volume+"/"+snapshotName+"@"+node)
+	k := snapKey(volume, node)
+	var kept []*sdspb.SnapshotInfo
+	for _, s := range f.snapshots[k] {
+		if s.GetName() != snapshotName {
+			kept = append(kept, s)
+		}
+	}
+	f.snapshots[k] = kept
+	return nil
+}
+
+func (f *fakeBackend) ListSnapshots(_ context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error) {
+	if f.snapListErr != nil {
+		return nil, f.snapListErr
+	}
+	return f.snapshots[snapKey(volume, node)], nil
 }
 
 type createCall struct {

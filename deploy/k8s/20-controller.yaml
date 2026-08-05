@@ -29,6 +29,19 @@ spec:
             - "--v=2"
           volumeMounts:
             - { name: socket-dir, mountPath: /csi }
+        # Drives CreateSnapshot/DeleteSnapshot when a VolumeSnapshot is created.
+        # Requires the cluster-wide VolumeSnapshot CRDs and snapshot-controller
+        # (see deploy/k8s/README.md) — k3s and most distros do not ship them.
+        - name: csi-snapshotter
+          image: registry.k8s.io/sig-storage/csi-snapshotter:v8.2.0
+          args:
+            - "--csi-address=/csi/csi.sock"
+            # An LVM/ZFS snapshot returns immediately, but the RPC still crosses
+            # SSH to a storage node; keep the same headroom as provisioning.
+            - "--timeout=120s"
+            - "--v=2"
+          volumeMounts:
+            - { name: socket-dir, mountPath: /csi }
         - name: plugin
           image: sds-csi:latest
           imagePullPolicy: IfNotPresent

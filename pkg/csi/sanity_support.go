@@ -16,6 +16,9 @@ type sanityBackend struct {
 	resources map[string]*sdspb.ResourceInfo
 	nodes     []*sdspb.NodeInfo
 	pools     []*sdspb.PoolInfo
+	// snapshots is keyed "<backing volume>|<node>", matching the backend's
+	// per-node snapshot namespace.
+	snapshots map[string][]*sdspb.SnapshotInfo
 }
 
 // NewSanityFakeBackend builds a fake backend seeded with the given node names.
@@ -85,6 +88,45 @@ func (b *sanityBackend) ListPools(_ context.Context) ([]*sdspb.PoolInfo, error) 
 
 func (b *sanityBackend) RegisterNode(_ context.Context, name, address string) (*sdspb.NodeInfo, error) {
 	return &sdspb.NodeInfo{Name: name, Address: address}, nil
+}
+
+func (b *sanityBackend) CreateSnapshot(_ context.Context, volume, snapshotName, node string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.snapshots == nil {
+		b.snapshots = map[string][]*sdspb.SnapshotInfo{}
+	}
+	k := volume + "|" + node
+	for _, s := range b.snapshots[k] {
+		if s.GetName() == snapshotName {
+			return nil // idempotent
+		}
+	}
+	b.snapshots[k] = append(b.snapshots[k], &sdspb.SnapshotInfo{Name: snapshotName, Volume: volume})
+	return nil
+}
+
+func (b *sanityBackend) DeleteSnapshot(_ context.Context, volume, snapshotName, node string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	k := volume + "|" + node
+	var kept []*sdspb.SnapshotInfo
+	for _, s := range b.snapshots[k] {
+		if s.GetName() != snapshotName {
+			kept = append(kept, s)
+		}
+	}
+	b.snapshots[k] = kept
+	return nil
+}
+
+func (b *sanityBackend) ListSnapshots(_ context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	src := b.snapshots[volume+"|"+node]
+	out := make([]*sdspb.SnapshotInfo, len(src))
+	copy(out, src)
+	return out, nil
 }
 
 func (b *sanityBackend) SetPrimary(_ context.Context, _, _ string, _ bool) error   { return nil }

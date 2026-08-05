@@ -1,0 +1,21 @@
+# VolumeSnapshotClass for SDS volumes.
+#
+# PREREQUISITE (cluster-wide, install once — k3s and most distros do NOT ship
+# these): the VolumeSnapshot CRDs and the snapshot-controller from
+# kubernetes-csi/external-snapshotter. Without them `kind: VolumeSnapshot` is
+# not a known type and this file will not apply. See deploy/k8s/README.md.
+#
+# deletionPolicy: Delete removes the underlying LVM/ZFS snapshot when the
+# VolumeSnapshot object is deleted. Use Retain if snapshots must outlive the
+# Kubernetes objects that reference them.
+#
+# NOTE: a snapshot is taken on ONE node's local backing volume — it is not
+# replicated by DRBD. It protects against logical faults (bad writes, accidental
+# deletion), not against losing that node. For off-cluster protection, ship the
+# snapshot somewhere else.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: sds-drbd-snapshot
+driver: sds.csi.liliang-cn.com
+deletionPolicy: Delete

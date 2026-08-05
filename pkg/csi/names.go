@@ -23,6 +23,21 @@ func sanitizeResourceName(in string) string {
 	return string(out)
 }
 
+// snapshotNamePrefix keeps generated snapshot names out of LVM's reserved
+// namespace. lvcreate rejects any LV whose name starts with "snapshot"
+// ("Names starting \"snapshot\" are reserved"), and Kubernetes names every
+// VolumeSnapshot "snapshot-<uuid>" — so the sanitized name would be rejected on
+// the node without this prefix.
+const snapshotNamePrefix = "sdssnap_"
+
+// sanitizeSnapshotName maps a CSI snapshot name (typically "snapshot-<uuid>") to
+// a name that LVM and ZFS both accept. The result is embedded in the CSI
+// snapshot ID, so create and delete always agree on it without a reverse
+// mapping.
+func sanitizeSnapshotName(in string) string {
+	return snapshotNamePrefix + sanitizeResourceName(in)
+}
+
 func isLetter(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 }

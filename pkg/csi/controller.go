@@ -185,6 +185,10 @@ func (s *controllerServer) ControllerGetCapabilities(context.Context, *csi.Contr
 	return &csi.ControllerGetCapabilitiesResponse{Capabilities: []*csi.ControllerServiceCapability{
 		cap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME),
 		cap(csi.ControllerServiceCapability_RPC_EXPAND_VOLUME),
+		// LIST_SNAPSHOTS is deliberately NOT advertised: snapshots live on
+		// individual nodes with no cluster-wide index, so the driver cannot
+		// enumerate them. Create/Delete are fully supported.
+		cap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT),
 	}}, nil
 }
 

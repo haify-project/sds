@@ -23,7 +23,17 @@ func TestControllerCapabilitiesAndValidation(t *testing.T) {
 	// ControllerGetCapabilities
 	caps, err := ctrl.ControllerGetCapabilities(context.Background(), &csi.ControllerGetCapabilitiesRequest{})
 	require.NoError(t, err)
-	assert.Len(t, caps.Capabilities, 2)
+	// CREATE_DELETE_VOLUME, EXPAND_VOLUME, CREATE_DELETE_SNAPSHOT. LIST_SNAPSHOTS
+	// is intentionally absent (no cluster-wide snapshot index to enumerate).
+	var types []csi.ControllerServiceCapability_RPC_Type
+	for _, c := range caps.Capabilities {
+		types = append(types, c.GetRpc().GetType())
+	}
+	assert.ElementsMatch(t, []csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+	}, types)
 
 	// ValidateVolumeCapabilities
 	_, err = ctrl.ValidateVolumeCapabilities(context.Background(), &csi.ValidateVolumeCapabilitiesRequest{})

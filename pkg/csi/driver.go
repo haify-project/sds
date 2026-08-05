@@ -48,6 +48,15 @@ type SDSBackend interface {
 	// DetachDisklessClient removes a diskless client added via
 	// AttachDisklessClient. Idempotent.
 	DetachDisklessClient(ctx context.Context, resource, node string) error
+	// CreateSnapshot takes a point-in-time snapshot of the backing volume
+	// (`<pool>/<lv>`) on one node that holds a diskful replica.
+	CreateSnapshot(ctx context.Context, volume, snapshotName, node string) error
+	// DeleteSnapshot removes a snapshot created by CreateSnapshot. Idempotent.
+	DeleteSnapshot(ctx context.Context, volume, snapshotName, node string) error
+	// ListSnapshots returns the snapshots of a backing volume on one node. The
+	// CSI driver uses it to make CreateSnapshot idempotent; it does not expose a
+	// ListSnapshots RPC (there is no cluster-wide snapshot index to enumerate).
+	ListSnapshots(ctx context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error)
 	// ResizeVolume expands the backing DRBD+LVM/ZFS volume to newSizeGB on
 	// all replica nodes. Called by ControllerExpandVolume.
 	ResizeVolume(ctx context.Context, resource string, volumeID uint32, sizeGB uint32) error
