@@ -1,0 +1,124 @@
+package csi
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+// volumeSource is where a new volume's initial contents come from: a block
+// device on a specific node, which the new volume's placement must therefore
+// include so the copy can run locally.
+type volumeSource struct {
+	// device is the path to copy from, e.g. /dev/sds_vg0/sdssnap_foo.
+	device string
+	// node holds device locally and must end up holding a replica of the new
+	// volume, since PopulateVolume runs the copy there.
+	node string
+	// cleanup removes anything created purely to serve this copy (the temporary
+	// snapshot taken when cloning a live volume). Nil when there is nothing to
+	// undo.
+	cleanup func()
+}
+
+// resolveVolumeSource turns a CSI VolumeContentSource into the concrete device
+// to copy from.
+//
+// Cloning an in-use volume by reading its backing store directly would capture a
+// torn, mid-write image, so a clone first takes a snapshot of the source and
+// copies from that instead: the snapshot is a single point in time, and the
+// caller drops it again once the copy is done.
+func (s *controllerServer) resolveVolumeSource(ctx context.Context, cs *csi.VolumeContentSource) (*volumeSource, error) {
+	switch src := cs.GetType().(type) {
+	case *csi.VolumeContentSource_Snapshot:
+		id := src.Snapshot.GetSnapshotId()
+		resource, node, snapName, err := parseSnapshotID(id)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "snapshot %q: %v", id, err)
+		}
+		res, gerr := s.backend.GetResource(ctx, resource)
+		if gerr != nil || res == nil {
+			return nil, status.Errorf(codes.NotFound, "source volume %q of snapshot %q no longer exists", resource, id)
+		}
+		pool, _, perr := snapshotSource(res)
+		if perr != nil {
+			return nil, status.Error(codes.FailedPrecondition, perr.Error())
+		}
+		// snapshotSource returns "<pool>/<lv>"; the snapshot lives in the same pool.
+		poolName := pool[:len(pool)-len(baseName(pool))-1]
+		return &volumeSource{device: fmt.Sprintf("/dev/%s/%s", poolName, snapName), node: node}, nil
+
+	case *csi.VolumeContentSource_Volume:
+		srcID := src.Volume.GetVolumeId()
+		res, gerr := s.backend.GetResource(ctx, srcID)
+		if gerr != nil || res == nil {
+			return nil, status.Errorf(codes.NotFound, "source volume %q not found", srcID)
+		}
+		volumePath, node, perr := snapshotSource(res)
+		if perr != nil {
+			return nil, status.Error(codes.FailedPrecondition, perr.Error())
+		}
+		poolName := volumePath[:len(volumePath)-len(baseName(volumePath))-1]
+
+		// Snapshot the source so the clone copies a consistent point in time
+		// even if the source is mounted and being written to.
+		tmp := sanitizeSnapshotName("clone-src-" + srcID)
+		if err := s.backend.CreateSnapshot(ctx, volumePath, tmp, node); err != nil {
+			return nil, status.Errorf(codes.Internal, "snapshot source %q for clone: %v", srcID, err)
+		}
+		return &volumeSource{
+			device: fmt.Sprintf("/dev/%s/%s", poolName, tmp),
+			node:   node,
+			cleanup: func() {
+				// Best effort: a leaked temporary snapshot wastes COW space but
+				// does not corrupt anything, and must not fail the clone.
+				_ = s.backend.DeleteSnapshot(context.WithoutCancel(ctx), volumePath, tmp, node)
+			},
+		}, nil
+
+	default:
+		return nil, status.Error(codes.InvalidArgument, "unsupported volume content source")
+	}
+}
+
+// baseName returns the segment after the last "/" of a "<pool>/<lv>" path.
+func baseName(path string) string {
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' {
+			return path[i+1:]
+		}
+	}
+	return path
+}
+
+// contentSourceOf echoes the request's content source back in the response, as
+// the CSI spec requires for a volume created from a snapshot or another volume.
+func contentSourceOf(cs *csi.VolumeContentSource) *csi.VolumeContentSource {
+	if cs == nil {
+		return nil
+	}
+	switch src := cs.GetType().(type) {
+	case *csi.VolumeContentSource_Snapshot:
+		return &csi.VolumeContentSource{Type: &csi.VolumeContentSource_Snapshot{
+			Snapshot: &csi.VolumeContentSource_SnapshotSource{SnapshotId: src.Snapshot.GetSnapshotId()},
+		}}
+	case *csi.VolumeContentSource_Volume:
+		return &csi.VolumeContentSource{Type: &csi.VolumeContentSource_Volume{
+			Volume: &csi.VolumeContentSource_VolumeSource{VolumeId: src.Volume.GetVolumeId()},
+		}}
+	}
+	return nil
+}
+
+// sourceSizeGiB reports the source resource's size in whole GiB, used to reject
+// a restore into a volume smaller than the data it must hold.
+func sourceSizeGiB(res *sdspb.ResourceInfo) uint32 {
+	if vols := res.GetVolumes(); len(vols) > 0 {
+		return uint32(vols[0].GetSizeGb())
+	}
+	return 0
+}

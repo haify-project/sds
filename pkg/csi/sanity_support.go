@@ -129,6 +129,10 @@ func (b *sanityBackend) ListSnapshots(_ context.Context, volume, node string) ([
 	return out, nil
 }
 
+func (b *sanityBackend) PopulateVolume(_ context.Context, _ string, _ uint32, _, _ string) (uint64, error) {
+	return 0, nil
+}
+
 func (b *sanityBackend) SetPrimary(_ context.Context, _, _ string, _ bool) error   { return nil }
 func (b *sanityBackend) PromoteForNode(_ context.Context, _, _ string) error       { return nil }
 func (b *sanityBackend) SetSecondary(_ context.Context, _, _ string) error         { return nil }

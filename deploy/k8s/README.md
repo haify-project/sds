@@ -75,6 +75,36 @@ deletion, a failed migration), not against losing that node: DRBD faithfully
 replicates every write, including destructive ones, so replication is not a
 backup. For protection against losing the cluster, ship snapshots off-site.
 
-Restoring a snapshot into a **new** volume (`dataSource` on a PVC) and volume
-cloning are not implemented yet — both need the new volume's data to be
-populated before first use.
+### Restoring and cloning
+
+Both are supported via a PVC `dataSource`:
+
+```yaml
+# restore a snapshot into a new volume
+spec:
+  dataSource: { name: my-snap, kind: VolumeSnapshot, apiGroup: snapshot.storage.k8s.io }
+
+# clone an existing volume
+spec:
+  dataSource: { name: my-pvc, kind: PersistentVolumeClaim }
+```
+
+The new volume is created empty, then filled by copying the source into its
+**DRBD device** on a node that holds one of its replicas — so DRBD replicates
+the data to every peer as part of the normal write path. Placement is forced to
+include the node holding the source so the copy stays local.
+
+Two consequences worth knowing:
+
+- **Cloning snapshots the source first.** Reading a mounted volume's backing
+  store directly would capture a torn image, so a clone takes an internal
+  snapshot, copies from that, and drops it again.
+- **`CreateVolume` blocks for the duration of the copy.** For large volumes,
+  raise the external-provisioner `--timeout` accordingly. If the copy fails the
+  half-written volume is destroyed so a retry starts clean; a controller crash
+  mid-copy is the one window that can leave an empty volume behind.
+
+Application-level consistency is still the application's job: snapshot a
+database after a `CHECKPOINT`/`FSYNC` (or quiesce it) if you want more than
+crash consistency. PostgreSQL and Redis both replay cleanly from a
+crash-consistent snapshot in practice.

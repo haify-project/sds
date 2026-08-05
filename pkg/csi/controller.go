@@ -91,6 +91,21 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		}
 	}
 
+	// A volume restored from a snapshot, or cloned from another volume, must be
+	// filled before first use. Resolve where the data comes from first: the copy
+	// runs on the node holding the source, so that node has to be among the new
+	// volume's replicas.
+	var source *volumeSource
+	if cs := req.GetVolumeContentSource(); cs != nil {
+		source, err = s.resolveVolumeSource(ctx, cs)
+		if err != nil {
+			return nil, err
+		}
+		if source.cleanup != nil {
+			defer source.cleanup()
+		}
+	}
+
 	nodes, err := s.backend.ListNodes(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list nodes: %v", err)
@@ -102,9 +117,19 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	// Only consider nodes that actually host the requested pool: replicas
 	// placed on a node without the backing pool fail at LV-creation time.
 	candidates := nodesWithPool(nodes, pools, params.Pool)
-	replicaNodes, err := selectReplicaNodes(candidates, requisiteNodes(req.GetAccessibilityRequirements()), params.Replicas)
+	requisite := requisiteNodes(req.GetAccessibilityRequirements())
+	if source != nil {
+		// Put the source's node first so a replica lands there and the copy is
+		// local; without this the new volume could be placed entirely elsewhere.
+		requisite = append([]string{source.node}, requisite...)
+	}
+	replicaNodes, err := selectReplicaNodes(candidates, requisite, params.Replicas)
 	if err != nil {
 		return nil, status.Errorf(codes.ResourceExhausted, "pool %q: %v", params.Pool, err)
+	}
+	if source != nil && !containsNode(replicaNodes, source.node) {
+		return nil, status.Errorf(codes.ResourceExhausted,
+			"node %q holds the source data but cannot host a replica of the new volume (pool %q)", source.node, params.Pool)
 	}
 
 	labels := make(map[string]string, len(params.ResourceLabels)+1)
@@ -134,12 +159,40 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Errorf(codes.Internal, "create resource: %v", err)
 	}
 
+	// Fill the new volume from its source. This must happen before the volume is
+	// ever handed out, so on failure the half-written resource is destroyed
+	// rather than returned: a retry then starts from a clean, empty volume.
+	//
+	// (If the controller itself dies mid-copy the resource survives empty, and a
+	// retry would take the "already exists" path above and return it as ready.
+	// That window is not closed here; it needs persisted provisioning state.)
+	if source != nil {
+		if _, perr := s.backend.PopulateVolume(ctx, name, 0, source.device, source.node); perr != nil {
+			if derr := s.backend.DeleteResource(context.WithoutCancel(ctx), name); derr != nil {
+				s.log.Error("failed to roll back a volume whose restore failed; it may need manual cleanup",
+					zap.String("volume", name), zap.Error(derr))
+			}
+			return nil, status.Errorf(codes.Internal, "populate %q from %q: %v", name, source.device, perr)
+		}
+	}
+
 	return &csi.CreateVolumeResponse{Volume: &csi.Volume{
 		VolumeId:           name,
 		CapacityBytes:      int64(sizeGB) * giB,
 		AccessibleTopology: topologyFor(replicaNodes, params.AllowRemoteVolumeAccess),
 		VolumeContext:      volumeContextFor(params.AllowRemoteVolumeAccess),
+		ContentSource:      contentSourceOf(req.GetVolumeContentSource()),
 	}}, nil
+}
+
+// containsNode reports whether nodes includes want.
+func containsNode(nodes []string, want string) bool {
+	for _, n := range nodes {
+		if n == want {
+			return true
+		}
+	}
+	return false
 }
 
 // topologyFor decides where the CO may schedule Pods that use the volume. By
@@ -189,6 +242,7 @@ func (s *controllerServer) ControllerGetCapabilities(context.Context, *csi.Contr
 		// individual nodes with no cluster-wide index, so the driver cannot
 		// enumerate them. Create/Delete are fully supported.
 		cap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT),
+		cap(csi.ControllerServiceCapability_RPC_CLONE_VOLUME),
 	}}, nil
 }
 

@@ -38,6 +38,8 @@ type fakeBackend struct {
 	snapListErr   error
 	snapCreated   []string // "<volume>/<name>@<node>" passed to CreateSnapshot
 	snapDeleted   []string // "<volume>/<name>@<node>" passed to DeleteSnapshot
+	populateErr   error
+	populated     []string // "<res>/<vol><-<device>@<node>" passed to PopulateVolume
 
 	createCalls []createCall
 }
@@ -73,6 +75,14 @@ func (f *fakeBackend) DeleteSnapshot(_ context.Context, volume, snapshotName, no
 	}
 	f.snapshots[k] = kept
 	return nil
+}
+
+func (f *fakeBackend) PopulateVolume(_ context.Context, resource string, volumeID uint32, sourceDevice, node string) (uint64, error) {
+	if f.populateErr != nil {
+		return 0, f.populateErr
+	}
+	f.populated = append(f.populated, fmt.Sprintf("%s/%d<-%s@%s", resource, volumeID, sourceDevice, node))
+	return 1 << 20, nil
 }
 
 func (f *fakeBackend) ListSnapshots(_ context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error) {

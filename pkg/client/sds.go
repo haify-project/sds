@@ -1248,6 +1248,26 @@ func (c *SDSClient) DeleteSnapshotSchedule(ctx context.Context, name string) err
 }
 
 // RestoreSnapshot restores a snapshot to its source volume
+// PopulateVolume copies sourceDevice (an LVM/ZFS snapshot, or another volume's
+// backing store) into an already-created, still-empty resource. It backs CSI
+// restore-from-snapshot and volume cloning; unlike RestoreSnapshot it fills a
+// different, new volume rather than merging into the source's own origin.
+func (c *SDSClient) PopulateVolume(ctx context.Context, resource string, volumeID uint32, sourceDevice, node string) (uint64, error) {
+	resp, err := c.client.PopulateVolume(ctx, &sdspb.PopulateVolumeRequest{
+		Resource:     resource,
+		VolumeId:     volumeID,
+		SourceDevice: sourceDevice,
+		Node:         node,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if !resp.Success {
+		return 0, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.BytesCopied, nil
+}
+
 func (c *SDSClient) RestoreSnapshot(ctx context.Context, volume, snapshotName, node string) error {
 	req := &sdspb.RestoreSnapshotRequest{
 		Volume:       volume,

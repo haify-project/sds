@@ -33,6 +33,7 @@ func TestControllerCapabilitiesAndValidation(t *testing.T) {
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+		csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
 	}, types)
 
 	// ValidateVolumeCapabilities

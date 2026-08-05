@@ -57,6 +57,10 @@ type SDSBackend interface {
 	// CSI driver uses it to make CreateSnapshot idempotent; it does not expose a
 	// ListSnapshots RPC (there is no cluster-wide snapshot index to enumerate).
 	ListSnapshots(ctx context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error)
+	// PopulateVolume copies sourceDevice into an already-created, still-empty
+	// resource, on a node that holds one of its replicas. It backs
+	// restore-from-snapshot and volume cloning.
+	PopulateVolume(ctx context.Context, resource string, volumeID uint32, sourceDevice, node string) (uint64, error)
 	// ResizeVolume expands the backing DRBD+LVM/ZFS volume to newSizeGB on
 	// all replica nodes. Called by ControllerExpandVolume.
 	ResizeVolume(ctx context.Context, resource string, volumeID uint32, sizeGB uint32) error

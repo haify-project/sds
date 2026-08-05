@@ -179,6 +179,93 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 	return nil
 }
 
+// PopulateVolume copies sourceDevice into an already-created, still-empty DRBD
+// resource. It is how a CSI restore-from-snapshot (and volume clone) gets data
+// into a brand-new volume; RestoreSnapshot, by contrast, merges a snapshot back
+// into its own origin in place.
+//
+// The copy is written to the target's DRBD device rather than its backing LV, so
+// DRBD replicates every block to the peers as part of the write path — no
+// separate per-replica copy, and no risk of replicas silently diverging.
+//
+// The caller MUST ensure the resource is newly created and not yet in use: this
+// overwrites it from byte zero. node must hold a diskful replica of resource and
+// have sourceDevice locally.
+func (sm *SnapshotManager) PopulateVolume(ctx context.Context, resource string, volumeID uint32, sourceDevice, node string) (uint64, error) {
+	if strings.TrimSpace(resource) == "" {
+		return 0, fmt.Errorf("resource is required")
+	}
+	if strings.TrimSpace(sourceDevice) == "" {
+		return 0, fmt.Errorf("source device is required")
+	}
+	address := sm.controller.ResolveHost(node)
+	if address == "" {
+		return 0, fmt.Errorf("node not found: %s", node)
+	}
+
+	target := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, volumeID)
+
+	sm.controller.logger.Info("Populating volume from source device",
+		zap.String("resource", resource),
+		zap.Uint32("volume_id", volumeID),
+		zap.String("source", sourceDevice),
+		zap.String("target", target),
+		zap.String("node", node))
+
+	// The target must be Primary to be writable. Promote before the copy and
+	// demote afterwards so the new volume is left exactly as a freshly created
+	// one would be (Secondary everywhere, ready for the node plugin to promote).
+	if err := sm.controller.resources.SetPrimary(ctx, resource, node, false); err != nil {
+		return 0, fmt.Errorf("promote %s on %s for populate: %w", resource, node, err)
+	}
+	defer func() {
+		if err := sm.controller.resources.SetSecondary(ctx, resource, node); err != nil {
+			sm.controller.logger.Warn("Failed to demote after populate; the volume is still usable but stays Primary",
+				zap.String("resource", resource), zap.String("node", node), zap.Error(err))
+		}
+	}()
+
+	// Copy exactly as many bytes as the DRBD device holds, not the whole source.
+	//
+	// With `meta-disk internal` a DRBD device is SMALLER than the backing volume
+	// it sits on — the tail of that volume holds DRBD's own metadata. A snapshot
+	// of the backing volume therefore contains [filesystem][DRBD metadata], and
+	// blindly copying all of it into the (smaller) target device both overflows
+	// it and would drag the source's metadata into the target's data area.
+	// Bounding the copy by the target's size takes precisely the filesystem
+	// region and leaves the target's own metadata untouched.
+	//
+	// conv=fsync forces the copy to reach stable storage (and, through DRBD, the
+	// peers) before dd exits, so a later promote elsewhere cannot read stale
+	// data. Errors are fatal: a partial copy must never look like success.
+	cmd := fmt.Sprintf(
+		"set -e; SZ=$(sudo blockdev --getsize64 %s); "+
+			"sudo dd if=%s of=%s bs=4M count=$SZ iflag=fullblock,count_bytes oflag=direct conv=fsync status=none; "+
+			"sudo blockdev --flushbufs %s; echo $SZ",
+		target, sourceDevice, target, target)
+	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
+	if err != nil {
+		return 0, fmt.Errorf("copy %s -> %s on %s: %w", sourceDevice, target, node, err)
+	}
+	if !result.AllSuccess() {
+		return 0, fmt.Errorf("copy %s -> %s on %s failed: %s", sourceDevice, target, node, result.FailureDetails())
+	}
+
+	var copied uint64
+	if hr, ok := result.Hosts[address]; ok && hr != nil {
+		if n, perr := strconv.ParseUint(strings.TrimSpace(hr.Output), 10, 64); perr == nil {
+			copied = n
+		}
+	}
+
+	sm.controller.logger.Info("Volume populated",
+		zap.String("resource", resource),
+		zap.String("source", sourceDevice),
+		zap.Uint64("bytes", copied))
+
+	return copied, nil
+}
+
 func parseVolumePath(volume string) (vg, lv string) {
 	parts := strings.Split(volume, "/")
 	if len(parts) >= 2 {

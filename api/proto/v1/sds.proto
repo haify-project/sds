@@ -196,6 +196,17 @@ service SDSController {
       additional_bindings { get: "/v1/volumes/{volume}/snapshots"; }
     };
   }
+  // PopulateVolume copies a source block device (an LVM/ZFS snapshot, or another
+  // resource's backing volume) into an ALREADY-CREATED, still-empty DRBD
+  // resource. Unlike RestoreSnapshot — which merges a snapshot back into its own
+  // origin in place — this fills a *different*, new volume, which is what CSI
+  // restore-from-snapshot and volume cloning need.
+  //
+  // The copy is written to the target's DRBD device (not its backing LV) on a
+  // node that holds a replica, so DRBD replicates it to every peer for free.
+  rpc PopulateVolume(PopulateVolumeRequest) returns (PopulateVolumeResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/populate"; body: "*"; };
+  }
 
   // Snapshot schedule operations (cron-driven snapshots + GFS retention)
   rpc CreateSnapshotSchedule(CreateSnapshotScheduleRequest) returns (CreateSnapshotScheduleResponse) {
@@ -1467,6 +1478,25 @@ message RestoreSnapshotRequest {
 message RestoreSnapshotResponse {
   bool success = 1;
   string message = 2;
+}
+
+message PopulateVolumeRequest {
+  // resource / volume_id identify the freshly created, still-empty target.
+  string resource = 1;
+  uint32 volume_id = 2;
+  // source_device is the block device to copy FROM, on `node`: an LVM snapshot
+  // (/dev/<vg>/<snap>), a ZFS zvol, or another resource's backing volume.
+  string source_device = 3;
+  // node must hold a diskful replica of `resource` AND have source_device
+  // locally; the copy runs entirely on that node.
+  string node = 4;
+}
+
+message PopulateVolumeResponse {
+  bool success = 1;
+  string message = 2;
+  // bytes_copied is what dd reported, for logging and progress reporting.
+  uint64 bytes_copied = 3;
 }
 
 message ListSnapshotsRequest {

@@ -1320,6 +1320,21 @@ func (s *Server) RestoreSnapshot(ctx context.Context, req *sdspb.RestoreSnapshot
 	}, nil
 }
 
+// PopulateVolume fills a freshly created, still-empty resource from a source
+// block device (a snapshot, or another volume's backing store). It is the
+// server side of CSI restore-from-snapshot and volume cloning.
+func (s *Server) PopulateVolume(ctx context.Context, req *sdspb.PopulateVolumeRequest) (*sdspb.PopulateVolumeResponse, error) {
+	copied, err := s.snapshots.PopulateVolume(ctx, req.GetResource(), req.GetVolumeId(), req.GetSourceDevice(), req.GetNode())
+	if err != nil {
+		return &sdspb.PopulateVolumeResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.PopulateVolumeResponse{
+		Success:     true,
+		Message:     "Volume populated successfully",
+		BytesCopied: copied,
+	}, nil
+}
+
 func (s *Server) ListSnapshots(ctx context.Context, req *sdspb.ListSnapshotsRequest) (*sdspb.ListSnapshotsResponse, error) {
 	snapshots, err := s.snapshots.ListSnapshots(ctx, req.Volume, req.Node)
 	if err != nil {
