@@ -109,6 +109,16 @@ const SYNC_REPLICATION_STATES = new Set([
   'WFBitMapT',
 ]);
 
+// csiManagedLabel is stamped on every resource the Kubernetes CSI driver
+// provisions (see pkg/csi CreateVolume). Such a volume's lifecycle belongs to
+// Kubernetes: deleting it here strands the PersistentVolume that still
+// references it, so the UI marks it and warns before a manual delete.
+const csiManagedLabel = 'sds.csi/managed-by';
+
+function isCsiManaged(resource: Resource): boolean {
+  return resource.labels?.[csiManagedLabel] === 'csi';
+}
+
 // isPeerSyncing reports whether a peer node-state represents a resync in
 // progress. The local node has no replication relationship (empty
 // replicationState) so it never counts as syncing.
@@ -304,6 +314,16 @@ function ResourceRow({
           <div className="min-w-0 space-y-1 whitespace-normal">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{resource.name}</span>
+              {isCsiManaged(resource) && (
+                <Badge
+                  variant="outline"
+                  className="border-sky-500/40 text-sky-600 dark:text-sky-400"
+                  title="Provisioned by the Kubernetes CSI driver. Its lifecycle belongs to Kubernetes — delete the PersistentVolumeClaim instead of removing it here."
+                >
+                  <Boxes className="mr-1 h-3 w-3" />
+                  Kubernetes
+                </Badge>
+              )}
               {resource.quorumRisk && (
                 <Badge
                   variant="outline"
@@ -608,6 +628,7 @@ function ResourceActionsMenu({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         resourceName={resource.name}
+        csiManaged={isCsiManaged(resource)}
       />
     </>
   );
@@ -2073,10 +2094,12 @@ function DeleteResourceDialog({
   open,
   onOpenChange,
   resourceName,
+  csiManaged = false,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   resourceName: string;
+  csiManaged?: boolean;
 }) {
   const queryClient = useQueryClient();
 
@@ -2099,6 +2122,14 @@ function DeleteResourceDialog({
             This removes the DRBD resource and destroys all backing volumes and
             their data on every node. This action cannot be undone.
           </AlertDialogDescription>
+          {csiManaged && (
+            <AlertDialogDescription className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+              This volume was provisioned by the Kubernetes CSI driver. Deleting
+              it here leaves the PersistentVolume that still references it
+              stranded, and Kubernetes will not recreate the data. Delete the
+              PersistentVolumeClaim instead and let the driver clean up.
+            </AlertDialogDescription>
+          )}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
