@@ -138,7 +138,9 @@ func (b *sanityBackend) PromoteForNode(_ context.Context, _, _ string) error    
 func (b *sanityBackend) SetSecondary(_ context.Context, _, _ string) error         { return nil }
 func (b *sanityBackend) AttachDisklessClient(_ context.Context, _, _ string) error { return nil }
 func (b *sanityBackend) DetachDisklessClient(_ context.Context, _, _ string) error { return nil }
-func (b *sanityBackend) ResizeVolume(_ context.Context, _ string, _ uint32, _ uint32) error { return nil }
+func (b *sanityBackend) ResizeVolume(_ context.Context, _ string, _ uint32, _ uint32) error {
+	return nil
+}
 
 var _ SDSBackend = (*sanityBackend)(nil)
 

@@ -15,7 +15,7 @@ func TestGatewayManagerHostsAndList(t *testing.T) {
 
 	// ListGateways with no DB returns empty slice
 	_, _ = m.ListGateways(context.Background())
-	
+
 }
 
 func TestGatewayConfigHelpersExtra(t *testing.T) {

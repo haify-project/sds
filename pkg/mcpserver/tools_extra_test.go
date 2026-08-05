@@ -4,16 +4,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	"github.com/liliang-cn/sds/pkg/client"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/liliang-cn/sds/pkg/client"
 )
 
 type mockExtraClient struct {
 	mockClient
-	gateways []*sdspb.GatewayInfo
+	gateways  []*sdspb.GatewayInfo
 	haConfigs []*sdspb.HaConfigInfo
 }
 
@@ -83,25 +83,33 @@ func TestMCPExtraTools(t *testing.T) {
 	// Call sds_node_list
 	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_node_list"})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_pool_list
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_pool_list"})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_gateway_list
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_gateway_list"})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_ha_list
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_ha_list"})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_ha_create
@@ -112,7 +120,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_ha_evict
@@ -123,7 +133,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_snapshot_create
@@ -137,7 +149,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_snapshot_delete
@@ -151,7 +165,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_gateway_create_nfs
@@ -164,7 +180,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_gateway_create_iscsi
@@ -177,7 +195,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_gateway_create_nvme
@@ -190,7 +210,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// Call sds_gateway_delete
@@ -201,7 +223,9 @@ func TestMCPExtraTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 }
 
@@ -260,7 +284,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 	// sds_self_ha_status
 	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_self_ha_status"})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_self_ha_enable
@@ -272,7 +298,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_self_ha_disable
@@ -283,7 +311,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_nfs_exports list, add, remove
@@ -292,7 +322,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -305,7 +337,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -317,7 +351,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_iscsi_luns list, add, remove
@@ -326,7 +362,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -339,7 +377,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -351,7 +391,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_nvme_namespaces list, add, remove
@@ -360,7 +402,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -372,26 +416,30 @@ func TestMCPExtraSubTools(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "sds_nvme_namespaces",
 		Arguments: map[string]interface{}{
-			"resource": "gw1",
-			"action":   "remove",
+			"resource":     "gw1",
+			"action":       "remove",
 			"namespace_id": 1,
 		},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 }
 
 func (m *mockExtraClient) ListISCSIInitiators(_ context.Context, _ string) ([]string, error) {
 	return []string{"iqn.init"}, nil
 }
-func (m *mockExtraClient) AddISCSIInitiator(_ context.Context, _, _ string) error { return nil }
+func (m *mockExtraClient) AddISCSIInitiator(_ context.Context, _, _ string) error    { return nil }
 func (m *mockExtraClient) RemoveISCSIInitiator(_ context.Context, _, _ string) error { return nil }
 
 func (m *mockExtraClient) GetISCSIChap(_ context.Context, _ string) (*sdspb.GetISCSIChapResponse, error) {
@@ -402,7 +450,7 @@ func (m *mockExtraClient) SetISCSIChap(_ context.Context, _, _, _ string, _ bool
 func (m *mockExtraClient) ListNVMeHosts(_ context.Context, _ string) ([]string, error) {
 	return []string{"nqn.host"}, nil
 }
-func (m *mockExtraClient) AddNVMeHost(_ context.Context, _, _ string) error { return nil }
+func (m *mockExtraClient) AddNVMeHost(_ context.Context, _, _ string) error    { return nil }
 func (m *mockExtraClient) RemoveNVMeHost(_ context.Context, _, _ string) error { return nil }
 
 func (m *mockExtraClient) ListSnapshotSchedules(_ context.Context) ([]*sdspb.SnapshotScheduleInfo, error) {
@@ -412,11 +460,13 @@ func (m *mockExtraClient) CreateSnapshotSchedule(_ context.Context, _, _ string,
 	return nil
 }
 func (m *mockExtraClient) DeleteSnapshotSchedule(_ context.Context, _ string) error { return nil }
-func (m *mockExtraClient) RestoreSnapshot(_ context.Context, _, _, _ string) error { return nil }
+func (m *mockExtraClient) RestoreSnapshot(_ context.Context, _, _, _ string) error  { return nil }
 
-func (m *mockExtraClient) UpdateResourceOptions(_ context.Context, _ string, _ map[string]string) error { return nil }
+func (m *mockExtraClient) UpdateResourceOptions(_ context.Context, _ string, _ map[string]string) error {
+	return nil
+}
 func (m *mockExtraClient) SetPrimary(_ context.Context, _, _ string, _ bool) error { return nil }
-func (m *mockExtraClient) SetSecondary(_ context.Context, _, _ string) error { return nil }
+func (m *mockExtraClient) SetSecondary(_ context.Context, _, _ string) error       { return nil }
 
 func TestMCPExtraSubTools2(t *testing.T) {
 	mc := &mockExtraClient{}
@@ -428,7 +478,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -436,7 +488,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "add", "iqn": "iqn.init"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -444,7 +498,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "remove", "iqn": "iqn.init"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_iscsi_chap get, set
@@ -453,7 +509,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "get"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -461,7 +519,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "set", "username": "user", "password": "pass"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_nvme_hosts list, add, remove
@@ -470,7 +530,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -478,7 +540,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "add", "host_nqn": "nqn.host"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -486,7 +550,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "remove", "host_nqn": "nqn.host"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_snapshot_schedule_list, create, delete
@@ -494,7 +560,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Name: "sds_snapshot_schedule_list",
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -502,7 +570,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "res1", "cron": "0 * * * *", "keep_daily": 7},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -510,7 +580,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"name": "res1"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_snapshot_restore
@@ -519,7 +591,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "res1", "name": "snap1", "node": "n1", "pool": "vg0"},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 
 	// sds_resource_set_options
@@ -528,7 +602,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 		Arguments: map[string]interface{}{"resource": "res1", "options": map[string]string{"opt": "val"}},
 	})
 	require.NoError(t, err)
-	if res.IsError { t.Logf("tool error: %+v", res.Content[0]) }
+	if res.IsError {
+		t.Logf("tool error: %+v", res.Content[0])
+	}
 	assert.False(t, res.IsError)
 }
 
@@ -602,7 +678,7 @@ func (m *mockExtraClient) ResourceStatus(_ context.Context, name string) (*sdspb
 	return &sdspb.ResourceStatus{Name: name}, nil
 }
 func (m *mockExtraClient) AddVolume(_ context.Context, _, _, _ string, _ uint32) error { return nil }
-func (m *mockExtraClient) RemoveVolume(_ context.Context, _ string, _ uint32) error     { return nil }
+func (m *mockExtraClient) RemoveVolume(_ context.Context, _ string, _ uint32) error    { return nil }
 func (m *mockExtraClient) ResizeVolume(_ context.Context, _ string, _ uint32, _ uint32) error {
 	return nil
 }
@@ -636,7 +712,7 @@ func TestMCPExtraSubTools4(t *testing.T) {
 		Arguments: map[string]interface{}{"address": "10.0.0.2"},
 	})
 	require.NoError(t, err)
-	
+
 	assert.False(t, res.IsError)
 
 	// sds_pool_add_disk

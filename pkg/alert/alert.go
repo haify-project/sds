@@ -38,7 +38,7 @@ type ResourceLister interface {
 
 // AlertPayload is the JSON structure posted to the WebhookURL.
 type AlertPayload struct {
-	Event     string    `json:"event"`      // "degraded" or "resolved"
+	Event     string    `json:"event"` // "degraded" or "resolved"
 	Resource  string    `json:"resource"`
 	Node      string    `json:"node,omitempty"`
 	DiskState string    `json:"disk_state,omitempty"`

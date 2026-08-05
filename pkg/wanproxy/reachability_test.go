@@ -149,4 +149,3 @@ func TestStatusReportsUnreachableAndInactive(t *testing.T) {
 		t.Fatal("Healthy() must be false when nothing is up")
 	}
 }
-
