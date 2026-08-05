@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api, HaStartItem, OcfAgentSpec } from '@/services/api';
 import { OcfAgentBuilder } from '@/components/OcfAgentBuilder';

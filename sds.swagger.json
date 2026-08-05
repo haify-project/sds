@@ -2349,6 +2349,47 @@
         ]
       }
     },
+    "/v1/resources/{resource}/populate": {
+      "post": {
+        "summary": "PopulateVolume copies a source block device (an LVM/ZFS snapshot, or another\nresource's backing volume) into an ALREADY-CREATED, still-empty DRBD\nresource. Unlike RestoreSnapshot — which merges a snapshot back into its own\norigin in place — this fills a *different*, new volume, which is what CSI\nrestore-from-snapshot and volume cloning need.",
+        "description": "The copy is written to the target's DRBD device (not its backing LV) on a\nnode that holds a replica, so DRBD replicates it to every peer for free.",
+        "operationId": "SDSController_PopulateVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PopulateVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "description": "resource / volume_id identify the freshly created, still-empty target.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerPopulateVolumeBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{resource}/primary": {
       "post": {
         "operationId": "SDSController_SetPrimary",
@@ -4093,6 +4134,23 @@
         },
         "fstype": {
           "type": "string"
+        }
+      }
+    },
+    "SDSControllerPopulateVolumeBody": {
+      "type": "object",
+      "properties": {
+        "volumeId": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "sourceDevice": {
+          "type": "string",
+          "description": "source_device is the block device to copy FROM, on `node`: an LVM snapshot\n(/dev/\u003cvg\u003e/\u003csnap\u003e), a ZFS zvol, or another resource's backing volume."
+        },
+        "node": {
+          "type": "string",
+          "description": "node must hold a diskful replica of `resource` AND have source_device\nlocally; the copy runs entirely on that node."
         }
       }
     },
@@ -6242,6 +6300,22 @@
         },
         "compression": {
           "type": "string"
+        }
+      }
+    },
+    "v1PopulateVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "bytesCopied": {
+          "type": "string",
+          "format": "uint64",
+          "description": "bytes_copied is what dd reported, for logging and progress reporting."
         }
       }
     },

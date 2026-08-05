@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/container-storage-interface/spec v1.12.0
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
 	github.com/kubernetes-csi/csi-test/v5 v5.3.1
 	github.com/liliang-cn/dispatch v1.1.6
@@ -22,7 +23,7 @@ require (
 	go.etcd.io/bbolt v1.4.3
 	go.uber.org/zap v1.28.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa
-	google.golang.org/grpc v1.81.1
+	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	k8s.io/mount-utils v0.31.0
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
@@ -46,7 +47,6 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
-	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
