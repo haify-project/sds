@@ -2258,8 +2258,17 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		zap.String("dbRes.Nodes", dbRes.Nodes),
 		zap.Strings("parsed_nodeAddresses", nodeAddresses))
 
-	// Query live DRBD status from first available host
-	result, err := rm.deployment.DRBDStatus(ctx, []string{hosts[0]}, name)
+	// Ask hosts in turn until one answers. Asking only hosts[0] made a resource
+	// entirely unobservable whenever its first node was down — role Unknown, no
+	// node states, every peer greyed out — while healthy peers sat there able to
+	// answer. Any live replica reports the whole resource, so which one replies
+	// does not matter; that it is reachable does.
+	// answeredAt indexes both hosts and nodeAddresses: resourceHosts builds them
+	// in the same order, so the node that answered can be named. Both parsers
+	// need that name — the status output describes the answering node as
+	// "local", and filing it under the wrong node reports a machine that is
+	// down as healthy.
+	result, answeredAt, err := rm.drbdStatusFromAnyHost(ctx, hosts, name)
 
 	var volumes []*ResourceVolumeInfo
 	nodeStates := make(map[string]*ResourceNodeState)
@@ -2297,7 +2306,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 				}
 
 				// Parse node states from status output
-				nodeStates = parseNodeStatesFromStatus(r.Output, nodeAddresses)
+				nodeStates = parseNodeStatesFromStatus(r.Output, nodesLocalFirst(nodeAddresses, answeredAt))
 
 				rm.controller.logger.Debug("Parsed node states",
 					zap.Int("count", len(nodeStates)))
@@ -2309,13 +2318,14 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 
 	// Prefer structured `drbdsetup status --json`: it is keyed by node name and
 	// exposes per-peer replication state and resync completion (percent) that
-	// the plain-text parse above cannot surface. The queried node (hosts[0])
-	// corresponds to the first configured node, so it is the JSON "local" node.
+	// the plain-text parse above cannot surface. It must query the same host the
+	// text status came from: the JSON "local" node is whichever node answered,
+	// not whichever is configured first.
 	// On any failure (older drbd without --json, non-zero exit, parse error) we
 	// keep the text-parsed states above and degrade gracefully.
-	if len(nodeAddresses) > 0 {
-		localNode := nodeAddresses[0]
-		if jsonResult, jerr := rm.deployment.DRBDStatusJSON(ctx, []string{hosts[0]}, name); jerr == nil {
+	if len(nodeAddresses) > 0 && answeredAt >= 0 && answeredAt < len(nodeAddresses) {
+		localNode := nodeAddresses[answeredAt]
+		if jsonResult, jerr := rm.deployment.DRBDStatusJSON(ctx, []string{hosts[answeredAt]}, name); jerr == nil {
 			for _, r := range jsonResult.Hosts {
 				if !r.Success {
 					continue
@@ -5426,4 +5436,50 @@ func wanStatusMessage(st *wanproxy.MultiStatus) string {
 		problems = append(problems, "DR WAN endpoint unreachable")
 	}
 	return strings.Join(problems, "; ")
+}
+
+// drbdStatusFromAnyHost returns the first usable `drbdadm status` answer.
+//
+// A host is skipped both when it cannot be reached and when the command it ran
+// failed: a node that answers "no resources defined" is no more informative
+// than one that answers nothing. The last error is returned when none work, so
+// the caller can still render the resource with unknown state rather than
+// failing outright — the UI has to draw something either way.
+func (rm *ResourceManager) drbdStatusFromAnyHost(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, int, error) {
+	var lastErr error
+	for i, host := range hosts {
+		result, err := rm.deployment.DRBDStatus(ctx, []string{host}, resource)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if result == nil || !result.AllSuccess() {
+			lastErr = fmt.Errorf("drbdadm status for %s on %s did not succeed", resource, host)
+			continue
+		}
+		return result, i, nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no hosts to ask for %s", resource)
+	}
+	return nil, -1, lastErr
+}
+
+// nodesLocalFirst returns nodes reordered so the one at idx comes first.
+//
+// parseNodeStatesFromStatus treats the head of the list as the node the status
+// was read from, which held while only hosts[0] was ever asked. Once any
+// reachable host can answer, the caller has to say which one did.
+func nodesLocalFirst(nodes []string, idx int) []string {
+	if idx <= 0 || idx >= len(nodes) {
+		return nodes
+	}
+	out := make([]string, 0, len(nodes))
+	out = append(out, nodes[idx])
+	for i, n := range nodes {
+		if i != idx {
+			out = append(out, n)
+		}
+	}
+	return out
 }

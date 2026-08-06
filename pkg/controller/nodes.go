@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -407,6 +408,12 @@ func (nm *NodeManager) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
 	for _, node := range nm.nodes {
 		nodes = append(nodes, node)
 	}
+
+	// Sorted by name, because a map range gives a different order on almost
+	// every call and the UI redraws this list on each poll: rows jump around
+	// while being read, and a reordered list is indistinguishable from one
+	// where something actually changed.
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 
 	return nodes, nil
 }
