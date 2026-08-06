@@ -198,6 +198,21 @@ webhook_min_severity = "warning"   # info | warning | critical
 # headers = { X-Token = "..." }
 ```
 
+### Cross-site (WAN) maintenance
+
+A WAN resource has one replication tunnel ("leg") per primary-site node, each a
+systemd instance named after that node. If a node is renumbered or removed, its
+leg can be left behind — still running, but no longer what the controller
+expects. `wan repair` reconciles the two:
+
+```bash
+sds-cli wan repair <resource> --dry-run   # show the plan; touches nothing
+sds-cli wan repair <resource>
+```
+
+It converges, so running it on a healthy resource reports nothing to do. The
+repair restarts tunnels, so use `--dry-run` first.
+
 ### Notifications
 
 Event types: `resource.degraded`, `resource.failover`, `resource.no_primary`,

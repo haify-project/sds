@@ -190,6 +190,19 @@ webhook_min_severity = "warning"   # info | warning | critical
 # headers = { X-Token = "..." }
 ```
 
+### 跨站点（WAN）维护
+
+WAN 资源为每个主站节点建一条复制隧道（leg），每条是一个以该节点命名的 systemd
+实例。节点换了地址或被移除时，旧的 leg 可能被留下——仍在运行，但已不是控制器
+所期待的那条。`wan repair` 把两者对齐：
+
+```bash
+sds-cli wan repair <资源> --dry-run   # 只打印计划，不做任何改动
+sds-cli wan repair <资源>
+```
+
+它是收敛的，对健康资源执行会报告"无需改动"。修复会重启隧道，建议先跑 `--dry-run`。
+
 ### 通知
 
 事件类型：`resource.degraded`、`resource.failover`、`resource.no_primary`、
