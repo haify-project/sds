@@ -260,7 +260,25 @@ func failedResult(hosts []string, output string) *deployment.ExecResult {
 
 func TestWANStatusHelpersAndResourceList(t *testing.T) {
 	assert.Equal(t, "WAN status unavailable", wanStatusMessage(nil))
-	assert.Equal(t, "primary proxy inactive; DR proxy inactive; DR WAN endpoint unreachable", wanStatusMessage(&wanproxy.ProxyStatus{}))
+	assert.Equal(t, "no WAN legs configured", wanStatusMessage(&wanproxy.MultiStatus{}))
+
+	// A broken leg has to name the node it belongs to: "primary proxy inactive"
+	// on a multi-replica resource does not say which replica lost its tunnel.
+	assert.Equal(t,
+		"leg 10.0.0.1 down on both ends; proxy inactive on 10.0.0.2; DR proxy inactive for leg 10.0.0.3; DR WAN endpoint unreachable",
+		wanStatusMessage(&wanproxy.MultiStatus{Legs: []wanproxy.LegStatus{
+			{PrimaryHost: "10.0.0.1"},
+			{PrimaryHost: "10.0.0.2", DRActive: true},
+			{PrimaryHost: "10.0.0.3", PrimaryActive: true},
+		}}))
+
+	// A fully healthy multi-leg resource reports nothing at all.
+	healthy := &wanproxy.MultiStatus{
+		Legs:         []wanproxy.LegStatus{{PrimaryHost: "10.0.0.1", PrimaryActive: true, DRActive: true}},
+		WANReachable: true,
+	}
+	assert.True(t, healthy.Healthy())
+	assert.Empty(t, wanStatusMessage(healthy))
 
 	ctrl := newBasicTestController(&fakeDeploymentClient{})
 	ctrl.db = newTestDB(t)
@@ -269,10 +287,11 @@ func TestWANStatusHelpersAndResourceList(t *testing.T) {
 	ctrl.gateway = gateway.New(NewGatewayResourceManager(ctrl.resources, false, 1), &gatewayAdapterDeployment{}, zap.NewNop(), nil)
 	ctrl.hostsMap["n2"] = "10.0.0.2"
 	res := &database.Resource{Name: "wan1", Nodes: "n1,n2", DRNode: "n2", DREndpoint: "203.0.113.2", WANPort: 43512, Port: 7001, WANMode: true}
-	spec := ctrl.resources.wanProxySpecFor(res)
-	assert.Equal(t, "10.0.0.1", spec.PrimaryNodeAddr)
-	assert.Equal(t, "10.0.0.2", spec.DRNodeAddr)
-	assert.Equal(t, 43512, spec.WANPort)
+	multi := ctrl.resources.wanMultiSpecFor(res)
+	assert.Equal(t, []string{"10.0.0.1"}, multi.PrimaryNodeAddrs, "the DR node must not appear as a primary-site leg")
+	assert.Equal(t, "10.0.0.2", multi.DRNodeAddr)
+	assert.Equal(t, 43512, multi.BaseWANPort)
+	assert.Equal(t, 7001, multi.BaseDRBDPort)
 
 	_, err := (&ResourceManager{controller: &Controller{}}).GetResourceStatusList(ctx)
 	assert.Error(t, err)

@@ -1743,14 +1743,42 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 		}
 		probe(label, drAddr, unit)
 	}
-	spec := rm.wanProxySpecFor(dbRes)
-	info.WANReachable = wanproxy.Reachable(ctx, rm.wanproxyDeployClient(), spec)
-	// Proxy counters from the primary (the side that holds the backlog). Best
-	// effort: an older proxy publishes nothing, and that must not fail status.
-	if st, serr := wanproxy.Status(ctx, rm.wanproxyDeployClient(), spec); serr == nil && st != nil {
-		info.Metrics = st.PrimaryMetrics
+	// Reachability and counters come from a leg whose dialer is actually
+	// running. Probing from the first node in the list instead reports "WAN
+	// unreachable" whenever that particular replica happens to be down, which
+	// points at the wrong end of the link.
+	multi := rm.wanMultiSpecFor(dbRes)
+	if st, serr := wanproxy.StatusMulti(ctx, rm.wanproxyDeployClient(), multi); serr == nil && st != nil {
+		info.WANReachable = st.WANReachable
+		// Proxy counters from a live primary (the side that holds the backlog).
+		// Best effort: an older proxy publishes nothing, and that must not fail
+		// status.
+		if host := liveWANPrimary(st); host != "" {
+			info.Metrics = wanproxy.ReadNodeMetrics(ctx, rm.wanproxyDeployClient(), host, wanLegFor(st, host))
+		}
 	}
 	return info, nil
+}
+
+// liveWANPrimary returns the address of a primary-site node whose dialer is
+// running, or "" when none is.
+func liveWANPrimary(st *wanproxy.MultiStatus) string {
+	for _, l := range st.Legs {
+		if l.PrimaryActive {
+			return l.PrimaryHost
+		}
+	}
+	return ""
+}
+
+// wanLegFor returns the leg id served by the given primary host.
+func wanLegFor(st *wanproxy.MultiStatus, host string) string {
+	for _, l := range st.Legs {
+		if l.PrimaryHost == host {
+			return l.LegID
+		}
+	}
+	return st.Resource
 }
 
 // randomWANPort picks a random TCP port in [3001, 65535] for a WAN proxy when
@@ -5277,7 +5305,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 		// the alert monitor can surface a broken cross-site link.
 		if dbRes.WANMode {
 			item.WANEnabled = true
-			st, err := wanproxy.Status(ctx, rm.wanproxyDeployClient(), rm.wanProxySpecFor(dbRes))
+			st, err := wanproxy.StatusMulti(ctx, rm.wanproxyDeployClient(), rm.wanMultiSpecFor(dbRes))
 			switch {
 			case err != nil:
 				item.WANHealthy = false
@@ -5319,37 +5347,59 @@ func disklessByDesign(c *Controller, dbRes *database.Resource) map[string]bool {
 // wanProxySpecFor rebuilds the sds-proxy spec for a stored WAN resource so its
 // live status can be queried. The primary is the resource node that is not the
 // DR node.
-func (rm *ResourceManager) wanProxySpecFor(dbRes *database.Resource) wanproxy.ProxySpec {
-	primary := ""
+// wanMultiSpecFor rebuilds the full multi-leg sds-proxy spec for a stored WAN
+// resource so its live status can be queried.
+//
+// It must mirror what provisioning built, because leg names and ports are
+// derived from it: one leg per primary-site node, in the stored node order
+// (Legs assigns WAN and DRBD ports by index), with the DR node excluded.
+//
+// This replaced a version that collapsed the resource to a single ProxySpec
+// named after the resource with an arbitrary node as "the primary". Once a WAN
+// resource has more than one primary-site replica, the real units are
+// sds-proxy@<resource>_<node>, so that spec named a unit present on no node and
+// reported a perfectly healthy WAN as entirely down.
+func (rm *ResourceManager) wanMultiSpecFor(dbRes *database.Resource) wanproxy.MultiSpec {
+	var primaries []string
 	for _, n := range splitCSV(dbRes.Nodes) {
-		if n != dbRes.DRNode {
-			primary = n
-			break
+		if n == "" || n == dbRes.DRNode {
+			continue
 		}
+		primaries = append(primaries, rm.controller.ResolveHost(n))
 	}
-	return wanproxy.ProxySpec{
+	return wanproxy.MultiSpec{
 		Resource:          dbRes.Name,
-		PrimaryNodeAddr:   rm.controller.ResolveHost(primary),
+		PrimaryNodeAddrs:  primaries,
 		DRNodeAddr:        rm.controller.ResolveHost(dbRes.DRNode),
 		DRPublicEndpoint:  dbRes.DREndpoint,
 		PrimaryEgressAddr: dbRes.WANEgressAddress,
-		WANPort:           dbRes.WANPort,
-		DRBDPort:          dbRes.Port,
+		BaseWANPort:       int(dbRes.WANPort),
+		BaseDRBDPort:      int(dbRes.Port),
 	}
 }
 
 // wanStatusMessage renders a short human description of an unhealthy WAN proxy
 // pair; it returns "" when the pair is healthy.
-func wanStatusMessage(st *wanproxy.ProxyStatus) string {
+func wanStatusMessage(st *wanproxy.MultiStatus) string {
 	if st == nil {
 		return "WAN status unavailable"
 	}
-	var problems []string
-	if !st.Primary.Active {
-		problems = append(problems, "primary proxy inactive")
+	if len(st.Legs) == 0 {
+		return "no WAN legs configured"
 	}
-	if !st.DR.Active {
-		problems = append(problems, "DR proxy inactive")
+	var problems []string
+	// Name the node on each broken leg. "primary proxy inactive" on a
+	// multi-replica resource does not say which replica lost its tunnel, which
+	// is the only thing the operator needs in order to act.
+	for _, l := range st.Unhealthy() {
+		switch {
+		case !l.PrimaryActive && !l.DRActive:
+			problems = append(problems, fmt.Sprintf("leg %s down on both ends", l.PrimaryHost))
+		case !l.PrimaryActive:
+			problems = append(problems, fmt.Sprintf("proxy inactive on %s", l.PrimaryHost))
+		default:
+			problems = append(problems, fmt.Sprintf("DR proxy inactive for leg %s", l.PrimaryHost))
+		}
 	}
 	if !st.WANReachable {
 		problems = append(problems, "DR WAN endpoint unreachable")
