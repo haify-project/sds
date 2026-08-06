@@ -2004,3 +2004,16 @@ func (c *SDSClient) ListEvents(ctx context.Context, req *sdspb.ListEventsRequest
 func (c *SDSClient) WatchEvents(ctx context.Context, req *sdspb.WatchEventsRequest) (sdspb.SDSController_WatchEventsClient, error) {
 	return c.client.WatchEvents(ctx, req)
 }
+
+// RepairWanProxy reconciles a WAN resource's replication tunnels with the
+// controller's current node list.
+func (c *SDSClient) RepairWanProxy(ctx context.Context, name string, dryRun bool) (*sdspb.RepairWanProxyResponse, error) {
+	resp, err := c.client.RepairWanProxy(ctx, &sdspb.RepairWanProxyRequest{Name: name, DryRun: dryRun})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}

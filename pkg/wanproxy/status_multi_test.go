@@ -302,3 +302,134 @@ func TestStatusMultiAmbiguousHostDoesNotGuess(t *testing.T) {
 	require.Len(t, st.Unhealthy(), 1)
 	assert.Equal(t, "openclaw_192-168-123-62", st.Unhealthy()[0].LegID)
 }
+
+// Leg names must come from the node's stable name, not its address, or a
+// renumber orphans the tunnel.
+func TestLegsUseNodeNamesWhenGiven(t *testing.T) {
+	m := openclawSpec()
+	m.PrimaryNodeKeys = []string{"node-a", "node-b", "node-e"}
+
+	legs := m.Legs()
+	require.Len(t, legs, 3)
+	assert.Equal(t, "openclaw_node-a", legs[0].Resource)
+	assert.Equal(t, "openclaw_node-e", legs[2].Resource)
+	// The address is still what the leg is reached at.
+	assert.Equal(t, "192.168.123.62", legs[0].PrimaryNodeAddr)
+
+	// Renumbering the node must not change the leg's name.
+	m.PrimaryNodeAddrs[0] = "192.168.123.99"
+	assert.Equal(t, "openclaw_node-a", m.Legs()[0].Resource)
+}
+
+func TestLegsFallBackToAddressWithoutNames(t *testing.T) {
+	m := openclawSpec()
+	assert.Equal(t, "openclaw_192-168-123-62", m.Legs()[0].Resource)
+
+	// A partially-filled key list falls back per entry rather than shifting.
+	m.PrimaryNodeKeys = []string{"", "node-b"}
+	legs := m.Legs()
+	assert.Equal(t, "openclaw_192-168-123-62", legs[0].Resource)
+	assert.Equal(t, "openclaw_node-b", legs[1].Resource)
+	assert.Equal(t, "openclaw_192-168-123-212", legs[2].Resource)
+}
+
+func TestFindStaleLegsFindsRenumberedOrphan(t *testing.T) {
+	m := openclawSpec()
+	m.PrimaryNodeKeys = []string{"node-a", "node-b", "node-e"}
+	legs := m.Legs()
+
+	// node-a still runs the address-named leg from before the renumber, and the
+	// DR still has its acceptor.
+	units := map[string][]string{
+		"192.168.123.62":  {unitRow("openclaw_192-168-123-206", true)},
+		"192.168.123.227": {unitRow(legs[1].Resource, true)},
+		"192.168.123.212": {unitRow(legs[2].Resource, true)},
+		"47.109.108.170": {
+			unitRow("openclaw_192-168-123-206", true),
+			unitRow(legs[1].Resource, true),
+			unitRow(legs[2].Resource, true),
+		},
+	}
+
+	stale, err := FindStaleLegs(context.Background(), &hostUnits{units: units}, m)
+	require.NoError(t, err)
+	require.Len(t, stale, 2, "the orphan exists on the node and on the DR")
+	assert.Equal(t, "192.168.123.62", stale[0].Host)
+	assert.Equal(t, "openclaw_192-168-123-206", stale[0].LegID)
+	assert.Equal(t, "47.109.108.170", stale[1].Host)
+}
+
+// A healthy resource has nothing stale, so repair is a no-op on it.
+func TestFindStaleLegsIsEmptyWhenConsistent(t *testing.T) {
+	m := openclawSpec()
+	legs := m.Legs()
+	units := map[string][]string{}
+	dr := []string{}
+	for i, leg := range legs {
+		units[m.PrimaryNodeAddrs[i]] = []string{unitRow(leg.Resource, true)}
+		dr = append(dr, unitRow(leg.Resource, true))
+	}
+	units[m.DRNodeAddr] = dr
+
+	stale, err := FindStaleLegs(context.Background(), &hostUnits{units: units}, m)
+	require.NoError(t, err)
+	assert.Empty(t, stale)
+}
+
+// One resource's legs must never be swept up as another's.
+func TestFindStaleLegsDoesNotTouchOtherResources(t *testing.T) {
+	m := openclawSpec()
+	legs := m.Legs()
+	units := map[string][]string{
+		"192.168.123.62":  {unitRow(legs[0].Resource, true), unitRow("openclawdata_x", true)},
+		"192.168.123.227": {unitRow(legs[1].Resource, true)},
+		"192.168.123.212": {unitRow(legs[2].Resource, true)},
+		"47.109.108.170":  {unitRow(legs[0].Resource, true), unitRow(legs[1].Resource, true), unitRow(legs[2].Resource, true)},
+	}
+
+	stale, err := FindStaleLegs(context.Background(), &hostUnits{units: units}, m)
+	require.NoError(t, err)
+	assert.Empty(t, stale, "openclawdata is a different resource, not a stale openclaw leg")
+}
+
+// An unreachable node reports nothing; that is not evidence its leg is stale,
+// and deleting on that basis would tear down a tunnel that is merely unseen.
+func TestFindStaleLegsIgnoresUnreachableHosts(t *testing.T) {
+	m := openclawSpec()
+	legs := m.Legs()
+	units := map[string][]string{
+		"192.168.123.227": {unitRow(legs[1].Resource, true)},
+		"192.168.123.212": {unitRow(legs[2].Resource, true)},
+		"47.109.108.170":  {unitRow(legs[1].Resource, true), unitRow(legs[2].Resource, true)},
+	}
+
+	stale, err := FindStaleLegs(context.Background(), &hostUnits{units: units}, m)
+	require.NoError(t, err)
+	assert.Empty(t, stale)
+}
+
+func TestBelongsToResource(t *testing.T) {
+	assert.True(t, belongsToResource("openclaw", "openclaw"))
+	assert.True(t, belongsToResource("openclaw_node-a", "openclaw"))
+	assert.False(t, belongsToResource("openclawdata", "openclaw"))
+	assert.False(t, belongsToResource("other_node-a", "openclaw"))
+}
+
+// The one name shape that would make two resources' legs indistinguishable is
+// refused at creation, which is what keeps FindStaleLegs safe.
+func TestValidateResourceNameForWAN(t *testing.T) {
+	existing := []string{"openclaw", "vmstore"}
+
+	assert.NoError(t, ValidateResourceNameForWAN("archive", existing))
+	assert.NoError(t, ValidateResourceNameForWAN("openclawdata", existing))
+	assert.NoError(t, ValidateResourceNameForWAN("openclaw", existing), "renaming to itself is not a collision")
+
+	err := ValidateResourceNameForWAN("openclaw_backup", existing)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "openclaw")
+}
+
+func TestRemoveStaleLegsIsNoOpOnEmpty(t *testing.T) {
+	assert.NoError(t, RemoveStaleLegs(context.Background(), &hostUnits{}, nil))
+	assert.Error(t, RemoveStaleLegs(context.Background(), nil, []StaleLeg{{Host: "h", LegID: "l"}}))
+}

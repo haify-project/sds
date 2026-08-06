@@ -736,6 +736,22 @@ type MultiSpec struct {
 	// Each gets a dialer; each gets a matching acceptor on the DR.
 	PrimaryNodeAddrs []string
 
+	// PrimaryNodeKeys are the stable identities of those nodes — their
+	// registered names — in the same order as PrimaryNodeAddrs. Leg names are
+	// derived from these.
+	//
+	// Naming a leg after a node's address bakes a mutable fact into a systemd
+	// instance name, a config filename and a metrics path. When the node is
+	// renumbered (a DHCP lease that moves, a VM that returns on a different
+	// address) every one of those names still refers to the old address, so the
+	// running tunnel is orphaned: it keeps replicating, but nothing that
+	// recomputes the name can find it, and deprovisioning silently misses it.
+	//
+	// A node's registered name does not change when its address does, which is
+	// the property the name needs. Empty entries fall back to the address, so a
+	// caller that has no names still gets the historic behaviour.
+	PrimaryNodeKeys []string
+
 	// DRNodeAddr is the DR-site node (runs every acceptor).
 	DRNodeAddr string
 
@@ -767,7 +783,7 @@ func (m MultiSpec) Legs() []ProxySpec {
 	specs := make([]ProxySpec, 0, len(m.PrimaryNodeAddrs))
 	for i, primary := range m.PrimaryNodeAddrs {
 		specs = append(specs, ProxySpec{
-			Resource:              LegID(m.Resource, primary, single),
+			Resource:              LegID(m.Resource, m.legKey(i), single),
 			PrimaryNodeAddr:       primary,
 			DRNodeAddr:            m.DRNodeAddr,
 			DRPublicEndpoint:      m.DRPublicEndpoint,
@@ -780,6 +796,17 @@ func (m MultiSpec) Legs() []ProxySpec {
 		})
 	}
 	return specs
+}
+
+// legKey returns the stable identity used to name leg i, falling back to the
+// node's address when no name was supplied.
+func (m MultiSpec) legKey(i int) string {
+	if i < len(m.PrimaryNodeKeys) {
+		if k := strings.TrimSpace(m.PrimaryNodeKeys[i]); k != "" {
+			return k
+		}
+	}
+	return m.PrimaryNodeAddrs[i]
 }
 
 // Validate checks the multi-replica spec before anything is provisioned.
@@ -1096,4 +1123,125 @@ func parseActiveUnits(out string) map[string]bool {
 		units[fields[0]] = fields[2] == "active"
 	}
 	return units
+}
+
+// StaleLeg is a proxy instance found on a node that the current spec does not
+// account for — typically a leg left behind after the node was renumbered, or
+// after a replica was removed from the resource.
+type StaleLeg struct {
+	Host  string
+	LegID string
+}
+
+// FindStaleLegs reports proxy instances for this resource that the spec does
+// not expect: on a primary-site node, anything that is not that node's own leg;
+// on the DR node, anything that is not one of the legs.
+//
+// Matching is deliberately narrow. A resource's instances are exactly
+// "<resource>" and "<resource>_<key>", so a resource named "foo" must not sweep
+// up "foobar"'s instances. It is still possible to construct a collision by
+// naming one resource "<other>_<something>"; such a name is rejected at
+// creation (see ValidateResourceNameForWAN) precisely so this stays safe.
+func FindStaleLegs(ctx context.Context, deploy DeploymentClient, m MultiSpec) ([]StaleLeg, error) {
+	if deploy == nil {
+		return nil, fmt.Errorf("wanproxy: deployment client is nil")
+	}
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+
+	legs := m.Legs()
+	hosts := append(append([]string{}, m.PrimaryNodeAddrs...), m.DRNodeAddr)
+
+	res, err := deploy.Exec(ctx, hosts, fmt.Sprintf(
+		"systemctl list-units --all --plain --no-legend --no-pager '%s*' 2>/dev/null || true",
+		UnitInstance(m.Resource)))
+	if err != nil {
+		return nil, fmt.Errorf("wanproxy: list proxy instances: %w", err)
+	}
+
+	// expected[host] is the set of leg ids that host is supposed to run.
+	expected := make(map[string]map[string]bool, len(hosts))
+	for _, h := range hosts {
+		expected[h] = map[string]bool{}
+	}
+	for _, leg := range legs {
+		expected[leg.PrimaryNodeAddr][leg.Resource] = true
+		expected[m.DRNodeAddr][leg.Resource] = true
+	}
+
+	var stale []StaleLeg
+	if res != nil {
+		for _, host := range hosts {
+			h := res.Hosts[host]
+			if h == nil || !h.Success {
+				// A node that cannot be reached is not evidence of a stale leg.
+				continue
+			}
+			for unit := range parseActiveUnits(h.Output) {
+				legID := strings.TrimSuffix(strings.TrimPrefix(unit, "sds-proxy@"), ".service")
+				if !belongsToResource(legID, m.Resource) || expected[host][legID] {
+					continue
+				}
+				stale = append(stale, StaleLeg{Host: host, LegID: legID})
+			}
+		}
+	}
+	sort.Slice(stale, func(i, j int) bool {
+		if stale[i].Host != stale[j].Host {
+			return stale[i].Host < stale[j].Host
+		}
+		return stale[i].LegID < stale[j].LegID
+	})
+	return stale, nil
+}
+
+// belongsToResource reports whether a leg id is one of this resource's, i.e.
+// exactly the resource (single-replica naming) or "<resource>_<key>".
+func belongsToResource(legID, resource string) bool {
+	return legID == resource || strings.HasPrefix(legID, resource+"_")
+}
+
+// RemoveStaleLegs stops, disables and removes the config of each stale leg.
+//
+// It is best-effort per leg so one unreachable node cannot strand the rest, and
+// it only ever touches instances FindStaleLegs identified — a leg the spec does
+// expect is never removed, so calling this on a healthy resource is a no-op.
+func RemoveStaleLegs(ctx context.Context, deploy DeploymentClient, stale []StaleLeg) error {
+	if deploy == nil {
+		return fmt.Errorf("wanproxy: deployment client is nil")
+	}
+	var firstErr error
+	for _, s := range stale {
+		if err := run(ctx, deploy, []string{s.Host},
+			fmt.Sprintf("sudo systemctl disable --now %s 2>/dev/null || true", UnitInstance(s.LegID)),
+			"disable stale proxy leg"); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		if err := run(ctx, deploy, []string{s.Host},
+			fmt.Sprintf("sudo rm -f %s %s", NodeConfigPath(s.LegID), NodeMetricsPath(s.LegID)),
+			"remove stale proxy config"); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// ValidateResourceNameForWAN rejects a WAN resource name that could be mistaken
+// for another resource's leg. Leg instances are named "<resource>_<key>", so a
+// resource literally named like one of those would make the two indistinguish-
+// able — and FindStaleLegs would consider one resource's legs stale for the
+// other. Refusing the name at creation is cheaper than disambiguating forever.
+func ValidateResourceNameForWAN(name string, existing []string) error {
+	for _, other := range existing {
+		if other == name {
+			continue
+		}
+		if strings.HasPrefix(name, other+"_") {
+			return fmt.Errorf(
+				"wanproxy: resource name %q collides with WAN leg names of resource %q; choose a name that is not %q_<suffix>",
+				name, other, other)
+		}
+	}
+	return nil
 }

@@ -714,6 +714,22 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		if strings.TrimSpace(wan.DREndpoint) == "" {
 			return fmt.Errorf("WAN resource %q requires a DR endpoint (--dr-endpoint)", name)
 		}
+		// WAN legs are systemd instances named "<resource>_<node>". A resource
+		// named like one of those would be indistinguishable from another
+		// resource's leg, and leg reconciliation would treat one's tunnels as
+		// the other's litter. Refusing the name is cheaper than disambiguating
+		// it forever.
+		if rm.controller.db != nil {
+			if existing, lerr := rm.controller.db.ListResources(ctx); lerr == nil {
+				names := make([]string, 0, len(existing))
+				for _, e := range existing {
+					names = append(names, e.Name)
+				}
+				if verr := wanproxy.ValidateResourceNameForWAN(name, names); verr != nil {
+					return verr
+				}
+			}
+		}
 		if wan.WANPort == 0 {
 			wan.WANPort = randomWANPort()
 			rm.controller.logger.Info("auto-allocated WAN proxy port",
@@ -943,8 +959,11 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		drAddr := nodeIPs[len(nodeIPs)-1]
 
 		multi := wanproxy.MultiSpec{
-			Resource:          name,
-			PrimaryNodeAddrs:  primaryAddrs,
+			Resource:         name,
+			PrimaryNodeAddrs: primaryAddrs,
+			// Names, not addresses, decide what each leg is called: a node that
+			// is later renumbered keeps its name, and so keeps its leg.
+			PrimaryNodeKeys:   nodes[:len(nodes)-1],
 			DRNodeAddr:        drAddr,
 			DRPublicEndpoint:  wan.DREndpoint,
 			BaseWANPort:       int(wan.WANPort),
@@ -5360,16 +5379,18 @@ func disklessByDesign(c *Controller, dbRes *database.Resource) map[string]bool {
 // sds-proxy@<resource>_<node>, so that spec named a unit present on no node and
 // reported a perfectly healthy WAN as entirely down.
 func (rm *ResourceManager) wanMultiSpecFor(dbRes *database.Resource) wanproxy.MultiSpec {
-	var primaries []string
+	var primaries, primaryNames []string
 	for _, n := range splitCSV(dbRes.Nodes) {
 		if n == "" || n == dbRes.DRNode {
 			continue
 		}
 		primaries = append(primaries, rm.controller.ResolveHost(n))
+		primaryNames = append(primaryNames, n)
 	}
 	return wanproxy.MultiSpec{
 		Resource:          dbRes.Name,
 		PrimaryNodeAddrs:  primaries,
+		PrimaryNodeKeys:   primaryNames,
 		DRNodeAddr:        rm.controller.ResolveHost(dbRes.DRNode),
 		DRPublicEndpoint:  dbRes.DREndpoint,
 		PrimaryEgressAddr: dbRes.WANEgressAddress,

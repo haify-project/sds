@@ -408,6 +408,14 @@ service SDSController {
     option (google.api.http) = { get: "/v1/events"; };
   }
 
+  // RepairWanProxy reconciles a WAN resource's replication tunnels with what
+  // the controller currently believes its nodes are: it re-provisions the legs
+  // that should exist and removes instances left behind by a node that was
+  // renumbered or removed. Safe to run on a healthy resource — it converges.
+  rpc RepairWanProxy(RepairWanProxyRequest) returns (RepairWanProxyResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/wan/repair"; body: "*"; };
+  }
+
   // WatchEvents streams notifications as they happen, so an operator (or the
   // web UI, or a script) can react without polling. Over REST this is a
   // newline-delimited JSON stream; `curl -N .../v1/events/watch` works.
@@ -1384,6 +1392,24 @@ message ListEventsResponse {
   uint64 published = 4;
   // Events dropped because a subscriber could not keep up.
   uint64 dropped = 5;
+}
+
+message RepairWanProxyRequest {
+  string name = 1;
+  // DryRun reports what would change without touching anything. Worth using
+  // first: repair restarts replication tunnels.
+  bool dry_run = 2;
+}
+
+message RepairWanProxyResponse {
+  bool success = 1;
+  string message = 2;
+  // Legs the resource should have, as "<node> -> <leg id>".
+  repeated string expected_legs = 3;
+  // Instances removed (or, under dry_run, that would be), as "<host>: <leg id>".
+  repeated string removed_legs = 4;
+  // True when nothing needed changing.
+  bool already_consistent = 5;
 }
 
 message WatchEventsRequest {

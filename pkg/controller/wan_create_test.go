@@ -194,10 +194,49 @@ func TestCreateResourceWANMultiReplicaPrimarySite(t *testing.T) {
 	assert.Equal(t, 2, strings.Count(cfg, "connection {"), "one WAN leg per primary")
 
 	// Each leg gets its own proxy config on the DR, which terminates both.
-	_, aLeg := findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres_10-0-0-1"))
-	_, bLeg := findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres_10-0-0-2"))
-	assert.True(t, aLeg, "expected a proxy config for the first leg")
-	assert.True(t, bLeg, "expected a proxy config for the second leg")
+	//
+	// Legs are named after the NODE, not its address. Naming them after the
+	// address bakes a mutable fact into a systemd instance name, a config
+	// filename and a metrics path, so renumbering the node orphans a tunnel
+	// that is still replicating: status reports a phantom outage and
+	// deprovisioning misses it entirely.
+	_, aLeg := findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres_a"))
+	_, bLeg := findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres_b"))
+	assert.True(t, aLeg, "expected a proxy config for node a's leg")
+	assert.True(t, bLeg, "expected a proxy config for node b's leg")
+
+	_, byAddr := findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres_10-0-0-1"))
+	assert.False(t, byAddr, "a leg must not be named after an address")
+}
+
+// A WAN leg is a systemd instance named "<resource>_<node>", so a resource
+// named like one of those would be indistinguishable from another resource's
+// leg — and leg reconciliation would treat one's tunnels as the other's litter.
+func TestCreateResourceWANRejectsLegShapedName(t *testing.T) {
+	withTempPKI(t)
+	dep := &fakeDeploymentClient{}
+	ctrl := newBasicTestController(dep)
+	ctrl.db = openTestDB(t)
+	registerNodes(ctrl, map[string]string{"a": "10.0.0.1", "b": "10.0.0.2", "dr": "10.0.0.3"})
+	ctx := context.Background()
+
+	require.NoError(t, ctrl.resources.CreateResourceWithVolumes(ctx,
+		"wanres", 7300, []string{"a", "b"}, "C", "lvm", nil,
+		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}},
+		&WANSpec{DRNode: "dr", DREndpoint: "dr.example.com", WANPort: 34567}))
+
+	err := ctrl.resources.CreateResourceWithVolumes(ctx,
+		"wanres_a", 7400, []string{"a", "b"}, "C", "lvm", nil,
+		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}},
+		&WANSpec{DRNode: "dr", DREndpoint: "dr.example.com", WANPort: 34600})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "collides with WAN leg names")
+
+	// A name that merely shares a prefix is fine — only the "_" shape collides.
+	assert.NoError(t, ctrl.resources.CreateResourceWithVolumes(ctx,
+		"wanresdata", 7500, []string{"a", "b"}, "C", "lvm", nil,
+		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}},
+		&WANSpec{DRNode: "dr", DREndpoint: "dr.example.com", WANPort: 34700}))
 }
 
 // TestServerCreateResourceWANSucceeds drives the gRPC handler with a WAN request

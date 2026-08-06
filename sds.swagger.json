@@ -2160,6 +2160,45 @@
         ]
       }
     },
+    "/v1/resources/{name}/wan/repair": {
+      "post": {
+        "summary": "RepairWanProxy reconciles a WAN resource's replication tunnels with what\nthe controller currently believes its nodes are: it re-provisions the legs\nthat should exist and removes instances left behind by a node that was\nrenumbered or removed. Safe to run on a healthy resource — it converges.",
+        "operationId": "SDSController_RepairWanProxy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RepairWanProxyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRepairWanProxyBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{resource}/diskless-clients": {
       "post": {
         "operationId": "SDSController_AttachDisklessClient",
@@ -4282,6 +4321,15 @@
         "node": {
           "type": "string",
           "description": "node must hold a diskful replica of `resource` AND have source_device\nlocally; the copy runs entirely on that node."
+        }
+      }
+    },
+    "SDSControllerRepairWanProxyBody": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean",
+          "description": "DryRun reports what would change without touching anything. Worth using\nfirst: repair restarts replication tunnels."
         }
       }
     },
@@ -6705,6 +6753,35 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1RepairWanProxyResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "expectedLegs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Legs the resource should have, as \"\u003cnode\u003e -\u003e \u003cleg id\u003e\"."
+        },
+        "removedLegs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Instances removed (or, under dry_run, that would be), as \"\u003chost\u003e: \u003cleg id\u003e\"."
+        },
+        "alreadyConsistent": {
+          "type": "boolean",
+          "description": "True when nothing needed changing."
         }
       }
     },

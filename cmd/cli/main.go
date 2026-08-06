@@ -29,6 +29,7 @@ func main() {
 	rootCmd.AddCommand(healthCommand())
 	rootCmd.AddCommand(rbacCommand())
 	rootCmd.AddCommand(eventCommand())
+	rootCmd.AddCommand(wanCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
