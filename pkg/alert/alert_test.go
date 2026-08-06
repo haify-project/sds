@@ -322,3 +322,39 @@ func TestIsDegradedStates(t *testing.T) {
 	assert.False(t, deg)
 	assert.Empty(t, reason)
 }
+
+// A quorum tiebreaker and a diskless client are Diskless by design. Alerting on
+// them produces a warning that can never clear — and since auto_tiebreaker is
+// on by default, one per two-replica resource.
+func TestExpectedDisklessIsNotDegraded(t *testing.T) {
+	mon, drain := newHarness(t, Options{Resources: &mockLister{list: []ResourceStatusInfo{{
+		Name: "mysqlha",
+		NodeStates: map[string]NodeStateInfo{
+			"orange1": healthy("Primary"),
+			"orange2": healthy("Secondary"),
+			// The auto-added tiebreaker.
+			"orange3": {DiskState: "Diskless", ReplicationState: "Established", Role: "Secondary", ExpectedDiskless: true},
+		},
+	}}}})
+
+	mon.Poll(context.Background())
+	assert.Empty(t, drain(), "a tiebreaker being Diskless is its healthy state")
+}
+
+// The exemption is narrow: it covers Diskless only, and only the disk state.
+func TestExpectedDisklessStillReportsRealFaults(t *testing.T) {
+	for name, st := range map[string]NodeStateInfo{
+		"failed disk":  {DiskState: "Failed", ExpectedDiskless: true},
+		"detached":     {DiskState: "Detached", ExpectedDiskless: true},
+		"disconnected": {DiskState: "Diskless", ReplicationState: "StandAlone", ExpectedDiskless: true},
+	} {
+		deg, reason := isDegraded(st)
+		assert.True(t, deg, "%s must still be reported", name)
+		assert.NotEmpty(t, reason)
+	}
+
+	// And a node that is NOT diskless by design losing its disk is still a fault.
+	deg, reason := isDegraded(NodeStateInfo{DiskState: "Diskless"})
+	assert.True(t, deg)
+	assert.Contains(t, reason, "Diskless")
+}

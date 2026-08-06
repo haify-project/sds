@@ -39,6 +39,16 @@ type NodeStateInfo struct {
 	// Role is "Primary", "Secondary", or "Unknown". Failover detection is built
 	// on this.
 	Role string
+	// ExpectedDiskless marks a node that is supposed to have no local copy: a
+	// quorum tiebreaker, or a diskless client mounting the volume over the DRBD
+	// network. For these, "Diskless" is the healthy steady state, not a fault.
+	//
+	// Without this the monitor fires a warning for every tiebreaker — and
+	// resource.auto_tiebreaker defaults to on, so every two-replica resource
+	// has one — producing a permanent alert that can never clear. A wall of
+	// un-clearable alerts is worse than no alerting: it trains people to
+	// ignore the ones that matter.
+	ExpectedDiskless bool
 }
 
 // ResourceStatusInfo is one resource's health across its replicas.
@@ -408,7 +418,15 @@ func primarySet(res ResourceStatusInfo) string {
 // isDegraded reports whether a replica's DRBD state indicates a fault.
 func isDegraded(st NodeStateInfo) (bool, string) {
 	switch st.DiskState {
-	case "Diskless", "Failed", "Detached":
+	case "Diskless":
+		// Expected for tiebreakers and diskless clients; a fault anywhere else,
+		// where it means the node lost its local copy.
+		if !st.ExpectedDiskless {
+			return true, "disk state is Diskless"
+		}
+	case "Failed", "Detached":
+		// Not exempted by ExpectedDiskless: a node with no disk by design still
+		// should not be reporting a failed one.
 		return true, fmt.Sprintf("disk state is %s", st.DiskState)
 	}
 	switch st.ReplicationState {

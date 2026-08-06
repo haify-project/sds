@@ -5255,6 +5255,11 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 		if err != nil || info == nil {
 			continue
 		}
+		// Nodes that hold no local copy on purpose: quorum tiebreakers and
+		// diskless clients. They report Diskless as their normal state, so the
+		// monitor has to be told, or it alerts on every one of them forever.
+		diskless := disklessByDesign(rm.controller, dbRes)
+
 		item := alert.ResourceStatusInfo{
 			Name:       dbRes.Name,
 			NodeStates: make(map[string]alert.NodeStateInfo, len(info.NodeStates)),
@@ -5264,6 +5269,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 				DiskState:        st.DiskState,
 				ReplicationState: st.Replication,
 				Role:             st.Role,
+				ExpectedDiskless: diskless[node] || diskless[rm.controller.ResolveHost(node)],
 			}
 		}
 
@@ -5285,6 +5291,29 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 		result = append(result, item)
 	}
 	return result, nil
+}
+
+// disklessByDesign returns the set of nodes that are meant to carry no local
+// replica of the resource — quorum tiebreakers (DisklessNodes) and diskless
+// data clients (DisklessClients).
+//
+// Entries are recorded by node name, while live DRBD status can key a node by
+// either name or address depending on how it was reported, so each name is
+// indexed under both.
+func disklessByDesign(c *Controller, dbRes *database.Resource) map[string]bool {
+	out := map[string]bool{}
+	for _, list := range []string{dbRes.DisklessNodes, dbRes.DisklessClients} {
+		for _, n := range splitCSV(list) {
+			if n == "" {
+				continue
+			}
+			out[n] = true
+			if addr := c.ResolveHost(n); addr != "" {
+				out[addr] = true
+			}
+		}
+	}
+	return out
 }
 
 // wanProxySpecFor rebuilds the sds-proxy spec for a stored WAN resource so its
