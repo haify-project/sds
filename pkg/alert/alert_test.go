@@ -358,3 +358,109 @@ func TestExpectedDisklessStillReportsRealFaults(t *testing.T) {
 	assert.True(t, deg)
 	assert.Contains(t, reason, "Diskless")
 }
+
+// A degraded replica is a common reason to reach for remove-replica, so the
+// stuck alert lands on exactly the workflow that provokes it: the resource
+// still exists, so a "resource deleted" check never fires, and nothing
+// evaluates the departed node's condition again.
+func TestRemovedReplicaClearsItsAlert(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name: "data",
+		NodeStates: map[string]NodeStateInfo{
+			"n1": healthy("Primary"),
+			"n2": healthy("Secondary"),
+			"n3": {DiskState: "Failed", Role: "Secondary"},
+		},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	require.Len(t, drain(), 1)
+
+	delete(lister.list[0].NodeStates, "n3")
+	mon.Poll(ctx)
+
+	evts := drain()
+	require.Len(t, evts, 1)
+	assert.Equal(t, event.StatusResolved, evts[0].Status)
+	assert.Equal(t, "n3", evts[0].Node)
+	assert.Equal(t, "data", evts[0].Resource)
+	assert.Contains(t, evts[0].Message, "no longer part of resource data")
+
+	// And it stays quiet afterwards rather than re-resolving every poll.
+	mon.Poll(ctx)
+	assert.Empty(t, drain())
+}
+
+func TestUnregisteredNodeClearsItsAlert(t *testing.T) {
+	nodes := &mockNodeLister{list: []NodeStatusInfo{
+		{Name: "n1", Reachable: true},
+		{Name: "n2", Reachable: false, Message: "no route to host"},
+	}}
+	mon, drain := newHarness(t, Options{Resources: &mockLister{}, Nodes: nodes})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	require.Len(t, drain(), 1)
+
+	nodes.list = nodes.list[:1]
+	mon.Poll(ctx)
+
+	evts := drain()
+	require.Len(t, evts, 1)
+	assert.Equal(t, event.StatusResolved, evts[0].Status)
+	assert.Contains(t, evts[0].Message, "no longer registered")
+}
+
+// The safety property: a source that could not be listed reports nothing, and
+// nothing must never be read as "everything cleared". Otherwise one transient
+// database error resolves every alert in the cluster.
+func TestListFailureDoesNotResolveAnything(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:       "data",
+		NodeStates: map[string]NodeStateInfo{"n1": {DiskState: "Failed", Role: "Secondary"}},
+	}}}
+	nodes := &mockNodeLister{list: []NodeStatusInfo{{Name: "n9", Reachable: false}}}
+	mon, drain := newHarness(t, Options{Resources: lister, Nodes: nodes})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	require.Len(t, drain(), 2, "one degraded replica, one unreachable node")
+
+	lister.err = errors.New("db closed")
+	nodes.err = errors.New("dispatch unavailable")
+	mon.Poll(ctx)
+	assert.Empty(t, drain(), "a failed list must not resolve outstanding alerts")
+
+	// When the source comes back and the fault is genuinely gone, it resolves.
+	lister.err = nil
+	nodes.err = nil
+	lister.list[0].NodeStates["n1"] = healthy("Secondary")
+	nodes.list[0].Reachable = true
+	mon.Poll(ctx)
+	assert.Len(t, drain(), 2)
+}
+
+// One source failing must not block the other from resolving its own.
+func TestOneFailedSourceDoesNotBlockTheOther(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:       "data",
+		NodeStates: map[string]NodeStateInfo{"n1": {DiskState: "Failed", Role: "Secondary"}},
+	}}}
+	nodes := &mockNodeLister{list: []NodeStatusInfo{{Name: "n9", Reachable: false}}}
+	mon, drain := newHarness(t, Options{Resources: lister, Nodes: nodes})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	require.Len(t, drain(), 2)
+
+	// Resources still answer and the resource is gone; nodes are unavailable.
+	lister.list = nil
+	nodes.err = errors.New("dispatch unavailable")
+	mon.Poll(ctx)
+
+	evts := drain()
+	require.Len(t, evts, 1, "the resource alert clears; the node alert is left alone")
+	assert.Equal(t, "data", evts[0].Resource)
+}

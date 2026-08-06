@@ -177,15 +177,37 @@ func (m *Monitor) Polls() int {
 // Poll runs one health check cycle. Exported so a caller can force a check and
 // so tests need not wait on a ticker.
 func (m *Monitor) Poll(ctx context.Context) {
-	m.checkResources(ctx)
-	m.checkNodes(ctx)
+	// scope records every condition this cycle actually evaluated, so a firing
+	// alert whose subject has since vanished can be cleared. See resolveVanished.
+	sc := &pollScope{seen: map[string]bool{}, live: map[string]bool{}}
+	m.checkResources(ctx, sc)
+	m.checkNodes(ctx, sc)
+	m.resolveVanished(sc)
 
 	m.pollsMu.Lock()
 	m.polls++
 	m.pollsMu.Unlock()
 }
 
-func (m *Monitor) checkResources(ctx context.Context) {
+// pollScope is what one poll observed: the condition keys it evaluated, the
+// resources it saw, and whether each source answered at all.
+type pollScope struct {
+	seen map[string]bool
+	live map[string]bool
+	// resourcesOK / nodesOK are false when that source could not be listed. A
+	// source that failed reports nothing, which must never be mistaken for
+	// "every condition it owns has cleared".
+	resourcesOK bool
+	nodesOK     bool
+}
+
+func (s *pollScope) mark(key string) {
+	if s != nil {
+		s.seen[key] = true
+	}
+}
+
+func (m *Monitor) checkResources(ctx context.Context, sc *pollScope) {
 	if m.resources == nil {
 		return
 	}
@@ -194,20 +216,27 @@ func (m *Monitor) checkResources(ctx context.Context) {
 		m.log.Warn("alert monitor: list resources failed", zap.Error(err))
 		return
 	}
+	sc.resourcesOK = true
 
-	live := make(map[string]bool, len(resources))
 	for _, res := range resources {
-		live[res.Name] = true
-		m.checkReplicas(res)
+		sc.live[res.Name] = true
+		m.checkReplicas(res, sc)
 		m.checkPrimary(res)
-		m.checkWAN(res)
+		m.checkWAN(res, sc)
 	}
-	m.forgetDeleted(live)
+
+	m.mu.Lock()
+	for name := range m.primaries {
+		if !sc.live[name] {
+			delete(m.primaries, name)
+		}
+	}
+	m.mu.Unlock()
 }
 
 // checkReplicas raises one condition per replica whose disk or replication
 // state has left the healthy set.
-func (m *Monitor) checkReplicas(res ResourceStatusInfo) {
+func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
 	for node, state := range res.NodeStates {
 		degraded, reason := isDegraded(state)
 		m.level(event.Event{
@@ -219,7 +248,7 @@ func (m *Monitor) checkReplicas(res ResourceStatusInfo) {
 				"disk_state": state.DiskState,
 				"repl_state": state.ReplicationState,
 			},
-		}, degraded,
+		}, sc, degraded,
 			fmt.Sprintf("resource %s on %s degraded: %s", res.Name, node, reason),
 			fmt.Sprintf("resource %s on %s recovered to normal state", res.Name, node))
 	}
@@ -277,7 +306,7 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo) {
 // checkWAN tracks the cross-site link as its own condition, keyed to the
 // resource rather than a node, so a broken link is surfaced even when every
 // local replica looks healthy.
-func (m *Monitor) checkWAN(res ResourceStatusInfo) {
+func (m *Monitor) checkWAN(res ResourceStatusInfo, sc *pollScope) {
 	if !res.WANEnabled {
 		return
 	}
@@ -286,12 +315,12 @@ func (m *Monitor) checkWAN(res ResourceStatusInfo) {
 		Severity: event.SeverityCritical,
 		Resource: res.Name,
 		Node:     "wan",
-	}, !res.WANHealthy,
+	}, sc, !res.WANHealthy,
 		fmt.Sprintf("resource %s WAN replication degraded: %s", res.Name, res.WANMessage),
 		fmt.Sprintf("resource %s WAN replication recovered", res.Name))
 }
 
-func (m *Monitor) checkNodes(ctx context.Context) {
+func (m *Monitor) checkNodes(ctx context.Context, sc *pollScope) {
 	if m.nodes == nil {
 		return
 	}
@@ -300,6 +329,8 @@ func (m *Monitor) checkNodes(ctx context.Context) {
 		m.log.Warn("alert monitor: list nodes failed", zap.Error(err))
 		return
 	}
+	sc.nodesOK = true
+
 	for _, n := range nodes {
 		msg := n.Message
 		if msg == "" {
@@ -309,51 +340,84 @@ func (m *Monitor) checkNodes(ctx context.Context) {
 			Type:     event.TypeNodeUnreachable,
 			Severity: event.SeverityCritical,
 			Node:     n.Name,
-		}, !n.Reachable,
+		}, sc, !n.Reachable,
 			fmt.Sprintf("node %s is unreachable: %s", n.Name, msg),
 			fmt.Sprintf("node %s is reachable again", n.Name))
 	}
 }
 
-// forgetDeleted drops per-resource state for resources that no longer exist, so
-// a resource that is deleted and later recreated does not appear to have failed
-// over from wherever its predecessor's Primary happened to be. Any condition
-// still firing for it is resolved first — otherwise a receiver is left holding
-// an alert that can never clear.
-func (m *Monitor) forgetDeleted(live map[string]bool) {
-	m.mu.Lock()
-	for name := range m.primaries {
-		if !live[name] {
-			delete(m.primaries, name)
-		}
-	}
+// resolveVanished clears alerts whose subject no longer exists.
+//
+// A level condition only resolves when something evaluates it and finds it
+// false. If the thing it describes disappears, nothing evaluates it again and
+// the alert stays raised forever. Three ways that happens, all reachable from
+// normal operations:
+//
+//   - the resource is deleted;
+//   - a replica is removed from a resource that still exists (remove-replica) —
+//     and a replica being degraded is a common reason to remove it, so the
+//     stuck alert lands on exactly the workflow that provokes it;
+//   - a node is unregistered while unreachable.
+//
+// Keying this off "the resource is gone" only covered the first. Keying it off
+// "nothing evaluated this condition" covers all three, and needs no separate
+// knowledge of what removal looks like.
+//
+// The safety condition is that silence must come from a source that actually
+// answered. A failed list produces no keys at all, which would otherwise read
+// as every condition it owns having cleared — resolving every alert in the
+// cluster on a transient database error.
+func (m *Monitor) resolveVanished(sc *pollScope) {
+	type vanished struct{ key, message string }
 
-	var stale []string
+	m.mu.Lock()
+	var stale []vanished
 	for key, on := range m.firing {
-		if !on {
+		if !on || sc.seen[key] {
 			continue
 		}
-		// Key layout is "<type>|<resource>|<node>"; the resource is field 1.
+		// Key layout is "<type>|<resource>|<node>".
 		parts := strings.Split(key, "|")
-		if len(parts) == 3 && parts[1] != "" && !live[parts[1]] {
-			stale = append(stale, key)
+		if len(parts) != 3 {
+			continue
 		}
+		resource, node := parts[1], parts[2]
+
+		// Resource-scoped conditions belong to the resource lister, node-scoped
+		// ones to the node lister. Only prune from a source that reported.
+		if resource != "" && !sc.resourcesOK {
+			continue
+		}
+		if resource == "" && !sc.nodesOK {
+			continue
+		}
+
+		var msg string
+		switch {
+		case resource == "":
+			msg = fmt.Sprintf("node %s is no longer registered; clearing its outstanding alert", node)
+		case !sc.live[resource]:
+			msg = fmt.Sprintf("resource %s no longer exists; clearing its outstanding alert", resource)
+		default:
+			msg = fmt.Sprintf("%s is no longer part of resource %s; clearing its outstanding alert", node, resource)
+		}
+		stale = append(stale, vanished{key: key, message: msg})
 	}
-	for _, key := range stale {
-		delete(m.firing, key)
+	for _, v := range stale {
+		delete(m.firing, v.key)
 	}
 	m.mu.Unlock()
 
-	sort.Strings(stale)
-	for _, key := range stale {
-		parts := strings.Split(key, "|")
+	sort.Slice(stale, func(i, j int) bool { return stale[i].key < stale[j].key })
+	for _, v := range stale {
+		parts := strings.Split(v.key, "|")
 		m.publish(event.Event{
 			Type:     event.Type(parts[0]),
 			Severity: event.SeverityInfo,
 			Status:   event.StatusResolved,
 			Resource: parts[1],
 			Node:     parts[2],
-			Message:  fmt.Sprintf("resource %s no longer exists; clearing its outstanding alert", parts[1]),
+			Message:  v.message,
 		})
 	}
 }
@@ -361,8 +425,9 @@ func (m *Monitor) forgetDeleted(live map[string]bool) {
 // level reports a condition that is either true or false at each poll, emitting
 // exactly one firing event when it starts and one resolved event when it ends.
 // The severity on tmpl applies to the firing event; a recovery is informational.
-func (m *Monitor) level(tmpl event.Event, active bool, firingMsg, resolvedMsg string) {
+func (m *Monitor) level(tmpl event.Event, sc *pollScope, active bool, firingMsg, resolvedMsg string) {
 	key := tmpl.Key()
+	sc.mark(key)
 
 	m.mu.Lock()
 	was := m.firing[key]
