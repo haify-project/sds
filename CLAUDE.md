@@ -144,6 +144,8 @@ default_snapshot_suffix = "_snap"
 | `pkg/client`     | gRPC client for sds-cli                                                                |
 | `pkg/database`   | BBolt-based persistent storage for gateways                                            |
 | `pkg/reactor`    | drbd-reactor promoter config generation                                                |
+| `pkg/alert`      | Health detector: turns cluster state into events (degrade, failover, node loss)        |
+| `pkg/event`      | Notification bus, bounded history, and Webhook delivery                                |
 | `cmd/controller` | Controller main entry point                                                            |
 | `cmd/cli`        | CLI tool commands                                                                      |
 | `api/proto/v1`   | gRPC protocol definitions                                                              |

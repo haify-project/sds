@@ -1986,3 +1986,21 @@ func (c *SDSClient) RestoreLvmSnapshot(ctx context.Context, pool, snapshotName, 
 
 	return nil
 }
+
+// ListEvents returns retained notifications, oldest first.
+func (c *SDSClient) ListEvents(ctx context.Context, req *sdspb.ListEventsRequest) (*sdspb.ListEventsResponse, error) {
+	resp, err := c.client.ListEvents(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}
+
+// WatchEvents opens a notification stream. The caller reads until Recv returns
+// an error; cancelling ctx closes the stream.
+func (c *SDSClient) WatchEvents(ctx context.Context, req *sdspb.WatchEventsRequest) (sdspb.SDSController_WatchEventsClient, error) {
+	return c.client.WatchEvents(ctx, req)
+}

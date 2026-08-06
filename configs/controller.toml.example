@@ -47,3 +47,28 @@ port = 9090
 enabled = true
 listen_address = "0.0.0.0"
 port = 8080
+# Health detection and notifications.
+#
+# `enabled` starts the detector and the event bus by itself. Delivery is a
+# separate, optional concern: with no webhook configured the events are still
+# readable at GET /v1/events, streamed at GET /v1/events/watch, pushed to the
+# web UI's notification bell over GET /v1/events/stream, and followed with
+# `sds-cli event watch`.
+[alert]
+enabled = false
+check_interval_sec = 30
+# SSH-probe every registered node on each poll. This is what produces
+# node.unreachable events, and the only check that costs a round trip per node.
+check_nodes = true
+# Events retained for clients that connect after something happened.
+history_size = 500
+
+# Single-receiver shorthand: one POST per event, body is the event JSON.
+webhook_url = ""
+webhook_min_severity = "warning"   # info | warning | critical
+
+# Additional receivers, each with its own threshold.
+# [[alert.webhooks]]
+# url = "https://chat.example.com/hooks/sds"
+# min_severity = "info"
+# headers = { X-Token = "..." }

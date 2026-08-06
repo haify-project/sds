@@ -1,0 +1,304 @@
+// Package event carries the controller's operational notifications — a replica
+// going degraded, a resource's Primary moving to another node, a node dropping
+// off the network — from the detectors that notice them to whoever wants to
+// know.
+//
+// Everything goes through one in-process Bus. A Webhook is then just a
+// subscriber that POSTs, and a watch stream is a subscriber that forwards; both
+// see exactly the same events in the same order, so an operator can wire up
+// either (or both) without the two disagreeing about what happened.
+//
+// The Bus is deliberately not persisted. These are notifications about what the
+// cluster is doing right now; the durable record of who changed what is the
+// audit trail, and the durable record of cluster state is the cluster itself. A
+// bounded in-memory history exists only so a client that connects a moment late
+// can still see the alert that made someone go looking.
+package event
+
+import (
+	"slices"
+	"sort"
+	"sync"
+	"time"
+)
+
+// Type identifies what happened. Values are dotted "<subject>.<condition>" so a
+// consumer can filter on a prefix ("resource.") without enumerating every type.
+type Type string
+
+const (
+	// TypeResourceDegraded fires when a replica's disk or replication state
+	// leaves the healthy set (Diskless, Failed, StandAlone, ...).
+	TypeResourceDegraded Type = "resource.degraded"
+	// TypeResourceFailover fires when a resource's Primary role moves from one
+	// set of nodes to a different one — the event an operator most wants pushed
+	// at them, because by the time it happens the cluster has already reacted.
+	TypeResourceFailover Type = "resource.failover"
+	// TypeResourceNoPrimary fires when a resource that had a Primary no longer
+	// has one anywhere. Nothing is serving I/O for it.
+	TypeResourceNoPrimary Type = "resource.no_primary"
+	// TypeResourcePromoted fires when a resource gains a Primary, either for the
+	// first time or after a TypeResourceNoPrimary.
+	TypeResourcePromoted Type = "resource.promoted"
+	// TypeNodeUnreachable fires when the controller cannot reach a registered
+	// node over SSH — the transport every other operation depends on.
+	TypeNodeUnreachable Type = "node.unreachable"
+	// TypeWANDegraded fires when a WAN-replicated resource's cross-site link is
+	// broken, which local replica states cannot reveal on their own.
+	TypeWANDegraded Type = "wan.degraded"
+)
+
+// Severity ranks how much an event should interrupt someone.
+type Severity string
+
+const (
+	// SeverityInfo is a state change worth recording, not worth waking anyone.
+	SeverityInfo Severity = "info"
+	// SeverityWarning means redundancy or reachability is reduced but service
+	// continues.
+	SeverityWarning Severity = "warning"
+	// SeverityCritical means service is affected or one more failure ends it.
+	SeverityCritical Severity = "critical"
+)
+
+// rank orders severities for threshold comparisons. An unknown value ranks with
+// info so a typo in a config filter cannot silently suppress critical alerts.
+func (s Severity) rank() int {
+	switch s {
+	case SeverityCritical:
+		return 2
+	case SeverityWarning:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// AtLeast reports whether s is as severe as min.
+func (s Severity) AtLeast(min Severity) bool { return s.rank() >= min.rank() }
+
+// ParseSeverity maps a config string to a Severity, falling back to info (the
+// most permissive threshold) for anything unrecognised.
+func ParseSeverity(s string) Severity {
+	switch Severity(s) {
+	case SeverityCritical:
+		return SeverityCritical
+	case SeverityWarning:
+		return SeverityWarning
+	default:
+		return SeverityInfo
+	}
+}
+
+// Status distinguishes an alert being raised from the same alert clearing, so a
+// receiver can pair them up instead of treating a recovery as a new problem.
+type Status string
+
+const (
+	// StatusFiring means the condition is currently true.
+	StatusFiring Status = "firing"
+	// StatusResolved means a previously firing condition has cleared.
+	StatusResolved Status = "resolved"
+	// StatusInfo is for one-shot events that neither fire nor clear.
+	StatusInfo Status = "info"
+)
+
+// Event is one notification. The JSON encoding here is the Webhook body and the
+// watch-stream frame; both are the same shape on purpose, so a receiver written
+// against one works against the other.
+type Event struct {
+	// ID is monotonic across the whole bus, starting at 1. A watcher that sees
+	// its IDs skip knows it fell behind and lost events, which is otherwise
+	// invisible.
+	ID       uint64   `json:"id"`
+	Type     Type     `json:"type"`
+	Severity Severity `json:"severity"`
+	Status   Status   `json:"status"`
+	// Resource and Node scope the event. Either may be empty for events that do
+	// not apply to one.
+	Resource string `json:"resource,omitempty"`
+	Node     string `json:"node,omitempty"`
+	Message  string `json:"message"`
+	// Details carries type-specific fields (disk_state, from/to nodes, ...)
+	// without turning this struct into the union of every event's needs.
+	Details   map[string]string `json:"details,omitempty"`
+	Timestamp time.Time         `json:"timestamp"`
+}
+
+// Key identifies the condition an event is about, so firing and resolved
+// notifications for the same problem can be matched. It is not unique per
+// event — that is ID.
+func (e Event) Key() string {
+	return string(e.Type) + "|" + e.Resource + "|" + e.Node
+}
+
+// Filter narrows which events a subscriber or history query wants.
+type Filter struct {
+	// MinSeverity drops anything less severe. Zero value (empty) keeps all.
+	MinSeverity Severity
+	// Types keeps only these types. Empty keeps all.
+	Types []Type
+	// Resource keeps only events for this resource. Empty keeps all.
+	Resource string
+}
+
+// Match reports whether e passes the filter.
+func (f Filter) Match(e Event) bool {
+	if !e.Severity.AtLeast(f.MinSeverity) {
+		return false
+	}
+	if f.Resource != "" && e.Resource != f.Resource {
+		return false
+	}
+	if len(f.Types) == 0 {
+		return true
+	}
+	return slices.Contains(f.Types, e.Type)
+}
+
+// DefaultHistory is the number of past events kept for late-joining clients.
+const DefaultHistory = 500
+
+// subscriberBuffer is how many events a slow subscriber may fall behind before
+// it starts losing them. Deep enough to ride out a burst (a node failing takes
+// every resource on it degraded at once), shallow enough that a dead client
+// cannot pin megabytes.
+const subscriberBuffer = 256
+
+type subscription struct {
+	ch      chan Event
+	filter  Filter
+	dropped uint64
+}
+
+// Bus fans events out to subscribers and keeps a bounded history. It is safe
+// for concurrent use.
+type Bus struct {
+	mu       sync.Mutex
+	nextID   uint64
+	hist     []Event
+	histNext int
+	histWrap bool
+	subs     map[uint64]*subscription
+	nextSub  uint64
+	dropped  uint64
+}
+
+// NewBus creates a bus retaining the last history events. history <= 0 uses
+// DefaultHistory.
+func NewBus(history int) *Bus {
+	if history <= 0 {
+		history = DefaultHistory
+	}
+	return &Bus{
+		hist: make([]Event, history),
+		subs: make(map[uint64]*subscription),
+	}
+}
+
+// Publish stamps e with the next ID and the current time (unless already set),
+// records it in the history, and delivers it to every matching subscriber. It
+// returns the stamped event.
+//
+// Delivery never blocks: a subscriber whose buffer is full loses the event
+// rather than stalling the detector that published it. Losing an alert is bad;
+// wedging the health monitor behind one unresponsive Webhook receiver would
+// lose all of them.
+func (b *Bus) Publish(e Event) Event {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.nextID++
+	e.ID = b.nextID
+	if e.Timestamp.IsZero() {
+		e.Timestamp = time.Now()
+	}
+	if e.Severity == "" {
+		e.Severity = SeverityInfo
+	}
+	if e.Status == "" {
+		e.Status = StatusInfo
+	}
+
+	b.hist[b.histNext] = e
+	b.histNext++
+	if b.histNext == len(b.hist) {
+		b.histNext = 0
+		b.histWrap = true
+	}
+
+	for _, s := range b.subs {
+		if !s.filter.Match(e) {
+			continue
+		}
+		select {
+		case s.ch <- e:
+		default:
+			s.dropped++
+			b.dropped++
+		}
+	}
+	return e
+}
+
+// Subscribe returns a channel of events matching filter and a cancel function.
+// Cancel must be called when the subscriber is done; it closes the channel, so
+// a `for e := range ch` loop terminates. Calling cancel more than once is safe.
+func (b *Bus) Subscribe(filter Filter) (<-chan Event, func()) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.nextSub++
+	id := b.nextSub
+	s := &subscription{ch: make(chan Event, subscriberBuffer), filter: filter}
+	b.subs[id] = s
+
+	var once sync.Once
+	cancel := func() {
+		once.Do(func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if _, ok := b.subs[id]; ok {
+				delete(b.subs, id)
+				close(s.ch)
+			}
+		})
+	}
+	return s.ch, cancel
+}
+
+// Recent returns up to limit past events matching filter, oldest first. limit
+// <= 0 returns everything retained. sinceID > 0 returns only events newer than
+// that ID, which lets a reconnecting watcher resume without replaying what it
+// already saw.
+func (b *Bus) Recent(filter Filter, sinceID uint64, limit int) []Event {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	var out []Event
+	for i := 0; i < len(b.hist); i++ {
+		e := b.hist[i]
+		if e.ID == 0 || e.ID <= sinceID {
+			continue // never written, or already seen
+		}
+		if !filter.Match(e) {
+			continue
+		}
+		out = append(out, e)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+
+	// Trim from the front: when more events match than the caller asked for,
+	// the newest are the useful ones.
+	if limit > 0 && len(out) > limit {
+		out = out[len(out)-limit:]
+	}
+	return out
+}
+
+// Stats reports bus counters for diagnostics.
+func (b *Bus) Stats() (published, dropped uint64, subscribers int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.nextID, b.dropped, len(b.subs)
+}

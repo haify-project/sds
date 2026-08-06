@@ -58,8 +58,10 @@ graph TD
   让 Pod 可以调度到非副本节点。
 - **快照**：LVM 和 ZFS 快照，以及 GFS（祖父-父-子）保留策略计划任务。
 - **跨数据中心（WAN）**：当入站 UDP 被封禁时，通过 TCP 代理在 NAT/WAN 上运行 DRBD 复制。
-- **安全与运维**：令牌认证、RBAC、审计日志、可选 TLS、Prometheus 指标，以及基于
-  Webhook 的健康/告警监控。
+- **安全与运维**：令牌认证、RBAC、审计日志、可选 TLS、Prometheus 指标。
+- **通知**：健康检测器会为副本降级、主备切换（failover）、失去 Primary、节点失联
+  和 WAN 链路中断产生事件，可通过 Webhook 回调、gRPC/REST 监听流、推送到 Web UI
+  通知铃铛的 SSE，或 `sds-cli event watch` 送达。
 - **Web UI**：控制器内嵌的单页 Web 界面。
 - **AI 集成（MCP）**：`sds-mcp` 通过 Model Context Protocol 暴露 44 个管理工具，
   供 AI 助手（Claude Code、Claude Desktop 等）使用。
@@ -94,7 +96,8 @@ sds/
 │   ├── reactor/          # drbd-reactor promoter 配置生成
 │   ├── mcpserver/        # MCP 工具定义与处理器
 │   ├── wanproxy/         # 跨数据中心 DRBD-over-TCP 代理
-│   ├── alert/            # 健康/告警监控（Webhook）
+│   ├── alert/            # 健康检测器（降级、切换、节点失联）
+│   ├── event/            # 通知总线、历史缓冲与 Webhook 投递
 │   ├── rbac/             # 基于角色的访问控制
 │   ├── metrics/          # Prometheus 指标
 │   ├── config/           # 配置解析
@@ -164,12 +167,53 @@ auto_tiebreaker = true  # 为 2 副本资源自动添加无盘 quorum 仲裁票
 [self_ha]
 enabled = false
 
-# 可选：Webhook 健康/告警监控
+# 可选：健康检测与通知。
+#
+# `enabled` 本身只启动检测器和事件总线；投递方式是独立的：即使不配置 Webhook，
+# 事件同样可以通过 GET /v1/events 读取、GET /v1/events/watch 流式订阅、
+# GET /v1/events/stream 推送给 Web UI 的通知铃铛，或用 `sds-cli event watch` 跟踪。
 [alert]
 enabled = false
-webhook_url = ""
 check_interval_sec = 60
+check_nodes = true      # 每轮通过 SSH 探测各节点，用于产生 node.unreachable
+history_size = 500      # 为迟到的客户端保留的历史事件条数
+
+# 单接收端的简写形式。
+webhook_url = ""
+webhook_min_severity = "warning"   # info | warning | critical
+
+# 也可以配置多个接收端，各自设定阈值——例如 pager 只收 critical，
+# 聊天群收全部。
+# [[alert.webhooks]]
+# url = "https://chat.example.com/hooks/sds"
+# min_severity = "info"
+# headers = { X-Token = "..." }
 ```
+
+### 通知
+
+事件类型：`resource.degraded`、`resource.failover`、`resource.no_primary`、
+`resource.promoted`、`node.unreachable`、`wan.degraded`。每条事件都带有
+`severity`（`info`/`warning`/`critical`）和 `status`（条件出现时为 `firing`，
+恢复时为 `resolved`），接收端因此可以把告警和它的恢复配成一对，而不会把恢复
+当成一次新的故障。
+
+```bash
+# 实时跟踪，或回放控制器仍保留的历史
+sds-cli event watch
+sds-cli event watch --min-severity critical --type resource.failover
+sds-cli event list --replay --json
+
+# 同样的事件走 REST（换行分隔的 JSON）
+curl -N http://controller:3375/v1/events/watch
+
+# 面向浏览器的 SSE，也就是 Web UI 铃铛所订阅的
+curl -N http://controller:3375/v1/events/stream
+```
+
+事件 id 单调递增，客户端看到跳号就知道自己落后了、而不是"什么都没发生"；
+重连时带上 `since_id` 即可续传，不会重复收到已经看过的事件。订阅者若停止读取，
+丢的只是它自己的事件，不会阻塞检测器。
 
 存储节点的 SSH 访问**不在**此处配置——`dispatch` 库读取它自己的
 `~/.dispatch/config.toml`（SSH 用户、密钥、主机→地址映射）。主机也可在运行时通过

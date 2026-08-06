@@ -400,6 +400,25 @@ service SDSController {
     option (google.api.http) = { get: "/v1/logs"; };
   }
 
+  // Operational notifications: a replica degraded, a resource's Primary moved,
+  // a node stopped answering. ListEvents serves the controller's bounded
+  // in-memory history — enough to see what just happened, not an archive. The
+  // durable record of who did what is ListAuditEvents.
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse) {
+    option (google.api.http) = { get: "/v1/events"; };
+  }
+
+  // WatchEvents streams notifications as they happen, so an operator (or the
+  // web UI, or a script) can react without polling. Over REST this is a
+  // newline-delimited JSON stream; `curl -N .../v1/events/watch` works.
+  //
+  // A watcher that cannot keep up loses events rather than blocking the
+  // controller. Event.id is monotonic across the whole stream, so a gap in it
+  // is how a client detects that it fell behind.
+  rpc WatchEvents(WatchEventsRequest) returns (stream Event) {
+    option (google.api.http) = { get: "/v1/events/watch"; };
+  }
+
 }
 
 // Pool messages
@@ -1316,6 +1335,65 @@ message ListControllerLogsResponse {
   string node = 4;
   // True when the buffer has wrapped, i.e. older lines have been discarded.
   bool truncated = 5;
+}
+
+// ==================== Events / notifications ====================
+
+// Event is one operational notification. The same shape is delivered to
+// Webhook receivers as JSON, so a receiver written against one works against
+// the other.
+message Event {
+  // Monotonic across the controller's whole event stream, starting at 1. A
+  // watcher whose ids skip a value knows it fell behind and lost events.
+  uint64 id = 1;
+  // Dotted "<subject>.<condition>", e.g. "resource.failover",
+  // "resource.degraded", "resource.no_primary", "resource.promoted",
+  // "node.unreachable", "wan.degraded".
+  string type = 2;
+  // "info" | "warning" | "critical".
+  string severity = 3;
+  // "firing" when a condition starts, "resolved" when it clears, "info" for
+  // one-shot events that do neither. Pairing these is how a receiver avoids
+  // treating a recovery as a new problem.
+  string status = 4;
+  string resource = 5;      // empty for events not scoped to a resource
+  string node = 6;          // empty for events not scoped to a node
+  string message = 7;       // human-readable, already formatted
+  // Type-specific fields: disk_state / repl_state for degrade events,
+  // from / to for failover events.
+  map<string, string> details = 8;
+  int64 timestamp_unix_ms = 9;
+}
+
+message ListEventsRequest {
+  int32 limit = 1;              // newest first; 0 means a server-chosen default
+  string min_severity = 2;      // "info" (default) | "warning" | "critical"
+  repeated string types = 3;    // exact type matches; empty for all
+  string resource = 4;          // empty for all
+  // Only events newer than this id. Lets a client resume where it left off
+  // instead of re-reading the whole buffer.
+  uint64 since_id = 5;
+}
+
+message ListEventsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Event events = 3;    // oldest first
+  // Total published since the controller started. Compared against the oldest
+  // id returned, this tells a client whether history has been discarded.
+  uint64 published = 4;
+  // Events dropped because a subscriber could not keep up.
+  uint64 dropped = 5;
+}
+
+message WatchEventsRequest {
+  string min_severity = 1;
+  repeated string types = 2;
+  string resource = 3;
+  // Replay retained events newer than this id before streaming live ones, so a
+  // reconnecting client does not miss what happened while it was away. 0 skips
+  // the replay and starts from now.
+  uint64 since_id = 4;
 }
 
 message ResourceInfo {

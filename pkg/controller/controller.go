@@ -24,6 +24,7 @@ import (
 	"github.com/liliang-cn/sds/pkg/config"
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/liliang-cn/sds/pkg/event"
 	"github.com/liliang-cn/sds/pkg/gateway"
 	"github.com/liliang-cn/sds/pkg/logbuf"
 	"github.com/liliang-cn/sds/pkg/metrics"
@@ -48,7 +49,11 @@ type Controller struct {
 	metrics       *metrics.Metrics
 	metricsServer *http.Server
 	// UI
-	uiServer     *UIServer
+	uiServer *UIServer
+	// events carries operational notifications (degrade, failover, node loss)
+	// from the health detector to Webhook receivers and watch streams. Nil when
+	// notifications are disabled, which is what the API surfaces report on.
+	events       *event.Bus
 	alertMonitor *alert.Monitor
 	// logRing holds the controller's recent log output for the API to serve.
 	// Nil when the process was started without one, in which case the log view
@@ -222,13 +227,10 @@ func (c *Controller) Start() error {
 		}
 	}
 
-	// Start Alert Monitor if enabled
-	if c.config.Alert.Enabled && c.config.Alert.WebhookURL != "" {
-		interval := time.Duration(c.config.Alert.CheckIntervalSec) * time.Second
-		c.alertMonitor = alert.NewMonitor(c.config.Alert.WebhookURL, interval, c.resources, c.logger)
-		c.alertMonitor.Start(c.ctx)
-		c.logger.Info("Alert monitor started", zap.String("webhook", c.config.Alert.WebhookURL))
-	}
+	// Bring up the event bus, health detector and Webhook receivers before the
+	// API, so a watcher that connects the instant the port opens does not miss
+	// the first poll's findings.
+	c.startNotifications()
 
 	// Start gRPC server
 	if err := c.startGRPCServer(); err != nil {
@@ -268,6 +270,53 @@ func (c *Controller) Start() error {
 	return nil
 }
 
+// Events returns the notification bus, or nil when notifications are disabled.
+func (c *Controller) Events() *event.Bus { return c.events }
+
+// startNotifications brings up the event bus, the health detector that feeds
+// it, and any configured Webhook receivers.
+//
+// A Webhook is no longer required to enable this: the bus also backs the watch
+// stream and the SSE endpoint, so an operator who wants to tail events without
+// standing up an HTTP receiver just sets enabled = true.
+func (c *Controller) startNotifications() {
+	if !c.config.Alert.Enabled {
+		return
+	}
+
+	c.events = event.NewBus(c.config.Alert.HistorySize)
+
+	opts := alert.Options{
+		Interval:  time.Duration(c.config.Alert.CheckIntervalSec) * time.Second,
+		Resources: c.resources,
+		Logger:    c.logger,
+	}
+	// Node reachability costs an SSH round trip per node per poll, so it is a
+	// separate switch from the resource checks, which are served from state the
+	// controller already gathers.
+	if c.config.Alert.CheckNodes {
+		opts.Nodes = c.nodes
+	}
+	c.alertMonitor = alert.NewMonitor(c.events, opts)
+	c.alertMonitor.Start(c.ctx)
+
+	for _, wh := range c.config.Alert.Receivers() {
+		event.NewWebhook(event.WebhookConfig{
+			URL:     wh.URL,
+			Headers: wh.Headers,
+			Filter:  event.Filter{MinSeverity: event.ParseSeverity(wh.MinSeverity)},
+		}, c.logger).Start(c.ctx, c.events)
+		c.logger.Info("Alert webhook registered",
+			zap.String("url", wh.URL),
+			zap.String("min_severity", wh.MinSeverity))
+	}
+
+	c.logger.Info("Notifications started",
+		zap.Duration("interval", opts.Interval),
+		zap.Bool("node_checks", opts.Nodes != nil),
+		zap.Int("webhooks", len(c.config.Alert.Receivers())))
+}
+
 // Stop stops the controller
 func (c *Controller) Stop() {
 	c.logger.Info("Stopping SDS controller")
@@ -277,6 +326,12 @@ func (c *Controller) Stop() {
 	// Stop the snapshot scheduler
 	if c.schedules != nil {
 		c.schedules.Stop()
+	}
+
+	// Stop the health detector. Subscribers (Webhooks, watch streams) unwind on
+	// their own once c.cancel above propagates.
+	if c.alertMonitor != nil {
+		c.alertMonitor.Stop()
 	}
 
 	// Stop metrics server
@@ -316,14 +371,6 @@ func (c *Controller) Stop() {
 
 // startGRPCServer starts the gRPC server with gRPC-Gateway on separate ports
 func (c *Controller) startGRPCServer() error {
-	// Start Alert Monitor if enabled
-	if c.config.Alert.Enabled && c.config.Alert.WebhookURL != "" {
-		interval := time.Duration(c.config.Alert.CheckIntervalSec) * time.Second
-		c.alertMonitor = alert.NewMonitor(c.config.Alert.WebhookURL, interval, c.resources, c.logger)
-		c.alertMonitor.Start(c.ctx)
-		c.logger.Info("Alert monitor started", zap.String("webhook", c.config.Alert.WebhookURL))
-	}
-
 	// Start gRPC server on the configured port
 	grpcAddr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, c.config.Server.Port)
 	grpcLis, err := net.Listen("tcp", grpcAddr)
@@ -411,14 +458,6 @@ func (c *Controller) startGRPCServer() error {
 
 	c.logger.Info("Registered SDS controller service")
 
-	// Start Alert Monitor if enabled
-	if c.config.Alert.Enabled && c.config.Alert.WebhookURL != "" {
-		interval := time.Duration(c.config.Alert.CheckIntervalSec) * time.Second
-		c.alertMonitor = alert.NewMonitor(c.config.Alert.WebhookURL, interval, c.resources, c.logger)
-		c.alertMonitor.Start(c.ctx)
-		c.logger.Info("Alert monitor started", zap.String("webhook", c.config.Alert.WebhookURL))
-	}
-
 	// Start gRPC server
 	go func() {
 		c.logger.Info("gRPC server listening", zap.String("address", grpcAddr))
@@ -452,6 +491,10 @@ func (c *Controller) startGRPCServer() error {
 
 	// Read-only RBAC introspection endpoints for the UI/CLI (whoami / policies).
 	c.registerRBACRoutes(gatewayMux, rbacEngine)
+
+	// Browser-facing SSE event stream, alongside the generated
+	// /v1/events/watch that serves newline-delimited JSON.
+	c.registerEventRoutes(gatewayMux, rbacEngine)
 
 	// Wrap with CORS handler
 	corsHandler := corsMiddleware(gatewayMux)

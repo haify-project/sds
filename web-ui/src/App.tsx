@@ -83,7 +83,11 @@ function App() {
           </Routes>
         </BrowserRouter>
         <AuthTokenDialog />
-        <Toaster richColors position="top-right" />
+        {/* Bottom-right, not top-right: the header's right edge holds the
+            notification bell, the Copilot toggle and the account menu, and a
+            toast stack parked over them covers the controls it is telling you
+            to go and use. */}
+        <Toaster richColors position="bottom-right" />
       </TooltipProvider>
     </QueryClientProvider>
   );

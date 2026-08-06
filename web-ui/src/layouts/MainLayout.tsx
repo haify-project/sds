@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
+import { NotificationBell } from '@/components/NotificationBell';
 
 // Collapsing the sidebar is a per-workstation preference, so it is remembered
 // across reloads. Storage can throw (private mode, disabled cookies); the
@@ -273,6 +274,7 @@ export function MainLayout() {
               <Sparkles className="h-4 w-4" />
               Copilot
             </button>
+            <NotificationBell />
             <UserMenu />
           </div>
         </header>

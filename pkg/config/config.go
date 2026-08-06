@@ -56,12 +56,61 @@ type DispatchConfig struct {
 	Parallel   int    `mapstructure:"parallel"`
 }
 
-// AlertConfig controls background health polling and Webhook notifications for
-// DRBD degraded states (StandAlone, Diskless, Syncing, Loss of Quorum).
+// AlertConfig controls background health polling and how the resulting
+// notifications are delivered.
+//
+// Enabling this starts the detector and the event bus. Delivery is separate and
+// optional: with no Webhook configured the events are still readable over
+// `GET /v1/events`, streamed over `GET /v1/events/watch`, and pushed to browsers
+// over `GET /v1/events/stream`.
 type AlertConfig struct {
-	Enabled          bool   `mapstructure:"enabled"`
-	WebhookURL       string `mapstructure:"webhook_url"`
-	CheckIntervalSec int    `mapstructure:"check_interval_sec"`
+	Enabled bool `mapstructure:"enabled"`
+	// WebhookURL is the single-receiver shorthand. Equivalent to one entry in
+	// Webhooks; both may be set, and both receive events.
+	WebhookURL string `mapstructure:"webhook_url"`
+	// WebhookMinSeverity filters WebhookURL: "info" (default), "warning" or
+	// "critical".
+	WebhookMinSeverity string `mapstructure:"webhook_min_severity"`
+	// Webhooks are additional receivers, each with its own severity threshold —
+	// a pager on "critical", a chat channel on "info".
+	Webhooks         []WebhookReceiver `mapstructure:"webhooks"`
+	CheckIntervalSec int               `mapstructure:"check_interval_sec"`
+	// CheckNodes enables SSH reachability probing of every registered node on
+	// each poll. It is what produces node.unreachable events, and it is the only
+	// check that costs a round trip per node, so it has its own switch.
+	CheckNodes bool `mapstructure:"check_nodes"`
+	// HistorySize is how many past events are retained for late-joining clients.
+	// Zero uses the event package default.
+	HistorySize int `mapstructure:"history_size"`
+}
+
+// WebhookReceiver is one HTTP notification target.
+type WebhookReceiver struct {
+	URL string `mapstructure:"url"`
+	// MinSeverity drops anything less severe: "info" (default), "warning",
+	// "critical".
+	MinSeverity string `mapstructure:"min_severity"`
+	// Headers are sent with every request — an auth token, a routing key.
+	Headers map[string]string `mapstructure:"headers"`
+}
+
+// Receivers returns every configured Webhook, folding the WebhookURL shorthand
+// in as the first entry. Receivers without a URL are skipped rather than
+// producing a receiver that fails on every delivery.
+func (a AlertConfig) Receivers() []WebhookReceiver {
+	var out []WebhookReceiver
+	if a.WebhookURL != "" {
+		out = append(out, WebhookReceiver{
+			URL:         a.WebhookURL,
+			MinSeverity: a.WebhookMinSeverity,
+		})
+	}
+	for _, w := range a.Webhooks {
+		if w.URL != "" {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // SelfHAConfig configures controller Self-HA.
@@ -314,6 +363,8 @@ func setDefaults() {
 	viper.SetDefault("schedule.enabled", true)
 	viper.SetDefault("alert.enabled", false)
 	viper.SetDefault("alert.check_interval_sec", 30)
+	viper.SetDefault("alert.check_nodes", true)
+	viper.SetDefault("alert.history_size", 500)
 }
 
 // Save saves configuration to file

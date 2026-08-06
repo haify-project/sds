@@ -62,8 +62,12 @@ graph TD
   retention schedules.
 - **Cross-DC (WAN)**: a TCP proxy for running DRBD replication across NAT/WAN
   where inbound UDP is blocked.
-- **Security & Ops**: token auth, RBAC, audit logging, optional TLS, Prometheus
-  metrics, and a webhook-based health/alert monitor.
+- **Security & Ops**: token auth, RBAC, audit logging, optional TLS, and
+  Prometheus metrics.
+- **Notifications**: a health detector that raises events for degraded replicas,
+  failovers, lost Primaries, unreachable nodes and broken WAN links, delivered
+  by Webhook, by gRPC/REST watch stream, by SSE to the web UI's notification
+  bell, or by `sds-cli event watch`.
 - **Web UI**: an embedded single-page UI served by the controller.
 - **AI Integration (MCP)**: `sds-mcp` exposes 44 management tools over the Model
   Context Protocol for AI assistants (Claude Code, Claude Desktop, etc.).
@@ -98,7 +102,8 @@ sds/
 │   ├── reactor/          # drbd-reactor promoter config generation
 │   ├── mcpserver/        # MCP tool definitions and handlers
 │   ├── wanproxy/         # Cross-DC DRBD-over-TCP proxy
-│   ├── alert/            # Health/alert monitor (webhook)
+│   ├── alert/            # Health detector (degrade, failover, node loss)
+│   ├── event/            # Notification bus, history, and Webhook delivery
 │   ├── rbac/             # Role-based access control
 │   ├── metrics/          # Prometheus metrics
 │   ├── config/           # Configuration parsing
@@ -168,12 +173,56 @@ auto_tiebreaker = true  # auto-add a diskless quorum tiebreaker for 2-replica re
 [self_ha]
 enabled = false
 
-# Optional: webhook health/alert monitor
+# Optional: health detection and notifications.
+#
+# `enabled` starts the detector and the event bus on its own. Delivery is
+# separate: with no webhook configured the events are still readable at
+# GET /v1/events, streamed at GET /v1/events/watch, pushed to the web UI's
+# notification bell over GET /v1/events/stream, and followed with
+# `sds-cli event watch`.
 [alert]
 enabled = false
-webhook_url = ""
 check_interval_sec = 60
+check_nodes = true      # SSH-probe each node per poll; produces node.unreachable
+history_size = 500      # events retained for clients that connect late
+
+# Single-receiver shorthand.
+webhook_url = ""
+webhook_min_severity = "warning"   # info | warning | critical
+
+# Additional receivers, each with its own threshold — a pager on critical,
+# a chat channel on everything.
+# [[alert.webhooks]]
+# url = "https://chat.example.com/hooks/sds"
+# min_severity = "info"
+# headers = { X-Token = "..." }
 ```
+
+### Notifications
+
+Event types: `resource.degraded`, `resource.failover`, `resource.no_primary`,
+`resource.promoted`, `node.unreachable`, `wan.degraded`. Each carries a
+`severity` (`info`/`warning`/`critical`) and a `status` (`firing` when a
+condition starts, `resolved` when it clears), so a receiver can pair an alert
+with its recovery instead of reading the recovery as a new fault.
+
+```bash
+# Follow live, or replay what the controller still holds
+sds-cli event watch
+sds-cli event watch --min-severity critical --type resource.failover
+sds-cli event list --replay --json
+
+# Same events over REST (newline-delimited JSON)
+curl -N http://controller:3375/v1/events/watch
+
+# Browser-friendly SSE, which is what the web UI's bell subscribes to
+curl -N http://controller:3375/v1/events/stream
+```
+
+Event ids are monotonic, so a client that sees a gap knows it fell behind rather
+than that nothing happened; reconnecting with `since_id` resumes without
+replaying what was already seen. A subscriber that stops reading loses its own
+events rather than blocking the detector.
 
 SSH access to storage nodes is **not** configured here — the `dispatch` library
 reads its own `~/.dispatch/config.toml` (SSH user, key, and host→address map).

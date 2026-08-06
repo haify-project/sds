@@ -83,6 +83,137 @@
         ]
       }
     },
+    "/v1/events": {
+      "get": {
+        "summary": "Operational notifications: a replica degraded, a resource's Primary moved,\na node stopped answering. ListEvents serves the controller's bounded\nin-memory history — enough to see what just happened, not an archive. The\ndurable record of who did what is ListAuditEvents.",
+        "operationId": "SDSController_ListEvents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListEventsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "description": "newest first; 0 means a server-chosen default",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "minSeverity",
+            "description": "\"info\" (default) | \"warning\" | \"critical\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "types",
+            "description": "exact type matches; empty for all",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "resource",
+            "description": "empty for all",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sinceId",
+            "description": "Only events newer than this id. Lets a client resume where it left off\ninstead of re-reading the whole buffer.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/events/watch": {
+      "get": {
+        "summary": "WatchEvents streams notifications as they happen, so an operator (or the\nweb UI, or a script) can react without polling. Over REST this is a\nnewline-delimited JSON stream; `curl -N .../v1/events/watch` works.",
+        "description": "A watcher that cannot keep up loses events rather than blocking the\ncontroller. Event.id is monotonic across the whole stream, so a gap in it\nis how a client detects that it fell behind.",
+        "operationId": "SDSController_WatchEvents",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1Event"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1Event"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "minSeverity",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "types",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "resource",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sinceId",
+            "description": "Replay retained events newer than this id before streaming live ones, so a\nreconnecting client does not miss what happened while it was away. 0 skips\nthe replay and starts from now.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/gateways": {
       "get": {
         "operationId": "SDSController_ListGateways",
@@ -5329,6 +5460,52 @@
         }
       }
     },
+    "v1Event": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Monotonic across the controller's whole event stream, starting at 1. A\nwatcher whose ids skip a value knows it fell behind and lost events."
+        },
+        "type": {
+          "type": "string",
+          "description": "Dotted \"\u003csubject\u003e.\u003ccondition\u003e\", e.g. \"resource.failover\",\n\"resource.degraded\", \"resource.no_primary\", \"resource.promoted\",\n\"node.unreachable\", \"wan.degraded\"."
+        },
+        "severity": {
+          "type": "string",
+          "description": "\"info\" | \"warning\" | \"critical\"."
+        },
+        "status": {
+          "type": "string",
+          "description": "\"firing\" when a condition starts, \"resolved\" when it clears, \"info\" for\none-shot events that do neither. Pairing these is how a receiver avoids\ntreating a recovery as a new problem."
+        },
+        "resource": {
+          "type": "string",
+          "title": "empty for events not scoped to a resource"
+        },
+        "node": {
+          "type": "string",
+          "title": "empty for events not scoped to a node"
+        },
+        "message": {
+          "type": "string",
+          "title": "human-readable, already formatted"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Type-specific fields: disk_state / repl_state for degrade events,\nfrom / to for failover events."
+        },
+        "timestampUnixMs": {
+          "type": "string",
+          "format": "int64"
+        }
+      },
+      "description": "Event is one operational notification. The same shape is delivered to\nWebhook receivers as JSON, so a receiver written against one works against\nthe other."
+    },
     "v1EvictHaResponse": {
       "type": "object",
       "properties": {
@@ -5752,6 +5929,35 @@
         "truncated": {
           "type": "boolean",
           "description": "True when the buffer has wrapped, i.e. older lines have been discarded."
+        }
+      }
+    },
+    "v1ListEventsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Event"
+          },
+          "title": "oldest first"
+        },
+        "published": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Total published since the controller started. Compared against the oldest\nid returned, this tells a client whether history has been discarded."
+        },
+        "dropped": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Events dropped because a subscriber could not keep up."
         }
       }
     },

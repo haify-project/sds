@@ -5263,6 +5263,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 			item.NodeStates[node] = alert.NodeStateInfo{
 				DiskState:        st.DiskState,
 				ReplicationState: st.Replication,
+				Role:             st.Role,
 			}
 		}
 
