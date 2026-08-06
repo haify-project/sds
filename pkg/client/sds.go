@@ -1017,6 +1017,18 @@ func (c *SDSClient) AddReplica(ctx context.Context, resource, node string) error
 	return nil
 }
 
+// RemoveReplica takes a diskful replica out of a running resource.
+func (c *SDSClient) RemoveReplica(ctx context.Context, resource, node string) error {
+	resp, err := c.client.RemoveReplica(ctx, &sdspb.RemoveReplicaRequest{Resource: resource, Node: node})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 func (c *SDSClient) EvictHa(ctx context.Context, resource string) error {
 	req := &sdspb.EvictHaRequest{
 		Resource: resource,

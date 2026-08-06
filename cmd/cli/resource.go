@@ -44,6 +44,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceSetOptions())
 	cmd.AddCommand(resourcePrimary())
 	cmd.AddCommand(resourceAddReplica())
+	cmd.AddCommand(resourceRemoveReplica())
 	cmd.AddCommand(resourceAddDR())
 	cmd.AddCommand(resourceDRFailover())
 	cmd.AddCommand(resourceSecondary())
@@ -684,6 +685,57 @@ func formatStringSlice(values []string) string {
 	result := append([]string(nil), values...)
 	sort.Strings(result)
 	return strings.Join(result, ", ")
+}
+
+func resourceRemoveReplica() *cobra.Command {
+	var node string
+	var yes bool
+
+	cmd := &cobra.Command{
+		Use:   "remove-replica <resource> --node <node>",
+		Short: "Take a diskful replica out of a running resource",
+		Long: `Remove one full copy of a running resource. The inverse of add-replica, for a
+node that was added to carry a resource through some maintenance and is not
+wanted permanently.
+
+The surviving replicas keep their node-ids, so none of them resyncs; only the
+leaving node is torn down. It is refused when that node is Primary, when it is
+the quorum tiebreaker or the off-site DR, or when fewer than two diskful copies
+would remain — unlike a conversion, whose single-copy window closes when the
+resync finishes, this is permanent.
+
+  sds resource remove-replica sds-meta --node node-d`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource := args[0]
+			if node == "" {
+				return fmt.Errorf("--node is required")
+			}
+			if !yes {
+				fmt.Printf("This destroys the copy of %q on %q. Re-run with --yes to proceed.\n", resource, node)
+				return nil
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer sdsClient.Close()
+
+			if err := sdsClient.RemoveReplica(ctx, resource, node); err != nil {
+				return fmt.Errorf("failed to remove replica: %w", err)
+			}
+			fmt.Printf("Replica removed from %q.\n", node)
+			fmt.Printf("  sds resource status %s\n", resource)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&node, "node", "", "Node whose replica is removed")
+	cmd.Flags().BoolVar(&yes, "yes", false, "Confirm destroying that node's copy")
+	return cmd
 }
 
 func resourceAddReplica() *cobra.Command {

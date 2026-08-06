@@ -2636,6 +2636,42 @@
         ]
       }
     },
+    "/v1/resources/{resource}/replicas/{node}": {
+      "delete": {
+        "operationId": "SDSController_RemoveReplica",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RemoveReplicaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{resource}/secondary": {
       "post": {
         "operationId": "SDSController_SetSecondary",
@@ -6735,6 +6771,17 @@
       }
     },
     "v1RemoveNVMeNamespaceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RemoveReplicaResponse": {
       "type": "object",
       "properties": {
         "success": {

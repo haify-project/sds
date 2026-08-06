@@ -127,6 +127,9 @@ service SDSController {
   rpc AddReplica(AddReplicaRequest) returns (AddReplicaResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/replicas"; body: "*"; };
   }
+  rpc RemoveReplica(RemoveReplicaRequest) returns (RemoveReplicaResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/replicas/{node}"; };
+  }
   rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse) {
     option (google.api.http) = { delete: "/v1/resources/{resource}/ha"; };
   }
@@ -1236,6 +1239,19 @@ message AddDRResponse {
 message AddReplicaRequest {
   string resource = 1;
   string node = 2;
+}
+
+// RemoveReplicaRequest takes a diskful replica out of a running resource. The
+// inverse of AddReplica; refused when the node is Primary, is the tiebreaker or
+// the DR, or when fewer than two diskful copies would remain.
+message RemoveReplicaRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message RemoveReplicaResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message AddReplicaResponse {

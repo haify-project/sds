@@ -1186,6 +1186,16 @@ func (s *Server) AddReplica(ctx context.Context, req *sdspb.AddReplicaRequest) (
 	}, nil
 }
 
+func (s *Server) RemoveReplica(ctx context.Context, req *sdspb.RemoveReplicaRequest) (*sdspb.RemoveReplicaResponse, error) {
+	if err := s.resources.RemoveReplica(ctx, req.Resource, req.Node); err != nil {
+		return &sdspb.RemoveReplicaResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.RemoveReplicaResponse{
+		Success: true,
+		Message: fmt.Sprintf("replica removed from %q", req.Node),
+	}, nil
+}
+
 func (s *Server) DeleteHa(ctx context.Context, req *sdspb.DeleteHaRequest) (*sdspb.DeleteHaResponse, error) {
 	err := s.resources.RemoveHa(ctx, req.Resource)
 	if err != nil {

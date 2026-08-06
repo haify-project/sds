@@ -57,6 +57,7 @@ const (
 	SDSController_SetTiebreaker_FullMethodName            = "/v1.SDSController/SetTiebreaker"
 	SDSController_AddDR_FullMethodName                    = "/v1.SDSController/AddDR"
 	SDSController_AddReplica_FullMethodName               = "/v1.SDSController/AddReplica"
+	SDSController_RemoveReplica_FullMethodName            = "/v1.SDSController/RemoveReplica"
 	SDSController_DeleteHa_FullMethodName                 = "/v1.SDSController/DeleteHa"
 	SDSController_GetHa_FullMethodName                    = "/v1.SDSController/GetHa"
 	SDSController_ListHa_FullMethodName                   = "/v1.SDSController/ListHa"
@@ -174,6 +175,7 @@ type SDSControllerClient interface {
 	SetTiebreaker(ctx context.Context, in *SetTiebreakerRequest, opts ...grpc.CallOption) (*SetTiebreakerResponse, error)
 	AddDR(ctx context.Context, in *AddDRRequest, opts ...grpc.CallOption) (*AddDRResponse, error)
 	AddReplica(ctx context.Context, in *AddReplicaRequest, opts ...grpc.CallOption) (*AddReplicaResponse, error)
+	RemoveReplica(ctx context.Context, in *RemoveReplicaRequest, opts ...grpc.CallOption) (*RemoveReplicaResponse, error)
 	DeleteHa(ctx context.Context, in *DeleteHaRequest, opts ...grpc.CallOption) (*DeleteHaResponse, error)
 	GetHa(ctx context.Context, in *GetHaRequest, opts ...grpc.CallOption) (*GetHaResponse, error)
 	ListHa(ctx context.Context, in *ListHaRequest, opts ...grpc.CallOption) (*ListHaResponse, error)
@@ -675,6 +677,16 @@ func (c *sDSControllerClient) AddReplica(ctx context.Context, in *AddReplicaRequ
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddReplicaResponse)
 	err := c.cc.Invoke(ctx, SDSController_AddReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RemoveReplica(ctx context.Context, in *RemoveReplicaRequest, opts ...grpc.CallOption) (*RemoveReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveReplicaResponse)
+	err := c.cc.Invoke(ctx, SDSController_RemoveReplica_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1417,6 +1429,7 @@ type SDSControllerServer interface {
 	SetTiebreaker(context.Context, *SetTiebreakerRequest) (*SetTiebreakerResponse, error)
 	AddDR(context.Context, *AddDRRequest) (*AddDRResponse, error)
 	AddReplica(context.Context, *AddReplicaRequest) (*AddReplicaResponse, error)
+	RemoveReplica(context.Context, *RemoveReplicaRequest) (*RemoveReplicaResponse, error)
 	DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error)
 	GetHa(context.Context, *GetHaRequest) (*GetHaResponse, error)
 	ListHa(context.Context, *ListHaRequest) (*ListHaResponse, error)
@@ -1657,6 +1670,9 @@ func (UnimplementedSDSControllerServer) AddDR(context.Context, *AddDRRequest) (*
 }
 func (UnimplementedSDSControllerServer) AddReplica(context.Context, *AddReplicaRequest) (*AddReplicaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddReplica not implemented")
+}
+func (UnimplementedSDSControllerServer) RemoveReplica(context.Context, *RemoveReplicaRequest) (*RemoveReplicaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveReplica not implemented")
 }
 func (UnimplementedSDSControllerServer) DeleteHa(context.Context, *DeleteHaRequest) (*DeleteHaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteHa not implemented")
@@ -2563,6 +2579,24 @@ func _SDSController_AddReplica_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).AddReplica(ctx, req.(*AddReplicaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RemoveReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveReplicaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RemoveReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RemoveReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RemoveReplica(ctx, req.(*RemoveReplicaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3942,6 +3976,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddReplica",
 			Handler:    _SDSController_AddReplica_Handler,
+		},
+		{
+			MethodName: "RemoveReplica",
+			Handler:    _SDSController_RemoveReplica_Handler,
 		},
 		{
 			MethodName: "DeleteHa",

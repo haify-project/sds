@@ -1629,6 +1629,61 @@ func local_request_SDSController_AddReplica_0(ctx context.Context, marshaler run
 	return msg, metadata, err
 }
 
+func request_SDSController_RemoveReplica_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RemoveReplicaRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["resource"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "resource")
+	}
+	protoReq.Resource, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "resource", err)
+	}
+	val, ok = pathParams["node"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node")
+	}
+	protoReq.Node, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node", err)
+	}
+	msg, err := client.RemoveReplica(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_SDSController_RemoveReplica_0(ctx context.Context, marshaler runtime.Marshaler, server SDSControllerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RemoveReplicaRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["resource"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "resource")
+	}
+	protoReq.Resource, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "resource", err)
+	}
+	val, ok = pathParams["node"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node")
+	}
+	protoReq.Node, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node", err)
+	}
+	msg, err := server.RemoveReplica(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_SDSController_DeleteHa_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq DeleteHaRequest
@@ -5468,6 +5523,26 @@ func RegisterSDSControllerHandlerServer(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_SDSController_AddReplica_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodDelete, pattern_SDSController_RemoveReplica_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/v1.SDSController/RemoveReplica", runtime.WithHTTPPathPattern("/v1/resources/{resource}/replicas/{node}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_SDSController_RemoveReplica_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_RemoveReplica_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodDelete, pattern_SDSController_DeleteHa_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -7701,6 +7776,23 @@ func RegisterSDSControllerHandlerClient(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_SDSController_AddReplica_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodDelete, pattern_SDSController_RemoveReplica_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/v1.SDSController/RemoveReplica", runtime.WithHTTPPathPattern("/v1/resources/{resource}/replicas/{node}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_SDSController_RemoveReplica_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_RemoveReplica_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodDelete, pattern_SDSController_DeleteHa_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -9069,6 +9161,7 @@ var (
 	pattern_SDSController_SetTiebreaker_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "resources", "resource", "ha", "tiebreaker"}, ""))
 	pattern_SDSController_AddDR_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "dr"}, ""))
 	pattern_SDSController_AddReplica_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "replicas"}, ""))
+	pattern_SDSController_RemoveReplica_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "replicas", "node"}, ""))
 	pattern_SDSController_DeleteHa_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
 	pattern_SDSController_GetHa_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
 	pattern_SDSController_ListHa_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "ha"}, ""))
@@ -9188,6 +9281,7 @@ var (
 	forward_SDSController_SetTiebreaker_0            = runtime.ForwardResponseMessage
 	forward_SDSController_AddDR_0                    = runtime.ForwardResponseMessage
 	forward_SDSController_AddReplica_0               = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveReplica_0            = runtime.ForwardResponseMessage
 	forward_SDSController_DeleteHa_0                 = runtime.ForwardResponseMessage
 	forward_SDSController_GetHa_0                    = runtime.ForwardResponseMessage
 	forward_SDSController_ListHa_0                   = runtime.ForwardResponseMessage
