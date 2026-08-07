@@ -504,6 +504,26 @@ func TestReportsADeviceThatCouldNotBeReleased(t *testing.T) {
 	assert.Contains(t, err.Error(), "still in use")
 }
 
+// If lvs never named the fast device, it is still a member PV of the pool after
+// the detach — the same end state as a vgreduce that failed, and reported the
+// same way rather than passed over.
+func TestReportsACacheDeviceItCouldNotIdentify(t *testing.T) {
+	anonymous := lvsLine("sds_sdspool", "[sds_sdspool_thin_tdata]", "Cwi-aoC---", "cache", "107374182400",
+		"writethrough", "1638400", "409600", "0", "1", "1", "1", "1", "sds_sdspool_thin_tdata_corig(0)")
+	dep := newDetachFake(anonymous, "")
+	var released bool
+	dep.vgReduceAndRemovePVFunc = func(_ context.Context, hosts []string, _, _ string) (*deployment.ExecResult, error) {
+		released = true
+		return successExecResult(hosts, ""), nil
+	}
+	ctrl := cacheTestController(t, dep)
+
+	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vgreduce")
+	assert.False(t, released, "there is no device name to hand to vgreduce")
+}
+
 // ---- listing ----
 
 // An operator has to be able to tell a tiered pool from a plain one without

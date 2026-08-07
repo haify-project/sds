@@ -330,14 +330,19 @@ func (sm *StorageManager) RemovePoolCache(ctx context.Context, node, poolName st
 			poolName, node, after.DirtyPercent)
 	}
 
-	if info.Device != "" {
-		// See VGReduceAndRemovePV: an SSD left in the group is free space that a
-		// later thin-pool extension would silently allocate pool data onto.
-		if err := execFailure(sm.controller.deployment.VGReduceAndRemovePV(ctx,
-			[]string{address}, poolName, info.Device)); err != nil {
-			return fmt.Errorf("the cache was flushed and detached, but %s is still a physical volume of %s "+
-				"on %s and must be removed before the pool is grown: %w", info.Device, poolName, node, err)
-		}
+	// See VGReduceAndRemovePV: an SSD left in the group is free space that a
+	// later thin-pool extension would silently allocate pool data onto. Not
+	// knowing which device it was is the same problem as failing to remove it,
+	// and is reported the same way rather than passed over in silence.
+	if info.Device == "" {
+		return fmt.Errorf("the cache on %s on %s was flushed and detached, but lvs did not say which device "+
+			"it was on, so that device is still a physical volume of the pool; take it out with "+
+			"`vgreduce %s <device>` before the pool is grown", poolName, node, poolName)
+	}
+	if err := execFailure(sm.controller.deployment.VGReduceAndRemovePV(ctx,
+		[]string{address}, poolName, info.Device)); err != nil {
+		return fmt.Errorf("the cache was flushed and detached, but %s is still a physical volume of %s "+
+			"on %s and must be removed before the pool is grown: %w", info.Device, poolName, node, err)
 	}
 
 	sm.controller.logger.Info("Pool cache removed",
