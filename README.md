@@ -69,7 +69,7 @@ graph TD
   by Webhook, by gRPC/REST watch stream, by SSE to the web UI's notification
   bell, or by `sds-cli event watch`.
 - **Web UI**: an embedded single-page UI served by the controller.
-- **AI Integration (MCP)**: `sds-mcp` exposes 44 management tools over the Model
+- **AI Integration (MCP)**: `sds-mcp` exposes 81 management tools over the Model
   Context Protocol for AI assistants (Claude Code, Claude Desktop, etc.).
 
 ## Interfaces & default ports
@@ -346,10 +346,15 @@ requested pool.
 
 ### 8. AI Assistants (MCP)
 
-`sds-mcp` serves the full management surface (44 tools: pools, resources,
-snapshots, gateways, HA) over the Model Context Protocol on stdio. Destructive
-operations are annotated so MCP clients ask for confirmation, and `--read-only`
-restricts the server to list/status/health tools.
+`sds-mcp` serves the full management surface (81 tools: pools, resources,
+snapshots, gateways, HA, ZFS, topology, and observability) over the Model Context
+Protocol on stdio. Destructive operations are annotated so MCP clients ask for
+confirmation, and `--read-only` restricts the server to list/status/health tools.
+
+Three of them answer what the cluster *did* rather than what it is, which is
+most of what anyone asks after something goes wrong: `sds_event_list`
+(degrade / failover / node-loss notifications), `sds_audit_list` (who called
+what), and `sds_log_list` (the active controller's own log).
 
 ```bash
 # Register with Claude Code

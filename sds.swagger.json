@@ -3798,6 +3798,27 @@
       }
     },
     "/v1/zfs/pools": {
+      "get": {
+        "summary": "Listing ZFS pools was the one RPC in the ZFS pool CRUD triple with no HTTP\nbinding, so it was reachable over gRPC but absent from the REST API and\nfrom the generated OpenAPI document. Create and Delete were both bound.",
+        "operationId": "SDSController_ListZFSpools",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListZFSPoolsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      },
       "post": {
         "summary": "ZFS operations",
         "operationId": "SDSController_CreateZFSPool",

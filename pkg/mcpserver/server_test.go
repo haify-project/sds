@@ -136,6 +136,22 @@ func TestToolRegistration(t *testing.T) {
 		"sds_gateway_list", "sds_gateway_create_nfs", "sds_gateway_create_iscsi", "sds_gateway_create_nvme",
 		"sds_nfs_exports", "sds_iscsi_luns", "sds_iscsi_chap", "sds_nvme_namespaces",
 		"sds_ha_create", "sds_ha_evict", "sds_self_ha_status", "sds_self_ha_enable",
+		// Observability: what the cluster did, not just what it is. Without
+		// these an assistant can describe a cluster but not explain how it got
+		// there, which is most of what gets asked after an incident.
+		"sds_event_list", "sds_audit_list", "sds_log_list",
+		// ZFS: the controller has had this surface for a long time and the
+		// client interface already declared it; none of it was ever exposed.
+		"sds_zfs_pool_list", "sds_zfs_dataset_create", "sds_zfs_volume_create",
+		"sds_zfs_volume_resize", "sds_zfs_snapshot_clone",
+		// Topology and node lifecycle.
+		"sds_resource_add_replica", "sds_resource_remove_replica",
+		"sds_resource_attach_diskless", "sds_resource_detach_diskless",
+		"sds_resource_set_tiebreaker", "sds_resource_add_dr", "sds_wan_repair",
+		"sds_node_drain", "sds_node_undrain", "sds_node_set_labels",
+		"sds_pool_convert_thin",
+		"sds_ha_get_toml", "sds_ha_promoter_status",
+		"sds_ocf_agent_list", "sds_ocf_agent_metadata",
 	} {
 		if _, found := tools[want]; !found {
 			t.Errorf("expected tool %q not registered", want)

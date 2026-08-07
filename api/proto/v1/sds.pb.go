@@ -15772,7 +15772,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"I\n" +
 	"\x13UndrainNodeResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\xb7a\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2\xcea\n" +
 	"\rSDSController\x12Q\n" +
 	"\n" +
 	"CreatePool\x12\x15.v1.CreatePoolRequest\x1a\x16.v1.CreatePoolResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/pools\x12U\n" +
@@ -15865,8 +15865,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x0eRemoveNVMeHost\x12\x19.v1.RemoveNVMeHostRequest\x1a\x1a.v1.RemoveNVMeHostResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/v1/gateways/nvme/hosts:remove\x12m\n" +
 	"\rListNVMeHosts\x12\x18.v1.ListNVMeHostsRequest\x1a\x19.v1.ListNVMeHostsResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/gateways/nvme/hosts:list\x12^\n" +
 	"\rCreateZFSPool\x12\x18.v1.CreateZFSPoolRequest\x1a\x19.v1.CreateZFSPoolResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/zfs/pools\x12b\n" +
-	"\rDeleteZFSPool\x12\x18.v1.DeleteZFSPoolRequest\x1a\x19.v1.DeleteZFSPoolResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/v1/zfs/pools/{name}\x12A\n" +
-	"\fListZFSpools\x12\x17.v1.ListZFSPoolsRequest\x1a\x18.v1.ListZFSPoolsResponse\x12j\n" +
+	"\rDeleteZFSPool\x12\x18.v1.DeleteZFSPoolRequest\x1a\x19.v1.DeleteZFSPoolResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/v1/zfs/pools/{name}\x12X\n" +
+	"\fListZFSpools\x12\x17.v1.ListZFSPoolsRequest\x1a\x18.v1.ListZFSPoolsResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/zfs/pools\x12j\n" +
 	"\x10CreateZFSDataset\x12\x1b.v1.CreateZFSDatasetRequest\x1a\x1c.v1.CreateZFSDatasetResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/zfs/datasets\x12f\n" +
 	"\x0fCreateZFSVolume\x12\x1a.v1.CreateZFSVolumeRequest\x1a\x1b.v1.CreateZFSVolumeResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/zfs/volumes\x12\x9c\x01\n" +
 	"\x0fResizeZFSVolume\x12\x1a.v1.ResizeZFSVolumeRequest\x1a\x1b.v1.ResizeZFSVolumeResponse\"P\x82\xd3\xe4\x93\x02J:\x01*Z\":\x01*2\x1d/v1/zfs/volumes/{volume_path}2!/v1/zfs/volumes/{volume_path=*/*}\x12\x9d\x01\n" +

@@ -2029,3 +2029,27 @@ func (c *SDSClient) RepairWanProxy(ctx context.Context, name string, dryRun bool
 	}
 	return resp, nil
 }
+
+// ListAuditEvents returns the persisted audit trail, newest first.
+func (c *SDSClient) ListAuditEvents(ctx context.Context, req *sdspb.ListAuditEventsRequest) (*sdspb.ListAuditEventsResponse, error) {
+	resp, err := c.client.ListAuditEvents(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}
+
+// ListControllerLogs returns recent lines from the active controller's own log.
+func (c *SDSClient) ListControllerLogs(ctx context.Context, req *sdspb.ListControllerLogsRequest) (*sdspb.ListControllerLogsResponse, error) {
+	resp, err := c.client.ListControllerLogs(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}

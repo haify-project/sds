@@ -240,6 +240,9 @@ type SDSControllerClient interface {
 	// ZFS operations
 	CreateZFSPool(ctx context.Context, in *CreateZFSPoolRequest, opts ...grpc.CallOption) (*CreateZFSPoolResponse, error)
 	DeleteZFSPool(ctx context.Context, in *DeleteZFSPoolRequest, opts ...grpc.CallOption) (*DeleteZFSPoolResponse, error)
+	// Listing ZFS pools was the one RPC in the ZFS pool CRUD triple with no HTTP
+	// binding, so it was reachable over gRPC but absent from the REST API and
+	// from the generated OpenAPI document. Create and Delete were both bound.
 	ListZFSpools(ctx context.Context, in *ListZFSPoolsRequest, opts ...grpc.CallOption) (*ListZFSPoolsResponse, error)
 	CreateZFSDataset(ctx context.Context, in *CreateZFSDatasetRequest, opts ...grpc.CallOption) (*CreateZFSDatasetResponse, error)
 	CreateZFSVolume(ctx context.Context, in *CreateZFSVolumeRequest, opts ...grpc.CallOption) (*CreateZFSVolumeResponse, error)
@@ -1494,6 +1497,9 @@ type SDSControllerServer interface {
 	// ZFS operations
 	CreateZFSPool(context.Context, *CreateZFSPoolRequest) (*CreateZFSPoolResponse, error)
 	DeleteZFSPool(context.Context, *DeleteZFSPoolRequest) (*DeleteZFSPoolResponse, error)
+	// Listing ZFS pools was the one RPC in the ZFS pool CRUD triple with no HTTP
+	// binding, so it was reachable over gRPC but absent from the REST API and
+	// from the generated OpenAPI document. Create and Delete were both bound.
 	ListZFSpools(context.Context, *ListZFSPoolsRequest) (*ListZFSPoolsResponse, error)
 	CreateZFSDataset(context.Context, *CreateZFSDatasetRequest) (*CreateZFSDatasetResponse, error)
 	CreateZFSVolume(context.Context, *CreateZFSVolumeRequest) (*CreateZFSVolumeResponse, error)

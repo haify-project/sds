@@ -306,7 +306,12 @@ service SDSController {
   rpc DeleteZFSPool(DeleteZFSPoolRequest) returns (DeleteZFSPoolResponse) {
     option (google.api.http) = { delete: "/v1/zfs/pools/{name}"; };
   }
-  rpc ListZFSpools(ListZFSPoolsRequest) returns (ListZFSPoolsResponse);
+  // Listing ZFS pools was the one RPC in the ZFS pool CRUD triple with no HTTP
+  // binding, so it was reachable over gRPC but absent from the REST API and
+  // from the generated OpenAPI document. Create and Delete were both bound.
+  rpc ListZFSpools(ListZFSPoolsRequest) returns (ListZFSPoolsResponse) {
+    option (google.api.http) = { get: "/v1/zfs/pools"; };
+  }
   rpc CreateZFSDataset(CreateZFSDatasetRequest) returns (CreateZFSDatasetResponse) {
     option (google.api.http) = { post: "/v1/zfs/datasets"; body: "*"; };
   }

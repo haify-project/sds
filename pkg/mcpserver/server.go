@@ -68,6 +68,9 @@ func (s *Server) MCPServer() *mcp.Server {
 	s.registerSnapshotTools(srv)
 	s.registerGatewayTools(srv)
 	s.registerHATools(srv)
+	s.registerObservabilityTools(srv)
+	s.registerZFSTools(srv)
+	s.registerTopologyTools(srv)
 	return srv
 }
 

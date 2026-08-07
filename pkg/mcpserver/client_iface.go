@@ -100,6 +100,42 @@ type ControllerClient interface {
 	GetSelfHaStatus(ctx context.Context) (*client.SelfHaStatus, error)
 	EnableSelfHa(ctx context.Context, vip, pool string, sizeGB, port uint32, nodes []string) (string, string, error)
 	DisableSelfHa(ctx context.Context, node string) error
+	GetHaStatus(ctx context.Context, resource string) ([]*sdspb.HaPromoterStatus, error)
+	GetHaToml(ctx context.Context, resource string) (*sdspb.GetHaTomlResponse, error)
+	SyncHaToml(ctx context.Context, resource, content string) (string, error)
+	ListResourceAgents(ctx context.Context) ([]*sdspb.ResourceAgentInfo, error)
+	GetResourceAgentMetadata(ctx context.Context, provider, name string) (*sdspb.GetResourceAgentMetadataResponse, error)
+
+	// Observability: what the cluster did, not just what it is. An assistant
+	// with only state queries can describe the cluster but cannot explain how
+	// it got there — which is most of what an operator actually asks.
+	ListEvents(ctx context.Context, req *sdspb.ListEventsRequest) (*sdspb.ListEventsResponse, error)
+	ListAuditEvents(ctx context.Context, req *sdspb.ListAuditEventsRequest) (*sdspb.ListAuditEventsResponse, error)
+	ListControllerLogs(ctx context.Context, req *sdspb.ListControllerLogsRequest) (*sdspb.ListControllerLogsResponse, error)
+
+	// Topology changes
+	AddReplica(ctx context.Context, resource, node string) error
+	RemoveReplica(ctx context.Context, resource, node string) error
+	AttachDisklessClient(ctx context.Context, resource, node string) error
+	DetachDisklessClient(ctx context.Context, resource, node string) error
+	SetTiebreaker(ctx context.Context, resource, node string) (string, string, error)
+	AddDR(ctx context.Context, resource, drNode, drEndpoint string, wanPort uint32, egressAddress string) (uint32, error)
+	RepairWanProxy(ctx context.Context, name string, dryRun bool) (*sdspb.RepairWanProxyResponse, error)
+
+	// Node lifecycle
+	DrainNode(ctx context.Context, name string) ([]string, error)
+	UndrainNode(ctx context.Context, name string) error
+	SetNodeLabels(ctx context.Context, node string, labels map[string]string, replace bool) (*sdspb.NodeInfo, error)
+	ConvertPoolToThin(ctx context.Context, node, pool string) error
+
+	// ZFS
+	ListZFSpools(ctx context.Context) ([]*sdspb.PoolInfo, error)
+	DeleteZFSPool(ctx context.Context, name, node string) error
+	CreateZFSDataset(ctx context.Context, datasetPath, node string) error
+	DeleteZFSDataset(ctx context.Context, datasetPath, node string) error
+	CreateZFSVolume(ctx context.Context, poolName, volumeName, size, node string) error
+	ResizeZFSVolume(ctx context.Context, volumePath, newSize, node string) error
+	CloneZFSSnapshot(ctx context.Context, snapshot, clonePath, node string) error
 }
 
 // compile-time check: the real gRPC client satisfies the interface.
