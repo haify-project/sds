@@ -286,6 +286,44 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 	return rec, nil
 }
 
+// dataMoveTimeout is how long a volume transfer may take when the caller set no
+// deadline of its own. The CLI defaults to 24h; this matches it so a backup
+// started over the API is not cut shorter than one started from the shell.
+const dataMoveTimeout = 24 * time.Hour
+
+// execDataMove runs a command that streams a whole volume, bounded by the
+// caller's deadline rather than by deployment.Exec's default.
+//
+// That default is 30 seconds. It is right for the `lvs` and `drbdsetup` queries
+// Exec was written for and catastrophic for moving a volume: a 1 GiB image
+// takes roughly 40 seconds on a gigabit LAN, so Exec returned while dd and
+// rclone were still running. Everything downstream then read that early return
+// as a finished upload — the verification found no object yet and failed the
+// backup, the cleanup could not delete an object that did not exist yet, and
+// the pipeline carried on regardless and eventually left a complete but
+// orphaned image on the target. Every symptom traced back to this one line.
+//
+// It also reports a result that named no host as a failure. deployment.Exec
+// returns AllSuccess() == true for an empty host set, so a command that ran
+// nowhere is indistinguishable from one that succeeded — which is exactly the
+// wrong default for a step whose whole purpose is moving bytes.
+func (bm *BackupManager) execDataMove(ctx context.Context, host, cmd string) (*deployment.ExecResult, error) {
+	timeout := dataMoveTimeout
+	if dl, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(dl); remaining > 0 {
+			timeout = remaining
+		}
+	}
+	res, err := bm.controller.deployment.Exec(ctx, []string{host}, cmd, deployment.WithExecTimeout(timeout))
+	if err != nil {
+		return nil, err
+	}
+	if res == nil || len(res.Hosts) == 0 {
+		return nil, fmt.Errorf("command produced no result for %s; it may not have run at all", host)
+	}
+	return res, nil
+}
+
 // uploadVolumes streams each snapshot to the target and verifies the stored
 // size. It stops at the first failure: half an image is not a backup.
 func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session, host string,
@@ -307,7 +345,7 @@ func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session,
 		cmd := fmt.Sprintf("set -e -o pipefail; sudo dd if=%s bs=4M count=%d iflag=fullblock,count_bytes status=none | %s",
 			snapDev, size, sess.PushCmd(object, size))
 		*uploaded = append(*uploaded, object)
-		res, err := bm.controller.deployment.Exec(ctx, []string{host}, "bash -c "+shellSingleQuote(cmd))
+		res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
 		if err != nil {
 			return fmt.Errorf("upload volume %d of %q: %w", v.VolumeID, info.Name, err)
 		}

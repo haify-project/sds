@@ -1325,6 +1325,20 @@ type execOptions struct {
 	timeout  time.Duration
 }
 
+// ExecTimeoutOf reports the timeout an option list would apply, or 0 when it
+// sets none and Exec's own default would be used.
+//
+// Exported so a caller can assert on what it is about to ask for. The default
+// suits short queries and is badly wrong for a command that streams a volume,
+// which is not visible at the call site without this.
+func ExecTimeoutOf(opts ...ExecOption) time.Duration {
+	o := &execOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o.timeout
+}
+
 // WithExecParallel sets parallelism
 func WithExecParallel(n int) ExecOption {
 	return func(o *execOptions) {

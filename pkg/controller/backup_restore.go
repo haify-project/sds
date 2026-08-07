@@ -141,7 +141,9 @@ func (bm *BackupManager) restoreVolume(ctx context.Context, sess backup.Session,
 	cmd := fmt.Sprintf(
 		"set -e -o pipefail; %s | sudo dd of=%s bs=4M count=%d iflag=fullblock,count_bytes oflag=direct conv=fsync status=none; sudo blockdev --flushbufs %s",
 		sess.PullCmd(v.Object), target, v.Bytes, target)
-	res, err := bm.controller.deployment.Exec(ctx, []string{host}, "bash -c "+shellSingleQuote(cmd))
+	// Same 30-second default, same consequence in the other direction: a
+	// truncated restore that reports success. See execDataMove.
+	res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
 	if err != nil {
 		return fmt.Errorf("restore volume %d of %q: %w", v.VolumeID, resource, err)
 	}
