@@ -69,7 +69,7 @@ graph TD
   和 WAN 链路中断产生事件，可通过 Webhook 回调、gRPC/REST 监听流、推送到 Web UI
   通知铃铛的 SSE，或 `sds-cli event watch` 送达。
 - **Web UI**：控制器内嵌的单页 Web 界面。
-- **AI 集成（MCP）**：`sds-mcp` 通过 Model Context Protocol 暴露 81 个管理工具，
+- **AI 集成（MCP）**：`sds-mcp` 通过 Model Context Protocol 暴露 89 个管理工具，
   供 AI 助手（Claude Code、Claude Desktop 等）使用。
 
 ## 接口与默认端口
@@ -432,8 +432,8 @@ reclaimPolicy: Delete
 
 ### 9. AI 助手（MCP）
 
-`sds-mcp` 通过 Model Context Protocol 在 stdio 上提供完整的管理面（81 个工具：池、资源、
-快照、网关、HA、ZFS、拓扑与可观测性）。破坏性操作已标注，MCP 客户端会请求确认；
+`sds-mcp` 通过 Model Context Protocol 在 stdio 上提供完整的管理面（89 个工具：池、资源、
+快照、网关、HA、ZFS、拓扑、可观测性、分层与备份）。破坏性操作已标注，MCP 客户端会请求确认；
 `--read-only` 会将服务限制为 list/status/health 类工具。
 
 其中三个回答的是集群"做过什么"而不是"现在是什么" —— 出事之后大家问的多半是前者：

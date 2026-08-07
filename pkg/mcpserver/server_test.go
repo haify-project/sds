@@ -108,6 +108,18 @@ func listTools(t *testing.T, session *mcp.ClientSession) map[string]*mcp.Tool {
 	return tools
 }
 
+// Adding a backup target takes an object-store secret, and a tool argument is
+// recorded by whatever called it. There must be no tool for it — the CLI reads
+// the secret from an env var or a file instead.
+func TestNoToolAcceptsABackupSecret(t *testing.T) {
+	session := connect(t, &mockClient{}, false)
+	for name := range listTools(t, session) {
+		if name == "sds_backup_target_add" || name == "sds_backup_target_create" {
+			t.Errorf("%s would carry a credential through a tool call", name)
+		}
+	}
+}
+
 func TestToolRegistration(t *testing.T) {
 	session := connect(t, &mockClient{}, false)
 	tools := listTools(t, session)
@@ -152,6 +164,10 @@ func TestToolRegistration(t *testing.T) {
 		"sds_pool_convert_thin",
 		"sds_ha_get_toml", "sds_ha_promoter_status",
 		"sds_ocf_agent_list", "sds_ocf_agent_metadata",
+		// Fast tier and off-cluster backups.
+		"sds_pool_add_cache", "sds_pool_remove_cache",
+		"sds_backup_list", "sds_backup_create", "sds_backup_restore", "sds_backup_delete",
+		"sds_backup_target_list", "sds_backup_target_delete",
 	} {
 		if _, found := tools[want]; !found {
 			t.Errorf("expected tool %q not registered", want)

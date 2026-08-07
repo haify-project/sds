@@ -78,7 +78,7 @@ graph TD
   by Webhook, by gRPC/REST watch stream, by SSE to the web UI's notification
   bell, or by `sds-cli event watch`.
 - **Web UI**: an embedded single-page UI served by the controller.
-- **AI Integration (MCP)**: `sds-mcp` exposes 81 management tools over the Model
+- **AI Integration (MCP)**: `sds-mcp` exposes 89 management tools over the Model
   Context Protocol for AI assistants (Claude Code, Claude Desktop, etc.).
 
 ## Interfaces & default ports
@@ -467,8 +467,8 @@ requested pool.
 
 ### 9. AI Assistants (MCP)
 
-`sds-mcp` serves the full management surface (81 tools: pools, resources,
-snapshots, gateways, HA, ZFS, topology, and observability) over the Model Context
+`sds-mcp` serves the full management surface (89 tools: pools, resources,
+snapshots, gateways, HA, ZFS, topology, observability, tiering and backups) over the Model Context
 Protocol on stdio. Destructive operations are annotated so MCP clients ask for
 confirmation, and `--read-only` restricts the server to list/status/health tools.
 

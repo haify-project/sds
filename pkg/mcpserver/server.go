@@ -71,6 +71,7 @@ func (s *Server) MCPServer() *mcp.Server {
 	s.registerObservabilityTools(srv)
 	s.registerZFSTools(srv)
 	s.registerTopologyTools(srv)
+	s.registerDataLifecycleTools(srv)
 	return srv
 }
 

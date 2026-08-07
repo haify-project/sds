@@ -136,6 +136,19 @@ type ControllerClient interface {
 	CreateZFSVolume(ctx context.Context, poolName, volumeName, size, node string) error
 	ResizeZFSVolume(ctx context.Context, volumePath, newSize, node string) error
 	CloneZFSSnapshot(ctx context.Context, snapshot, clonePath, node string) error
+
+	// Fast tier
+	AddPoolCache(ctx context.Context, node, pool, device, mode string) (string, uint64, error)
+	RemovePoolCache(ctx context.Context, node, pool string) error
+
+	// Off-cluster backups. AddBackupTarget is absent on purpose: it carries a
+	// credential, and MCP tool arguments are recorded by the caller.
+	ListBackupTargets(ctx context.Context) ([]*sdspb.BackupTargetInfo, error)
+	DeleteBackupTarget(ctx context.Context, name string, force bool) error
+	CreateBackup(ctx context.Context, resource, target, node string) (*sdspb.BackupInfo, error)
+	ListBackups(ctx context.Context, resource, target string) ([]*sdspb.BackupInfo, error)
+	RestoreBackup(ctx context.Context, id, resource, node string) (*sdspb.BackupInfo, error)
+	DeleteBackup(ctx context.Context, id, node string, force bool) error
 }
 
 // compile-time check: the real gRPC client satisfies the interface.
