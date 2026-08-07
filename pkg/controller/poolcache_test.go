@@ -573,3 +573,65 @@ func TestPoolListingSurvivesAnUnreadableCacheQuery(t *testing.T) {
 	require.Len(t, pools, 1)
 	assert.Nil(t, pools[0].Cache)
 }
+
+// The report below is not synthetic. It was captured from LVM 2.03.16 on a real
+// node by creating a thin pool, attaching a cache volume to it with the exact
+// command this package issues, and running the exact query LVMCacheFields
+// defines. Everything about how LVM presents a cached thin pool was a guess
+// until then, and the guesses that mattered were:
+//
+//   - `lvconvert --type cache --cachevol X vg/<thinpool>` is accepted with the
+//     THIN POOL's name; LVM redirects the cache onto its _tdata sub-LV itself
+//     and reports "Logical volume vg/<pool>_tdata is now cached". Passing
+//     _tdata explicitly is not required. `--uncache vg/<thinpool>` is likewise
+//     accepted, and removes the cache volume as part of the detach.
+//   - cache_mode appears on the _tdata row, NOT on the thin pool's own row,
+//     which is blank. Reading the mode back from the pool row would compare
+//     "" against "writethrough" and fail every successful attach.
+//   - The fast volume becomes "[<name>_cvol]" with segtype `linear`, not
+//     `cache-pool`, so only the name suffix identifies it — and it is the only
+//     row carrying the real block device.
+//   - A third internal row, "[<pool>_tdata_corig]", appears and must be
+//     ignored; its devices column holds the slow device.
+//   - The origin row's own devices column names an LV, not a device, so the
+//     device has to come from the _cvol row.
+func TestParsesRealLVMCachedThinPoolReport(t *testing.T) {
+	const real = `  sds_vg0|[tiertest_cache_cvol]|Cwi-aoC---|linear|1073741824|||||||||/dev/sdd(512)
+  sds_vg0|tiertest_thin|twi-a-tz--|thin-pool|2147483648|||||||||tiertest_thin_tdata(0)
+  sds_vg0|[tiertest_thin_tdata]|Cwi-aoC---|cache|2147483648|writethrough|16256|0|0|0|0|0|0|tiertest_thin_tdata_corig(0)
+  sds_vg0|[tiertest_thin_tdata_corig]|owi-aoC---|linear|2147483648|||||||||/dev/sdd(0)
+  sds_vg0|[tiertest_thin_tmeta]|ewi-ao----|linear|4194304|||||||||/dev/sdc(6145)`
+
+	byVG := parseCacheReport(real)
+	rows, found := byVG["sds_vg0"]
+	require.True(t, found, "the volume group must be recognised")
+	require.Len(t, rows, 5, "every internal row is reported and must survive parsing")
+
+	info := summarizeCache(rows)
+	require.NotNil(t, info, "a cached thin pool must not read as uncached")
+
+	assert.Equal(t, "writethrough", info.Mode,
+		"the mode lives on the _tdata row; reading the pool row yields empty and breaks the read-back check")
+	assert.Equal(t, "tiertest_thin_tdata", info.OriginLV)
+	assert.Equal(t, "/dev/sdd", info.Device,
+		"the device comes from the _cvol row — the origin row names an LV")
+	assert.Equal(t, uint64(1073741824), info.SizeBytes)
+	assert.False(t, info.Degraded, "Cwi-aoC--- is a healthy cache")
+
+	// A freshly attached writethrough cache has taken no writes yet. Dirty is
+	// the number an operator watches, so it must read as 0 rather than as
+	// unknown-therefore-alarming.
+	assert.Zero(t, info.DirtyPercent)
+	assert.Zero(t, info.UsedPercent)
+}
+
+// The same host before any cache existed: the plain thin pool must not be
+// mistaken for a cached one just because it has internal sub-LVs.
+func TestParsesRealLVMUncachedThinPoolReport(t *testing.T) {
+	const real = `  sds_vg0|tiertest_thin|twi-a-tz--|thin-pool|2147483648|||||||||tiertest_thin_tdata(0)
+  sds_vg0|[tiertest_thin_tdata]|Twi-ao----|linear|2147483648|||||||||/dev/sdd(0)
+  sds_vg0|[tiertest_thin_tmeta]|ewi-ao----|linear|4194304|||||||||/dev/sdc(6145)`
+
+	info := summarizeCache(parseCacheReport(real)["sds_vg0"])
+	assert.Nil(t, info, "a thin pool with no cache segment has no cache")
+}
