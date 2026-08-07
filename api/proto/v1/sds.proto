@@ -222,6 +222,34 @@ service SDSController {
     option (google.api.http) = { delete: "/v1/snapshot-schedules/{name}"; };
   }
 
+  // Backup operations: shipping point-in-time copies OFF the cluster to an
+  // S3-compatible object store, an SMB share or a WebDAV endpoint.
+  //
+  // Distinct from snapshots (same pool, lost with the machine) and from WAN DR
+  // (a replica, where a delete replicates). Every backup is a FULL image; there
+  // is no incremental mode.
+  rpc AddBackupTarget(AddBackupTargetRequest) returns (AddBackupTargetResponse) {
+    option (google.api.http) = { post: "/v1/backup-targets"; body: "*"; };
+  }
+  rpc ListBackupTargets(ListBackupTargetsRequest) returns (ListBackupTargetsResponse) {
+    option (google.api.http) = { get: "/v1/backup-targets"; };
+  }
+  rpc DeleteBackupTarget(DeleteBackupTargetRequest) returns (DeleteBackupTargetResponse) {
+    option (google.api.http) = { delete: "/v1/backup-targets/{name}"; };
+  }
+  rpc CreateBackup(CreateBackupRequest) returns (CreateBackupResponse) {
+    option (google.api.http) = { post: "/v1/backups"; body: "*"; };
+  }
+  rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse) {
+    option (google.api.http) = { get: "/v1/backups"; };
+  }
+  rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse) {
+    option (google.api.http) = { post: "/v1/backups/{id}/restore"; body: "*"; };
+  }
+  rpc DeleteBackup(DeleteBackupRequest) returns (DeleteBackupResponse) {
+    option (google.api.http) = { delete: "/v1/backups/{id}"; };
+  }
+
   // Gateway operations
   rpc CreateNFSGateway(CreateNFSGatewayRequest) returns (CreateNFSGatewayResponse) {
     option (google.api.http) = { post: "/v1/gateways/nfs"; body: "*"; };
@@ -1689,6 +1717,145 @@ message DeleteSnapshotScheduleRequest {
 }
 
 message DeleteSnapshotScheduleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Backup messages
+
+// BackupTargetInfo describes a backup repository. The secret is intentionally
+// absent: a credential readable back out of the API leaks through every client
+// that ever renders it.
+message BackupTargetInfo {
+  string name = 1;
+  string kind = 2;       // s3 | smb | webdav
+  string prefix = 3;
+  string bucket = 4;
+  string endpoint = 5;
+  string region = 6;
+  string host = 7;
+  string share = 8;
+  string user = 9;
+  // description is a rendered one-line summary for display.
+  string description = 10;
+}
+
+message AddBackupTargetRequest {
+  string name = 1;
+  string kind = 2;
+  string prefix = 3;
+  string bucket = 4;
+  string endpoint = 5;
+  string region = 6;
+  string host = 7;
+  string share = 8;
+  // user is the S3 access key id, or the SMB/WebDAV username.
+  string user = 9;
+  // secret is the S3 secret access key, or the SMB/WebDAV password. It is
+  // write-only: it is never returned by any RPC. Clients are expected to read
+  // it from an environment variable or a file rather than a command-line flag.
+  string secret = 10;
+  // secret_obscured says secret is already in rclone's obscured form.
+  bool secret_obscured = 11;
+}
+
+message AddBackupTargetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListBackupTargetsRequest {}
+
+message ListBackupTargetsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BackupTargetInfo targets = 3;
+}
+
+message DeleteBackupTargetRequest {
+  string name = 1;
+  bool force = 2;
+}
+
+message DeleteBackupTargetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message BackupVolumeInfo {
+  uint32 volume_id = 1;
+  string object = 2;
+  uint64 bytes = 3;
+  string pool = 4;
+  string backing_volume = 5;
+}
+
+message BackupInfo {
+  string id = 1;
+  string resource = 2;
+  string target = 3;
+  string node = 4;
+  string backend = 5;
+  // state is running | completed | failed. Only completed is restorable.
+  string state = 6;
+  string error = 7;
+  string prefix = 8;
+  uint64 total_bytes = 9;
+  string started_at = 10;
+  string finished_at = 11;
+  repeated BackupVolumeInfo volumes = 12;
+}
+
+message CreateBackupRequest {
+  string resource = 1;
+  string target = 2;
+  // node optionally pins which replica is snapshotted and read. Empty prefers
+  // an UpToDate Secondary.
+  string node = 3;
+}
+
+message CreateBackupResponse {
+  bool success = 1;
+  string message = 2;
+  BackupInfo backup = 3;
+}
+
+message ListBackupsRequest {
+  string resource = 1;
+  string target = 2;
+}
+
+message ListBackupsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BackupInfo backups = 3;
+}
+
+message RestoreBackupRequest {
+  string id = 1;
+  // resource is the resource to restore INTO; empty restores into the resource
+  // the backup was taken from. It must exist, be large enough, and not be in
+  // use.
+  string resource = 2;
+  string node = 3;
+}
+
+message RestoreBackupResponse {
+  bool success = 1;
+  string message = 2;
+  BackupInfo backup = 3;
+}
+
+message DeleteBackupRequest {
+  string id = 1;
+  // node optionally selects which node reaches the target to delete the
+  // objects; empty uses the node that wrote the backup.
+  string node = 2;
+  // force drops the record even when the objects could not be removed.
+  bool force = 3;
+}
+
+message DeleteBackupResponse {
   bool success = 1;
   string message = 2;
 }

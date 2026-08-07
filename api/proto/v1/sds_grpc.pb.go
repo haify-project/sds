@@ -77,6 +77,13 @@ const (
 	SDSController_CreateSnapshotSchedule_FullMethodName   = "/v1.SDSController/CreateSnapshotSchedule"
 	SDSController_ListSnapshotSchedules_FullMethodName    = "/v1.SDSController/ListSnapshotSchedules"
 	SDSController_DeleteSnapshotSchedule_FullMethodName   = "/v1.SDSController/DeleteSnapshotSchedule"
+	SDSController_AddBackupTarget_FullMethodName          = "/v1.SDSController/AddBackupTarget"
+	SDSController_ListBackupTargets_FullMethodName        = "/v1.SDSController/ListBackupTargets"
+	SDSController_DeleteBackupTarget_FullMethodName       = "/v1.SDSController/DeleteBackupTarget"
+	SDSController_CreateBackup_FullMethodName             = "/v1.SDSController/CreateBackup"
+	SDSController_ListBackups_FullMethodName              = "/v1.SDSController/ListBackups"
+	SDSController_RestoreBackup_FullMethodName            = "/v1.SDSController/RestoreBackup"
+	SDSController_DeleteBackup_FullMethodName             = "/v1.SDSController/DeleteBackup"
 	SDSController_CreateNFSGateway_FullMethodName         = "/v1.SDSController/CreateNFSGateway"
 	SDSController_CreateISCSIGateway_FullMethodName       = "/v1.SDSController/CreateISCSIGateway"
 	SDSController_CreateNVMeGateway_FullMethodName        = "/v1.SDSController/CreateNVMeGateway"
@@ -211,6 +218,19 @@ type SDSControllerClient interface {
 	CreateSnapshotSchedule(ctx context.Context, in *CreateSnapshotScheduleRequest, opts ...grpc.CallOption) (*CreateSnapshotScheduleResponse, error)
 	ListSnapshotSchedules(ctx context.Context, in *ListSnapshotSchedulesRequest, opts ...grpc.CallOption) (*ListSnapshotSchedulesResponse, error)
 	DeleteSnapshotSchedule(ctx context.Context, in *DeleteSnapshotScheduleRequest, opts ...grpc.CallOption) (*DeleteSnapshotScheduleResponse, error)
+	// Backup operations: shipping point-in-time copies OFF the cluster to an
+	// S3-compatible object store, an SMB share or a WebDAV endpoint.
+	//
+	// Distinct from snapshots (same pool, lost with the machine) and from WAN DR
+	// (a replica, where a delete replicates). Every backup is a FULL image; there
+	// is no incremental mode.
+	AddBackupTarget(ctx context.Context, in *AddBackupTargetRequest, opts ...grpc.CallOption) (*AddBackupTargetResponse, error)
+	ListBackupTargets(ctx context.Context, in *ListBackupTargetsRequest, opts ...grpc.CallOption) (*ListBackupTargetsResponse, error)
+	DeleteBackupTarget(ctx context.Context, in *DeleteBackupTargetRequest, opts ...grpc.CallOption) (*DeleteBackupTargetResponse, error)
+	CreateBackup(ctx context.Context, in *CreateBackupRequest, opts ...grpc.CallOption) (*CreateBackupResponse, error)
+	ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*ListBackupsResponse, error)
+	RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error)
+	DeleteBackup(ctx context.Context, in *DeleteBackupRequest, opts ...grpc.CallOption) (*DeleteBackupResponse, error)
 	// Gateway operations
 	CreateNFSGateway(ctx context.Context, in *CreateNFSGatewayRequest, opts ...grpc.CallOption) (*CreateNFSGatewayResponse, error)
 	CreateISCSIGateway(ctx context.Context, in *CreateISCSIGatewayRequest, opts ...grpc.CallOption) (*CreateISCSIGatewayResponse, error)
@@ -886,6 +906,76 @@ func (c *sDSControllerClient) DeleteSnapshotSchedule(ctx context.Context, in *De
 	return out, nil
 }
 
+func (c *sDSControllerClient) AddBackupTarget(ctx context.Context, in *AddBackupTargetRequest, opts ...grpc.CallOption) (*AddBackupTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddBackupTargetResponse)
+	err := c.cc.Invoke(ctx, SDSController_AddBackupTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListBackupTargets(ctx context.Context, in *ListBackupTargetsRequest, opts ...grpc.CallOption) (*ListBackupTargetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBackupTargetsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListBackupTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteBackupTarget(ctx context.Context, in *DeleteBackupTargetRequest, opts ...grpc.CallOption) (*DeleteBackupTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBackupTargetResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteBackupTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateBackup(ctx context.Context, in *CreateBackupRequest, opts ...grpc.CallOption) (*CreateBackupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateBackupResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*ListBackupsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBackupsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListBackups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreBackupResponse)
+	err := c.cc.Invoke(ctx, SDSController_RestoreBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteBackup(ctx context.Context, in *DeleteBackupRequest, opts ...grpc.CallOption) (*DeleteBackupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBackupResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) CreateNFSGateway(ctx context.Context, in *CreateNFSGatewayRequest, opts ...grpc.CallOption) (*CreateNFSGatewayResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateNFSGatewayResponse)
@@ -1468,6 +1558,19 @@ type SDSControllerServer interface {
 	CreateSnapshotSchedule(context.Context, *CreateSnapshotScheduleRequest) (*CreateSnapshotScheduleResponse, error)
 	ListSnapshotSchedules(context.Context, *ListSnapshotSchedulesRequest) (*ListSnapshotSchedulesResponse, error)
 	DeleteSnapshotSchedule(context.Context, *DeleteSnapshotScheduleRequest) (*DeleteSnapshotScheduleResponse, error)
+	// Backup operations: shipping point-in-time copies OFF the cluster to an
+	// S3-compatible object store, an SMB share or a WebDAV endpoint.
+	//
+	// Distinct from snapshots (same pool, lost with the machine) and from WAN DR
+	// (a replica, where a delete replicates). Every backup is a FULL image; there
+	// is no incremental mode.
+	AddBackupTarget(context.Context, *AddBackupTargetRequest) (*AddBackupTargetResponse, error)
+	ListBackupTargets(context.Context, *ListBackupTargetsRequest) (*ListBackupTargetsResponse, error)
+	DeleteBackupTarget(context.Context, *DeleteBackupTargetRequest) (*DeleteBackupTargetResponse, error)
+	CreateBackup(context.Context, *CreateBackupRequest) (*CreateBackupResponse, error)
+	ListBackups(context.Context, *ListBackupsRequest) (*ListBackupsResponse, error)
+	RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error)
+	DeleteBackup(context.Context, *DeleteBackupRequest) (*DeleteBackupResponse, error)
 	// Gateway operations
 	CreateNFSGateway(context.Context, *CreateNFSGatewayRequest) (*CreateNFSGatewayResponse, error)
 	CreateISCSIGateway(context.Context, *CreateISCSIGatewayRequest) (*CreateISCSIGatewayResponse, error)
@@ -1736,6 +1839,27 @@ func (UnimplementedSDSControllerServer) ListSnapshotSchedules(context.Context, *
 }
 func (UnimplementedSDSControllerServer) DeleteSnapshotSchedule(context.Context, *DeleteSnapshotScheduleRequest) (*DeleteSnapshotScheduleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteSnapshotSchedule not implemented")
+}
+func (UnimplementedSDSControllerServer) AddBackupTarget(context.Context, *AddBackupTargetRequest) (*AddBackupTargetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddBackupTarget not implemented")
+}
+func (UnimplementedSDSControllerServer) ListBackupTargets(context.Context, *ListBackupTargetsRequest) (*ListBackupTargetsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListBackupTargets not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteBackupTarget(context.Context, *DeleteBackupTargetRequest) (*DeleteBackupTargetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteBackupTarget not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateBackup(context.Context, *CreateBackupRequest) (*CreateBackupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateBackup not implemented")
+}
+func (UnimplementedSDSControllerServer) ListBackups(context.Context, *ListBackupsRequest) (*ListBackupsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListBackups not implemented")
+}
+func (UnimplementedSDSControllerServer) RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RestoreBackup not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteBackup(context.Context, *DeleteBackupRequest) (*DeleteBackupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteBackup not implemented")
 }
 func (UnimplementedSDSControllerServer) CreateNFSGateway(context.Context, *CreateNFSGatewayRequest) (*CreateNFSGatewayResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateNFSGateway not implemented")
@@ -2949,6 +3073,132 @@ func _SDSController_DeleteSnapshotSchedule_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_AddBackupTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddBackupTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).AddBackupTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_AddBackupTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).AddBackupTarget(ctx, req.(*AddBackupTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListBackupTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBackupTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListBackupTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListBackupTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListBackupTargets(ctx, req.(*ListBackupTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteBackupTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBackupTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteBackupTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteBackupTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteBackupTarget(ctx, req.(*DeleteBackupTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateBackup(ctx, req.(*CreateBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBackupsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListBackups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListBackups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListBackups(ctx, req.(*ListBackupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RestoreBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RestoreBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RestoreBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RestoreBackup(ctx, req.(*RestoreBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteBackup(ctx, req.(*DeleteBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_CreateNFSGateway_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateNFSGatewayRequest)
 	if err := dec(in); err != nil {
@@ -4062,6 +4312,34 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteSnapshotSchedule",
 			Handler:    _SDSController_DeleteSnapshotSchedule_Handler,
+		},
+		{
+			MethodName: "AddBackupTarget",
+			Handler:    _SDSController_AddBackupTarget_Handler,
+		},
+		{
+			MethodName: "ListBackupTargets",
+			Handler:    _SDSController_ListBackupTargets_Handler,
+		},
+		{
+			MethodName: "DeleteBackupTarget",
+			Handler:    _SDSController_DeleteBackupTarget_Handler,
+		},
+		{
+			MethodName: "CreateBackup",
+			Handler:    _SDSController_CreateBackup_Handler,
+		},
+		{
+			MethodName: "ListBackups",
+			Handler:    _SDSController_ListBackups_Handler,
+		},
+		{
+			MethodName: "RestoreBackup",
+			Handler:    _SDSController_RestoreBackup_Handler,
+		},
+		{
+			MethodName: "DeleteBackup",
+			Handler:    _SDSController_DeleteBackup_Handler,
 		},
 		{
 			MethodName: "CreateNFSGateway",

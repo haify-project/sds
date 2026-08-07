@@ -83,6 +83,244 @@
         ]
       }
     },
+    "/v1/backup-targets": {
+      "get": {
+        "operationId": "SDSController_ListBackupTargets",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListBackupTargetsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "summary": "Backup operations: shipping point-in-time copies OFF the cluster to an\nS3-compatible object store, an SMB share or a WebDAV endpoint.",
+        "description": "Distinct from snapshots (same pool, lost with the machine) and from WAN DR\n(a replica, where a delete replicates). Every backup is a FULL image; there\nis no incremental mode.",
+        "operationId": "SDSController_AddBackupTarget",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddBackupTargetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1AddBackupTargetRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/backup-targets/{name}": {
+      "delete": {
+        "operationId": "SDSController_DeleteBackupTarget",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteBackupTargetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/backups": {
+      "get": {
+        "operationId": "SDSController_ListBackups",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListBackupsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "operationId": "SDSController_CreateBackup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateBackupResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateBackupRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/backups/{id}": {
+      "delete": {
+        "operationId": "SDSController_DeleteBackup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteBackupResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "node",
+            "description": "node optionally selects which node reaches the target to delete the\nobjects; empty uses the node that wrote the backup.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "force",
+            "description": "force drops the record even when the objects could not be removed.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/backups/{id}/restore": {
+      "post": {
+        "operationId": "SDSController_RestoreBackup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RestoreBackupResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRestoreBackupBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/events": {
       "get": {
         "summary": "Operational notifications: a replica degraded, a resource's Primary moved,\na node stopped answering. ListEvents serves the controller's bounded\nin-memory history — enough to see what just happened, not an archive. The\ndurable record of who did what is ListAuditEvents.",
@@ -4410,6 +4648,18 @@
         }
       }
     },
+    "SDSControllerRestoreBackupBody": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string",
+          "description": "resource is the resource to restore INTO; empty restores into the resource\nthe backup was taken from. It must exist, be large enough, and not be in\nuse."
+        },
+        "node": {
+          "type": "string"
+        }
+      }
+    },
     "SDSControllerRestoreLvmSnapshotBody": {
       "type": "object",
       "properties": {
@@ -4550,6 +4800,58 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
+        }
+      }
+    },
+    "v1AddBackupTargetRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "share": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string",
+          "description": "user is the S3 access key id, or the SMB/WebDAV username."
+        },
+        "secret": {
+          "type": "string",
+          "description": "secret is the S3 secret access key, or the SMB/WebDAV password. It is\nwrite-only: it is never returned by any RPC. Clients are expected to read\nit from an environment variable or a file rather than a command-line flag."
+        },
+        "secretObscured": {
+          "type": "boolean",
+          "description": "secret_obscured says secret is already in rclone's obscured form."
+        }
+      }
+    },
+    "v1AddBackupTargetResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
         }
       }
     },
@@ -4809,6 +5111,113 @@
         }
       }
     },
+    "v1BackupInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "resource": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "description": "state is running | completed | failed. Only completed is restorable."
+        },
+        "error": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "finishedAt": {
+          "type": "string"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BackupVolumeInfo"
+          }
+        }
+      }
+    },
+    "v1BackupTargetInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "title": "s3 | smb | webdav"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "share": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "description": "description is a rendered one-line summary for display."
+        }
+      },
+      "description": "BackupTargetInfo describes a backup repository. The secret is intentionally\nabsent: a credential readable back out of the API leaks through every client\nthat ever renders it."
+    },
+    "v1BackupVolumeInfo": {
+      "type": "object",
+      "properties": {
+        "volumeId": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "object": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "pool": {
+          "type": "string"
+        },
+        "backingVolume": {
+          "type": "string"
+        }
+      }
+    },
     "v1CloneZFSSnapshotResponse": {
       "type": "object",
       "properties": {
@@ -4865,6 +5274,35 @@
             "type": "string"
           },
           "description": "Volumes rebuilt on this node; each is resyncing in full from its peers\nwhen the call returns."
+        }
+      }
+    },
+    "v1CreateBackupRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string",
+          "description": "node optionally pins which replica is snapshotted and read. Empty prefers\nan UpToDate Secondary."
+        }
+      }
+    },
+    "v1CreateBackupResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "backup": {
+          "$ref": "#/definitions/v1BackupInfo"
         }
       }
     },
@@ -5335,6 +5773,28 @@
       }
     },
     "v1CreateZFSVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DeleteBackupResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DeleteBackupTargetResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -6008,6 +6468,42 @@
           "type": "string",
           "format": "int64",
           "description": "Entries held in total, so the UI can say whether it is showing everything."
+        }
+      }
+    },
+    "v1ListBackupTargetsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BackupTargetInfo"
+          }
+        }
+      }
+    },
+    "v1ListBackupsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "backups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BackupInfo"
+          }
         }
       }
     },
@@ -7104,6 +7600,20 @@
         },
         "status": {
           "$ref": "#/definitions/v1ResourceStatus"
+        }
+      }
+    },
+    "v1RestoreBackupResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "backup": {
+          "$ref": "#/definitions/v1BackupInfo"
         }
       }
     },

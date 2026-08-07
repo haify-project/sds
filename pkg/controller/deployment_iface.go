@@ -8,6 +8,10 @@ import (
 
 type deploymentClient interface {
 	DistributeConfig(ctx context.Context, hosts []string, content, remotePath string, opts ...deployment.ConfigOption) (*deployment.ConfigResult, error)
+	// DistributeSecret writes content at mode 0600 relative to the login user's
+	// home without it ever reaching a command line. DistributeConfig is not an
+	// alternative for credentials; see its implementation for why.
+	DistributeSecret(ctx context.Context, hosts []string, content, relPath string) (*deployment.ConfigResult, error)
 	DeleteConfig(ctx context.Context, hosts []string, remotePath string) error
 	Exec(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error)
 

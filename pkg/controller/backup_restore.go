@@ -1,0 +1,357 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"go.uber.org/zap"
+
+	"github.com/liliang-cn/sds/pkg/backup"
+	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/liliang-cn/sds/pkg/deployment"
+)
+
+// Restore and delete. A backup you cannot restore is not a backup, and a
+// restore that silently overwrites a volume something is using is worse than no
+// restore at all — so the safety checks here are the point of the file, not
+// decoration around it.
+
+// RestoreBackup writes a completed backup's images into resource.
+//
+// The target resource must already exist, must have at least as many volumes as
+// the backup, each at least as large, and must not be in use. It is restored in
+// place: every block of every volume is overwritten from byte zero.
+//
+// node selects which replica to write through. The write goes to the DRBD
+// device rather than the backing LV, so DRBD replicates it to the peers as part
+// of the write path — one copy over the network, and no chance of replicas
+// silently diverging. PopulateVolume takes the same approach for the same
+// reason.
+func (bm *BackupManager) RestoreBackup(ctx context.Context, backupID, resource, node string) (*database.Backup, error) {
+	if bm.controller.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	rec, err := bm.controller.db.GetBackup(ctx, backupID)
+	if err != nil {
+		return nil, err
+	}
+	if rec.State != database.BackupStateCompleted {
+		return nil, fmt.Errorf(
+			"backup %q is in state %q and cannot be restored; only a verified, completed backup is restorable",
+			backupID, rec.State)
+	}
+	if len(rec.Volumes) == 0 {
+		return nil, fmt.Errorf("backup %q records no volume images", backupID)
+	}
+	if resource == "" {
+		resource = rec.Resource
+	}
+
+	dbTarget, err := bm.controller.db.GetBackupTarget(ctx, rec.Target)
+	if err != nil {
+		return nil, fmt.Errorf("backup %q refers to target %q: %w", backupID, rec.Target, err)
+	}
+
+	info, err := bm.controller.resources.GetResource(ctx, resource)
+	if err != nil {
+		return nil, err
+	}
+	if err := bm.assertRestorable(ctx, info); err != nil {
+		return nil, err
+	}
+
+	node, err = bm.pickRestoreNode(info, node)
+	if err != nil {
+		return nil, err
+	}
+	host := bm.controller.ResolveHost(node)
+	dep := newBackupDeploymentClient(bm.controller.deployment)
+	if err := bm.backend.Preflight(ctx, dep, host); err != nil {
+		return nil, err
+	}
+
+	// Size check before anything is promoted or written. A target device
+	// smaller than the image would take a silently truncated copy — a
+	// filesystem that mounts and is missing its tail, which is the worst
+	// possible way for a restore to fail.
+	for _, v := range rec.Volumes {
+		have, err := bm.drbdDeviceBytes(ctx, host, resource, v.VolumeID)
+		if err != nil {
+			return nil, err
+		}
+		if have < v.Bytes {
+			return nil, fmt.Errorf(
+				"volume %d of %q is %d bytes but the backup image is %d; restore into a resource at least as large",
+				v.VolumeID, resource, have, v.Bytes)
+		}
+	}
+
+	sess, err := bm.backend.Prepare(ctx, dep, host, targetSpecFromDB(dbTarget))
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := sess.Close(context.WithoutCancel(ctx)); err != nil {
+			bm.controller.logger.Warn("Failed to remove staged backup credentials",
+				zap.String("node", node), zap.Error(err))
+		}
+	}()
+
+	// The device must be Primary to be writable. Demote afterwards so the
+	// resource is left exactly as it was found.
+	if err := bm.controller.resources.SetPrimary(ctx, resource, node, false); err != nil {
+		return nil, fmt.Errorf("promote %s on %s for restore: %w", resource, node, err)
+	}
+	defer func() {
+		if err := bm.controller.resources.SetSecondary(context.WithoutCancel(ctx), resource, node); err != nil {
+			bm.controller.logger.Warn("Failed to demote after restore; the data is written but the resource stays Primary",
+				zap.String("resource", resource), zap.String("node", node), zap.Error(err))
+		}
+	}()
+
+	bm.controller.logger.Info("Restoring backup",
+		zap.String("backup", backupID), zap.String("resource", resource), zap.String("node", node))
+
+	for _, v := range rec.Volumes {
+		if err := bm.restoreVolume(ctx, sess, host, resource, v); err != nil {
+			return nil, err
+		}
+	}
+
+	bm.controller.logger.Info("Backup restored",
+		zap.String("backup", backupID), zap.String("resource", resource),
+		zap.Uint64("bytes", rec.TotalBytes))
+	return rec, nil
+}
+
+// restoreVolume streams one image onto its DRBD device.
+func (bm *BackupManager) restoreVolume(ctx context.Context, sess backup.Session, host, resource string, v database.BackupVolume) error {
+	target := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, v.VolumeID)
+
+	// count is bounded by the image's recorded size, not by the device's: the
+	// device may be larger, and writing past the image would be writing
+	// whatever the pipe produced after it ended. conv=fsync forces the copy
+	// through to stable storage — and, via DRBD, to the peers — before dd
+	// exits, so a promote elsewhere afterwards cannot read stale blocks.
+	// pipefail makes a failed download fail the whole restore instead of
+	// leaving dd to write a short stream and exit 0; `set -e` is what stops the
+	// trailing flushbufs from overwriting that failure with its own exit 0.
+	cmd := fmt.Sprintf(
+		"set -e -o pipefail; %s | sudo dd of=%s bs=4M count=%d iflag=fullblock,count_bytes oflag=direct conv=fsync status=none; sudo blockdev --flushbufs %s",
+		sess.PullCmd(v.Object), target, v.Bytes, target)
+	res, err := bm.controller.deployment.Exec(ctx, []string{host}, "bash -c "+shellSingleQuote(cmd))
+	if err != nil {
+		return fmt.Errorf("restore volume %d of %q: %w", v.VolumeID, resource, err)
+	}
+	if !res.AllSuccess() {
+		return fmt.Errorf("restore volume %d of %q failed: %s", v.VolumeID, resource, res.FailureDetails())
+	}
+	return nil
+}
+
+// assertRestorable refuses to overwrite a resource anything is using.
+//
+// "In use" is defined by DRBD's own rule: only a Primary can be open, so a
+// resource that is Secondary everywhere has no writer and no mount anywhere in
+// the cluster. A gateway or a drbd-reactor promoter config is treated the same
+// way even when nothing is Primary right now, because either of them can
+// promote the resource at any moment — including in the middle of the restore.
+func (bm *BackupManager) assertRestorable(ctx context.Context, info *ResourceInfo) error {
+	if len(info.Volumes) == 0 {
+		return fmt.Errorf("resource %q has no volumes to restore into", info.Name)
+	}
+	var primaries []string
+	for node, st := range info.NodeStates {
+		if st != nil && strings.EqualFold(st.Role, "Primary") {
+			primaries = append(primaries, node)
+		}
+	}
+	if len(primaries) > 0 {
+		return fmt.Errorf(
+			"resource %q is Primary on %s and is therefore in use; stop the workload and demote it before restoring over it",
+			info.Name, strings.Join(primaries, ", "))
+	}
+	if bm.controller.db != nil {
+		if gw, err := bm.controller.db.GetGatewayByResource(ctx, info.Name); err == nil && gw != nil {
+			return fmt.Errorf(
+				"resource %q is exported by gateway %q, which can promote it at any moment; delete or stop the gateway before restoring over it",
+				info.Name, gw.Name)
+		}
+	}
+	return nil
+}
+
+// pickRestoreNode chooses the replica to write through: the named one, or any
+// node with an UpToDate copy.
+func (bm *BackupManager) pickRestoreNode(info *ResourceInfo, requested string) (string, error) {
+	if requested != "" {
+		for _, n := range info.Nodes {
+			if n == requested {
+				return requested, nil
+			}
+		}
+		return "", fmt.Errorf("node %q holds no replica of %q", requested, info.Name)
+	}
+	for _, n := range info.Nodes {
+		if info.WANMode && n == info.DRNode {
+			continue
+		}
+		if st := info.NodeStates[n]; st != nil && st.DiskState == "UpToDate" {
+			return n, nil
+		}
+	}
+	return "", fmt.Errorf(
+		"no node holds an UpToDate replica of %q to restore through; repair the resource first", info.Name)
+}
+
+// DeleteBackup removes a backup's objects from its target and then its record.
+//
+// The record is only dropped once the objects are gone, so a failure leaves the
+// backup listed and retryable rather than turning it into storage nobody knows
+// about. force drops the record regardless, which is the escape hatch for a
+// target that no longer exists.
+func (bm *BackupManager) DeleteBackup(ctx context.Context, backupID, node string, force bool) error {
+	if bm.controller.db == nil {
+		return fmt.Errorf("database not available")
+	}
+	rec, err := bm.controller.db.GetBackup(ctx, backupID)
+	if err != nil {
+		return err
+	}
+
+	if err := bm.removeBackupObjects(ctx, rec, node); err != nil {
+		if !force {
+			return fmt.Errorf("%w (pass --force to drop the record anyway and leave the objects behind)", err)
+		}
+		bm.controller.logger.Warn("Dropping backup record despite object removal failure",
+			zap.String("backup", backupID), zap.Error(err))
+	}
+
+	if err := bm.controller.db.DeleteBackup(ctx, backupID); err != nil {
+		return fmt.Errorf("delete backup record: %w", err)
+	}
+	bm.controller.logger.Info("Backup deleted", zap.String("backup", backupID), zap.Bool("force", force))
+	return nil
+}
+
+// removeBackupObjects deletes a backup's images and manifest from its target.
+func (bm *BackupManager) removeBackupObjects(ctx context.Context, rec *database.Backup, node string) error {
+	dbTarget, err := bm.controller.db.GetBackupTarget(ctx, rec.Target)
+	if err != nil {
+		return fmt.Errorf("backup %q refers to target %q: %w", rec.ID, rec.Target, err)
+	}
+	if node == "" {
+		// Any node can reach the target; the one that wrote the backup is the
+		// one already known to have working credentials and connectivity.
+		node = rec.Node
+	}
+	host := bm.controller.ResolveHost(node)
+	if host == "" {
+		return fmt.Errorf("no node available to reach target %q", rec.Target)
+	}
+
+	dep := newBackupDeploymentClient(bm.controller.deployment)
+	sess, err := bm.backend.Prepare(ctx, dep, host, targetSpecFromDB(dbTarget))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := sess.Close(context.WithoutCancel(ctx)); err != nil {
+			bm.controller.logger.Warn("Failed to remove staged backup credentials",
+				zap.String("node", node), zap.Error(err))
+		}
+	}()
+
+	objects := make([]string, 0, len(rec.Volumes)+1)
+	for _, v := range rec.Volumes {
+		objects = append(objects, v.Object)
+	}
+	objects = append(objects, backup.ObjectPath(rec.Prefix, manifestObject))
+	for _, obj := range objects {
+		if err := sess.Remove(ctx, obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ==================== Backup Adapter ====================
+
+// BackupDeploymentClient adapts the controller's deploymentClient to
+// backup.DeploymentClient. It mirrors WanproxyDeploymentClient, so the backup
+// path runs over exactly the SSH transport the rest of the controller uses and
+// stays fakeable in tests.
+type BackupDeploymentClient struct {
+	dc deploymentClient
+}
+
+// NewBackupDeploymentClient creates the adapter.
+func NewBackupDeploymentClient(dc deploymentClient) backup.DeploymentClient {
+	return &BackupDeploymentClient{dc: dc}
+}
+
+func newBackupDeploymentClient(dc deploymentClient) backup.DeploymentClient {
+	return &BackupDeploymentClient{dc: dc}
+}
+
+func (a *BackupDeploymentClient) Exec(ctx context.Context, hosts []string, cmd string) (*backup.Result, error) {
+	res, err := a.dc.Exec(ctx, hosts, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return execResultToBackup(res), nil
+}
+
+func (a *BackupDeploymentClient) PutSecret(ctx context.Context, hosts []string, content, relPath string) (*backup.Result, error) {
+	res, err := a.dc.DistributeSecret(ctx, hosts, content, relPath)
+	if err != nil {
+		return nil, err
+	}
+	return configResultToBackup(res, hosts), nil
+}
+
+func execResultToBackup(res *deployment.ExecResult) *backup.Result {
+	out := &backup.Result{Hosts: make(map[string]*backup.HostResult)}
+	if res == nil {
+		return out
+	}
+	for host, hr := range res.Hosts {
+		out.Hosts[host] = &backup.HostResult{Host: hr.Host, Output: hr.Output, Success: hr.Success, Err: hr.Error}
+	}
+	return out
+}
+
+// configResultToBackup converts a ConfigResult. Like the WAN adapter it falls
+// back to the aggregate Success flag when the per-host map is empty, so
+// AllSuccess stays accurate for a distribute that reported success in bulk.
+func configResultToBackup(res *deployment.ConfigResult, hosts []string) *backup.Result {
+	out := &backup.Result{Hosts: make(map[string]*backup.HostResult)}
+	if res == nil {
+		return out
+	}
+	for host, hr := range res.Hosts {
+		out.Hosts[host] = &backup.HostResult{Host: hr.Host, Output: hr.Output, Success: hr.Success, Err: hr.Error}
+	}
+	if len(out.Hosts) == 0 {
+		for _, h := range hosts {
+			out.Hosts[h] = &backup.HostResult{Host: h, Success: res.Success}
+		}
+	}
+	return out
+}
+
+// formatBytes renders a byte count for the CLI and API summaries.
+func formatBytes(n uint64) string {
+	const unit = 1024
+	if n < unit {
+		return strconv.FormatUint(n, 10) + " B"
+	}
+	div, exp := uint64(unit), 0
+	for v := n / unit; v >= unit; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}

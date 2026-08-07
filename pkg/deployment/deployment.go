@@ -313,6 +313,93 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 	return configResult, nil
 }
 
+// DistributeSecret writes content to relPath — resolved against the SSH login
+// user's home directory — at mode 0600, WITHOUT the content ever appearing in a
+// command line.
+//
+// DistributeConfig cannot be used for secrets. It base64-encodes the payload
+// into the remote command string, so the bytes are visible in `ps` on the node
+// for the duration of the copy and in anything that logs commands along the
+// way. That is harmless for a DRBD config and disqualifying for an object-store
+// secret key. This path hands the content to the scp protocol over the existing
+// SSH session instead, where it travels in the encrypted stream and the mode is
+// set by the receiving end before the file has any content.
+//
+// relPath is relative on purpose: the copy runs as the login user, who cannot
+// necessarily write /etc or /run, and a 0600 file in that user's own home needs
+// no privilege at all. Callers are expected to have created the parent
+// directory 0700 first, so the file is private even for the instant between
+// create and chmod.
+func (c *Client) DistributeSecret(ctx context.Context, hosts []string, content, relPath string) (*ConfigResult, error) {
+	if filepath.IsAbs(relPath) {
+		return nil, fmt.Errorf("DistributeSecret: %q must be relative to the login user's home", relPath)
+	}
+
+	result := &ConfigResult{Path: relPath, Success: true, Hosts: make(map[string]*HostResult)}
+
+	// Stage the payload in a private directory on the controller. A 0600 file
+	// inside a 0700 directory is never readable by another local user, not even
+	// between os.MkdirTemp and os.WriteFile.
+	dir, err := os.MkdirTemp("", "sds-secret-")
+	if err != nil {
+		return nil, fmt.Errorf("DistributeSecret: stage secret: %w", err)
+	}
+	defer os.RemoveAll(dir)
+	local := filepath.Join(dir, filepath.Base(relPath))
+	if err := os.WriteFile(local, []byte(content), 0600); err != nil {
+		return nil, fmt.Errorf("DistributeSecret: stage secret: %w", err)
+	}
+
+	var localHosts, remoteHosts []string
+	localAddrs := getLocalIPs()
+	for _, host := range hosts {
+		if isLocalIP(host, localAddrs) {
+			localHosts = append(localHosts, host)
+		} else {
+			remoteHosts = append(remoteHosts, host)
+		}
+	}
+
+	// A node that is this machine skips SSH entirely; $HOME is the controller
+	// process's own, which is the same account the local Exec branch runs as.
+	for _, host := range localHosts {
+		hr := &HostResult{Host: host, Success: true}
+		home, err := os.UserHomeDir()
+		if err == nil {
+			dest := filepath.Join(home, relPath)
+			if err = os.MkdirAll(filepath.Dir(dest), 0700); err == nil {
+				err = os.WriteFile(dest, []byte(content), 0600)
+			}
+		}
+		if err != nil {
+			hr.Success, hr.Error = false, err
+			result.Success = false
+		}
+		result.Hosts[host] = hr
+	}
+
+	if len(remoteHosts) > 0 {
+		copyResult, err := c.dispatch.Copy(ctx, remoteHosts, local, relPath, dispatch.WithCopyMode(0600))
+		if err != nil {
+			return nil, fmt.Errorf("DistributeSecret: copy to %v: %w", remoteHosts, err)
+		}
+		for _, host := range remoteHosts {
+			hr := &HostResult{Host: host, Success: false, Error: fmt.Errorf("no result for host")}
+			if r := copyResult.Hosts[host]; r != nil {
+				hr.Success, hr.Error = r.Success, r.Error
+			}
+			if !hr.Success {
+				result.Success = false
+			}
+			result.Hosts[host] = hr
+		}
+	}
+
+	c.logger.Debug("Secret distributed",
+		zap.Strings("hosts", hosts), zap.String("path", relPath), zap.Bool("success", result.Success))
+	return result, nil
+}
+
 // maxInlineB64Len bounds the base64 payload sent as a single `echo` argument.
 // Linux caps one argument at MAX_ARG_STRLEN (128 KiB); stay well under it so the
 // fast single-command path never trips "Argument list too long".

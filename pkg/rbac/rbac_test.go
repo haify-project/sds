@@ -23,6 +23,14 @@ func TestClassify(t *testing.T) {
 		{"/v1.SDSController/CreateResource", "resource", ActWrite},
 		{"/v1.SDSController/ResourceStatus", "resource", ActRead},
 		{"/v1.SDSController/SetPrimary", "resource", ActWrite},
+		// Off-cluster backups must not fall through to "system", where an
+		// operator has read only: the feature would then be unusable by
+		// anyone but admin, and nothing would say so.
+		{"/v1.SDSController/CreateBackup", "backup", ActWrite},
+		{"/v1.SDSController/RestoreBackup", "backup", ActWrite},
+		{"/v1.SDSController/AddBackupTarget", "backup", ActWrite},
+		{"/v1.SDSController/ListBackups", "backup", ActRead},
+		{"/v1.SDSController/ListBackupTargets", "backup", ActRead},
 	}
 	for _, c := range cases {
 		obj, act := Classify(c.method)

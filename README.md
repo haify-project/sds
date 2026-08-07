@@ -60,6 +60,11 @@ graph TD
   (`allowRemoteVolumeAccess`) so Pods can run on non-replica nodes.
 - **Snapshots**: LVM and ZFS snapshots, plus GFS (grandfather-father-son)
   retention schedules.
+- **Backups (off-cluster)**: ship crash-consistent point-in-time copies to an
+  S3-compatible object store, an SMB share or a WebDAV endpoint, and restore
+  them. **Full images only — there is no incremental mode**; see
+  [Off-cluster backups](#7-off-cluster-backups) for the limits before you build
+  a schedule on it.
 - **Cross-DC (WAN)**: a TCP proxy for running DRBD replication across NAT/WAN
   where inbound UDP is blocked.
 - **Security & Ops**: token auth, RBAC, audit logging, optional TLS, and
@@ -321,7 +326,56 @@ sds-cli resource snapshot list   --resource res01 --node orange1
 sds-cli resource snapshot schedule create --resource res01 --cron "0 * * * *" --keep-hourly 6 --keep-daily 7
 ```
 
-### 7. Kubernetes (CSI)
+### 7. Off-cluster backups
+
+Snapshots live in the same pool as their origin, so losing the machine loses
+both. WAN DR is a *replica*: delete something and the deletion replicates. A
+backup is the third layer — a copy that nothing in the cluster can reach.
+
+Backups are read from a storage-native snapshot, never from the live volume, so
+the image is crash-consistent. The transfer runs **on the storage node** via
+[rclone](https://rclone.org), so the data goes node → object store directly
+rather than through the controller. `rclone` must be installed on the nodes that
+take backups; SDS checks for it before it snapshots anything.
+
+**Limitations — read these before building a schedule on it:**
+
+- **Every backup is a FULL image. There is no incremental mode.** A nightly
+  backup of a 2 TiB volume transfers 2 TiB every night.
+- **The stream is not compressed.** That is what allows the byte-for-byte size
+  check against the target after each upload; a backup is only recorded as
+  `completed` once the target confirms it holds exactly as many bytes as were
+  sent.
+- **LVM-backed volumes only.** A ZFS zvol snapshot has no block device to read
+  without cloning it first, so ZFS-backed resources are refused rather than
+  half-supported.
+- Backups are **not** wired into the snapshot scheduler; run `backup create`
+  from cron/systemd-timer for now.
+
+```bash
+# Define a repository. There is deliberately no --secret-key flag: the secret
+# comes from SDS_BACKUP_SECRET or --secret-file ("-" reads stdin), so it never
+# lands in your shell history or in argv.
+export SDS_BACKUP_SECRET='...'
+sds-cli backup target add --name offsite --kind s3 \
+    --bucket sds-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
+
+# A NAS over SMB (the password is obscured for rclone automatically)
+sds-cli backup target add --name nas --kind smb \
+    --host nas.lan --share backups --user backupuser --secret-file -
+
+sds-cli backup target list          # secrets are never shown
+sds-cli backup create --resource res01 --target offsite
+sds-cli backup list --resource res01
+
+# Restore. Refused while the resource is Primary anywhere or exported by a
+# gateway — stop the workload first.
+sds-cli backup restore res01_20260101T020000Z --resource res01
+
+sds-cli backup delete res01_20260101T020000Z
+```
+
+### 8. Kubernetes (CSI)
 
 The CSI driver provisions DRBD volumes as PersistentVolumes. Apply the manifests
 in `deploy/k8s/` (set the endpoint to your controller's address), then use the
@@ -344,7 +398,7 @@ reclaimPolicy: Delete
 Replica placement is pool-aware: volumes only land on nodes that host the
 requested pool.
 
-### 8. AI Assistants (MCP)
+### 9. AI Assistants (MCP)
 
 `sds-mcp` serves the full management surface (81 tools: pools, resources,
 snapshots, gateways, HA, ZFS, topology, and observability) over the Model Context
