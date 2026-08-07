@@ -824,6 +824,14 @@ message CreateResourceRequest {
   repeated string do_not_place_with = 17;
   map<string, string> labels = 18;
   string profile = 19;
+
+  // encrypt puts a LUKS2 container between DRBD and the backing LVM/ZFS volume
+  // on every replica, so the pool disks hold ciphertext. This is encryption AT
+  // REST ONLY: DRBD sits ABOVE the crypt layer, so replication traffic between
+  // nodes is the same plaintext it always was. Chosen once, at creation: there
+  // is no in-place conversion, and asking for one on a resource that already
+  // exists is refused rather than half-applied.
+  bool encrypt = 21;
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the
@@ -1468,6 +1476,10 @@ message ResourceInfo {
   // different site, a different protocol, and it never takes over automatically.
   bool wan_mode = 13;
   string dr_node = 14;
+  // encrypted is true when every replica's backing volume is a LUKS2 container
+  // (DRBD → LUKS → LVM/ZFS). Encryption at rest only — DRBD replicates the
+  // plaintext, so the wire is not protected by this.
+  bool encrypted = 15;
 }
 
 message ResourceStatus {
@@ -1499,6 +1511,10 @@ message ResourceStatus {
   // reported nowhere: an operator had to know DRBD counts every configured node
   // (tiebreakers and the off-site DR included) and work out the majority by hand.
   QuorumInfo quorum = 13;
+  // encrypted mirrors ResourceInfo.encrypted: the backing volumes are LUKS2
+  // containers. Reported here because "is this volume encrypted?" is a question
+  // an auditor asks of the running system, not of the creation request.
+  bool encrypted = 14;
 }
 
 // QuorumInfo is the vote arithmetic behind "will this resource survive?".
@@ -1569,6 +1585,10 @@ message VolumeInfo {
   // Backing logical volume name inside the pool (e.g. "<resource>_data").
   // Combined with pool it forms the "<pool>/<lv>" path used by snapshot APIs.
   string backing_volume = 5;
+  // encrypted is true when DRBD consumes this volume through a LUKS2 container
+  // rather than the backing LV/zvol directly. Snapshots of an encrypted volume
+  // are snapshots of the ciphertext.
+  bool encrypted = 6;
 }
 
 // Snapshot messages

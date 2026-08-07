@@ -23,7 +23,7 @@ func TestAddReplicaToConfigLAN(t *testing.T) {
 	rm.controller.hostsMap["node-d"] = "192.168.1.30"
 
 	out, err := rm.addReplicaToConfig(lanResConfig, "openclaw", "node-d", "192.168.1.30",
-		addDRVolumes, 7300, 2, 0, false, "")
+		addDRVolumes, 7300, 2, 0, false, "", false)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "on sds-d {")
@@ -58,7 +58,7 @@ func TestAddReplicaToConfigTwoSiteGetsItsOwnLeg(t *testing.T) {
 	rm.controller.hostsMap["node-d"] = "192.168.1.30"
 
 	out, err := rm.addReplicaToConfig(twoSite, "openclaw", "node-d", "192.168.1.30",
-		addDRVolumes, 7300, 2, 7902, true, "node-c")
+		addDRVolumes, 7300, 2, 7902, true, "node-c", false)
 	require.NoError(t, err)
 
 	// Its LAN identity is a real address; only the leg uses loopback.
@@ -77,7 +77,7 @@ func TestAddReplicaToConfigTwoSiteGetsItsOwnLeg(t *testing.T) {
 func TestAddReplicaToConfigRejectsExistingNode(t *testing.T) {
 	rm := addDRTestFixture(t)
 	_, err := rm.addReplicaToConfig(lanResConfig, "openclaw", "node-b", "192.168.1.11",
-		addDRVolumes, 7300, 1, 0, false, "")
+		addDRVolumes, 7300, 1, 0, false, "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already in the config")
 }

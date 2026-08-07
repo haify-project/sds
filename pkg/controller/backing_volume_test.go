@@ -99,7 +99,7 @@ func TestCreateBackingVolumeReusesExistingLargeEnoughVolume(t *testing.T) {
 	ctrl := newBasicTestController(dep)
 
 	err := ctrl.resources.createBackingVolume(context.Background(),
-		[]string{"10.0.0.1", "10.0.0.2"}, []string{"node1", "node2"}, "lvm", "vg0", "res1_data", 3)
+		[]string{"10.0.0.1", "10.0.0.2"}, []string{"node1", "node2"}, "lvm", "vg0", "res1_data", 3, false)
 	require.NoError(t, err, "a leftover volume big enough to reuse must not block the retry")
 	assert.True(t, lvsQueried, "reuse must be justified by checking the actual size")
 }
@@ -126,7 +126,7 @@ func TestCreateBackingVolumeRefusesTooSmallExistingVolume(t *testing.T) {
 	ctrl := newBasicTestController(dep)
 
 	err := ctrl.resources.createBackingVolume(context.Background(),
-		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 3)
+		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 3, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "too small to reuse")
 }
@@ -146,7 +146,7 @@ func TestCreateBackingVolumeStillFailsOnRealErrors(t *testing.T) {
 	ctrl := newBasicTestController(dep)
 
 	err := ctrl.resources.createBackingVolume(context.Background(),
-		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 3)
+		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 3, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "insufficient free space")
 }
@@ -163,7 +163,7 @@ func TestCreateBackingVolumePassesOverAllocatedSize(t *testing.T) {
 	ctrl := newBasicTestController(dep)
 
 	require.NoError(t, ctrl.resources.createBackingVolume(context.Background(),
-		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 4))
+		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 4, false))
 
 	var total uint64
 	_, err := fmt.Sscanf(gotSize, "%dB", &total)

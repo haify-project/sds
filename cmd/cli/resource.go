@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -115,6 +116,7 @@ func resourceCreate() *cobra.Command {
 	var wanEgress string
 	var profile string
 	var labels map[string]string
+	var encrypt bool
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -178,6 +180,18 @@ func resourceCreate() *cobra.Command {
 				return fmt.Errorf("size too small (minimum 1 GiB)")
 			}
 
+			// Say it here rather than only in the docs. The distinction between
+			// at-rest and in-transit is the one an operator is most likely to
+			// get wrong about this flag, and getting it wrong means believing
+			// replication traffic is protected when it is not.
+			if encrypt {
+				fmt.Fprintf(os.Stderr,
+					"Note: --encrypt encrypts each replica's backing volume (at rest).\n"+
+						"      DRBD sits above the crypt layer, so replication between nodes stays PLAINTEXT.\n"+
+						"      Each node keeps its own key in /etc/sds/luks (root-only); deleting the\n"+
+						"      resource destroys those keys, and there is no central escrow.\n")
+			}
+
 			grpcClient, conn, err := newResourceGRPCClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
@@ -225,6 +239,7 @@ func resourceCreate() *cobra.Command {
 				DoNotPlaceWith:      doNotPlaceWith,
 				Labels:              labels,
 				Profile:             profile,
+				Encrypt:             encrypt,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create resource: %w", err)
@@ -260,6 +275,9 @@ func resourceCreate() *cobra.Command {
 				fmt.Printf("  Protocol:    %s\n", profileCreateValue(requestProtocol, profile))
 			}
 			fmt.Printf("  Size:        %d GiB (%s)\n", sizeGiB, util.FormatBytes(sizeBytes))
+			if encrypt {
+				fmt.Printf("  Encryption:  LUKS2 at rest (replication traffic is NOT encrypted)\n")
+			}
 			if len(drbdOptions) > 0 {
 				fmt.Printf("  Options:     %v\n", drbdOptions)
 			}
@@ -291,6 +309,11 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Resource profile name")
 	cmd.Flags().StringToStringVar(&labels, "label", nil, "Resource label as key=value (repeatable)")
+	cmd.Flags().BoolVar(&encrypt, "encrypt", false,
+		"Encrypt each replica's backing volume with LUKS2 (DRBD -> LUKS -> LVM). "+
+			"AT REST ONLY: DRBD is above the crypt layer, so replication traffic between nodes stays plaintext. "+
+			"Each node generates and keeps its own key under /etc/sds/luks (root-only, never sent anywhere); "+
+			"there is no central escrow and it cannot be enabled later. LVM pools only.")
 	cmd.Flags().BoolVar(&wan, "wan", false, "Enable opt-in WAN replication (async protocol A to --dr-node via sds-proxy; --nodes may list several primary-site replicas)")
 	cmd.Flags().StringVar(&drNode, "dr-node", "", "DR-site node name (requires --wan; must be a registered node)")
 	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "DR site's public WAN address the primary dials (requires --wan)")
@@ -386,6 +409,9 @@ func resourceGet() *cobra.Command {
 			fmt.Printf("Resource: %s\n", resource.Name)
 			fmt.Printf("  Port:     %d\n", resource.Port)
 			fmt.Printf("  Protocol: %s\n", resource.Protocol)
+			if resource.Encrypted {
+				fmt.Printf("  Encrypted: LUKS2 at rest (replication traffic is NOT encrypted)\n")
+			}
 			fmt.Printf("  Profile:  %s\n", displayValue(resource.Profile))
 			fmt.Printf("  Labels:   %s\n", formatLabels(resource.Labels))
 			fmt.Printf("  Nodes:\n")
@@ -1353,13 +1379,24 @@ func resourceStatus() *cobra.Command {
 			fmt.Printf("Resource Status: %s\n", status.GetName())
 			fmt.Printf("  Role:  %s\n", status.GetRole())
 			fmt.Printf("  Nodes: %v\n", status.GetNodes())
+			if status.GetEncrypted() {
+				// Spelled out rather than a bare "yes": an operator reading a
+				// status page is exactly who might otherwise conclude that the
+				// replication link is protected too.
+				fmt.Printf("  Encryption: LUKS2 on each replica's backing volume (at rest).\n")
+				fmt.Printf("              Replication between nodes is NOT encrypted.\n")
+			}
 
 			volumes := status.GetVolumes()
 			if len(volumes) > 0 {
 				fmt.Printf("\n  Volumes:\n")
 				for _, vol := range volumes {
-					fmt.Printf("    %d: %s (%d GB)\n",
-						vol.GetVolumeId(), vol.GetDevice(), vol.GetSizeGb())
+					enc := ""
+					if vol.GetEncrypted() {
+						enc = " [encrypted]"
+					}
+					fmt.Printf("    %d: %s (%d GB)%s\n",
+						vol.GetVolumeId(), vol.GetDevice(), vol.GetSizeGb(), enc)
 				}
 			}
 

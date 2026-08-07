@@ -3337,8 +3337,15 @@ type CreateResourceRequest struct {
 	DoNotPlaceWith []string          `protobuf:"bytes,17,rep,name=do_not_place_with,json=doNotPlaceWith,proto3" json:"do_not_place_with,omitempty"`
 	Labels         map[string]string `protobuf:"bytes,18,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Profile        string            `protobuf:"bytes,19,opt,name=profile,proto3" json:"profile,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// encrypt puts a LUKS2 container between DRBD and the backing LVM/ZFS volume
+	// on every replica, so the pool disks hold ciphertext. This is encryption AT
+	// REST ONLY: DRBD sits ABOVE the crypt layer, so replication traffic between
+	// nodes is the same plaintext it always was. Chosen once, at creation: there
+	// is no in-place conversion, and asking for one on a resource that already
+	// exists is refused rather than half-applied.
+	Encrypt       bool `protobuf:"varint,21,opt,name=encrypt,proto3" json:"encrypt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateResourceRequest) Reset() {
@@ -3509,6 +3516,13 @@ func (x *CreateResourceRequest) GetProfile() string {
 		return x.Profile
 	}
 	return ""
+}
+
+func (x *CreateResourceRequest) GetEncrypt() bool {
+	if x != nil {
+		return x.Encrypt
+	}
+	return false
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the
@@ -8896,8 +8910,12 @@ type ResourceInfo struct {
 	// copy, and dr_node names which of `nodes` holds it. Without this the list
 	// shows the DR as just another replica, which is exactly wrong — it is a
 	// different site, a different protocol, and it never takes over automatically.
-	WanMode       bool   `protobuf:"varint,13,opt,name=wan_mode,json=wanMode,proto3" json:"wan_mode,omitempty"`
-	DrNode        string `protobuf:"bytes,14,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`
+	WanMode bool   `protobuf:"varint,13,opt,name=wan_mode,json=wanMode,proto3" json:"wan_mode,omitempty"`
+	DrNode  string `protobuf:"bytes,14,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`
+	// encrypted is true when every replica's backing volume is a LUKS2 container
+	// (DRBD → LUKS → LVM/ZFS). Encryption at rest only — DRBD replicates the
+	// plaintext, so the wire is not protected by this.
+	Encrypted     bool `protobuf:"varint,15,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9030,6 +9048,13 @@ func (x *ResourceInfo) GetDrNode() string {
 	return ""
 }
 
+func (x *ResourceInfo) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
+}
+
 type ResourceStatus struct {
 	state      protoimpl.MessageState        `protogen:"open.v1"`
 	Name       string                        `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -9059,7 +9084,11 @@ type ResourceStatus struct {
 	// lost. It is the one number that governs availability and it was previously
 	// reported nowhere: an operator had to know DRBD counts every configured node
 	// (tiebreakers and the off-site DR included) and work out the majority by hand.
-	Quorum        *QuorumInfo `protobuf:"bytes,13,opt,name=quorum,proto3" json:"quorum,omitempty"`
+	Quorum *QuorumInfo `protobuf:"bytes,13,opt,name=quorum,proto3" json:"quorum,omitempty"`
+	// encrypted mirrors ResourceInfo.encrypted: the backing volumes are LUKS2
+	// containers. Reported here because "is this volume encrypted?" is a question
+	// an auditor asks of the running system, not of the creation request.
+	Encrypted     bool `protobuf:"varint,14,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9183,6 +9212,13 @@ func (x *ResourceStatus) GetQuorum() *QuorumInfo {
 		return x.Quorum
 	}
 	return nil
+}
+
+func (x *ResourceStatus) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
 }
 
 // QuorumInfo is the vote arithmetic behind "will this resource survive?".
@@ -9500,6 +9536,10 @@ type VolumeInfo struct {
 	// Backing logical volume name inside the pool (e.g. "<resource>_data").
 	// Combined with pool it forms the "<pool>/<lv>" path used by snapshot APIs.
 	BackingVolume string `protobuf:"bytes,5,opt,name=backing_volume,json=backingVolume,proto3" json:"backing_volume,omitempty"`
+	// encrypted is true when DRBD consumes this volume through a LUKS2 container
+	// rather than the backing LV/zvol directly. Snapshots of an encrypted volume
+	// are snapshots of the ciphertext.
+	Encrypted     bool `protobuf:"varint,6,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9567,6 +9607,13 @@ func (x *VolumeInfo) GetBackingVolume() string {
 		return x.BackingVolume
 	}
 	return ""
+}
+
+func (x *VolumeInfo) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
 }
 
 // Snapshot messages
@@ -14914,7 +14961,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x14drbd_reactor_version\x18\x04 \x01(\tR\x12drbdReactorVersion\x120\n" +
 	"\x14drbd_reactor_running\x18\x05 \x01(\bR\x12drbdReactorRunning\x12:\n" +
 	"\x19resource_agents_installed\x18\x06 \x01(\bR\x17resourceAgentsInstalled\x12)\n" +
-	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\xc8\x06\n" +
+	"\x10available_agents\x18\a \x03(\tR\x0favailableAgents\"\xe2\x06\n" +
 	"\x15CreateResourceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x14\n" +
@@ -14937,7 +14984,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x10replicas_on_same\x18\x10 \x03(\tR\x0ereplicasOnSame\x12)\n" +
 	"\x11do_not_place_with\x18\x11 \x03(\tR\x0edoNotPlaceWith\x12=\n" +
 	"\x06labels\x18\x12 \x03(\v2%.v1.CreateResourceRequest.LabelsEntryR\x06labels\x12\x18\n" +
-	"\aprofile\x18\x13 \x01(\tR\aprofile\x1a>\n" +
+	"\aprofile\x18\x13 \x01(\tR\aprofile\x12\x18\n" +
+	"\aencrypt\x18\x15 \x01(\bR\aencrypt\x1a>\n" +
 	"\x10DrbdOptionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
@@ -15328,7 +15376,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\fmin_severity\x18\x01 \x01(\tR\vminSeverity\x12\x14\n" +
 	"\x05types\x18\x02 \x03(\tR\x05types\x12\x1a\n" +
 	"\bresource\x18\x03 \x01(\tR\bresource\x12\x19\n" +
-	"\bsince_id\x18\x04 \x01(\x04R\asinceId\"\xf1\x04\n" +
+	"\bsince_id\x18\x04 \x01(\x04R\asinceId\"\x8f\x05\n" +
 	"\fResourceInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x1a\n" +
@@ -15346,13 +15394,14 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x06labels\x18\v \x03(\v2\x1c.v1.ResourceInfo.LabelsEntryR\x06labels\x12\x18\n" +
 	"\aprofile\x18\f \x01(\tR\aprofile\x12\x19\n" +
 	"\bwan_mode\x18\r \x01(\bR\awanMode\x12\x17\n" +
-	"\adr_node\x18\x0e \x01(\tR\x06drNode\x1aT\n" +
+	"\adr_node\x18\x0e \x01(\tR\x06drNode\x12\x1c\n" +
+	"\tencrypted\x18\x0f \x01(\bR\tencrypted\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
 	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf4\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x92\x05\n" +
 	"\x0eResourceStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x14\n" +
@@ -15370,7 +15419,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\rwan_reachable\x18\v \x01(\bR\fwanReachable\x12/\n" +
 	"\vwan_metrics\x18\f \x01(\v2\x0e.v1.WANMetricsR\n" +
 	"wanMetrics\x12&\n" +
-	"\x06quorum\x18\r \x01(\v2\x0e.v1.QuorumInfoR\x06quorum\x1aT\n" +
+	"\x06quorum\x18\r \x01(\v2\x0e.v1.QuorumInfoR\x06quorum\x12\x1c\n" +
+	"\tencrypted\x18\x0e \x01(\bR\tencrypted\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
 	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\x1a;\n" +
@@ -15408,14 +15458,15 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"disk_state\x18\x02 \x01(\tR\tdiskState\x12+\n" +
 	"\x11replication_state\x18\x03 \x01(\tR\x10replicationState\x12!\n" +
 	"\fsync_percent\x18\x04 \x01(\x01R\vsyncPercent\x12\x12\n" +
-	"\x04node\x18\x05 \x01(\tR\x04node\"\x95\x01\n" +
+	"\x04node\x18\x05 \x01(\tR\x04node\"\xb3\x01\n" +
 	"\n" +
 	"VolumeInfo\x12\x1b\n" +
 	"\tvolume_id\x18\x01 \x01(\rR\bvolumeId\x12\x16\n" +
 	"\x06device\x18\x02 \x01(\tR\x06device\x12\x17\n" +
 	"\asize_gb\x18\x03 \x01(\x04R\x06sizeGb\x12\x12\n" +
 	"\x04pool\x18\x04 \x01(\tR\x04pool\x12%\n" +
-	"\x0ebacking_volume\x18\x05 \x01(\tR\rbackingVolume\"h\n" +
+	"\x0ebacking_volume\x18\x05 \x01(\tR\rbackingVolume\x12\x1c\n" +
+	"\tencrypted\x18\x06 \x01(\bR\tencrypted\"h\n" +
 	"\x15CreateSnapshotRequest\x12\x16\n" +
 	"\x06volume\x18\x01 \x01(\tR\x06volume\x12#\n" +
 	"\rsnapshot_name\x18\x02 \x01(\tR\fsnapshotName\x12\x12\n" +
