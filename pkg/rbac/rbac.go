@@ -72,6 +72,7 @@ func defaultPolicies() []Policy {
 		{"operator", "resource", "*"},
 		{"operator", "gateway", "*"},
 		{"operator", "snapshot", "*"},
+		{"operator", "backup", "*"},
 		{"operator", "ha", "*"},
 		{"operator", "node", ActRead},
 		{"operator", "system", ActRead},
@@ -472,6 +473,12 @@ func classifyAction(method string) string {
 
 func classifyObject(method string) string {
 	switch {
+	// Before the snapshot case: off-cluster backups are their own object, so an
+	// operator who may ship data off-site can be distinguished from one who may
+	// only snapshot in place. Unclassified would land it in "system", where an
+	// operator has read only — a working feature nobody but admin could use.
+	case strings.Contains(method, "Backup"):
+		return "backup"
 	case strings.Contains(method, "Snapshot"):
 		return "snapshot"
 	case containsAny(method, "Gateway", "NFS", "ISCSI", "NVMe", "Chap", "Export", "Initiator", "LUN", "Host", "Namespace"):

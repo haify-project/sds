@@ -48,6 +48,7 @@ type fakeDeploymentClient struct {
 	lvListSnapshotsFunc                 func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
 	lvMergeSnapshotFunc                 func(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error)
 	distributeConfigFunc                func(ctx context.Context, hosts []string, content, remotePath string, opts ...deployment.ConfigOption) (*deployment.ConfigResult, error)
+	distributeSecretFunc                func(ctx context.Context, hosts []string, content, relPath string) (*deployment.ConfigResult, error)
 	drbdCreateMDFunc                    func(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	drbdUpFunc                          func(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
 	drbdDownFunc                        func(ctx context.Context, hosts []string, resource string) (*deployment.ExecResult, error)
@@ -92,6 +93,11 @@ type fakeDeploymentClient struct {
 	distributedConfigs []struct {
 		hosts               []string
 		content, remotePath string
+	}
+	distributedSecrets []struct {
+		hosts   []string
+		content string
+		relPath string
 	}
 	deleteConfigCalls []struct {
 		hosts      []string
@@ -148,6 +154,18 @@ func (f *fakeDeploymentClient) DistributeConfig(ctx context.Context, hosts []str
 		return f.distributeConfigFunc(ctx, hosts, content, remotePath, opts...)
 	}
 	return &deployment.ConfigResult{Success: true, Path: remotePath}, nil
+}
+
+func (f *fakeDeploymentClient) DistributeSecret(ctx context.Context, hosts []string, content, relPath string) (*deployment.ConfigResult, error) {
+	f.distributedSecrets = append(f.distributedSecrets, struct {
+		hosts   []string
+		content string
+		relPath string
+	}{hosts: cloneStrings(hosts), content: content, relPath: relPath})
+	if f.distributeSecretFunc != nil {
+		return f.distributeSecretFunc(ctx, hosts, content, relPath)
+	}
+	return &deployment.ConfigResult{Success: true, Path: relPath}, nil
 }
 
 func (f *fakeDeploymentClient) DeleteConfig(ctx context.Context, hosts []string, remotePath string) error {
@@ -543,6 +561,7 @@ func newBasicTestController(dep deploymentClient) *Controller {
 	ctrl.resources.SetDeployment(dep)
 	ctrl.gateway = gateway.New(nil, nil, zap.NewNop(), nil)
 	ctrl.schedules = NewScheduleManager(ctrl)
+	ctrl.backups = NewBackupManager(ctrl)
 	return ctrl
 }
 

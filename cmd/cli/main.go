@@ -30,6 +30,7 @@ func main() {
 	rootCmd.AddCommand(rbacCommand())
 	rootCmd.AddCommand(eventCommand())
 	rootCmd.AddCommand(wanCommand())
+	rootCmd.AddCommand(backupCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

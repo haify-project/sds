@@ -60,6 +60,9 @@ graph TD
   LUKS2 容器（`DRBD → LUKS → LVM`）。**仅是静态加密——DRBD 位于加密层之上，
   节点之间的复制流量仍是明文。** 见 [静态加密](#静态加密)。
 - **快照**：LVM 和 ZFS 快照，以及 GFS（祖父-父-子）保留策略计划任务。
+- **异地备份（集群外）**：把崩溃一致的时间点副本推送到 S3 兼容对象存储、SMB 共享
+  或 WebDAV，并可恢复。**只有全量，没有增量**；在据此制定备份计划之前，请先看
+  [异地备份](#7-异地备份集群外) 里的限制。
 - **跨数据中心（WAN）**：当入站 UDP 被封禁时，通过 TCP 代理在 NAT/WAN 上运行 DRBD 复制。
 - **安全与运维**：令牌认证、RBAC、审计日志、可选 TLS、Prometheus 指标。
 - **通知**：健康检测器会为副本降级、主备切换（failover）、失去 Primary、节点失联
@@ -367,7 +370,46 @@ sds-cli resource snapshot list   --resource res01 --node orange1
 sds-cli resource snapshot schedule create --resource res01 --cron "0 * * * *" --keep-hourly 6 --keep-daily 7
 ```
 
-### 7. Kubernetes（CSI）
+### 7. 异地备份（集群外）
+
+快照和它的源卷在同一个池里，机器没了两个一起没。WAN 容灾是*副本*：删除同样会被复制
+过去。备份是第三层 —— 一份集群里任何东西都够不着的副本。
+
+备份读的是存储层快照，绝不读活动卷，因此镜像是崩溃一致的。传输在**存储节点上**通过
+[rclone](https://rclone.org) 完成，数据直接从节点走到对象存储，不经过控制器。做备份的
+节点上必须装有 `rclone`；SDS 会在打快照之前先检查。
+
+**限制 —— 制定备份计划之前请务必读完：**
+
+- **每次备份都是全量镜像，没有增量模式。** 2 TiB 的卷每天备份一次，就是每天传 2 TiB。
+- **数据流不压缩。** 正是因此每次上传后才能做逐字节的大小校验：只有对端确认收到的字节
+  数与发出的完全一致，备份才会被记为 `completed`。
+- **仅支持 LVM 后端的卷。** ZFS zvol 的快照不先克隆就没有块设备可读，所以 ZFS 后端的
+  资源会被直接拒绝，而不是做一半。
+- 备份**没有**接入快照调度器；目前请用 cron / systemd timer 调用 `backup create`。
+
+```bash
+# 定义仓库。这里刻意没有 --secret-key 参数：密钥来自 SDS_BACKUP_SECRET 或
+# --secret-file（"-" 表示从 stdin 读），因此不会落进 shell 历史或 argv。
+export SDS_BACKUP_SECRET='...'
+sds-cli backup target add --name offsite --kind s3 \
+    --bucket sds-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
+
+# SMB 上的 NAS（密码会自动转换成 rclone 的 obscure 形式）
+sds-cli backup target add --name nas --kind smb \
+    --host nas.lan --share backups --user backupuser --secret-file -
+
+sds-cli backup target list          # 永远不会显示密钥
+sds-cli backup create --resource res01 --target offsite
+sds-cli backup list --resource res01
+
+# 恢复。只要资源在任一节点是 Primary，或者被网关导出，就会被拒绝 —— 先停业务。
+sds-cli backup restore res01_20260101T020000Z --resource res01
+
+sds-cli backup delete res01_20260101T020000Z
+```
+
+### 8. Kubernetes（CSI）
 
 CSI 驱动将 DRBD 卷作为 PersistentVolume 供给。应用 `deploy/k8s/` 下的清单（把 endpoint
 改成你的控制器地址），然后使用 `sds-drbd` StorageClass：
@@ -388,7 +430,7 @@ reclaimPolicy: Delete
 
 副本放置是 pool 感知的：卷只会落在拥有目标 pool 的节点上。
 
-### 8. AI 助手（MCP）
+### 9. AI 助手（MCP）
 
 `sds-mcp` 通过 Model Context Protocol 在 stdio 上提供完整的管理面（81 个工具：池、资源、
 快照、网关、HA、ZFS、拓扑与可观测性）。破坏性操作已标注，MCP 客户端会请求确认；

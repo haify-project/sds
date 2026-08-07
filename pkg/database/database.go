@@ -24,6 +24,10 @@ const (
 	haConfigsBucket = "ha_configs"
 	rbacBucket      = "rbac"
 	schedulesBucket = "snapshot_schedules"
+	// Off-cluster backup shipping: the repositories (targets) and the metadata
+	// of each copy pushed to them. See pkg/backup.
+	backupTargetsBucket = "backup_targets"
+	backupsBucket       = "backups"
 )
 
 // rbacStateKey is the single key under rbacBucket holding the serialized RBAC
@@ -71,7 +75,7 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 
 	// Initialize buckets
 	if err := db.Update(func(tx *bolt.Tx) error {
-		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, profilesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket}
+		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, profilesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket, backupTargetsBucket, backupsBucket}
 		for _, bucket := range buckets {
 			_, err := tx.CreateBucketIfNotExists([]byte(bucket))
 			if err != nil {

@@ -66,6 +66,7 @@ type Controller struct {
 	nodes     *NodeManager
 	gateway   *gateway.Manager
 	schedules *ScheduleManager
+	backups   *BackupManager
 }
 
 // SetLogRing attaches the buffer the log view reads from. The ring has to exist
@@ -124,6 +125,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	ctrl.snapshots = NewSnapshotManager(ctrl)
 	ctrl.nodes = NewNodeManager(ctrl)
 	ctrl.schedules = NewScheduleManager(ctrl)
+	ctrl.backups = NewBackupManager(ctrl)
 
 	// Initialize gateway with adapters
 	gwResourceManager := NewGatewayResourceManager(ctrl.resources,
@@ -259,6 +261,16 @@ func (c *Controller) Start() error {
 	if c.config.Schedule.Enabled && c.db != nil {
 		if err := c.schedules.Start(context.Background()); err != nil {
 			c.logger.Warn("Failed to start snapshot scheduler", zap.Error(err))
+		}
+	}
+
+	// A backup left "running" belongs to a controller that died mid-transfer;
+	// only the active controller ships backups, so nothing can still be in
+	// flight here. Resolve it now so an incomplete copy is never listed as
+	// something that could be restored.
+	if c.db != nil && c.backups != nil {
+		if err := c.backups.ReconcileInterrupted(context.Background()); err != nil {
+			c.logger.Warn("Failed to reconcile interrupted backups", zap.Error(err))
 		}
 	}
 
