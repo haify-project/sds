@@ -196,6 +196,37 @@ function PoolItem({ pool }: { pool: Pool }) {
       </div>
       <Progress value={usedPercent} className="h-2" />
 
+      {pool.cached && (
+        <div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          <span>Cache:</span>
+          <Badge
+            variant="outline"
+            className={
+              pool.cacheMode === 'writeback'
+                ? 'border-amber-500/50 text-amber-600'
+                : undefined
+            }
+          >
+            {pool.cacheMode}
+          </Badge>
+          <span className="font-mono text-[0.65rem]">{pool.cacheDevice}</span>
+          <span>
+            {pool.cacheHitPercent ?? 0}% hit &bull; {pool.cacheUsedPercent ?? 0}%
+            used
+          </span>
+          {/* Dirty is the share of the cache that exists nowhere else on this
+              node, so it is only worth surfacing when there is some. */}
+          {(pool.cacheDirtyPercent ?? 0) > 0 && (
+            <span className="text-amber-600">
+              {pool.cacheDirtyPercent}% not yet on disk
+            </span>
+          )}
+          {pool.cacheDegraded && (
+            <Badge variant="destructive">cache degraded</Badge>
+          )}
+        </div>
+      )}
+
       {pool.devices && pool.devices.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
           <span className="text-xs text-muted-foreground">

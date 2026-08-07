@@ -80,15 +80,33 @@ func (s *Server) GetPool(ctx context.Context, req *sdspb.GetPoolRequest) (*sdspb
 	return &sdspb.GetPoolResponse{
 		Success: true,
 		Message: "Pool found",
-		Pool: &sdspb.PoolInfo{
-			Name:    pool.Name,
-			Type:    pool.Type,
-			Node:    pool.Node,
-			TotalGb: pool.TotalGB,
-			FreeGb:  pool.FreeGB,
-			Devices: pool.Devices,
-		},
+		Pool:    pbPoolInfo(pool),
 	}, nil
+}
+
+// pbPoolInfo converts a pool, including its storage tier if it has one.
+func pbPoolInfo(p *PoolInfo) *sdspb.PoolInfo {
+	out := &sdspb.PoolInfo{
+		Name:        p.Name,
+		Type:        p.Type,
+		Node:        p.Node,
+		TotalGb:     p.TotalGB,
+		FreeGb:      p.FreeGB,
+		Devices:     p.Devices,
+		Thin:        p.Thin,
+		Compression: p.Compression,
+	}
+	if c := p.Cache; c != nil {
+		out.Cached = true
+		out.CacheMode = c.Mode
+		out.CacheSizeBytes = c.SizeBytes
+		out.CacheUsedPercent = c.UsedPercent
+		out.CacheHitPercent = c.HitPercent
+		out.CacheDirtyPercent = c.DirtyPercent
+		out.CacheDevice = c.Device
+		out.CacheDegraded = c.Degraded
+	}
+	return out
 }
 
 func (s *Server) ListPools(ctx context.Context, req *sdspb.ListPoolsRequest) (*sdspb.ListPoolsResponse, error) {
@@ -102,14 +120,7 @@ func (s *Server) ListPools(ctx context.Context, req *sdspb.ListPoolsRequest) (*s
 
 	var pbPools []*sdspb.PoolInfo
 	for _, p := range pools {
-		pbPools = append(pbPools, &sdspb.PoolInfo{
-			Name:    p.Name,
-			Type:    p.Type,
-			Node:    p.Node,
-			TotalGb: p.TotalGB,
-			FreeGb:  p.FreeGB,
-			Devices: p.Devices,
-		})
+		pbPools = append(pbPools, pbPoolInfo(p))
 	}
 
 	return &sdspb.ListPoolsResponse{
@@ -867,6 +878,35 @@ func (s *Server) ConvertPoolToThin(ctx context.Context, req *sdspb.ConvertPoolTo
 	return &sdspb.ConvertPoolToThinResponse{
 		Success: true,
 		Message: "pool rebuilt as thin; the volumes are resyncing from their peers",
+	}, nil
+}
+
+// AddPoolCache puts an SSD in front of one node's pool with lvmcache.
+func (s *Server) AddPoolCache(ctx context.Context, req *sdspb.AddPoolCacheRequest) (*sdspb.AddPoolCacheResponse, error) {
+	info, err := s.storage.AddPoolCache(ctx, req.GetNode(), req.GetPool(), req.GetDevice(), req.GetMode())
+	if err != nil {
+		return &sdspb.AddPoolCacheResponse{Success: false, Message: err.Error()}, nil
+	}
+	msg := fmt.Sprintf("cache attached to %s on %s in %s mode", req.GetPool(), req.GetNode(), info.Mode)
+	if info.Mode == cacheModeWriteback {
+		msg += "; writes are acknowledged from the SSD, so losing it loses whatever it has not destaged"
+	}
+	return &sdspb.AddPoolCacheResponse{
+		Success:        true,
+		Message:        msg,
+		Mode:           info.Mode,
+		CacheSizeBytes: info.SizeBytes,
+	}, nil
+}
+
+// RemovePoolCache flushes and detaches a pool's cache.
+func (s *Server) RemovePoolCache(ctx context.Context, req *sdspb.RemovePoolCacheRequest) (*sdspb.RemovePoolCacheResponse, error) {
+	if err := s.storage.RemovePoolCache(ctx, req.GetNode(), req.GetPool()); err != nil {
+		return &sdspb.RemovePoolCacheResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.RemovePoolCacheResponse{
+		Success: true,
+		Message: "cache flushed, detached, and its device released from the pool",
 	}, nil
 }
 
@@ -1699,16 +1739,7 @@ func (s *Server) ListZFSpools(ctx context.Context, req *sdspb.ListZFSPoolsReques
 
 	var pbPools []*sdspb.PoolInfo
 	for _, p := range pools {
-		pbPools = append(pbPools, &sdspb.PoolInfo{
-			Name:        p.Name,
-			Type:        p.Type,
-			Node:        p.Node,
-			TotalGb:     p.TotalGB,
-			FreeGb:      p.FreeGB,
-			Devices:     p.Devices,
-			Thin:        p.Thin,
-			Compression: p.Compression,
-		})
+		pbPools = append(pbPools, pbPoolInfo(p))
 	}
 
 	return &sdspb.ListZFSPoolsResponse{

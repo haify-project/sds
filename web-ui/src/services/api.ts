@@ -31,6 +31,17 @@ export interface Pool {
   devices: string[];
   thin: boolean;
   compression: string;
+  // Storage tiering (lvmcache). cacheMode is the field that matters
+  // operationally: writeback puts the SSD in the durability path, writethrough
+  // does not.
+  cached?: boolean;
+  cacheMode?: string;
+  cacheSizeBytes?: string;
+  cacheUsedPercent?: number;
+  cacheHitPercent?: number;
+  cacheDirtyPercent?: number;
+  cacheDevice?: string;
+  cacheDegraded?: boolean;
 }
 
 export interface Resource {

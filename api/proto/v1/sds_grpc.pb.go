@@ -121,6 +121,8 @@ const (
 	SDSController_DrainNode_FullMethodName                = "/v1.SDSController/DrainNode"
 	SDSController_UndrainNode_FullMethodName              = "/v1.SDSController/UndrainNode"
 	SDSController_ConvertPoolToThin_FullMethodName        = "/v1.SDSController/ConvertPoolToThin"
+	SDSController_AddPoolCache_FullMethodName             = "/v1.SDSController/AddPoolCache"
+	SDSController_RemovePoolCache_FullMethodName          = "/v1.SDSController/RemovePoolCache"
 	SDSController_ListAuditEvents_FullMethodName          = "/v1.SDSController/ListAuditEvents"
 	SDSController_ListControllerLogs_FullMethodName       = "/v1.SDSController/ListControllerLogs"
 	SDSController_ListEvents_FullMethodName               = "/v1.SDSController/ListEvents"
@@ -269,6 +271,12 @@ type SDSControllerClient interface {
 	// Thick pools cannot hold a snapshot history: each snapshot reserves a fixed
 	// COW area whether anything changes or not.
 	ConvertPoolToThin(ctx context.Context, in *ConvertPoolToThinRequest, opts ...grpc.CallOption) (*ConvertPoolToThinResponse, error)
+	// Storage tiering: put an SSD/NVMe device in front of one node's LVM pool
+	// with lvmcache. The cache serves the whole pool, and defaults to
+	// writethrough because a writeback cache holds acknowledged writes that no
+	// other node has yet.
+	AddPoolCache(ctx context.Context, in *AddPoolCacheRequest, opts ...grpc.CallOption) (*AddPoolCacheResponse, error)
+	RemovePoolCache(ctx context.Context, in *RemovePoolCacheRequest, opts ...grpc.CallOption) (*RemovePoolCacheResponse, error)
 	// Audit trail: who called what, when, and whether it was allowed. Persisted
 	// in the database, which lives on the controller's replicated volume, so the
 	// history follows the controller across a failover instead of being split
@@ -1326,6 +1334,26 @@ func (c *sDSControllerClient) ConvertPoolToThin(ctx context.Context, in *Convert
 	return out, nil
 }
 
+func (c *sDSControllerClient) AddPoolCache(ctx context.Context, in *AddPoolCacheRequest, opts ...grpc.CallOption) (*AddPoolCacheResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddPoolCacheResponse)
+	err := c.cc.Invoke(ctx, SDSController_AddPoolCache_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RemovePoolCache(ctx context.Context, in *RemovePoolCacheRequest, opts ...grpc.CallOption) (*RemovePoolCacheResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemovePoolCacheResponse)
+	err := c.cc.Invoke(ctx, SDSController_RemovePoolCache_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAuditEventsResponse)
@@ -1526,6 +1554,12 @@ type SDSControllerServer interface {
 	// Thick pools cannot hold a snapshot history: each snapshot reserves a fixed
 	// COW area whether anything changes or not.
 	ConvertPoolToThin(context.Context, *ConvertPoolToThinRequest) (*ConvertPoolToThinResponse, error)
+	// Storage tiering: put an SSD/NVMe device in front of one node's LVM pool
+	// with lvmcache. The cache serves the whole pool, and defaults to
+	// writethrough because a writeback cache holds acknowledged writes that no
+	// other node has yet.
+	AddPoolCache(context.Context, *AddPoolCacheRequest) (*AddPoolCacheResponse, error)
+	RemovePoolCache(context.Context, *RemovePoolCacheRequest) (*RemovePoolCacheResponse, error)
 	// Audit trail: who called what, when, and whether it was allowed. Persisted
 	// in the database, which lives on the controller's replicated volume, so the
 	// history follows the controller across a failover instead of being split
@@ -1868,6 +1902,12 @@ func (UnimplementedSDSControllerServer) UndrainNode(context.Context, *UndrainNod
 }
 func (UnimplementedSDSControllerServer) ConvertPoolToThin(context.Context, *ConvertPoolToThinRequest) (*ConvertPoolToThinResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConvertPoolToThin not implemented")
+}
+func (UnimplementedSDSControllerServer) AddPoolCache(context.Context, *AddPoolCacheRequest) (*AddPoolCacheResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddPoolCache not implemented")
+}
+func (UnimplementedSDSControllerServer) RemovePoolCache(context.Context, *RemovePoolCacheRequest) (*RemovePoolCacheResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemovePoolCache not implemented")
 }
 func (UnimplementedSDSControllerServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAuditEvents not implemented")
@@ -3741,6 +3781,42 @@ func _SDSController_ConvertPoolToThin_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_AddPoolCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPoolCacheRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).AddPoolCache(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_AddPoolCache_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).AddPoolCache(ctx, req.(*AddPoolCacheRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RemovePoolCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePoolCacheRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RemovePoolCache(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RemovePoolCache_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RemovePoolCache(ctx, req.(*RemovePoolCacheRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAuditEventsRequest)
 	if err := dec(in); err != nil {
@@ -4238,6 +4314,14 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConvertPoolToThin",
 			Handler:    _SDSController_ConvertPoolToThin_Handler,
+		},
+		{
+			MethodName: "AddPoolCache",
+			Handler:    _SDSController_AddPoolCache_Handler,
+		},
+		{
+			MethodName: "RemovePoolCache",
+			Handler:    _SDSController_RemovePoolCache_Handler,
 		},
 		{
 			MethodName: "ListAuditEvents",

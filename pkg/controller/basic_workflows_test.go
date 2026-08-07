@@ -33,6 +33,13 @@ type fakeDeploymentClient struct {
 	lvThinPoolInFunc                    func(ctx context.Context, host, vgName string) (string, error)
 	lvExtendThinPoolMetadataFunc        func(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes uint64) (*deployment.ExecResult, error)
 	lvExtendThinPoolAllFreeFunc         func(ctx context.Context, hosts []string, vgName, poolName string) (*deployment.ExecResult, error)
+	lvsCacheReportFunc                  func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
+	probeBlockDeviceFunc                func(ctx context.Context, host, device string) (*deployment.ExecResult, error)
+	vgExtendFunc                        func(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error)
+	vgReduceAndRemovePVFunc             func(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error)
+	lvCreateCacheVolFunc                func(ctx context.Context, hosts []string, vgName, lvName, device string) (*deployment.ExecResult, error)
+	lvConvertToCacheFunc                func(ctx context.Context, hosts []string, vgName, lvName, cacheVol, mode string) (*deployment.ExecResult, error)
+	lvUncacheFunc                       func(ctx context.Context, hosts []string, vgName, lvName string) (*deployment.ExecResult, error)
 	drbdAttachFunc                      func(ctx context.Context, host, resource string) (*deployment.ExecResult, error)
 	zfsCreatePoolFunc                   func(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...deployment.ZFSOption) (*deployment.ExecResult, error)
 	zfsDestroyPoolFunc                  func(ctx context.Context, hosts []string, poolName string) (*deployment.ExecResult, error)
@@ -237,6 +244,55 @@ func (f *fakeDeploymentClient) LVExtendThinPoolMetadata(ctx context.Context, hos
 func (f *fakeDeploymentClient) LVExtendThinPoolAllFree(ctx context.Context, hosts []string, vgName, poolName string) (*deployment.ExecResult, error) {
 	if f.lvExtendThinPoolAllFreeFunc != nil {
 		return f.lvExtendThinPoolAllFreeFunc(ctx, hosts, vgName, poolName)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) LVSCacheReport(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error) {
+	if f.lvsCacheReportFunc != nil {
+		return f.lvsCacheReportFunc(ctx, hosts, vgName)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) ProbeBlockDevice(ctx context.Context, host, device string) (*deployment.ExecResult, error) {
+	if f.probeBlockDeviceFunc != nil {
+		return f.probeBlockDeviceFunc(ctx, host, device)
+	}
+	return successExecResult([]string{host}, ""), nil
+}
+
+func (f *fakeDeploymentClient) VGExtend(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error) {
+	if f.vgExtendFunc != nil {
+		return f.vgExtendFunc(ctx, hosts, vgName, device)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) VGReduceAndRemovePV(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error) {
+	if f.vgReduceAndRemovePVFunc != nil {
+		return f.vgReduceAndRemovePVFunc(ctx, hosts, vgName, device)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) LVCreateCacheVol(ctx context.Context, hosts []string, vgName, lvName, device string) (*deployment.ExecResult, error) {
+	if f.lvCreateCacheVolFunc != nil {
+		return f.lvCreateCacheVolFunc(ctx, hosts, vgName, lvName, device)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) LVConvertToCache(ctx context.Context, hosts []string, vgName, lvName, cacheVol, mode string) (*deployment.ExecResult, error) {
+	if f.lvConvertToCacheFunc != nil {
+		return f.lvConvertToCacheFunc(ctx, hosts, vgName, lvName, cacheVol, mode)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) LVUncache(ctx context.Context, hosts []string, vgName, lvName string) (*deployment.ExecResult, error) {
+	if f.lvUncacheFunc != nil {
+		return f.lvUncacheFunc(ctx, hosts, vgName, lvName)
 	}
 	return successExecResult(hosts, ""), nil
 }

@@ -262,7 +262,23 @@ sds-cli pool create --name data-pool --type lvm      --nodes orange1 --devices /
 sds-cli pool create --name thin-pool --type lvm-thin --nodes orange1 --devices /dev/sdc
 sds-cli pool create --name tank      --type zfs      --nodes orange1 --devices /dev/sdd
 sds-cli pool list
+
+# Storage tiering: put an SSD in front of one node's thin pool (lvmcache).
+# The whole device is consumed and the cache serves every volume in the pool.
+sds-cli pool add-cache --node orange1 --pool thin-pool --device /dev/nvme0n1
+
+# Flush the cache, detach it, and give the device back. The detach is verified,
+# so a cache that could not be flushed is reported as a failure.
+sds-cli pool remove-cache --node orange1 --pool thin-pool
 ```
+
+The cache defaults to **writethrough**: a write is acknowledged only once it has
+reached the slow disk, so losing the SSD costs performance and nothing else.
+`--mode writeback` acknowledges writes from the SSD and destages them later —
+losing that one device then loses every write it had not yet written down, and
+only a replica that happens to hold them can give them back, which a resyncing
+peer or a correlated failure will not. `sds-cli pool get` shows how much of a
+writeback cache is dirty, which is the size of that window right now.
 
 ### 3. Resource Management
 

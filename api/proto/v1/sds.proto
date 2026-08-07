@@ -393,6 +393,17 @@ service SDSController {
     option (google.api.http) = { post: "/v1/nodes/{node}/pools/{pool}/convert-thin"; };
   }
 
+  // Storage tiering: put an SSD/NVMe device in front of one node's LVM pool
+  // with lvmcache. The cache serves the whole pool, and defaults to
+  // writethrough because a writeback cache holds acknowledged writes that no
+  // other node has yet.
+  rpc AddPoolCache(AddPoolCacheRequest) returns (AddPoolCacheResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/pools/{pool}/cache"; body: "*"; };
+  }
+  rpc RemovePoolCache(RemovePoolCacheRequest) returns (RemovePoolCacheResponse) {
+    option (google.api.http) = { delete: "/v1/nodes/{node}/pools/{pool}/cache"; };
+  }
+
   // Audit trail: who called what, when, and whether it was allowed. Persisted
   // in the database, which lives on the controller's replicated volume, so the
   // history follows the controller across a failover instead of being split
@@ -500,6 +511,28 @@ message PoolInfo {
   repeated string devices = 6;
   bool thin = 7;
   string compression = 8;
+
+  // Storage tiering (lvmcache). A pool with no fast tier reports cached=false
+  // and leaves the rest zero, so a tiered pool is distinguishable from a plain
+  // one in a plain `pool list`.
+  bool cached = 9;
+  // "writethrough" or "writeback".
+  string cache_mode = 10;
+  // Size of the fast device given to the cache.
+  uint64 cache_size_bytes = 11;
+  // Kernel dm-cache counters, rounded to whole percent. hit_percent is
+  // cumulative since the cache was last activated, not a moving average.
+  uint32 cache_used_percent = 12;
+  uint32 cache_hit_percent = 13;
+  // Share of the cache holding writes that have not reached the slow device.
+  // Zero on a writethrough cache by construction; on a writeback cache this is
+  // the size of the window that a lost SSD would take with it.
+  uint32 cache_dirty_percent = 14;
+  // The fast block device backing the cache, as the node names it.
+  string cache_device = 15;
+  // True when LVM reports the cache as unhealthy — a cache in this state
+  // cannot be flushed, so it cannot be detached without discarding data.
+  bool cache_degraded = 16;
 }
 
 // ZFS messages
@@ -2069,6 +2102,37 @@ message ConvertPoolToThinResponse {
   // Volumes rebuilt on this node; each is resyncing in full from its peers
   // when the call returns.
   repeated string volumes = 3;
+}
+
+message AddPoolCacheRequest {
+  string node = 1;
+  string pool = 2;
+  // Block device on that node to spend entirely on cache, e.g. /dev/nvme0n1.
+  string device = 3;
+  // "writethrough" (the default when empty) or "writeback". writeback
+  // acknowledges a write once it is on the SSD, so losing that one SSD loses
+  // every write it had not yet destaged, recoverable only from a replica that
+  // happens to hold them.
+  string mode = 4;
+}
+
+message AddPoolCacheResponse {
+  bool success = 1;
+  string message = 2;
+  // The mode actually applied, so a caller that sent nothing learns it got
+  // writethrough rather than assuming.
+  string mode = 3;
+  uint64 cache_size_bytes = 4;
+}
+
+message RemovePoolCacheRequest {
+  string node = 1;
+  string pool = 2;
+}
+
+message RemovePoolCacheResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message DrainNodeResponse {

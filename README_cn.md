@@ -251,7 +251,20 @@ sds-cli pool create --name data-pool --type lvm      --nodes orange1 --devices /
 sds-cli pool create --name thin-pool --type lvm-thin --nodes orange1 --devices /dev/sdc
 sds-cli pool create --name tank      --type zfs      --nodes orange1 --devices /dev/sdd
 sds-cli pool list
+
+# 存储分层：用 lvmcache 把 SSD 挂到某个节点的 thin pool 前面。
+# 整块设备会被占用，缓存服务该池中的所有卷。
+sds-cli pool add-cache --node orange1 --pool thin-pool --device /dev/nvme0n1
+
+# 刷盘、摘除缓存并归还设备。摘除后会复核，未刷完的缓存一律按失败报告。
+sds-cli pool remove-cache --node orange1 --pool thin-pool
 ```
+
+缓存默认是 **writethrough**：写入只有落到慢盘后才返回成功，所以丢掉 SSD 只
+损失性能。`--mode writeback` 则在数据只写进 SSD 时就返回成功，之后再回刷 —
+一旦这块设备损坏，尚未回刷的写入就全部丢失，只能指望某个副本恰好有这些数据，
+而正在重同步的对端或相关联的故障并不能保证这一点。`sds-cli pool get` 会显示
+writeback 缓存中脏数据的比例，也就是此刻这个风险窗口有多大。
 
 ### 3. 资源管理
 

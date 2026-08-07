@@ -22,6 +22,10 @@ type PoolInfo struct {
 	Devices     []string `json:"devices"`
 	Thin        bool     `json:"thin"`
 	Compression string   `json:"compression,omitempty"`
+	// Cache describes the pool's fast tier, or is nil when it has none. See
+	// poolcache.go — this is what makes a tiered pool distinguishable from a
+	// plain one without a second call.
+	Cache *PoolCacheInfo `json:"cache,omitempty"`
 }
 
 // StorageManager manages all storage operations
@@ -233,14 +237,23 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 			for _, line := range lines {
 				name, totalSize, freeSize, _, ok := parseLVMPoolLine(line)
 				if ok && name == poolName {
-					return &PoolInfo{
+					info := &PoolInfo{
 						Name:    poolName,
 						Type:    "vg",
 						Node:    node,
 						TotalGB: totalSize / 1024 / 1024 / 1024,
 						FreeGB:  freeSize / 1024 / 1024 / 1024,
 						Devices: []string{},
-					}, nil
+					}
+					// A pool that cannot report its cache is still a pool; the
+					// capacity figures above are the reason this call exists.
+					if cache, cerr := sm.readPoolCache(ctx, address, poolName); cerr == nil {
+						info.Cache = cache
+					} else {
+						sm.controller.logger.Warn("Failed to read pool cache state",
+							zap.String("pool", poolName), zap.Error(cerr))
+					}
+					return info, nil
 				}
 			}
 		}
@@ -321,6 +334,17 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 		}
 		for _, pool := range poolByKey {
 			slices.Sort(pool.Devices)
+		}
+
+		// One lvs call for every host, folded into the rows above by the same
+		// normalized host name they were keyed under.
+		if len(poolByKey) > 0 {
+			caches := sm.cacheByPool(ctx, hosts)
+			for _, pool := range poolByKey {
+				if byVG, ok := caches[pool.Node]; ok {
+					pool.Cache = byVG[pool.Name]
+				}
+			}
 		}
 	}
 

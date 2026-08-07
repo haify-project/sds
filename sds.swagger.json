@@ -1635,6 +1635,85 @@
         ]
       }
     },
+    "/v1/nodes/{node}/pools/{pool}/cache": {
+      "delete": {
+        "operationId": "SDSController_RemovePoolCache",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RemovePoolCacheResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "summary": "Storage tiering: put an SSD/NVMe device in front of one node's LVM pool\nwith lvmcache. The cache serves the whole pool, and defaults to\nwritethrough because a writeback cache holds acknowledged writes that no\nother node has yet.",
+        "operationId": "SDSController_AddPoolCache",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddPoolCacheResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerAddPoolCacheBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/nodes/{node}/pools/{pool}/convert-thin": {
       "post": {
         "summary": "ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.\nThick pools cannot hold a snapshot history: each snapshot reserves a fixed\nCOW area whether anything changes or not.",
@@ -4182,6 +4261,19 @@
         }
       }
     },
+    "SDSControllerAddPoolCacheBody": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string",
+          "description": "Block device on that node to spend entirely on cache, e.g. /dev/nvme0n1."
+        },
+        "mode": {
+          "type": "string",
+          "description": "\"writethrough\" (the default when empty) or \"writeback\". writeback\nacknowledges a write once it is on the SSD, so losing that one SSD loses\nevery write it had not yet destaged, recoverable only from a replica that\nhappens to hold them."
+        }
+      }
+    },
     "SDSControllerAddReplicaBody": {
       "type": "object",
       "properties": {
@@ -4700,6 +4792,25 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1AddPoolCacheResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "description": "The mode actually applied, so a caller that sent nothing learns it got\nwritethrough rather than assuming."
+        },
+        "cacheSizeBytes": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -6611,6 +6722,41 @@
         },
         "compression": {
           "type": "string"
+        },
+        "cached": {
+          "type": "boolean",
+          "description": "Storage tiering (lvmcache). A pool with no fast tier reports cached=false\nand leaves the rest zero, so a tiered pool is distinguishable from a plain\none in a plain `pool list`."
+        },
+        "cacheMode": {
+          "type": "string",
+          "description": "\"writethrough\" or \"writeback\"."
+        },
+        "cacheSizeBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Size of the fast device given to the cache."
+        },
+        "cacheUsedPercent": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Kernel dm-cache counters, rounded to whole percent. hit_percent is\ncumulative since the cache was last activated, not a moving average."
+        },
+        "cacheHitPercent": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "cacheDirtyPercent": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Share of the cache holding writes that have not reached the slow device.\nZero on a writethrough cache by construction; on a writeback cache this is\nthe size of the window that a lost SSD would take with it."
+        },
+        "cacheDevice": {
+          "type": "string",
+          "description": "The fast block device backing the cache, as the node names it."
+        },
+        "cacheDegraded": {
+          "type": "boolean",
+          "description": "True when LVM reports the cache as unhealthy — a cache in this state\ncannot be flushed, so it cannot be detached without discarding data."
         }
       }
     },
@@ -6792,6 +6938,17 @@
       }
     },
     "v1RemoveNVMeNamespaceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RemovePoolCacheResponse": {
       "type": "object",
       "properties": {
         "success": {

@@ -300,6 +300,34 @@ func (c *SDSClient) ConvertPoolToThin(ctx context.Context, node, pool string) er
 	return nil
 }
 
+// AddPoolCache puts a fast device in front of one node's LVM pool. mode may be
+// empty, which the controller resolves to writethrough. It returns the mode
+// actually applied and the size of the cache.
+func (c *SDSClient) AddPoolCache(ctx context.Context, node, pool, device, mode string) (string, uint64, error) {
+	resp, err := c.client.AddPoolCache(ctx, &sdspb.AddPoolCacheRequest{
+		Node: node, Pool: pool, Device: device, Mode: mode,
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	if !resp.Success {
+		return "", 0, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Mode, resp.CacheSizeBytes, nil
+}
+
+// RemovePoolCache flushes and detaches a pool's cache.
+func (c *SDSClient) RemovePoolCache(ctx context.Context, node, pool string) error {
+	resp, err := c.client.RemovePoolCache(ctx, &sdspb.RemovePoolCacheRequest{Node: node, Pool: pool})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 // UndrainNode returns a drained node to active service.
 func (c *SDSClient) UndrainNode(ctx context.Context, name string) error {
 	resp, err := c.client.UndrainNode(ctx, &sdspb.UndrainNodeRequest{Name: name})
