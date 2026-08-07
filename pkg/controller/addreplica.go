@@ -86,6 +86,16 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 		primaryAddrs = append(primaryAddrs, rm.controller.ResolveHost(n))
 	}
 
+	// A replica of an encrypted resource is encrypted, or it is a hole: the new
+	// node would hold a full plaintext copy of data every other node keeps
+	// encrypted, and nothing in `resource status` would say so. Refuse early if
+	// the newcomer cannot do it, before any storage is provisioned.
+	if dbRes.Encrypted {
+		if err := rm.assertEncryptionSupported(ctx, []string{newAddr}, []string{node}); err != nil {
+			return err
+		}
+	}
+
 	rm.controller.logger.Info("Adding replica to running resource",
 		zap.String("resource", resource),
 		zap.String("node", node),
@@ -154,12 +164,21 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 			return
 		}
 		rm.undoAddReplica(context.WithoutCancel(ctx), resource, resPath, liveConfig,
-			lanHosts, newAddr, dbVols)
+			lanHosts, newAddr, dbVols, dbRes.Encrypted)
 	}()
 
 	for i, v := range dbVols {
 		if cerr := rm.createBackingVolumeOn(ctx, newAddr, v.Pool, v.VolumeName, backingSizes[i]); cerr != nil {
 			return fmt.Errorf("create backing volume %s/%s on %q: %w", v.Pool, v.VolumeName, node, cerr)
+		}
+		// The newcomer generates its own key, exactly as every other replica
+		// did. Sizing needs no crypt allowance here: backingSizes is copied
+		// from what an existing replica's LV really is, header included.
+		if dbRes.Encrypted {
+			if cerr := rm.encryptBackingVolumeOn(ctx, newAddr, node, v.Pool, v.VolumeName,
+				fmt.Sprintf("/dev/%s/%s", v.Pool, v.VolumeName)); cerr != nil {
+				return cerr
+			}
 		}
 	}
 
@@ -197,7 +216,8 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 	}
 
 	newConfig, err := rm.addReplicaToConfig(liveConfig, resource, node, newAddr, dbVols,
-		dbRes.Port, len(primaries), newBind, dbRes.WANMode && dbRes.DRNode != "", dbRes.DRNode)
+		dbRes.Port, len(primaries), newBind, dbRes.WANMode && dbRes.DRNode != "", dbRes.DRNode,
+		dbRes.Encrypted)
 	if err != nil {
 		return fmt.Errorf("rewrite config for new replica: %w", err)
 	}
@@ -253,7 +273,8 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 
 // addReplicaToConfig adds a diskful node to a live resource config.
 func (rm *ResourceManager) addReplicaToConfig(content, resource, node, addr string,
-	vols []*database.Volume, port, legIndex, bindPort int, wan bool, drNode string) (string, error) {
+	vols []*database.Volume, port, legIndex, bindPort int, wan bool, drNode string,
+	encrypted bool) (string, error) {
 
 	name := rm.controller.nodes.GetDRBDNameByRef(node)
 	blocks := parseOnBlocks(content)
@@ -274,9 +295,17 @@ func (rm *ResourceManager) addReplicaToConfig(content, resource, node, addr stri
 	fmt.Fprintf(&stanza, "        address   %s:%d;\n", addr, port)
 	fmt.Fprintf(&stanza, "        node-id   %d;\n", nextID)
 	for _, v := range vols {
+		// The crypt container is what DRBD attaches on an encrypted resource.
+		// Its name comes from pool and volume, which are identical on every
+		// node, so the newcomer's stanza names the same device as its peers
+		// even though the key behind it is its own.
+		disk := fmt.Sprintf("/dev/%s/%s", v.Pool, v.VolumeName)
+		if encrypted {
+			disk = luksMapperPath(v.Pool, v.VolumeName)
+		}
 		fmt.Fprintf(&stanza, "        volume %d {\n", v.VolumeID)
 		fmt.Fprintf(&stanza, "            device    minor %d;\n", minorForVolume(content, v.VolumeID))
-		fmt.Fprintf(&stanza, "            disk      /dev/%s/%s;\n", v.Pool, v.VolumeName)
+		fmt.Fprintf(&stanza, "            disk      %s;\n", disk)
 		fmt.Fprintf(&stanza, "            meta-disk internal;\n")
 		fmt.Fprintf(&stanza, "        }\n")
 	}
@@ -329,7 +358,7 @@ func (rm *ResourceManager) addReplicaToConfig(content, resource, node, addr stri
 // failure that got us here, and a rollback that aborts halfway is worse than one
 // that keeps going.
 func (rm *ResourceManager) undoAddReplica(ctx context.Context, resource, resPath, originalConfig string,
-	lanHosts []string, newAddr string, vols []*database.Volume) {
+	lanHosts []string, newAddr string, vols []*database.Volume, encrypted bool) {
 
 	log := rm.controller.logger.With(zap.String("resource", resource), zap.String("node", newAddr))
 	log.Warn("Rolling back replica addition")
@@ -348,6 +377,11 @@ func (rm *ResourceManager) undoAddReplica(ctx context.Context, resource, resPath
 		log.Error("Rollback: failed to tear down the new replica", zap.Error(err))
 	}
 	for _, v := range vols {
+		// The container holds the LV open, and its key is worth destroying
+		// whether or not the lvremove that follows succeeds.
+		if encrypted {
+			rm.closeBackingVolumeOn(ctx, []string{newAddr}, v.Pool, v.VolumeName)
+		}
 		if _, err := rm.deployment.Exec(ctx, []string{newAddr},
 			fmt.Sprintf("sudo lvremove -f %s/%s", v.Pool, v.VolumeName)); err != nil {
 			log.Error("Rollback: failed to remove a backing volume",

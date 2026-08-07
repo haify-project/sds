@@ -58,6 +58,10 @@ graph TD
 - **Kubernetes (CSI)**: dynamic provisioning of DRBD volumes, pool-aware replica
   placement, `WaitForFirstConsumer` topology, and opt-in diskless remote access
   (`allowRemoteVolumeAccess`) so Pods can run on non-replica nodes.
+- **Encryption at rest**: `resource create --encrypt` puts a LUKS2 container
+  between DRBD and the backing volume on every replica (`DRBD → LUKS → LVM`).
+  **At rest only — DRBD sits above the crypt layer, so replication traffic
+  between nodes is plaintext.** See [Encryption at rest](#encryption-at-rest).
 - **Snapshots**: LVM and ZFS snapshots, plus GFS (grandfather-father-son)
   retention schedules.
 - **Cross-DC (WAN)**: a TCP proxy for running DRBD replication across NAT/WAN
@@ -296,7 +300,54 @@ sds-cli resource mount res01 0 /mnt/res01 --node orange1
 
 # Online expansion
 sds-cli resource resize-volume res01 0 20G
+
+# Encrypted at rest (see the section below before using this)
+sds-cli resource create --name res-enc --port 7003 --size 10G --nodes orange1,orange2 --pool data-pool --encrypt
 ```
+
+#### Encryption at rest
+
+`--encrypt` wraps each replica's backing volume in a LUKS2 container, so the
+stack becomes `DRBD → LUKS → LVM` and the pool disks hold ciphertext.
+
+**DRBD replicates plaintext.** The crypt layer is *below* DRBD, so what travels
+between nodes over the replication link is exactly as unencrypted as it was
+before. If you need the wire protected, that is a separate problem (a VPN, or
+`sds-proxy`'s mTLS tunnel for the WAN case) — `--encrypt` does not address it.
+
+What it does protect: a pool disk that leaves the building. RMA, decommission,
+theft of the drives. Since each node keeps its key on its own root filesystem,
+it does **not** protect a whole server that walks out of the rack.
+
+Key handling:
+
+- Each node generates its own 512-bit key from `/dev/urandom`, **on the node**.
+  Keys are never sent over SSH, never reach the controller, and appear in no
+  log, no audit record and no database.
+- They live in `/etc/sds/luks/` (directory `0700`, key files `0400`, root-owned)
+  and are only ever handed to `cryptsetup` as `--key-file`, never as an argument.
+- There is **no central escrow**. Losing a node's root filesystem loses that
+  node's key, and with it that node's copy of the ciphertext. The peers hold the
+  same data under their own keys, so DRBD rebuilds the replica — but you cannot
+  recover a lone surviving disk whose node is gone.
+- `resource delete` overwrites and removes the keys on every node before the
+  backing volumes are released.
+
+Containers are reopened at boot by `sds-drbd-up.service`, after LVM activation
+and before `drbdadm adjust`, so an encrypted resource survives a reboot and a
+failover without operator action. Every replica — Primary and Secondary alike —
+opens its own container, because a Secondary needs its backing device too.
+
+Limits, deliberately:
+
+- LVM pools only. ZFS has its own dataset-level encryption; a crypt layer under
+  DRBD on a zvol is refused rather than half-supported.
+- It cannot be turned on (or off) after creation. Converting in place would mean
+  destroying and resyncing each replica in turn, and a failure halfway would
+  leave some replicas encrypted and some not with nothing in the config to say
+  which. Asking for it on an existing resource is refused with an explanation.
+- Every node holding a replica needs `cryptsetup` and a kernel with `dm-crypt`;
+  this is checked before anything is provisioned.
 
 ### 4. Diskless Clients
 

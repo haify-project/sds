@@ -52,6 +52,10 @@ type ResourceInfo struct {
 	// takes over automatically.
 	WANMode bool
 	DRNode  string
+	// Encrypted is true when every replica's backing volume is a LUKS2
+	// container (DRBD → LUKS → LVM). Encryption at rest only: DRBD is
+	// above the crypt layer, so replication traffic is plaintext.
+	Encrypted bool
 }
 
 // ResourceNodeState represents detailed state of a node for a resource
@@ -77,6 +81,10 @@ type ResourceVolumeInfo struct {
 	// (e.g. "<resource>_data"); "<pool>/<backing_volume>" is the path
 	// consumed by snapshot operations.
 	BackingVolume string
+	// Encrypted is true when DRBD reaches this volume through a LUKS2
+	// container rather than the LV/zvol directly. A snapshot of an encrypted
+	// volume is a snapshot of the ciphertext.
+	Encrypted bool
 }
 
 // ResourceManager manages DRBD resources using dispatch
@@ -348,6 +356,19 @@ type resolvedVolume struct {
 	pool       string
 	sizeGB     uint32
 	minor      int
+	// encrypted routes DRBD at this volume's LUKS container instead of at the
+	// LV/zvol. Carried per volume rather than passed alongside so the config
+	// generator cannot be handed a volume list and the wrong flag.
+	encrypted bool
+}
+
+// backingDevice is the path DRBD is pointed at for this volume: the crypt
+// container when it is encrypted, the LV or zvol when it is not.
+func (v resolvedVolume) backingDevice(storageType string) string {
+	if v.encrypted {
+		return luksMapperPath(v.pool, v.volumeName)
+	}
+	return backingPathForVolume(v.pool, v.volumeName, storageType)
 }
 
 // CreateResource creates a single-volume DRBD resource. It is a thin wrapper
@@ -379,11 +400,17 @@ type WANSpec struct {
 	WANPort uint32
 }
 
-// ResourceMetadata is persisted with a resource but does not affect DRBD
-// runtime behavior after creation.
+// ResourceMetadata carries the resource-level choices that are not part of the
+// volume list: organizational metadata, and whether the backing volumes are
+// encrypted at rest.
 type ResourceMetadata struct {
 	Labels  map[string]string
 	Profile string
+	// Encrypt wraps every replica's backing volume in a LUKS2 container, so
+	// the stack becomes DRBD → LUKS → LVM. Unlike Labels and Profile this
+	// one does change what gets built, and it can only be chosen here: see
+	// assertEncryptionNotRetrofitted.
+	Encrypt bool
 }
 
 // AdoptResult summarizes what AdoptResource recorded, so callers can display it.
@@ -790,6 +817,25 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 			volumeName: volumeName,
 			pool:       normalizeManagedName(pool),
 			sizeGB:     v.SizeGB,
+			encrypted:  metadata.Encrypt,
+		}
+		if metadata.Encrypt {
+			if err := validateLUKSNames(resolved[i].pool, volumeName); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Encryption is decided here and nowhere else, so the refusal to change it
+	// belongs before anything is built. A name that already carries a resource
+	// with the other setting is a request to convert in place, which this does
+	// not do.
+	if err := rm.assertEncryptionNotRetrofitted(ctx, name, metadata.Encrypt); err != nil {
+		return err
+	}
+	if metadata.Encrypt {
+		if err := assertEncryptableStorage(storageType); err != nil {
+			return err
 		}
 	}
 
@@ -800,6 +846,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		zap.String("protocol", protocol),
 		zap.Int("volumes", len(resolved)),
 		zap.String("storage_type", storageType),
+		zap.Bool("encrypted", metadata.Encrypt),
 		zap.Any("options", drbdOptions))
 
 	// Quorum tiebreaker: a 2-node resource under quorum=majority loses its
@@ -870,6 +917,16 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		return fmt.Errorf("DRBD port %d is already in use by resource %q; choose a different port", port, conflict)
 	}
 
+	// Pre-flight the crypt layer on every diskful node before the first volume
+	// is made. Discovering a node without cryptsetup halfway through would
+	// leave encrypted volumes on the nodes already visited and a rollback to
+	// unwind, for a request that could never have succeeded.
+	if metadata.Encrypt {
+		if err := rm.assertEncryptionSupported(ctx, nodeIPs, nodes); err != nil {
+			return err
+		}
+	}
+
 	// Roll back partial state if a later step fails: a half-created resource
 	// (e.g. LVs made but create-md failed) otherwise leaves orphaned backing
 	// volumes and a stray .res that block a clean retry.
@@ -896,8 +953,14 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 				BaseDRBDPort:     int(port),
 			})
 		}
-		// Backing volumes exist on diskful nodes only.
+		// Backing volumes exist on diskful nodes only. An encrypted volume's
+		// container has to be closed and its key destroyed first: while the
+		// container is open the LV is held and lvremove refuses, and a key left
+		// behind after a failed create is a secret nothing will ever collect.
 		for _, v := range resolved {
+			if v.encrypted {
+				rm.closeBackingVolumeOn(cleanupCtx, nodeIPs, v.pool, v.volumeName)
+			}
 			if storageType == "zfs" || storageType == "zfs-thin" {
 				_, _ = rm.deployment.ZFSDestroyDataset(cleanupCtx, nodeIPs, fmt.Sprintf("%s/%s", v.pool, v.volumeName))
 			} else {
@@ -908,7 +971,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 
 	// 1. Create the backing storage for every volume on all diskful nodes.
 	for _, v := range resolved {
-		if err := rm.createBackingVolume(ctx, nodeIPs, nodes, storageType, v.pool, v.volumeName, v.sizeGB); err != nil {
+		if err := rm.createBackingVolume(ctx, nodeIPs, nodes, storageType, v.pool, v.volumeName, v.sizeGB, v.encrypted); err != nil {
 			return err
 		}
 	}
@@ -1040,7 +1103,16 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// drbd-utils (diskful or diskless tiebreaker). Best-effort: never fail
 	// resource creation just because it did not stick — the resource is
 	// already up at this point.
-	rm.ensureDRBDBootUnitEnabled(ctx, allIPs)
+	//
+	// Except when the resource is encrypted. That same unit is what opens the
+	// crypt containers at boot, so without it a rebooted node comes back with
+	// no backing device and the replica attaches Diskless — silently, and only
+	// discovered the next time the node restarts, which is the worst possible
+	// moment to find out. A resource that cannot survive a reboot is not one to
+	// hand back as created.
+	if bootErr := rm.ensureDRBDBootUnitEnabled(ctx, allIPs); bootErr != nil && metadata.Encrypt {
+		return fmt.Errorf("install the boot unit that opens the LUKS containers: %w", bootErr)
+	}
 
 	// 6. Save to database
 	if rm.controller.db != nil {
@@ -1053,6 +1125,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 			DisklessNodes: strings.Join(disklessNodes, ","),
 			Labels:        cloneStringMap(metadata.Labels),
 			Profile:       metadata.Profile,
+			Encrypted:     metadata.Encrypt,
 		}
 		// Persist WAN metadata so DeleteResource can deprovision the proxy pair
 		// and the UI/CLI can show the resource is WAN-replicated.
@@ -1074,7 +1147,10 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 				VolumeID:     v.id,
 				Pool:         v.pool,
 				SizeGB:       int(v.sizeGB),
-				Device:       backingPathForVolume(v.pool, v.volumeName, storageType),
+				// The device DRBD actually consumes, crypt container included.
+				// Teardown and resize read this back to decide what they are
+				// dealing with, exactly as they already do for a zvol.
+				Device: v.backingDevice(storageType),
 			}
 			if err := rm.controller.db.SaveVolume(ctx, volumeRecord); err != nil {
 				rm.controller.logger.Warn("Failed to save volume to database",
@@ -1114,6 +1190,13 @@ const drbdBootScriptPath = "/usr/local/sbin/sds-drbd-up.sh"
 //   - activates LVM volume groups (`vgchange -ay`) so DRBD backing devices
 //     exist before attach — otherwise a resource comes up Diskless because its
 //     backing LV was not yet active at boot;
+//   - opens any LUKS containers SDS has registered on the node, between those
+//     two steps: an encrypted resource's backing device is the crypt mapping,
+//     which cannot exist before the LV does and must exist before DRBD
+//     attaches. Doing it inside this one script is what makes that ordering
+//     certain — as three separate units it would depend on cryptsetup.target
+//     landing after an LVM activation this script does not trust in the first
+//     place;
 //   - adjusts EACH resource independently with `|| true`, so a foreign resource
 //     already brought up by its own drbd-reactor promoter (which fails with
 //     "minor exists" / exit 10) can neither abort the remaining resources nor
@@ -1129,6 +1212,7 @@ DRBDADM="$(command -v drbdadm 2>/dev/null || true)"
 # 1. Activate LVM so DRBD backing devices exist before we attach them.
 vgchange -ay >/dev/null 2>&1 || true
 udevadm settle >/dev/null 2>&1 || true
+` + luksBootOpenSnippet() + `
 # 2. Reconcile each resource independently; tolerate ones already up (a foreign
 #    reactor-managed resource yields "minor exists" / exit 10).
 for res in $("$DRBDADM" sh-resources 2>/dev/null); do
@@ -1163,13 +1247,19 @@ sudo systemctl enable ` + drbdBootUnit
 // it is idempotent and reconciles config->running state, so it attaches backing
 // disks AND tolerates a resource that is already up (e.g. a non-sds DRBD
 // resource on the same node) instead of aborting with a "minor exists" error
-// and leaving later resources half-up (Diskless). It is best-effort: any failure is logged and
-// swallowed so it never breaks the calling operation (the resource is already
-// up). Writing the same unit file and re-enabling it are idempotent, so
-// repeated calls across resource creations are safe.
-func (rm *ResourceManager) ensureDRBDBootUnitEnabled(ctx context.Context, hosts []string) {
+// and leaving later resources half-up (Diskless). Writing the same unit file and
+// re-enabling it are idempotent, so repeated calls across resource creations are
+// safe.
+//
+// The failure is logged here and also returned, because how much it matters
+// depends on the caller. For a plaintext resource it is cosmetic — the resource
+// is already up, and a missing boot unit costs one `drbdadm adjust` after a
+// reboot. For an encrypted one this same unit is what opens the crypt
+// containers, so its absence means the node comes back with no backing device
+// at all; that caller treats the error as fatal.
+func (rm *ResourceManager) ensureDRBDBootUnitEnabled(ctx context.Context, hosts []string) error {
 	if rm.deployment == nil || len(hosts) == 0 {
-		return
+		return nil
 	}
 	result, err := rm.deployment.Exec(ctx, hosts, drbdBootUnitInstallCmd())
 	if err != nil {
@@ -1177,17 +1267,18 @@ func (rm *ResourceManager) ensureDRBDBootUnitEnabled(ctx context.Context, hosts 
 			zap.String("unit", drbdBootUnit),
 			zap.Strings("hosts", hosts),
 			zap.Error(err))
-		return
+		return fmt.Errorf("install %s on %v: %w", drbdBootUnit, hosts, err)
 	}
 	if !result.AllSuccess() {
 		rm.controller.logger.Warn("Failed to install DRBD boot unit on some hosts; those nodes may not auto-up resources after reboot",
 			zap.String("unit", drbdBootUnit),
 			zap.Strings("failed_hosts", result.FailedHosts()))
-		return
+		return fmt.Errorf("install %s on %v: %s", drbdBootUnit, result.FailedHosts(), result.FailureDetails())
 	}
 	rm.controller.logger.Info("Installed and enabled DRBD boot unit for reboot auto-recovery",
 		zap.String("unit", drbdBootUnit),
 		zap.Strings("hosts", hosts))
+	return nil
 }
 
 // drbdMetadataBytes returns the space DRBD's INTERNAL metadata takes off the end
@@ -1234,11 +1325,23 @@ const minMetadataPeers = 7
 // the requested size plus DRBD's internal-metadata allowance, so the DRBD
 // device the guest actually sees is at least as big as the user asked for.
 func backingVolumeSizeArg(sizeGB uint32, peers int) string {
+	return fmt.Sprintf("%dB", backingVolumeSizeBytes(sizeGB, peers, false))
+}
+
+// backingVolumeSizeBytes is the same calculation with the crypt layer folded
+// in. A LUKS2 header sits at the FRONT of the device and is not part of the
+// mapping DRBD sees, so an encrypted volume has to be that much larger for the
+// DRBD device to come out the size that was asked for — the same shortfall
+// drbdMetadataBytes exists to absorb, from the other end of the device.
+func backingVolumeSizeBytes(sizeGB uint32, peers int, encrypted bool) uint64 {
 	data := uint64(sizeGB) * 1024 * 1024 * 1024
-	total := data + drbdMetadataBytes(data, peers)
 	// LVM/ZFS accept byte suffixes; using bytes avoids rounding the allowance
 	// away by expressing the total in whole gigabytes.
-	return fmt.Sprintf("%dB", total)
+	total := data + drbdMetadataBytes(data, peers)
+	if encrypted {
+		total += luksHeaderBytes
+	}
+	return total
 }
 
 // createBackingVolume creates one volume's backing storage (ZFS zvol, LVM thin
@@ -1252,8 +1355,14 @@ func backingVolumeSizeArg(sizeGB uint32, peers int) string {
 // would make every later attempt at the same name fail with "already exists",
 // permanently blocking that volume (the same class of trap as a
 // partially-applied resize).
-func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nodes []string, storageType, pool, volumeName string, sizeGB uint32) error {
-	size := backingVolumeSizeArg(sizeGB, len(nodeIPs)-1)
+//
+// When encrypt is set each node's volume is wrapped in its own LUKS2 container
+// and left open, so what the caller ends up with is /dev/mapper/<container>
+// rather than the LV itself. The container is built per node, immediately after
+// that node's volume, so a failure anywhere leaves at most one half-encrypted
+// volume for the rollback to collect rather than a set of them.
+func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nodes []string, storageType, pool, volumeName string, sizeGB uint32, encrypt bool) error {
+	size := fmt.Sprintf("%dB", backingVolumeSizeBytes(sizeGB, len(nodeIPs)-1, encrypt))
 	for i, nodeIP := range nodeIPs {
 		var result *deployment.ExecResult
 		var err error
@@ -1300,6 +1409,12 @@ func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nod
 						pool, volumeName, host)
 				}
 				return fmt.Errorf("backing volume %s/%s creation failed on %s: %s", pool, volumeName, host, hres.Output)
+			}
+		}
+		if encrypt {
+			if err := rm.encryptBackingVolumeOn(ctx, nodeIP, nodes[i], pool, volumeName,
+				backingPathForVolume(pool, volumeName, storageType)); err != nil {
+				return err
 			}
 		}
 	}
@@ -2039,14 +2154,12 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		config.WriteString(fmt.Sprintf("\n    volume %d {\n", v.id))
 		config.WriteString(fmt.Sprintf("        device    minor %d;\n", v.minor))
 
-		// Use the ZFS or LVM device path based on storage type.
-		var diskPath string
-		if storageType == "zfs" || storageType == "zfs-thin" {
-			diskPath = fmt.Sprintf("/dev/zvol/%s/%s", v.pool, v.volumeName)
-		} else {
-			diskPath = fmt.Sprintf("/dev/%s/%s", v.pool, v.volumeName)
-		}
-		config.WriteString(fmt.Sprintf("        disk      %s;\n", diskPath))
+		// The ZFS or LVM device path per storage type — or, for an encrypted
+		// volume, the crypt container that sits on top of it. DRBD must attach
+		// to the mapping and never to the LV underneath: pointing it at the LV
+		// would have it write plaintext straight past the layer that exists to
+		// encrypt it.
+		config.WriteString(fmt.Sprintf("        disk      %s;\n", v.backingDevice(storageType)))
 		config.WriteString("        meta-disk internal;\n")
 
 		if len(diskOptKeys) > 0 {
@@ -2289,12 +2402,19 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 					sizeGB := v.sizeGB
 					pool := ""
 					backingVolume := ""
+					encrypted := false
 					if dbVol, ok := dbVolumeByID[v.id]; ok {
 						if sizeGB == 0 {
 							sizeGB = uint64(max(dbVol.SizeGB, 0))
 						}
 						pool = dbVol.Pool
 						backingVolume = dbVol.VolumeName
+						// v.device is the DRBD device (/dev/drbdN); the crypt
+						// layer only shows in the recorded BACKING device. The
+						// resource flag is required as well, so an adopted
+						// foreign resource that merely happens to live under
+						// /dev/mapper is not reported as one of ours.
+						encrypted = dbRes.Encrypted && luksIsMapperPath(dbVol.Device)
 					}
 					volumes = append(volumes, &ResourceVolumeInfo{
 						VolumeID:      uint32(v.id),
@@ -2302,6 +2422,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 						SizeGB:        sizeGB,
 						Pool:          pool,
 						BackingVolume: backingVolume,
+						Encrypted:     encrypted,
 					})
 				}
 
@@ -2367,6 +2488,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		Profile:    dbRes.Profile,
 		WANMode:    dbRes.WANMode,
 		DRNode:     dbRes.DRNode,
+		Encrypted:  dbRes.Encrypted,
 	}
 
 	if len(info.Volumes) == 0 && len(dbVolumes) > 0 {
@@ -2377,6 +2499,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 				SizeGB:        uint64(max(volume.SizeGB, 0)),
 				Pool:          volume.Pool,
 				BackingVolume: volume.VolumeName,
+				Encrypted:     dbRes.Encrypted && luksIsMapperPath(volume.Device),
 			})
 		}
 	}
@@ -2416,6 +2539,7 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 					SizeGB:        uint64(max(volume.SizeGB, 0)),
 					Pool:          volume.Pool,
 					BackingVolume: volume.VolumeName,
+					Encrypted:     dbRes.Encrypted && luksIsMapperPath(volume.Device),
 				})
 			}
 		}
@@ -2442,6 +2566,7 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 			QuorumRisk: len(nodeAddresses) == 2 && dbRes.DisklessNodes == "",
 			WANMode:    dbRes.WANMode,
 			DRNode:     dbRes.DRNode,
+			Encrypted:  dbRes.Encrypted,
 		})
 	}
 
@@ -2500,6 +2625,23 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	}
 	pool = normalizeManagedName(pool)
 
+	// A volume added to an encrypted resource is encrypted too. Anything else
+	// would put plaintext on the pool disks of a resource whose whole point is
+	// that it does not — and would do it invisibly, since nothing in the DRBD
+	// config makes one volume's crypt layer more visible than another's.
+	encrypt := false
+	if rm.controller.db != nil {
+		dbRes, derr := rm.controller.db.GetResource(ctx, resource)
+		if derr == nil && dbRes != nil {
+			encrypt = dbRes.Encrypted
+		}
+	}
+	if encrypt {
+		if err := validateLUKSNames(pool, volume); err != nil {
+			return err
+		}
+	}
+
 	hosts, err := rm.resourceHosts(ctx, resource)
 	if err != nil {
 		return err
@@ -2546,7 +2688,12 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	// duplicate minor fails. This is exactly what a retried gateway state-volume
 	// provision used to do — each attempt appended another volume N pointing at
 	// the same <res>_state1 LV. Treat an already-referenced disk as done.
-	diskRef := fmt.Sprintf("/dev/%s/%s;", pool, volume)
+	backingDevice := fmt.Sprintf("/dev/%s/%s", pool, volume)
+	drbdDisk := backingDevice
+	if encrypt {
+		drbdDisk = luksMapperPath(pool, volume)
+	}
+	diskRef := drbdDisk + ";"
 	if drbdConfigReferencesDisk(hostResult.Output, diskRef) {
 		rm.controller.logger.Info("Volume already present in resource config; skipping duplicate add",
 			zap.String("resource", resource),
@@ -2569,8 +2716,8 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	// Extend the synchronized DRBD resource config with the new volume block.
 	// LINBIT recommends updating the config identically on all nodes and then
 	// calling `drbdadm adjust <resource>` to let DRBD enable the new volume.
-	volumeBlock := fmt.Sprintf("    volume %d {\n        device    minor %d;\n        disk      /dev/%s/%s;\n        meta-disk internal;\n    }",
-		newVolNum, newMinor, pool, volume)
+	volumeBlock := fmt.Sprintf("    volume %d {\n        device    minor %d;\n        disk      %s;\n        meta-disk internal;\n    }",
+		newVolNum, newMinor, drbdDisk)
 
 	// Roll back partial state if a later step fails. Without this, a retry of a
 	// failed add (e.g. create-md errored) re-reads the .res that still carries
@@ -2589,7 +2736,12 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_, _ = rm.deployment.DistributeConfig(cleanupCtx, hosts, originalConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource))
-		_, _ = rm.deployment.LVRemove(cleanupCtx, hosts, fmt.Sprintf("/dev/%s/%s", pool, volume))
+		if encrypt {
+			// Close before removing: the open container holds the LV, and a key
+			// left behind outlives the volume it was protecting.
+			rm.closeBackingVolumeOn(cleanupCtx, hosts, pool, volume)
+		}
+		_, _ = rm.deployment.LVRemove(cleanupCtx, hosts, backingDevice)
 	}()
 
 	// Create LVs on all nodes
@@ -2597,6 +2749,11 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		_, err := rm.deployment.LVCreate(ctx, []string{host}, pool, volume, fmt.Sprintf("%dG", sizeGB))
 		if err != nil {
 			return fmt.Errorf("failed to create LV on %s: %w", host, err)
+		}
+		if encrypt {
+			if err := rm.encryptBackingVolumeOn(ctx, host, host, pool, volume, backingDevice); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -2664,7 +2821,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 			VolumeID:     newVolNum,
 			Pool:         pool,
 			SizeGB:       int(sizeGB),
-			Device:       fmt.Sprintf("/dev/%s/%s", pool, volume),
+			Device:       drbdDisk,
 		}); err != nil {
 			rm.controller.logger.Warn("Failed to save added volume to database",
 				zap.String("resource", resource),
@@ -3188,6 +3345,14 @@ func (rm *ResourceManager) deleteBackingVolume(ctx context.Context, hosts []stri
 	if volume.Pool == "" || volume.VolumeName == "" {
 		return fmt.Errorf("volume record incomplete (pool=%q, volume=%q)", volume.Pool, volume.VolumeName)
 	}
+	// An encrypted volume's container has to go first, for two reasons: an open
+	// container holds the LV so lvremove refuses, and the key is the only thing
+	// making the ciphertext left in the freed extents unreadable. Destroying it
+	// before the storage is released is what turns "deleted" into "gone".
+	if luksIsMapperPath(volume.Device) && rm.resourceIsEncrypted(ctx, volume.ResourceName) {
+		rm.closeBackingVolumeOn(ctx, hosts, volume.Pool, volume.VolumeName)
+	}
+
 	var cmd string
 	if strings.HasPrefix(volume.Device, "/dev/zvol/") {
 		cmd = fmt.Sprintf("sudo zfs destroy %s/%s", volume.Pool, volume.VolumeName)
@@ -3611,12 +3776,23 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 			return fmt.Errorf("ZFS backing volume removal failed: %s", zfsRes.FailureDetails())
 		}
 	} else {
+		// An encrypted volume is addressed as /dev/mapper/... in the config but
+		// LVM only understands the LV beneath it, so resolve one to the other
+		// and close the container first — it holds the LV open.
+		lvPath, cryptPool, cryptVolume, rerr := rm.backingLVFor(ctx, resource, volumeID, target.DiskPath)
+		if rerr != nil {
+			return rerr
+		}
+		if cryptPool != "" {
+			rm.closeBackingVolumeOn(ctx, hosts, cryptPool, cryptVolume)
+		}
+
 		// A failed lvremove on any node leaves an orphan and a lopsided DRBD
 		// resource, so surface per-host failures instead of only transport
 		// errors. Detaching the just-removed volume's minor releases the LV if
 		// the kernel still holds it after the adjust.
 		removeCmd := fmt.Sprintf("sudo lvremove -f %s || { sudo drbdsetup detach %s/%d 2>/dev/null; sudo lvremove -f %s; }",
-			target.DiskPath, resource, volumeID, target.DiskPath)
+			lvPath, resource, volumeID, lvPath)
 		rmRes, err := rm.deployment.Exec(ctx, hosts, removeCmd)
 		if err != nil {
 			return fmt.Errorf("failed to delete LVM backing volume: %w", err)
@@ -3744,7 +3920,22 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 			return fmt.Errorf("ZFS backing volume resize failed: %s", zfsRes.FailureDetails())
 		}
 	} else {
-		resizeCmd := fmt.Sprintf("sudo lvresize -L %s -y %s", sizeArg, target.DiskPath)
+		// With a crypt layer the LV and the mapping are two different devices
+		// and both have to grow: lvresize addresses the LV, and the mapping —
+		// which is what DRBD measures — stays at its old size until cryptsetup
+		// is told, so skipping that step makes `drbdadm resize` find nothing
+		// new and report success on a resize that did not happen.
+		lvPath, cryptPool, cryptVolume, rerr := rm.backingLVFor(ctx, resource, volumeID, target.DiskPath)
+		if rerr != nil {
+			return rerr
+		}
+		if cryptPool != "" {
+			// The crypt header lives at the front of the LV and is not part of
+			// the mapping, so the LV must be grown by that much more for the
+			// DRBD device to reach the requested size.
+			sizeArg = fmt.Sprintf("%dB", newSizeGB*1024*1024*1024+luksHeaderBytes)
+		}
+		resizeCmd := fmt.Sprintf("sudo lvresize -L %s -y %s", sizeArg, lvPath)
 		lvRes, err := rm.deployment.Exec(ctx, hosts, resizeCmd)
 		if err != nil {
 			return fmt.Errorf("failed to resize LVM backing volume: %w", err)
@@ -3756,7 +3947,7 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 			// where DRBD refuses to resize), the LVs are already grown. Without
 			// this check every later retry would fail here forever and the
 			// volume could never be resized again.
-			short, verr := rm.hostsBelowLVSize(ctx, lvRes.FailedHosts(), target.DiskPath, newSizeGB)
+			short, verr := rm.hostsBelowLVSize(ctx, lvRes.FailedHosts(), lvPath, newSizeGB)
 			if verr != nil {
 				return fmt.Errorf("LVM backing volume resize failed on %v (size could not be verified: %w)",
 					lvRes.FailedHosts(), verr)
@@ -3769,6 +3960,19 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 				zap.String("resource", resource),
 				zap.Uint64("size_gb", newSizeGB),
 				zap.Strings("hosts", lvRes.FailedHosts()))
+		}
+
+		// Grow the mapping onto the extents the LV just gained. Idempotent, so
+		// it is safe on the retry path the LV branch above exists to allow.
+		if cryptPool != "" {
+			cmd, cerr := luksResizeCmd(cryptPool, cryptVolume)
+			if cerr != nil {
+				return cerr
+			}
+			if cerr := execFailure(rm.deployment.Exec(ctx, hosts, cmd)); cerr != nil {
+				return fmt.Errorf("grow the LUKS container of %s/%d onto the new extents: %w",
+					resource, volumeID, cerr)
+			}
 		}
 	}
 

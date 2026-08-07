@@ -327,8 +327,16 @@ type Resource struct {
 	// Persisted because the proxy config is re-rendered from this record, so a
 	// controller restart would otherwise silently drop the pinned egress.
 	WANEgressAddress string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// Encrypted records that every replica's backing volume is a LUKS2
+	// container, so DRBD consumes /dev/mapper/<container> instead of the LV or
+	// zvol directly. False for every record written before this existed, which
+	// is exactly right: those resources are not encrypted.
+	//
+	// No key material is stored here, or anywhere else in the controller. Each
+	// node generates and keeps its own key; see pkg/controller/encryption.go.
+	Encrypted bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // ResourceProfile contains defaults applied when a resource is created.

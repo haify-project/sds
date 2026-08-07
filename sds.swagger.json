@@ -5312,6 +5312,10 @@
         },
         "profile": {
           "type": "string"
+        },
+        "encrypt": {
+          "type": "boolean",
+          "description": "encrypt puts a LUKS2 container between DRBD and the backing LVM/ZFS volume\non every replica, so the pool disks hold ciphertext. This is encryption AT\nREST ONLY: DRBD sits ABOVE the crypt layer, so replication traffic between\nnodes is the same plaintext it always was. Chosen once, at creation: there\nis no in-place conversion, and asking for one on a resource that already\nexists is refused rather than half-applied."
         }
       },
       "title": "Resource messages"
@@ -7140,6 +7144,10 @@
         },
         "drNode": {
           "type": "string"
+        },
+        "encrypted": {
+          "type": "boolean",
+          "description": "encrypted is true when every replica's backing volume is a LUKS2 container\n(DRBD → LUKS → LVM/ZFS). Encryption at rest only — DRBD replicates the\nplaintext, so the wire is not protected by this."
         }
       }
     },
@@ -7247,6 +7255,10 @@
         "quorum": {
           "$ref": "#/definitions/v1QuorumInfo",
           "description": "quorum is what decides whether this resource keeps serving when nodes are\nlost. It is the one number that governs availability and it was previously\nreported nowhere: an operator had to know DRBD counts every configured node\n(tiebreakers and the off-site DR included) and work out the majority by hand."
+        },
+        "encrypted": {
+          "type": "boolean",
+          "description": "encrypted mirrors ResourceInfo.encrypted: the backing volumes are LUKS2\ncontainers. Reported here because \"is this volume encrypted?\" is a question\nan auditor asks of the running system, not of the creation request."
         }
       }
     },
@@ -7531,6 +7543,10 @@
         "backingVolume": {
           "type": "string",
           "description": "Backing logical volume name inside the pool (e.g. \"\u003cresource\u003e_data\").\nCombined with pool it forms the \"\u003cpool\u003e/\u003clv\u003e\" path used by snapshot APIs."
+        },
+        "encrypted": {
+          "type": "boolean",
+          "description": "encrypted is true when DRBD consumes this volume through a LUKS2 container\nrather than the backing LV/zvol directly. Snapshots of an encrypted volume\nare snapshots of the ciphertext."
         }
       }
     },

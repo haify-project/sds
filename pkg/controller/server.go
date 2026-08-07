@@ -374,6 +374,7 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	err := s.resources.CreateResourceWithVolumesMetadata(ctx, req.Name, req.Port, nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes, wan, ResourceMetadata{
 		Labels:  req.Labels,
 		Profile: req.Profile,
+		Encrypt: req.Encrypt,
 	})
 	if err != nil {
 		return &sdspb.CreateResourceResponse{
@@ -498,6 +499,7 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 			SizeGb:        v.SizeGB,
 			Pool:          v.Pool,
 			BackingVolume: v.BackingVolume,
+			Encrypted:     v.Encrypted,
 		})
 	}
 
@@ -528,6 +530,7 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 			QuorumRisk:      resource.QuorumRisk,
 			WanMode:         resource.WANMode,
 			DrNode:          resource.DRNode,
+			Encrypted:       resource.Encrypted,
 			Labels:          resource.Labels,
 			Profile:         resource.Profile,
 		},
@@ -553,6 +556,7 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 				SizeGb:        v.SizeGB,
 				Pool:          v.Pool,
 				BackingVolume: v.BackingVolume,
+				Encrypted:     v.Encrypted,
 			})
 		}
 		pbResources = append(pbResources, &sdspb.ResourceInfo{
@@ -567,6 +571,7 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 			QuorumRisk:      r.QuorumRisk,
 			WanMode:         r.WANMode,
 			DrNode:          r.DRNode,
+			Encrypted:       r.Encrypted,
 			Labels:          r.Labels,
 			Profile:         r.Profile,
 		})
@@ -733,6 +738,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		Name:       resource.Name,
 		Role:       resource.Role,
 		Nodes:      resource.Nodes,
+		Encrypted:  resource.Encrypted,
 		NodeStates: make(map[string]*sdspb.NodeResourceState),
 	}
 
@@ -765,6 +771,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 			SizeGb:        v.SizeGB,
 			Pool:          v.Pool,
 			BackingVolume: v.BackingVolume,
+			Encrypted:     v.Encrypted,
 		})
 	}
 

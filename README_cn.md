@@ -56,6 +56,9 @@ graph TD
 - **Kubernetes（CSI）**：动态供给 DRBD 卷、pool 感知的副本放置、
   `WaitForFirstConsumer` 拓扑，以及可选的无盘远程访问（`allowRemoteVolumeAccess`），
   让 Pod 可以调度到非副本节点。
+- **静态加密**：`resource create --encrypt` 在每个副本的 DRBD 与后端卷之间放入一层
+  LUKS2 容器（`DRBD → LUKS → LVM`）。**仅是静态加密——DRBD 位于加密层之上，
+  节点之间的复制流量仍是明文。** 见 [静态加密](#静态加密)。
 - **快照**：LVM 和 ZFS 快照，以及 GFS（祖父-父-子）保留策略计划任务。
 - **跨数据中心（WAN）**：当入站 UDP 被封禁时，通过 TCP 代理在 NAT/WAN 上运行 DRBD 复制。
 - **安全与运维**：令牌认证、RBAC、审计日志、可选 TLS、Prometheus 指标。
@@ -282,7 +285,48 @@ sds-cli resource mount res01 0 /mnt/res01 --node orange1
 
 # 在线扩容
 sds-cli resource resize-volume res01 0 20G
+
+# 静态加密（使用前请先读下面这一节）
+sds-cli resource create --name res-enc --port 7003 --size 10G --nodes orange1,orange2 --pool data-pool --encrypt
 ```
+
+#### 静态加密
+
+`--encrypt` 会把每个副本的后端卷包进一个 LUKS2 容器，栈变成
+`DRBD → LUKS → LVM`，落到池磁盘上的是密文。
+
+**DRBD 复制的是明文。** 加密层在 DRBD *下面*，所以节点之间复制链路上传输的数据
+与开启加密之前完全一样，没有任何保护。如果需要保护链路，那是另一个问题
+（VPN，或者跨 WAN 场景下 `sds-proxy` 的 mTLS 隧道）——`--encrypt` 不解决它。
+
+它保护的是：离开机房的池磁盘（返修、报废、被偷走的盘）。由于每个节点把密钥放在
+自己的根文件系统上，它**不**保护被整台搬走的服务器。
+
+密钥处理：
+
+- 每个节点在**本节点**用 `/dev/urandom` 生成自己的 512 位密钥。密钥不经过 SSH
+  传输、不到达控制器，也不会出现在任何日志、审计记录或数据库里。
+- 密钥存放在 `/etc/sds/luks/`（目录 `0700`，密钥文件 `0400`，属主 root），并且
+  只会以 `--key-file` 的形式交给 `cryptsetup`，绝不作为命令行参数。
+- **没有集中托管（escrow）**。丢失某节点的根文件系统就等于丢失该节点的密钥，
+  以及该节点那份密文。其他副本用各自的密钥持有同样的数据，DRBD 会重建该副本——
+  但你无法从一块孤零零幸存的磁盘里恢复数据。
+- `resource delete` 会在释放后端卷之前，在每个节点上覆写并删除密钥。
+
+容器由 `sds-drbd-up.service` 在开机时重新打开，时机在 LVM 激活之后、
+`drbdadm adjust` 之前，因此加密资源无需人工介入即可扛过重启与故障切换。
+每个副本（无论 Primary 还是 Secondary）都打开自己的容器——Secondary 同样需要
+它的后端设备。
+
+有意为之的限制：
+
+- 仅支持 LVM 池。ZFS 有自己的数据集级加密；在 zvol 上再垫一层加密会被直接拒绝，
+  而不是做一半。
+- 创建之后无法开启或关闭。原地转换意味着逐个副本销毁并重新同步，中途失败会留下
+  一部分副本加密、一部分不加密，而配置里看不出是哪一部分。对已存在的资源提出这
+  个要求会被明确拒绝并给出说明。
+- 每个持有副本的节点都需要 `cryptsetup` 以及带 `dm-crypt` 的内核；这会在开始供给
+  任何存储之前检查。
 
 ### 4. 无盘客户端
 
