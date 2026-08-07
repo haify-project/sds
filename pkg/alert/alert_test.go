@@ -122,6 +122,9 @@ func TestFailoverDetected(t *testing.T) {
 	require.Len(t, evts, 1)
 	assert.Equal(t, event.TypeResourceFailover, evts[0].Type)
 	assert.Equal(t, event.SeverityWarning, evts[0].Severity)
+	// A failover has already happened; there is no later state that clears it.
+	// Firing would leave every historical failover outstanding forever.
+	assert.Equal(t, event.StatusInfo, evts[0].Status)
 	assert.Equal(t, "n1", evts[0].Details["from"])
 	assert.Equal(t, "n2", evts[0].Details["to"])
 	assert.Contains(t, evts[0].Message, "Primary moved from n1 to n2")

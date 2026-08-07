@@ -291,10 +291,15 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo) {
 			Details:  map[string]string{"to": cur},
 		})
 	default:
+		// One-shot, not a level condition: a failover has already happened and
+		// there is no later state in which it "clears". Marking it firing would
+		// leave it outstanding forever in any receiver that pairs firing with
+		// resolved — the wall of un-clearable alerts that makes people stop
+		// reading them. no_primary is different and does resolve, via promoted.
 		m.publish(event.Event{
 			Type:     event.TypeResourceFailover,
 			Severity: event.SeverityWarning,
-			Status:   event.StatusFiring,
+			Status:   event.StatusInfo,
 			Resource: res.Name,
 			Node:     cur,
 			Message:  fmt.Sprintf("resource %s failed over: Primary moved from %s to %s", res.Name, prev, cur),
