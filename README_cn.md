@@ -67,9 +67,10 @@ graph TD
 - **安全与运维**：令牌认证、RBAC、审计日志、可选 TLS、Prometheus 指标。
 - **通知**：健康检测器会为副本降级、主备切换（failover）、失去 Primary、节点失联
   和 WAN 链路中断产生事件，可通过 Webhook 回调、gRPC/REST 监听流、推送到 Web UI
-  通知铃铛的 SSE，或 `sds-cli event watch` 送达。
+  通知铃铛的 SSE，或 `sds-cli event watch` 送达；也可以按飞书 / Slack / 企业微信 /
+  钉钉各自的消息格式直接推到群机器人，在 Web UI 里配置、无需重启。
 - **Web UI**：控制器内嵌的单页 Web 界面。
-- **AI 集成（MCP）**：`sds-mcp` 通过 Model Context Protocol 暴露 89 个管理工具，
+- **AI 集成（MCP）**：`sds-mcp` 通过 Model Context Protocol 暴露 91 个管理工具，
   供 AI 助手（Claude Code、Claude Desktop 等）使用。
 
 ## 接口与默认端口
@@ -233,6 +234,44 @@ curl -N http://controller:3375/v1/events/stream
 事件 id 单调递增，客户端看到跳号就知道自己落后了、而不是"什么都没发生"；
 重连时带上 `since_id` 即可续传，不会重复收到已经看过的事件。订阅者若停止读取，
 丢的只是它自己的事件，不会阻塞检测器。
+
+#### 发送到 IM 机器人
+
+IM 服务不接受任意 JSON，所以通知渠道有 **kind（消息格式）**。飞书、Slack、企业微信、
+钉钉各自定义了自己的消息信封，把原始事件 JSON 发过去等于什么都没送到。更麻烦的是，
+飞书、企业微信、钉钉会**在 HTTP 200 里返回拒绝**——配错的渠道看起来一直在正常工作，
+直到某次故障没人收到通知才暴露。
+
+渠道存在控制器数据库里、不在 `controller.toml` 里，所以增删和静音立即生效：改配置文件
+再重启意味着主动制造一段没有告警的窗口，而这通常发生在集群已经出问题的时候。下面
+`[alert]` 里的接收端仍然有效，两者互不影响。
+
+```bash
+sds-cli channel add --name oncall --kind feishu \
+    --url https://open.feishu.cn/open-apis/bot/v2/hook/xxxx --min-severity warning
+
+sds-cli channel add --name pager --kind slack \
+    --url https://hooks.slack.com/services/T00/B00/xxxx --min-severity critical
+
+# 钉钉加签：密钥不做成命令行参数——那会留在 shell 历史里。
+export SDS_NOTIFY_SECRET=SECxxxx
+sds-cli channel add --name ops --kind dingtalk \
+    --url 'https://oapi.dingtalk.com/robot/send?access_token=xxxx'
+
+# 判断渠道是否真的能用的唯一办法，会把服务端自己的回复报出来。
+sds-cli channel test oncall
+
+sds-cli channel list
+sds-cli channel delete oncall
+```
+
+可选 kind：`generic`（原样发送事件 JSON，给自建接收端用）、`feishu`、`slack`、
+`wecom`、`dingtalk`。如果把已知的机器人地址配成了错误的 kind，保存时就会被拒绝，
+而不是等到投递时才失败。Web UI 的 **Notifications** 页面管理的是同一批渠道，也带
+测试按钮。
+
+重复执行 `channel add` 时不提供密钥，会保留已存的那个——所以改一下阈值不会悄悄把
+签名去掉；要删除用 `--clear-secret`。任何 API 都不会把密钥读回来。
 
 存储节点的 SSH 访问**不在**此处配置——`dispatch` 库读取它自己的
 `~/.dispatch/config.toml`（SSH 用户、密钥、主机→地址映射）。主机也可在运行时通过
@@ -432,7 +471,7 @@ reclaimPolicy: Delete
 
 ### 9. AI 助手（MCP）
 
-`sds-mcp` 通过 Model Context Protocol 在 stdio 上提供完整的管理面（89 个工具：池、资源、
+`sds-mcp` 通过 Model Context Protocol 在 stdio 上提供完整的管理面（91 个工具：池、资源、
 快照、网关、HA、ZFS、拓扑、可观测性、分层与备份）。破坏性操作已标注，MCP 客户端会请求确认；
 `--read-only` 会将服务限制为 list/status/health 类工具。
 

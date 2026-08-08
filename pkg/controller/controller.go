@@ -67,6 +67,7 @@ type Controller struct {
 	gateway   *gateway.Manager
 	schedules *ScheduleManager
 	backups   *BackupManager
+	notify    *NotifyManager
 }
 
 // SetLogRing attaches the buffer the log view reads from. The ring has to exist
@@ -312,6 +313,13 @@ func (c *Controller) startNotifications() {
 	c.alertMonitor = alert.NewMonitor(c.events, opts)
 	c.alertMonitor.Start(c.ctx)
 
+	// Database-backed channels come up before the file-based ones so a UI-added
+	// channel is delivering by the time the first poll finishes.
+	c.notify = NewNotifyManager(c)
+	if err := c.notify.Reload(c.ctx); err != nil {
+		c.logger.Warn("Failed to load notification channels", zap.Error(err))
+	}
+
 	for _, wh := range c.config.Alert.Receivers() {
 		event.NewWebhook(event.WebhookConfig{
 			URL:     wh.URL,
@@ -326,7 +334,8 @@ func (c *Controller) startNotifications() {
 	c.logger.Info("Notifications started",
 		zap.Duration("interval", opts.Interval),
 		zap.Bool("node_checks", opts.Nodes != nil),
-		zap.Int("webhooks", len(c.config.Alert.Receivers())))
+		zap.Int("webhooks", len(c.config.Alert.Receivers())),
+		zap.Int("channels", c.notify.Active()))
 }
 
 // Stop stops the controller

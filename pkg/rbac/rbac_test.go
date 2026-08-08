@@ -128,3 +128,28 @@ func TestInvalidInputs(t *testing.T) {
 		t.Errorf("expected error for policy with empty object")
 	}
 }
+
+// Notification channels carry a signing secret and decide who gets paged, so
+// they are administrative configuration: readable by an operator, writable only
+// by an admin. That is what the unclassified default already gives them, and
+// this pins it — a later object rule that happened to match "Channel" would
+// otherwise widen who can redirect a cluster's alerts without anyone noticing.
+func TestNotifyChannelRPCsAreSystemScoped(t *testing.T) {
+	for _, tc := range []struct {
+		method string
+		action string
+	}{
+		{"ListNotifyChannels", ActRead},
+		{"SaveNotifyChannel", ActWrite},
+		{"DeleteNotifyChannel", ActWrite},
+		{"TestNotifyChannel", ActWrite},
+	} {
+		object, action := Classify("/v1.SDSController/" + tc.method)
+		if object != "system" {
+			t.Errorf("%s: object = %q, want system", tc.method, object)
+		}
+		if action != tc.action {
+			t.Errorf("%s: action = %q, want %q", tc.method, action, tc.action)
+		}
+	}
+}

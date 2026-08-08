@@ -133,6 +133,10 @@ const (
 	SDSController_ListAuditEvents_FullMethodName          = "/v1.SDSController/ListAuditEvents"
 	SDSController_ListControllerLogs_FullMethodName       = "/v1.SDSController/ListControllerLogs"
 	SDSController_ListEvents_FullMethodName               = "/v1.SDSController/ListEvents"
+	SDSController_ListNotifyChannels_FullMethodName       = "/v1.SDSController/ListNotifyChannels"
+	SDSController_SaveNotifyChannel_FullMethodName        = "/v1.SDSController/SaveNotifyChannel"
+	SDSController_DeleteNotifyChannel_FullMethodName      = "/v1.SDSController/DeleteNotifyChannel"
+	SDSController_TestNotifyChannel_FullMethodName        = "/v1.SDSController/TestNotifyChannel"
 	SDSController_RepairWanProxy_FullMethodName           = "/v1.SDSController/RepairWanProxy"
 	SDSController_WatchEvents_FullMethodName              = "/v1.SDSController/WatchEvents"
 )
@@ -311,6 +315,23 @@ type SDSControllerClient interface {
 	// in-memory history — enough to see what just happened, not an archive. The
 	// durable record of who did what is ListAuditEvents.
 	ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error)
+	// Notification channels: where alerts are delivered. These live in the
+	// controller database rather than in controller.toml so they can be changed
+	// from the UI while the controller runs — reconfiguring alerting by editing a
+	// file and restarting means a deliberate window with no alerting at all.
+	//
+	// A channel has a kind, because a chat service does not accept an arbitrary
+	// JSON document: Feishu, Slack, WeCom and DingTalk each define their own
+	// message envelope and reject anything else, and Feishu, WeCom and DingTalk
+	// do it inside an HTTP 200.
+	ListNotifyChannels(ctx context.Context, in *ListNotifyChannelsRequest, opts ...grpc.CallOption) (*ListNotifyChannelsResponse, error)
+	SaveNotifyChannel(ctx context.Context, in *SaveNotifyChannelRequest, opts ...grpc.CallOption) (*SaveNotifyChannelResponse, error)
+	DeleteNotifyChannel(ctx context.Context, in *DeleteNotifyChannelRequest, opts ...grpc.CallOption) (*DeleteNotifyChannelResponse, error)
+	// TestNotifyChannel delivers one synthetic message to a single channel and
+	// reports what the far end actually said, including a rejection returned
+	// inside a 200. It does not go through the event bus, so it neither pages the
+	// other channels nor appears in the event history.
+	TestNotifyChannel(ctx context.Context, in *TestNotifyChannelRequest, opts ...grpc.CallOption) (*TestNotifyChannelResponse, error)
 	// RepairWanProxy reconciles a WAN resource's replication tunnels with what
 	// the controller currently believes its nodes are: it re-provisions the legs
 	// that should exist and removes instances left behind by a node that was
@@ -1474,6 +1495,46 @@ func (c *sDSControllerClient) ListEvents(ctx context.Context, in *ListEventsRequ
 	return out, nil
 }
 
+func (c *sDSControllerClient) ListNotifyChannels(ctx context.Context, in *ListNotifyChannelsRequest, opts ...grpc.CallOption) (*ListNotifyChannelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNotifyChannelsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListNotifyChannels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SaveNotifyChannel(ctx context.Context, in *SaveNotifyChannelRequest, opts ...grpc.CallOption) (*SaveNotifyChannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveNotifyChannelResponse)
+	err := c.cc.Invoke(ctx, SDSController_SaveNotifyChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteNotifyChannel(ctx context.Context, in *DeleteNotifyChannelRequest, opts ...grpc.CallOption) (*DeleteNotifyChannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteNotifyChannelResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteNotifyChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) TestNotifyChannel(ctx context.Context, in *TestNotifyChannelRequest, opts ...grpc.CallOption) (*TestNotifyChannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestNotifyChannelResponse)
+	err := c.cc.Invoke(ctx, SDSController_TestNotifyChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) RepairWanProxy(ctx context.Context, in *RepairWanProxyRequest, opts ...grpc.CallOption) (*RepairWanProxyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RepairWanProxyResponse)
@@ -1677,6 +1738,23 @@ type SDSControllerServer interface {
 	// in-memory history — enough to see what just happened, not an archive. The
 	// durable record of who did what is ListAuditEvents.
 	ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error)
+	// Notification channels: where alerts are delivered. These live in the
+	// controller database rather than in controller.toml so they can be changed
+	// from the UI while the controller runs — reconfiguring alerting by editing a
+	// file and restarting means a deliberate window with no alerting at all.
+	//
+	// A channel has a kind, because a chat service does not accept an arbitrary
+	// JSON document: Feishu, Slack, WeCom and DingTalk each define their own
+	// message envelope and reject anything else, and Feishu, WeCom and DingTalk
+	// do it inside an HTTP 200.
+	ListNotifyChannels(context.Context, *ListNotifyChannelsRequest) (*ListNotifyChannelsResponse, error)
+	SaveNotifyChannel(context.Context, *SaveNotifyChannelRequest) (*SaveNotifyChannelResponse, error)
+	DeleteNotifyChannel(context.Context, *DeleteNotifyChannelRequest) (*DeleteNotifyChannelResponse, error)
+	// TestNotifyChannel delivers one synthetic message to a single channel and
+	// reports what the far end actually said, including a rejection returned
+	// inside a 200. It does not go through the event bus, so it neither pages the
+	// other channels nor appears in the event history.
+	TestNotifyChannel(context.Context, *TestNotifyChannelRequest) (*TestNotifyChannelResponse, error)
 	// RepairWanProxy reconciles a WAN resource's replication tunnels with what
 	// the controller currently believes its nodes are: it re-provisions the legs
 	// that should exist and removes instances left behind by a node that was
@@ -2041,6 +2119,18 @@ func (UnimplementedSDSControllerServer) ListControllerLogs(context.Context, *Lis
 }
 func (UnimplementedSDSControllerServer) ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListEvents not implemented")
+}
+func (UnimplementedSDSControllerServer) ListNotifyChannels(context.Context, *ListNotifyChannelsRequest) (*ListNotifyChannelsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListNotifyChannels not implemented")
+}
+func (UnimplementedSDSControllerServer) SaveNotifyChannel(context.Context, *SaveNotifyChannelRequest) (*SaveNotifyChannelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SaveNotifyChannel not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteNotifyChannel(context.Context, *DeleteNotifyChannelRequest) (*DeleteNotifyChannelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteNotifyChannel not implemented")
+}
+func (UnimplementedSDSControllerServer) TestNotifyChannel(context.Context, *TestNotifyChannelRequest) (*TestNotifyChannelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TestNotifyChannel not implemented")
 }
 func (UnimplementedSDSControllerServer) RepairWanProxy(context.Context, *RepairWanProxyRequest) (*RepairWanProxyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RepairWanProxy not implemented")
@@ -4121,6 +4211,78 @@ func _SDSController_ListEvents_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_ListNotifyChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNotifyChannelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListNotifyChannels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListNotifyChannels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListNotifyChannels(ctx, req.(*ListNotifyChannelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SaveNotifyChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveNotifyChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SaveNotifyChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SaveNotifyChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SaveNotifyChannel(ctx, req.(*SaveNotifyChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteNotifyChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNotifyChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteNotifyChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteNotifyChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteNotifyChannel(ctx, req.(*DeleteNotifyChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_TestNotifyChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestNotifyChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).TestNotifyChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_TestNotifyChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).TestNotifyChannel(ctx, req.(*TestNotifyChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_RepairWanProxy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RepairWanProxyRequest)
 	if err := dec(in); err != nil {
@@ -4612,6 +4774,22 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListEvents",
 			Handler:    _SDSController_ListEvents_Handler,
+		},
+		{
+			MethodName: "ListNotifyChannels",
+			Handler:    _SDSController_ListNotifyChannels_Handler,
+		},
+		{
+			MethodName: "SaveNotifyChannel",
+			Handler:    _SDSController_SaveNotifyChannel_Handler,
+		},
+		{
+			MethodName: "DeleteNotifyChannel",
+			Handler:    _SDSController_DeleteNotifyChannel_Handler,
+		},
+		{
+			MethodName: "TestNotifyChannel",
+			Handler:    _SDSController_TestNotifyChannel_Handler,
 		},
 		{
 			MethodName: "RepairWanProxy",

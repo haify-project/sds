@@ -3,8 +3,8 @@ package event
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -13,8 +13,16 @@ import (
 
 // WebhookConfig describes one HTTP receiver.
 type WebhookConfig struct {
-	// URL receives a POST per event with the Event JSON as the body.
+	// URL receives a POST per event.
 	URL string
+	// Kind is the message format the far end expects. Empty means generic: the
+	// Event JSON unchanged. A chat service needs its own envelope and rejects
+	// anything else — see render.go.
+	Kind Kind
+	// Secret is the signing secret for kinds that authenticate that way
+	// (DingTalk's 加签). It is never logged and never leaves this process
+	// except as a signature.
+	Secret string
 	// Filter narrows what this receiver is sent. A pager wants critical only; a
 	// chat channel may want everything.
 	Filter Filter
@@ -85,8 +93,23 @@ func (w *Webhook) Start(ctx context.Context, bus *Bus) {
 // Start and a cancelled context; used by tests to avoid racing on shutdown.
 func (w *Webhook) Wait() { <-w.done }
 
+// Deliver sends one event now and reports what happened, instead of logging it
+// and moving on the way the bus-driven path does.
+//
+// This is what a "send a test message" button needs. The background path is
+// deliberately fire-and-forget — an operator must not be blocked on a chat
+// service being slow — but a person who just entered a bot URL is owed the
+// actual answer, including the far end's own rejection text.
+func (w *Webhook) Deliver(ctx context.Context, e Event) error {
+	body, err := w.cfg.Kind.Render(e)
+	if err != nil {
+		return fmt.Errorf("encode event: %w", err)
+	}
+	return w.post(ctx, body)
+}
+
 func (w *Webhook) deliver(ctx context.Context, e Event) {
-	body, err := json.Marshal(e)
+	body, err := w.cfg.Kind.Render(e)
 	if err != nil {
 		w.log.Error("webhook: encode event", zap.Error(err))
 		return
@@ -124,7 +147,14 @@ func (w *Webhook) deliver(ctx context.Context, e Event) {
 }
 
 func (w *Webhook) post(ctx context.Context, body []byte) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.cfg.URL, bytes.NewReader(body))
+	// Signed per attempt, not once: DingTalk's signature covers a timestamp it
+	// only accepts within an hour, so a retry after a long backoff needs a
+	// fresh one.
+	dest, err := w.cfg.Kind.SignedURL(w.cfg.URL, w.cfg.Secret, time.Now())
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, dest, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -145,5 +175,14 @@ func (w *Webhook) post(ctx context.Context, body []byte) error {
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("receiver returned HTTP %d", resp.StatusCode)
 	}
-	return nil
+
+	// The body has to be read even on a 200. Feishu, WeCom and DingTalk all
+	// answer 200 for a message they refused, putting the reason in the body;
+	// stopping at the status code would report every one of those as delivered.
+	// Bounded because a misconfigured URL can point at anything at all.
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+	if err != nil {
+		return fmt.Errorf("read the receiver's reply: %w", err)
+	}
+	return w.cfg.Kind.CheckResponse(raw)
 }

@@ -1989,6 +1989,130 @@
         ]
       }
     },
+    "/v1/notify-channels": {
+      "get": {
+        "summary": "Notification channels: where alerts are delivered. These live in the\ncontroller database rather than in controller.toml so they can be changed\nfrom the UI while the controller runs — reconfiguring alerting by editing a\nfile and restarting means a deliberate window with no alerting at all.",
+        "description": "A channel has a kind, because a chat service does not accept an arbitrary\nJSON document: Feishu, Slack, WeCom and DingTalk each define their own\nmessage envelope and reject anything else, and Feishu, WeCom and DingTalk\ndo it inside an HTTP 200.",
+        "operationId": "SDSController_ListNotifyChannels",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListNotifyChannelsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "operationId": "SDSController_SaveNotifyChannel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SaveNotifyChannelResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "SaveNotifyChannelRequest creates a channel or replaces one by name.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SaveNotifyChannelRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/notify-channels/{name}": {
+      "delete": {
+        "operationId": "SDSController_DeleteNotifyChannel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteNotifyChannelResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/notify-channels/{name}/test": {
+      "post": {
+        "summary": "TestNotifyChannel delivers one synthetic message to a single channel and\nreports what the far end actually said, including a rejection returned\ninside a 200. It does not go through the event bus, so it neither pages the\nother channels nor appears in the event history.",
+        "operationId": "SDSController_TestNotifyChannel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TestNotifyChannelResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerTestNotifyChannelBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/pools": {
       "get": {
         "operationId": "SDSController_ListPools",
@@ -4847,6 +4971,9 @@
         }
       }
     },
+    "SDSControllerTestNotifyChannelBody": {
+      "type": "object"
+    },
     "SDSControllerUnmountResourceBody": {
       "type": "object",
       "properties": {
@@ -5953,6 +6080,17 @@
         }
       }
     },
+    "v1DeleteNotifyChannelResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1DeletePoolResponse": {
       "type": "object",
       "properties": {
@@ -6877,6 +7015,31 @@
         }
       }
     },
+    "v1ListNotifyChannelsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NotifyChannelInfo"
+          }
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "kinds lists the message formats this controller can render, so a client\ndoes not have to carry its own copy of the list and go stale."
+        }
+      }
+    },
     "v1ListPoolsResponse": {
       "type": "object",
       "properties": {
@@ -7165,6 +7328,49 @@
           "description": "node is the SDS node name this state belongs to. The map itself is keyed by\nDRBD host name, which is the machine's real hostname and generally is NOT\nthe node name the rest of the API uses — so without this a caller cannot\npair a state with the entry of `nodes` it describes."
         }
       }
+    },
+    "v1NotifyChannelInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "description": "kind is generic | feishu | slack | wecom | dingtalk."
+        },
+        "url": {
+          "type": "string"
+        },
+        "minSeverity": {
+          "type": "string"
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "hasSecret": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "description": "NotifyChannelInfo describes one alert delivery channel. The signing secret is\nintentionally absent, exactly as BackupTargetInfo omits its credential: a\nsecret readable back out of the API leaks through every client that renders\nit. has_secret says whether one is stored, which is what a UI needs in order\nto show \"configured\" without showing the value."
     },
     "v1OcfAgent": {
       "type": "object",
@@ -7819,6 +8025,60 @@
         }
       }
     },
+    "v1SaveNotifyChannelRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "minSeverity": {
+          "type": "string"
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "secret": {
+          "type": "string",
+          "description": "secret is the signing secret for kinds that authenticate that way\n(DingTalk's 加签). Write-only: never returned by any RPC.\n\nAn empty secret on an existing channel LEAVES THE STORED ONE ALONE, because\na UI cannot render the secret to send it back, so an edit of any other\nfield would otherwise silently clear it. clear_secret is how a secret is\nactually removed."
+        },
+        "clearSecret": {
+          "type": "boolean"
+        }
+      },
+      "description": "SaveNotifyChannelRequest creates a channel or replaces one by name."
+    },
+    "v1SaveNotifyChannelResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "channel": {
+          "$ref": "#/definitions/v1NotifyChannelInfo"
+        }
+      }
+    },
     "v1SetDualPrimaryResponse": {
       "type": "object",
       "properties": {
@@ -7985,6 +8245,18 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1TestNotifyChannelResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string",
+          "description": "message carries the far end's own rejection text when it refused, which is\nthe part that says what to fix."
         }
       }
     },

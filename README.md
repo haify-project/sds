@@ -76,9 +76,10 @@ graph TD
 - **Notifications**: a health detector that raises events for degraded replicas,
   failovers, lost Primaries, unreachable nodes and broken WAN links, delivered
   by Webhook, by gRPC/REST watch stream, by SSE to the web UI's notification
-  bell, or by `sds-cli event watch`.
+  bell, or by `sds-cli event watch` — and to Feishu, Slack, WeCom or DingTalk in
+  each service's own message format, configurable from the UI without a restart.
 - **Web UI**: an embedded single-page UI served by the controller.
-- **AI Integration (MCP)**: `sds-mcp` exposes 89 management tools over the Model
+- **AI Integration (MCP)**: `sds-mcp` exposes 91 management tools over the Model
   Context Protocol for AI assistants (Claude Code, Claude Desktop, etc.).
 
 ## Interfaces & default ports
@@ -247,6 +248,48 @@ Event ids are monotonic, so a client that sees a gap knows it fell behind rather
 than that nothing happened; reconnecting with `since_id` resumes without
 replaying what was already seen. A subscriber that stops reading loses its own
 events rather than blocking the detector.
+
+#### Delivering to a chat app
+
+A chat service will not accept an arbitrary JSON document, so a channel has a
+**kind**. Feishu, Slack, WeCom and DingTalk each define their own message
+envelope; posting the raw event to a bot URL delivers nothing. Worse, Feishu,
+WeCom and DingTalk report the refusal *inside an HTTP 200*, so a misconfigured
+channel looks like it is working right up until an outage passes unnoticed.
+
+Channels live in the controller database, not in `controller.toml`, so adding or
+muting one takes effect immediately — reconfiguring alerting by editing a file
+and restarting means a deliberate window with no alerting, usually on a cluster
+that is already having a bad day. The `[alert]` receivers below still work and
+are independent of these.
+
+```bash
+sds-cli channel add --name oncall --kind feishu \
+    --url https://open.feishu.cn/open-apis/bot/v2/hook/xxxx --min-severity warning
+
+sds-cli channel add --name pager --kind slack \
+    --url https://hooks.slack.com/services/T00/B00/xxxx --min-severity critical
+
+# DingTalk 加签: the secret is never a flag — it would land in shell history.
+export SDS_NOTIFY_SECRET=SECxxxx
+sds-cli channel add --name ops --kind dingtalk \
+    --url 'https://oapi.dingtalk.com/robot/send?access_token=xxxx'
+
+# The only way to know a channel works. Reports what the service itself said.
+sds-cli channel test oncall
+
+sds-cli channel list
+sds-cli channel delete oncall
+```
+
+Kinds: `generic` (the event JSON unchanged, for a receiver you wrote), `feishu`,
+`slack`, `wecom`, `dingtalk`. A well-known bot URL saved with the wrong kind is
+refused up front rather than at delivery time. The same channels are managed in
+the web UI under **Notifications**, including the test button.
+
+Re-running `channel add` without a secret leaves the stored one alone, so
+changing a threshold cannot silently unsign a channel; `--clear-secret` removes
+it. A secret is never returned by any API.
 
 SSH access to storage nodes is **not** configured here — the `dispatch` library
 reads its own `~/.dispatch/config.toml` (SSH user, key, and host→address map).
@@ -467,9 +510,9 @@ requested pool.
 
 ### 9. AI Assistants (MCP)
 
-`sds-mcp` serves the full management surface (89 tools: pools, resources,
-snapshots, gateways, HA, ZFS, topology, observability, tiering and backups) over the Model Context
-Protocol on stdio. Destructive operations are annotated so MCP clients ask for
+`sds-mcp` serves the full management surface (91 tools: pools, resources,
+snapshots, gateways, HA, ZFS, topology, observability, tiering, backups and
+notification channels) over the Model Context Protocol on stdio. Destructive operations are annotated so MCP clients ask for
 confirmation, and `--read-only` restricts the server to list/status/health tools.
 
 Three of them answer what the cluster *did* rather than what it is, which is

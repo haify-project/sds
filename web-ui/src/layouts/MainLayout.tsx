@@ -15,6 +15,7 @@ import {
   Menu,
   PanelLeft,
   ScrollText,
+  BellRing,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
@@ -71,6 +72,7 @@ const navigation = [
   { name: 'Resources', href: '/resources', icon: Box },
   { name: 'Gateways', href: '/gateways', icon: Network },
   { name: 'HA', href: '/ha', icon: ShieldCheck },
+  { name: 'Notifications', href: '/notifications', icon: BellRing },
   { name: 'Access', href: '/access', icon: Lock },
   { name: 'Logs', href: '/logs', icon: ScrollText },
 ];

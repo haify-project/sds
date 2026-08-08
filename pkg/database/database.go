@@ -28,6 +28,11 @@ const (
 	// of each copy pushed to them. See pkg/backup.
 	backupTargetsBucket = "backup_targets"
 	backupsBucket       = "backups"
+
+	// notifyChannelsBucket holds where alerts are delivered. Kept in the
+	// database so a channel can be changed from the UI without restarting the
+	// controller — an alerting path must not need an outage to reconfigure.
+	notifyChannelsBucket = "notify_channels"
 )
 
 // rbacStateKey is the single key under rbacBucket holding the serialized RBAC
@@ -75,7 +80,7 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 
 	// Initialize buckets
 	if err := db.Update(func(tx *bolt.Tx) error {
-		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, profilesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket, backupTargetsBucket, backupsBucket}
+		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, profilesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket, backupTargetsBucket, backupsBucket, notifyChannelsBucket}
 		for _, bucket := range buckets {
 			_, err := tx.CreateBucketIfNotExists([]byte(bucket))
 			if err != nil {

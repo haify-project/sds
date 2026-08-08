@@ -113,6 +113,13 @@ type ControllerClient interface {
 	ListAuditEvents(ctx context.Context, req *sdspb.ListAuditEventsRequest) (*sdspb.ListAuditEventsResponse, error)
 	ListControllerLogs(ctx context.Context, req *sdspb.ListControllerLogsRequest) (*sdspb.ListControllerLogsResponse, error)
 
+	// Notification channels. Listing and testing are exposed; creating one is
+	// not, for the same reason a backup target cannot be created from here — a
+	// bot URL is a bearer credential, and anything passed as a tool argument is
+	// recorded in the conversation that passed it.
+	ListNotifyChannels(ctx context.Context) ([]*sdspb.NotifyChannelInfo, []string, error)
+	TestNotifyChannel(ctx context.Context, name string) (string, error)
+
 	// Topology changes
 	AddReplica(ctx context.Context, resource, node string) error
 	RemoveReplica(ctx context.Context, resource, node string) error

@@ -455,6 +455,32 @@ service SDSController {
     option (google.api.http) = { get: "/v1/events"; };
   }
 
+  // Notification channels: where alerts are delivered. These live in the
+  // controller database rather than in controller.toml so they can be changed
+  // from the UI while the controller runs — reconfiguring alerting by editing a
+  // file and restarting means a deliberate window with no alerting at all.
+  //
+  // A channel has a kind, because a chat service does not accept an arbitrary
+  // JSON document: Feishu, Slack, WeCom and DingTalk each define their own
+  // message envelope and reject anything else, and Feishu, WeCom and DingTalk
+  // do it inside an HTTP 200.
+  rpc ListNotifyChannels(ListNotifyChannelsRequest) returns (ListNotifyChannelsResponse) {
+    option (google.api.http) = { get: "/v1/notify-channels"; };
+  }
+  rpc SaveNotifyChannel(SaveNotifyChannelRequest) returns (SaveNotifyChannelResponse) {
+    option (google.api.http) = { post: "/v1/notify-channels"; body: "*"; };
+  }
+  rpc DeleteNotifyChannel(DeleteNotifyChannelRequest) returns (DeleteNotifyChannelResponse) {
+    option (google.api.http) = { delete: "/v1/notify-channels/{name}"; };
+  }
+  // TestNotifyChannel delivers one synthetic message to a single channel and
+  // reports what the far end actually said, including a rejection returned
+  // inside a 200. It does not go through the event bus, so it neither pages the
+  // other channels nor appears in the event history.
+  rpc TestNotifyChannel(TestNotifyChannelRequest) returns (TestNotifyChannelResponse) {
+    option (google.api.http) = { post: "/v1/notify-channels/{name}/test"; body: "*"; };
+  }
+
   // RepairWanProxy reconciles a WAN resource's replication tunnels with what
   // the controller currently believes its nodes are: it re-provisions the legs
   // that should exist and removes instances left behind by a node that was
@@ -1832,6 +1858,82 @@ message DeleteBackupTargetRequest {
 
 message DeleteBackupTargetResponse {
   bool success = 1;
+  string message = 2;
+}
+
+// NotifyChannelInfo describes one alert delivery channel. The signing secret is
+// intentionally absent, exactly as BackupTargetInfo omits its credential: a
+// secret readable back out of the API leaks through every client that renders
+// it. has_secret says whether one is stored, which is what a UI needs in order
+// to show "configured" without showing the value.
+message NotifyChannelInfo {
+  string name = 1;
+  // kind is generic | feishu | slack | wecom | dingtalk.
+  string kind = 2;
+  string url = 3;
+  string min_severity = 4;
+  repeated string types = 5;
+  map<string, string> headers = 6;
+  bool enabled = 7;
+  bool has_secret = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message ListNotifyChannelsRequest {}
+
+message ListNotifyChannelsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NotifyChannelInfo channels = 3;
+  // kinds lists the message formats this controller can render, so a client
+  // does not have to carry its own copy of the list and go stale.
+  repeated string kinds = 4;
+}
+
+// SaveNotifyChannelRequest creates a channel or replaces one by name.
+message SaveNotifyChannelRequest {
+  string name = 1;
+  string kind = 2;
+  string url = 3;
+  string min_severity = 4;
+  repeated string types = 5;
+  map<string, string> headers = 6;
+  bool enabled = 7;
+  // secret is the signing secret for kinds that authenticate that way
+  // (DingTalk's 加签). Write-only: never returned by any RPC.
+  //
+  // An empty secret on an existing channel LEAVES THE STORED ONE ALONE, because
+  // a UI cannot render the secret to send it back, so an edit of any other
+  // field would otherwise silently clear it. clear_secret is how a secret is
+  // actually removed.
+  string secret = 8;
+  bool clear_secret = 9;
+}
+
+message SaveNotifyChannelResponse {
+  bool success = 1;
+  string message = 2;
+  NotifyChannelInfo channel = 3;
+}
+
+message DeleteNotifyChannelRequest {
+  string name = 1;
+}
+
+message DeleteNotifyChannelResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message TestNotifyChannelRequest {
+  string name = 1;
+}
+
+message TestNotifyChannelResponse {
+  bool success = 1;
+  // message carries the far end's own rejection text when it refused, which is
+  // the part that says what to fix.
   string message = 2;
 }
 

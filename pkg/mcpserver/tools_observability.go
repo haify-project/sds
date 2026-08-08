@@ -205,3 +205,62 @@ func (s *Server) registerObservabilityTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 }
+
+type notifyChannelOut struct {
+	Name        string `json:"name"`
+	Kind        string `json:"kind" jsonschema:"message format: generic, feishu, slack, wecom or dingtalk"`
+	URL         string `json:"url"`
+	MinSeverity string `json:"min_severity"`
+	Enabled     bool   `json:"enabled" jsonschema:"false means the channel is configured but muted and receives nothing"`
+	HasSecret   bool   `json:"has_secret"`
+}
+
+type notifyChannelListOut struct {
+	Channels []notifyChannelOut `json:"channels"`
+	Kinds    []string           `json:"kinds" jsonschema:"message formats this controller can render"`
+}
+
+// registerNotifyTools exposes where alerts go, and the one operation that can
+// tell whether they arrive.
+//
+// There is deliberately no tool for CREATING a channel. A bot URL is a bearer
+// credential — anyone holding it can post into the channel — and anything
+// passed as a tool argument is recorded in the conversation that passed it.
+// The same rule keeps sds_backup_target_add out of the tool list.
+func (s *Server) registerNotifyTools(srv *mcp.Server) {
+	addRead(s, srv, readOnlyTool("sds_notify_channel_list", "List alert notification channels",
+		"List where this cluster's alerts are delivered — Feishu, Slack, WeCom, DingTalk or a plain webhook. "+
+			"Use this when asked whether anyone would be told about a problem: a cluster with alerting enabled "+
+			"and no enabled channel raises events that nobody receives. Bot URLs are returned; signing secrets "+
+			"never are."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, notifyChannelListOut, error) {
+			channels, kinds, err := s.client.ListNotifyChannels(ctx)
+			if err != nil {
+				return nil, notifyChannelListOut{}, err
+			}
+			out := notifyChannelListOut{Channels: make([]notifyChannelOut, 0, len(channels)), Kinds: kinds}
+			for _, c := range channels {
+				out.Channels = append(out.Channels, notifyChannelOut{
+					Name: c.Name, Kind: c.Kind, URL: c.Url,
+					MinSeverity: c.MinSeverity, Enabled: c.Enabled, HasSecret: c.HasSecret,
+				})
+			}
+			return nil, out, nil
+		})
+
+	addWrite(s, srv, writeTool("sds_notify_channel_test", "Send a test alert to one channel",
+		"Deliver one synthetic message to a single channel and report what the service actually said. This is the "+
+			"only way to know a channel works: Feishu, WeCom and DingTalk answer HTTP 200 for a message they "+
+			"refused and put the reason in the body, so a wrong bot URL or a missing signature looks like success "+
+			"from the outside. The message does not go through the event bus, so it reaches no other channel and "+
+			"does not appear in the event history."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in struct {
+			Name string `json:"name" jsonschema:"channel to test"`
+		}) (*mcp.CallToolResult, opResult, error) {
+			msg, err := s.client.TestNotifyChannel(ctx, in.Name)
+			if err != nil {
+				return nil, opResult{}, err
+			}
+			return nil, ok(msg), nil
+		})
+}

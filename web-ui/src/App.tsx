@@ -34,6 +34,11 @@ const CreateHAPage = lazy(() =>
 const AccessPage = lazy(() =>
   import('./pages/AccessPage').then((m) => ({ default: m.AccessPage })),
 );
+const NotificationsPage = lazy(() =>
+  import('./pages/NotificationsPage').then((m) => ({
+    default: m.NotificationsPage,
+  })),
+);
 const LogsPage = lazy(() =>
   import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })),
 );
@@ -77,6 +82,10 @@ function App() {
               <Route path="gateways" element={<GatewaysPage />} />
               <Route path="ha" element={<HAPage />} />
               <Route path="ha/create" element={<CreateHAPage />} />
+              <Route
+                path="notifications"
+                element={<NotificationsPage />}
+              />
               <Route path="access" element={<AccessPage />} />
               <Route path="logs" element={<LogsPage />} />
             </Route>
