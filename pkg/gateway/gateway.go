@@ -44,6 +44,11 @@ type ResourceVolumeInfo struct {
 	VolumeID uint32
 	Device   string
 	SizeGB   uint64
+	// BackingVolume is the logical volume name inside the pool, e.g.
+	// "<resource>_data" or "<resource>_state1". It is how a gateway tells its
+	// own scratch volume apart from the one the operator asked to export —
+	// see clusterPrivateAndPayload.
+	BackingVolume string
 }
 
 // ResourceInfo represents DRBD resource information
@@ -639,4 +644,71 @@ true`, id, id, id)
 func (m *Manager) reloadDrbdReactor(ctx context.Context) error {
 	reloadCmd := "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor"
 	return m.deployment.Exec(ctx, m.hosts, reloadCmd)
+}
+
+// stateVolumePrefix marks a volume created by EnsureGatewayVolumes for the
+// gateway's own bookkeeping (NFS's rpc state, LIO's target state). It is
+// "<resource>_state<N>"; the operator's own volume is "<resource>_data".
+const stateVolumeSuffix = "_state"
+
+// clusterPrivateAndPayload decides which of a resource's volumes holds gateway
+// bookkeeping and which one is actually exported.
+//
+// This is not a free choice, and getting it backwards is silent. The gateway
+// templates were written against linstor-gateway's convention — volume 0 is
+// cluster-private, volume 1 is the payload — which holds when the gateway
+// creates the resource itself and reserves volume 0. SDS does the opposite:
+// `resource create --size` puts the operator's data on volume 0 as
+// "<resource>_data", and the state volume is APPENDED afterwards by
+// EnsureGatewayVolumes. Following the template's convention on an SDS resource
+// therefore exports the 1 GiB scratch volume and formats the operator's data
+// volume as gateway scratch — a share that comes up, mounts, and is both the
+// wrong size and not their storage.
+//
+// The volume numbers cannot be swapped instead: DRBD records them in metadata,
+// so renumbering an existing resource means destroying and resyncing it.
+//
+// The state volume is identified by name rather than by position, because
+// position is exactly what was wrong. A resource with no "_state" volume at all
+// was built by hand in the linstor layout, so the original convention is kept
+// for it.
+func clusterPrivateAndPayload(volumes []*ResourceVolumeInfo, fallbackDevice string) (clusterPrivate string, payload []*ResourceVolumeInfo) {
+	var state *ResourceVolumeInfo
+	for _, v := range volumes {
+		if v == nil || v.Device == "" {
+			continue
+		}
+		if state == nil && strings.Contains(v.BackingVolume, stateVolumeSuffix) {
+			state = v
+			continue
+		}
+		payload = append(payload, v)
+	}
+	if state != nil && len(payload) > 0 {
+		return state.Device, payload
+	}
+
+	// No state volume to go on: this resource was built by hand in the linstor
+	// layout, so keep that convention rather than guessing.
+	payload = nil
+	for _, v := range volumes {
+		if v != nil && v.VolumeID != 0 && v.Device != "" {
+			payload = append(payload, v)
+		}
+	}
+	if len(payload) == 0 {
+		if dev := volumeDevice(volumes, fallbackDevice, 1); dev != "" {
+			payload = []*ResourceVolumeInfo{{VolumeID: 1, Device: dev}}
+		}
+	}
+	return fallbackDevice, payload
+}
+
+// payloadDevice returns the device for the first exported volume, or the
+// fallback when a resource somehow has none.
+func payloadDevice(payload []*ResourceVolumeInfo, fallback string) string {
+	if len(payload) > 0 && payload[0].Device != "" {
+		return payload[0].Device
+	}
+	return fallback
 }

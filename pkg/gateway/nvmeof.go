@@ -106,7 +106,12 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 	// Promote on one of the resource's own nodes and make sure the
 	// cluster-private volume carries a filesystem BEFORE reactor takes
 	// over: its Filesystem agent mounts but never formats.
-	if err := n.ensureGatewayPrerequisites(ctx, req.Resource, resInfo.Nodes, drbdDevice); err != nil {
+	// Only the cluster-private volume is formatted. The exported volume must
+	// stay raw — it is a block device handed to an initiator, which puts its
+	// own filesystem on it. Passing volumes[0] here formatted the operator's
+	// data volume as gateway scratch; see clusterPrivateAndPayload.
+	clusterPrivateDev, _ := clusterPrivateAndPayload(resInfo.Volumes, drbdDevice)
+	if err := n.ensureGatewayPrerequisites(ctx, req.Resource, resInfo.Nodes, clusterPrivateDev); err != nil {
 		return &v1.CreateNVMeGatewayResponse{
 			Success: false,
 			Message: err.Error(),
@@ -203,15 +208,19 @@ func (n *NVMeManager) generateNVMeGatewayConfig(req *v1.CreateNVMeGatewayRequest
 		NGUID  string
 	}
 
-	namespaces := make([]Namespace, 0, max(len(volumes)-1, 0))
-	for _, vol := range volumes {
-		v := int(vol.VolumeID)
-		if v == 0 {
-			continue // volume 0 stays cluster-private
-		}
+	// See clusterPrivateAndPayload: the gateway's scratch volume is identified
+	// by name, so the namespace is the operator's volume rather than whichever
+	// one happened to be numbered 1.
+	clusterPrivateDev, payload := clusterPrivateAndPayload(volumes, drbdDevice)
+
+	// NSIDs are 1-based: zero is not a valid namespace identifier, so they
+	// cannot simply mirror the DRBD volume number now that the payload is
+	// usually volume 0.
+	namespaces := make([]Namespace, 0, len(payload))
+	for i, vol := range payload {
 		namespaces = append(namespaces, Namespace{
-			Number: v,
-			Device: volumeDevice(volumes, drbdDevice, v),
+			Number: i + 1,
+			Device: vol.Device,
 			UUID:   generateUUID(),
 			NGUID:  generateUUID(),
 		})
@@ -241,7 +250,7 @@ func (n *NVMeManager) generateNVMeGatewayConfig(req *v1.CreateNVMeGatewayRequest
 		IPAddress:          ipAddr,
 		Prefix:             prefix,
 		FSType:             DefaultFSType,
-		DRBDDevice:         drbdDevice,
+		DRBDDevice:         clusterPrivateDev,
 		ClusterPrivatePath: clusterPrivatePath,
 		NVMePort:           DefaultNVMePort,
 		Serial:             serial,

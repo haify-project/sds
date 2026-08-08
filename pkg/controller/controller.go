@@ -716,6 +716,11 @@ func (a *GatewayResourceManager) GetResource(ctx context.Context, name string) (
 			VolumeID: v.VolumeID,
 			Device:   v.Device,
 			SizeGB:   v.SizeGB,
+			// The gateway tells its own auto-provisioned "<res>_state<N>"
+			// volume from the operator's "<res>_data" by this name. Without
+			// it, it can only go by position — which is what used to make it
+			// export the wrong one.
+			BackingVolume: v.BackingVolume,
 		}
 	}
 

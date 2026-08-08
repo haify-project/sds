@@ -96,7 +96,12 @@ func (i *iSCSIManager) CreateISCSIGateway(ctx context.Context, req *v1.CreateISC
 	// Promote on one of the resource's own nodes and make sure the
 	// cluster-private volume carries a filesystem BEFORE reactor takes
 	// over: its Filesystem agent mounts but never formats.
-	if err := i.ensureGatewayPrerequisites(ctx, req.Resource, resInfo.Nodes, drbdDevice); err != nil {
+	// Only the cluster-private volume is formatted. The exported volume must
+	// stay raw — it is a block device handed to an initiator, which puts its
+	// own filesystem on it. Passing volumes[0] here formatted the operator's
+	// data volume as gateway scratch; see clusterPrivateAndPayload.
+	clusterPrivateDev, _ := clusterPrivateAndPayload(resInfo.Volumes, drbdDevice)
+	if err := i.ensureGatewayPrerequisites(ctx, req.Resource, resInfo.Nodes, clusterPrivateDev); err != nil {
 		return &v1.CreateISCSIGatewayResponse{
 			Success: false,
 			Message: err.Error(),
@@ -178,16 +183,21 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 		Serial string
 	}
 
-	luns := make([]LUN, 0, max(len(volumes)-1, 0))
-	for _, vol := range volumes {
-		v := int(vol.VolumeID)
-		if v == 0 {
-			continue // volume 0 stays cluster-private
-		}
+	// Which volume is the gateway's own scratch and which is the operator's is
+	// decided by name, not by position — see clusterPrivateAndPayload. Doing it
+	// by position handed the initiator the 1 GiB state volume.
+	clusterPrivateDev, payload := clusterPrivateAndPayload(volumes, drbdDevice)
+
+	// LUN numbering stays 1-based and independent of the DRBD volume number:
+	// LUN 0 has special meaning to some initiators, and the payload volume is
+	// now usually volume 0.
+	luns := make([]LUN, 0, len(payload))
+	for i, vol := range payload {
+		n := i + 1
 		luns = append(luns, LUN{
-			Number: v,
-			Device: volumeDevice(volumes, drbdDevice, v),
-			Serial: generateSerialFromIQN(req.Iqn, v),
+			Number: n,
+			Device: vol.Device,
+			Serial: generateSerialFromIQN(req.Iqn, n),
 		})
 	}
 
@@ -240,7 +250,7 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 		Prefix:             prefix,
 		Portal:             portal,
 		FSType:             DefaultFSType,
-		DRBDDevice:         drbdDevice,
+		DRBDDevice:         clusterPrivateDev,
 		ClusterPrivatePath: clusterPrivatePath,
 		ISCSIPort:          DefaultISCSIPort,
 		CHAPArgs:           chapArgs,
