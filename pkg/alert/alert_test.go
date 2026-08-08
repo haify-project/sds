@@ -152,13 +152,55 @@ func TestNoPrimaryIsCritical(t *testing.T) {
 	require.Len(t, evts, 1)
 	assert.Equal(t, event.TypeResourceNoPrimary, evts[0].Type)
 	assert.Equal(t, event.SeverityCritical, evts[0].Severity)
+	firingKey := evts[0].Key()
 
-	// Coming back is informational, and pairs with the alert above.
+	// The clear must arrive under the SAME type. A receiver pairs firing with
+	// resolved by (type, resource); a resolve published as resource.promoted
+	// closes nothing, and the critical stays outstanding forever.
 	lister.list[0].NodeStates["n1"] = healthy("Primary")
 	mon.Poll(ctx)
 	evts = drain()
 	require.Len(t, evts, 1)
-	assert.Equal(t, event.TypeResourcePromoted, evts[0].Type)
+	assert.Equal(t, event.TypeResourceNoPrimary, evts[0].Type)
+	assert.Equal(t, event.StatusResolved, evts[0].Status)
+	assert.Equal(t, evts[0].Key(), firingKey, "the resolve must carry the firing event's key")
+}
+
+// A resource that has never had a Primary is Secondary by design, not in
+// trouble. Raising a critical for each of those would bury the real ones.
+func TestSecondaryEverywhereIsNotAnAlert(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:       "res1",
+		NodeStates: map[string]NodeStateInfo{"n1": healthy("Secondary")},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	mon.Poll(ctx)
+	assert.Empty(t, drain())
+}
+
+// Deleting a resource while it has no Primary must clear the critical. Nothing
+// evaluates the condition again, so without this it stays raised forever.
+func TestNoPrimaryClearsWhenTheResourceIsDeleted(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:       "res1",
+		NodeStates: map[string]NodeStateInfo{"n1": healthy("Primary")},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	lister.list[0].NodeStates["n1"] = healthy("Secondary")
+	mon.Poll(ctx)
+	drain()
+
+	lister.list = nil
+	mon.Poll(ctx)
+	evts := drain()
+	require.Len(t, evts, 1)
+	assert.Equal(t, event.TypeResourceNoPrimary, evts[0].Type)
 	assert.Equal(t, event.StatusResolved, evts[0].Status)
 }
 

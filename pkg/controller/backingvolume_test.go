@@ -99,3 +99,65 @@ func TestBackingVolumeReportsALVMFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "insufficient free space")
 }
+
+// Resource creation must ask the node what shape the pool has, exactly as
+// add-replica does. `--storage-type` defaults to "lvm" and nothing reconciles it
+// with the pool it names, so before this a resource created in a thin pool
+// without the flag attempted a thick lvcreate in a volume group the thin pool
+// had already consumed — which cannot succeed by construction.
+func TestCreateResourceUsesTheThinPoolEvenWhenStorageTypeSaysLVM(t *testing.T) {
+	var thinPool string
+	dep := &fakeDeploymentClient{
+		lvThinPoolInFunc: func(_ context.Context, _, vgName string) (string, error) {
+			return vgName + "_thin", nil
+		},
+		lvCreateThinVolumeFunc: func(_ context.Context, hosts []string, _, pool, _, _ string) (*deployment.ExecResult, error) {
+			thinPool = pool
+			return successExecResult(hosts, ""), nil
+		},
+		lvCreateFunc: func(_ context.Context, hosts []string, _, _, _ string) (*deployment.ExecResult, error) {
+			t.Error("a thick lvcreate must not be used on a thin pool")
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+
+	require.NoError(t, ctrl.resources.createBackingVolume(context.Background(),
+		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 2, false))
+	assert.Equal(t, "vg0_thin", thinPool)
+}
+
+// A genuinely thick pool still gets a thick volume.
+func TestCreateResourceStaysThickWhenTheNodeHasNoThinPool(t *testing.T) {
+	thick := false
+	dep := &fakeDeploymentClient{
+		lvThinPoolInFunc: func(_ context.Context, _, _ string) (string, error) { return "", nil },
+		lvCreateFunc: func(_ context.Context, hosts []string, _, _, _ string) (*deployment.ExecResult, error) {
+			thick = true
+			return successExecResult(hosts, ""), nil
+		},
+		lvCreateThinVolumeFunc: func(_ context.Context, hosts []string, _, _, _, _ string) (*deployment.ExecResult, error) {
+			t.Error("there is no thin pool to use")
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+
+	require.NoError(t, ctrl.resources.createBackingVolume(context.Background(),
+		[]string{"10.0.0.1"}, []string{"node1"}, "lvm", "vg0", "res1_data", 2, false))
+	assert.True(t, thick)
+}
+
+// Asking for lvm-thin on a pool that has none is still an error, not a silent
+// downgrade to a thick volume the operator did not ask for.
+func TestCreateResourceRefusesThinOnAPoolWithoutOne(t *testing.T) {
+	dep := &fakeDeploymentClient{
+		lvThinPoolInFunc: func(_ context.Context, _, _ string) (string, error) { return "", nil },
+	}
+	ctrl := newBasicTestController(dep)
+
+	err := ctrl.resources.createBackingVolume(context.Background(),
+		[]string{"10.0.0.1"}, []string{"node1"}, "lvm-thin", "vg0", "res1_data", 2, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "has no thin pool")
+}

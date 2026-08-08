@@ -1369,20 +1369,34 @@ func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nod
 		switch storageType {
 		case "zfs", "zfs-thin":
 			result, err = rm.deployment.ZFSCreateThinDataset(ctx, []string{nodeIP}, pool, volumeName, size)
-		case "lvm-thin":
-			// The thin pool's name is asked for, not assumed: `pool create`
-			// builds "<pool>_thin" but converting a thick pool in place builds
-			// a differently named one, and guessing fails on those nodes.
+		default:
+			// The shape comes from the node, not from storageType.
+			//
+			// --storage-type defaults to "lvm" and nothing reconciles it with the
+			// pool it names, so a resource created in a thin pool without the flag
+			// used to attempt a thick lvcreate in a volume group the thin pool had
+			// already consumed. That fails on free space — an error naming the
+			// symptom and not the cause — and it is unfixable by construction: a
+			// full-VG thin pool leaves nothing for a thick LV to take. add-replica
+			// and add-dr already ask the node (see createBackingVolumeOn); this is
+			// the same question, so that a replica added later has the same shape
+			// as the one creation made.
+			//
+			// The thin pool's name is asked for too, not assumed: `pool create`
+			// builds "<pool>_thin" but converting a thick pool in place builds a
+			// differently named one, and guessing fails on those nodes.
 			thinPool, perr := rm.deployment.LVThinPoolIn(ctx, nodeIP, pool)
 			if perr != nil {
 				return fmt.Errorf("look for a thin pool in %s on %s: %w", pool, nodes[i], perr)
 			}
 			if thinPool == "" {
-				return fmt.Errorf("pool %s on %s is recorded as lvm-thin but has no thin pool", pool, nodes[i])
+				if storageType == "lvm-thin" {
+					return fmt.Errorf("pool %s on %s is recorded as lvm-thin but has no thin pool", pool, nodes[i])
+				}
+				result, err = rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, volumeName, size)
+				break
 			}
 			result, err = rm.deployment.LVCreateThinVolume(ctx, []string{nodeIP}, pool, thinPool, volumeName, size)
-		default:
-			result, err = rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, volumeName, size)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to create backing volume %s/%s on %s: %w", pool, volumeName, nodes[i], err)

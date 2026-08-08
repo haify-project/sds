@@ -187,6 +187,25 @@ func TestObscureRoundTrips(t *testing.T) {
 	}
 }
 
+// TestRevealMatchesRealRclone pins the obscure key against ciphertext produced
+// by an actual rclone. The round-trip test above only proves Obscure and Reveal
+// agree with each other, which they would even if the key were wrong — and a
+// wrong key fails nowhere until an SMB or WebDAV target rejects the password at
+// backup time. These values came from `rclone obscure` on rclone v1.60.1, and
+// the reverse direction (real rclone revealing our output) was checked the same
+// way; if rclone ever changes the encoding, this test is where it surfaces.
+func TestRevealMatchesRealRclone(t *testing.T) {
+	for obscured, plain := range map[string]string{
+		"F834wybNHMHmZdJ4G6C4C1JsluAYHN94hIpWxRHiCYEY_w": "hunter2-test-PASS!",
+		"j8m2raXkHZrQKOu83oAbTK8MYZEwXYNZ53_XGQ":         "sds-verify-1",
+		"tzicA3LHaOznPFnnpNDEZtuZIrLryfc83aIoLQ":         "sds-verify-2",
+	} {
+		back, err := Reveal(obscured)
+		require.NoError(t, err)
+		assert.Equal(t, plain, back)
+	}
+}
+
 func TestRevealRejectsSomethingThatIsNotObscured(t *testing.T) {
 	_, err := Reveal("plain password!!")
 	require.Error(t, err)
@@ -210,6 +229,35 @@ func TestSMBConfigObscuresThePassword(t *testing.T) {
 	back, err := Reveal(pass)
 	require.NoError(t, err)
 	assert.Equal(t, "hunter2", back)
+}
+
+// A non-standard SMB port has to reach rclone as its own config key. Left
+// inside `host`, rclone appends its default and dials "host:port:445".
+func TestSMBHostCarriesANonStandardPortAsItsOwnKey(t *testing.T) {
+	conf, err := renderRcloneConfig(TargetSpec{
+		Name: "nas", Kind: KindSMB, Host: "192.0.2.10:4450", Share: "backups", User: "u", Secret: "p",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, conf, "host = 192.0.2.10\n")
+	assert.Contains(t, conf, "port = 4450\n")
+	assert.NotContains(t, conf, "host = 192.0.2.10:4450")
+}
+
+func TestSMBHostWithoutAPortIsLeftAlone(t *testing.T) {
+	for _, host := range []string{"nas.lan", "[2001:db8::1]"} {
+		conf, err := renderRcloneConfig(TargetSpec{
+			Name: "nas", Kind: KindSMB, Host: host, Share: "backups", User: "u", Secret: "p",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, conf, "host = "+host+"\n")
+		assert.NotContains(t, conf, "port = ")
+	}
+}
+
+func TestSMBRejectsAMalformedPortAtAddTime(t *testing.T) {
+	err := TargetSpec{Name: "nas", Kind: KindSMB, Host: "nas.lan:smb", Share: "b"}.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid port")
 }
 
 func TestObscuredSecretIsPassedThroughButValidated(t *testing.T) {

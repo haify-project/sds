@@ -98,6 +98,16 @@ type Monitor struct {
 	// absent from this map has not been observed yet, which is what suppresses
 	// failover alerts on the first poll.
 	primaries map[string]string
+	// lastPrimary remembers the last node that actually held the Primary role,
+	// and unlike primaries it is not cleared when the role goes away. It is what
+	// makes "no Primary" expressible as a condition: the alert has to keep
+	// naming the node that was demoted for as long as it stays raised, and
+	// primaries is "" on every poll after the first one that noticed.
+	//
+	// Its presence is also the test for whether a resource is supposed to have a
+	// Primary at all. Most resources sit Secondary on every node by design, so
+	// treating that as an outage would raise a critical for each of them.
+	lastPrimary map[string]string
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -127,14 +137,15 @@ func NewMonitor(bus *event.Bus, opts Options) *Monitor {
 		opts.Logger = zap.NewNop()
 	}
 	return &Monitor{
-		interval:  opts.Interval,
-		resources: opts.Resources,
-		nodes:     opts.Nodes,
-		bus:       bus,
-		log:       opts.Logger,
-		firing:    make(map[string]bool),
-		primaries: make(map[string]string),
-		stop:      make(chan struct{}),
+		interval:    opts.Interval,
+		resources:   opts.Resources,
+		nodes:       opts.Nodes,
+		bus:         bus,
+		log:         opts.Logger,
+		firing:      make(map[string]bool),
+		primaries:   make(map[string]string),
+		lastPrimary: make(map[string]string),
+		stop:        make(chan struct{}),
 	}
 }
 
@@ -221,7 +232,7 @@ func (m *Monitor) checkResources(ctx context.Context, sc *pollScope) {
 	for _, res := range resources {
 		sc.live[res.Name] = true
 		m.checkReplicas(res, sc)
-		m.checkPrimary(res)
+		m.checkPrimary(res, sc)
 		m.checkWAN(res, sc)
 	}
 
@@ -229,6 +240,7 @@ func (m *Monitor) checkResources(ctx context.Context, sc *pollScope) {
 	for name := range m.primaries {
 		if !sc.live[name] {
 			delete(m.primaries, name)
+			delete(m.lastPrimary, name)
 		}
 	}
 	m.mu.Unlock()
@@ -255,13 +267,42 @@ func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
 }
 
 // checkPrimary detects the Primary role moving, disappearing, or appearing.
-func (m *Monitor) checkPrimary(res ResourceStatusInfo) {
+func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 	cur := primarySet(res)
 
 	m.mu.Lock()
 	prev, known := m.primaries[res.Name]
 	m.primaries[res.Name] = cur
+	if cur != "" {
+		m.lastPrimary[res.Name] = cur
+	}
+	demoted, expectPrimary := m.lastPrimary[res.Name]
 	m.mu.Unlock()
+
+	// Losing the Primary is a LEVEL condition and has to resolve under its own
+	// type. It used to be published directly as a one-shot firing event, with a
+	// separate resource.promoted event standing in for the clear — but a
+	// receiver pairs firing with resolved by type, so nothing ever closed the
+	// critical. It stayed outstanding for the life of the process, and survived
+	// even deleting the resource, since resolveVanished can only clear
+	// conditions that went through here and were recorded in m.firing.
+	//
+	// The node is deliberately not part of the key: it would change from the
+	// demoted node to "" on the very next poll and split one condition into two.
+	noPrimary := event.Event{
+		Type:     event.TypeResourceNoPrimary,
+		Severity: event.SeverityCritical,
+		Resource: res.Name,
+		Details:  map[string]string{"from": demoted},
+	}
+
+	m.mu.Lock()
+	recovering := m.firing[noPrimary.Key()]
+	m.mu.Unlock()
+
+	m.level(noPrimary, sc, expectPrimary && cur == "",
+		fmt.Sprintf("resource %s has no Primary: %s was demoted and nothing took over", res.Name, demoted),
+		fmt.Sprintf("resource %s has a Primary again on %s", res.Name, cur))
 
 	// First sighting: record where the Primary is without claiming it just moved
 	// there. See the package comment.
@@ -271,16 +312,15 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo) {
 
 	switch {
 	case cur == "":
-		m.publish(event.Event{
-			Type:     event.TypeResourceNoPrimary,
-			Severity: event.SeverityCritical,
-			Status:   event.StatusFiring,
-			Resource: res.Name,
-			Node:     prev,
-			Message:  fmt.Sprintf("resource %s has no Primary: %s was demoted and nothing took over", res.Name, prev),
-			Details:  map[string]string{"from": prev},
-		})
+		// Reported by the level condition above.
 	case prev == "":
+		// A resource taking a Primary for the first time is worth saying. The
+		// same transition arriving as the end of an outage is not: the
+		// no_primary condition just resolved and named the same node, and two
+		// events for one change is how a feed stops being read.
+		if recovering {
+			return
+		}
 		m.publish(event.Event{
 			Type:     event.TypeResourcePromoted,
 			Severity: event.SeverityInfo,

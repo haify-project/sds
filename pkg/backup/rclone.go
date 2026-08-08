@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -250,7 +251,11 @@ func renderRcloneConfig(t TargetSpec) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&b, "type = smb\nhost = %s\n", t.Host)
+		host, port := splitSMBHost(t.Host)
+		fmt.Fprintf(&b, "type = smb\nhost = %s\n", host)
+		if port != "" {
+			fmt.Fprintf(&b, "port = %s\n", port)
+		}
 		if t.User != "" {
 			fmt.Fprintf(&b, "user = %s\n", t.User)
 		}
@@ -273,6 +278,28 @@ func renderRcloneConfig(t TargetSpec) (string, error) {
 		return "", fmt.Errorf("backup: unknown target kind %q", t.Kind)
 	}
 	return b.String(), nil
+}
+
+// splitSMBHost separates an optional port from an SMB host.
+//
+// rclone's smb backend appends its own ":445" to whatever `host` holds, so a
+// host:port left intact dials "host:port:445" and fails with "too many colons
+// in address" — a message that names neither the target nor the setting behind
+// it. The port has to travel in its own config key.
+//
+// A bracketed IPv6 literal with no port ("[::1]") makes SplitHostPort report a
+// missing port; that is precisely the signal that there is nothing to split, so
+// the value goes through untouched and rclone appends the default itself.
+func splitSMBHost(h string) (host, port string) {
+	h = strings.TrimSpace(h)
+	if !strings.Contains(h, ":") {
+		return h, ""
+	}
+	host, port, err := net.SplitHostPort(h)
+	if err != nil {
+		return h, ""
+	}
+	return host, port
 }
 
 // configPassword returns the obscured password for an SMB/WebDAV target.

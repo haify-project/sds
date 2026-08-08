@@ -58,6 +58,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -145,6 +146,14 @@ func (t TargetSpec) Validate() error {
 	case KindSMB:
 		if strings.TrimSpace(t.Host) == "" || strings.TrimSpace(t.Share) == "" {
 			return fmt.Errorf("backup: smb target %q needs a host and a share", t.Name)
+		}
+		// A port is optional, but a malformed one must be rejected here rather
+		// than reaching rclone, which would report it as a connection failure
+		// at backup time with nothing pointing back at the typo.
+		if _, port := splitSMBHost(t.Host); port != "" {
+			if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+				return fmt.Errorf("backup: smb target %q has an invalid port in host %q", t.Name, t.Host)
+			}
 		}
 	case KindWebDAV:
 		if strings.TrimSpace(t.Endpoint) == "" {
