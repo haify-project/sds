@@ -6,10 +6,19 @@
 // carry MCP annotations: read-only tools are always registered, mutating
 // tools are skipped entirely in read-only mode, and destructive tools are
 // hinted so clients can require user confirmation.
+//
+// Read-only mode admits named exceptions via Options.AllowWrite, for the
+// common shape of "let it see everything and do one thing". The exception is
+// enforced by not registering the other tools at all, rather than by asking a
+// client to hide them: a client-side filter constrains one client, while an
+// unregistered tool cannot be called by anything that connects.
 package mcpserver
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -28,6 +37,20 @@ const (
 type Options struct {
 	// ReadOnly registers only read-only tools (list/status/health).
 	ReadOnly bool
+	// AllowWrite names mutating tools to register despite ReadOnly, so a caller
+	// can grant a few explicit exceptions — "everything you can look at, plus
+	// evict" — without opening the whole write surface.
+	//
+	// Setting it implies ReadOnly. Granting exceptions to an open server would
+	// mean nothing, and reading it as "additionally allow" on a server that
+	// already allows everything is the kind of misconfiguration that is only
+	// discovered by something being deleted.
+	//
+	// Enforcing this here rather than in the client matters: a client-side tool
+	// filter hides a tool from the model, but the server still answers if
+	// anything else connects to it. An unregistered tool cannot be called at
+	// all.
+	AllowWrite []string
 	// Version reported in the MCP initialize handshake.
 	Version string
 }
@@ -37,7 +60,13 @@ type Server struct {
 	client   ControllerClient
 	logger   *zap.Logger
 	readOnly bool
-	version  string
+	// allow names the write tools registered despite readOnly.
+	allow map[string]bool
+	// writeToolNames records every write tool the server knows how to offer,
+	// registered or not, so an allowlist entry that matches nothing can be
+	// reported instead of silently doing nothing.
+	writeToolNames map[string]bool
+	version        string
 }
 
 // New creates a Server. The client is typically *client.SDSClient; tests
@@ -48,12 +77,38 @@ func New(c ControllerClient, logger *zap.Logger, opts Options) *Server {
 	if version == "" {
 		version = "dev"
 	}
+	allow := make(map[string]bool, len(opts.AllowWrite))
+	for _, name := range opts.AllowWrite {
+		if name = strings.TrimSpace(name); name != "" {
+			allow[name] = true
+		}
+	}
 	return &Server{
 		client:   c,
 		logger:   logger,
-		readOnly: opts.ReadOnly,
+		readOnly: opts.ReadOnly || len(allow) > 0,
+		allow:    allow,
 		version:  version,
 	}
+}
+
+// UnmatchedAllowed returns the AllowWrite names that no tool answers to.
+//
+// A typo in an allowlist is silent in the worst direction: the operator
+// believes a tool is reachable, and finds out it is not at the moment they
+// need it. Callers should treat a non-empty result as a configuration error
+// rather than a warning.
+//
+// It must be called after MCPServer(), which is what records the names.
+func (s *Server) UnmatchedAllowed() []string {
+	var missing []string
+	for name := range s.allow {
+		if !s.writeToolNames[name] {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 // MCPServer builds the underlying MCP server with all tools registered.
@@ -77,10 +132,24 @@ func (s *Server) MCPServer() *mcp.Server {
 }
 
 // Run serves MCP over stdio until the client disconnects or ctx is done.
+//
+// It refuses to start on an allowlist entry that matches no tool. Starting
+// anyway would serve a smaller tool set than the operator asked for and say
+// nothing about it, and the gap would surface at the moment the tool was
+// needed.
 func (s *Server) Run(ctx context.Context) error {
 	srv := s.MCPServer()
+	if missing := s.UnmatchedAllowed(); len(missing) > 0 {
+		return fmt.Errorf("allow: no such tool: %s", strings.Join(missing, ", "))
+	}
+	allowed := make([]string, 0, len(s.allow))
+	for name := range s.allow {
+		allowed = append(allowed, name)
+	}
+	sort.Strings(allowed)
 	s.logger.Info("starting SDS MCP server on stdio",
 		zap.Bool("read_only", s.readOnly),
+		zap.Strings("allowed_write_tools", allowed),
 		zap.String("version", s.version),
 	)
 	return srv.Run(ctx, &mcp.StdioTransport{})
@@ -145,9 +214,15 @@ func addRead[In, Out any](s *Server, srv *mcp.Server, t *mcp.Tool, h mcp.ToolHan
 	mcp.AddTool(srv, t, instrument(s, t.Name, readTimeout, h))
 }
 
-// addWrite registers a mutating tool unless the server is read-only.
+// addWrite registers a mutating tool unless the server is read-only and the
+// tool is not named in the allowlist.
 func addWrite[In, Out any](s *Server, srv *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
-	if s.readOnly {
+	if s.writeToolNames == nil {
+		s.writeToolNames = make(map[string]bool)
+	}
+	s.writeToolNames[t.Name] = true
+
+	if s.readOnly && !s.allow[t.Name] {
 		return
 	}
 	mcp.AddTool(srv, t, instrument(s, t.Name, writeTimeout, h))

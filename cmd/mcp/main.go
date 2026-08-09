@@ -29,6 +29,7 @@ func main() {
 		controllerAddr string
 		tokenFlag      string
 		readOnly       bool
+		allowWrite     []string
 		debug          bool
 	)
 
@@ -57,8 +58,9 @@ func main() {
 			defer func() { _ = sdsClient.Close() }()
 
 			srv := mcpserver.New(sdsClient, logger, mcpserver.Options{
-				ReadOnly: readOnly,
-				Version:  version,
+				ReadOnly:   readOnly,
+				AllowWrite: allowWrite,
+				Version:    version,
 			})
 			return srv.Run(cmd.Context())
 		},
@@ -67,6 +69,9 @@ func main() {
 	rootCmd.Flags().StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "SDS controller address")
 	rootCmd.Flags().StringVar(&tokenFlag, "token", "", "API token (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
 	rootCmd.Flags().BoolVar(&readOnly, "read-only", false, "register only read-only tools (list/status/health)")
+	rootCmd.Flags().StringSliceVar(&allowWrite, "allow", nil,
+		"mutating tools to register by name despite --read-only, e.g. --allow sds_ha_evict. "+
+			"Implies --read-only. Refuses to start on a name no tool answers to")
 	rootCmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging on stderr")
 
 	if err := rootCmd.Execute(); err != nil {
