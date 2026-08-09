@@ -11,10 +11,15 @@ import (
 
 // SnapshotInfo represents snapshot information
 type SnapshotInfo struct {
-	Name      string
-	Volume    string
-	SizeGB    uint64
+	Name   string
+	Volume string
+	SizeGB uint64
+	// CreatedAt is LVM's own lv_time, passed through as it renders it.
 	CreatedAt string
+	// Origin is the logical volume the snapshot was taken from. It is what
+	// attributes a snapshot to a DRBD resource: a pool holds the snapshots of
+	// every resource on that node, and the name alone does not say which.
+	Origin string
 }
 
 // SnapshotManager manages volume snapshots

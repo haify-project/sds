@@ -1988,11 +1988,13 @@ func (c *SDSClient) DeleteLvmSnapshot(ctx context.Context, pool, snapshotName, n
 	return nil
 }
 
-// ListLvmSnapshots lists LVM snapshots for a pool (VG)
-func (c *SDSClient) ListLvmSnapshots(ctx context.Context, pool, node string) ([]*sdspb.SnapshotInfo, error) {
+// ListLvmSnapshots lists LVM snapshots in a pool (VG). resource narrows the
+// result to that DRBD resource's volumes; empty lists the whole pool.
+func (c *SDSClient) ListLvmSnapshots(ctx context.Context, pool, node, resource string) ([]*sdspb.SnapshotInfo, error) {
 	req := &sdspb.ListLvmSnapshotsRequest{
-		LvName: pool, // Mapped to VG Name
-		Node:   node,
+		LvName:   pool, // the pool is a volume group at the LVM level
+		Node:     node,
+		Resource: resource,
 	}
 
 	resp, err := c.client.ListLvmSnapshots(ctx, req)

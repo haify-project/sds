@@ -82,6 +82,17 @@ type AlertConfig struct {
 	// HistorySize is how many past events are retained for late-joining clients.
 	// Zero uses the event package default.
 	HistorySize int `mapstructure:"history_size"`
+	// CheckPools enables thin pool capacity alerting. It rides on the pool
+	// listing the controller already serves, so unlike CheckNodes it costs no
+	// extra round trip per subject — but it is still a switch, because a
+	// cluster that has deliberately overcommitted its pools does not want to be
+	// told so every poll.
+	CheckPools bool `mapstructure:"check_pools"`
+	// PoolNearFullPercent and PoolFullPercent are the thin pool utilisation
+	// thresholds, applied to data and metadata alike. Zero uses the alert
+	// package defaults (85 and 95).
+	PoolNearFullPercent float64 `mapstructure:"pool_near_full_percent"`
+	PoolFullPercent     float64 `mapstructure:"pool_full_percent"`
 }
 
 // WebhookReceiver is one HTTP notification target.
@@ -365,6 +376,11 @@ func setDefaults() {
 	viper.SetDefault("alert.check_interval_sec", 30)
 	viper.SetDefault("alert.check_nodes", true)
 	viper.SetDefault("alert.history_size", 500)
+	// On by default: a thin pool filling up is silent until it is fatal, and it
+	// costs nothing extra to watch.
+	viper.SetDefault("alert.check_pools", true)
+	viper.SetDefault("alert.pool_near_full_percent", 85.0)
+	viper.SetDefault("alert.pool_full_percent", 95.0)
 }
 
 // Save saves configuration to file

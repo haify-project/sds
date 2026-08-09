@@ -1494,12 +1494,20 @@
         "parameters": [
           {
             "name": "lvName",
+            "description": "Despite the name this carries the VOLUME GROUP, which is what the pool is\nat the LVM level. Kept for wire compatibility.",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
             "name": "node",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "resource",
+            "description": "Narrows the result to one DRBD resource's volumes. Empty lists the whole\ngroup. Without it, `snapshot list --resource a` and `--resource b` returned\nidentical lists of everything in the pool.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -7463,6 +7471,37 @@
         "cacheDegraded": {
           "type": "boolean",
           "description": "True when LVM reports the cache as unhealthy — a cache in this state\ncannot be flushed, so it cannot be detached without discarding data."
+        },
+        "thinPoolLv": {
+          "type": "string",
+          "description": "Thin pool utilisation. total_gb/free_gb above describe the VOLUME GROUP,\nand SDS creates its thin pool with every free extent, so free_gb is zero\nfor the whole life of such a pool however empty it is. These fields are\nthe ones that say whether the next write will succeed.\n\nthin_pool_lv is empty when the group holds no thin pool; that — not a zero\npercentage — is how \"no thin pool\" is told apart from \"a thin pool at 0%\"."
+        },
+        "thinSizeBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Capacity of the thin pool itself, which data_percent is a percentage of."
+        },
+        "thinDataPercent": {
+          "type": "number",
+          "format": "double"
+        },
+        "thinMetadataPercent": {
+          "type": "number",
+          "format": "double",
+          "description": "Metadata exhaustion stops writes as completely as data exhaustion, and the\ntwo fill for unrelated reasons, so neither substitutes for the other."
+        },
+        "thinOutOfSpace": {
+          "type": "boolean",
+          "description": "LVM's own verdict, from the volume health field of lv_attr rather than\ninferred from a percentage. A pool in this state has already refused\nwrites, and the kernel drops the backing disk out from under DRBD."
+        },
+        "totalBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Exact capacity. total_gb/free_gb are rounded to whole gibibytes and are\nkept for compatibility; anything doing arithmetic or rendering a precise\nsize should use these."
+        },
+        "freeBytes": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -8186,6 +8225,10 @@
         },
         "createdAt": {
           "type": "string"
+        },
+        "origin": {
+          "type": "string",
+          "description": "The logical volume this snapshot was taken from. A pool holds the snapshots\nof every resource on its node, and the snapshot name alone does not say\nwhich one it belongs to."
         }
       }
     },

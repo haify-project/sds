@@ -954,8 +954,23 @@ func (c *Client) LVRemoveSnapshot(ctx context.Context, hosts []string, vgName, s
 }
 
 // LVListSnapshots lists snapshots for a volume group
+// Fields are pipe-separated because lv_time contains spaces
+// ("2026-08-08 06:00:03 +0000"); with a space separator a caller splitting on
+// whitespace silently reads the date as three extra columns.
+//
+// The command used to carry a literal "VG/LV" — a placeholder copied from the
+// lvs man page and never substituted. lvs still printed the snapshots it found,
+// but exited 5 because no such volume existed, so any caller that checked the
+// exit status threw away a perfectly good answer and reported no snapshots at
+// all. The scheduler survived it only because it reads output regardless of
+// exit status; `sds resource snapshot list` did not, and showed an empty list
+// on a pool holding 27 snapshots.
+//
+// origin names the volume each snapshot was taken from, which is what lets a
+// caller attribute snapshots to a resource rather than to a whole pool.
 func (c *Client) LVListSnapshots(ctx context.Context, hosts []string, vgName string) (*ExecResult, error) {
-	cmd := fmt.Sprintf("sudo lvs -S lv_role=snapshot VG/LV -o lv_name,lv_size,lv_time --noheadings --separator=' ' %s", vgName)
+	cmd := fmt.Sprintf("sudo lvs -S lv_role=snapshot -o lv_name,lv_size,lv_time,origin "+
+		"--noheadings --nosuffix --units b --separator='|' %s", vgName)
 	return c.Exec(ctx, hosts, cmd)
 }
 

@@ -45,7 +45,7 @@ type ControllerClient interface {
 
 	// Snapshots (storage-type aware)
 	CreateLvmSnapshot(ctx context.Context, pool, lvName, snapshotName, node, size string) error
-	ListLvmSnapshots(ctx context.Context, pool, node string) ([]*sdspb.SnapshotInfo, error)
+	ListLvmSnapshots(ctx context.Context, pool, node, resource string) ([]*sdspb.SnapshotInfo, error)
 	DeleteLvmSnapshot(ctx context.Context, pool, snapshotName, node string) error
 	RestoreLvmSnapshot(ctx context.Context, pool, snapshotName, node string) error
 	CreateZFSSnapshot(ctx context.Context, dataset, snapshotName, node string) error

@@ -310,6 +310,11 @@ func (c *Controller) startNotifications() {
 	if c.config.Alert.CheckNodes {
 		opts.Nodes = c.nodes
 	}
+	if c.config.Alert.CheckPools {
+		opts.Pools = c.storage
+		opts.NearFullPercent = c.config.Alert.PoolNearFullPercent
+		opts.FullPercent = c.config.Alert.PoolFullPercent
+	}
 	c.alertMonitor = alert.NewMonitor(c.events, opts)
 	c.alertMonitor.Start(c.ctx)
 

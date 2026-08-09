@@ -293,3 +293,37 @@ func (nm *NodeManager) GetNodeStatusList(ctx context.Context) ([]alert.NodeStatu
 	}
 	return out, nil
 }
+
+// GetPoolStatusList adapts StorageManager to alert.PoolLister.
+//
+// It reuses ListPools rather than issuing its own queries, which keeps the
+// figures the monitor alerts on identical to the ones the UI and CLI show — an
+// alert that disagrees with the page an operator opens next is worse than no
+// alert. ListPools already folds thin pool utilisation in with one lvs call for
+// the whole cluster, so this costs nothing beyond the listing itself.
+//
+// Pools that report no thin pool are passed through rather than filtered here;
+// the monitor needs to see them to tell a pool that was converted to thick from
+// one that was deleted.
+func (sm *StorageManager) GetPoolStatusList(ctx context.Context) ([]alert.PoolStatusInfo, error) {
+	pools, err := sm.ListPools(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]alert.PoolStatusInfo, 0, len(pools))
+	for _, p := range pools {
+		if p == nil {
+			continue
+		}
+		info := alert.PoolStatusInfo{Name: p.Name, Node: p.Node}
+		if u := p.ThinUsage; u != nil {
+			info.ThinPool = u.PoolLV
+			info.DataPercent = u.DataPercent
+			info.MetaPercent = u.MetaPercent
+			info.OutOfSpace = u.OutOfSpace
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}

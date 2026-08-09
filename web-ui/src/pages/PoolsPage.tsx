@@ -172,16 +172,54 @@ export function PoolsPage() {
   );
 }
 
+// Thin pool utilisation thresholds, mirroring the controller's alert defaults
+// (pkg/alert). Kept in step so a pool the UI colours red is a pool that has
+// already paged someone, rather than two different opinions of "full".
+const THIN_NEAR_FULL = 85;
+const THIN_FULL = 95;
+
+function thinUsageClass(percent: number): string {
+  if (percent >= THIN_FULL) return 'text-destructive font-medium';
+  if (percent >= THIN_NEAR_FULL) return 'text-amber-600 font-medium';
+  return '';
+}
+
 function PoolItem({ pool }: { pool: Pool }) {
   const total = Number(pool.totalGb);
   const free = Number(pool.freeGb);
-  const usedPercent = total > 0 ? ((total - free) / total) * 100 : 0;
+
+  // A thin pool's capacity is not its volume group's capacity. SDS builds the
+  // pool from every free extent, so vgFree is zero from the moment the pool
+  // exists and stays there — a bar driven by it reads 100% full whether the
+  // pool is empty or about to refuse writes, which is exactly what it did
+  // while node-a was failing on 2026-08-09. When there is a thin pool, its own
+  // utilisation is the only figure worth putting on the bar.
+  const thin = pool.thinPoolLv
+    ? {
+        lv: pool.thinPoolLv,
+        data: pool.thinDataPercent ?? 0,
+        meta: pool.thinMetadataPercent ?? 0,
+        outOfSpace: pool.thinOutOfSpace ?? false,
+      }
+    : null;
+
+  // Absent thin figures, fall back to the volume group rather than drawing a
+  // 0% bar for a pool that simply did not report — an older agent, or a group
+  // that genuinely holds no thin pool.
+  const usedPercent = thin
+    ? thin.data
+    : total > 0
+      ? ((total - free) / total) * 100
+      : 0;
 
   return (
     <div className="rounded-lg border bg-muted/40 p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">{pool.name}</span>
         <div className="flex items-center gap-1">
+          {thin?.outOfSpace && (
+            <Badge variant="destructive">out of space</Badge>
+          )}
           <Badge variant="outline" className={poolTypeBadgeClass(pool.type)}>
             {poolTypeLabel(pool.type)}
           </Badge>
@@ -190,11 +228,41 @@ function PoolItem({ pool }: { pool: Pool }) {
         </div>
       </div>
 
-      <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-        <span>{free} GB free</span>
-        <span>{total} GB total</span>
-      </div>
-      <Progress value={usedPercent} className="h-2" />
+      {thin ? (
+        <>
+          <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+            <span className={thinUsageClass(thin.data)}>
+              {thin.data.toFixed(1)}% of pool used
+            </span>
+            <span>{total} GB total</span>
+          </div>
+          <Progress value={usedPercent} className="h-2" />
+          {/* The volume group's own free space is still worth seeing — it is
+              what an extension would draw on — but as a footnote, not as the
+              headline health figure it used to be. */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[0.65rem] text-muted-foreground">
+            <span className="font-mono">{thin.lv}</span>
+            <span className={thinUsageClass(thin.meta)}>
+              metadata {thin.meta.toFixed(1)}%
+            </span>
+            <span>VG {free} GB unallocated</span>
+          </div>
+          {thin.outOfSpace && (
+            <p className="mt-1 text-[0.65rem] text-destructive">
+              LVM reports this pool out of data space: writes are failing, and
+              any DRBD replica on it will drop to Diskless.
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+            <span>{free} GB free</span>
+            <span>{total} GB total</span>
+          </div>
+          <Progress value={usedPercent} className="h-2" />
+        </>
+      )}
 
       {pool.cached && (
         <div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">

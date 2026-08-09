@@ -84,7 +84,13 @@ func TestStorageSnapshotParsingAndRestore(t *testing.T) {
 	}
 	dep.lvListSnapshotsFunc = func(_ context.Context, hosts []string, vg string) (*deployment.ExecResult, error) {
 		assert.Equal(t, "sds_fast", vg)
-		return successExecResult(hosts, "snap1 origin\nsnap2 origin"), nil
+		// "name|size_bytes|time|origin" — pipe-separated because lv_time
+		// carries spaces. The previous fixture used two space-separated
+		// columns, which is what the command emitted back when it still had
+		// the "VG/LV" placeholder in it.
+		return successExecResult(hosts,
+			"snap1|1073741824|2026-08-09 13:00:02 +0000|origin\n"+
+				"snap2|1073741824|2026-08-09 14:00:02 +0000|origin"), nil
 	}
 	mergeCalled := false
 	dep.lvMergeSnapshotFunc = func(_ context.Context, hosts []string, vg, snapshot string) (*deployment.ExecResult, error) {
@@ -100,7 +106,7 @@ func TestStorageSnapshotParsingAndRestore(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, zfs, 1)
 	assert.Equal(t, "snap1", zfs[0].Name)
-	lvm, err := ctrl.storage.ListLvmSnapshots(ctx, "fast", "n1")
+	lvm, err := ctrl.storage.ListLvmSnapshots(ctx, "fast", "n1", "")
 	require.NoError(t, err)
 	require.Len(t, lvm, 2)
 	assert.Equal(t, "snap2", lvm[1].Name)

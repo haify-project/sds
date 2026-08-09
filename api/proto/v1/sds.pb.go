@@ -606,6 +606,29 @@ type PoolInfo struct {
 	// True when LVM reports the cache as unhealthy — a cache in this state
 	// cannot be flushed, so it cannot be detached without discarding data.
 	CacheDegraded bool `protobuf:"varint,16,opt,name=cache_degraded,json=cacheDegraded,proto3" json:"cache_degraded,omitempty"`
+	// Thin pool utilisation. total_gb/free_gb above describe the VOLUME GROUP,
+	// and SDS creates its thin pool with every free extent, so free_gb is zero
+	// for the whole life of such a pool however empty it is. These fields are
+	// the ones that say whether the next write will succeed.
+	//
+	// thin_pool_lv is empty when the group holds no thin pool; that — not a zero
+	// percentage — is how "no thin pool" is told apart from "a thin pool at 0%".
+	ThinPoolLv string `protobuf:"bytes,17,opt,name=thin_pool_lv,json=thinPoolLv,proto3" json:"thin_pool_lv,omitempty"`
+	// Capacity of the thin pool itself, which data_percent is a percentage of.
+	ThinSizeBytes   uint64  `protobuf:"varint,18,opt,name=thin_size_bytes,json=thinSizeBytes,proto3" json:"thin_size_bytes,omitempty"`
+	ThinDataPercent float64 `protobuf:"fixed64,19,opt,name=thin_data_percent,json=thinDataPercent,proto3" json:"thin_data_percent,omitempty"`
+	// Metadata exhaustion stops writes as completely as data exhaustion, and the
+	// two fill for unrelated reasons, so neither substitutes for the other.
+	ThinMetadataPercent float64 `protobuf:"fixed64,20,opt,name=thin_metadata_percent,json=thinMetadataPercent,proto3" json:"thin_metadata_percent,omitempty"`
+	// LVM's own verdict, from the volume health field of lv_attr rather than
+	// inferred from a percentage. A pool in this state has already refused
+	// writes, and the kernel drops the backing disk out from under DRBD.
+	ThinOutOfSpace bool `protobuf:"varint,21,opt,name=thin_out_of_space,json=thinOutOfSpace,proto3" json:"thin_out_of_space,omitempty"`
+	// Exact capacity. total_gb/free_gb are rounded to whole gibibytes and are
+	// kept for compatibility; anything doing arithmetic or rendering a precise
+	// size should use these.
+	TotalBytes    uint64 `protobuf:"varint,22,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`
+	FreeBytes     uint64 `protobuf:"varint,23,opt,name=free_bytes,json=freeBytes,proto3" json:"free_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -750,6 +773,55 @@ func (x *PoolInfo) GetCacheDegraded() bool {
 		return x.CacheDegraded
 	}
 	return false
+}
+
+func (x *PoolInfo) GetThinPoolLv() string {
+	if x != nil {
+		return x.ThinPoolLv
+	}
+	return ""
+}
+
+func (x *PoolInfo) GetThinSizeBytes() uint64 {
+	if x != nil {
+		return x.ThinSizeBytes
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetThinDataPercent() float64 {
+	if x != nil {
+		return x.ThinDataPercent
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetThinMetadataPercent() float64 {
+	if x != nil {
+		return x.ThinMetadataPercent
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetThinOutOfSpace() bool {
+	if x != nil {
+		return x.ThinOutOfSpace
+	}
+	return false
+}
+
+func (x *PoolInfo) GetTotalBytes() uint64 {
+	if x != nil {
+		return x.TotalBytes
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetFreeBytes() uint64 {
+	if x != nil {
+		return x.FreeBytes
+	}
+	return 0
 }
 
 // ZFS messages
@@ -2299,9 +2371,15 @@ func (x *DeleteLvmSnapshotResponse) GetMessage() string {
 }
 
 type ListLvmSnapshotsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	LvName        string                 `protobuf:"bytes,1,opt,name=lv_name,json=lvName,proto3" json:"lv_name,omitempty"`
-	Node          string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Despite the name this carries the VOLUME GROUP, which is what the pool is
+	// at the LVM level. Kept for wire compatibility.
+	LvName string `protobuf:"bytes,1,opt,name=lv_name,json=lvName,proto3" json:"lv_name,omitempty"`
+	Node   string `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	// Narrows the result to one DRBD resource's volumes. Empty lists the whole
+	// group. Without it, `snapshot list --resource a` and `--resource b` returned
+	// identical lists of everything in the pool.
+	Resource      string `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2346,6 +2424,13 @@ func (x *ListLvmSnapshotsRequest) GetLvName() string {
 func (x *ListLvmSnapshotsRequest) GetNode() string {
 	if x != nil {
 		return x.Node
+	}
+	return ""
+}
+
+func (x *ListLvmSnapshotsRequest) GetResource() string {
+	if x != nil {
+		return x.Resource
 	}
 	return ""
 }
@@ -10277,11 +10362,15 @@ func (x *ListSnapshotsResponse) GetSnapshots() []*SnapshotInfo {
 }
 
 type SnapshotInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Volume        string                 `protobuf:"bytes,2,opt,name=volume,proto3" json:"volume,omitempty"`
-	SizeGb        uint64                 `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Name      string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Volume    string                 `protobuf:"bytes,2,opt,name=volume,proto3" json:"volume,omitempty"`
+	SizeGb    uint64                 `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	CreatedAt string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// The logical volume this snapshot was taken from. A pool holds the snapshots
+	// of every resource on its node, and the snapshot name alone does not say
+	// which one it belongs to.
+	Origin        string `protobuf:"bytes,5,opt,name=origin,proto3" json:"origin,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10340,6 +10429,13 @@ func (x *SnapshotInfo) GetSizeGb() uint64 {
 func (x *SnapshotInfo) GetCreatedAt() string {
 	if x != nil {
 		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *SnapshotInfo) GetOrigin() string {
+	if x != nil {
+		return x.Origin
 	}
 	return ""
 }
@@ -16883,7 +16979,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04node\x18\x03 \x01(\tR\x04node\"K\n" +
 	"\x15AddDiskToPoolResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xff\x03\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x94\x06\n" +
 	"\bPoolInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
@@ -16902,7 +16998,17 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x11cache_hit_percent\x18\r \x01(\rR\x0fcacheHitPercent\x12.\n" +
 	"\x13cache_dirty_percent\x18\x0e \x01(\rR\x11cacheDirtyPercent\x12!\n" +
 	"\fcache_device\x18\x0f \x01(\tR\vcacheDevice\x12%\n" +
-	"\x0ecache_degraded\x18\x10 \x01(\bR\rcacheDegraded\"`\n" +
+	"\x0ecache_degraded\x18\x10 \x01(\bR\rcacheDegraded\x12 \n" +
+	"\fthin_pool_lv\x18\x11 \x01(\tR\n" +
+	"thinPoolLv\x12&\n" +
+	"\x0fthin_size_bytes\x18\x12 \x01(\x04R\rthinSizeBytes\x12*\n" +
+	"\x11thin_data_percent\x18\x13 \x01(\x01R\x0fthinDataPercent\x122\n" +
+	"\x15thin_metadata_percent\x18\x14 \x01(\x01R\x13thinMetadataPercent\x12)\n" +
+	"\x11thin_out_of_space\x18\x15 \x01(\bR\x0ethinOutOfSpace\x12\x1f\n" +
+	"\vtotal_bytes\x18\x16 \x01(\x04R\n" +
+	"totalBytes\x12\x1d\n" +
+	"\n" +
+	"free_bytes\x18\x17 \x01(\x04R\tfreeBytes\"`\n" +
 	"\x14CreateZFSPoolRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x14\n" +
@@ -17000,10 +17106,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04node\x18\x03 \x01(\tR\x04node\"O\n" +
 	"\x19DeleteLvmSnapshotResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"F\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"b\n" +
 	"\x17ListLvmSnapshotsRequest\x12\x17\n" +
 	"\alv_name\x18\x01 \x01(\tR\x06lvName\x12\x12\n" +
-	"\x04node\x18\x02 \x01(\tR\x04node\"~\n" +
+	"\x04node\x18\x02 \x01(\tR\x04node\x12\x1a\n" +
+	"\bresource\x18\x03 \x01(\tR\bresource\"~\n" +
 	"\x18ListLvmSnapshotsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12.\n" +
@@ -17617,13 +17724,14 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x15ListSnapshotsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12.\n" +
-	"\tsnapshots\x18\x03 \x03(\v2\x10.v1.SnapshotInfoR\tsnapshots\"r\n" +
+	"\tsnapshots\x18\x03 \x03(\v2\x10.v1.SnapshotInfoR\tsnapshots\"\x8a\x01\n" +
 	"\fSnapshotInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06volume\x18\x02 \x01(\tR\x06volume\x12\x17\n" +
 	"\asize_gb\x18\x03 \x01(\x04R\x06sizeGb\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\tR\tcreatedAt\"\x86\x01\n" +
+	"created_at\x18\x04 \x01(\tR\tcreatedAt\x12\x16\n" +
+	"\x06origin\x18\x05 \x01(\tR\x06origin\"\x86\x01\n" +
 	"\fGFSRetention\x12\x16\n" +
 	"\x06hourly\x18\x01 \x01(\x05R\x06hourly\x12\x14\n" +
 	"\x05daily\x18\x02 \x01(\x05R\x05daily\x12\x16\n" +

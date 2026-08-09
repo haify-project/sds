@@ -34,6 +34,7 @@ type fakeDeploymentClient struct {
 	lvExtendThinPoolMetadataFunc        func(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes uint64) (*deployment.ExecResult, error)
 	lvExtendThinPoolAllFreeFunc         func(ctx context.Context, hosts []string, vgName, poolName string) (*deployment.ExecResult, error)
 	lvsCacheReportFunc                  func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
+	lvsThinReportFunc                   func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
 	probeBlockDeviceFunc                func(ctx context.Context, host, device string) (*deployment.ExecResult, error)
 	vgExtendFunc                        func(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error)
 	vgReduceAndRemovePVFunc             func(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error)
@@ -269,6 +270,13 @@ func (f *fakeDeploymentClient) LVExtendThinPoolAllFree(ctx context.Context, host
 func (f *fakeDeploymentClient) LVSCacheReport(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error) {
 	if f.lvsCacheReportFunc != nil {
 		return f.lvsCacheReportFunc(ctx, hosts, vgName)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
+func (f *fakeDeploymentClient) LVSThinReport(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error) {
+	if f.lvsThinReportFunc != nil {
+		return f.lvsThinReportFunc(ctx, hosts, vgName)
 	}
 	return successExecResult(hosts, ""), nil
 }

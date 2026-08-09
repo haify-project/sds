@@ -1926,9 +1926,9 @@ func resourceSnapshotList() *cobra.Command {
 					fmt.Printf("  - %s (created: %s)\n", snap.Name, snap.CreatedAt)
 				}
 			} else {
-				// LVM snapshots
-				// Pass pool as VG name
-				snapshots, err := sdsClient.ListLvmSnapshots(ctx, pool, node)
+				// LVM snapshots. The pool is the volume group; resource is what
+				// narrows the group's snapshots down to this one's volumes.
+				snapshots, err := sdsClient.ListLvmSnapshots(ctx, pool, node, resource)
 				if err != nil {
 					return fmt.Errorf("failed to list LVM snapshots: %w", err)
 				}
@@ -1939,10 +1939,16 @@ func resourceSnapshotList() *cobra.Command {
 				}
 
 				fmt.Printf("LVM snapshots for resource '%s':\n", resource)
-				fmt.Println("  Name                    Size")
-				fmt.Println("  ----------------------- ----")
+				fmt.Printf("  %-45s %-8s %-14s %s\n", "Name", "Size", "Origin", "Created")
+				fmt.Printf("  %-45s %-8s %-14s %s\n",
+					strings.Repeat("-", 45), strings.Repeat("-", 8),
+					strings.Repeat("-", 14), strings.Repeat("-", 25))
 				for _, snap := range snapshots {
-					fmt.Printf("  %-23s %d GB\n", snap.Name, snap.SizeGb)
+					fmt.Printf("  %-45s %-8s %-14s %s\n",
+						snap.Name,
+						fmt.Sprintf("%d GB", snap.SizeGb),
+						snap.Origin,
+						snap.CreatedAt)
 				}
 			}
 

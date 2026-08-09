@@ -698,7 +698,7 @@ func (m *mockExtraClient) GetHa(_ context.Context, resource string) (*sdspb.HaCo
 func (m *mockExtraClient) GetGateway(_ context.Context, id string) (*sdspb.GatewayInfo, error) {
 	return &sdspb.GatewayInfo{Id: id}, nil
 }
-func (m *mockExtraClient) ListLvmSnapshots(_ context.Context, _, _ string) ([]*sdspb.SnapshotInfo, error) {
+func (m *mockExtraClient) ListLvmSnapshots(_ context.Context, _, _, _ string) ([]*sdspb.SnapshotInfo, error) {
 	return []*sdspb.SnapshotInfo{{Name: "snap1"}}, nil
 }
 

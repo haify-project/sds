@@ -92,9 +92,18 @@ func pbPoolInfo(p *PoolInfo) *sdspb.PoolInfo {
 		Node:        p.Node,
 		TotalGb:     p.TotalGB,
 		FreeGb:      p.FreeGB,
+		TotalBytes:  p.TotalBytes,
+		FreeBytes:   p.FreeBytes,
 		Devices:     p.Devices,
 		Thin:        p.Thin,
 		Compression: p.Compression,
+	}
+	if u := p.ThinUsage; u != nil {
+		out.ThinPoolLv = u.PoolLV
+		out.ThinSizeBytes = u.SizeBytes
+		out.ThinDataPercent = u.DataPercent
+		out.ThinMetadataPercent = u.MetaPercent
+		out.ThinOutOfSpace = u.OutOfSpace
 	}
 	if c := p.Cache; c != nil {
 		out.Cached = true
@@ -1408,6 +1417,7 @@ func (s *Server) ListSnapshots(ctx context.Context, req *sdspb.ListSnapshotsRequ
 			Volume:    snap.Volume,
 			SizeGb:    snap.SizeGB,
 			CreatedAt: snap.CreatedAt,
+			Origin:    snap.Origin,
 		})
 	}
 
@@ -1859,6 +1869,7 @@ func (s *Server) ListZFSSnapshots(ctx context.Context, req *sdspb.ListZFSSnapsho
 			Volume:    snap.Volume,
 			SizeGb:    snap.SizeGB,
 			CreatedAt: snap.CreatedAt,
+			Origin:    snap.Origin,
 		})
 	}
 
@@ -1928,7 +1939,7 @@ func (s *Server) DeleteLvmSnapshot(ctx context.Context, req *sdspb.DeleteLvmSnap
 }
 
 func (s *Server) ListLvmSnapshots(ctx context.Context, req *sdspb.ListLvmSnapshotsRequest) (*sdspb.ListLvmSnapshotsResponse, error) {
-	snapshots, err := s.storage.ListLvmSnapshots(ctx, req.LvName, req.Node)
+	snapshots, err := s.storage.ListLvmSnapshots(ctx, req.LvName, req.Node, req.Resource)
 	if err != nil {
 		return &sdspb.ListLvmSnapshotsResponse{
 			Success:   false,
@@ -1944,6 +1955,7 @@ func (s *Server) ListLvmSnapshots(ctx context.Context, req *sdspb.ListLvmSnapsho
 			Volume:    snap.Volume,
 			SizeGb:    snap.SizeGB,
 			CreatedAt: snap.CreatedAt,
+			Origin:    snap.Origin,
 		})
 	}
 	return &sdspb.ListLvmSnapshotsResponse{

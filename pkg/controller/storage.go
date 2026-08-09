@@ -14,11 +14,18 @@ import (
 
 // PoolInfo represents pool information
 type PoolInfo struct {
-	Name        string   `json:"name"`
-	Type        string   `json:"type"` // "vg" or "zfs"
-	Node        string   `json:"node"`
+	Name string `json:"name"`
+	Type string `json:"type"` // "vg" or "zfs"
+	Node string `json:"node"`
+	// TotalGB and FreeGB are rounded, not truncated. A 20 GiB disk carries PV
+	// metadata and leaves the group at 19.996 GiB; truncating reported that as
+	// 19 and made a freshly created pool look like it had lost a gigabyte.
+	// TotalBytes and FreeBytes carry the exact figures for anything that needs
+	// to do arithmetic or render a precise size.
 	TotalGB     uint64   `json:"total_gb"`
 	FreeGB      uint64   `json:"free_gb"`
+	TotalBytes  uint64   `json:"total_bytes"`
+	FreeBytes   uint64   `json:"free_bytes"`
 	Devices     []string `json:"devices"`
 	Thin        bool     `json:"thin"`
 	Compression string   `json:"compression,omitempty"`
@@ -26,6 +33,15 @@ type PoolInfo struct {
 	// poolcache.go — this is what makes a tiered pool distinguishable from a
 	// plain one without a second call.
 	Cache *PoolCacheInfo `json:"cache,omitempty"`
+	// ThinUsage is the utilisation of the thin pool inside this group, or nil
+	// when the group holds none.
+	//
+	// It is the only capacity figure here that reflects whether writes will
+	// succeed. TotalGB and FreeGB describe the *volume group*, and SDS creates
+	// its pool with every free extent, so FreeGB is zero for the whole life of
+	// such a pool no matter how empty it is. Prefer this when it is present;
+	// see poolthin.go.
+	ThinUsage *PoolThinInfo `json:"thin_usage,omitempty"`
 }
 
 // StorageManager manages all storage operations
@@ -64,6 +80,13 @@ func poolInfoFromDB(pool *database.Pool) *PoolInfo {
 
 func isZFSPoolType(poolType string) bool {
 	return poolType == "zfs"
+}
+
+// bytesToGB converts to whole gibibytes by rounding to nearest rather than
+// truncating. See the comment on PoolInfo.TotalGB.
+func bytesToGB(b uint64) uint64 {
+	const giB = 1024 * 1024 * 1024
+	return (b + giB/2) / giB
 }
 
 func (sm *StorageManager) getPersistedPool(ctx context.Context, name string) (*PoolInfo, error) {
@@ -238,12 +261,14 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 				name, totalSize, freeSize, _, ok := parseLVMPoolLine(line)
 				if ok && name == poolName {
 					info := &PoolInfo{
-						Name:    poolName,
-						Type:    "vg",
-						Node:    node,
-						TotalGB: totalSize / 1024 / 1024 / 1024,
-						FreeGB:  freeSize / 1024 / 1024 / 1024,
-						Devices: []string{},
+						Name:       poolName,
+						Type:       "vg",
+						Node:       node,
+						TotalGB:    bytesToGB(totalSize),
+						FreeGB:     bytesToGB(freeSize),
+						TotalBytes: totalSize,
+						FreeBytes:  freeSize,
+						Devices:    []string{},
 					}
 					// A pool that cannot report its cache is still a pool; the
 					// capacity figures above are the reason this call exists.
@@ -252,6 +277,15 @@ func (sm *StorageManager) GetPool(ctx context.Context, poolName, node string) (*
 					} else {
 						sm.controller.logger.Warn("Failed to read pool cache state",
 							zap.String("pool", poolName), zap.Error(cerr))
+					}
+					// Same tolerance for utilisation, and the same reason it is
+					// worth a second call: the vgs figures above cannot say
+					// whether a thin pool is about to refuse writes.
+					if usage, uerr := sm.readThinUsage(ctx, address, poolName); uerr == nil {
+						info.ThinUsage = usage
+					} else {
+						sm.controller.logger.Warn("Failed to read thin pool usage",
+							zap.String("pool", poolName), zap.Error(uerr))
 					}
 					return info, nil
 				}
@@ -316,11 +350,13 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 					pool, exists := poolByKey[key]
 					if !exists {
 						pool = &PoolInfo{
-							Name:    vgName,
-							Type:    "vg",
-							Node:    normalizedHost,
-							TotalGB: totalSize / 1024 / 1024 / 1024,
-							FreeGB:  freeSize / 1024 / 1024 / 1024,
+							Name:       vgName,
+							Type:       "vg",
+							Node:       normalizedHost,
+							TotalGB:    bytesToGB(totalSize),
+							FreeGB:     bytesToGB(freeSize),
+							TotalBytes: totalSize,
+							FreeBytes:  freeSize,
 						}
 						poolByKey[key] = pool
 						seen[key] = true
@@ -336,13 +372,17 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 			slices.Sort(pool.Devices)
 		}
 
-		// One lvs call for every host, folded into the rows above by the same
+		// Two lvs calls for every host, folded into the rows above by the same
 		// normalized host name they were keyed under.
 		if len(poolByKey) > 0 {
 			caches := sm.cacheByPool(ctx, hosts)
+			usage := sm.thinUsageByPool(ctx, hosts)
 			for _, pool := range poolByKey {
 				if byVG, ok := caches[pool.Node]; ok {
 					pool.Cache = byVG[pool.Name]
+				}
+				if byVG, ok := usage[pool.Node]; ok {
+					pool.ThinUsage = byVG[pool.Name]
 				}
 			}
 		}
@@ -529,12 +569,14 @@ func (sm *StorageManager) GetZFSPool(ctx context.Context, poolName, node string)
 				totalSize, _ := strconv.ParseUint(fields[1], 10, 64)
 				freeSize, _ := strconv.ParseUint(fields[2], 10, 64)
 				return &PoolInfo{
-					Name:    poolName,
-					Type:    "zfs",
-					Node:    node,
-					TotalGB: totalSize / 1024 / 1024 / 1024,
-					FreeGB:  freeSize / 1024 / 1024 / 1024,
-					Devices: []string{},
+					Name:       poolName,
+					Type:       "zfs",
+					Node:       node,
+					TotalGB:    bytesToGB(totalSize),
+					FreeGB:     bytesToGB(freeSize),
+					TotalBytes: totalSize,
+					FreeBytes:  freeSize,
+					Devices:    []string{},
 				}, nil
 			}
 		}
@@ -600,11 +642,13 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 					totalSize, _ := strconv.ParseUint(fields[1], 10, 64)
 					freeSize, _ := strconv.ParseUint(fields[2], 10, 64)
 					pools = append(pools, &PoolInfo{
-						Name:    poolName,
-						Type:    "zfs",
-						Node:    normalizedHost,
-						TotalGB: totalSize / 1024 / 1024 / 1024,
-						FreeGB:  freeSize / 1024 / 1024 / 1024,
+						Name:       poolName,
+						Type:       "zfs",
+						Node:       normalizedHost,
+						TotalGB:    bytesToGB(totalSize),
+						FreeGB:     bytesToGB(freeSize),
+						TotalBytes: totalSize,
+						FreeBytes:  freeSize,
 					})
 				}
 			}
@@ -916,8 +960,11 @@ func (sm *StorageManager) CreateLvmSnapshot(ctx context.Context, vgName, lvName,
 	return nil
 }
 
-// ListLvmSnapshots lists LVM snapshots for a volume
-func (sm *StorageManager) ListLvmSnapshots(ctx context.Context, vgName, node string) ([]*SnapshotInfo, error) {
+// ListLvmSnapshots lists LVM snapshots in a volume group.
+//
+// resource narrows the result to that DRBD resource's volumes; empty lists the
+// whole group.
+func (sm *StorageManager) ListLvmSnapshots(ctx context.Context, vgName, node, resource string) ([]*SnapshotInfo, error) {
 	vgName = normalizeManagedName(vgName)
 
 	// Resolve node address
@@ -927,28 +974,88 @@ func (sm *StorageManager) ListLvmSnapshots(ctx context.Context, vgName, node str
 	if err != nil {
 		return nil, fmt.Errorf("failed to list LVM snapshots: %w", err)
 	}
+	if !result.AllSuccess() {
+		// Reporting an empty list on a failed command is how this went unnoticed
+		// for so long: a pool holding 27 snapshots read as a pool holding none,
+		// and nothing said why.
+		return nil, fmt.Errorf("failed to list LVM snapshots in %s: %s", vgName, result.FailureDetails())
+	}
+
+	// An empty resource lists the whole group. Otherwise only snapshots whose
+	// origin is one of the resource's backing volumes are returned — the
+	// `--resource` flag used to be accepted, printed in the heading, and then
+	// ignored, so `snapshot list --resource a` and `--resource b` returned
+	// identical lists of everything in the pool.
+	var wanted map[string]bool
+	if resource != "" {
+		wanted, err = sm.backingVolumesOf(ctx, resource)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	var snapshots []*SnapshotInfo
 	for _, r := range result.Hosts {
-		if r.Success {
-			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
-			for _, line := range lines {
-				if line == "" {
-					continue
-				}
-				fields := strings.Fields(line)
-				if len(fields) >= 2 {
-					snapshots = append(snapshots, &SnapshotInfo{
-						Name:   fields[0],
-						Volume: vgName, // Using VG name as volume context
-						SizeGB: 0,      // LVM list output needs parsing for size
-					})
-				}
+		for _, line := range strings.Split(strings.TrimSpace(r.Output), "\n") {
+			snap, ok := parseSnapshotLine(line, vgName)
+			if !ok {
+				continue
 			}
+			if wanted != nil && !wanted[snap.Origin] {
+				continue
+			}
+			snapshots = append(snapshots, snap)
 		}
 	}
 
 	return snapshots, nil
+}
+
+// parseSnapshotLine reads one row of LVListSnapshots output:
+// "name|size_bytes|time|origin".
+func parseSnapshotLine(line, vgName string) (*SnapshotInfo, bool) {
+	fields := strings.Split(strings.TrimSpace(line), "|")
+	if len(fields) < 4 {
+		return nil, false
+	}
+	name := strings.TrimSpace(fields[0])
+	if name == "" {
+		return nil, false
+	}
+	return &SnapshotInfo{
+		Name:      name,
+		Volume:    vgName,
+		SizeGB:    bytesToGB(parseThinUint(fields[1])),
+		CreatedAt: strings.TrimSpace(fields[2]),
+		Origin:    strings.TrimSpace(fields[3]),
+	}, true
+}
+
+// backingVolumesOf resolves a resource to the set of LV names its snapshots can
+// have as an origin.
+//
+// Read from the database rather than rebuilt from the "<name>_data" /
+// "<name>_vol<K>" convention: the convention lives in resource creation, and a
+// second copy of it here would keep working right up until the day the first
+// one changed.
+func (sm *StorageManager) backingVolumesOf(ctx context.Context, resource string) (map[string]bool, error) {
+	if sm.controller.db == nil {
+		return nil, fmt.Errorf("database not available, cannot resolve volumes of resource %s", resource)
+	}
+	volumes, err := sm.controller.db.ListVolumes(ctx, resource)
+	if err != nil {
+		return nil, fmt.Errorf("list volumes of resource %s: %w", resource, err)
+	}
+	if len(volumes) == 0 {
+		return nil, fmt.Errorf("resource %s has no volumes, or does not exist", resource)
+	}
+	wanted := make(map[string]bool, len(volumes))
+	for _, v := range volumes {
+		if v != nil && v.VolumeName != "" {
+			wanted[v.VolumeName] = true
+		}
+	}
+	return wanted, nil
 }
 
 // DeleteLvmSnapshot deletes an LVM snapshot

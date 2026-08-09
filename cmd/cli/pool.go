@@ -225,6 +225,19 @@ func poolGet() *cobra.Command {
 			fmt.Printf("  Node: %s\n", pool.Node)
 			fmt.Printf("  Total: %d GB (%s)\n", pool.TotalGb, util.FormatBytes(pool.TotalGb*1000*1000*1000))
 			fmt.Printf("  Free: %d GB (%s)\n", pool.FreeGb, util.FormatBytes(pool.FreeGb*1000*1000*1000))
+			// The two lines above describe the volume group, whose free space
+			// SDS drives to zero by building the thin pool from every free
+			// extent. When there is a thin pool, its utilisation is the figure
+			// that decides whether the next write succeeds.
+			if pool.ThinPoolLv != "" {
+				fmt.Printf("  Thin pool: %s (%s)\n", pool.ThinPoolLv, util.FormatBytes(pool.ThinSizeBytes))
+				fmt.Printf("    Data: %.2f%%  Metadata: %.2f%%\n",
+					pool.ThinDataPercent, pool.ThinMetadataPercent)
+				if pool.ThinOutOfSpace {
+					fmt.Fprintf(os.Stderr, "    WARNING: LVM reports this pool out of data space; "+
+						"writes are failing and any DRBD replica on it will drop to Diskless\n")
+				}
+			}
 			if pool.Cached {
 				fmt.Printf("  Cache: %s %s on %s\n",
 					util.FormatBytes(pool.CacheSizeBytes), pool.CacheMode, pool.CacheDevice)
@@ -286,9 +299,19 @@ func poolList() *cobra.Command {
 						tier += " [CACHE DEGRADED]"
 					}
 				}
-				fmt.Printf("  - %s (type=%s, node=%s, %d/%d GB free - %s)%s\n",
+				// Likewise the pool's own fullness: "0/19 GB free" is true of
+				// the volume group and true of every SDS pool ever created, so
+				// on its own it tells an operator nothing.
+				usage := ""
+				if p.ThinPoolLv != "" {
+					usage = fmt.Sprintf(", %.1f%% used", p.ThinDataPercent)
+					if p.ThinOutOfSpace {
+						usage += ", OUT OF SPACE"
+					}
+				}
+				fmt.Printf("  - %s (type=%s, node=%s, %d/%d GB free - %s%s)%s\n",
 					p.Name, p.Type, p.Node, p.FreeGb, p.TotalGb,
-					util.FormatBytes(p.FreeGb*1000*1000*1000), tier)
+					util.FormatBytes(p.FreeGb*1000*1000*1000), usage, tier)
 			}
 
 			return nil

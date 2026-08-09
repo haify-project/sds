@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -81,11 +82,57 @@ type NodeLister interface {
 	GetNodeStatusList(ctx context.Context) ([]NodeStatusInfo, error)
 }
 
+// PoolStatusInfo is one storage pool's capacity as the monitor needs it.
+//
+// Only thin pool utilisation is here, and deliberately not the volume group's
+// free space: SDS creates a thin pool with every free extent in its group, so
+// vg_free is zero from the moment the pool exists and alerting on it would fire
+// permanently for every pool in the cluster.
+type PoolStatusInfo struct {
+	Name string
+	Node string
+	// ThinPool is the thin pool LV inside the group, empty when the group holds
+	// none. Empty means the percentages below carry no information — a thick
+	// group is not a pool at 0% — and no capacity condition is evaluated.
+	ThinPool    string
+	DataPercent float64
+	MetaPercent float64
+	// OutOfSpace is LVM's own out-of-data-space flag, which is a fact rather
+	// than a threshold and is alerted on regardless of the percentages.
+	OutOfSpace bool
+}
+
+// PoolLister reports the capacity of every managed pool. It is optional: a
+// Monitor built without one never raises pool events.
+type PoolLister interface {
+	GetPoolStatusList(ctx context.Context) ([]PoolStatusInfo, error)
+}
+
+// source names which lister owns a condition, so a condition can be cleared
+// when its subject vanishes without being cleared merely because a *different*
+// lister failed.
+//
+// This used to be inferred from the shape of the event key — a condition with
+// an empty Resource was a node condition, anything else a resource condition.
+// Pool conditions have both a name and a node and fit neither, and guessing
+// would have let a failed pool listing resolve every node alert, or a healthy
+// node poll silently clear a pool alert whose source never answered.
+type source int
+
+const (
+	sourceResources source = iota
+	sourceNodes
+	sourcePools
+)
+
 // Monitor polls cluster health and publishes state changes to a bus.
 type Monitor struct {
 	interval  time.Duration
 	resources ResourceLister
 	nodes     NodeLister
+	pools     PoolLister
+	nearFull  float64
+	full      float64
 	bus       *event.Bus
 	log       *zap.Logger
 
@@ -94,6 +141,10 @@ type Monitor struct {
 	// event.Event.Key(), so each is reported once when it starts and once when
 	// it clears rather than on every poll.
 	firing map[string]bool
+	// owners records which lister raised each firing condition. Kept alongside
+	// firing rather than derived from the key, so resolveVanished can tell a
+	// subject that disappeared from a source that failed to answer.
+	owners map[string]source
 	// primaries remembers each resource's Primary set between polls. A resource
 	// absent from this map has not been observed yet, which is what suppresses
 	// failover alerts on the first poll.
@@ -124,9 +175,23 @@ type Options struct {
 	Resources ResourceLister
 	// Nodes is optional; nil disables node reachability alerts.
 	Nodes NodeLister
+	// Pools is optional; nil disables thin pool capacity alerts.
+	Pools PoolLister
+	// NearFullPercent and FullPercent are the thin pool utilisation thresholds.
+	// Zero or out-of-range values fall back to the defaults, and a NearFull at
+	// or above Full is corrected rather than rejected — a misconfigured
+	// threshold must not silently disable the alerting it configures.
+	NearFullPercent float64
+	FullPercent     float64
 	// Logger is optional.
 	Logger *zap.Logger
 }
+
+// Default thin pool utilisation thresholds, in percent.
+const (
+	DefaultNearFullPercent = 85.0
+	DefaultFullPercent     = 95.0
+)
 
 // NewMonitor creates a monitor publishing to bus.
 func NewMonitor(bus *event.Bus, opts Options) *Monitor {
@@ -136,17 +201,42 @@ func NewMonitor(bus *event.Bus, opts Options) *Monitor {
 	if opts.Logger == nil {
 		opts.Logger = zap.NewNop()
 	}
+	near, full := normalizeThresholds(opts.NearFullPercent, opts.FullPercent)
 	return &Monitor{
 		interval:    opts.Interval,
 		resources:   opts.Resources,
 		nodes:       opts.Nodes,
+		pools:       opts.Pools,
+		nearFull:    near,
+		full:        full,
 		bus:         bus,
 		log:         opts.Logger,
 		firing:      make(map[string]bool),
+		owners:      make(map[string]source),
 		primaries:   make(map[string]string),
 		lastPrimary: make(map[string]string),
 		stop:        make(chan struct{}),
 	}
+}
+
+// normalizeThresholds keeps the two thin pool thresholds usable whatever the
+// configuration says.
+//
+// A percentage outside (0, 100] is meaningless and falls back to the default. A
+// near-full at or above full would make the warning unreachable — every pool
+// crossing it would already be critical — so it is pulled below rather than
+// rejected: a bad threshold should degrade the alert, not remove it.
+func normalizeThresholds(near, full float64) (float64, float64) {
+	if near <= 0 || near > 100 {
+		near = DefaultNearFullPercent
+	}
+	if full <= 0 || full > 100 {
+		full = DefaultFullPercent
+	}
+	if near >= full {
+		near = full * DefaultNearFullPercent / DefaultFullPercent
+	}
+	return near, full
 }
 
 // Start begins background polling until ctx is cancelled or Stop is called.
@@ -190,9 +280,10 @@ func (m *Monitor) Polls() int {
 func (m *Monitor) Poll(ctx context.Context) {
 	// scope records every condition this cycle actually evaluated, so a firing
 	// alert whose subject has since vanished can be cleared. See resolveVanished.
-	sc := &pollScope{seen: map[string]bool{}, live: map[string]bool{}}
+	sc := &pollScope{seen: map[string]bool{}, live: map[string]bool{}, livePools: map[string]bool{}}
 	m.checkResources(ctx, sc)
 	m.checkNodes(ctx, sc)
+	m.checkPools(ctx, sc)
 	m.resolveVanished(sc)
 
 	m.pollsMu.Lock()
@@ -205,11 +296,16 @@ func (m *Monitor) Poll(ctx context.Context) {
 type pollScope struct {
 	seen map[string]bool
 	live map[string]bool
-	// resourcesOK / nodesOK are false when that source could not be listed. A
-	// source that failed reports nothing, which must never be mistaken for
-	// "every condition it owns has cleared".
+	// livePools holds the pools seen this poll, keyed "<pool>@<node>", which is
+	// what makes a deleted pool distinguishable from a pool on a node that
+	// dropped out of the listing.
+	livePools map[string]bool
+	// resourcesOK / nodesOK / poolsOK are false when that source could not be
+	// listed. A source that failed reports nothing, which must never be
+	// mistaken for "every condition it owns has cleared".
 	resourcesOK bool
 	nodesOK     bool
+	poolsOK     bool
 }
 
 func (s *pollScope) mark(key string) {
@@ -260,7 +356,7 @@ func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
 				"disk_state": state.DiskState,
 				"repl_state": state.ReplicationState,
 			},
-		}, sc, degraded,
+		}, sc, sourceResources, degraded,
 			fmt.Sprintf("resource %s on %s degraded: %s", res.Name, node, reason),
 			fmt.Sprintf("resource %s on %s recovered to normal state", res.Name, node))
 	}
@@ -300,7 +396,7 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 	recovering := m.firing[noPrimary.Key()]
 	m.mu.Unlock()
 
-	m.level(noPrimary, sc, expectPrimary && cur == "",
+	m.level(noPrimary, sc, sourceResources, expectPrimary && cur == "",
 		fmt.Sprintf("resource %s has no Primary: %s was demoted and nothing took over", res.Name, demoted),
 		fmt.Sprintf("resource %s has a Primary again on %s", res.Name, cur))
 
@@ -360,7 +456,7 @@ func (m *Monitor) checkWAN(res ResourceStatusInfo, sc *pollScope) {
 		Severity: event.SeverityCritical,
 		Resource: res.Name,
 		Node:     "wan",
-	}, sc, !res.WANHealthy,
+	}, sc, sourceResources, !res.WANHealthy,
 		fmt.Sprintf("resource %s WAN replication degraded: %s", res.Name, res.WANMessage),
 		fmt.Sprintf("resource %s WAN replication recovered", res.Name))
 }
@@ -385,11 +481,114 @@ func (m *Monitor) checkNodes(ctx context.Context, sc *pollScope) {
 			Type:     event.TypeNodeUnreachable,
 			Severity: event.SeverityCritical,
 			Node:     n.Name,
-		}, sc, !n.Reachable,
+		}, sc, sourceNodes, !n.Reachable,
 			fmt.Sprintf("node %s is unreachable: %s", n.Name, msg),
 			fmt.Sprintf("node %s is reachable again", n.Name))
 	}
 }
+
+// checkPools raises capacity conditions for every thin pool in the cluster.
+//
+// This is the one health signal that no other check can stand in for. A thin
+// pool that runs out of data space stops accepting writes; the kernel then
+// detaches the backing device, and DRBD reports Diskless on a node configured
+// diskful — which surfaces as a resource.degraded alert naming a *replica*
+// problem for what is really a *capacity* problem, and only once the damage is
+// done. Watching the pool is what makes it preventable.
+func (m *Monitor) checkPools(ctx context.Context, sc *pollScope) {
+	if m.pools == nil {
+		return
+	}
+	pools, err := m.pools.GetPoolStatusList(ctx)
+	if err != nil {
+		m.log.Warn("alert monitor: list pools failed", zap.Error(err))
+		return
+	}
+	sc.poolsOK = true
+
+	for _, p := range pools {
+		// Recorded before the thin check, not after: a pool converted back to
+		// thick still exists, and saying it "no longer exists" when clearing its
+		// old capacity alert would send an operator looking for a deletion that
+		// never happened.
+		sc.livePools[poolKey(p.Name, p.Node)] = true
+
+		// A group with no thin pool has no utilisation to judge. Its vg_free is
+		// a real number, but it is also the number SDS drives to zero on
+		// purpose, so there is nothing here to alert on.
+		if p.ThinPool == "" {
+			continue
+		}
+		m.checkPoolDimension(p, sc, "data", p.DataPercent,
+			event.TypePoolDataNearFull, event.TypePoolDataFull)
+		m.checkPoolDimension(p, sc, "metadata", p.MetaPercent,
+			event.TypePoolMetadataNearFull, event.TypePoolMetadataFull)
+
+		m.level(event.Event{
+			Type:     event.TypePoolOutOfSpace,
+			Severity: event.SeverityCritical,
+			Resource: p.Name,
+			Node:     p.Node,
+			Details: map[string]string{
+				"thin_pool":        p.ThinPool,
+				"data_percent":     formatPercent(p.DataPercent),
+				"metadata_percent": formatPercent(p.MetaPercent),
+			},
+		}, sc, sourcePools, p.OutOfSpace,
+			fmt.Sprintf("pool %s on %s is out of data space: writes are failing and any DRBD replica on it will drop to Diskless", p.Name, p.Node),
+			fmt.Sprintf("pool %s on %s is no longer out of data space", p.Name, p.Node))
+	}
+}
+
+// checkPoolDimension raises the near-full and full conditions for one
+// utilisation dimension of one pool.
+//
+// The two are mutually exclusive by construction: near-full is only active
+// below the critical threshold, so crossing it resolves the warning in the same
+// poll that raises the critical. Reporting both at once would double every
+// notification at the moment it matters most.
+func (m *Monitor) checkPoolDimension(p PoolStatusInfo, sc *pollScope, dimension string, percent float64, nearType, fullType event.Type) {
+	details := func() map[string]string {
+		return map[string]string{
+			"thin_pool": p.ThinPool,
+			"dimension": dimension,
+			"percent":   formatPercent(percent),
+			"threshold": formatPercent(m.nearFull) + "/" + formatPercent(m.full),
+		}
+	}
+
+	m.level(event.Event{
+		Type:     fullType,
+		Severity: event.SeverityCritical,
+		Resource: p.Name,
+		Node:     p.Node,
+		Details:  details(),
+	}, sc, sourcePools, percent >= m.full,
+		fmt.Sprintf("pool %s on %s is %s%% %s used: extend it or free space now — a full DRBD resync of the volumes it holds reallocates every block and may not fit",
+			p.Name, p.Node, formatPercent(percent), dimension),
+		fmt.Sprintf("pool %s on %s %s usage is back under %s%%", p.Name, p.Node, dimension, formatPercent(m.full)))
+
+	m.level(event.Event{
+		Type:     nearType,
+		Severity: event.SeverityWarning,
+		Resource: p.Name,
+		Node:     p.Node,
+		Details:  details(),
+	}, sc, sourcePools, percent >= m.nearFull && percent < m.full,
+		fmt.Sprintf("pool %s on %s is %s%% %s used: plan an extension", p.Name, p.Node, formatPercent(percent), dimension),
+		fmt.Sprintf("pool %s on %s %s usage is back under %s%%", p.Name, p.Node, dimension, formatPercent(m.nearFull)))
+}
+
+// formatPercent renders a utilisation figure the way LVM reports it, to two
+// decimal places, so an event repeats what an operator will see in `lvs`.
+func formatPercent(v float64) string {
+	return strconv.FormatFloat(v, 'f', 2, 64)
+}
+
+// poolKey identifies a pool by name and node. A pool name is only unique within
+// a node — every node in this cluster has an "sds_sdspool" — so the node is
+// part of the identity, not a label on it.
+func poolKey(name, node string) string { return name + "@" + node }
 
 // resolveVanished clears alerts whose subject no longer exists.
 //
@@ -428,28 +627,42 @@ func (m *Monitor) resolveVanished(sc *pollScope) {
 		}
 		resource, node := parts[1], parts[2]
 
-		// Resource-scoped conditions belong to the resource lister, node-scoped
-		// ones to the node lister. Only prune from a source that reported.
-		if resource != "" && !sc.resourcesOK {
-			continue
-		}
-		if resource == "" && !sc.nodesOK {
-			continue
-		}
-
+		// Only prune from a source that reported. Which source owns a condition
+		// is recorded when it starts firing rather than guessed from the key:
+		// pool conditions carry both a name and a node, so the old "empty
+		// resource means node" rule would have misattributed every one of them.
 		var msg string
-		switch {
-		case resource == "":
+		switch m.owners[key] {
+		case sourceNodes:
+			if !sc.nodesOK {
+				continue
+			}
 			msg = fmt.Sprintf("node %s is no longer registered; clearing its outstanding alert", node)
-		case !sc.live[resource]:
-			msg = fmt.Sprintf("resource %s no longer exists; clearing its outstanding alert", resource)
+		case sourcePools:
+			if !sc.poolsOK {
+				continue
+			}
+			if sc.livePools[poolKey(resource, node)] {
+				msg = fmt.Sprintf("pool %s on %s no longer holds a thin pool; clearing its outstanding alert", resource, node)
+			} else {
+				msg = fmt.Sprintf("pool %s on %s no longer exists; clearing its outstanding alert", resource, node)
+			}
 		default:
-			msg = fmt.Sprintf("%s is no longer part of resource %s; clearing its outstanding alert", node, resource)
+			if !sc.resourcesOK {
+				continue
+			}
+			switch {
+			case !sc.live[resource]:
+				msg = fmt.Sprintf("resource %s no longer exists; clearing its outstanding alert", resource)
+			default:
+				msg = fmt.Sprintf("%s is no longer part of resource %s; clearing its outstanding alert", node, resource)
+			}
 		}
 		stale = append(stale, vanished{key: key, message: msg})
 	}
 	for _, v := range stale {
 		delete(m.firing, v.key)
+		delete(m.owners, v.key)
 	}
 	m.mu.Unlock()
 
@@ -470,7 +683,11 @@ func (m *Monitor) resolveVanished(sc *pollScope) {
 // level reports a condition that is either true or false at each poll, emitting
 // exactly one firing event when it starts and one resolved event when it ends.
 // The severity on tmpl applies to the firing event; a recovery is informational.
-func (m *Monitor) level(tmpl event.Event, sc *pollScope, active bool, firingMsg, resolvedMsg string) {
+//
+// src names the lister that owns the condition, and is recorded for as long as
+// it fires so that resolveVanished can tell "the subject is gone" from "the
+// source that would have reported it did not answer".
+func (m *Monitor) level(tmpl event.Event, sc *pollScope, src source, active bool, firingMsg, resolvedMsg string) {
 	key := tmpl.Key()
 	sc.mark(key)
 
@@ -479,8 +696,10 @@ func (m *Monitor) level(tmpl event.Event, sc *pollScope, active bool, firingMsg,
 	switch {
 	case active && !was:
 		m.firing[key] = true
+		m.owners[key] = src
 	case !active && was:
 		delete(m.firing, key)
+		delete(m.owners, key)
 	default:
 		m.mu.Unlock()
 		return

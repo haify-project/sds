@@ -927,7 +927,7 @@ func TestSDSClientRemainingAPIs(t *testing.T) {
 
 	require.NoError(t, c.CreateLvmSnapshot(ctx, "vg0", "lv1", "snap1", "n1", "1G"))
 	require.NoError(t, c.DeleteLvmSnapshot(ctx, "vg0", "snap1", "n1"))
-	_, err = c.ListLvmSnapshots(ctx, "vg0", "n1")
+	_, err = c.ListLvmSnapshots(ctx, "vg0", "n1", "")
 	require.NoError(t, err)
 	require.NoError(t, c.RestoreLvmSnapshot(ctx, "vg0", "snap1", "n1"))
 }

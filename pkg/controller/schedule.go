@@ -406,11 +406,17 @@ func (sm *ScheduleManager) listScheduledSnaps(ctx context.Context, host string, 
 			return nil, err
 		}
 		for _, line := range execLines(res, host) {
-			fields := strings.Fields(line)
-			if len(fields) == 0 {
+			// Pipe-separated, because lv_time carries spaces. Splitting on
+			// whitespace worked only as long as the name was first and nothing
+			// downstream looked at the other columns.
+			name := strings.TrimSpace(line)
+			if idx := strings.IndexByte(name, '|'); idx >= 0 {
+				name = strings.TrimSpace(name[:idx])
+			}
+			if name == "" {
 				continue
 			}
-			names = append(names, fields[0])
+			names = append(names, name)
 		}
 	}
 

@@ -46,6 +46,43 @@ const (
 	// TypeWANDegraded fires when a WAN-replicated resource's cross-site link is
 	// broken, which local replica states cannot reveal on their own.
 	TypeWANDegraded Type = "wan.degraded"
+
+	// Thin pool capacity. Data and metadata are separate types rather than one
+	// "pool full" event because they are separate failure modes with unrelated
+	// causes, and an operator's response differs: data exhaustion is fixed by
+	// extending the pool or deleting snapshots, metadata exhaustion by
+	// extending the metadata LV specifically.
+	//
+	// Near-full and full are likewise separate types rather than one type whose
+	// severity changes. A level condition publishes its severity when it starts
+	// firing, so a single type crossing from warning to critical would never
+	// re-announce itself; as two conditions, crossing the higher threshold
+	// resolves the warning and raises the critical, which is visible.
+	//
+	// These carry the pool name in Resource and the node in Node. A pool is the
+	// subject of the event in the same way a DRBD resource is.
+
+	// TypePoolDataNearFull fires when a thin pool's data utilisation crosses
+	// the warning threshold: still serving writes, no longer with room to
+	// spare.
+	TypePoolDataNearFull Type = "pool.data_near_full"
+	// TypePoolDataFull fires when a thin pool's data utilisation is high enough
+	// that it may no longer be able to absorb a full DRBD resync of the volumes
+	// it holds — a resync reallocates every block, so a pool that looks
+	// comfortable by snapshot delta can still fail one.
+	TypePoolDataFull Type = "pool.data_full"
+	// TypePoolMetadataNearFull fires when a thin pool's metadata utilisation
+	// crosses the warning threshold.
+	TypePoolMetadataNearFull Type = "pool.metadata_near_full"
+	// TypePoolMetadataFull fires when a thin pool's metadata utilisation is
+	// critical. Metadata is sized once at pool creation and does not grow with
+	// the pool, so this can fire on a pool whose data is nearly empty.
+	TypePoolMetadataFull Type = "pool.metadata_full"
+	// TypePoolOutOfSpace fires when LVM itself reports the pool as out of data
+	// space. This is not a threshold: the pool has already refused writes, the
+	// kernel has dropped the backing device, and any DRBD replica on it is
+	// about to report Diskless.
+	TypePoolOutOfSpace Type = "pool.out_of_space"
 )
 
 // Severity ranks how much an event should interrupt someone.

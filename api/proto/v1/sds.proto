@@ -587,6 +587,31 @@ message PoolInfo {
   // True when LVM reports the cache as unhealthy — a cache in this state
   // cannot be flushed, so it cannot be detached without discarding data.
   bool cache_degraded = 16;
+
+  // Thin pool utilisation. total_gb/free_gb above describe the VOLUME GROUP,
+  // and SDS creates its thin pool with every free extent, so free_gb is zero
+  // for the whole life of such a pool however empty it is. These fields are
+  // the ones that say whether the next write will succeed.
+  //
+  // thin_pool_lv is empty when the group holds no thin pool; that — not a zero
+  // percentage — is how "no thin pool" is told apart from "a thin pool at 0%".
+  string thin_pool_lv = 17;
+  // Capacity of the thin pool itself, which data_percent is a percentage of.
+  uint64 thin_size_bytes = 18;
+  double thin_data_percent = 19;
+  // Metadata exhaustion stops writes as completely as data exhaustion, and the
+  // two fill for unrelated reasons, so neither substitutes for the other.
+  double thin_metadata_percent = 20;
+  // LVM's own verdict, from the volume health field of lv_attr rather than
+  // inferred from a percentage. A pool in this state has already refused
+  // writes, and the kernel drops the backing disk out from under DRBD.
+  bool thin_out_of_space = 21;
+
+  // Exact capacity. total_gb/free_gb are rounded to whole gibibytes and are
+  // kept for compatibility; anything doing arithmetic or rendering a precise
+  // size should use these.
+  uint64 total_bytes = 22;
+  uint64 free_bytes = 23;
 }
 
 // ZFS messages
@@ -747,8 +772,14 @@ message DeleteLvmSnapshotResponse {
 }
 
 message ListLvmSnapshotsRequest {
+  // Despite the name this carries the VOLUME GROUP, which is what the pool is
+  // at the LVM level. Kept for wire compatibility.
   string lv_name = 1;
   string node = 2;
+  // Narrows the result to one DRBD resource's volumes. Empty lists the whole
+  // group. Without it, `snapshot list --resource a` and `--resource b` returned
+  // identical lists of everything in the pool.
+  string resource = 3;
 }
 
 message ListLvmSnapshotsResponse {
@@ -1747,6 +1778,10 @@ message SnapshotInfo {
   string volume = 2;
   uint64 size_gb = 3;
   string created_at = 4;
+  // The logical volume this snapshot was taken from. A pool holds the snapshots
+  // of every resource on its node, and the snapshot name alone does not say
+  // which one it belongs to.
+  string origin = 5;
 }
 
 // Snapshot schedule messages

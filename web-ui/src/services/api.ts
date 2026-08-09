@@ -42,6 +42,21 @@ export interface Pool {
   cacheDirtyPercent?: number;
   cacheDevice?: string;
   cacheDegraded?: boolean;
+  // Thin pool utilisation. totalGb/freeGb above describe the VOLUME GROUP, and
+  // SDS builds its thin pool from every free extent, so freeGb is zero for the
+  // whole life of such a pool however empty it is. These are the fields that
+  // say whether the next write will succeed.
+  //
+  // thinPoolLv is empty when the group holds no thin pool; that — not a zero
+  // percentage — distinguishes "no thin pool" from "a thin pool at 0%".
+  thinPoolLv?: string;
+  thinSizeBytes?: string;
+  thinDataPercent?: number;
+  thinMetadataPercent?: number;
+  thinOutOfSpace?: boolean;
+  // Exact capacity. totalGb/freeGb are rounded to whole gibibytes.
+  totalBytes?: string;
+  freeBytes?: string;
 }
 
 export interface Resource {

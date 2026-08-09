@@ -52,6 +52,9 @@ type snapshotOut struct {
 	Volume    string `json:"volume,omitempty"`
 	SizeGB    uint64 `json:"size_gb,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
+	// Origin is the volume the snapshot was taken from, which is what says
+	// which resource it belongs to when a pool holds several.
+	Origin string `json:"origin,omitempty"`
 }
 
 type snapshotListOut struct {
@@ -92,7 +95,7 @@ func (s *Server) registerSnapshotTools(srv *mcp.Server) {
 			if in.StorageType == "zfs" {
 				infos, err = s.client.ListZFSSnapshots(ctx, zfsDataset(in.Pool, in.Resource), in.Node)
 			} else {
-				infos, err = s.client.ListLvmSnapshots(ctx, in.Pool, in.Node)
+				infos, err = s.client.ListLvmSnapshots(ctx, in.Pool, in.Node, in.Resource)
 			}
 			if err != nil {
 				return nil, snapshotListOut{}, err
@@ -104,6 +107,7 @@ func (s *Server) registerSnapshotTools(srv *mcp.Server) {
 					Volume:    sn.Volume,
 					SizeGB:    sn.SizeGb,
 					CreatedAt: sn.CreatedAt,
+					Origin:    sn.Origin,
 				})
 			}
 			return nil, out, nil
