@@ -39,14 +39,29 @@ type healthCheckOut struct {
 }
 
 type poolOut struct {
-	Name        string   `json:"name"`
-	Type        string   `json:"type"`
-	Node        string   `json:"node"`
-	TotalGB     uint64   `json:"total_gb"`
-	FreeGB      uint64   `json:"free_gb"`
-	Devices     []string `json:"devices,omitempty"`
-	Thin        bool     `json:"thin"`
-	Compression string   `json:"compression,omitempty"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Node string `json:"node"`
+	// TotalGB and FreeGB describe the VOLUME GROUP. SDS builds its thin pool
+	// from every free extent, so FreeGB is zero for the whole life of such a
+	// pool however empty it is — do not read it as "the pool is full".
+	TotalGB uint64   `json:"total_gb" jsonschema:"volume group size; not the thin pool's"`
+	FreeGB  uint64   `json:"free_gb" jsonschema:"UNALLOCATED extents in the volume group. Structurally zero for any pool SDS created, whatever its utilisation. Judge fullness from thin_data_percent, not from this"`
+	Devices []string `json:"devices,omitempty"`
+	// Thin is the pool type recorded when the pool was created, which is not a
+	// reliable test for whether a thin pool exists today: a group adopted or
+	// converted later reports false while holding one. thin_pool_lv is the
+	// live answer.
+	Thin        bool   `json:"thin" jsonschema:"the recorded pool type; thin_pool_lv is the authoritative signal"`
+	Compression string `json:"compression,omitempty"`
+	// Thin pool utilisation. Empty thin_pool_lv means the group holds no thin
+	// pool; that, and not a zero percentage, is how "no thin pool" is told
+	// apart from "a thin pool at 0%".
+	ThinPoolLV      string  `json:"thin_pool_lv,omitempty" jsonschema:"the thin pool logical volume; empty when the group holds none"`
+	ThinSizeBytes   uint64  `json:"thin_size_bytes,omitempty" jsonschema:"capacity of the thin pool itself, which thin_data_percent is a percentage of"`
+	ThinDataPercent float64 `json:"thin_data_percent,omitempty" jsonschema:"how full the thin pool is. THIS is the number that says whether writes will succeed"`
+	ThinMetaPercent float64 `json:"thin_metadata_percent,omitempty" jsonschema:"thin pool metadata utilisation; exhausting it stops writes just as completely as data, and it fills for unrelated reasons"`
+	ThinOutOfSpace  bool    `json:"thin_out_of_space,omitempty" jsonschema:"LVM reports the pool out of data space: writes are already failing and any DRBD replica on it will drop to Diskless"`
 }
 
 type poolListOut struct {
@@ -173,14 +188,19 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			out := poolListOut{Pools: make([]poolOut, 0, len(pools))}
 			for _, p := range pools {
 				out.Pools = append(out.Pools, poolOut{
-					Name:        p.Name,
-					Type:        p.Type,
-					Node:        p.Node,
-					TotalGB:     p.TotalGb,
-					FreeGB:      p.FreeGb,
-					Devices:     p.Devices,
-					Thin:        p.Thin,
-					Compression: p.Compression,
+					Name:            p.Name,
+					Type:            p.Type,
+					Node:            p.Node,
+					TotalGB:         p.TotalGb,
+					FreeGB:          p.FreeGb,
+					Devices:         p.Devices,
+					Thin:            p.Thin,
+					Compression:     p.Compression,
+					ThinPoolLV:      p.ThinPoolLv,
+					ThinSizeBytes:   p.ThinSizeBytes,
+					ThinDataPercent: p.ThinDataPercent,
+					ThinMetaPercent: p.ThinMetadataPercent,
+					ThinOutOfSpace:  p.ThinOutOfSpace,
 				})
 			}
 			return nil, out, nil
