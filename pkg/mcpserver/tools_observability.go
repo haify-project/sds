@@ -20,7 +20,7 @@ import (
 
 type eventOut struct {
 	ID        uint64            `json:"id" jsonschema:"monotonic id; a gap means the reader fell behind and lost events"`
-	Type      string            `json:"type" jsonschema:"resource.degraded, resource.failover, resource.no_primary, resource.promoted, node.unreachable, wan.degraded"`
+	Type      string            `json:"type" jsonschema:"resource.degraded, resource.failover, resource.no_primary, resource.promoted, node.unreachable, wan.degraded, pool.data_near_full, pool.data_full, pool.metadata_near_full, pool.metadata_full, pool.out_of_space"`
 	Severity  string            `json:"severity" jsonschema:"info, warning, or critical"`
 	Status    string            `json:"status" jsonschema:"firing when a condition starts, resolved when it clears, info for one-shot events"`
 	Resource  string            `json:"resource,omitempty"`
@@ -105,10 +105,13 @@ func rfc3339(ms int64) string {
 func (s *Server) registerObservabilityTools(srv *mcp.Server) {
 	addRead(s, srv, readOnlyTool("sds_event_list", "List cluster events",
 		"List operational notifications the controller has raised: replicas going degraded, a resource's Primary "+
-			"moving, a node becoming unreachable, WAN replication breaking. Each event has a severity and a status "+
-			"(firing when a condition starts, resolved when it clears), so a firing event with no matching resolved "+
-			"is still outstanding. This is the tool to reach for when asked what went wrong or what changed — the "+
-			"other tools only show the cluster's current shape. Requires [alert] enabled in controller.toml."),
+			"moving, a node becoming unreachable, WAN replication breaking, a thin pool filling up. Each event has "+
+			"a severity and a status (firing when a condition starts, resolved when it clears), so a firing event "+
+			"with no matching resolved is still outstanding. This is the tool to reach for when asked what went "+
+			"wrong or what changed — the other tools only show the cluster's current shape. "+
+			"pool.* events carry the pool name in resource and the node in node; pair them with sds_pool_list for "+
+			"the current percentages, since an outstanding event says a threshold was crossed, not where the pool "+
+			"is now. Requires [alert] enabled in controller.toml."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in eventListIn) (*mcp.CallToolResult, eventListOut, error) {
 			resp, err := s.client.ListEvents(ctx, &sdspb.ListEventsRequest{
 				Limit:       in.Limit,
