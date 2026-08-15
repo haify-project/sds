@@ -117,6 +117,15 @@ sds/
 └── scripts/              # 部署脚本
 ```
 
+## 文档
+
+| 文档 | 适用场景 |
+| --- | --- |
+| [docs/user-guide.md](docs/user-guide.md) | **日常使用** —— 概念模型、各项操作流程、出问题时怎么查。集群已就绪时从这里开始。 |
+| [docs/deployment-guide.md](docs/deployment-guide.md) | 从零搭建集群的分步指南。 |
+| [docs/node-prerequisites.md](docs/node-prerequisites.md) | 每个存储节点需要装什么、为什么。 |
+| [docs/mcp.md](docs/mcp.md) | 通过 MCP 让 AI 助手操作 SDS。 |
+
 ## 快速开始
 
 ### 前置要求

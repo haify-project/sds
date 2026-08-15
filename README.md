@@ -126,6 +126,15 @@ sds/
 └── scripts/              # Deployment scripts
 ```
 
+## Documentation
+
+| Guide | For |
+| --- | --- |
+| [docs/user-guide.md](docs/user-guide.md) | **Using SDS day to day** — the mental model, every workflow, and what to do when something is wrong. Start here if the cluster already exists. |
+| [docs/deployment-guide.md](docs/deployment-guide.md) | Building a cluster from nothing, step by step. |
+| [docs/node-prerequisites.md](docs/node-prerequisites.md) | What each storage node needs installed, and why. |
+| [docs/mcp.md](docs/mcp.md) | Driving SDS from an AI assistant over MCP. |
+
 ## Getting Started
 
 ### Prerequisites

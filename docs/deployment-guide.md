@@ -423,13 +423,24 @@ backend and an LLM/embedder (e.g. DashScope).
 - Binaries on every node (so it can ride Self-HA): `/opt/sds/bin/{sds-ai,sds-mcp}`.
 - Config on the Self-HA DRBD mount (so it follows failover): `/var/lib/sds/ai/`
   with `sds-ai.env` + `domain.toml`. Key env: `OSS_LLM_API_KEY/BASE_URL/MODEL`,
-  `OSS_EMB_*` (**embedder must be 1024-dim `text-embedding-v4`** to match the
-  index), `SDS_AI_CONTROLLER=127.0.0.1:3374`, `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`,
+  `OSS_EMB_*`, `SDS_AI_EMB_DIM`, `SDS_AI_KNOWLEDGE_DB`,
+  `SDS_AI_CONTROLLER=127.0.0.1:3374`, `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`,
   `SDS_AI_ADDR=:7634`.
+- **The embedder must match the index it is searching**, and the model is not
+  the constraint — the width is. Any OpenAI-compatible embedder works as long
+  as `SDS_AI_EMB_DIM` equals the dimension the index was built at. Changing
+  embedder to one of a different width means rebuilding the knowledge base:
+  the old index cannot be searched with the new vectors, and the symptom is
+  not an error but every search returning nothing. `GET /ai/kb/list` reports
+  the width read back from the index, which is how you check.
 - Unit `sds-ai.service` (`EnvironmentFile`/`WorkingDirectory`/`HOME` =
   `/var/lib/sds/ai`), left **disabled** so only the reactor promoter starts it.
-- HTTP: `GET /ai/health`, `POST /ai/chat/stream` (chat), and the knowledge-base
-  update endpoints `POST /ai/kb/{doc,ingest,refresh,purge}`.
+- HTTP: `GET /ai/health`, `POST /ai/chat/stream` (chat), `GET /ai/kb/list`
+  (what the knowledge base holds), and the knowledge-base update endpoints
+  `POST /ai/kb/{doc,ingest,refresh,purge}`.
+- The chat body's `session_id` is what makes a follow-up a follow-up. Send the
+  same one across turns and the Copilot resolves "it" against what was already
+  discussed; omit it and every turn starts from nothing.
 
 Add `sds-ai.service` to `[self_ha] extra_services` so it rides the controller.
 
@@ -512,3 +523,7 @@ done
 | CSI node plugin: every mount fails with gRPC `EOF` | hostNetwork DaemonSet needs `dnsPolicy: ClusterFirstWithHostNet`. |
 | NVMe-oF gateway starts but no `:4420` listener | Missing `nvmet-tcp` kernel module — `apt-get install linux-modules-extra-$(uname -r)` + `modprobe`. |
 | Distributing a large binary to a node silently fails | Fixed: `DistributeConfig` chunks large files (was capped by Linux `MAX_ARG_STRLEN`). Rebuild the controller if on an old version. |
+| `gateway nfs create` reports success and prints mount instructions, but the gateway never starts | `nfs-kernel-server` is not installed on the nodes (section 4 of node-prerequisites). Creation does not preflight it; the failure appears only in `ocf.rs@nfsserver_*` as "No init script or systemd unit file detected for nfs server". |
+| A gateway exports the wrong size — a 2 GiB resource serves ~1 GiB | A gateway created before the volume-role fix exported the cluster-private state volume and formatted the data volume as gateway scratch. Delete and recreate the gateway (`sds-cli gateway delete --resource <r>`, then create again); the data volume's contents are lost either way, since it was being used as scratch. |
+| `pool add-cache` refuses with "not a thin pool" | lvmcache needs one LV every volume passes through; a thick pool has none. Convert first with `sds-cli pool convert-thin`. |
+| The AI Copilot answers confidently but cites a document that has nothing to do with the question | The knowledge base is near-empty, so the single closest chunk is always the top hit. Check with `GET /ai/kb/list` and ingest real content. |
