@@ -43,6 +43,34 @@ func registerKBRoutes(mux *http.ServeMux, ag *ossagent.Agent) {
 		writeKBJSON(w, map[string]any{"ok": true, "id": b.ID})
 	})
 
+	// GET /ai/kb/list answers "what is actually in there?". Without it the only
+	// way to check an ingest landed — or that an index still matches the
+	// configured embedder — was to open the SQLite file on the node by hand.
+	mux.HandleFunc("/ai/kb/list", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "use GET", http.StatusMethodNotAllowed)
+			return
+		}
+		inv, err := ag.Inventory(r.Context())
+		if err != nil {
+			writeKBErr(w, err)
+			return
+		}
+		sources := make([]map[string]any, 0, len(inv.Sources))
+		for _, s := range inv.Sources {
+			sources = append(sources, map[string]any{
+				"document_id": s.DocumentID, "chunks": s.Chunks, "bytes": s.Bytes,
+			})
+		}
+		writeKBJSON(w, map[string]any{
+			"ok": true, "sources": sources, "chunks": inv.Chunks,
+			"graph_nodes": inv.Nodes, "graph_edges": inv.Edges,
+			// Read back from the index, not from SDS_AI_EMB_DIM: the two
+			// disagreeing is what makes every search silently return nothing.
+			"dim": inv.Dim,
+		})
+	})
+
 	mux.HandleFunc("/ai/kb/ingest", dirHandler(ag.IngestDir))
 	mux.HandleFunc("/ai/kb/refresh", dirHandler(ag.Refresh))
 

@@ -151,9 +151,12 @@ func streamHandler(ag *ossagent.Agent) http.HandlerFunc {
 			flusher.Flush()
 		}
 
-		// Stream is single-turn (stateless). Cross-turn memory is a follow-up
-		// once the facade exposes a session-aware streaming method.
-		_, _, err := ag.Stream(r.Context(), body.Message, func(ev ossagent.Event) {
+		// The session id the UI sends is what makes a follow-up a follow-up.
+		// It used to be accepted, echoed back in X-Session-Id, and then
+		// dropped — so every turn of the sidebar started from nothing and
+		// "so how do I fix it" had no idea what "it" was. An empty id still
+		// runs stateless, which is what a scripted one-shot caller wants.
+		_, _, err := ag.Stream(r.Context(), body.SessionID, body.Message, func(ev ossagent.Event) {
 			switch ev.Kind {
 			case ossagent.EventText:
 				if ev.Text != "" {
