@@ -69,6 +69,12 @@ func registerKBRoutes(mux *http.ServeMux, ag *ossagent.Agent) {
 			// Read back from the index, not from SDS_AI_EMB_DIM: the two
 			// disagreeing is what makes every search silently return nothing.
 			"dim": inv.Dim,
+			// How far the extracted graph has wandered from the vocabulary
+			// domain.toml declares. An undeclared EDGE type is the one that
+			// costs something: expansion filters on the declared vocabulary,
+			// so the edge is stored and then never traversed, and the graph
+			// looks populated while expanding to nothing.
+			"drift": inv.Drift,
 		})
 	})
 
