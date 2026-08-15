@@ -123,6 +123,53 @@ error_patterns = [
 repos = []
 
 # ---------------------------------------------------------------------------
+# Code vocabulary — the admission list for `oss-agent ingest-repo`, which
+# imports an Understand-Anything knowledge-graph.json (AST + LLM analysis of a
+# real repository). Deliberately separate from the prose vocabulary above: the
+# prose lists are pasted into the LLM extractor's prompt, and telling a prose
+# extractor it may emit `function` and `calls` invites it to invent code
+# structure out of documentation. This list is consumed only by the importer,
+# which REFUSES a whole graph containing any type not declared here — so if
+# Understand-Anything grows a new type, the import fails loudly with a
+# histogram naming it, and the fix is one line below.
+#
+# The lists are Understand-Anything's own unions (packages/core/src/types.ts,
+# v2.8.1). lower_snake, matching what a deterministic extractor emits; the
+# case split against the prose vocabulary is what keeps "a file contains a
+# function" from merging with "a cluster contains a node".
+# ---------------------------------------------------------------------------
+
+[vocabulary.code]
+resolution = "syntactic" # name matching over a parse tree; Go `implements` is a guess
+entity_types = [
+  "file", "function", "class", "module", "concept",
+  "config", "document", "service", "table", "endpoint",
+  "pipeline", "schema", "resource",
+  "domain", "flow", "step",
+  "article", "entity", "topic", "claim", "source",
+]
+relation_types = [
+  # structural
+  "imports", "exports", "contains", "inherits", "implements",
+  # behavioral
+  "calls", "subscribes", "publishes", "middleware",
+  # data flow
+  "reads_from", "writes_to", "transforms", "validates",
+  # dependencies
+  "depends_on", "tested_by", "configures",
+  # semantic
+  "related", "similar_to",
+  # infrastructure
+  "deploys", "serves", "provisions", "triggers",
+  # schema/data
+  "migrates", "documents", "routes", "defines_schema",
+  # domain
+  "contains_flow", "flow_step", "cross_domain",
+  # knowledge
+  "cites", "contradicts", "builds_on", "exemplifies", "categorized_under", "authored_by",
+]
+
+# ---------------------------------------------------------------------------
 # Deterministic destructive-command red-lines (LLM-independent). Applied to the
 # string form of a suggested action / any command, before an operator can approve.
 # ---------------------------------------------------------------------------
