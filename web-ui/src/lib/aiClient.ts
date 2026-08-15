@@ -1,3 +1,5 @@
+import { getApiToken } from '@/services/api';
+
 // aiClient — talks to the `oss-agent serve` NDJSON stream that backs the SDS AI
 // Copilot. The agent runs as a separate process (see ai/README.md); this client
 // only speaks its wire protocol over HTTP.
@@ -119,9 +121,17 @@ export async function streamChat(
   onEvent: (e: AIEvent) => void,
   signal?: AbortSignal,
 ): Promise<StreamChatResult> {
+  // The same token the REST calls use. sds-ai requires it whenever one is
+  // configured; without this the Copilot was the one part of the UI that
+  // reached an unauthenticated endpoint, and its knowledge-base routes are
+  // writable.
+  const token = getApiToken();
   const res = await fetch(`${aiBase()}/ai/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ message, session_id: sessionId ?? '' }),
     signal,
   });

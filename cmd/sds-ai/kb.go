@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	ossagent "github.com/liliang-cn/oss-agent"
@@ -68,6 +69,59 @@ func registerKBRoutes(mux *http.ServeMux, ag *ossagent.Agent) {
 			// Read back from the index, not from SDS_AI_EMB_DIM: the two
 			// disagreeing is what makes every search silently return nothing.
 			"dim": inv.Dim,
+		})
+	})
+
+	// POST /ai/kb/upload ingests documents sent over the wire.
+	//
+	// /ai/kb/ingest reads a directory ON THE NODE, so loading a corpus from
+	// anywhere else meant copying the files there first — scp, root, a path to
+	// clean up afterwards, and the corpus left sitting on the DRBD mount for no
+	// reason. That is a lot of ceremony for "here are eight markdown files".
+	// This takes the documents themselves.
+	//
+	// Re-uploading an id replaces it, so this is also how a corpus is refreshed
+	// after the docs change: send them all again.
+	mux.HandleFunc("/ai/kb/upload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "use POST", http.StatusMethodNotAllowed)
+			return
+		}
+		var b struct {
+			Docs []struct {
+				ID      string `json:"id"`
+				Title   string `json:"title"`
+				Content string `json:"content"`
+			} `json:"docs"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			http.Error(w, `body must be {"docs":[{"id","title","content"}]}`, http.StatusBadRequest)
+			return
+		}
+		if len(b.Docs) == 0 {
+			http.Error(w, "no documents", http.StatusBadRequest)
+			return
+		}
+
+		// Each document costs an embedding round trip and an extraction call, so
+		// a failure partway through is normal enough to report precisely rather
+		// than collapse into one error: the operator needs to know which
+		// documents landed and which to send again.
+		ingested := make([]string, 0, len(b.Docs))
+		failures := map[string]string{}
+		for i, d := range b.Docs {
+			if d.ID == "" || d.Content == "" {
+				failures[fmt.Sprintf("#%d", i)] = "missing id or content"
+				continue
+			}
+			if err := ag.IngestDoc(r.Context(), d.ID, d.Title, d.Content); err != nil {
+				failures[d.ID] = err.Error()
+				continue
+			}
+			ingested = append(ingested, d.ID)
+		}
+		writeKBJSON(w, map[string]any{
+			"ok": len(failures) == 0, "ingested": ingested, "failed": failures,
 		})
 	})
 

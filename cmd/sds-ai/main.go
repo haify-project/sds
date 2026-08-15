@@ -47,7 +47,10 @@ func atoiOr(key string, def int) int {
 }
 
 func main() {
-	addr := envOr("SDS_AI_ADDR", ":7634")
+	// Loopback by default. The web UI proxies /ai/* from its own port, so this
+	// costs the UI nothing — and the previous ":7634" put an unauthenticated
+	// knowledge-base writer on every interface.
+	addr := envOr("SDS_AI_ADDR", "127.0.0.1:7634")
 	knowledgeDB := os.Getenv("SDS_AI_KNOWLEDGE_DB")
 	if knowledgeDB == "" {
 		log.Fatal("SDS_AI_KNOWLEDGE_DB is required (path to drbd-reactor.db)")
@@ -90,8 +93,13 @@ func main() {
 	// Knowledge-base update surface (POST /ai/kb/{doc,ingest,refresh,purge}).
 	registerKBRoutes(mux, ag)
 
+	handler, err := guard(addr, withCORS(allowOrigin, mux))
+	if err != nil {
+		log.Fatalf("sds-ai: %v", err)
+	}
+
 	log.Printf("sds-ai listening on %s (knowledge=%s)", addr, knowledgeDB)
-	if err := http.ListenAndServe(addr, withCORS(allowOrigin, mux)); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
