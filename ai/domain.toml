@@ -51,16 +51,61 @@ Safety (non-negotiable):
   volumes, and the backup precondition, and defer to explicit operator approval.
 '''
 
+# ---------------------------------------------------------------------------
+# Ontology. Both lists go into the extraction prompt verbatim — "Use ONLY these
+# entity types" / "Use ONLY these relation types" — once per ingested chunk, and
+# nothing downstream reconciles one chunk's vocabulary with the next one's. So
+# the vocabulary has to be closed here or it is not closed at all: eight
+# paragraphs about the same failover become eight private spellings of it, and a
+# graph whose edges are spelled six ways is a graph nobody can walk.
+#
+# Naming follows the RDF/schema.org split of classes from predicates: node types
+# PascalCase, edge types lower_snake. The edge half is not a style choice — see
+# the relation_types note below.
+#
+# Node types are the things an operator names in a sentence: the storage stack
+# (node → pool → resource → volume → replica), the things that protect it
+# (snapshots, schedules, backups, targets), the things that serve it (gateways,
+# promoter configs, OCF agents, VIPs), and the things you read when it breaks
+# (states, events, error strings, config parameters, CLI commands). What is
+# deliberately NOT a type here is any *variant* of one: a pool's lvm/lvm-thin/zfs
+# kind, a gateway's NFS/iSCSI/NVMe-oF protocol, a replica's Primary/Secondary
+# role or its diskless tiebreaker duty. Those are properties of an instance, and
+# promoting them would both grow this list with every enum SDS gains and force
+# the model to choose between two types that mean the same thing. "Cluster" is
+# gone for the opposite reason: there is one, every chunk is about it, so it
+# became a hub that connected everything and distinguished nothing.
 entity_types = [
-  "Cluster", "Node", "StoragePool", "DRBDResource", "Volume",
-  "HAConfig", "PromoterConfig", "OCFAgent", "VIP", "Gateway",
-  "Snapshot", "KernelModule", "ErrorCode", "CLI_Command", "ConfigParameter", "State",
+  "Node", "StoragePool", "BlockDevice", "DRBDResource", "Volume", "Replica",
+  "Snapshot", "SnapshotSchedule", "Backup", "BackupTarget",
+  "Gateway", "HAConfig", "PromoterConfig", "OCFAgent", "VIP",
+  "WANTunnel", "LUKSContainer",
+  "Event", "NotificationChannel", "RBACRole",
+  "SystemdService", "Package", "KernelModule",
+  "ConfigParameter", "CLICommand", "State", "ErrorCode",
 ]
 
+# Edges are chosen for what we want to walk when answering an operator, not for
+# everything the docs can express: what backs this resource, which node exports
+# this gateway, what protects it, what this state means and what clears it.
+#
+# The spelling is forced. `knowledge_search` retrieves, then expands one hop
+# along a FIXED edge list built into oss-agent — calls, contains, depends_on,
+# inherits, implements, triggers, deploys, related — compared by exact string
+# equality. An edge type outside that list is not weakly matched, it is simply
+# never followed, which is why the earlier SCREAMING_SNAKE set produced a graph
+# that looked populated and expanded to nothing: DEPLOYED_ON is not deploys.
+# The first row below is therefore spelled to land inside that list and carries
+# the questions worth a hop; calls/inherits/implements are left to the C sources
+# already in the knowledge base, since nothing in a storage doc inherits.
+# The rest are domain edges: not expanded today, but they are what makes an
+# extracted node say something true about its neighbour rather than "related",
+# and they are reachable by entity-scoped queries over the graph.
 relation_types = [
-  "DEPLOYED_ON", "CONTAINS", "MANAGES", "BACKS", "DEPENDS_ON",
-  "PROMOTES", "EXPORTS", "TRIGGERED_BY", "RESOLVES", "MUTUALLY_EXCLUSIVE",
-  "TRIGGERED_IN_STATE", "DEFINED_IN",
+  "contains", "depends_on", "deploys", "triggers", "related",
+  "backs", "exports", "promotes", "replicates_to", "protects", "stored_on",
+  "caches", "notifies", "resolves", "configured_by", "conflicts_with",
+  "has_state",
 ]
 
 # Regex sources (TOML literal strings preserve backslashes). Group 1 = message.
