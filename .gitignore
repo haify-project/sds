@@ -55,3 +55,10 @@ sds-resource-status.png
 
 # Compiled binaries — never commit (a 75MB sds-ai binary once bloated history)
 cmd/sds-ai/sds-ai
+
+# understand-anything: keep the graph and its incremental baseline, drop scratch.
+# The graph is worth ~1h and a few million tokens to rebuild, and fingerprints.json
+# is what lets a later run touch only the files that changed.
+.understand-anything/intermediate/
+.understand-anything/tmp/
+.understand-anything/.trash-*/
