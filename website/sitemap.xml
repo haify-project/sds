@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  单页站点,所以只有一条 URL。#start / #faq 那些锚点不单列 ——
+  它们不是独立文档,列进来只会让抓取工具把同一份内容收录成三份。
+  robots.txt 里引用了这个文件;改了域名记得两边一起改。
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://sds.superleo.cn/</loc>
+    <lastmod>2026-08-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

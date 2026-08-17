@@ -29,6 +29,6 @@ SDS(Software-Defined Storage)面向国产化 / 信创场景,把生产环境的�
 
 ## 链接
 
-- 官网 / Landing: https://sds.example.com/
-- 部署指南: https://sds.example.com/#start
-- 常见问题 (FAQ): https://sds.example.com/#faq
+- 官网 / Landing: https://sds.superleo.cn/
+- 部署指南: https://sds.superleo.cn/#start
+- 常见问题 (FAQ): https://sds.superleo.cn/#faq

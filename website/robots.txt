@@ -23,4 +23,4 @@ Allow: /
 User-agent: Applebot-Extended
 Allow: /
 
-Sitemap: https://sds.example.com/sitemap.xml
+Sitemap: https://sds.superleo.cn/sitemap.xml

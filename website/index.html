@@ -12,25 +12,28 @@
 <meta name="theme-color" content="#0a0e15" media="(prefers-color-scheme: dark)" />
 <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" />
 <meta name="keywords" content="软件定义存储,SDS,DRBD,国产CPU,信创,鲲鹏,飞腾,龙芯,麒麟,统信,Kubernetes CSI,高可用,块存储,自主可控" />
-<link rel="canonical" href="https://sds.example.com/" />
+<link rel="canonical" href="https://sds.superleo.cn/" />
 <!-- Open Graph -->
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="SDS 软件定义存储" />
 <meta property="og:locale" content="zh_CN" />
 <meta property="og:title" content="SDS · 支持国产芯片的软件定义存储" />
 <meta property="og:description" content="基于 DRBD 的软件定义存储:强一致同步复制、智能放置、自动高可用、多协议网关与 Kubernetes CSI,全栈运行在国产 CPU 与国产操作系统上。" />
-<meta property="og:url" content="https://sds.example.com/" />
-<meta property="og:image" content="https://sds.example.com/og.png" />
+<meta property="og:url" content="https://sds.superleo.cn/" />
+<meta property="og:image" content="https://sds.superleo.cn/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="SDS · 支持国产芯片的软件定义存储" />
 <meta name="twitter:description" content="基于 DRBD 的软件定义存储:强一致同步复制、自动高可用、多协议网关与 Kubernetes CSI,支持国产 CPU 与国产 OS。" />
-<meta name="twitter:image" content="https://sds.example.com/og.png" />
+<meta name="twitter:image" content="https://sds.superleo.cn/og.png" />
 <script>
   (function(){try{var t=localStorage.getItem('sds-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+<!--
+  没有网络字体,故意的。这个页面的读者在国内,而 fonts.googleapis.com 那条
+  <link rel=stylesheet> 是阻塞渲染的 —— 它连不上时不是"字体退化",是整页白屏
+  等到超时。同一个道理也适用于客户内网里的演示机:这里不应该有任何外链。
+  下面的字体栈按 麒麟/统信 → Windows → macOS 的顺序排,每一档都是系统自带。
+-->
 <style>
   :root{
     --ink-0:#070a0f; --ink-1:#0a0e15; --ink-2:#0f141d; --ink-3:#151c27;
@@ -38,9 +41,9 @@
     --fg:#e9eef6; --fg-dim:#9aa7bb; --fg-mute:#5e6a7e;
     --jade:#44e0ad; --jade-2:#1f9e78; --amber:#f2b45b;
     --jade-fade:rgba(68,224,173,.08); --on-jade:#04120c; --glow:rgba(68,224,173,.06);
-    --serif:"Noto Serif SC","Songti SC",serif;
-    --sans:"IBM Plex Sans","Noto Sans SC",system-ui,-apple-system,sans-serif;
-    --mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
+    --serif:"Source Han Serif SC","Noto Serif CJK SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Source Han Sans SC","Noto Sans CJK SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono","DejaVu Sans Mono",Consolas,monospace;
     --maxw:1180px;
   }
   :root[data-theme="light"]{
@@ -564,8 +567,11 @@ sds-cli <span class="p">gateway nfs create</span> <span class="f">--resource</sp
   document.querySelectorAll('.rv').forEach(el=>io.observe(el));
   requestAnimationFrame(()=>document.querySelectorAll('header .rv').forEach(el=>el.classList.add('in')));
 </script>
-<!-- GoatCounter analytics (self-hosted at stats.superleo.app) -->
-<script data-goatcounter="https://stats.superleo.app/count"
-        async src="https://stats.superleo.app/count.js"></script>
+<!--
+  这里原本挂着 GoatCounter(stats.superleo.app),那台机器已注销,埋点连的是
+  一个不存在的主机。留着不会拖慢页面(async),但也永远收不到一条数据 ——
+  与其留一个看着像在统计的空壳,不如摘掉。要恢复统计就重新起一份 GoatCounter,
+  再把这两行按新域名加回来;Caddy 的访问日志同时也能回答"有多少人来过"。
+-->
 </body>
 </html>
