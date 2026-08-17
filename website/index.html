@@ -568,10 +568,13 @@ sds-cli <span class="p">gateway nfs create</span> <span class="f">--resource</sp
   requestAnimationFrame(()=>document.querySelectorAll('header .rv').forEach(el=>el.classList.add('in')));
 </script>
 <!--
-  这里原本挂着 GoatCounter(stats.superleo.app),那台机器已注销,埋点连的是
-  一个不存在的主机。留着不会拖慢页面(async),但也永远收不到一条数据 ——
-  与其留一个看着像在统计的空壳,不如摘掉。要恢复统计就重新起一份 GoatCounter,
-  再把这两行按新域名加回来;Caddy 的访问日志同时也能回答"有多少人来过"。
+  自建 Plausible(stats.superleo.cn,跑在 dell VM 104 的 docker 里)。
+  统计域名和站点同在 superleo.cn 下,是刻意的:埋点脚本要被国内访客的浏览器
+  加载才算数,挂在境外域名上等于统计不到人 —— 而这种故障不会报错,页面照常
+  显示,只有数字一直是 0。同域也顺带绕开了大部分拦截名单。
+
+  defer 而不是 async:它不阻塞解析,又保证在 DOM 就绪后才跑,顺序可预期。
 -->
+<script defer data-domain="sds.superleo.cn" src="https://stats.superleo.cn/js/script.js"></script>
 </body>
 </html>
