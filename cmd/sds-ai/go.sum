@@ -152,8 +152,8 @@ github.com/liliang-cn/cortexdb/v2 v2.73.0 h1:houEwNl+hN1yEGTL1XRFG2ZVOLGjKaGWDS+
 github.com/liliang-cn/cortexdb/v2 v2.73.0/go.mod h1:O4EPYRbBsEpEsRisT2Hs2jhKVoEMPuRm87xAXpwLMwc=
 github.com/liliang-cn/mcp-swagger-server v0.4.0 h1:vgcUvQp+ped++O1+hQz29oWtXiHE+QrC3wjeQvyT50o=
 github.com/liliang-cn/mcp-swagger-server v0.4.0/go.mod h1:/ulyr2I9rj9LFAY4mdT875hewZGYgMi08uNKBa203Ew=
-github.com/liliang-cn/oss-agent v0.18.0 h1:0URHiuqZN53AVsGLmWow1eWdlqWTEyLJO51lodm9UnE=
-github.com/liliang-cn/oss-agent v0.18.0/go.mod h1:aTwohbyJJRqokprMsAw2I83feUTxH46L3JaN+m+zK4I=
+github.com/liliang-cn/oss-agent v0.19.0 h1:33pL2oKqAtYqoO5qh7j71W2g1lE3UfvEVE/FHyHsfOs=
+github.com/liliang-cn/oss-agent v0.19.0/go.mod h1:aTwohbyJJRqokprMsAw2I83feUTxH46L3JaN+m+zK4I=
 github.com/liliang-cn/pipeit v0.1.0 h1:ZU5hkL5SXr6vHtn/gcJBX9i55l0HM4rVsYTfxqn5M34=
 github.com/liliang-cn/pipeit v0.1.0/go.mod h1:ghxqa1CKTztR5me4vl8srIYQhfv89tc37SnocoXv4/E=
 github.com/liliang-cn/skills-go v1.9.0 h1:f734/1BM4edgTeMlhkcUnXYenxeXEdgVm9/MDbkwE3Y=

@@ -191,25 +191,22 @@ repos = []
 # that is not there — a warning that cries wolf is worse than none.
 # ---------------------------------------------------------------------------
 
-# "what backs this resource" — the pool is the thing underneath.
-[[relation]]
-name = "backs"
-from = "StoragePool"
-to   = "DRBDResource"
+# NOT declared, deliberately: `backs`, `stored_on` and `exports` are CHAINS. A
+# BlockDevice backs a StoragePool backs a DRBDResource; a Volume is stored on a
+# StoragePool stored on a Node; a Node exports a Gateway exports a DRBDResource. The middle term is both a source and a target, so the two
+# ends necessarily overlap without being identical — the one shape a link cannot
+# have, because an edge between two middle terms would read both ways. The live
+# graph holds 35 `backs` and 70 `stored_on` edges of exactly that middle form,
+# which is how this was discovered rather than guessed. Declaring one link of
+# the chain and calling the rest drift would report real data as broken.
 
-# "which node exports this gateway" — the gateway is exported BY a node, so the
-# node is the source. This is the one the relation_types note states outright.
-[[relation]]
-name = "exports"
-from = "Node"
-to   = "Gateway"
-
-# A drbd-reactor promoter config promotes a DRBD resource to Primary. The
-# OCFAgent runs underneath it and does not promote anything itself.
+# A drbd-reactor promoter config promotes a DRBD resource to Primary, and so
+# does an operator running `sds-cli ha evict` — 16 such edges are in the graph.
+# The OCFAgent runs underneath and does not promote anything itself.
 [[relation]]
 name = "promotes"
-from = "PromoterConfig"
-to   = "DRBDResource"
+from = ["PromoterConfig", "CLICommand"]
+to   = ["DRBDResource"]
 
 # An event is what fires; a channel is what it goes out on.
 [[relation]]
@@ -221,28 +218,21 @@ to   = "NotificationChannel"
 # volume. The Snapshot/Backup pair is why an end needs to be a list at all.
 [[relation]]
 name = "protects"
-from = ["Snapshot", "Backup", "SnapshotSchedule"]
+from = ["Snapshot", "Backup", "SnapshotSchedule", "LUKSContainer"]
 to   = ["Volume", "DRBDResource"]
-
-# What a thing sits on. A volume and its replicas land on block devices and
-# pools; a backup lands on its target, which is somewhere else entirely.
-[[relation]]
-name = "stored_on"
-from = ["Volume", "Replica", "Snapshot", "Backup"]
-to   = ["BlockDevice", "StoragePool", "BackupTarget"]
 
 # A state belongs to the thing that is in it. This is the widest end in the
 # file and still a real constraint: a Package or a CLICommand does not have a
 # State, and an extracted `has_state` claiming otherwise is a mistake.
 [[relation]]
 name = "has_state"
-from = ["DRBDResource", "Replica", "Volume", "Gateway", "HAConfig", "Node", "SystemdService"]
+from = ["DRBDResource", "Replica", "Volume", "Gateway", "HAConfig", "Node", "SystemdService", "KernelModule", "Backup"]
 to   = ["State"]
 
 # Configuration flows one way: the parameter configures the thing, never back.
 [[relation]]
 name = "configured_by"
-from = ["DRBDResource", "Gateway", "HAConfig", "PromoterConfig", "SystemdService", "WANTunnel"]
+from = ["DRBDResource", "Gateway", "HAConfig", "PromoterConfig", "SystemdService", "WANTunnel", "CLICommand"]
 to   = ["ConfigParameter"]
 
 # What clears an error. A command an operator runs, or a parameter they change.
@@ -256,15 +246,15 @@ to   = ["ErrorCode", "State"]
 # same fact about the same pair.
 [[relation]]
 name = "replicates_to"
-from = ["Replica", "Node"]
-to   = ["Replica", "Node"]
+from = ["Replica", "Node", "DRBDResource"]
+to   = ["Replica", "Node", "DRBDResource"]
 
 # Two things that cannot both hold. Same shape as replicates_to and same
 # reason: a conflict is symmetric.
 [[relation]]
 name = "conflicts_with"
-from = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter"]
-to   = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter"]
+from = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter", "Replica"]
+to   = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter", "Replica"]
 
 # ---------------------------------------------------------------------------
 # Code vocabulary — the admission list for `oss-agent ingest-repo`, which
