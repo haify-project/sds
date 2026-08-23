@@ -2,7 +2,7 @@ module github.com/liliang-cn/sds/cmd/sds-ai
 
 go 1.25.5
 
-require github.com/liliang-cn/oss-agent v0.20.0
+require github.com/liliang-cn/oss-agent v0.21.0
 
 require (
 	github.com/0x51-dev/rdf v0.1.0 // indirect
