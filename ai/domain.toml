@@ -65,6 +65,15 @@ Safety (non-negotiable):
 # paragraphs about the same failover become eight private spellings of it, and a
 # graph whose edges are spelled six ways is a graph nobody can walk.
 #
+# The lists are not only a prompt. Every entity type below is registered with
+# cortexdb as an object type implementing one `DomainEntity` interface, and that
+# interface is what retrieval asks for: a node whose type is declared here is
+# offered as a graph seed before an imported code node, and takes a neighbour
+# slot before one. A type NOT declared here — invented by the extracting model,
+# or imported from the SDS code graph — is still stored and still reachable,
+# just behind. `/ai/kb/doctor` names the invented ones; a live base carried a
+# "StorageClass" nobody declared for months without anyone noticing.
+#
 # Naming follows the RDF/schema.org split of classes from predicates: node types
 # PascalCase, edge types lower_snake. The edge half is not a style choice — see
 # the relation_types note below.
@@ -95,18 +104,25 @@ entity_types = [
 # everything the docs can express: what backs this resource, which node exports
 # this gateway, what protects it, what this state means and what clears it.
 #
-# The spelling is forced. `knowledge_search` retrieves, then expands one hop
-# along a FIXED edge list built into oss-agent — calls, contains, depends_on,
-# inherits, implements, triggers, deploys, related — compared by exact string
-# equality. An edge type outside that list is not weakly matched, it is simply
-# never followed, which is why the earlier SCREAMING_SNAKE set produced a graph
-# that looked populated and expanded to nothing: DEPLOYED_ON is not deploys.
-# The first row below is therefore spelled to land inside that list and carries
-# the questions worth a hop; calls/inherits/implements are left to the C sources
-# already in the knowledge base, since nothing in a storage doc inherits.
-# The rest are domain edges: not expanded today, but they are what makes an
-# extracted node say something true about its neighbour rather than "related",
-# and they are reachable by entity-scoped queries over the graph.
+# THIS LIST IS the expansion whitelist. `knowledge_search` retrieves, then
+# expands one hop along the edge types declared here, case-widened so the
+# extractor's approximation of the declared spelling still matches. Every row
+# below is walked, not just the first.
+#
+# It was not always so. Expansion used to filter on a FIXED list built into
+# oss-agent — calls, contains, depends_on, inherits, implements, triggers,
+# deploys, related — compared by exact string equality, and an edge outside it
+# was never followed. That is why the original SCREAMING_SNAKE set produced a
+# graph that looked populated and expanded to nothing: DEPLOYED_ON is not
+# deploys. The first row is still spelled to land inside that built-in list,
+# which costs nothing and keeps the graph walkable by a copilot pinned to an
+# older oss-agent. calls/inherits/implements are left to the C sources already
+# in the knowledge base, since nothing in a storage doc inherits.
+#
+# Adding a row here does NOT make the edges already in the graph appear: they
+# were extracted under whichever vocabulary was in force at ingest, and
+# `/ai/kb/doctor` reports when the two have parted ways. Changing a spelling
+# means re-ingesting the sources that used it.
 relation_types = [
   "contains", "depends_on", "deploys", "triggers", "related",
   "backs", "exports", "promotes", "replicates_to", "protects", "stored_on",

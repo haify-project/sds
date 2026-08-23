@@ -22,6 +22,9 @@ import (
 //	/ai/kb/ingest   {dir}                -> ingest a directory (docs + code error strings)
 //	/ai/kb/refresh  {dir}                -> purge that source then re-ingest (captures edits/deletes)
 //	/ai/kb/purge    {match,prefix}       -> remove a source
+//
+// Plus two GETs that read: /ai/kb/list (what is in the index) and
+// /ai/kb/doctor (whether retrieval over it still works).
 func registerKBRoutes(mux *http.ServeMux, ag *ossagent.Agent) {
 	mux.HandleFunc("/ai/kb/doc", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -76,6 +79,36 @@ func registerKBRoutes(mux *http.ServeMux, ag *ossagent.Agent) {
 			// looks populated while expanding to nothing.
 			"drift": inv.Drift,
 		})
+	})
+
+	// GET /ai/kb/doctor answers "does retrieval still work", which /ai/kb/list
+	// cannot: an index can hold the right documents and still return nothing.
+	//
+	// Every check corresponds to a failure that produced no error anywhere on
+	// this cluster — a stale HTTP_PROXY in front of the embedder while chat kept
+	// working, a vector index capping recall below the requested k, the SDS code
+	// graph outnumbering the runbooks ten to one, and the extractor inventing a
+	// "StorageClass" node type the domain never declared. The copilot answered
+	// through all of them; it just answered worse.
+	//
+	// GET rather than POST because it changes nothing, and unauthenticated for
+	// the same reason the rest of this surface is: `guard` keeps it on loopback.
+	mux.HandleFunc("/ai/kb/doctor", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "use GET", http.StatusMethodNotAllowed)
+			return
+		}
+		d := ag.Doctor(r.Context())
+		checks := make([]map[string]any, 0, len(d.Checks))
+		for _, c := range d.Checks {
+			checks = append(checks, map[string]any{
+				"name": c.Name, "status": string(c.Status), "detail": c.Detail, "hint": c.Hint,
+			})
+		}
+		// ok is false when a check FAILED, not when one warned: a warning is
+		// something to look at, and a monitor that pages on every one of them
+		// gets muted.
+		writeKBJSON(w, map[string]any{"ok": !d.Failed, "checks": checks})
 	})
 
 	// POST /ai/kb/upload ingests documents sent over the wire.
