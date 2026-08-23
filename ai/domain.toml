@@ -130,6 +130,10 @@ relation_types = [
   "has_state",
 ]
 
+#
+# Four of these also declare what sits on each end — see the [[relation]] blocks
+# further down, which have to live below every top-level key in this file.
+
 # Regex sources (TOML literal strings preserve backslashes). Group 1 = message.
 # Mine the log/error string literals an operator actually sees, so a real error
 # line can be traced back to its source.
@@ -143,6 +147,64 @@ error_patterns = [
 
 # Knowledge is already ingested into drbd-reactor.db; no repos to (re)ingest here.
 repos = []
+
+# ---------------------------------------------------------------------------
+# Relation ends. A [[relation]] says what may sit on each side of an edge type,
+# which the flat relation_types list cannot.
+#
+# These blocks are BELOW every top-level key on purpose. In TOML a table header
+# ends the top-level section, so a [[relation]] placed next to relation_types —
+# where it reads best — silently swallows error_patterns and repos into itself.
+# Nothing fails: they load as keys of a relation nobody reads, and the domain
+# comes up with zero error patterns.
+#
+# Two things read the ends. The ontology registers them as the link's two sides,
+# and cortexdb decides a traversal's DIRECTION by keeping only nodes of the far
+# side's type — so "exports" and "exports_of" mean opposite things only for the
+# relations below. And `/ai/kb/doctor` compares them against the edges actually
+# in the graph: an extracted `backs` asserted from the resource to the pool is
+# stored without complaint, reads as a fact, and is walked as one. Nothing in
+# the answer says the arrow points the wrong way. This declaration is the only
+# thing that can disagree with it.
+#
+# Declaring ends is an ASSERTION about SDS, not a hint, so only edges whose
+# direction is not arguable are here. A relation genuinely polymorphic in its
+# source — `protects`, which a Snapshot and a Backup both do; `has_state`, which
+# half this vocabulary has; `stored_on`, `configured_by` — stays in
+# relation_types with no ends. That is not a gap to fill in for its own sake: an
+# end declared wrong makes doctor report drift that is not there, and a warning
+# that cries wolf is worse than no warning.
+#
+# Each end is ONE entity_type. A cortexdb link is one name and one pair of ends,
+# and the name IS the edge type in the graph, so a polymorphic relation cannot
+# be split per combination without producing edge types nothing ever wrote.
+# ---------------------------------------------------------------------------
+
+# "what backs this resource" — the pool is the thing underneath.
+[[relation]]
+name = "backs"
+from = "StoragePool"
+to   = "DRBDResource"
+
+# "which node exports this gateway" — the gateway is exported BY a node, so the
+# node is the source. This is the one the relation_types note states outright.
+[[relation]]
+name = "exports"
+from = "Node"
+to   = "Gateway"
+
+# A drbd-reactor promoter config promotes a DRBD resource to Primary. The
+# OCFAgent runs underneath it and does not promote anything itself.
+[[relation]]
+name = "promotes"
+from = "PromoterConfig"
+to   = "DRBDResource"
+
+# An event is what fires; a channel is what it goes out on.
+[[relation]]
+name = "notifies"
+from = "Event"
+to   = "NotificationChannel"
 
 # ---------------------------------------------------------------------------
 # Code vocabulary — the admission list for `oss-agent ingest-repo`, which
