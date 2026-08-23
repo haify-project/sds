@@ -167,17 +167,28 @@ repos = []
 # the answer says the arrow points the wrong way. This declaration is the only
 # thing that can disagree with it.
 #
-# Declaring ends is an ASSERTION about SDS, not a hint, so only edges whose
-# direction is not arguable are here. A relation genuinely polymorphic in its
-# source — `protects`, which a Snapshot and a Backup both do; `has_state`, which
-# half this vocabulary has; `stored_on`, `configured_by` — stays in
-# relation_types with no ends. That is not a gap to fill in for its own sake: an
-# end declared wrong makes doctor report drift that is not there, and a warning
-# that cries wolf is worse than no warning.
+# An end is one type or a list of them. A list becomes an ontology interface
+# those types implement, which is how a relation polymorphic in one end — a
+# Snapshot and a Backup both protect a Volume — is modelled without either
+# declaring something false or leaving the relation without ends.
 #
-# Each end is ONE entity_type. A cortexdb link is one name and one pair of ends,
-# and the name IS the edge type in the graph, so a polymorphic relation cannot
-# be split per combination without producing edge types nothing ever wrote.
+# What a list is NOT is a shrug. Every type in it is asserted to belong there,
+# and a node type outside it is reported as misdirected exactly like a reversed
+# edge. So the lists below are the types SDS actually puts on each end, not
+# every type that could conceivably appear.
+#
+# The two ends must be disjoint or identical, never partly overlapping. An
+# edge's direction is recovered by matching its endpoints against the two ends;
+# disjoint ends decide it, identical ends make it a self-relation where either
+# reading is the same statement, and partial overlap leaves an edge between two
+# shared types matching both. `conflicts_with` below is the identical case.
+#
+# Still not declared: `contains`, `depends_on`, `deploys`, `triggers`,
+# `related` and `caches`. The first five are the generic edges the extractor
+# reaches for when nothing more specific fits, and their ends are whatever the
+# paragraph happened to be about; `caches` has no settled meaning in SDS yet.
+# Declaring ends is an assertion, and one made wrong makes doctor report drift
+# that is not there — a warning that cries wolf is worse than none.
 # ---------------------------------------------------------------------------
 
 # "what backs this resource" — the pool is the thing underneath.
@@ -205,6 +216,55 @@ to   = "DRBDResource"
 name = "notifies"
 from = "Event"
 to   = "NotificationChannel"
+
+# A snapshot, a backup or the schedule that produces them is what protects a
+# volume. The Snapshot/Backup pair is why an end needs to be a list at all.
+[[relation]]
+name = "protects"
+from = ["Snapshot", "Backup", "SnapshotSchedule"]
+to   = ["Volume", "DRBDResource"]
+
+# What a thing sits on. A volume and its replicas land on block devices and
+# pools; a backup lands on its target, which is somewhere else entirely.
+[[relation]]
+name = "stored_on"
+from = ["Volume", "Replica", "Snapshot", "Backup"]
+to   = ["BlockDevice", "StoragePool", "BackupTarget"]
+
+# A state belongs to the thing that is in it. This is the widest end in the
+# file and still a real constraint: a Package or a CLICommand does not have a
+# State, and an extracted `has_state` claiming otherwise is a mistake.
+[[relation]]
+name = "has_state"
+from = ["DRBDResource", "Replica", "Volume", "Gateway", "HAConfig", "Node", "SystemdService"]
+to   = ["State"]
+
+# Configuration flows one way: the parameter configures the thing, never back.
+[[relation]]
+name = "configured_by"
+from = ["DRBDResource", "Gateway", "HAConfig", "PromoterConfig", "SystemdService", "WANTunnel"]
+to   = ["ConfigParameter"]
+
+# What clears an error. A command an operator runs, or a parameter they change.
+[[relation]]
+name = "resolves"
+from = ["CLICommand", "ConfigParameter"]
+to   = ["ErrorCode", "State"]
+
+# Replication runs between replicas, across nodes. Both ends are the same set,
+# which makes it a self-relation: "a replicates_to b" read backwards is the
+# same fact about the same pair.
+[[relation]]
+name = "replicates_to"
+from = ["Replica", "Node"]
+to   = ["Replica", "Node"]
+
+# Two things that cannot both hold. Same shape as replicates_to and same
+# reason: a conflict is symmetric.
+[[relation]]
+name = "conflicts_with"
+from = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter"]
+to   = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter"]
 
 # ---------------------------------------------------------------------------
 # Code vocabulary — the admission list for `oss-agent ingest-repo`, which
