@@ -111,6 +111,36 @@ func registerKBRoutes(mux *http.ServeMux, ag *ossagent.Agent) {
 		writeKBJSON(w, map[string]any{"ok": !d.Failed, "checks": checks})
 	})
 
+	// GET /ai/kb/resolve merges entities that are one concept spelled two ways.
+	//
+	// Entity ids keep separators, so "DRBDResource" and "DRBD resource" are two
+	// nodes and each document's edges attached to whichever spelling it used.
+	// The copilot's walk pools them, so answers no longer depend on how a name
+	// was typed — but the graph still holds two entities and doctor still warns.
+	// This ends it.
+	//
+	// GET and dry by default: deleting a node is not reversible, and the list is
+	// short enough to read first. ?apply=true makes the merges.
+	mux.HandleFunc("/ai/kb/resolve", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "use GET", http.StatusMethodNotAllowed)
+			return
+		}
+		apply := r.URL.Query().Get("apply") == "true"
+		rep, err := ag.ResolveSpellings(r.Context(), !apply)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		groups := make([]map[string]any, 0, len(rep.Groups))
+		for _, g := range rep.Groups {
+			groups = append(groups, map[string]any{"canonical": g.Canonical, "aliases": g.Aliases})
+		}
+		writeKBJSON(w, map[string]any{
+			"applied": apply, "merged": rep.Merged, "groups": groups,
+		})
+	})
+
 	// POST /ai/kb/upload ingests documents sent over the wire.
 	//
 	// /ai/kb/ingest reads a directory ON THE NODE, so loading a corpus from
