@@ -205,8 +205,12 @@ repos = []
 # The OCFAgent runs underneath and does not promote anything itself.
 [[relation]]
 name = "promotes"
-from = ["PromoterConfig", "CLICommand"]
-to   = ["DRBDResource"]
+# The graph disagreed with the first version of this and was right: `drbd-promote@sds-meta`
+# promotes sds-meta, `Node: hp` promotes sds-meta, and drbd-reactor promotes resources.
+# That is the language DRBD itself uses. SystemdService stays on the from end only —
+# a promoter starting sds-ai.service is its start list, which `contains` already says.
+from = ["PromoterConfig", "CLICommand", "Node", "SystemdService", "Package"]
+to   = ["DRBDResource", "Volume"]
 
 # An event is what fires; a channel is what it goes out on.
 [[relation]]
@@ -232,7 +236,16 @@ to   = ["State"]
 # Configuration flows one way: the parameter configures the thing, never back.
 [[relation]]
 name = "configured_by"
-from = ["DRBDResource", "Gateway", "HAConfig", "PromoterConfig", "SystemdService", "WANTunnel", "CLICommand"]
+# Half of this relation's uses fell outside the first from list, and reading them
+# settled it: `StoragePool: vg0` IS configured by `--pool`, a CSI Volume by `--fstype`,
+# an OCFAgent by `ip`. Nearly anything in an ops domain is configured by a parameter,
+# so the from end is nearly the whole vocabulary — what the declaration is really for
+# here is the to end and the direction, both of which still hold.
+# ConfigParameter is deliberately absent: a parameter configured by another parameter
+# is the model being vague, and drift should keep saying so.
+from = ["DRBDResource", "Gateway", "HAConfig", "PromoterConfig", "SystemdService", "WANTunnel",
+        "CLICommand", "Node", "Volume", "Replica", "StoragePool", "OCFAgent", "Package",
+        "NotificationChannel", "BackupTarget", "BlockDevice"]
 to   = ["ConfigParameter"]
 
 # What clears an error. A command an operator runs, or a parameter they change.
