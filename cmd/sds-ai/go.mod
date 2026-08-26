@@ -2,7 +2,7 @@ module github.com/liliang-cn/sds/cmd/sds-ai
 
 go 1.25.5
 
-require github.com/liliang-cn/oss-agent v0.21.0
+require github.com/liliang-cn/oss-agent v0.22.0
 
 require (
 	github.com/0x51-dev/rdf v0.1.0 // indirect
@@ -65,7 +65,7 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/json-iterator/go v0.0.0-20171115153421-f7279a603ede // indirect
 	github.com/liliang-cn/agent-go/v3 v3.10.0 // indirect
-	github.com/liliang-cn/cortexdb/v2 v2.73.0 // indirect
+	github.com/liliang-cn/cortexdb/v2 v2.77.0 // indirect
 	github.com/liliang-cn/mcp-swagger-server v0.4.0 // indirect
 	github.com/liliang-cn/pipeit v0.1.0 // indirect
 	github.com/liliang-cn/skills-go v1.9.0 // indirect
