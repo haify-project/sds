@@ -139,9 +139,33 @@ func normalizeDeviceList(devices []string) []string {
 
 // ==================== POOL OPERATIONS ====================
 
+// defaultedPoolType resolves an omitted pool type from the controller's
+// configuration.
+//
+// The policy belongs here rather than in a client. It used to live in sds-cli,
+// which substituted "lvm-thin" before the request ever left the process — so the
+// CLI created thin pools while every other caller that omitted the type (the
+// REST gateway, MCP, the web UI) reached normalizeLVMPoolType with an empty
+// string and got a thick group instead. Two entry points, two silently
+// different defaults, and storage.default_pool_type — the setting that exists to
+// say which one — read by nobody.
+//
+// An unset configuration falls through to normalizeLVMPoolType's own handling of
+// "", which is how a Controller built without config (tests, embedded uses)
+// keeps working.
+func (sm *StorageManager) defaultedPoolType(poolType string) string {
+	if strings.TrimSpace(poolType) != "" {
+		return poolType
+	}
+	if sm.controller == nil || sm.controller.config == nil {
+		return poolType
+	}
+	return sm.controller.config.Storage.DefaultPoolType
+}
+
 // CreatePool creates a storage pool
 func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64) error {
-	normalizedType, err := normalizeLVMPoolType(poolType)
+	normalizedType, err := normalizeLVMPoolType(sm.defaultedPoolType(poolType))
 	if err != nil {
 		return err
 	}

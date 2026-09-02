@@ -83,7 +83,7 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			if err := c.AddBackupTarget(ctx, &sdspb.AddBackupTargetRequest{
 				Name: name, Kind: kind, Prefix: prefix,
@@ -93,7 +93,11 @@ Examples:
 			}); err != nil {
 				return fmt.Errorf("failed to add backup target: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Backup target %q saved\n", name)
+			// Writes to the command's own output stream are best-effort. The only ways
+			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// which this command can report anywhere the operator is still looking, and
+			// treating them as errors would report a successful operation as failed.
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Backup target %q saved\n", name)
 			return nil
 		},
 	}
@@ -124,7 +128,7 @@ func backupTargetListCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			targets, err := c.ListBackupTargets(ctx)
 			if err != nil {
@@ -132,13 +136,13 @@ func backupTargetListCommand() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			if len(targets) == 0 {
-				fmt.Fprintln(out, "No backup targets configured")
+				_, _ = fmt.Fprintln(out, "No backup targets configured")
 				return nil
 			}
 			for _, t := range targets {
-				fmt.Fprintf(out, "%s\n  %s\n", t.Name, t.Description)
+				_, _ = fmt.Fprintf(out, "%s\n  %s\n", t.Name, t.Description)
 				if t.User != "" {
-					fmt.Fprintf(out, "  user: %s\n", t.User)
+					_, _ = fmt.Fprintf(out, "  user: %s\n", t.User)
 				}
 			}
 			return nil
@@ -164,12 +168,12 @@ it anyway, for a target whose storage is already gone.`,
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			if err := c.DeleteBackupTarget(ctx, args[0], force); err != nil {
 				return fmt.Errorf("failed to delete backup target: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Backup target %q deleted\n", args[0])
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Backup target %q deleted\n", args[0])
 			return nil
 		},
 	}

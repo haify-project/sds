@@ -2,12 +2,10 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
@@ -96,9 +94,7 @@ func TestListLvmSnapshotsFiltersByResource(t *testing.T) {
 	// to be accepted, printed in the heading, and then ignored, so listing two
 	// different resources returned identical lists of everything.
 	ctrl := newBasicTestController(snapshotDeployment(realLvsOutput))
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	ctx := context.Background()
@@ -133,12 +129,10 @@ func TestListLvmSnapshotsRejectsAnUnknownResource(t *testing.T) {
 	// Better an error than the whole pool under a heading naming a resource
 	// that does not exist.
 	ctrl := newBasicTestController(snapshotDeployment(realLvsOutput))
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	_, err = ctrl.storage.ListLvmSnapshots(context.Background(), "sds_sdspool", "node-e", "nope")
+	_, err := ctrl.storage.ListLvmSnapshots(context.Background(), "sds_sdspool", "node-e", "nope")
 	require.Error(t, err)
 }
 

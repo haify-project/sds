@@ -220,12 +220,12 @@ func addDisklessClientBlock(content, node, ip string, port int) (string, error) 
 	}
 
 	var blk strings.Builder
-	blk.WriteString(fmt.Sprintf("\n    on %s {\n", node))
-	blk.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
-	blk.WriteString(fmt.Sprintf("        node-id   %d;\n", nextID))
+	fmt.Fprintf(&blk, "\n    on %s {\n", node)
+	fmt.Fprintf(&blk, "        address   %s:%d;\n", ip, port)
+	fmt.Fprintf(&blk, "        node-id   %d;\n", nextID)
 	for _, v := range vols {
-		blk.WriteString(fmt.Sprintf("        volume %d {\n", v.VolumeID))
-		blk.WriteString(fmt.Sprintf("            device    minor %d;\n", v.Minor))
+		fmt.Fprintf(&blk, "        volume %d {\n", v.VolumeID)
+		fmt.Fprintf(&blk, "            device    minor %d;\n", v.Minor)
 		blk.WriteString("            disk      none;\n")
 		blk.WriteString("        }\n")
 	}

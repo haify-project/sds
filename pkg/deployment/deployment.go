@@ -185,7 +185,11 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 				Error:   err,
 			}
 			configResult.Success = false
-			os.Remove(localTempFile)
+			// Best-effort cleanup of the staging copy. The host has already been
+			// recorded as failed with the error that matters; the temp path is a
+			// fixed name that the next distribution overwrites, so a failed
+			// unlink leaks nothing but one stale file.
+			_ = os.Remove(localTempFile)
 			continue
 		}
 
@@ -198,7 +202,7 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 				Error:   err,
 			}
 			configResult.Success = false
-			os.Remove(localTempFile)
+			_ = os.Remove(localTempFile)
 			continue
 		}
 
@@ -302,7 +306,9 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 			}
 			c.logger.Debug("Remote config distributed", zap.String("host", host))
 		}
-		os.Remove(localTempFile)
+		// The remote copies are done with the staging file; same best-effort
+		// reasoning as the local branch above.
+		_ = os.Remove(localTempFile)
 	}
 
 	// Run post-command if specified
@@ -344,7 +350,18 @@ func (c *Client) DistributeSecret(ctx context.Context, hosts []string, content, 
 	if err != nil {
 		return nil, fmt.Errorf("DistributeSecret: stage secret: %w", err)
 	}
-	defer os.RemoveAll(dir)
+	// This is the one cleanup in this file that is worth a word if it fails: the
+	// staged file is the secret itself, and leaving it on the controller's disk
+	// defeats the point of taking the scp path in the first place. Nothing can
+	// be done about it from here — the caller's operation may well have
+	// succeeded — so it is logged rather than returned, loudly enough that an
+	// operator can go and shred it.
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			c.logger.Warn("failed to remove staged secret from the controller; remove it by hand",
+				zap.String("dir", dir), zap.Error(err))
+		}
+	}()
 	local := filepath.Join(dir, filepath.Base(relPath))
 	if err := os.WriteFile(local, []byte(content), 0600); err != nil {
 		return nil, fmt.Errorf("DistributeSecret: stage secret: %w", err)

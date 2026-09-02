@@ -37,7 +37,7 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 		return &v1.CreateNFSGatewayResponse{
 			Success: false,
 			Message: fmt.Sprintf("invalid service IP: %v", err),
-		}, err
+		}, invalidArgument(fmt.Errorf("invalid service IP: %w", err))
 	}
 
 	// Fail early with a clear message if the OCF agents an NFS gateway needs are

@@ -31,7 +31,7 @@ func iscsiLUNAdd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.AddISCSILUN(cmd.Context(), resource, lun, device)
 			if err != nil {
@@ -65,7 +65,7 @@ func iscsiLUNRemove() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.RemoveISCSILUN(cmd.Context(), resource, lun)
 			if err != nil {
@@ -96,7 +96,7 @@ func iscsiLUNList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			luns, err := sdsClient.ListISCSILUNs(cmd.Context(), resource)
 			if err != nil {
@@ -146,7 +146,7 @@ func iscsiInitiatorAdd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.AddISCSIInitiator(cmd.Context(), resource, initiator)
 			if err != nil {
@@ -177,7 +177,7 @@ func iscsiInitiatorRemove() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.RemoveISCSIInitiator(cmd.Context(), resource, initiator)
 			if err != nil {
@@ -208,7 +208,7 @@ func iscsiInitiatorList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			initiators, err := sdsClient.ListISCSIInitiators(cmd.Context(), resource)
 			if err != nil {
@@ -258,7 +258,7 @@ func iscsiCHAPSet() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.SetISCSIChap(cmd.Context(), resource, username, password, mutual)
 			if err != nil {
@@ -292,7 +292,7 @@ func iscsiCHAPGet() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			resp, err := sdsClient.GetISCSIChap(cmd.Context(), resource)
 			if err != nil {

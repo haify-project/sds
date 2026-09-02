@@ -614,6 +614,33 @@ func (rm *ResourceManager) primaryBackingSizes(ctx context.Context, hosts []stri
 // quorumLineRe matches the `quorum <value>;` line inside a resource's options.
 var quorumLineRe = regexp.MustCompile(`(?m)^(\s*)quorum\s+\S+;`)
 
+// primarySiteQuorum renders the `quorum` value for a resource with an off-site
+// DR: a majority of the nodes that could actually take over.
+//
+// DRBD counts every configured node toward a majority, but the DR is an
+// asynchronous copy that is never promoted automatically — it cannot take over,
+// so letting it vote on whether the primary site may accept writes is backwards.
+// Worse, it actively costs availability: adding a DR to a 3-node resource lifts
+// the bar from 2 votes to 3, so the site that used to survive one local failure
+// no longer does. That is how a quorum tiebreaker can be added, a DR attached,
+// and the tiebreaker's vote silently cancelled out.
+//
+// The narrower guarantee is deliberate and bounded: the excluded node is
+// unreachable from the primary site's network by construction — it is reached
+// only through a proxy tunnel — so it cannot form a rival quorate partition with
+// any local node. This is not the same as picking a small number arbitrarily.
+//
+// This is the only place the number is computed. It used to be derived here and
+// again, independently, at each of the two call sites that narrow a resource's
+// quorum, while the tests asserted on a third copy that nothing called — so the
+// arithmetic the cluster actually ran was unguarded.
+func primarySiteQuorum(localVoters int) string {
+	if localVoters < 1 {
+		localVoters = 1
+	}
+	return strconv.Itoa(localVoters/2 + 1)
+}
+
 // setLocalSiteQuorum rewrites a config's quorum to a majority of the primary
 // site, so attaching a DR does not raise the bar the local nodes must clear.
 //
@@ -622,10 +649,7 @@ var quorumLineRe = regexp.MustCompile(`(?m)^(\s*)quorum\s+\S+;`)
 // suddenly needs 3 of 4 votes and no longer does. The operator asked for an
 // off-site copy and silently got a downgrade to local resilience.
 func setLocalSiteQuorum(content string, localVoters int) string {
-	if localVoters < 1 {
-		localVoters = 1
-	}
-	want := strconv.Itoa(localVoters/2 + 1)
+	want := primarySiteQuorum(localVoters)
 	if quorumLineRe.MatchString(content) {
 		return quorumLineRe.ReplaceAllString(content, "${1}quorum "+want+";")
 	}

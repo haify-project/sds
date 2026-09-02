@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -776,12 +775,10 @@ func TestStorageManagerCreatePoolPersistsDatabaseState(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	err = ctrl.storage.CreatePool(context.Background(), "data-pool", "lvm-thin", "node1", []string{"/dev/sdb", "/dev/sdc"}, 100)
+	err := ctrl.storage.CreatePool(context.Background(), "data-pool", "lvm-thin", "node1", []string{"/dev/sdb", "/dev/sdc"}, 100)
 	require.NoError(t, err)
 
 	stored, err := ctrl.db.GetPool(context.Background(), "sds_data-pool")
@@ -799,12 +796,10 @@ func TestStorageManagerCreateZFSPoolPersistsThinState(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	err = ctrl.storage.CreateZFSPool(context.Background(), "tank", "node1", []string{"/dev/nvme0n1"})
+	err := ctrl.storage.CreateZFSPool(context.Background(), "tank", "node1", []string{"/dev/nvme0n1"})
 	require.NoError(t, err)
 
 	require.Len(t, dep.zfsCreatePoolCalls, 1)
@@ -826,9 +821,7 @@ func TestStorageManagerAddDiskUpdatesPersistedPoolDevices(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{
@@ -838,7 +831,7 @@ func TestStorageManagerAddDiskUpdatesPersistedPoolDevices(t *testing.T) {
 		Devices: "/dev/sdb",
 	}))
 
-	err = ctrl.storage.AddDiskToPool(context.Background(), "data-pool", "/dev/sdc", "node1")
+	err := ctrl.storage.AddDiskToPool(context.Background(), "data-pool", "/dev/sdc", "node1")
 	require.NoError(t, err)
 
 	stored, err := ctrl.db.GetPool(context.Background(), "sds_data-pool")
@@ -852,9 +845,7 @@ func TestStorageManagerDeletePoolRemovesPersistedState(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{
@@ -863,7 +854,7 @@ func TestStorageManagerDeletePoolRemovesPersistedState(t *testing.T) {
 		Node: "node1",
 	}))
 
-	err = ctrl.storage.DeletePool(context.Background(), "data-pool", "node1")
+	err := ctrl.storage.DeletePool(context.Background(), "data-pool", "node1")
 	require.NoError(t, err)
 	_, err = ctrl.db.GetPool(context.Background(), "sds_data-pool")
 	assert.ErrorContains(t, err, "not found")
@@ -879,9 +870,7 @@ func TestStorageManagerGetPoolFallsBackToDatabase(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{
@@ -934,9 +923,7 @@ func TestStorageManagerDeletePoolUsesZFSPathFromPersistedType(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{
@@ -945,7 +932,7 @@ func TestStorageManagerDeletePoolUsesZFSPathFromPersistedType(t *testing.T) {
 		Node: "node1",
 	}))
 
-	err = ctrl.storage.DeletePool(context.Background(), "tank", "node1")
+	err := ctrl.storage.DeletePool(context.Background(), "tank", "node1")
 	require.NoError(t, err)
 	require.Len(t, dep.zfsDestroyPoolCalls, 1)
 	assert.Equal(t, []string{"10.0.0.1"}, dep.zfsDestroyPoolCalls[0].hosts)
@@ -1002,12 +989,10 @@ func TestResourceManagerCreateResourcePersistsInitialVolume(t *testing.T) {
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 	ctrl.hostsMap["node2"] = "10.0.0.2"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	err = ctrl.resources.CreateResourceWithVolumesMetadata(context.Background(), "res1", 7001, []string{"node1", "node2"}, "", "lvm", nil,
+	err := ctrl.resources.CreateResourceWithVolumesMetadata(context.Background(), "res1", 7001, []string{"node1", "node2"}, "", "lvm", nil,
 		[]VolumeSpec{{SizeGB: 10, Pool: "data-pool"}}, nil, ResourceMetadata{
 			Profile: "production",
 			Labels:  map[string]string{"app": "postgres"},
@@ -1101,9 +1086,7 @@ func TestResourceManagerDeleteResourceRemovesDatabaseRecord(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1131,7 +1114,7 @@ func TestResourceManagerDeleteResourceRemovesDatabaseRecord(t *testing.T) {
 	ctrl.resources.hosts = []string{"wrong-host"}
 	ctrl.resources.mu.Unlock()
 
-	err = ctrl.resources.DeleteResource(context.Background(), "res1", true)
+	err := ctrl.resources.DeleteResource(context.Background(), "res1", true)
 	require.NoError(t, err)
 	require.Len(t, dep.drbdDownCalls, 1)
 	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, dep.drbdDownCalls[0].hosts)
@@ -1163,9 +1146,7 @@ func TestResourceManagerGetResourceUsesResourceSpecificHosts(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1185,7 +1166,7 @@ func TestResourceManagerGetResourceUsesResourceSpecificHosts(t *testing.T) {
 	ctrl.resources.hosts = []string{"wrong-host"}
 	ctrl.resources.mu.Unlock()
 
-	_, err = ctrl.resources.GetResource(context.Background(), "res1")
+	_, err := ctrl.resources.GetResource(context.Background(), "res1")
 	require.NoError(t, err)
 	require.Len(t, dep.drbdStatusCalls, 1)
 	assert.Equal(t, []string{"10.0.0.1"}, dep.drbdStatusCalls[0].hosts)
@@ -1199,9 +1180,7 @@ func TestResourceManagerGetResourceFallsBackToPersistedVolumes(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1245,9 +1224,7 @@ func TestResourceManagerAddVolumePersistsMetadata(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1262,7 +1239,7 @@ func TestResourceManagerAddVolumePersistsMetadata(t *testing.T) {
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 	ctrl.hostsMap["node2"] = "10.0.0.2"
 
-	err = ctrl.resources.AddVolume(context.Background(), "res1", "res1_logs", "data-pool", 20)
+	err := ctrl.resources.AddVolume(context.Background(), "res1", "res1_logs", "data-pool", 20)
 	require.NoError(t, err)
 	require.Len(t, dep.distributedConfigs, 1)
 	assert.Contains(t, dep.distributedConfigs[0].content, "volume 1 {")
@@ -1295,9 +1272,7 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1320,7 +1295,7 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 	ctrl.hostsMap["node2"] = "10.0.0.2"
 
-	err = ctrl.resources.RemoveVolume(context.Background(), "res1", 1)
+	err := ctrl.resources.RemoveVolume(context.Background(), "res1", 1)
 	require.NoError(t, err)
 	require.Len(t, dep.distributedConfigs, 1)
 	assert.NotContains(t, dep.distributedConfigs[0].content, "volume 1 {")
@@ -1362,9 +1337,7 @@ func TestResourceManagerRemoveVolumeErrorsWhenBackingRemovalFails(t *testing.T) 
 		},
 	}
 	ctrl := newBasicTestController(dep)
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
 		Name: "res1", Port: 7001, Nodes: "node1,node2", Protocol: "C", Replicas: 2,
@@ -1372,7 +1345,7 @@ func TestResourceManagerRemoveVolumeErrorsWhenBackingRemovalFails(t *testing.T) 
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	err = ctrl.resources.RemoveVolume(context.Background(), "res1", 1)
+	err := ctrl.resources.RemoveVolume(context.Background(), "res1", 1)
 	require.Error(t, err, "RemoveVolume must not report success when lvremove fails")
 }
 
@@ -1388,9 +1361,7 @@ func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1413,7 +1384,7 @@ func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 	ctrl.hostsMap["node2"] = "10.0.0.2"
 
-	err = ctrl.resources.ResizeVolume(context.Background(), "res1", 1, 50)
+	err := ctrl.resources.ResizeVolume(context.Background(), "res1", 1, 50)
 	require.NoError(t, err)
 	var sawLVResize, sawDRBDResize bool
 	for _, call := range dep.execCalls {
@@ -1445,9 +1416,7 @@ func TestResourceManagerMakeHaUsesResourceNodesOnly(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1493,9 +1462,7 @@ func TestResourceManagerRemoveHaUsesResourceNodesOnly(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1516,7 +1483,7 @@ func TestResourceManagerRemoveHaUsesResourceNodesOnly(t *testing.T) {
 	ctrl.resources.hosts = []string{"wrong-host"}
 	ctrl.resources.mu.Unlock()
 
-	err = ctrl.resources.RemoveHa(context.Background(), "res1")
+	err := ctrl.resources.RemoveHa(context.Background(), "res1")
 	require.NoError(t, err)
 	require.Len(t, dep.deleteConfigCalls, 1)
 	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, dep.deleteConfigCalls[0].hosts)
@@ -1528,9 +1495,7 @@ func TestResourceManagerRemoveHaStopsVIP(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1601,9 +1566,7 @@ func TestResourceManagerEvictHaUsesResourceNodesOnly(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
@@ -1621,7 +1584,7 @@ func TestResourceManagerEvictHaUsesResourceNodesOnly(t *testing.T) {
 	ctrl.resources.hosts = []string{"wrong-host"}
 	ctrl.resources.mu.Unlock()
 
-	err = ctrl.resources.EvictHa(context.Background(), "res1")
+	err := ctrl.resources.EvictHa(context.Background(), "res1")
 	require.NoError(t, err)
 
 	var sawRemoteStatus, sawEvict bool

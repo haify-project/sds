@@ -50,6 +50,19 @@ type NodeStateInfo struct {
 	// un-clearable alerts is worse than no alerting: it trains people to
 	// ignore the ones that matter.
 	ExpectedDiskless bool
+	// SyncPercent is resync completion for this replica in 0..100, or nil when
+	// the status source carried no completion figure at all.
+	//
+	// Nil is not zero. Only the structured drbdsetup JSON reports completion;
+	// the plain-text fallback parse has no such field, and charting its zero
+	// value would paint a fully in-sync replica as one whose resync never
+	// started. Nothing here alerts on it — it is carried for Observer.
+	SyncPercent *float64
+	// Quorum reports whether this replica currently holds DRBD quorum, or nil
+	// when DRBD did not say. Nil is the normal case for peers: a node's status
+	// only carries its own quorum, and a peer's would be a guess. Carried for
+	// Observer; the quorum alerts are the operator's to write from the metric.
+	Quorum *bool
 }
 
 // ResourceStatusInfo is one resource's health across its replicas.
@@ -62,6 +75,22 @@ type ResourceStatusInfo struct {
 	WANEnabled bool
 	WANHealthy bool
 	WANMessage string
+}
+
+// Degraded reports whether any replica of the resource is in a faulty state.
+//
+// It is the same predicate the degrade alert fires on, exported rather than
+// reimplemented so a "degraded resources" gauge and a resource.degraded alert
+// can never disagree about the same instant — the disagreement an operator
+// notices is the one between the alert that paged them and the page they open
+// next.
+func (r ResourceStatusInfo) Degraded() bool {
+	for _, state := range r.NodeStates {
+		if bad, _ := isDegraded(state); bad {
+			return true
+		}
+	}
+	return false
 }
 
 // ResourceLister is satisfied by *controller.ResourceManager or a fake in tests.
@@ -100,12 +129,92 @@ type PoolStatusInfo struct {
 	// OutOfSpace is LVM's own out-of-data-space flag, which is a fact rather
 	// than a threshold and is alerted on regardless of the percentages.
 	OutOfSpace bool
+	// TotalBytes and FreeBytes are the volume group's own capacity, and
+	// ThinSizeBytes the data capacity of the thin pool inside it — the figure
+	// DataPercent is a percentage of.
+	//
+	// No condition here reads them, for the reason in the type comment: SDS
+	// drives vg_free to zero on purpose, so alerting on it would fire forever.
+	// They are carried for Observer, which charts capacity rather than judging
+	// it, and for which a thick group's group-level figures are the only ones
+	// that exist.
+	TotalBytes    uint64
+	FreeBytes     uint64
+	ThinSizeBytes uint64
 }
 
 // PoolLister reports the capacity of every managed pool. It is optional: a
 // Monitor built without one never raises pool events.
 type PoolLister interface {
 	GetPoolStatusList(ctx context.Context) ([]PoolStatusInfo, error)
+}
+
+// SourceStatus is how one of the monitor's data sources answered on one poll.
+//
+// The three states it distinguishes are the whole point of it. A source that is
+// switched off, a source that failed, and a source that answered with nothing
+// look identical once flattened to a slice of results, and a consumer that
+// cannot tell them apart will publish "zero nodes are reachable" for a database
+// error — which is precisely the reading an operator cannot distinguish from a
+// dead cluster.
+type SourceStatus struct {
+	// Enabled is false when the source is not configured at all. Nothing about
+	// it was attempted, so nothing about it should be reported either way.
+	Enabled bool
+	// OK is true when the listing succeeded. False with Enabled set means the
+	// listing was attempted and failed; Items is then empty and means nothing.
+	OK bool
+	// Err is the listing failure, nil when OK.
+	Err error
+	// Duration is how long the listing took, successful or not.
+	Duration time.Duration
+}
+
+// ResourceObservation is the resource listing of one poll.
+type ResourceObservation struct {
+	SourceStatus
+	Items []ResourceStatusInfo
+}
+
+// NodeObservation is the node listing of one poll.
+type NodeObservation struct {
+	SourceStatus
+	Items []NodeStatusInfo
+}
+
+// PoolObservation is the pool listing of one poll.
+type PoolObservation struct {
+	SourceStatus
+	Items []PoolStatusInfo
+}
+
+// Observation is everything one poll cycle saw, exactly as the checks saw it.
+type Observation struct {
+	Resources ResourceObservation
+	Nodes     NodeObservation
+	Pools     PoolObservation
+}
+
+// Observer is handed each poll's Observation after the events for it have been
+// published.
+//
+// The monitor's job is to turn cluster state into events, but the state it
+// gathers is also exactly what a metrics exporter needs, and gathering it twice
+// would double the SSH traffic and let the two views disagree about the same
+// instant. So one poll is published to whoever asked for it.
+//
+// This is an interface rather than a direct call into a metrics package for the
+// same reason the three listers above are interfaces: alert depends on
+// abstractions in both directions, has no opinion about what a consumer does
+// with a snapshot, and stays testable with nothing but fakes. The adapter that
+// turns an Observation into Prometheus series lives on the controller side,
+// alongside the adapters that satisfy the listers.
+//
+// Observed is called from the poll goroutine and must not block: a slow
+// observer delays the next health check, which is the one thing the monitor
+// cannot afford.
+type Observer interface {
+	Observed(Observation)
 }
 
 // source names which lister owns a condition, so a condition can be cleared
@@ -134,6 +243,7 @@ type Monitor struct {
 	nearFull  float64
 	full      float64
 	bus       *event.Bus
+	observer  Observer
 	log       *zap.Logger
 
 	mu sync.Mutex
@@ -183,6 +293,9 @@ type Options struct {
 	// threshold must not silently disable the alerting it configures.
 	NearFullPercent float64
 	FullPercent     float64
+	// Observer is optional; nil means each poll's snapshot is used for events
+	// only.
+	Observer Observer
 	// Logger is optional.
 	Logger *zap.Logger
 }
@@ -210,6 +323,7 @@ func NewMonitor(bus *event.Bus, opts Options) *Monitor {
 		nearFull:    near,
 		full:        full,
 		bus:         bus,
+		observer:    opts.Observer,
 		log:         opts.Logger,
 		firing:      make(map[string]bool),
 		owners:      make(map[string]source),
@@ -281,10 +395,17 @@ func (m *Monitor) Poll(ctx context.Context) {
 	// scope records every condition this cycle actually evaluated, so a firing
 	// alert whose subject has since vanished can be cleared. See resolveVanished.
 	sc := &pollScope{seen: map[string]bool{}, live: map[string]bool{}, livePools: map[string]bool{}}
-	m.checkResources(ctx, sc)
-	m.checkNodes(ctx, sc)
-	m.checkPools(ctx, sc)
+	var obs Observation
+	m.checkResources(ctx, sc, &obs)
+	m.checkNodes(ctx, sc, &obs)
+	m.checkPools(ctx, sc, &obs)
 	m.resolveVanished(sc)
+
+	// After the events, not before: an observer that panics or blocks must not
+	// be able to stop a degradation from being reported.
+	if m.observer != nil {
+		m.observer.Observed(obs)
+	}
 
 	m.pollsMu.Lock()
 	m.polls++
@@ -314,15 +435,22 @@ func (s *pollScope) mark(key string) {
 	}
 }
 
-func (m *Monitor) checkResources(ctx context.Context, sc *pollScope) {
+func (m *Monitor) checkResources(ctx context.Context, sc *pollScope, obs *Observation) {
 	if m.resources == nil {
 		return
 	}
+	obs.Resources.Enabled = true
+
+	start := time.Now()
 	resources, err := m.resources.GetResourceStatusList(ctx)
+	obs.Resources.Duration = time.Since(start)
 	if err != nil {
+		obs.Resources.Err = err
 		m.log.Warn("alert monitor: list resources failed", zap.Error(err))
 		return
 	}
+	obs.Resources.OK = true
+	obs.Resources.Items = resources
 	sc.resourcesOK = true
 
 	for _, res := range resources {
@@ -461,15 +589,22 @@ func (m *Monitor) checkWAN(res ResourceStatusInfo, sc *pollScope) {
 		fmt.Sprintf("resource %s WAN replication recovered", res.Name))
 }
 
-func (m *Monitor) checkNodes(ctx context.Context, sc *pollScope) {
+func (m *Monitor) checkNodes(ctx context.Context, sc *pollScope, obs *Observation) {
 	if m.nodes == nil {
 		return
 	}
+	obs.Nodes.Enabled = true
+
+	start := time.Now()
 	nodes, err := m.nodes.GetNodeStatusList(ctx)
+	obs.Nodes.Duration = time.Since(start)
 	if err != nil {
+		obs.Nodes.Err = err
 		m.log.Warn("alert monitor: list nodes failed", zap.Error(err))
 		return
 	}
+	obs.Nodes.OK = true
+	obs.Nodes.Items = nodes
 	sc.nodesOK = true
 
 	for _, n := range nodes {
@@ -495,15 +630,22 @@ func (m *Monitor) checkNodes(ctx context.Context, sc *pollScope) {
 // diskful — which surfaces as a resource.degraded alert naming a *replica*
 // problem for what is really a *capacity* problem, and only once the damage is
 // done. Watching the pool is what makes it preventable.
-func (m *Monitor) checkPools(ctx context.Context, sc *pollScope) {
+func (m *Monitor) checkPools(ctx context.Context, sc *pollScope, obs *Observation) {
 	if m.pools == nil {
 		return
 	}
+	obs.Pools.Enabled = true
+
+	start := time.Now()
 	pools, err := m.pools.GetPoolStatusList(ctx)
+	obs.Pools.Duration = time.Since(start)
 	if err != nil {
+		obs.Pools.Err = err
 		m.log.Warn("alert monitor: list pools failed", zap.Error(err))
 		return
 	}
+	obs.Pools.OK = true
+	obs.Pools.Items = pools
 	sc.poolsOK = true
 
 	for _, p := range pools {

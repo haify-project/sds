@@ -13,9 +13,20 @@ import (
 	"go.uber.org/zap"
 )
 
+// newTestDB opens a throwaway metadata database under the test's own temp
+// directory and closes it when the test ends.
+//
+// The close is registered after t.TempDir's removal and so runs before it
+// (Cleanup is LIFO): the bolt file is released while the directory it lives in
+// still exists. Its error is dropped on purpose — every assertion the test
+// makes has already run against the open handle, and bolt fsyncs at commit
+// rather than at close, so a failure to unmap the file cannot invalidate
+// anything the test observed.
 func newTestDB(t *testing.T) *database.DB {
+	t.Helper()
 	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 

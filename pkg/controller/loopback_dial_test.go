@@ -87,7 +87,7 @@ func TestLoopbackDialOptionsIgnoreAnEnvironmentProxy(t *testing.T) {
 	target := fmt.Sprintf("0.0.0.0:%d", grpcLis.Addr().(*net.TCPAddr).Port)
 	mux := runtime.NewServeMux()
 	require.NoError(t, sdspb.RegisterSDSControllerHandlerFromEndpoint(
-		context.Background(), mux, target, loopbackDialOptions()))
+		context.Background(), mux, target, loopbackDialOptions(nil)))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/logs", nil)
 	rec := httptest.NewRecorder()

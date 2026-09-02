@@ -205,7 +205,7 @@ level = "info"
 format = "json"
 
 [storage]
-default_pool_type = "vg"
+default_pool_type = "thin_pool"
 default_snapshot_suffix = "_snap"
 ```
 

@@ -44,9 +44,9 @@ rollback() {
     systemctl reload drbd-reactor 2>/dev/null
 `)
 	for _, addr := range standbyAddrs {
-		sb.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&sb,
 			"    ssh %s %s 'sudo rm -f %s && sudo systemctl reload drbd-reactor' 2>/dev/null\n",
-			selfHaSSHOpts, addr, selfHaReactorConfig))
+			selfHaSSHOpts, addr, selfHaReactorConfig)
 	}
 	sb.WriteString(`    systemctl enable --now sds-controller
     echo "[selfha] rollback finished: $(date -Is)"
@@ -74,9 +74,9 @@ systemctl reload drbd-reactor
 	if len(standbyAddrs) > 0 {
 		sb.WriteString("\n# 4. Activate on standbys: they see a peer Primary and stay passive.\n")
 		for _, addr := range standbyAddrs {
-			sb.WriteString(fmt.Sprintf(
+			fmt.Fprintf(&sb,
 				"ssh %s %s 'sudo mv %s.disabled %s && sudo systemctl reload drbd-reactor'\n",
-				selfHaSSHOpts, addr, selfHaReactorConfig, selfHaReactorConfig))
+				selfHaSSHOpts, addr, selfHaReactorConfig, selfHaReactorConfig)
 		}
 	}
 	sb.WriteString(`
@@ -180,9 +180,9 @@ cp -a "$REACTOR_CONF" "$CONF_BACKUP" 2>/dev/null || true
 # promote/mount/VIP through stale systemd dependencies.
 `)
 	for _, addr := range otherAddrs {
-		sb.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&sb,
 			"ssh %s %s 'sudo rm -f %s %s.disabled && sudo systemctl stop \"drbd-services@$(systemd-escape \"%s\").target\" 2>/dev/null; %ssudo systemctl reload drbd-reactor; sudo rm -rf %s; sudo rm -f /etc/systemd/system/var-lib-sds.mount; sudo systemctl daemon-reload'\n",
-			selfHaSSHOpts, addr, selfHaReactorConfig, selfHaReactorConfig, SelfHaResource, vipStopRemote, dropins))
+			selfHaSSHOpts, addr, selfHaReactorConfig, selfHaReactorConfig, SelfHaResource, vipStopRemote, dropins)
 	}
 
 	sb.WriteString(`
@@ -215,9 +215,9 @@ sudo systemctl enable --now sds-controller'
 bash -c "${restore_cmds//sudo /}"
 `)
 	} else {
-		sb.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&sb, `
 ssh %s %s "$restore_cmds"
-`, selfHaSSHOpts, targetAddr))
+`, selfHaSSHOpts, targetAddr)
 	}
 	sb.WriteString(`rm -f "$CONF_BACKUP"
 echo "[selfha] disable complete: $(date -Is)"

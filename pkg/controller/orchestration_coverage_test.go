@@ -42,7 +42,10 @@ func TestControllerStartAndStopServers(t *testing.T) {
 func TestControllerStartReportsOccupiedGRPCPort(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:43511")
 	require.NoError(t, err)
-	defer listener.Close()
+	// The listener exists only to hold 43511 while Start is expected to fail on
+	// it. Its close error says nothing about that assertion, and the port is
+	// released by process exit regardless.
+	defer func() { _ = listener.Close() }()
 
 	ctrl := newBasicTestController(&fakeDeploymentClient{})
 	ctrl.config = &config.Config{Server: config.ServerConfig{ListenAddress: "127.0.0.1", Port: 43511}}

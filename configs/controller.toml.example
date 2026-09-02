@@ -24,18 +24,41 @@ parallel = 10
 # only a root controller can create — point it somewhere writable otherwise.
 # pki_dir = "/var/lib/sds/wanproxy-pki"
 
+# Transport security for the gRPC API. The REST gateway and the web UI ride on
+# the same server through an in-process hop, so they follow automatically.
+#
+# With this off, bearer tokens ([auth]/[rbac] below) cross the network in the
+# clear; the controller says so in its startup log.
+#
+# NOTE: ca_cert / client_cert / client_key described a *client* and were never
+# read by anything. A config still carrying them is now rejected at startup —
+# replace them with cert_file/key_file below. The client-side spellings live on
+# as sds-cli's --tls-ca / --tls-cert / --tls-key.
 [tls]
 enabled = false
-# ca_cert = "/etc/sds/certs/ca.crt"
-# client_cert = "/etc/sds/certs/client.crt"
-# client_key = "/etc/sds/certs/client.key"
+# The certificate this controller presents, and its private key.
+# cert_file = "/etc/sds/certs/server.crt"
+# key_file = "/etc/sds/certs/server.key"
+# Setting a client CA is what turns on mutual TLS: clients must then present a
+# certificate signed by it, and one that is not gets no further than the
+# handshake. Leave it unset for server-only TLS.
+# client_ca_file = "/etc/sds/certs/client-ca.crt"
 
 [log]
 level = "info"  # debug, info, warn, error
 format = "json"  # json or text
 
 [storage]
-default_pool_type = "vg"
+# What `pool create` builds when no --type is given, for every client: sds-cli,
+# the REST gateway, MCP and the web UI alike. Thin is the default because a
+# thick pool cannot hold a snapshot history — LVM reserves a fixed COW area per
+# snapshot (SDS takes 20% of the origin), so a 10 GiB pool holding a 6 GiB
+# volume fits two of them. Set "vg" for thick pools everywhere.
+#
+# Only LVM types belong here (vg, lvm, lvm-thin, thin-pool, thin_pool). A ZFS
+# pool is built from vdevs by a different call, so an omitted type never becomes
+# one, and the controller refuses to start rather than accept "zfs" here.
+default_pool_type = "thin_pool"
 default_snapshot_suffix = "_snap"
 
 [metrics]

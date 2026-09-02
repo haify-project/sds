@@ -5,11 +5,14 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/liliang-cn/sds/pkg/client"
 )
 
 var (
 	controllerAddr string
 	tokenFlag      string
+	tlsFlags       client.TLSOptions
 )
 
 func main() {
@@ -20,6 +23,17 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "Controller address")
 	rootCmd.PersistentFlags().StringVar(&tokenFlag, "token", "", "API token (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
+
+	// Transport security, matching the controller's [tls] section. Any of the
+	// material flags implies --tls, so an operator who points at a CA cannot
+	// end up talking plaintext to a TLS controller and reading the handshake
+	// error as an outage.
+	rootCmd.PersistentFlags().BoolVar(&tlsFlags.Enabled, "tls", false, "Connect over TLS (implied by --tls-ca/--tls-cert; env SDS_TLS)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.CACert, "tls-ca", "", "CA bundle that signed the controller certificate (env SDS_TLS_CA; default: system trust store)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.ClientCert, "tls-cert", "", "Client certificate, for a controller requiring mutual TLS (env SDS_TLS_CERT)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.ClientKey, "tls-key", "", "Client private key (env SDS_TLS_KEY)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.ServerName, "tls-server-name", "", "Name to verify against the controller certificate (env SDS_TLS_SERVER_NAME)")
+	rootCmd.PersistentFlags().BoolVar(&tlsFlags.Insecure, "tls-insecure", false, "Encrypt but do NOT verify the controller — accepts any certificate (env SDS_TLS_INSECURE)")
 
 	rootCmd.AddCommand(poolCommand())
 	rootCmd.AddCommand(nodeCommand())

@@ -269,3 +269,61 @@ func TestCreateVolumeAcceptsFilesystemMode(t *testing.T) {
 	require.NoError(t, err, "filesystem mode must still be accepted")
 	assert.Len(t, b.createCalls, 1)
 }
+
+// setPoolFree gives each node's copy of the test pool a free-space figure, so a
+// test can pit capacity-aware placement against candidate-list order.
+func (f *fakeBackend) setPoolFree(freeGBByNode map[string]uint64) {
+	addrByName := map[string]string{}
+	for _, n := range f.nodes {
+		addrByName[n.GetName()] = n.GetAddress()
+	}
+	for _, p := range f.pools {
+		for name, gb := range freeGBByNode {
+			if addrByName[name] == p.GetNode() {
+				p.FreeBytes = gb * giB
+			}
+		}
+	}
+}
+
+// A PVC must land where `sds-cli resource create` would: on the nodes with the
+// most room. Before capacity-aware placement this took n1 and n2 purely because
+// ListNodes returned them first, filling up an already-tight node.
+func TestCreateVolumePrefersNodesWithMostFreeSpace(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.setPoolFree(map[string]uint64{"n1": 4, "n2": 200, "n3": 500})
+
+	_, err := newTestController(b).CreateVolume(context.Background(), validCreateReq("pvc-cap"))
+	require.NoError(t, err)
+	require.Len(t, b.createCalls, 1)
+	assert.Equal(t, []string{"n3", "n2"}, b.createCalls[0].nodes)
+}
+
+// Capacity must never outrank topology: with --strict-topology the requisite
+// node is the one the scheduler already bound the Pod to, so a volume placed
+// elsewhere leaves that Pod unable to mount it.
+func TestCreateVolumeKeepsRequisiteNodeDespiteLowCapacity(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.setPoolFree(map[string]uint64{"n1": 3, "n2": 200, "n3": 500})
+
+	req := validCreateReq("pvc-topo")
+	req.AccessibilityRequirements = &csi.TopologyRequirement{Preferred: []*csi.Topology{
+		{Segments: map[string]string{TopologyKeyNode: "n1"}},
+	}}
+	_, err := newTestController(b).CreateVolume(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, b.createCalls, 1)
+	assert.Equal(t, []string{"n1", "n3"}, b.createCalls[0].nodes)
+}
+
+// Out of room everywhere must fail as ResourceExhausted, which is the status
+// external-provisioner reacts to by rescheduling rather than retrying forever.
+func TestCreateVolumeOutOfCapacityIsResourceExhausted(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.setPoolFree(map[string]uint64{"n1": 1, "n2": 1, "n3": 1})
+
+	_, err := newTestController(b).CreateVolume(context.Background(), validCreateReq("pvc-full"))
+	require.Error(t, err)
+	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+	assert.Empty(t, b.createCalls, "no resource may be created when placement fails")
+}

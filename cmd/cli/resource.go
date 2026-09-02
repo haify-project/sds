@@ -83,7 +83,7 @@ func resourceSetOptions() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 			if err := sdsClient.UpdateResourceOptions(ctx, args[0], options); err != nil {
 				return fmt.Errorf("failed to update options: %w", err)
 			}
@@ -196,7 +196,7 @@ func resourceCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer conn.Close()
+			defer closeClient(conn)
 
 			requestReplicas := replicas
 			if profile != "" && !cmd.Flags().Changed("replicas") {
@@ -358,7 +358,7 @@ func resourceAdopt() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			resp, err := sdsClient.AdoptResource(ctx, name, nodeList, port, protocol)
 			if err != nil {
@@ -399,7 +399,7 @@ func resourceGet() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			resource, err := sdsClient.GetResource(ctx, name)
 			if err != nil {
@@ -464,7 +464,7 @@ func resourceDelete() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.DeleteResource(ctx, name)
 			if err != nil {
@@ -491,7 +491,7 @@ func resourceList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			resources, err := sdsClient.ListResources(ctx)
 			if err != nil {
@@ -576,7 +576,7 @@ func resourceProfileCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer conn.Close()
+			defer closeClient(conn)
 			resp, err := grpcClient.CreateResourceProfile(cmd.Context(), &sdspb.CreateResourceProfileRequest{Profile: profile})
 			if err != nil {
 				return fmt.Errorf("failed to create resource profile: %w", err)
@@ -612,7 +612,7 @@ func resourceProfileGet() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer conn.Close()
+			defer closeClient(conn)
 			resp, err := grpcClient.GetResourceProfile(cmd.Context(), &sdspb.GetResourceProfileRequest{Name: args[0]})
 			if err != nil {
 				return fmt.Errorf("failed to get resource profile: %w", err)
@@ -635,7 +635,7 @@ func resourceProfileList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer conn.Close()
+			defer closeClient(conn)
 			resp, err := grpcClient.ListResourceProfiles(cmd.Context(), &sdspb.ListResourceProfilesRequest{})
 			if err != nil {
 				return fmt.Errorf("failed to list resource profiles: %w", err)
@@ -666,7 +666,7 @@ func resourceProfileDelete() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer conn.Close()
+			defer closeClient(conn)
 			resp, err := grpcClient.DeleteResourceProfile(cmd.Context(), &sdspb.DeleteResourceProfileRequest{Name: args[0]})
 			if err != nil {
 				return fmt.Errorf("failed to delete resource profile: %w", err)
@@ -749,7 +749,7 @@ resync finishes, this is permanent.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.RemoveReplica(ctx, resource, node); err != nil {
 				return fmt.Errorf("failed to remove replica: %w", err)
@@ -795,7 +795,7 @@ replication the moment it was promoted.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.AddReplica(ctx, resource, node); err != nil {
 				return fmt.Errorf("failed to add replica: %w", err)
@@ -850,7 +850,7 @@ site. It does not vote: quorum stays a matter for the primary site alone.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			port, err := sdsClient.AddDR(ctx, resource, drNode, drEndpoint, wanPort, egress)
 			if err != nil {
@@ -910,7 +910,7 @@ func resourceAddVolume() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.AddVolume(ctx, resource, volume, pool, uint32(sizeGiB))
 			if err != nil {
@@ -958,7 +958,7 @@ func resourceRemoveVolume() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.RemoveVolume(ctx, resource, volumeID)
 			if err != nil {
@@ -1005,7 +1005,7 @@ func resourceResizeVolume() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.ResizeVolume(ctx, resource, volumeID, uint32(sizeGiB))
 			if err != nil {
@@ -1038,7 +1038,7 @@ func resourcePrimary() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.SetPrimary(ctx, resource, node, force)
 			if err != nil {
@@ -1078,7 +1078,7 @@ func resourceDRFailover() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			status, err := sdsClient.ResourceStatus(ctx, resource)
 			if err != nil {
@@ -1129,7 +1129,7 @@ func resourceSecondary() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.SetSecondary(ctx, resource, node)
 			if err != nil {
@@ -1233,7 +1233,7 @@ func resourceDualPrimary() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.SetDualPrimary(ctx, resource, enable); err != nil {
 				return fmt.Errorf("failed to set dual-primary: %w", err)
@@ -1277,7 +1277,7 @@ func resourceDisklessAttach() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.AttachDisklessClient(ctx, resource, node); err != nil {
 				return fmt.Errorf("failed to attach diskless client: %w", err)
@@ -1303,7 +1303,7 @@ func resourceDisklessDetach() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.DetachDisklessClient(ctx, resource, node); err != nil {
 				return fmt.Errorf("failed to detach diskless client: %w", err)
@@ -1337,7 +1337,7 @@ func resourceFs() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.CreateFilesystem(ctx, resource, volumeID, node, fstype)
 			if err != nil {
@@ -1369,7 +1369,7 @@ func resourceStatus() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			status, err := sdsClient.ResourceStatus(ctx, resource)
 			if err != nil {
@@ -1459,7 +1459,7 @@ func resourceMount() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.MountResource(ctx, resource, volumeID, mountPath, node, fstype)
 			if err != nil {
@@ -1500,7 +1500,7 @@ func resourceUnmount() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.UnmountResource(ctx, resource, volumeID, node)
 			if err != nil {
@@ -1536,7 +1536,7 @@ func resourcePromote() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.SetPrimary(ctx, resource, node, force)
 			if err != nil {
@@ -1569,7 +1569,7 @@ func resourceDemote() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.SetSecondary(ctx, resource, node)
 			if err != nil {
@@ -1634,7 +1634,7 @@ func resourceSnapshotScheduleCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			keep := &sdspb.GFSRetention{
 				Hourly:  int32(hourly),
@@ -1672,7 +1672,7 @@ func resourceSnapshotScheduleList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			schedules, err := sdsClient.ListSnapshotSchedules(ctx)
 			if err != nil {
@@ -1719,7 +1719,7 @@ func resourceSnapshotScheduleDelete() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.DeleteSnapshotSchedule(ctx, name); err != nil {
 				return fmt.Errorf("failed to delete snapshot schedule: %w", err)
@@ -1763,7 +1763,7 @@ func resourceSnapshotDelete() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if storageType == "zfs" {
 				// ZFS snapshot
@@ -1837,7 +1837,7 @@ func resourceSnapshotCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if storageType == "zfs" {
 				// ZFS snapshot: pool/resource_data@snapshot
@@ -1906,7 +1906,7 @@ func resourceSnapshotList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if storageType == "zfs" {
 				// ZFS snapshots
@@ -1998,7 +1998,7 @@ func resourceSnapshotRestore() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if storageType == "zfs" {
 				// ZFS rollback

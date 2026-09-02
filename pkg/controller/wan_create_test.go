@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/liliang-cn/sds/pkg/wanproxy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // withTempPKI points wanproxy's controller-side PKI cache at a temp dir so
@@ -21,15 +19,6 @@ func withTempPKI(t *testing.T) {
 	prev := wanproxy.PKIDir
 	wanproxy.PKIDir = t.TempDir()
 	t.Cleanup(func() { wanproxy.PKIDir = prev })
-}
-
-// openTestDB opens a throwaway BBolt database for a test.
-func openTestDB(t *testing.T) *database.DB {
-	t.Helper()
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	return db
 }
 
 // findDistributedConfig returns the content distributed to remotePath, or "".
@@ -60,7 +49,7 @@ func TestCreateResourceWANProvisionsAndPersists(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1", "dr": "10.0.0.2"})
 
 	err := ctrl.resources.CreateResourceWithVolumes(context.Background(),
@@ -105,7 +94,7 @@ func TestCreateResourceWANAutoPort(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1", "dr": "10.0.0.2"})
 
 	err := ctrl.resources.CreateResourceWithVolumes(context.Background(),
@@ -125,7 +114,7 @@ func TestCreateResourceWANRejectsUnregisteredDRNode(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1"})
 
 	err := ctrl.resources.CreateResourceWithVolumes(context.Background(),
@@ -176,7 +165,7 @@ func TestCreateResourceWANMultiReplicaPrimarySite(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"a": "10.0.0.1", "b": "10.0.0.2", "dr": "10.0.0.3"})
 
 	err := ctrl.resources.CreateResourceWithVolumes(context.Background(),
@@ -216,7 +205,7 @@ func TestCreateResourceWANRejectsLegShapedName(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"a": "10.0.0.1", "b": "10.0.0.2", "dr": "10.0.0.3"})
 	ctx := context.Background()
 
@@ -245,7 +234,7 @@ func TestServerCreateResourceWANSucceeds(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1", "dr": "10.0.0.2"})
 	srv := NewServer(ctrl)
 
@@ -327,7 +316,7 @@ func TestDeleteResourceWANDeprovisions(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1", "dr": "10.0.0.2"})
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{

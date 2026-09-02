@@ -97,7 +97,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	// volume's replicas.
 	var source *volumeSource
 	if cs := req.GetVolumeContentSource(); cs != nil {
-		source, err = s.resolveVolumeSource(ctx, cs)
+		source, err = s.resolveVolumeSource(ctx, cs, sizeGB)
 		if err != nil {
 			return nil, err
 		}
@@ -117,13 +117,18 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	// Only consider nodes that actually host the requested pool: replicas
 	// placed on a node without the backing pool fail at LV-creation time.
 	candidates := nodesWithPool(nodes, pools, params.Pool)
-	requisite := requisiteNodes(req.GetAccessibilityRequirements())
+	pinned := requisiteNodes(req.GetAccessibilityRequirements())
 	if source != nil {
 		// Put the source's node first so a replica lands there and the copy is
 		// local; without this the new volume could be placed entirely elsewhere.
-		requisite = append([]string{source.node}, requisite...)
+		pinned = append([]string{source.node}, pinned...)
 	}
-	replicaNodes, err := selectReplicaNodes(candidates, requisite, params.Replicas)
+	// The free space of the pool decides the rest, so a PVC lands where
+	// `sds-cli resource create` would: on the emptiest nodes. ResourceExhausted
+	// is the status the CO acts on — external-provisioner drops the PVC's
+	// selected-node annotation on it and reschedules — so every placement
+	// failure, capacity or otherwise, has to surface under that code.
+	replicaNodes, err := selectReplicaNodes(candidates, pinned, params.Replicas, uint64(sizeGB)*giB)
 	if err != nil {
 		return nil, status.Errorf(codes.ResourceExhausted, "pool %q: %v", params.Pool, err)
 	}

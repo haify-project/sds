@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -14,72 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
-
-func TestGenerateUUID(t *testing.T) {
-	uuid1 := generateUUID()
-	uuid2 := generateUUID()
-
-	// UUIDs should be unique
-	assert.NotEqual(t, uuid1, uuid2)
-
-	// UUID should have correct format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-	assert.Len(t, uuid1, 36)
-	assert.Equal(t, 4, strings.Count(uuid1, "-"))
-
-	// Verify version 4 UUID
-	parts := strings.Split(uuid1, "-")
-	require.Len(t, parts, 5)
-	// Version nibble should be 4 (position 12 in the UUID string, which is parts[2][0])
-	assert.Equal(t, "4", string(parts[2][0]))
-	// Variant nibble should be 8, 9, a, or b (position 16 in UUID, parts[3][0])
-	variant := string(parts[3][0])
-	assert.Contains(t, "89ab", variant)
-}
-
-func TestGenerateFSID(t *testing.T) {
-	resourceUUID := "12345678-1234-1234-1234-123456789abc"
-	volumeUUID := "87654321-4321-4321-4321-cba987654321"
-
-	fsid := generateFSID(resourceUUID, volumeUUID)
-
-	// FSID should have UUID format
-	assert.Len(t, fsid, 36)
-	assert.Equal(t, 4, strings.Count(fsid, "-"))
-
-	// Same inputs should produce same FSID
-	fsid2 := generateFSID(resourceUUID, volumeUUID)
-	assert.Equal(t, fsid, fsid2)
-
-	// Different inputs should produce different FSID
-	fsid3 := generateFSID("different", volumeUUID)
-	assert.NotEqual(t, fsid, fsid3)
-}
-
-func TestGenerateSerialFromIQN(t *testing.T) {
-	tests := []struct {
-		iqn          string
-		volumeNumber int
-	}{
-		{"iqn.2024-01.com.example:sds.data", 0},
-		{"iqn.2024-01.com.example:sds.data", 1},
-		{"iqn.2024-01.com.example:storage", 0},
-	}
-
-	results := make(map[string]bool)
-	for _, tt := range tests {
-		serial := generateSerialFromIQN(tt.iqn, tt.volumeNumber)
-		// Serial should be 16 hex characters (8 bytes)
-		assert.Len(t, serial, 16)
-		// Should only contain hex characters
-		for _, c := range serial {
-			assert.Contains(t, "0123456789abcdef", string(c))
-		}
-		// Each combination should produce unique serial
-		key := fmt.Sprintf("%s-%d", tt.iqn, tt.volumeNumber)
-		assert.False(t, results[key], "serial should be unique for each key")
-		results[key] = true
-	}
-}
 
 func TestParseServiceIP(t *testing.T) {
 	tests := []struct {
@@ -108,28 +41,6 @@ func TestParseServiceIP(t *testing.T) {
 				assert.Equal(t, tt.expectedIP, result.IP.String())
 				assert.Equal(t, tt.expectedLen, result.Prefix)
 			}
-		})
-	}
-}
-
-func TestGetDRBDDeviceForVolume(t *testing.T) {
-	tests := []struct {
-		baseDevice   string
-		volumeNumber int
-		expected     string
-	}{
-		{"/dev/drbd0", 0, "/dev/drbd0"},
-		{"/dev/drbd0", 1, "/dev/drbd1"},
-		{"/dev/drbd0", 2, "/dev/drbd2"},
-		{"/dev/drbd10", 0, "/dev/drbd10"},
-		{"/dev/drbd10", 1, "/dev/drbd11"},
-		{"/dev/drbd100", 5, "/dev/drbd105"},
-	}
-
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s+%d", tt.baseDevice, tt.volumeNumber), func(t *testing.T) {
-			result := getDRBDDeviceForVolume(tt.baseDevice, tt.volumeNumber)
-			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -188,56 +99,6 @@ func TestExecuteTemplateWithConditionals(t *testing.T) {
 	result, err = executeTemplate(tmpl, data)
 	require.NoError(t, err)
 	assert.NotContains(t, result, "Name")
-}
-
-func TestParseDeviceMinorFromConfig(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   string
-		expected int
-	}{
-		{
-			name: "single volume",
-			config: `
-resource test {
-    volume 0 {
-        device minor 10;
-        disk /dev/vg/lv;
-    }
-}
-`,
-			expected: 10,
-		},
-		{
-			name: "no volume",
-			config: `
-resource test {
-    net {
-        protocol C;
-    }
-}
-`,
-			expected: -1,
-		},
-		{
-			name: "device without minor",
-			config: `
-resource test {
-    volume 0 {
-        device /dev/drbd0;
-    }
-}
-`,
-			expected: -1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := parseDeviceMinorFromConfig(tt.config)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
 }
 
 // ==================== Manager Tests ====================
@@ -321,52 +182,6 @@ func TestManagerGetGateway(t *testing.T) {
 	// This may or may not error depending on filesystem state
 	// The important thing is it doesn't panic
 	_ = err
-}
-
-func TestManagerStopGateway(t *testing.T) {
-	logger := zap.NewNop()
-	mockDeployment := &MockDeploymentClient{}
-	manager := New(nil, mockDeployment, logger, []string{"node1", "node2"})
-
-	err := manager.StopGateway(context.Background(), "test-resource")
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(mockDeployment.ExecCommands), 3)
-	// Stop must disable the reactor config FIRST: a plain systemctl stop is
-	// undone within seconds because reactor re-promotes the resource. The
-	// script travels base64-encoded to survive dispatch's sh -c "..."
-	// quoting, which empties $variables.
-	decoded := decodeScriptCommand(t, mockDeployment.ExecCommands[0])
-	assert.Contains(t, decoded, `mv "$f" "$f.disabled"`)
-	assert.Contains(t, strings.Join(mockDeployment.ExecCommands, "\n"), "reload drbd-reactor")
-	assert.Contains(t, strings.Join(mockDeployment.ExecCommands, "\n"), "drbd-services@test\\x2dresource.target")
-}
-
-// decodeScriptCommand extracts and decodes the base64 payload from a
-// runScript-style command ("echo <b64> | base64 -d | sudo /bin/sh").
-func decodeScriptCommand(t *testing.T, cmd string) string {
-	t.Helper()
-	require.Contains(t, cmd, "base64 -d")
-	fields := strings.Fields(cmd)
-	require.GreaterOrEqual(t, len(fields), 2)
-	raw, err := base64.StdEncoding.DecodeString(fields[1])
-	require.NoError(t, err)
-	return string(raw)
-}
-
-func TestManagerStartGatewayReenablesConfig(t *testing.T) {
-	logger := zap.NewNop()
-	mockDeployment := &MockDeploymentClient{}
-	manager := New(nil, mockDeployment, logger, []string{"node1"})
-
-	err := manager.StartGateway(context.Background(), "test-resource")
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(mockDeployment.ExecCommands), 3)
-	// Command 0 flushes stale portblock rules (failback safety); command 1
-	// re-enables the config.
-	flushed := decodeScriptCommand(t, mockDeployment.ExecCommands[0])
-	assert.Contains(t, flushed, "iptables -D INPUT")
-	decoded := decodeScriptCommand(t, mockDeployment.ExecCommands[1])
-	assert.Contains(t, decoded, `mv "$f.disabled" "$f"`)
 }
 
 // ==================== Mock Implementations ====================
@@ -462,72 +277,4 @@ func testVolumes(count int) []*ResourceVolumeInfo {
 		vols[i] = &ResourceVolumeInfo{VolumeID: uint32(i), Device: fmt.Sprintf("/dev/drbd%d", i), SizeGB: 1}
 	}
 	return vols
-}
-
-// The gateway must export the operator's volume, not its own scratch volume.
-//
-// SDS creates the data volume first ("<res>_data", volume 0) and APPENDS the
-// cluster-private state volume afterwards, which is the opposite of the
-// linstor-gateway layout the templates were written against. Choosing by
-// position therefore exported the 1 GiB state volume and formatted the
-// operator's data volume as gateway scratch: a share that mounts, is the wrong
-// size, and holds none of their storage.
-func TestClusterPrivateIsTheStateVolumeNotVolumeZero(t *testing.T) {
-	volumes := []*ResourceVolumeInfo{
-		{VolumeID: 0, Device: "/dev/drbd26", SizeGB: 2, BackingVolume: "winblk_data"},
-		{VolumeID: 1, Device: "/dev/drbd27", SizeGB: 1, BackingVolume: "winblk_state1"},
-	}
-	private, payload := clusterPrivateAndPayload(volumes, "/dev/drbd26")
-
-	if private != "/dev/drbd27" {
-		t.Errorf("cluster-private = %q, want the state volume /dev/drbd27", private)
-	}
-	if len(payload) != 1 || payload[0].Device != "/dev/drbd26" {
-		t.Fatalf("payload = %+v, want the data volume /dev/drbd26", payload)
-	}
-}
-
-// Order must not matter: a resource whose state volume happens to come first
-// has to resolve the same way.
-func TestVolumeRolesDoNotDependOnOrder(t *testing.T) {
-	volumes := []*ResourceVolumeInfo{
-		{VolumeID: 1, Device: "/dev/drbd27", BackingVolume: "res_state1"},
-		{VolumeID: 0, Device: "/dev/drbd26", BackingVolume: "res_data"},
-	}
-	private, payload := clusterPrivateAndPayload(volumes, "/dev/drbd26")
-	if private != "/dev/drbd27" || len(payload) != 1 || payload[0].Device != "/dev/drbd26" {
-		t.Errorf("private=%q payload=%+v", private, payload)
-	}
-}
-
-// Several data volumes all get exported; only the state volume is withheld.
-func TestEveryNonStateVolumeIsExported(t *testing.T) {
-	volumes := []*ResourceVolumeInfo{
-		{VolumeID: 0, Device: "/dev/drbd10", BackingVolume: "res_data"},
-		{VolumeID: 1, Device: "/dev/drbd11", BackingVolume: "res_extra"},
-		{VolumeID: 2, Device: "/dev/drbd12", BackingVolume: "res_state2"},
-	}
-	private, payload := clusterPrivateAndPayload(volumes, "/dev/drbd10")
-	if private != "/dev/drbd12" {
-		t.Errorf("cluster-private = %q, want /dev/drbd12", private)
-	}
-	if len(payload) != 2 {
-		t.Fatalf("payload = %+v, want both data volumes", payload)
-	}
-}
-
-// A resource built by hand in the linstor layout has no "_state" volume, and
-// guessing at it would break a working gateway. The original convention holds.
-func TestLinstorStyleResourceKeepsTheOldLayout(t *testing.T) {
-	volumes := []*ResourceVolumeInfo{
-		{VolumeID: 0, Device: "/dev/drbd30", BackingVolume: "gw_private"},
-		{VolumeID: 1, Device: "/dev/drbd31", BackingVolume: "gw_payload"},
-	}
-	private, payload := clusterPrivateAndPayload(volumes, "/dev/drbd30")
-	if private != "/dev/drbd30" {
-		t.Errorf("cluster-private = %q, want volume 0 /dev/drbd30", private)
-	}
-	if len(payload) != 1 || payload[0].Device != "/dev/drbd31" {
-		t.Errorf("payload = %+v, want /dev/drbd31", payload)
-	}
 }

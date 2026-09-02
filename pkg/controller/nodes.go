@@ -187,10 +187,13 @@ func (nm *NodeManager) SetNodeLabels(ctx context.Context, nodeRef string, labels
 	nm.mu.Lock()
 	node := nm.nodes[resolved]
 	if node == nil {
-		// nodeRef may be a name/hostname that ResolveHost did not map.
+		// nodeRef may be a name/hostname that ResolveHost did not map. Only the
+		// node itself is taken from the fallback: nm.nodes holds pointers, so the
+		// label edits below land in the map entry without needing its key, and
+		// persistence reads the address off the node record rather than the key.
 		for addr, n := range nm.nodes {
 			if n.Name == nodeRef || n.Hostname == nodeRef || addr == nodeRef {
-				node, resolved = n, addr
+				node = n
 				break
 			}
 		}

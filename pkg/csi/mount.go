@@ -39,7 +39,7 @@ func (s *safeMounter) FormatAndMount(source, target, fsType string, options []st
 }
 
 func (s *safeMounter) Mount(source, target, fsType string, options []string) error {
-	return s.m.Interface.Mount(source, target, fsType, options)
+	return s.m.Mount(source, target, fsType, options)
 }
 
 func (s *safeMounter) Unmount(target string) error {
@@ -47,11 +47,11 @@ func (s *safeMounter) Unmount(target string) error {
 	if err != nil || !mounted {
 		return nil
 	}
-	return s.m.Interface.Unmount(target)
+	return s.m.Unmount(target)
 }
 
 func (s *safeMounter) IsMountPoint(target string) (bool, error) {
-	notMnt, err := s.m.Interface.IsLikelyNotMountPoint(target)
+	notMnt, err := s.m.IsLikelyNotMountPoint(target)
 	if os.IsNotExist(err) {
 		return false, nil
 	}

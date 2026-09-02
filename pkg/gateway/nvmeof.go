@@ -31,13 +31,33 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 		zap.String("nqn", req.Nqn),
 		zap.String("service_ip", req.ServiceIp))
 
+	// Reject a malformed NQN or transport type before anything with a side
+	// effect runs — see validate.go for why this cannot wait until the OCF
+	// agents parse them.
+	if err := validateNQN(req.Nqn); err != nil {
+		return &v1.CreateNVMeGatewayResponse{
+			Success: false,
+			Message: err.Error(),
+		}, invalidArgument(err)
+	}
+	// An unset transport is not a caller mistake: generateNVMeGatewayConfig
+	// defaults it to tcp. Only a value the caller actually chose is checked.
+	if req.TransportType != "" {
+		if err := parseTransportType(req.TransportType); err != nil {
+			return &v1.CreateNVMeGatewayResponse{
+				Success: false,
+				Message: err.Error(),
+			}, invalidArgument(err)
+		}
+	}
+
 	// Parse service IP
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	if err != nil {
 		return &v1.CreateNVMeGatewayResponse{
 			Success: false,
 			Message: fmt.Sprintf("invalid service IP: %v", err),
-		}, err
+		}, invalidArgument(fmt.Errorf("invalid service IP: %w", err))
 	}
 
 	// Fail early with a clear message if the OCF agents an NVMe-oF gateway
@@ -315,323 +335,6 @@ func (n *NVMeManager) DeleteNVMeGateway(ctx context.Context, resource string) er
 	return nil
 }
 
-// ==================== Namespace Management ====================
-
-// AddNamespace adds a namespace to an existing NVMe-oF gateway
-func (n *NVMeManager) AddNamespace(ctx context.Context, resource, device string) error {
-	n.logger.Info("Adding namespace to NVMe-oF gateway",
-		zap.String("resource", resource),
-		zap.String("device", device))
-
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return err
-	}
-
-	lines, trailingNewline := splitConfigLines(content)
-	maxNamespaceID := 0
-	for _, line := range lines {
-		params, ok := parseNVMeNamespaceLine(line)
-		if !ok {
-			continue
-		}
-		nsid, err := parseIntParam(params, "namespace_id")
-		if err == nil && nsid > maxNamespaceID {
-			maxNamespaceID = nsid
-		}
-		if params["backing_path"] == device {
-			return fmt.Errorf("namespace for device already exists: %s", device)
-		}
-	}
-
-	subsystemIdx := findLineIndex(lines, func(line string) bool {
-		_, ok := parseNVMeSubsystemLine(line)
-		return ok
-	})
-	if subsystemIdx < 0 {
-		return fmt.Errorf("failed to locate NVMe subsystem definition")
-	}
-
-	subsystemParams, _ := parseNVMeSubsystemLine(lines[subsystemIdx])
-	nqn := subsystemParams["nqn"]
-	if nqn == "" {
-		return fmt.Errorf("failed to parse NVMe subsystem NQN from config")
-	}
-
-	newLine := buildNVMeNamespaceLine(maxNamespaceID+1, nqn, device)
-	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
-		return strings.Contains(line, "ocf:heartbeat:nvmet-port ")
-	})
-	if err != nil {
-		return err
-	}
-
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
-}
-
-// RemoveNamespace removes a namespace from an NVMe-oF gateway
-func (n *NVMeManager) RemoveNamespace(ctx context.Context, resource string, nsid int) error {
-	n.logger.Info("Removing namespace from NVMe-oF gateway",
-		zap.String("resource", resource),
-		zap.Int("nsid", nsid))
-
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return err
-	}
-
-	lines, trailingNewline := splitConfigLines(content)
-	lines, removed := removeLine(lines, func(line string) bool {
-		params, ok := parseNVMeNamespaceLine(line)
-		return ok && params["namespace_id"] == fmt.Sprintf("%d", nsid)
-	})
-	if !removed {
-		return fmt.Errorf("namespace %d not found", nsid)
-	}
-
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
-}
-
-// ListNamespaces lists all namespaces for an NVMe-oF gateway
-func (n *NVMeManager) ListNamespaces(ctx context.Context, resource string) ([]map[string]string, error) {
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var namespaces []map[string]string
-	for _, line := range strings.Split(content, "\n") {
-		params, ok := parseNVMeNamespaceLine(line)
-		if !ok {
-			continue
-		}
-		namespaces = append(namespaces, map[string]string{
-			"namespace_id": params["namespace_id"],
-			"backing_path": params["backing_path"],
-			"uuid":         params["uuid"],
-			"nguid":        params["nguid"],
-			"nqn":          params["nqn"],
-		})
-	}
-
-	return namespaces, nil
-}
-
-// ==================== Subsystem Management ====================
-
-// CreateSubsystem creates an NVMe subsystem
-func (n *NVMeManager) CreateSubsystem(ctx context.Context, resource, nqn string) error {
-	n.logger.Info("Creating NVMe subsystem",
-		zap.String("resource", resource),
-		zap.String("nqn", nqn))
-
-	// Use nvmetcli or configuration files to create the subsystem
-	return fmt.Errorf("CreateSubsystem: managed by OCF resource agent")
-}
-
-// DeleteSubsystem deletes an NVMe subsystem
-func (n *NVMeManager) DeleteSubsystem(ctx context.Context, nqn string) error {
-	n.logger.Info("Deleting NVMe subsystem", zap.String("nqn", nqn))
-
-	return fmt.Errorf("DeleteSubsystem: use gateway deletion instead")
-}
-
-// ListSubsystems lists all NVMe subsystems
-func (n *NVMeManager) ListSubsystems(ctx context.Context, host string) ([]string, error) {
-	files, err := os.ReadDir(DrbdReactorConfigDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config directory: %w", err)
-	}
-
-	var subsystems []string
-	for _, file := range files {
-		if !strings.HasPrefix(file.Name(), "sds-nvmeof-") || !strings.HasSuffix(file.Name(), ".toml") {
-			continue
-		}
-
-		content, err := os.ReadFile(filepath.Join(DrbdReactorConfigDir, file.Name()))
-		if err != nil {
-			continue
-		}
-
-		for _, line := range strings.Split(string(content), "\n") {
-			if params, ok := parseNVMeSubsystemLine(line); ok && params["nqn"] != "" {
-				subsystems = append(subsystems, params["nqn"])
-			}
-		}
-	}
-
-	return uniqueSortedValues(subsystems), nil
-}
-
-// ==================== Host Management ====================
-
-// AddHost adds a host (initiator) to the NVMe subsystem
-func (n *NVMeManager) AddHost(ctx context.Context, resource, hostNQN string) error {
-	n.logger.Info("Adding host to NVMe subsystem",
-		zap.String("resource", resource),
-		zap.String("host_nqn", hostNQN))
-
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return err
-	}
-
-	lines, trailingNewline := splitConfigLines(content)
-	subsystemIdx := findLineIndex(lines, func(line string) bool {
-		_, ok := parseNVMeSubsystemLine(line)
-		return ok
-	})
-	if subsystemIdx < 0 {
-		return fmt.Errorf("failed to locate NVMe subsystem definition")
-	}
-
-	params, _ := parseNVMeSubsystemLine(lines[subsystemIdx])
-	allowed := parseAllowedList(params["allowed_initiators"])
-	allowed = append(allowed, hostNQN)
-	lines[subsystemIdx] = buildNVMeSubsystemLine(params["nqn"], formatAllowedList(allowed), params["serial"])
-
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
-}
-
-// RemoveHost removes a host from the NVMe subsystem
-func (n *NVMeManager) RemoveHost(ctx context.Context, resource, hostNQN string) error {
-	n.logger.Info("Removing host from NVMe subsystem",
-		zap.String("resource", resource),
-		zap.String("host_nqn", hostNQN))
-
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return err
-	}
-
-	lines, trailingNewline := splitConfigLines(content)
-	subsystemIdx := findLineIndex(lines, func(line string) bool {
-		_, ok := parseNVMeSubsystemLine(line)
-		return ok
-	})
-	if subsystemIdx < 0 {
-		return fmt.Errorf("failed to locate NVMe subsystem definition")
-	}
-
-	params, _ := parseNVMeSubsystemLine(lines[subsystemIdx])
-	current := parseAllowedList(params["allowed_initiators"])
-	if len(current) == 0 {
-		return fmt.Errorf("gateway currently allows all initiators; cannot remove a specific host without first defining an explicit allow-list")
-	}
-
-	updated := removeValue(current, hostNQN)
-	if len(updated) == len(current) {
-		return fmt.Errorf("host not found: %s", hostNQN)
-	}
-
-	lines[subsystemIdx] = buildNVMeSubsystemLine(params["nqn"], formatAllowedList(updated), params["serial"])
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
-}
-
-// ListHosts lists all hosts for an NVMe subsystem
-func (n *NVMeManager) ListHosts(ctx context.Context, resource string) ([]string, error) {
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, line := range strings.Split(content, "\n") {
-		if params, ok := parseNVMeSubsystemLine(line); ok {
-			allowed := parseAllowedList(params["allowed_initiators"])
-			if len(allowed) == 0 {
-				return []string{"ALL"}, nil
-			}
-			return allowed, nil
-		}
-	}
-
-	return nil, fmt.Errorf("failed to locate NVMe subsystem definition")
-}
-
-// ==================== Port Management ====================
-
-// CreatePort creates an NVMe port (transport endpoint)
-func (n *NVMeManager) CreatePort(ctx context.Context, resource, addr string, port int) error {
-	n.logger.Info("Creating NVMe port",
-		zap.String("resource", resource),
-		zap.String("addr", addr),
-		zap.Int("port", port))
-
-	return fmt.Errorf("CreatePort: managed by OCF resource agent")
-}
-
-// DeletePort deletes an NVMe port
-func (n *NVMeManager) DeletePort(ctx context.Context, resource, addr string, port int) error {
-	n.logger.Info("Deleting NVMe port",
-		zap.String("resource", resource),
-		zap.String("addr", addr),
-		zap.Int("port", port))
-
-	if port == 0 {
-		port = DefaultNVMePort
-	}
-	if port != DefaultNVMePort {
-		return fmt.Errorf("custom NVMe port removal is not supported by the current config writer")
-	}
-
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return err
-	}
-
-	lines, trailingNewline := splitConfigLines(content)
-	lines, removed := removeLine(lines, func(line string) bool {
-		params, ok := parseNVMePortLine(line)
-		return ok && params["addr"] == addr
-	})
-	if !removed {
-		return fmt.Errorf("port not found for addr %s", addr)
-	}
-
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
-}
-
-// ListPorts lists all ports for an NVMe subsystem
-func (n *NVMeManager) ListPorts(ctx context.Context, resource string) ([]map[string]string, error) {
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var ports []map[string]string
-	for _, line := range strings.Split(content, "\n") {
-		params, ok := parseNVMePortLine(line)
-		if !ok {
-			continue
-		}
-		ports = append(ports, map[string]string{
-			"addr": params["addr"],
-			"type": params["type"],
-			"nqns": params["nqns"],
-			"port": fmt.Sprintf("%d", DefaultNVMePort),
-		})
-	}
-
-	return ports, nil
-}
-
 // ==================== Helper Functions ====================
 
 // ensureNVMeModules loads the nvmet and nvmet-tcp kernel modules on the given
@@ -661,29 +364,4 @@ test -d /sys/kernel/config/nvmet`
 func generateNQN(resource string) string {
 	// Format: nqn.2024-01.com.example:sds.resource-name
 	return fmt.Sprintf("nqn.2024-01.com.example:sds.%s", resource)
-}
-
-// validateNQN validates an NQN format
-func validateNQN(nqn string) error {
-	if !strings.HasPrefix(nqn, "nqn.") {
-		return fmt.Errorf("invalid NQN format: must start with 'nqn.'")
-	}
-
-	parts := strings.Split(nqn, ":")
-	if len(parts) < 2 {
-		return fmt.Errorf("invalid NQN format: missing colon separator")
-	}
-
-	return nil
-}
-
-// parseTransportType parses and validates an NVMe transport type
-func parseTransportType(transport string) error {
-	validTypes := []string{"tcp", "rdma", "fc"}
-	for _, t := range validTypes {
-		if transport == t {
-			return nil
-		}
-	}
-	return fmt.Errorf("invalid transport type: %s (valid: %v)", transport, validTypes)
 }

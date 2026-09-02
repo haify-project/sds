@@ -23,7 +23,7 @@ func gatewayGet() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			gw, err := sdsClient.GetGateway(cmd.Context(), resource)
 			if err != nil {
@@ -69,7 +69,7 @@ func gatewayStatus() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			gw, err := sdsClient.GetGateway(cmd.Context(), resource)
 			if err != nil {

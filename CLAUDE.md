@@ -127,7 +127,7 @@ level = "info"
 format = "json"
 
 [storage]
-default_pool_type = "vg"
+default_pool_type = "thin_pool"   # what an omitted --type becomes, for every client
 default_snapshot_suffix = "_snap"
 ```
 
@@ -177,14 +177,27 @@ type GatewayResourceManager struct {
 
 ### Gateway Files
 
-| File                     | Lines | Purpose                                                                                        |
-| ------------------------ | ----- | ---------------------------------------------------------------------------------------------- |
-| `pkg/gateway/gateway.go` | ~380  | Common types, interfaces, shared operations                                                    |
-| `pkg/gateway/nfs.go`     | ~310  | NFS gateway - creates promoter config with Filesystem, IPaddr2, nfsserver, exportfs OCF agents |
-| `pkg/gateway/iscsi.go`   | ~410  | iSCSI gateway - creates promoter config with iSCSITarget, iSCSILogicalUnit OCF agents          |
-| `pkg/gateway/nvmeof.go`  | ~410  | NVMe-oF gateway - creates promoter config with nvmet-subsystem, nvmet-namespace OCF agents     |
+The package is split by responsibility rather than by protocol alone, because
+the shared concerns are where the invisible failures live — a start/stop path
+written without `lifecycle.go`'s invariants looks correct and isn't.
 
-**Limitation**: Each file must be under 600 lines of code.
+| File | Purpose |
+| ---- | ------- |
+| `gateway.go` | Common types, interfaces, the manager |
+| `lifecycle.go` | Delete/start/stop, reactor config writing and reload. Reactor re-promotes within seconds unless the *config file* is disabled first, and dispatch's `sh -c` quoting empties `$vars` unless the script is base64-wrapped |
+| `prereqs.go` | Whether the promoter's start chain will succeed. Skip any of these and the gateway *looks* created |
+| `volumes.go` | Device-path resolution and the cluster-private/payload split. Getting either wrong exports the wrong block device, invisibly |
+| `identity.go` | UUID/serial/FSID — how a client recognises its storage across a failover |
+| `config_helpers.go` | Parsing and building promoter config lines |
+| `validate.go` | IQN/NQN/transport validation, rejected before any side effect |
+| `nfs.go` | NFS gateway — Filesystem, IPaddr2, nfsserver, exportfs OCF agents |
+| `iscsi.go` + `iscsi_target.go` + `iscsi_acl.go` | iSCSI gateway — iSCSITarget/iSCSILogicalUnit agents; target and LUNs; initiator allow-list and CHAP |
+| `nvmeof.go` + `nvmeof_subsystem.go` + `nvmeof_hosts.go` | NVMe-oF gateway — nvmet-subsystem/nvmet-namespace agents; namespaces, subsystem and port; host allow-list |
+
+**Limitation**: Each file must be under 600 lines of code. This was silently
+broken for three files until 2026-09-02; check with `wc -l pkg/gateway/*.go`
+rather than assuming, and split by responsibility — an `iscsi_part2.go` obeys
+the number and defeats the point.
 
 ### Gateway Configuration
 

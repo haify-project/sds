@@ -40,9 +40,20 @@ func loopbackTarget(cfg *config.Config) string {
 // itself must never traverse an HTTP proxy, no matter how the operator
 // configured the machine. Relying on NO_PROXY listing every spelling of
 // "local" is how this broke in the first place.
-func loopbackDialOptions() []grpc.DialOption {
+//
+// tlsSetup must be the same one the gRPC server was built with, and nil only
+// when the server is plaintext. Getting this wrong is silent in the direction
+// that matters: the gRPC port keeps working perfectly while every REST call —
+// and with it the whole web UI — dies at the handshake. See newTLSSetup for
+// how the hop authenticates a server whose certificate was never issued for
+// 127.0.0.1.
+func loopbackDialOptions(setup *tlsSetup) []grpc.DialOption {
+	creds := insecure.NewCredentials()
+	if setup != nil {
+		creds = setup.loopbackCreds
+	}
 	return []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(creds),
 		grpc.WithNoProxy(),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4 * 1024 * 1024)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -53,6 +64,12 @@ func loopbackDialOptions() []grpc.DialOption {
 	}
 }
 
+// GatewayServer and the two helpers below are legacy plumbing kept for tests
+// only: the live REST gateway is built inline by Controller.startGRPCServer,
+// which is the path that carries transport credentials. They dial plaintext
+// and take a bare address with no config, so they must not be reintroduced on
+// the serving path — under [tls] they would fail at the handshake.
+//
 // GatewayServer wraps the gRPC-Gateway HTTP server
 type GatewayServer struct {
 	grpcAddr   string

@@ -79,7 +79,7 @@ func haCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Parse services
 			var serviceList []string
@@ -133,7 +133,7 @@ func haDelete() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.DeleteHa(ctx, resource)
 			if err != nil {
@@ -167,7 +167,7 @@ func haEvict() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.EvictHa(ctx, resource); err != nil {
 				return fmt.Errorf("failed to evict HA resource: %w", err)
@@ -195,7 +195,7 @@ func haList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			configs, err := sdsClient.ListHa(ctx)
 			if err != nil {
@@ -292,7 +292,7 @@ func haStatus() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			cfg, err := sdsClient.GetHa(ctx, resource)
 			if err != nil {
@@ -451,7 +451,7 @@ serving through it.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			previous, message, err := sdsClient.SetTiebreaker(ctx, resource, node)
 			if err != nil {

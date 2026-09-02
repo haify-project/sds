@@ -26,11 +26,14 @@ func toolNames(t *testing.T, s *Server) map[string]bool {
 	ct, st := mcp.NewInMemoryTransports()
 	serverSession, err := s.MCPServer().Connect(ctx, st, nil)
 	require.NoError(t, err)
-	defer serverSession.Close()
+	// Both sessions ride an in-memory transport that dies with the test; their
+	// close errors describe teardown of a pipe, not the tool list this helper
+	// is here to read.
+	defer func() { _ = serverSession.Close() }()
 
 	session, err := client.Connect(ctx, ct, nil)
 	require.NoError(t, err)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	res, err := session.ListTools(ctx, nil)
 	require.NoError(t, err)

@@ -2,15 +2,12 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // A representative .res for a foreign, hand-configured DRBD resource ("kaiwudb")
@@ -54,9 +51,7 @@ func TestResourceManagerAdoptResourceAutoDiscovers(t *testing.T) {
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 	ctrl.hostsMap["node2"] = "10.0.0.2"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	// No flags: everything is auto-discovered from the live .res.
@@ -112,9 +107,7 @@ func TestResourceManagerAdoptResourceFlagsOverride(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	// Explicit flags override the discovered nodes/port/protocol.
@@ -140,12 +133,10 @@ func TestResourceManagerAdoptResourceMissingIsRejected(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	_, err = ctrl.resources.AdoptResource(context.Background(), "ghost", nil, 0, "")
+	_, err := ctrl.resources.AdoptResource(context.Background(), "ghost", nil, 0, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
@@ -167,12 +158,10 @@ func TestResourceManagerAdoptResourceIsIdempotent(t *testing.T) {
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.hostsMap["node1"] = "10.0.0.1"
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	_, err = ctrl.resources.AdoptResource(context.Background(), "kaiwudb", nil, 0, "")
+	_, err := ctrl.resources.AdoptResource(context.Background(), "kaiwudb", nil, 0, "")
 	require.NoError(t, err)
 	stored, err := ctrl.db.GetResource(context.Background(), "kaiwudb")
 	require.NoError(t, err)

@@ -47,7 +47,10 @@ func TestOpenCreatesDirectory(t *testing.T) {
 	db, err := Open(cfg, logger)
 	require.NoError(t, err)
 	require.NotNil(t, db)
-	defer db.Close()
+	// Teardown only. The assertions below read the filesystem, not the handle,
+	// and bolt has already fsynced anything Open wrote, so a close failure
+	// cannot change what this test observes.
+	defer func() { _ = db.Close() }()
 
 	// Verify directory was created
 	dir := filepath.Dir(dbPath)
@@ -651,7 +654,9 @@ func newTestDB(t *testing.T) (*DB, func()) {
 	require.NoError(t, err)
 
 	cleanup := func() {
-		db.Close()
+		// Teardown for a database under t.TempDir(); every assertion has already
+		// run against the open handle by the time this fires.
+		_ = db.Close()
 	}
 
 	return db, cleanup

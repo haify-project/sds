@@ -30,7 +30,7 @@ func nvmeNamespaceAdd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.AddNVMeNamespace(cmd.Context(), resource, device)
 			if err != nil {
@@ -62,7 +62,7 @@ func nvmeNamespaceRemove() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.RemoveNVMeNamespace(cmd.Context(), resource, namespaceID)
 			if err != nil {
@@ -93,7 +93,7 @@ func nvmeNamespaceList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			namespaces, err := sdsClient.ListNVMeNamespaces(cmd.Context(), resource)
 			if err != nil {
@@ -143,7 +143,7 @@ func nvmeHostAdd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.AddNVMeHost(cmd.Context(), resource, hostNQN)
 			if err != nil {
@@ -174,7 +174,7 @@ func nvmeHostRemove() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.RemoveNVMeHost(cmd.Context(), resource, hostNQN)
 			if err != nil {
@@ -205,7 +205,7 @@ func nvmeHostList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			hosts, err := sdsClient.ListNVMeHosts(cmd.Context(), resource)
 			if err != nil {

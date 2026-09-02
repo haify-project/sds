@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"sort"
 	"sync"
 	"testing"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/liliang-cn/sds/pkg/config"
 	"github.com/liliang-cn/sds/pkg/database"
@@ -137,9 +135,7 @@ func TestRunScheduleSnapshotsDiskfulNodesOnly(t *testing.T) {
 		"orange3": "10.0.0.3",
 	})
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	// 2 diskful nodes + 1 diskless tiebreaker, one volume.

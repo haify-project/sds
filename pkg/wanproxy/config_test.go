@@ -67,15 +67,36 @@ peer_name = "sds-proxy"
 	}
 }
 
-// TestConfigDeterministic guards the table-test contract: rendering the same
-// spec twice yields identical bytes.
+// TestConfigDeterministic guards the contract the golden tests above depend on:
+// rendering the same spec repeatedly yields identical bytes.
+//
+// Both renders are bound to variables rather than compared inline. Comparing
+// two calls in one expression reads as a tautology — to a reviewer and to
+// staticcheck (SA4000) alike — which buries what is actually being asserted.
+//
+// The comparison is also repeated, because the realistic way these renderers
+// lose determinism is a map range creeping into the option emission. Go
+// randomizes map iteration order per range, so one extra render agrees with the
+// first by chance often enough to let such a change through; a run of them does
+// not. The renderers are pure string building, so the loop costs microseconds.
+//
+// Determinism matters beyond tidiness: the provisioner writes these files to
+// both nodes and reloads sds-proxy when the content changes. A renderer that
+// reorders its own keys would make every reconciliation look like a config
+// change and bounce the WAN legs on a loop.
 func TestConfigDeterministic(t *testing.T) {
 	spec := sampleSpec()
-	if RenderDialerConfig(spec) != RenderDialerConfig(spec) {
-		t.Fatal("dialer config not deterministic")
-	}
-	if RenderAcceptorConfig(spec) != RenderAcceptorConfig(spec) {
-		t.Fatal("acceptor config not deterministic")
+	dialer := RenderDialerConfig(spec)
+	acceptor := RenderAcceptorConfig(spec)
+
+	const renders = 100
+	for i := 2; i <= renders; i++ {
+		if got := RenderDialerConfig(spec); got != dialer {
+			t.Fatalf("dialer config not deterministic; render %d differs\n--- first ---\n%s\n--- render %d ---\n%s", i, dialer, i, got)
+		}
+		if got := RenderAcceptorConfig(spec); got != acceptor {
+			t.Fatalf("acceptor config not deterministic; render %d differs\n--- first ---\n%s\n--- render %d ---\n%s", i, acceptor, i, got)
+		}
 	}
 }
 

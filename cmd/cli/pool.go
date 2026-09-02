@@ -43,15 +43,10 @@ func poolCreate() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf("pool name is required")
 			}
-			if poolType == "" {
-				// Thin by default. A thick pool cannot hold a snapshot history:
-				// LVM makes every snapshot reserve a fixed COW area up front
-				// (SDS reserves 20% of the origin), so a 10 GiB pool holding a
-				// 6 GiB volume fits two snapshots — which is not a retention
-				// policy. Thin snapshots cost only the blocks that diverge.
-				// Pass --type lvm explicitly for the old behaviour.
-				poolType = "lvm-thin"
-			}
+			// An omitted type is left empty on purpose: the controller fills it
+			// from storage.default_pool_type. Substituting a default here is
+			// what made sds-cli and every other client disagree about what an
+			// unspecified pool is — see StorageManager.defaultedPoolType.
 			if nodes == "" {
 				return fmt.Errorf("nodes is required")
 			}
@@ -85,7 +80,7 @@ func poolCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Create pool on each node
 			successCount := 0
@@ -97,13 +92,19 @@ func poolCreate() *cobra.Command {
 					// For ZFS, 'disks' are vdevs. A zpool has no thin/thick mode;
 					// thin provisioning is a per-zvol property set at volume creation.
 					err = sdsClient.CreateZFSPool(ctx, name, n, diskList)
-				case "vg", "lvm", "lvm-thin", "thin_pool":
+				// "" reaches the LVM path deliberately: an unspecified type is
+				// resolved by the controller from storage.default_pool_type, and
+				// that setting can only name an LVM type — ZFS pools are built by
+				// a different RPC with vdevs rather than disks, so there is no
+				// empty-type ZFS case to route.
+				case "", "vg", "lvm", "lvm-thin", "thin-pool", "thin_pool":
 					// normalize type for backend if needed, but backend supports "vg" and "thin_pool"
 					// map lvm -> vg, lvm-thin -> thin_pool
 					backendType := poolType
-					if poolType == "lvm" {
+					switch poolType {
+					case "lvm":
 						backendType = "vg"
-					} else if poolType == "lvm-thin" {
+					case "lvm-thin":
 						backendType = "thin_pool"
 					}
 					err = sdsClient.CreatePool(ctx, name, backendType, n, diskList, util.BytesToGiB(sizeBytes))
@@ -140,7 +141,7 @@ func poolCreate() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Pool name")
-	cmd.Flags().StringVar(&poolType, "type", "", "Pool type: lvm-thin (default, snapshot-capable), lvm, zfs")
+	cmd.Flags().StringVar(&poolType, "type", "", "Pool type: lvm-thin (snapshot-capable), lvm, zfs (default: the controller's storage.default_pool_type)")
 	cmd.Flags().StringVar(&nodes, "nodes", "", "Comma-separated nodes where to create the pool")
 	cmd.Flags().StringVar(&devices, "devices", "", "Comma-separated list of devices")
 	cmd.Flags().StringVar(&size, "size", "", "Pool size (e.g., 10G, 10GB, 10GiB, 1T, 1TB)")
@@ -170,7 +171,7 @@ func poolDelete() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.DeletePool(ctx, name, node)
 			if err != nil {
@@ -213,7 +214,7 @@ func poolGet() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			pool, err := sdsClient.GetPool(ctx, name, node)
 			if err != nil {
@@ -274,7 +275,7 @@ func poolList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			pools, err := sdsClient.ListPools(ctx)
 			if err != nil {
@@ -353,7 +354,7 @@ func poolAddDisk() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			successCount := 0
 			var failedOps []string
@@ -430,7 +431,7 @@ headroom, not for the live data.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.ConvertPoolToThin(ctx, node, pool); err != nil {
 				return fmt.Errorf("failed to convert pool: %w", err)
@@ -499,7 +500,7 @@ the pool already has a cache.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			applied, size, err := sdsClient.AddPoolCache(ctx, node, pool, device, mode)
 			if err != nil {
@@ -559,7 +560,7 @@ lvconvert --uncache --force needed to accept that loss deliberately.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.RemovePoolCache(ctx, node, pool); err != nil {
 				return fmt.Errorf("failed to remove cache: %w", err)

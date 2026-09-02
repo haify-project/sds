@@ -60,6 +60,29 @@ type Config struct {
 // Default database path
 const DefaultDBPath = "/var/lib/sds/sds.db"
 
+// closeAfterFailedOpen releases the file when Open gives up after bolt has
+// already taken it.
+//
+// bolt holds an exclusive flock for as long as the handle lives, so returning
+// an error without closing turns the operator's next start into a lock timeout
+// on a database nothing is using — an error that says nothing about the schema
+// or bucket problem that actually stopped this one. The close error is logged
+// rather than returned because the error Open is already carrying is the one
+// worth reading; nothing has been written that a failed close could lose, since
+// bolt fsyncs at commit.
+func closeAfterFailedOpen(db *bolt.DB, path string, logger *zap.Logger) {
+	if logger == nil {
+		// Open takes the logger from its caller and does not check it; matching
+		// ensureSchema's guard keeps a cleanup path from panicking on the way
+		// out of an error the caller still needs to see.
+		logger = zap.NewNop()
+	}
+	if err := db.Close(); err != nil {
+		logger.Warn("Failed to close the database after an aborted open; the file may stay locked",
+			zap.String("path", path), zap.Error(err))
+	}
+}
+
 // Open opens the database connection
 func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 	if cfg == nil {
@@ -72,10 +95,29 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
+	// Sample this before opening: bolt.Open creates the file, after which there
+	// is no way left to tell an unversioned production database apart from one
+	// this process just made. A size check rather than bare existence, so a
+	// stray touch(1) on the path is not mistaken for a database with history.
+	preexisting := false
+	if fi, statErr := os.Stat(cfg.Path); statErr == nil && fi.Size() > 0 {
+		preexisting = true
+	}
+
 	// Open database
 	db, err := bolt.Open(cfg.Path, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Version gate before anything is written, including bucket creation: a
+	// database from a newer controller must be left exactly as it was found.
+	// Migrations run before the bucket initialization below so each step sees
+	// the layout that was actually on disk, not one already patched up by
+	// CreateBucketIfNotExists.
+	if err := ensureSchema(db, cfg.Path, preexisting, logger); err != nil {
+		closeAfterFailedOpen(db, cfg.Path, logger)
+		return nil, err
 	}
 
 	// Initialize buckets
@@ -89,7 +131,7 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 		}
 		return nil
 	}); err != nil {
-		db.Close()
+		closeAfterFailedOpen(db, cfg.Path, logger)
 		return nil, fmt.Errorf("failed to initialize buckets: %w", err)
 	}
 

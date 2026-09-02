@@ -2,13 +2,11 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
-	"go.uber.org/zap"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -122,9 +120,7 @@ func meshLine(t *testing.T, config string) string {
 func removeTestController(t *testing.T, dep deploymentClient, nodes, diskless string) *Controller {
 	t.Helper()
 	ctrl := newBasicTestController(dep)
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, db.SaveResource(context.Background(), &database.Resource{

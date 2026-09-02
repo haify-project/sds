@@ -57,41 +57,78 @@ func TestLANResourceKeepsQuorumMajority(t *testing.T) {
 // A DR is an asynchronous copy that is never promoted automatically, so it
 // cannot take over — letting it vote on whether the primary site may write is
 // backwards, and it costs real availability.
+//
+// These assertions go through exactly the two functions the create path
+// composes — localSiteVoters(len(allIPs)) then primarySiteQuorum — because they
+// used to go through a third copy of the same arithmetic that production never
+// called. A test that guards a parallel implementation guards nothing.
 func TestWANResourceSizesQuorumToPrimarySite(t *testing.T) {
-	assert.Equal(t, "majority", localSiteQuorum([]string{"a", "b"}, nil, nil),
-		"no WAN config means no change")
+	quorumFor := func(members ...string) string {
+		return primarySiteQuorum(localSiteVoters(len(members)))
+	}
 
-	wan := &wanConfig{DRNode: "dr"}
 	// {a, dr}: one node can take over, so it alone is quorate. The old majority
 	// of 2 meant losing the WAN link stopped writes at home — the exact opposite
 	// of what an async DR is for.
-	assert.Equal(t, "1", localSiteQuorum([]string{"a", "dr"}, nil, wan))
+	assert.Equal(t, "1", quorumFor("a", "dr"))
 	// {a, b, dr}: two local nodes, majority 2.
-	assert.Equal(t, "2", localSiteQuorum([]string{"a", "b", "dr"}, nil, wan))
+	assert.Equal(t, "2", quorumFor("a", "b", "dr"))
 	// {a, b, e, dr}: three local nodes, still 2 — where "majority" of all four
 	// would have demanded 3.
-	assert.Equal(t, "2", localSiteQuorum([]string{"a", "b", "e", "dr"}, nil, wan))
-	// A diskless tiebreaker is local and does vote.
-	assert.Equal(t, "2", localSiteQuorum([]string{"a", "b", "dr"}, []string{"tb"}, wan))
+	assert.Equal(t, "2", quorumFor("a", "b", "e", "dr"))
+	// A diskless tiebreaker is local and does vote: allIPs carries every
+	// participant, diskful or not.
+	assert.Equal(t, "2", quorumFor("a", "b", "tb", "dr"))
+}
+
+// The two paths that narrow a resource's quorum count the local site
+// differently — creation subtracts the DR from every participant, attaching a DR
+// adds up the primary-site members that already exist — and nothing made them
+// agree. They must, because they set the same field on the same resource: a
+// disagreement would move the bar every time a DR was re-attached.
+func TestBothQuorumPathsCountTheSameLocalSite(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		primaries []string
+		diskless  []string
+	}{
+		{"single primary", []string{"a"}, nil},
+		{"two primaries", []string{"a", "b"}, nil},
+		{"two primaries and a tiebreaker", []string{"a", "b"}, []string{"tb"}},
+		{"three primaries", []string{"a", "b", "e"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// What addDR computes: the primary-site members it can see.
+			viaAddDR := len(tc.primaries) + len(tc.diskless)
+			// What create computes: everything configured, less the DR.
+			viaCreate := localSiteVoters(len(tc.primaries) + len(tc.diskless) + 1)
+
+			assert.Equal(t, viaAddDR, viaCreate)
+			assert.Equal(t, primarySiteQuorum(viaAddDR), primarySiteQuorum(viaCreate))
+		})
+	}
 }
 
 // The property that matters: attaching a DR must never make a resource harder to
 // keep alive locally.
 func TestAddingDRNeverRaisesTheLocalBar(t *testing.T) {
-	wan := &wanConfig{DRNode: "dr"}
 	for _, localCount := range []int{1, 2, 3, 4, 5} {
-		local := make([]string, localCount)
-		for i := range local {
-			local[i] = string(rune('a' + i))
-		}
 		lanBar := localCount/2 + 1 // what `majority` demands with no DR
 
-		withDR := append(append([]string{}, local...), "dr")
-		got := localSiteQuorum(withDR, nil, wan)
+		// One more member joins — the DR — and the local bar must not move.
+		got := primarySiteQuorum(localSiteVoters(localCount + 1))
 
 		assert.Equal(t, lanBar, atoiTest(t, got),
 			"with %d local nodes, adding a DR must still need %d votes", localCount, lanBar)
 	}
+}
+
+// A member count that has lost its DR (or arrives empty) must still render a
+// usable quorum rather than 0, which DRBD reads as "quorum off".
+func TestPrimarySiteQuorumNeverFallsBelowOne(t *testing.T) {
+	assert.Equal(t, "1", primarySiteQuorum(0))
+	assert.Equal(t, "1", primarySiteQuorum(-1))
+	assert.Equal(t, "1", primarySiteQuorum(1))
 }
 
 func TestSetLocalSiteQuorumRewritesExistingLine(t *testing.T) {

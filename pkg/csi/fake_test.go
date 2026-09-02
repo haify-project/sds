@@ -137,7 +137,7 @@ func (f *fakeBackend) onlyPoolOnNodes(names ...string) {
 	for _, n := range names {
 		keep[n] = true
 	}
-	var addrs map[string]bool = map[string]bool{}
+	addrs := map[string]bool{}
 	for _, n := range f.nodes {
 		if keep[n.GetName()] {
 			addrs[n.GetAddress()] = true

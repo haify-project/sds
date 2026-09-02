@@ -38,7 +38,7 @@ func wanRepairCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			resp, err := c.RepairWanProxy(ctx, args[0], dryRun)
 			if err != nil {
@@ -46,23 +46,27 @@ func wanRepairCommand() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "Expected legs:")
+			// Writes to the command's own output stream are best-effort. The only ways
+			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// which this command can report anywhere the operator is still looking, and
+			// treating them as errors would report a successful operation as failed.
+			_, _ = fmt.Fprintln(out, "Expected legs:")
 			for _, l := range resp.ExpectedLegs {
-				fmt.Fprintf(out, "  %s\n", l)
+				_, _ = fmt.Fprintf(out, "  %s\n", l)
 			}
 			if len(resp.RemovedLegs) == 0 {
-				fmt.Fprintln(out, "\nNo stale instances.")
+				_, _ = fmt.Fprintln(out, "\nNo stale instances.")
 			} else {
 				verb := "Removed"
 				if dryRun {
 					verb = "Would remove"
 				}
-				fmt.Fprintf(out, "\n%s:\n", verb)
+				_, _ = fmt.Fprintf(out, "\n%s:\n", verb)
 				for _, l := range resp.RemovedLegs {
-					fmt.Fprintf(out, "  %s\n", l)
+					_, _ = fmt.Fprintf(out, "  %s\n", l)
 				}
 			}
-			fmt.Fprintf(out, "\n%s\n", resp.Message)
+			_, _ = fmt.Fprintf(out, "\n%s\n", resp.Message)
 			return nil
 		},
 	}

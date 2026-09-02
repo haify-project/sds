@@ -68,7 +68,7 @@ func iscsiCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Create iSCSI gateway
 			req := &v1.CreateISCSIGatewayRequest{
@@ -133,7 +133,7 @@ func iscsiList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			gateways, err := sdsClient.ListGateways(ctx)
 			if err != nil {
@@ -154,14 +154,21 @@ func iscsiList() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
+			// Writes to the command's own output stream are best-effort. The only ways
+			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// which this command can report anywhere the operator is still looking, and
+			// treating them as errors would report a successful operation as failed.
+			_, _ = fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
 
 			for _, gw := range iscsiGateways {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 					gw.Id, gw.Type, gw.Resource, gw.State)
 			}
 
-			w.Flush()
+			// Flush pushes the buffered table to stdout; like the Fprint calls above it
+			// is best-effort, and a write failure here says nothing about whether the
+			// operation the operator asked for succeeded.
+			_ = w.Flush()
 
 			return nil
 		},
@@ -209,7 +216,7 @@ func nfsCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Create NFS gateway
 			req := &v1.CreateNFSGatewayRequest{
@@ -271,7 +278,7 @@ func nfsList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			gateways, err := sdsClient.ListGateways(ctx)
 			if err != nil {
@@ -292,14 +299,14 @@ func nfsList() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
+			_, _ = fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
 
 			for _, gw := range nfsGateways {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 					gw.Id, gw.Type, gw.Resource, gw.State)
 			}
 
-			w.Flush()
+			_ = w.Flush()
 
 			return nil
 		},
@@ -346,7 +353,7 @@ func nvmeCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Create NVMe-oF gateway
 			req := &v1.CreateNVMeGatewayRequest{
@@ -405,7 +412,7 @@ func nvmeList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			gateways, err := sdsClient.ListGateways(ctx)
 			if err != nil {
@@ -426,14 +433,14 @@ func nvmeList() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
+			_, _ = fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
 
 			for _, gw := range nvmeGateways {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 					gw.Id, gw.Type, gw.Resource, gw.State)
 			}
 
-			w.Flush()
+			_ = w.Flush()
 
 			return nil
 		},
@@ -453,7 +460,7 @@ func gatewayList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			gateways, err := sdsClient.ListGateways(ctx)
 			if err != nil {
@@ -466,14 +473,14 @@ func gatewayList() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
+			_, _ = fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")
 
 			for _, gw := range gateways {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 					gw.Id, gw.Type, gw.Resource, gw.State)
 			}
 
-			w.Flush()
+			_ = w.Flush()
 
 			return nil
 		},
@@ -500,7 +507,7 @@ func gatewayDelete() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Delete gateway
 			err = sdsClient.DeleteGateway(ctx, resource)
@@ -542,7 +549,7 @@ This is typically handled automatically by drbd-reactor.`,
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.StartGateway(ctx, resource)
 			if err != nil {
@@ -580,7 +587,7 @@ This is typically handled automatically by drbd-reactor.`,
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.StopGateway(ctx, resource)
 			if err != nil {

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,9 +45,7 @@ func TestDeleteResourceCascadesGatewayTeardown(t *testing.T) {
 	gwDep := &fakeGatewayDeployment{}
 	ctrl.gateway = gateway.New(nil, gwDep, zap.NewNop(), []string{"10.0.0.1", "10.0.0.2"})
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, db.SaveResource(context.Background(), &database.Resource{
@@ -68,7 +65,7 @@ func TestDeleteResourceCascadesGatewayTeardown(t *testing.T) {
 	require.NoError(t, ctrl.resources.DeleteResource(context.Background(), "data", true))
 
 	// The gateway DB record must be gone.
-	_, err = db.GetGatewayByResource(context.Background(), "data")
+	_, err := db.GetGatewayByResource(context.Background(), "data")
 	require.Error(t, err)
 
 	// The gateway Manager teardown must have removed its reactor config on the
@@ -104,9 +101,7 @@ func TestDeleteResourceNoGatewayIsNoOp(t *testing.T) {
 	gwDep := &fakeGatewayDeployment{}
 	ctrl.gateway = gateway.New(nil, gwDep, zap.NewNop(), []string{"10.0.0.1", "10.0.0.2"})
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, db.SaveResource(context.Background(), &database.Resource{

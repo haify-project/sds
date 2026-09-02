@@ -2,13 +2,11 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/liliang-cn/sds/pkg/config"
 	"github.com/liliang-cn/sds/pkg/database"
@@ -189,7 +187,7 @@ func TestSelectTiebreakerPrefersOnline(t *testing.T) {
 func TestSelectTiebreakerPrefersStorageNodes(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{
 		"orange1": "10.0.0.1",
 		"orange2": "10.0.0.2",
@@ -223,12 +221,10 @@ func TestCreateResourceAutoAddsTiebreaker(t *testing.T) {
 		"node3": "10.0.0.3",
 	})
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	err = ctrl.resources.CreateResource(context.Background(), "res1", 7001,
+	err := ctrl.resources.CreateResource(context.Background(), "res1", 7001,
 		[]string{"node1", "node2"}, "", 10, "vg0", "lvm", nil)
 	require.NoError(t, err)
 
@@ -259,9 +255,7 @@ func TestDeleteResourceTearsDownTiebreaker(t *testing.T) {
 		"orange3": "10.0.0.3",
 	})
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, db.SaveResource(context.Background(), &database.Resource{
@@ -293,12 +287,10 @@ func TestCreateResourceNoTiebreakerWhenDisabled(t *testing.T) {
 		"node3": "10.0.0.3",
 	})
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 	ctrl.db = db
 
-	err = ctrl.resources.CreateResource(context.Background(), "res1", 7001,
+	err := ctrl.resources.CreateResource(context.Background(), "res1", 7001,
 		[]string{"node1", "node2"}, "", 10, "vg0", "lvm", nil)
 	require.NoError(t, err)
 

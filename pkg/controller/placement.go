@@ -27,7 +27,12 @@ import (
 // placementNode is a candidate node with the free capacity of its copy of the
 // target pool and its label set (for evaluating constraints).
 type placementNode struct {
-	node   string
+	node string
+	// freeGB only ranks candidates; whether a node may host the volume at all
+	// was already decided by poolCapacity.admits before the node got here. Zero
+	// is therefore not a rejection: it is a pool that could not report its
+	// capacity, or a thin pool with little left that can still take writes, and
+	// either one simply sorts behind every node able to prove it has room.
 	freeGB uint64
 	labels map[string]string
 }
@@ -196,11 +201,120 @@ func placementError(replicas int, c placementConstraints, eligible int) error {
 	}
 }
 
+// poolCapacity is what one node's copy of a pool can say about its room for a
+// new replica, plus how far that answer can be trusted.
+//
+// Three states, deliberately not two. "No room" and "could not say" are the
+// same number — zero — and reading the second as the first is what made
+// auto-placement impossible on thin storage: a thin pool is built from every
+// free extent of its volume group (see PoolInfo.ThinUsage), so the group
+// reports vg_free == 0 for the pool's whole life however empty it is. Every
+// thin node was therefore filtered out as full, and the failure was reported as
+// "insufficient capacity" — sending the operator to hunt for space that was
+// never missing. An unknown capacity now costs a node its rank, never its
+// candidacy.
+type poolCapacity struct {
+	// freeGB is what the pool has left, for ranking. Meaningless unless known.
+	freeGB uint64
+	// known is false when nothing in the pool report describes usable room.
+	known bool
+	// thin marks an over-provisioned pool, where freeGB is a health signal
+	// rather than a ceiling on the size of the next volume.
+	thin bool
+	// full is LVM's or the thresholds' verdict that a thin pool is out of room.
+	full bool
+}
+
+// admits reports whether a pool may host a replica of a volume asking sizeGB.
+//
+// The rule differs by pool kind, because "free space" means different things:
+//
+//   - Unknown capacity is admitted. A pool that did not tell us how full it is
+//     has not told us it is full, and a filter that treats silence as rejection
+//     empties itself of candidates on a cluster that is perfectly healthy. Such
+//     a node carries freeGB 0, so it is picked only when nothing better exists.
+//
+//   - A thick volume group is a hard ceiling: lvcreate fails the instant the
+//     group cannot cover the volume, so free >= requested is the real
+//     precondition and stays exactly as it always was.
+//
+//   - A thin pool is not a ceiling, and imposing one here would disable the
+//     feature. Thin volumes allocate as they are written, so a 100GB volume on
+//     a pool with 10GB left is not an accident — over-provisioning is the
+//     reason to run thin at all, and demanding the nominal size up front would
+//     refuse every placement that thin exists to allow. What is still worth
+//     refusing is a pool with no room for the data it already holds: at
+//     ThinPoolFullPercent, or with LVM's own out-of-space flag set, seeding a
+//     replica there is how a pool gets pushed over the edge — a new replica
+//     syncs, and a resync reallocates every block of a volume (see poolthin.go)
+//     — and a pool that refuses writes takes its DRBD disk down with it. Below
+//     that line the pool is admitted and ranked by what it has left, so
+//     placement still prefers the emptiest node.
+func (c poolCapacity) admits(sizeGB uint64) bool {
+	switch {
+	case !c.known:
+		return true
+	case c.thin:
+		return !c.full
+	default:
+		return c.freeGB >= sizeGB
+	}
+}
+
+// poolPlacementCapacity reads a pool report the way placement needs it.
+//
+// recordedThin is the pool type the controller has on file. It is consulted
+// only when the pool reported no thin utilisation, and only to tell a thin pool
+// whose `lvs` read failed (capacity unknown) from a thick group that is
+// genuinely full (capacity zero) — two states the numbers alone cannot
+// separate, since both read zero free. The live report wins whenever it exists,
+// because the record goes stale: a group converted to thin after creation still
+// has "vg" on file.
+func poolPlacementCapacity(p *PoolInfo, recordedThin bool) poolCapacity {
+	if p == nil {
+		return poolCapacity{}
+	}
+	if u := p.ThinUsage; u != nil {
+		// SizeBytes zero means the report reached us without the one figure the
+		// percentages are a percentage of, which leaves the pool's room unknown
+		// rather than exhausted.
+		if u.SizeBytes == 0 {
+			return poolCapacity{thin: true}
+		}
+		used := u.DataPercent
+		if used < 0 {
+			used = 0
+		}
+		if used > 100 {
+			used = 100
+		}
+		free := float64(u.SizeBytes) * (100 - used) / 100
+		return poolCapacity{
+			freeGB: bytesToGB(uint64(free)),
+			known:  true,
+			thin:   true,
+			full:   thinPoolExhausted(u),
+		}
+	}
+	if p.Thin || recordedThin {
+		return poolCapacity{thin: true}
+	}
+	return poolCapacity{freeGB: p.FreeGB, known: true}
+}
+
+// thinPoolExhausted reports whether a thin pool is too full to be seeded with
+// another replica. Metadata counts as well as data because exhausting either
+// one stops writes just as completely, and they fill at unrelated rates.
+func thinPoolExhausted(u *PoolThinInfo) bool {
+	return u.OutOfSpace || u.DataPercent >= ThinPoolFullPercent || u.MetaPercent >= ThinPoolFullPercent
+}
+
 // selectPlacementNodes auto-picks `replicas` node names to host a new resource
-// whose volumes need sizeGB total on pool. Candidates are the online nodes whose
-// copy of pool currently has at least sizeGB free, minus any node holding a
-// replica of a do-not-place-with resource. The constraints then shape the
-// selection. Used by CreateResource when the caller supplies no explicit nodes.
+// whose volumes need sizeGB total on pool. Candidates are the online nodes
+// whose copy of pool can take the volume (see poolCapacity.admits), minus any
+// node holding a replica of a do-not-place-with resource. The constraints then
+// shape the selection. Used by CreateResource when the caller supplies no
+// explicit nodes.
 func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string, sizeGB uint32, replicas int, onDifferent, onSame, doNotPlaceWith []string) ([]string, error) {
 	if replicas < 1 {
 		return nil, fmt.Errorf("replicas must be >= 1, got %d", replicas)
@@ -234,13 +348,18 @@ func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string
 		labelsByName[n.Name] = n.Labels
 	}
 
+	// One lookup for the pool's recorded type, not one per node: the record is
+	// keyed by pool name and every node's copy of a pool shares it.
+	recordedThin := rm.poolRecordedThin(ctx, pool)
+
 	var cands []placementNode
 	seen := make(map[string]bool)
 	for _, p := range pools {
 		if normalizeManagedName(p.Name) != pool {
 			continue
 		}
-		if p.FreeGB < uint64(sizeGB) {
+		capacity := poolPlacementCapacity(p, recordedThin)
+		if !capacity.admits(uint64(sizeGB)) {
 			continue
 		}
 		name := nameByAddr[p.Node]
@@ -251,13 +370,16 @@ func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string
 			continue
 		}
 		seen[name] = true
-		cands = append(cands, placementNode{node: name, freeGB: p.FreeGB, labels: labelsByName[name]})
+		cands = append(cands, placementNode{node: name, freeGB: capacity.freeGB, labels: labelsByName[name]})
 	}
 
 	constraints := placementConstraints{onDifferent: onDifferent, onSame: onSame}
 	picked, err := selectConstrained(cands, replicas, constraints)
 	if err != nil {
-		return nil, fmt.Errorf("%w (pool %q, need %dGB free per replica)", err, pool, sizeGB)
+		// "%dGB per replica" rather than "%dGB free per replica": on a thin pool
+		// the volume is not required to fit in what is free, so naming free
+		// space as the requirement would misdescribe why the placement failed.
+		return nil, fmt.Errorf("%w (pool %q, %dGB per replica)", err, pool, sizeGB)
 	}
 	rm.controller.logger.Info("auto-placed resource replicas",
 		zap.Strings("nodes", picked), zap.String("pool", pool),
@@ -265,6 +387,23 @@ func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string
 		zap.Strings("on_different", onDifferent), zap.Strings("on_same", onSame),
 		zap.Strings("do_not_place_with", doNotPlaceWith))
 	return picked, nil
+}
+
+// poolRecordedThin reports whether the controller created this pool as a thin
+// pool. A pool the cluster cannot currently be asked about — an unreachable
+// node, a failed `lvs` — still has its type on file, and that is the only thing
+// left to distinguish a thin pool of unknown fullness from a full thick group.
+// A missing or unreadable record answers "not thin", which is the pre-existing
+// behaviour and never widens what placement accepts.
+func (rm *ResourceManager) poolRecordedThin(ctx context.Context, pool string) bool {
+	if rm.controller.db == nil {
+		return false
+	}
+	p, err := rm.controller.db.GetPool(ctx, pool)
+	if err != nil || p == nil {
+		return false
+	}
+	return p.Type == "thin_pool"
 }
 
 // nodesHostingResources returns the set of node names holding a diskful replica

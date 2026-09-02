@@ -2,14 +2,12 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // GetResource asked hosts[0] and nothing else, so a resource became entirely
@@ -30,9 +28,7 @@ func fallbackTestController(t *testing.T, dep deploymentClient) *Controller {
 	t.Helper()
 	ctrl := newBasicTestController(dep)
 
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, db.SaveResource(context.Background(), &database.Resource{

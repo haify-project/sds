@@ -102,7 +102,7 @@ func TestLoadWithStorageConfig(t *testing.T) {
 
 	configContent := `
 [storage]
-default_pool_type = "zfs"
+default_pool_type = "lvm-thin"
 default_snapshot_suffix = "_backup"
 `
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
@@ -112,7 +112,7 @@ default_snapshot_suffix = "_backup"
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.Equal(t, "zfs", cfg.Storage.DefaultPoolType)
+	assert.Equal(t, "lvm-thin", cfg.Storage.DefaultPoolType)
 	assert.Equal(t, "_backup", cfg.Storage.DefaultSnapshotSuffix)
 }
 
@@ -136,7 +136,11 @@ format = "console"
 	assert.Equal(t, "console", cfg.Log.Format)
 }
 
-func TestLoadWithTLSConfig(t *testing.T) {
+// The section used to accept client-viewpoint field names and do nothing with
+// them. Reinterpreting them as the server's own material would turn a
+// plaintext deployment into a TLS one on upgrade, so they are rejected with a
+// message that names the replacements instead.
+func TestLoadRejectsLegacyTLSFieldNames(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "tls.toml")
 
@@ -150,14 +154,10 @@ client_key = "/path/to/client.key"
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	require.NoError(t, err)
 
-	cfg, err := Load(configPath)
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
-
-	assert.True(t, cfg.TLS.Enabled)
-	assert.Equal(t, "/path/to/ca.crt", cfg.TLS.CACert)
-	assert.Equal(t, "/path/to/client.crt", cfg.TLS.ClientCert)
-	assert.Equal(t, "/path/to/client.key", cfg.TLS.ClientKey)
+	_, err = Load(configPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tls.cert_file")
+	assert.Contains(t, err.Error(), "tls.key_file")
 }
 
 func TestLoadWithServerAddress(t *testing.T) {
@@ -306,4 +306,39 @@ path = "/custom/path/sds.db"
 	require.NotNil(t, cfg)
 
 	assert.Equal(t, "/custom/path/sds.db", cfg.Database.Path)
+}
+
+// storage.default_pool_type now decides what an unspecified pool is for every
+// client, so a value the controller cannot act on has to stop it at startup.
+// Left unvalidated it produces the worst shape of failure: a controller that
+// comes up clean and then refuses every pool creation that omits a type, citing
+// LVM at an operator who wrote something else on purpose.
+func TestDefaultPoolTypeIsValidated(t *testing.T) {
+	write := func(t *testing.T, poolType string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "storage.toml")
+		require.NoError(t, os.WriteFile(path,
+			[]byte("[storage]\ndefault_pool_type = \""+poolType+"\"\n"), 0644))
+		return path
+	}
+
+	for _, ok := range []string{"vg", "lvm", "lvm-thin", "thin-pool", "thin_pool", "LVM-Thin", " vg "} {
+		t.Run("accepts "+ok, func(t *testing.T) {
+			_, err := Load(write(t, ok))
+			assert.NoError(t, err)
+		})
+	}
+
+	// ZFS is a real pool type this CLI can create, which is exactly why it is
+	// the dangerous one to allow here: it looks right and cannot work, because
+	// a zpool is built from vdevs by a separate RPC that an omitted type never
+	// reaches.
+	for _, bad := range []string{"zfs", "btrfs", "thin"} {
+		t.Run("rejects "+bad, func(t *testing.T) {
+			_, err := Load(write(t, bad))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "storage.default_pool_type")
+			assert.Contains(t, err.Error(), bad, "the error must name the value the operator wrote")
+		})
+	}
 }

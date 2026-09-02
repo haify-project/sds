@@ -32,7 +32,12 @@ type volumeSource struct {
 // torn, mid-write image, so a clone first takes a snapshot of the source and
 // copies from that instead: the snapshot is a single point in time, and the
 // caller drops it again once the copy is done.
-func (s *controllerServer) resolveVolumeSource(ctx context.Context, cs *csi.VolumeContentSource) (*volumeSource, error) {
+//
+// wantGiB is the size the new volume was requested at, checked here rather than
+// by the caller because this is the last point before the first side effect: a
+// clone takes a snapshot of its source, and a request that can only end in a
+// failed copy should not have created one.
+func (s *controllerServer) resolveVolumeSource(ctx context.Context, cs *csi.VolumeContentSource, wantGiB uint32) (*volumeSource, error) {
 	switch src := cs.GetType().(type) {
 	case *csi.VolumeContentSource_Snapshot:
 		id := src.Snapshot.GetSnapshotId()
@@ -47,6 +52,9 @@ func (s *controllerServer) resolveVolumeSource(ctx context.Context, cs *csi.Volu
 		pool, _, perr := snapshotSource(res)
 		if perr != nil {
 			return nil, status.Error(codes.FailedPrecondition, perr.Error())
+		}
+		if err := checkSourceFits(res, wantGiB); err != nil {
+			return nil, err
 		}
 		// snapshotSource returns "<pool>/<lv>"; the snapshot lives in the same pool.
 		poolName := pool[:len(pool)-len(baseName(pool))-1]
@@ -63,6 +71,10 @@ func (s *controllerServer) resolveVolumeSource(ctx context.Context, cs *csi.Volu
 			return nil, status.Error(codes.FailedPrecondition, perr.Error())
 		}
 		poolName := volumePath[:len(volumePath)-len(baseName(volumePath))-1]
+
+		if err := checkSourceFits(res, wantGiB); err != nil {
+			return nil, err
+		}
 
 		// Snapshot the source so the clone copies a consistent point in time
 		// even if the source is mounted and being written to.
@@ -121,4 +133,26 @@ func sourceSizeGiB(res *sdspb.ResourceInfo) uint32 {
 		return uint32(vols[0].GetSizeGb())
 	}
 	return 0
+}
+
+// checkSourceFits rejects a restore or clone into a volume smaller than its
+// source.
+//
+// The copy is a whole-device read of the source onto the new volume, so a
+// smaller target cannot succeed: it fails inside PopulateVolume, after the
+// resource has been created on every replica and after a clone has snapshotted
+// its source, and the new volume is then torn down again. Kubernetes retries
+// the PVC forever, repeating that cycle, and the operator sees only a
+// dd/copy error. Refusing the request instead puts the real reason —
+// requested smaller than the source — on the PVC's events immediately.
+//
+// wantGiB of 0 means the caller stated no capacity; there is nothing to compare
+// against, so the copy is left to decide.
+func checkSourceFits(res *sdspb.ResourceInfo, wantGiB uint32) error {
+	srcGiB := sourceSizeGiB(res)
+	if wantGiB == 0 || srcGiB == 0 || srcGiB <= wantGiB {
+		return nil
+	}
+	return status.Errorf(codes.InvalidArgument,
+		"requested size %d GiB is smaller than source volume %q (%d GiB)", wantGiB, res.GetName(), srcGiB)
 }

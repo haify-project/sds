@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -91,7 +92,7 @@ func TestLoadWithComplexStorageConfig(t *testing.T) {
 
 	configContent := `
 [storage]
-default_pool_type = "zfs"
+default_pool_type = "lvm-thin"
 default_snapshot_suffix = "_backup_2024"
 `
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
@@ -101,7 +102,7 @@ default_snapshot_suffix = "_backup_2024"
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.Equal(t, "zfs", cfg.Storage.DefaultPoolType)
+	assert.Equal(t, "lvm-thin", cfg.Storage.DefaultPoolType)
 	assert.Equal(t, "_backup_2024", cfg.Storage.DefaultSnapshotSuffix)
 }
 
@@ -198,10 +199,7 @@ func TestConfigSaveWithAllSections(t *testing.T) {
 			Path: "/var/lib/sds/sds.db",
 		},
 		TLS: TLSConfig{
-			Enabled:    false,
-			CACert:     "",
-			ClientCert: "",
-			ClientKey:  "",
+			Enabled: false,
 		},
 		Log: LogConfig{
 			Level:  "info",
@@ -275,15 +273,17 @@ port = 9090
 
 func TestTLSConfigPaths(t *testing.T) {
 	tmpDir := t.TempDir()
+	certFile, keyFile := writeTestServerCert(t, tmpDir, "leaf")
+	caFile := writeTestClientCA(t, tmpDir)
 	configPath := filepath.Join(tmpDir, "tls_paths.toml")
 
-	configContent := `
+	configContent := fmt.Sprintf(`
 [tls]
 enabled = true
-ca_cert = "/etc/sds/ca.crt"
-client_cert = "/etc/sds/client.crt"
-client_key = "/etc/sds/client.key"
-`
+cert_file = %q
+key_file = %q
+client_ca_file = %q
+`, certFile, keyFile, caFile)
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	require.NoError(t, err)
 
@@ -292,7 +292,8 @@ client_key = "/etc/sds/client.key"
 	require.NotNil(t, cfg)
 
 	assert.True(t, cfg.TLS.Enabled)
-	assert.Equal(t, "/etc/sds/ca.crt", cfg.TLS.CACert)
-	assert.Equal(t, "/etc/sds/client.crt", cfg.TLS.ClientCert)
-	assert.Equal(t, "/etc/sds/client.key", cfg.TLS.ClientKey)
+	assert.Equal(t, certFile, cfg.TLS.CertFile)
+	assert.Equal(t, keyFile, cfg.TLS.KeyFile)
+	assert.Equal(t, caFile, cfg.TLS.ClientCAFile)
+	assert.True(t, cfg.TLS.MutualTLS(), "a client CA is what turns mutual TLS on")
 }

@@ -275,7 +275,7 @@ func TestEncryptionCannotBeRetrofittedOntoAnExistingResource(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := newBasicTestController(&fakeDeploymentClient{})
-			ctrl.db = openTestDB(t)
+			ctrl.db = newTestDB(t)
 			if tc.existing != nil {
 				require.NoError(t, ctrl.db.SaveResource(context.Background(), tc.existing))
 			}
@@ -294,7 +294,7 @@ func TestEncryptionCannotBeRetrofittedOntoAnExistingResource(t *testing.T) {
 // Aiming lvresize/lvremove at /dev/mapper/... does not address an LV at all.
 func TestBackingLVForResolvesThroughTheVolumeRecord(t *testing.T) {
 	ctrl := newBasicTestController(&fakeDeploymentClient{})
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	ctx := context.Background()
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "data", Encrypted: true}))
 	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{

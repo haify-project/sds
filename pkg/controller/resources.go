@@ -68,6 +68,20 @@ type ResourceNodeState struct {
 	// intermediate value while Replication is a resync state (SyncSource/
 	// SyncTarget/PausedSync*).
 	SyncPercent float64
+	// SyncPercentKnown says whether SyncPercent was actually derived from DRBD
+	// output. Only the structured `drbdsetup status --json` carries completion;
+	// the plain-text fallback has no such field, so its states leave this false
+	// with SyncPercent at its zero value.
+	//
+	// Anything charting completion over time must consult this first: a
+	// text-parsed zero graphed as "0% synced" turns a perfectly healthy cluster
+	// into one whose resync appears never to have started.
+	SyncPercentKnown bool
+	// Quorum is whether this node holds DRBD quorum for the resource, or nil
+	// when DRBD did not report it. Nil is the normal case for peers — a node's
+	// status only carries its own quorum — and for the plain-text parse, which
+	// does not surface quorum at all.
+	Quorum *bool
 }
 
 // ResourceVolumeInfo represents DRBD volume information
@@ -1084,7 +1098,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// setting can be applied later with `resource set-options`.
 	if wan != nil {
 		// allIPs is every participant; nodeIPs is the diskful ones, the DR last.
-		localVoters := len(allIPs) - 1
+		localVoters := localSiteVoters(len(allIPs))
 		if err := rm.applyLocalSiteQuorum(ctx, name, allIPs, localVoters); err != nil {
 			rm.controller.logger.Warn("Could not narrow quorum to the primary site; the DR still votes",
 				zap.String("resource", name), zap.Error(err))
@@ -1679,20 +1693,6 @@ const wanDRBDBindOffset = 100
 // multiPrimary reports whether the primary site holds more than one replica.
 func (w *wanConfig) multiPrimary() bool { return w != nil && len(w.PrimaryNodes) > 1 }
 
-// legIndex returns the position of a primary node in the WAN leg ordering,
-// which fixes its WAN port and loopback ports. -1 for the DR node.
-func (w *wanConfig) legIndex(node string) int {
-	if w == nil {
-		return -1
-	}
-	for i, n := range w.PrimaryNodes {
-		if n == node {
-			return i
-		}
-	}
-	return -1
-}
-
 // wanproxyLocalBinaryPath is the controller-local path to the sds-proxy binary
 // the WAN provisioner pushes to both nodes. We follow the same convention as
 // the service-ip / sds-controller helpers: a well-known /usr/local/bin path.
@@ -1709,6 +1709,15 @@ var wanproxyLocalBinaryPath = "/usr/local/bin/sds-proxy"
 // wanproxyBinaryResolver, because the two ends of a WAN leg frequently differ:
 // the off-site node is whatever the cloud rents, the primary site is whatever is
 // on the shelf.
+//
+// Nothing calls it today: every WAN path currently provisions a set of nodes and
+// so goes through wanproxyBinaryResolver. It is kept rather than deleted because
+// it is the single-node half of that pair, and the next single-node caller would
+// otherwise have to rediscover the rule stated above — a missing binary is a
+// warning, not a failed create. The unused check is silenced for exactly that
+// reason, not because the function is a leftover.
+//
+//nolint:unused // deliberately retained; see the note above.
 func (rm *ResourceManager) wanproxyBinaryPath() string {
 	if _, err := os.Stat(wanproxyLocalBinaryPath); err != nil {
 		rm.controller.logger.Warn("sds-proxy binary not found on controller; assuming it is pre-staged on WAN nodes",
@@ -1989,37 +1998,16 @@ func (rm *ResourceManager) applyLocalSiteQuorum(ctx context.Context, resource st
 		"apply the primary-site quorum")
 }
 
-// localSiteQuorum returns the `quorum` setting for a resource.
+// localSiteVoters counts the members entitled to decide whether the primary
+// site may write. allMembers is every configured participant of a WAN resource,
+// exactly one of which is the off-site DR; the DR replicates and still counts as
+// a member, it just does not get to decide whether home can write. See
+// primarySiteQuorum for why.
 //
-// A LAN resource gets "majority", unchanged: every node can serve, so every node
-// should have a say in whether serving is safe.
-//
-// A resource with an off-site DR does not. DRBD counts every configured node
-// toward a majority, but the DR is an asynchronous copy that is never promoted
-// automatically — it cannot take over, so letting it vote on whether the primary
-// site may accept writes is backwards. Worse, it actively costs availability:
-// adding a DR to a 3-node resource lifts the bar from 2 votes to 3, so the site
-// that used to survive one local failure no longer does. That is how a quorum
-// tiebreaker can be added, a DR attached, and the tiebreaker's vote silently
-// cancelled out.
-//
-// So a WAN resource's quorum is sized to the primary site alone: a majority of
-// the nodes that could actually take over. The DR still replicates and still
-// counts as a member; it just does not get to decide whether home can write.
-//
-// The narrower guarantee is deliberate and bounded: the excluded node is
-// unreachable from the primary site's network by construction — it is reached
-// only through a proxy tunnel — so it cannot form a rival quorate partition with
-// any local node. This is not the same as picking a small number arbitrarily.
-func localSiteQuorum(nodes, disklessNodes []string, wan *wanConfig) string {
-	if wan == nil {
-		return "majority"
-	}
-	local := len(nodes) - 1 + len(disklessNodes) // every member except the DR
-	if local < 1 {
-		local = 1
-	}
-	return strconv.Itoa(local/2 + 1)
+// A named function rather than a `- 1` at the call site: the subtraction is the
+// entire safety property, and an inline one is neither greppable nor testable.
+func localSiteVoters(allMembers int) int {
+	return allMembers - 1
 }
 
 func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes []resolvedVolume, nodes, disklessNodes []string, protocol, storageType string, options map[string]string, wan *wanConfig) string {
@@ -2084,7 +2072,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		}
 	}
 
-	config.WriteString(fmt.Sprintf("resource %s {\n", name))
+	fmt.Fprintf(&config, "resource %s {\n", name)
 
 	// Write configuration sections
 	knownSections := []string{"options", "net", "startup", "handlers"} // disk handled separately inside volume
@@ -2096,7 +2084,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		// Always write net section to include protocol
 		if s == "net" {
 			config.WriteString("\n    net {\n")
-			config.WriteString(fmt.Sprintf("        protocol %s;\n", protocol))
+			fmt.Fprintf(&config, "        protocol %s;\n", protocol)
 			if ok {
 				var keys []string
 				for k := range opts {
@@ -2104,7 +2092,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 				}
 				sort.Strings(keys)
 				for _, k := range keys {
-					config.WriteString(fmt.Sprintf("        %s %s;\n", k, opts[k]))
+					fmt.Fprintf(&config, "        %s %s;\n", k, opts[k])
 				}
 			}
 			config.WriteString("    }\n")
@@ -2113,7 +2101,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		}
 
 		if ok && len(opts) > 0 {
-			config.WriteString(fmt.Sprintf("\n    %s {\n", s))
+			fmt.Fprintf(&config, "\n    %s {\n", s)
 
 			// Sort keys for deterministic output
 			var keys []string
@@ -2123,7 +2111,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 			sort.Strings(keys)
 
 			for _, k := range keys {
-				config.WriteString(fmt.Sprintf("        %s %s;\n", k, opts[k]))
+				fmt.Fprintf(&config, "        %s %s;\n", k, opts[k])
 			}
 			config.WriteString("    }\n")
 			processed[s] = true
@@ -2142,14 +2130,14 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 	for _, s := range customSections {
 		// Generic write
 		opts := sections[s]
-		config.WriteString(fmt.Sprintf("\n    %s {\n", s))
+		fmt.Fprintf(&config, "\n    %s {\n", s)
 		var keys []string
 		for k := range opts {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			config.WriteString(fmt.Sprintf("        %s %s;\n", k, opts[k]))
+			fmt.Fprintf(&config, "        %s %s;\n", k, opts[k])
 		}
 		config.WriteString("    }\n")
 	}
@@ -2165,22 +2153,22 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 
 	// Generate a resource-level block for each volume (volume 0..N).
 	for _, v := range volumes {
-		config.WriteString(fmt.Sprintf("\n    volume %d {\n", v.id))
-		config.WriteString(fmt.Sprintf("        device    minor %d;\n", v.minor))
+		fmt.Fprintf(&config, "\n    volume %d {\n", v.id)
+		fmt.Fprintf(&config, "        device    minor %d;\n", v.minor)
 
 		// The ZFS or LVM device path per storage type — or, for an encrypted
 		// volume, the crypt container that sits on top of it. DRBD must attach
 		// to the mapping and never to the LV underneath: pointing it at the LV
 		// would have it write plaintext straight past the layer that exists to
 		// encrypt it.
-		config.WriteString(fmt.Sprintf("        disk      %s;\n", v.backingDevice(storageType)))
+		fmt.Fprintf(&config, "        disk      %s;\n", v.backingDevice(storageType))
 		config.WriteString("        meta-disk internal;\n")
 
 		if len(diskOptKeys) > 0 {
 			diskOpts := sections["disk"]
 			config.WriteString("        disk {\n")
 			for _, k := range diskOptKeys {
-				config.WriteString(fmt.Sprintf("            %s %s;\n", k, diskOpts[k]))
+				fmt.Fprintf(&config, "            %s %s;\n", k, diskOpts[k])
 			}
 			config.WriteString("        }\n")
 		}
@@ -2223,7 +2211,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		// `on <name>` must be the node's real hostname: drbdadm only applies a
 		// resource to a host that finds itself in one of these sections. The
 		// SDS node name is an operator-chosen label and may differ.
-		config.WriteString(fmt.Sprintf("\n    on %s {\n", rm.controller.nodes.GetDRBDNameByRef(node)))
+		fmt.Fprintf(&config, "\n    on %s {\n", rm.controller.nodes.GetDRBDNameByRef(node))
 		if wan.multiPrimary() {
 			// Multi-replica primary site: the per-node `address` is the LAN
 			// address the other replicas reach it on. The WAN legs cannot use it
@@ -2236,9 +2224,9 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 				// The DR has no LAN peers; every one of its connections is a
 				// WAN leg, so this address is never used. Keep it on loopback
 				// so a stray direct connect cannot leave the tunnel.
-				config.WriteString(fmt.Sprintf("        address   127.0.0.1:%d;\n", port))
+				fmt.Fprintf(&config, "        address   127.0.0.1:%d;\n", port)
 			} else {
-				config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
+				fmt.Fprintf(&config, "        address   %s:%d;\n", ip, port)
 			}
 		} else if wan != nil {
 			// WAN: route through the local per-resource sds-proxy on loopback
@@ -2250,15 +2238,15 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 			if node == wan.DRNode {
 				addrPort = port
 			}
-			config.WriteString(fmt.Sprintf("        address   127.0.0.1:%d;\n", addrPort))
+			fmt.Fprintf(&config, "        address   127.0.0.1:%d;\n", addrPort)
 		} else {
-			config.WriteString(fmt.Sprintf("        address   %s:%d;\n", ip, port))
+			fmt.Fprintf(&config, "        address   %s:%d;\n", ip, port)
 		}
-		config.WriteString(fmt.Sprintf("        node-id   %d;\n", i))
+		fmt.Fprintf(&config, "        node-id   %d;\n", i)
 		if diskless[node] {
 			for _, v := range volumes {
-				config.WriteString(fmt.Sprintf("        volume %d {\n", v.id))
-				config.WriteString(fmt.Sprintf("            device    minor %d;\n", v.minor))
+				fmt.Fprintf(&config, "        volume %d {\n", v.id)
+				fmt.Fprintf(&config, "            device    minor %d;\n", v.minor)
 				config.WriteString("            disk      none;\n")
 				config.WriteString("        }\n")
 			}
@@ -2290,7 +2278,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 				config.WriteString("\n    connection-mesh {\n")
 				config.WriteString("        hosts")
 				for _, h := range lanHosts {
-					config.WriteString(fmt.Sprintf(" %s", h))
+					fmt.Fprintf(&config, " %s", h)
 				}
 				config.WriteString(";\n")
 				config.WriteString("    }\n")
@@ -2311,8 +2299,8 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 			// binds legPort, where its local acceptor dials it. Both ends read
 			// the same numbers as their own loopback, which is what lets one
 			// connection stanza describe a tunnel with two different endpoints.
-			config.WriteString(fmt.Sprintf("        host %s address 127.0.0.1:%d;\n", primaryName, wan.bindPort(int(legPort), i)))
-			config.WriteString(fmt.Sprintf("        host %s address 127.0.0.1:%d;\n", drName, legPort))
+			fmt.Fprintf(&config, "        host %s address 127.0.0.1:%d;\n", primaryName, wan.bindPort(int(legPort), i))
+			fmt.Fprintf(&config, "        host %s address 127.0.0.1:%d;\n", drName, legPort)
 			// Async across the WAN, whatever the LAN mesh uses. pull-ahead lets
 			// a stalled tunnel drop behind instead of blocking the primary.
 			config.WriteString("        net {\n")
@@ -2329,7 +2317,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		config.WriteString("        hosts")
 		for _, node := range allNodes {
 			// Same rule as the `on` sections: the mesh lists DRBD host names.
-			config.WriteString(fmt.Sprintf(" %s", rm.controller.nodes.GetDRBDNameByRef(node)))
+			fmt.Fprintf(&config, " %s", rm.controller.nodes.GetDRBDNameByRef(node))
 		}
 		config.WriteString(";\n")
 		config.WriteString("    }\n")
@@ -5247,9 +5235,12 @@ func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNode
 
 	// Local node: role + disk from the top-level resource. A node has no
 	// replication relationship to itself, so it is fully in sync (100).
-	local := &ResourceNodeState{Role: res.Role, SyncPercent: 100}
+	local := &ResourceNodeState{Role: res.Role, SyncPercent: 100, SyncPercentKnown: true}
 	if len(res.Devices) > 0 {
 		local.DiskState = res.Devices[0].DiskState
+		// Quorum is only ever the queried node's own verdict; the peers below
+		// deliberately leave it nil rather than assume they agree.
+		local.Quorum = res.Devices[0].Quorum
 	}
 	states[localNode] = local
 
@@ -5258,7 +5249,7 @@ func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNode
 		if conn.Name == "" {
 			continue
 		}
-		peer := &ResourceNodeState{Role: conn.PeerRole, SyncPercent: 100}
+		peer := &ResourceNodeState{Role: conn.PeerRole, SyncPercent: 100, SyncPercentKnown: true}
 		if len(conn.PeerDevices) > 0 {
 			pd := conn.PeerDevices[0]
 			peer.DiskState = pd.PeerDiskState
@@ -5540,12 +5531,21 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 			NodeStates: make(map[string]alert.NodeStateInfo, len(info.NodeStates)),
 		}
 		for node, st := range info.NodeStates {
-			item.NodeStates[node] = alert.NodeStateInfo{
+			state := alert.NodeStateInfo{
 				DiskState:        st.DiskState,
 				ReplicationState: st.Replication,
 				Role:             st.Role,
 				ExpectedDiskless: diskless[node] || diskless[rm.controller.ResolveHost(node)],
+				Quorum:           st.Quorum,
 			}
+			// Only forward completion the status source actually reported. A
+			// text-parsed state has none, and passing its zero on would export
+			// "0% synced" for every replica of a cluster that is fully in sync.
+			if st.SyncPercentKnown {
+				percent := st.SyncPercent
+				state.SyncPercent = &percent
+			}
+			item.NodeStates[node] = state
 		}
 
 		// For WAN resources, fold the sds-proxy pair's health into the status so

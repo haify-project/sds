@@ -158,7 +158,11 @@ func (s *UIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// File not found, serve index.html for SPA routing
 			fileToServe = "index.html"
 		} else {
-			f.Close()
+			// The open was only a probe for existence and type; the bytes are
+			// read later with fs.ReadFile. Closing a handle nothing was read
+			// from cannot lose data, so the error is dropped rather than
+			// turning a servable page into a 500.
+			_ = f.Close()
 			stat, _ := f.Stat()
 			if stat.IsDir() {
 				// For directories, try to serve index.html inside

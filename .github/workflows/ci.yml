@@ -34,11 +34,61 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # golangci-lint is pinned to the same version `make lint` runs locally.
+      # A floating version turns an upstream release into a red build on a
+      # branch that changed nothing, which teaches everyone to ignore the gate.
+      #
+      # The two --max flags disable golangci-lint's own output truncation, not
+      # any linter. It defaults to reporting 50 issues per linter and 3 per
+      # distinct message, so a gate left on the defaults silently passes
+      # everything past those cutoffs — and picks *which* ones to show
+      # non-deterministically, so the same commit can fail on different lines
+      # in two runs. This repository went from "50 issues" to 255 the moment
+      # the caps came off.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.13.1
+          args: --timeout=5m --max-issues-per-linter=0 --max-same-issues=0
+
       - name: Build
         run: go build ./...
 
+      # -count=1 defeats the test cache. setup-go's cache restores
+      # ~/.cache/go-build, which holds test results as well as build output, so
+      # without this a green "ok (cached)" can mean the tests never ran on this
+      # commit at all.
+      #
+      # -race because this controller fans out over SSH to every node in
+      # parallel and multiplexes the results; the interesting bugs here are
+      # concurrent ones, and they do not reproduce on demand. The cost measured
+      # on the current suite is a few seconds.
       - name: Test
-        run: go test ./...
+        run: go test -race -count=1 ./...
+
+  vulncheck:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Ensure embedded UI placeholder
+        run: make ui-ensure
+
+      # Its own job, deliberately: govulncheck reads a database that changes
+      # without this repository changing, so it can go red on a commit that is
+      # identical to yesterday's green one. Kept separate so that signal — "a
+      # new advisory now reaches our code" — is never confused with "this change
+      # broke the build".
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
   web-ui:
     name: Web UI build

@@ -144,3 +144,53 @@ func TestCreateVolumeWithoutContentSourceDoesNotPopulate(t *testing.T) {
 	assert.Empty(t, b.populated, "an ordinary volume must not be copied into")
 	assert.Empty(t, b.snapCreated)
 }
+
+// withSize overrides a request's capacity so the source/target size mismatch is
+// the only thing under test.
+func withSize(req *csi.CreateVolumeRequest, gib int64) *csi.CreateVolumeRequest {
+	req.CapacityRange = &csi.CapacityRange{RequiredBytes: gib << 30}
+	return req
+}
+
+// A copy onto a device smaller than its source can only fail. Catching it at
+// the request boundary is what keeps the failure off the cluster: no resource
+// created and rolled back, and — for a clone — no snapshot taken of the source
+// just to be discarded.
+func TestRestoreRejectsTargetSmallerThanSource(t *testing.T) {
+	b := newFakeBackend("n1", "n2")
+	seedSnapshotSource(b, "pvc_src", "n1", "n2") // 2 GiB
+	s := newTestController(b)
+
+	_, err := s.CreateVolume(context.Background(), withSize(restoreReq("pvc-new", "pvc_src/n1/sdssnap_s1"), 1))
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, err.Error(), "smaller than source volume")
+
+	assert.Empty(t, b.createCalls, "no volume may be created for a request that cannot be satisfied")
+	assert.Empty(t, b.populated)
+}
+
+func TestCloneRejectsTargetSmallerThanSource(t *testing.T) {
+	b := newFakeBackend("n1", "n2")
+	seedSnapshotSource(b, "pvc_src", "n1", "n2") // 2 GiB
+	s := newTestController(b)
+
+	_, err := s.CreateVolume(context.Background(), withSize(cloneReq("pvc-new", "pvc_src"), 1))
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	assert.Empty(t, b.snapCreated, "the source must not be snapshotted for a clone that cannot succeed")
+	assert.Empty(t, b.createCalls)
+}
+
+// Equal sizes are the common case (a PVC restored at the snapshot's own size)
+// and must keep working.
+func TestRestoreAcceptsEqualSize(t *testing.T) {
+	b := newFakeBackend("n1", "n2")
+	seedSnapshotSource(b, "pvc_src", "n1", "n2") // 2 GiB
+	s := newTestController(b)
+
+	_, err := s.CreateVolume(context.Background(), withSize(restoreReq("pvc-new", "pvc_src/n1/sdssnap_s1"), 2))
+	require.NoError(t, err)
+	require.Len(t, b.populated, 1)
+}

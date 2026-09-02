@@ -66,7 +66,7 @@ func nfsExportAdd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.AddNFSExport(cmd.Context(), resource, exportPath, fsid, clientSpec, exportOptions)
 			if err != nil {
@@ -100,7 +100,7 @@ func nfsExportRemove() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.RemoveNFSExport(cmd.Context(), resource, exportPath)
 			if err != nil {
@@ -131,7 +131,7 @@ func nfsExportList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			exports, err := sdsClient.ListNFSExports(cmd.Context(), resource)
 			if err != nil {
@@ -175,7 +175,7 @@ func nfsMount() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			gw, err := sdsClient.GetGateway(cmd.Context(), resource)
 			if err != nil {

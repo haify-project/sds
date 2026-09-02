@@ -95,7 +95,7 @@ func TestReplicationAddressSurvivesRestart(t *testing.T) {
 		execFunc: hostnameExecFunc("n1"),
 	}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 
 	_, err := ctrl.nodes.RegisterNodeWithReplicationAddress(
 		context.Background(), "n1", "10.0.0.1", "10.99.0.1")
@@ -120,7 +120,7 @@ func TestReplicationAddressSurvivesRestart(t *testing.T) {
 func TestRegistrationWithoutReplicationAddressLeavesItEmpty(t *testing.T) {
 	dep := &fakeDeploymentClient{execFunc: hostnameExecFunc("n1")}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 
 	node, err := ctrl.nodes.RegisterNode(context.Background(), "n1", "10.0.0.1")
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestRegistrationWithoutReplicationAddressLeavesItEmpty(t *testing.T) {
 func TestRegistrationTrimsReplicationAddress(t *testing.T) {
 	dep := &fakeDeploymentClient{execFunc: hostnameExecFunc("n1")}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 
 	node, err := ctrl.nodes.RegisterNodeWithReplicationAddress(
 		context.Background(), "n1", "10.0.0.1", "   ")

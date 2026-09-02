@@ -2,7 +2,12 @@
 package config
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
+	"slices"
+	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
@@ -216,12 +221,83 @@ type DatabaseConfig struct {
 	Path string `mapstructure:"path"` // Database file path (default: /var/lib/sds/sds.db)
 }
 
-// TLSConfig represents TLS configuration
+// TLSConfig controls transport security for the gRPC API (and, through the
+// in-process REST gateway, for everything the web UI calls).
+//
+// This section used to be pure decoration: nothing in the tree read it, so
+// `enabled = true` produced a plaintext listener while the startup log happily
+// reported TLS as on — the worst kind of failure, a security switch that
+// claims to be closed. Every field below is now read at startup and every
+// unusable combination is rejected there, not at the first connection.
+//
+// The fields are named from the CONTROLLER's point of view, because that is
+// who reads them: CertFile/KeyFile are the certificate this server presents.
+// The old names (ca_cert / client_cert / client_key) described a *client*, and
+// a config still carrying them is rejected rather than reinterpreted — see
+// Validate. The client-side spellings live on in pkg/client, where they are
+// correct.
 type TLSConfig struct {
-	Enabled    bool   `mapstructure:"enabled"`
-	CACert     string `mapstructure:"ca_cert"`
-	ClientCert string `mapstructure:"client_cert"`
-	ClientKey  string `mapstructure:"client_key"`
+	Enabled bool `mapstructure:"enabled"`
+	// CertFile and KeyFile are the server certificate chain and its private
+	// key, PEM encoded. Both are required when Enabled.
+	CertFile string `mapstructure:"cert_file"`
+	KeyFile  string `mapstructure:"key_file"`
+	// ClientCAFile is the CA bundle that signs client certificates. Setting it
+	// is what turns on mutual TLS: the server then requires and verifies a
+	// client certificate on every connection. There is deliberately no
+	// separate "require_client_cert" switch — a CA configured but not enforced
+	// is exactly the kind of security setting that looks on while being off.
+	ClientCAFile string `mapstructure:"client_ca_file"`
+
+	// Legacy client-viewpoint names. They are still decoded so that a config
+	// which sets them fails loudly at startup instead of being silently
+	// ignored (which, for three releases, is what happened to the whole
+	// section). They are never used for anything else.
+	LegacyCACert     string `mapstructure:"ca_cert,omitempty"`
+	LegacyClientCert string `mapstructure:"client_cert,omitempty"`
+	LegacyClientKey  string `mapstructure:"client_key,omitempty"`
+}
+
+// MutualTLS reports whether client certificates are required and verified.
+func (t TLSConfig) MutualTLS() bool { return t.Enabled && t.ClientCAFile != "" }
+
+// Validate rejects a [tls] section that cannot work, at startup rather than at
+// the first connection. A controller that boots "with TLS" and only discovers
+// at the first handshake that its key does not match its certificate has
+// already told the operator it is secure.
+func (t TLSConfig) Validate() error {
+	if t.LegacyCACert != "" || t.LegacyClientCert != "" || t.LegacyClientKey != "" {
+		return fmt.Errorf("tls: ca_cert/client_cert/client_key name a *client's* material and are no longer read; " +
+			"the controller needs its own certificate — set tls.cert_file and tls.key_file, " +
+			"and tls.client_ca_file to require client certificates. " +
+			"(sds-cli keeps --tls-ca/--tls-cert/--tls-key for the client side.)")
+	}
+	if !t.Enabled {
+		return nil
+	}
+	if t.CertFile == "" || t.KeyFile == "" {
+		return fmt.Errorf("tls.cert_file and tls.key_file are required when tls.enabled is true")
+	}
+	// LoadX509KeyPair is the check, not a formality: it catches a missing or
+	// unreadable file, a PEM block that is not a certificate, and — the one an
+	// existence check would wave through — a key that does not belong to the
+	// certificate.
+	if _, err := tls.LoadX509KeyPair(t.CertFile, t.KeyFile); err != nil {
+		return fmt.Errorf("tls: cannot load cert_file %q with key_file %q: %w", t.CertFile, t.KeyFile, err)
+	}
+	if t.ClientCAFile != "" {
+		pem, err := os.ReadFile(t.ClientCAFile)
+		if err != nil {
+			return fmt.Errorf("tls: cannot read client_ca_file %q: %w", t.ClientCAFile, err)
+		}
+		// An unparsable bundle would otherwise produce an empty pool, and an
+		// empty ClientCAs pool rejects every client — mutual TLS that locks
+		// out the whole cluster instead of failing to start.
+		if !x509.NewCertPool().AppendCertsFromPEM(pem) {
+			return fmt.Errorf("tls: client_ca_file %q contains no PEM certificate", t.ClientCAFile)
+		}
+	}
+	return nil
 }
 
 // LogConfig represents logging configuration
@@ -311,6 +387,15 @@ func Load(configPath string) (*Config, error) {
 }
 
 // Validate validates the configuration
+// validPoolTypeDefaults are the values storage.default_pool_type may take.
+//
+// ZFS is deliberately absent even though `sds-cli pool create --type zfs` works:
+// a zpool is built from vdevs by a separate RPC, so an unspecified type never
+// resolves to one. Accepting "zfs" here would produce a controller that starts
+// cleanly and then fails every pool creation that omits a type, with an error
+// about LVM that names a setting the operator wrote on purpose.
+var validPoolTypeDefaults = []string{"vg", "lvm", "lvm-thin", "thin-pool", "thin_pool"}
+
 func (c *Config) Validate() error {
 	if c.Server.ListenAddress == "" {
 		c.Server.ListenAddress = "0.0.0.0"
@@ -321,6 +406,13 @@ func (c *Config) Validate() error {
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
 	}
+	if t := strings.ToLower(strings.TrimSpace(c.Storage.DefaultPoolType)); t != "" {
+		if !slices.Contains(validPoolTypeDefaults, t) {
+			return fmt.Errorf("storage.default_pool_type %q is not a pool type this controller can create (want one of %s)",
+				c.Storage.DefaultPoolType, strings.Join(validPoolTypeDefaults, ", "))
+		}
+	}
+
 	if c.Auth.Enabled {
 		if len(c.Auth.Token) < 16 {
 			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
@@ -347,6 +439,9 @@ func (c *Config) Validate() error {
 			seen[u.Token] = struct{}{}
 		}
 	}
+	if err := c.TLS.Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -360,6 +455,11 @@ func setDefaults() {
 	viper.SetDefault("log.format", "json")
 	// Thin by default: a thick LVM pool reserves a fixed COW area per snapshot,
 	// so it cannot hold a retention history. See cmd/cli/pool.go for the numbers.
+	// Thin by default. A thick pool cannot hold a snapshot history: LVM makes
+	// every snapshot reserve a fixed COW area up front (SDS reserves 20% of the
+	// origin), so a 10 GiB pool holding a 6 GiB volume fits two snapshots —
+	// which is not a retention policy. Thin snapshots cost only the blocks that
+	// diverge. Set "vg" here for the thick behaviour on every client at once.
 	viper.SetDefault("storage.default_pool_type", "thin_pool")
 	viper.SetDefault("storage.default_snapshot_suffix", "_snap")
 	viper.SetDefault("metrics.enabled", true)

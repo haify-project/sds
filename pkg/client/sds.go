@@ -23,6 +23,7 @@ type Option func(*clientOptions)
 
 type clientOptions struct {
 	token string
+	tls   TLSOptions
 }
 
 // WithToken attaches a static bearer token to every RPC, matching the
@@ -31,9 +32,15 @@ func WithToken(token string) Option {
 	return func(o *clientOptions) { o.token = token }
 }
 
+// WithTLS dials the controller over TLS, matching its [tls] section. Without
+// it the connection is plaintext, which is what every controller predating
+// transport security still serves.
+func WithTLS(tlsOpts TLSOptions) Option {
+	return func(o *clientOptions) { o.tls = tlsOpts }
+}
+
 // tokenCredentials implements credentials.PerRPCCredentials for the static
-// bearer-token scheme. The cluster API runs on a trusted management network
-// without transport TLS, so transport security is not required.
+// bearer-token scheme.
 type tokenCredentials struct {
 	token string
 }
@@ -42,6 +49,12 @@ func (t tokenCredentials) GetRequestMetadata(ctx context.Context, uri ...string)
 	return map[string]string{"authorization": "Bearer " + t.token}, nil
 }
 
+// RequireTransportSecurity stays false deliberately. Returning true would make
+// grpc-go refuse to send the token over a plaintext connection, which would
+// break every existing cluster that runs the API on a trusted management
+// network — the deployment model this project shipped with. Transport security
+// is opted into with WithTLS; the honest warning about the plaintext case is
+// logged by the controller at startup, where the operator can act on it.
 func (t tokenCredentials) RequireTransportSecurity() bool { return false }
 
 func NewSDSClient(addr string, opts ...Option) (*SDSClient, error) {
@@ -50,8 +63,16 @@ func NewSDSClient(addr string, opts ...Option) (*SDSClient, error) {
 		opt(&options)
 	}
 
+	transport := insecure.NewCredentials()
+	if options.tls.Active() {
+		var err error
+		if transport, err = options.tls.Credentials(); err != nil {
+			return nil, err
+		}
+	}
+
 	dialOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(transport),
 	}
 	if options.token != "" {
 		dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(tokenCredentials{token: options.token}))

@@ -75,6 +75,27 @@ type Controller struct {
 // over here rather than built by New.
 func (c *Controller) SetLogRing(r *logbuf.Ring) { c.logRing = r }
 
+// closeDBAfterFailedStart hands the metadata database back when New gives up
+// part way through.
+//
+// It matters because bolt holds an exclusive flock on the file: a controller
+// that aborts with the database still open leaves the next start attempt to
+// fail at "timeout" on a file nothing is really using — a far more confusing
+// error than the one New is about to return. The close error itself is logged
+// rather than returned, because the caller needs to see why the controller
+// could not be built, not how the cleanup went.
+func closeDBAfterFailedStart(logger *zap.Logger, db *database.DB) {
+	if db == nil {
+		return
+	}
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	if err := db.Close(); err != nil {
+		logger.Warn("Failed to close database after an aborted controller start", zap.Error(err))
+	}
+}
+
 // New creates a new controller
 func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,6 +103,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	// Open database
 	db, err := database.Open(&database.Config{Path: cfg.Database.Path}, logger)
 	if err != nil {
+		// A schema this binary cannot safely write is the one open failure that
+		// must not degrade into "continue without persistence". Running on with
+		// db == nil means the controller reports an empty cluster and then
+		// starts writing that view back over a database whose real content it
+		// never understood — which is precisely the data loss the version check
+		// exists to prevent. Refuse to start and let the operator roll forward
+		// or restore.
+		if database.IsSchemaIncompatible(err) {
+			cancel()
+			return nil, fmt.Errorf("cannot open database: %w", err)
+		}
 		logger.Warn("Failed to open database, continuing without persistence", zap.Error(err))
 		db = nil
 	}
@@ -103,9 +135,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	})
 	if err != nil {
 		cancel()
-		if db != nil {
-			db.Close()
-		}
+		closeDBAfterFailedStart(logger, db)
 		return nil, fmt.Errorf("failed to create deployment client: %w", err)
 	}
 
@@ -139,9 +169,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 		metricsInstance, err := metrics.New(logger)
 		if err != nil {
 			cancel()
-			if db != nil {
-				db.Close()
-			}
+			closeDBAfterFailedStart(logger, db)
 			return nil, fmt.Errorf("failed to initialize metrics: %w", err)
 		}
 		ctrl.metrics = metricsInstance
@@ -286,19 +314,13 @@ func (c *Controller) Start() error {
 // Events returns the notification bus, or nil when notifications are disabled.
 func (c *Controller) Events() *event.Bus { return c.events }
 
-// startNotifications brings up the event bus, the health detector that feeds
-// it, and any configured Webhook receivers.
+// alertOptions assembles what the health detector is asked to watch.
 //
-// A Webhook is no longer required to enable this: the bus also backs the watch
-// stream and the SSE endpoint, so an operator who wants to tail events without
-// standing up an HTTP receiver just sets enabled = true.
-func (c *Controller) startNotifications() {
-	if !c.config.Alert.Enabled {
-		return
-	}
-
-	c.events = event.NewBus(c.config.Alert.HistorySize)
-
+// Split out of startNotifications so the wiring can be asserted directly. The
+// observer in particular is the kind of connection that goes missing without
+// anything failing: the detector keeps raising events, the metrics endpoint
+// keeps answering, and only the numbers on it are quietly empty.
+func (c *Controller) alertOptions() alert.Options {
 	opts := alert.Options{
 		Interval:  time.Duration(c.config.Alert.CheckIntervalSec) * time.Second,
 		Resources: c.resources,
@@ -315,6 +337,39 @@ func (c *Controller) startNotifications() {
 		opts.NearFullPercent = c.config.Alert.PoolNearFullPercent
 		opts.FullPercent = c.config.Alert.PoolFullPercent
 	}
+	// One poll, two consumers. The state the detector gathers to raise events is
+	// the same state a dashboard needs, and collecting it twice would double the
+	// SSH round trips to every node while letting the alert and the panel
+	// disagree about the same instant — the disagreement an operator notices
+	// first and trusts least.
+	if c.metrics != nil {
+		opts.Observer = newMetricsObserver(c)
+	}
+	return opts
+}
+
+// startNotifications brings up the event bus, the health detector that feeds
+// it, and any configured Webhook receivers.
+//
+// A Webhook is no longer required to enable this: the bus also backs the watch
+// stream and the SSE endpoint, so an operator who wants to tail events without
+// standing up an HTTP receiver just sets enabled = true.
+func (c *Controller) startNotifications() {
+	if !c.config.Alert.Enabled {
+		// The health poll is the only thing that reads cluster state on a
+		// schedule, so it is also the only source the storage and DRBD gauges
+		// have. Disabling alerts silently empties half of /metrics, which is
+		// precisely the "a flat zero looks like a healthy cluster" failure the
+		// gauges were wired up to end — so say it once, out loud, at startup.
+		if c.config.Metrics.Enabled {
+			c.logger.Warn("Metrics are enabled but alerts are not; the pool, gateway and DRBD replication gauges stay empty because they are fed by the health poll. Set [alert] enabled = true to populate them.")
+		}
+		return
+	}
+
+	c.events = event.NewBus(c.config.Alert.HistorySize)
+
+	opts := c.alertOptions()
 	c.alertMonitor = alert.NewMonitor(c.events, opts)
 	c.alertMonitor.Start(c.ctx)
 
@@ -339,6 +394,7 @@ func (c *Controller) startNotifications() {
 	c.logger.Info("Notifications started",
 		zap.Duration("interval", opts.Interval),
 		zap.Bool("node_checks", opts.Nodes != nil),
+		zap.Bool("feeding_metrics", opts.Observer != nil),
 		zap.Int("webhooks", len(c.config.Alert.Receivers())),
 		zap.Int("channels", c.notify.Active()))
 }
@@ -456,7 +512,27 @@ func (c *Controller) startGRPCServer() error {
 	default:
 		c.logger.Warn("API authentication is DISABLED; enable [auth] or [rbac] in controller.toml for production")
 	}
+	// Transport security. Until this was wired up the whole [tls] section was
+	// decoration: the listener stayed plaintext while the startup log reported
+	// TLS as enabled, so the bearer token checked just above crossed the
+	// network in the clear on a cluster whose operator believed otherwise.
+	tlsSetup, err := newTLSSetup(c.config.TLS)
+	if err != nil {
+		return fmt.Errorf("failed to configure TLS: %w", err)
+	}
+
 	var opts []grpc.ServerOption
+	if tlsSetup != nil {
+		opts = append(opts, grpc.Creds(tlsSetup.serverCreds))
+		c.logger.Info("API transport TLS enabled",
+			zap.String("cert_file", c.config.TLS.CertFile),
+			zap.Bool("mutual_tls", tlsSetup.mutual))
+		if !tlsSetup.mutual {
+			c.logger.Info("Client certificates are not required; set tls.client_ca_file for mutual TLS")
+		}
+	} else {
+		c.logger.Warn("API transport is PLAINTEXT; bearer tokens cross the network unencrypted — enable [tls] in controller.toml for production")
+	}
 	if len(unaryInterceptors) > 0 {
 		opts = append(opts, grpc.ChainUnaryInterceptor(unaryInterceptors...))
 	}
@@ -511,7 +587,7 @@ func (c *Controller) startGRPCServer() error {
 	// Dial loopback explicitly — grpcAddr above is a LISTEN address and is
 	// normally "0.0.0.0:3374", which is not a destination. See loopbackTarget.
 	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(
-		context.Background(), gatewayMux, loopbackTarget(c.config), loopbackDialOptions()); err != nil {
+		context.Background(), gatewayMux, loopbackTarget(c.config), loopbackDialOptions(tlsSetup)); err != nil {
 		return fmt.Errorf("failed to register gateway handler: %w", err)
 	}
 

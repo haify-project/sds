@@ -314,8 +314,10 @@ func setupMockClient(t *testing.T) (*SDSClient, func()) {
 		return lis.Dial()
 	}
 
-	conn, err := grpc.DialContext(
-		context.Background(),
+	// NewClient, not the deprecated DialContext: it never blocks on a connection
+	// and resolves "passthrough://bufnet" through the custom dialer exactly the
+	// same way, so the bufconn wiring is unchanged.
+	conn, err := grpc.NewClient(
 		"passthrough://bufnet",
 		grpc.WithContextDialer(bufDialer),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),

@@ -41,7 +41,7 @@ func nodeList() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// List nodes
 			nodes, err := sdsClient.ListNodes(ctx)
@@ -56,7 +56,11 @@ func nodeList() *cobra.Command {
 
 			// Print nodes in table format
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "NAME\tADDRESS\tSTATE\tVERSION")
+			// Writes to the command's own output stream are best-effort. The only ways
+			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// which this command can report anywhere the operator is still looking, and
+			// treating them as errors would report a successful operation as failed.
+			_, _ = fmt.Fprintln(w, "NAME\tADDRESS\tSTATE\tVERSION")
 
 			for _, node := range nodes {
 				// Strip port from address for display
@@ -64,14 +68,17 @@ func nodeList() *cobra.Command {
 				if idx := strings.LastIndex(node.Address, ":"); idx != -1 {
 					displayAddr = node.Address[:idx]
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 					node.Name,
 					displayAddr,
 					node.State,
 					node.Version)
 			}
 
-			w.Flush()
+			// Flush pushes the buffered table to stdout; like the Fprint calls above it
+			// is best-effort, and a write failure here says nothing about whether the
+			// operation the operator asked for succeeded.
+			_ = w.Flush()
 
 			return nil
 		},
@@ -94,7 +101,7 @@ func nodeGet() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			foundNode, err := sdsClient.GetNode(ctx, nodeRef)
 			if err != nil {
@@ -144,7 +151,7 @@ func nodeLabel() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			node, err := sdsClient.SetNodeLabels(ctx, nodeRef, labels, replace)
 			if err != nil {
@@ -205,7 +212,7 @@ func nodeRegister() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Register node
 			node, err := sdsClient.RegisterNodeWithReplicationAddress(ctx, name, address, replicationAddress)
@@ -254,7 +261,7 @@ This removes the node from the database but does not affect the node itself.`,
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			err = sdsClient.UnregisterNode(ctx, address)
 			if err != nil {
@@ -288,7 +295,7 @@ func nodeDrain() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			moved, err := sdsClient.DrainNode(ctx, node)
 			if err != nil {
@@ -323,7 +330,7 @@ func nodeUndrain() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.UndrainNode(ctx, node); err != nil {
 				return fmt.Errorf("undrain failed: %w", err)

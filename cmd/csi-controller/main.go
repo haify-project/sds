@@ -24,7 +24,11 @@ func main() {
 	if err != nil {
 		log.Fatal("connect sds-controller", zap.Error(err))
 	}
-	defer sds.Close()
+	// Runs on an orderly shutdown, once the driver has stopped serving. All this
+	// can report is that tearing down an idle gRPC transport was untidy, on a
+	// process that is about to exit and has nothing left to retry, so the error
+	// is dropped rather than logged as a shutdown failure.
+	defer func() { _ = sds.Close() }()
 
 	d := csi.NewDriver(*endpoint, log,
 		csi.NewIdentityServer(),

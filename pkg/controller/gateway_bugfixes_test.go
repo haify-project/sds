@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // resWithVolumes builds a controller + BBolt DB with a two-node resource and the
@@ -18,9 +16,7 @@ import (
 func resWithVolumes(t *testing.T, cfg string, dep *fakeDeploymentClient, volumes ...*database.Volume) *Controller {
 	t.Helper()
 	ctrl := newBasicTestController(dep)
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	db := newTestDB(t)
 	ctrl.db = db
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
 		Name: "res1", Port: 7001, Nodes: "node1,node2", Protocol: "C", Replicas: 2,

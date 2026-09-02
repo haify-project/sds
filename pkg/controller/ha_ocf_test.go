@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/liliang-cn/sds/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // A realistic (trimmed) OCF meta-data document, in the shape emitted by
@@ -146,9 +144,7 @@ func TestGeneratePromoterConfigOrdered(t *testing.T) {
 func makeHaTestController(t *testing.T, dep *fakeDeploymentClient) *Controller {
 	t.Helper()
 	ctrl := newBasicTestController(dep)
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	db := newTestDB(t)
 	ctrl.db = db
 
 	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{

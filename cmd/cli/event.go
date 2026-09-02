@@ -61,7 +61,7 @@ func eventListCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			resp, err := c.ListEvents(ctx, &sdspb.ListEventsRequest{
 				Limit:       limit,
@@ -82,7 +82,11 @@ func eventListCommand() *cobra.Command {
 				printEvent(cmd.OutOrStdout(), e, f.jsonOut)
 			}
 			if resp.Dropped > 0 {
-				fmt.Fprintf(cmd.ErrOrStderr(),
+				// Writes to the command's own output stream are best-effort. The only ways
+				// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+				// which this command can report anywhere the operator is still looking, and
+				// treating them as errors would report a successful operation as failed.
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 					"\nwarning: %d event(s) were dropped because a subscriber could not keep up\n", resp.Dropped)
 			}
 			return nil
@@ -115,7 +119,7 @@ func eventWatchCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			// since_id 0 means "replay everything retained", so watching from now
 			// requires asking for the newest id first and starting after it.
@@ -140,7 +144,7 @@ func eventWatchCommand() *cobra.Command {
 			}
 
 			if !f.jsonOut {
-				fmt.Fprintln(cmd.ErrOrStderr(), "Watching for events; press Ctrl-C to stop.")
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Watching for events; press Ctrl-C to stop.")
 			}
 			var lastID uint64
 			for {
@@ -154,7 +158,7 @@ func eventWatchCommand() *cobra.Command {
 				// Ids are monotonic, so a jump means the controller dropped
 				// events for this watcher rather than that nothing happened.
 				if lastID != 0 && e.Id > lastID+1 {
-					fmt.Fprintf(cmd.ErrOrStderr(),
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 						"warning: missed %d event(s) — this client fell behind\n", e.Id-lastID-1)
 				}
 				lastID = e.Id
@@ -182,13 +186,13 @@ func printEvent(w io.Writer, e *sdspb.Event, asJSON bool) {
 			"timestamp": time.UnixMilli(e.TimestampUnixMs).Format(time.RFC3339),
 		})
 		if err == nil {
-			fmt.Fprintln(w, string(body))
+			_, _ = fmt.Fprintln(w, string(body))
 		}
 		return
 	}
 
 	ts := time.UnixMilli(e.TimestampUnixMs).Format("2006-01-02 15:04:05")
-	fmt.Fprintf(w, "%s  %-8s %-8s %-20s %s\n",
+	_, _ = fmt.Fprintf(w, "%s  %-8s %-8s %-20s %s\n",
 		ts, severityLabel(e.Severity), e.Status, e.Type, e.Message)
 
 	if len(e.Details) > 0 {
@@ -204,7 +208,7 @@ func printEvent(w io.Writer, e *sdspb.Event, asJSON bool) {
 			}
 		}
 		if len(parts) > 0 {
-			fmt.Fprintf(w, "%s  %s\n", strings.Repeat(" ", 19), strings.Join(parts, "  "))
+			_, _ = fmt.Fprintf(w, "%s  %s\n", strings.Repeat(" ", 19), strings.Join(parts, "  "))
 		}
 	}
 }

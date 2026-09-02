@@ -316,12 +316,18 @@ func (sm *StorageManager) GetPoolStatusList(ctx context.Context) ([]alert.PoolSt
 		if p == nil {
 			continue
 		}
-		info := alert.PoolStatusInfo{Name: p.Name, Node: p.Node}
+		info := alert.PoolStatusInfo{
+			Name:       p.Name,
+			Node:       p.Node,
+			TotalBytes: p.TotalBytes,
+			FreeBytes:  p.FreeBytes,
+		}
 		if u := p.ThinUsage; u != nil {
 			info.ThinPool = u.PoolLV
 			info.DataPercent = u.DataPercent
 			info.MetaPercent = u.MetaPercent
 			info.OutOfSpace = u.OutOfSpace
+			info.ThinSizeBytes = u.SizeBytes
 		}
 		out = append(out, info)
 	}

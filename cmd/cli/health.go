@@ -23,7 +23,7 @@ func healthCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			// Get nodes to check
 			var nodeList []string

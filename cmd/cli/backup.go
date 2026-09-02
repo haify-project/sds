@@ -71,17 +71,21 @@ offered for restore.
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			info, err := c.CreateBackup(ctx, resource, target, node)
 			if err != nil {
 				return fmt.Errorf("backup failed: %w", err)
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Backup %s completed\n", info.Id)
-			fmt.Fprintf(out, "  resource: %s (from node %s)\n", info.Resource, info.Node)
-			fmt.Fprintf(out, "  target:   %s/%s\n", info.Target, info.Prefix)
-			fmt.Fprintf(out, "  size:     %s across %d volume(s)\n", humanBytes(info.TotalBytes), len(info.Volumes))
+			// Writes to the command's own output stream are best-effort. The only ways
+			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// which this command can report anywhere the operator is still looking, and
+			// treating them as errors would report a successful operation as failed.
+			_, _ = fmt.Fprintf(out, "Backup %s completed\n", info.Id)
+			_, _ = fmt.Fprintf(out, "  resource: %s (from node %s)\n", info.Resource, info.Node)
+			_, _ = fmt.Fprintf(out, "  target:   %s/%s\n", info.Target, info.Prefix)
+			_, _ = fmt.Fprintf(out, "  size:     %s across %d volume(s)\n", humanBytes(info.TotalBytes), len(info.Volumes))
 			return nil
 		},
 	}
@@ -107,7 +111,7 @@ func backupListCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			backups, err := c.ListBackups(ctx, resource, target)
 			if err != nil {
@@ -115,18 +119,18 @@ func backupListCommand() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			if len(backups) == 0 {
-				fmt.Fprintln(out, "No backups found")
+				_, _ = fmt.Fprintln(out, "No backups found")
 				return nil
 			}
 			for _, b := range backups {
-				fmt.Fprintf(out, "%s  [%s]\n", b.Id, b.State)
-				fmt.Fprintf(out, "  resource=%s target=%s node=%s size=%s\n",
+				_, _ = fmt.Fprintf(out, "%s  [%s]\n", b.Id, b.State)
+				_, _ = fmt.Fprintf(out, "  resource=%s target=%s node=%s size=%s\n",
 					b.Resource, b.Target, b.Node, humanBytes(b.TotalBytes))
 				if b.StartedAt != "" {
-					fmt.Fprintf(out, "  started=%s finished=%s\n", b.StartedAt, orDash(b.FinishedAt))
+					_, _ = fmt.Fprintf(out, "  started=%s finished=%s\n", b.StartedAt, orDash(b.FinishedAt))
 				}
 				if b.Error != "" {
-					fmt.Fprintf(out, "  error: %s\n", b.Error)
+					_, _ = fmt.Fprintf(out, "  error: %s\n", b.Error)
 				}
 			}
 			return nil
@@ -161,7 +165,7 @@ interrupted or that failed verification is never restorable, by design.`,
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			info, err := c.RestoreBackup(ctx, args[0], resource, node)
 			if err != nil {
@@ -171,7 +175,7 @@ interrupted or that failed verification is never restorable, by design.`,
 			if dest == "" {
 				dest = info.Resource
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Backup %s restored into %q (%s across %d volume(s))\n",
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Backup %s restored into %q (%s across %d volume(s))\n",
 				info.Id, dest, humanBytes(info.TotalBytes), len(info.Volumes))
 			return nil
 		},
@@ -203,12 +207,12 @@ when the target itself no longer exists.`,
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer c.Close()
+			defer closeClient(c)
 
 			if err := c.DeleteBackup(ctx, args[0], node, force); err != nil {
 				return fmt.Errorf("failed to delete backup: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Backup %s deleted\n", args[0])
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Backup %s deleted\n", args[0])
 			return nil
 		},
 	}

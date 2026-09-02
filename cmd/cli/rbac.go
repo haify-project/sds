@@ -54,7 +54,10 @@ func rbacRequest(method, path string, payload any, out any) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to reach controller REST API: %w", err)
 	}
-	defer resp.Body.Close()
+	// Closing a response body only releases the connection back to the pool;
+	// the read that mattered is the ReadAll below, and its error is what the
+	// caller needs. A close failure here cannot invalidate a body already read.
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if len(body) > 0 && out != nil {
 		if err := json.Unmarshal(body, out); err != nil {
@@ -241,19 +244,26 @@ func rbacPoliciesCommand() *cobra.Command {
 
 			fmt.Println("Users")
 			uw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-			fmt.Fprintln(uw, "  NAME\tROLE")
+			// Writes to the command's own output stream are best-effort. The only ways
+			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// which this command can report anywhere the operator is still looking, and
+			// treating them as errors would report a successful operation as failed.
+			_, _ = fmt.Fprintln(uw, "  NAME\tROLE")
 			for _, u := range res.Users {
-				fmt.Fprintf(uw, "  %s\t%s\n", u.Name, u.Role)
+				_, _ = fmt.Fprintf(uw, "  %s\t%s\n", u.Name, u.Role)
 			}
-			uw.Flush()
+			// Flush pushes the buffered table to stdout; like the Fprint calls above it
+			// is best-effort, and a write failure here says nothing about whether the
+			// operation the operator asked for succeeded.
+			_ = uw.Flush()
 
 			fmt.Println("\nPolicies")
 			pw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-			fmt.Fprintln(pw, "  ROLE\tOBJECT\tACTION")
+			_, _ = fmt.Fprintln(pw, "  ROLE\tOBJECT\tACTION")
 			for _, p := range res.Policies {
-				fmt.Fprintf(pw, "  %s\t%s\t%s\n", p.Role, p.Object, p.Action)
+				_, _ = fmt.Fprintf(pw, "  %s\t%s\t%s\n", p.Role, p.Object, p.Action)
 			}
-			pw.Flush()
+			_ = pw.Flush()
 			return nil
 		},
 	}

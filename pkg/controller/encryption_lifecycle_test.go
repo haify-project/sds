@@ -38,7 +38,7 @@ func execIndexOf(dep *fakeDeploymentClient, substr string) int {
 func TestCreateEncryptedResourceBuildsContainersAndRecordsThem(t *testing.T) {
 	dep := encryptedCreateFake()
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	ctx := context.Background()
@@ -98,7 +98,7 @@ func TestCreateEncryptedResourceRefusesANodeWithoutCryptsetup(t *testing.T) {
 		},
 	}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	err := ctrl.resources.CreateResourceWithVolumesMetadata(context.Background(),
@@ -128,7 +128,7 @@ func TestCreateEncryptedResourceFailsIfTheBootUnitCannotBeInstalled(t *testing.T
 		},
 	}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	err := ctrl.resources.CreateResourceWithVolumesMetadata(context.Background(),
@@ -154,7 +154,7 @@ func TestCreatePlaintextResourceToleratesAMissingBootUnit(t *testing.T) {
 		},
 	}
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	require.NoError(t, ctrl.resources.CreateResourceWithVolumes(context.Background(),
@@ -165,7 +165,7 @@ func TestCreatePlaintextResourceToleratesAMissingBootUnit(t *testing.T) {
 func TestCreateEncryptedResourceRefusesZFSBackedPools(t *testing.T) {
 	dep := encryptedCreateFake()
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	err := ctrl.resources.CreateResourceWithVolumesMetadata(context.Background(),
@@ -182,7 +182,7 @@ func TestCreateEncryptedResourceRefusesZFSBackedPools(t *testing.T) {
 func TestDeleteEncryptedResourceDestroysTheKeysFirst(t *testing.T) {
 	dep := encryptedCreateFake()
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	ctx := context.Background()
@@ -208,7 +208,7 @@ func TestDeleteEncryptedResourceDestroysTheKeysFirst(t *testing.T) {
 func TestAddVolumeInheritsEncryptionFromTheResource(t *testing.T) {
 	dep := encryptedCreateFake()
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	ctx := context.Background()
@@ -254,7 +254,7 @@ func TestAddVolumeInheritsEncryptionFromTheResource(t *testing.T) {
 func TestResizeEncryptedVolumeGrowsTheMappingToo(t *testing.T) {
 	dep := encryptedCreateFake()
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{"node1": "10.0.0.1", "node2": "10.0.0.2"})
 
 	ctx := context.Background()

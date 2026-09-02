@@ -91,8 +91,12 @@ fmt:
 	gofmt -s -w .
 
 # Lint
+# The --max flags turn off golangci-lint's output truncation (50 per linter,
+# 3 per message by default), which otherwise hides most of what it found and
+# picks the survivors non-deterministically. Same flags as CI, so `make lint`
+# actually predicts the gate.
 lint:
-	golangci-lint run
+	golangci-lint run ./... --max-issues-per-linter=0 --max-same-issues=0
 
 # Point git at the versioned hooks in .githooks (run once per clone). The
 # pre-commit hook rejects staged Go files that are not gofmt-clean, which is
@@ -112,10 +116,14 @@ ci: ui-ensure
 		fi
 	@echo "==> go vet"
 	@go vet ./...
+	@echo "==> golangci-lint"
+	@golangci-lint run ./... --max-issues-per-linter=0 --max-same-issues=0
 	@echo "==> go build"
 	@go build ./...
-	@echo "==> go test"
-	@go test ./...
+	@echo "==> go test (race, uncached)"
+	@go test -race -count=1 ./...
+	@echo "==> govulncheck"
+	@go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 	@echo "==> web-ui build"
 	@npm --prefix web-ui run build --silent >/dev/null
 	@echo "CI pipeline passed"

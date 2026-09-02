@@ -17,7 +17,7 @@ import (
 func newDualPrimaryController(t *testing.T, dep deploymentClient, res *database.Resource) *Controller {
 	t.Helper()
 	ctrl := newBasicTestController(dep)
-	ctrl.db = openTestDB(t)
+	ctrl.db = newTestDB(t)
 	registerNodes(ctrl, map[string]string{
 		"n1":  "10.0.0.1",
 		"n2":  "10.0.0.2",

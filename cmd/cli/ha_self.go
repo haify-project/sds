@@ -60,7 +60,7 @@ so this command's connection drops by design. Track progress with
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			var nodeList []string
 			if nodes != "" {
@@ -105,7 +105,7 @@ func haSelfStatus() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			status, err := sdsClient.GetSelfHaStatus(ctx)
 			if err != nil {
@@ -158,7 +158,7 @@ connection drops by design.`,
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer sdsClient.Close()
+			defer closeClient(sdsClient)
 
 			if err := sdsClient.DisableSelfHa(ctx, node); err != nil {
 				return fmt.Errorf("failed to disable self-HA: %w", err)

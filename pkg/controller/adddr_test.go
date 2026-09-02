@@ -466,7 +466,7 @@ func TestSetTiebreakerRemovalMessageDependsOnReplicaCount(t *testing.T) {
 			ctrl := addDRTestFixture(t).controller
 			ctrl.deployment = fake
 			ctrl.resources.SetDeployment(fake)
-			ctrl.db = openTestDB(t)
+			ctrl.db = newTestDB(t)
 			require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
 				Name: "data", Port: 7300, Nodes: tc.nodes, DisklessNodes: "node-e",
 			}))
