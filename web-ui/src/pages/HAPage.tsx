@@ -361,7 +361,11 @@ function TopologySection({ promoters }: { promoters: PromoterView[] }) {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="px-5">
+            {/* ResourceTopology draws a viewBox'd SVG at `w-full`, so today it
+                shrinks to whatever it is given rather than overflowing. This is
+                the box it would scroll in the day it stops — the page itself
+                must never scroll sideways. */}
+            <CardContent className="overflow-x-auto px-5">
               {resource && status ? (
                 <ResourceTopology resource={resource} status={status} />
               ) : (
@@ -413,7 +417,11 @@ function StartListItem({ index, unit }: { index: number; unit: string }) {
       <span className="w-4 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
         {index}
       </span>
-      <span className="min-w-0 truncate rounded-[5px] border border-border bg-muted px-2 py-1 font-mono text-xs">
+      {/* These are long unbreakable mono strings —
+          `service-ip@192.168.123.251-24`. On a phone the chip wraps inside the
+          card rather than pushing its width out; the desktop card has the room
+          to truncate instead and keep the list scannable down its left edge. */}
+      <span className="min-w-0 rounded-[5px] border border-border bg-muted px-2 py-1 font-mono text-xs break-all md:truncate">
         {unit}
       </span>
     </li>
@@ -1112,7 +1120,7 @@ function TomlEditorSection({ resource }: { resource: string }) {
       {open && (
         <div className="space-y-2">
           {data?.path && (
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="font-mono text-xs break-all text-muted-foreground">
               {data.path}
             </p>
           )}
