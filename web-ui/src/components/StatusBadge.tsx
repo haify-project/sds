@@ -1,33 +1,53 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { toneOf, type StatusTone } from '@/components/status';
 
-/**
- * Cluster status → badge color mapping shared by all pages, so "online",
- * "Primary", "running" etc. look the same everywhere.
- */
-const GREEN = ['online', 'running', 'active', 'primary', 'uptodate', 'connected', 'healthy', 'enabled'];
-const YELLOW = ['secondary', 'syncing', 'inconsistent', 'degraded', 'standby'];
-const RED = ['offline', 'stopped', 'inactive', 'failed', 'error', 'diskless', 'disconnected'];
+const DOT: Record<StatusTone, string> = {
+  ok: 'bg-status-ok',
+  warn: 'bg-status-warn',
+  bad: 'bg-status-bad',
+  idle: 'bg-status-idle',
+};
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const s = (status || 'unknown').toLowerCase();
+// `soft` drops the outline for a tinted fill. It reads louder than the pill, so
+// it belongs on the one status a screen is actually about, not on every row.
+const SOFT: Record<StatusTone, string> = {
+  ok: 'bg-status-ok-soft text-status-ok',
+  warn: 'bg-status-warn-soft text-status-warn',
+  bad: 'bg-status-bad-soft text-status-bad',
+  idle: 'bg-status-idle-soft text-muted-foreground',
+};
+
+export function StatusBadge({
+  status,
+  variant = 'pill',
+  className,
+}: {
+  status: string;
+  variant?: 'pill' | 'soft';
+  className?: string;
+}) {
+  const tone = toneOf(status || 'unknown');
+  if (variant === 'soft') {
+    return (
+      <Badge
+        variant="outline"
+        className={cn('rounded-full border-transparent px-2.5 py-0.5 text-xs font-medium capitalize', SOFT[tone], className)}
+      >
+        {status || 'unknown'}
+      </Badge>
+    );
+  }
   // Monochrome pill; the small dot is the only color, carrying the status signal.
-  const dot = GREEN.includes(s)
-    ? 'bg-emerald-500'
-    : YELLOW.includes(s)
-      ? 'bg-amber-500'
-      : RED.includes(s)
-        ? 'bg-red-500'
-        : 'bg-muted-foreground';
   return (
     <Badge
       variant="outline"
       className={cn(
-        'gap-1.5 border-border bg-transparent font-normal capitalize text-foreground',
+        'gap-1.5 rounded-full border-border bg-card px-2.5 py-0.5 text-xs font-normal capitalize text-foreground',
         className
       )}
     >
-      <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />
+      <span className={cn('h-1.5 w-1.5 rounded-full', DOT[tone])} />
       {status || 'unknown'}
     </Badge>
   );
