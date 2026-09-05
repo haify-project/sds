@@ -25,13 +25,25 @@ export function PageHeader({
   return (
     <div
       data-slot="page-header"
-      className={cn('mb-6 flex items-end justify-between gap-4 border-b border-border pb-5', className)}
+      className={cn(
+        // Stacked on a phone: a non-wrapping row squeezed the subtitle to one
+        // word per line and pushed the actions off-screen, taking the whole
+        // page into horizontal scroll with them.
+        'mb-6 flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4',
+        className,
+      )}
     >
       <div className="min-w-0">
         <h1 className="text-[23px] leading-tight font-semibold tracking-[-0.015em]">{title}</h1>
-        {description ? <div className="mt-1.5 text-[13px] text-muted-foreground">{description}</div> : null}
+        {description ? (
+          <div className="mt-1.5 text-[13px] text-balance text-muted-foreground">{description}</div>
+        ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2.5">{actions}</div> : null}
+      {/* Actions wrap rather than overflow; on a phone they sit under the title
+          and stay reachable instead of being clipped at the viewport edge. */}
+      {actions ? (
+        <div className="flex flex-wrap items-center gap-2.5 sm:shrink-0 sm:flex-nowrap">{actions}</div>
+      ) : null}
     </div>
   );
 }
