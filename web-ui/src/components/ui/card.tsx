@@ -10,7 +10,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
         // Flat: one hairline border and no shadow. Cards here group data, they
         // are not lifted surfaces, and a hover that darkens the border implies
         // a click the card mostly does not accept.
-        "flex flex-col gap-6 rounded-[10px] border border-border bg-card py-6 text-card-foreground shadow-none hover:border-border",
+        "flex flex-col gap-6 rounded-lg border border-border bg-card py-6 text-card-foreground",
         className
       )}
       {...props}

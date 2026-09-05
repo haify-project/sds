@@ -49,6 +49,13 @@
   --status-warn: oklch(0.72 0.15 75);
   --status-bad: oklch(0.58 0.2 27);
   --status-idle: oklch(0.78 0.008 260);
+  /* Words on the 12% soft tint need their own, darker twin: the fill colours
+     themselves fail AA there in light mode (ok 2.99:1, warn 2.29:1, bad
+     3.97:1). Same hue and chroma, dropped in lightness until they pass. */
+  --status-ok-text: oklch(0.50 0.14 155);
+  --status-warn-text: oklch(0.53 0.15 75);
+  --status-bad-text: oklch(0.54 0.2 27);
+  --status-idle-text: oklch(0.50 0.01 260);
 }
 
 .dark {
@@ -87,6 +94,12 @@
   --status-warn: oklch(0.78 0.14 75);
   --status-bad: oklch(0.68 0.19 27);
   --status-idle: oklch(0.5 0.01 260);
+  /* Dark mode already clears AA over the tint, so the fill colour is the text
+     colour and the two themes stay one API. */
+  --status-ok-text: var(--status-ok);
+  --status-warn-text: var(--status-warn);
+  --status-bad-text: var(--status-bad);
+  --status-idle-text: var(--status-idle);
 }
 
 @theme inline {
@@ -133,6 +146,10 @@
   --color-status-warn: var(--status-warn);
   --color-status-bad: var(--status-bad);
   --color-status-idle: var(--status-idle);
+  --color-status-ok-text: var(--status-ok-text);
+  --color-status-warn-text: var(--status-warn-text);
+  --color-status-bad-text: var(--status-bad-text);
+  --color-status-idle-text: var(--status-idle-text);
   /* Soft variants for badge fills — a 12% tint stays legible under foreground
      text in both themes, which a flat status colour at full chroma does not. */
   --color-status-ok-soft: color-mix(in oklch, var(--status-ok) 12%, transparent);

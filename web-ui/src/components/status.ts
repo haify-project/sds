@@ -19,3 +19,28 @@ export function toneOf(status: string | undefined): StatusTone {
   // word must never render as a red alarm.
   return 'idle';
 }
+
+/**
+ * Tone → class, defined once. The badge, the tick and the segment bar all drew
+ * their own byte-identical copy of this map, which is three places for "warn"
+ * to quietly become a different yellow. Class strings stay literal so the
+ * Tailwind v4 scanner still sees every one of them.
+ */
+export const TONE_BG: Record<StatusTone, string> = {
+  ok: 'bg-status-ok',
+  warn: 'bg-status-warn',
+  bad: 'bg-status-bad',
+  idle: 'bg-status-idle',
+};
+
+/**
+ * Tinted fill plus the text colour that is actually readable on it — the
+ * `-text` tokens, not the fill colours, which fail AA over their own 12% tint
+ * in light mode.
+ */
+export const TONE_SOFT: Record<StatusTone, string> = {
+  ok: 'bg-status-ok-soft text-status-ok-text',
+  warn: 'bg-status-warn-soft text-status-warn-text',
+  bad: 'bg-status-bad-soft text-status-bad-text',
+  idle: 'bg-status-idle-soft text-status-idle-text',
+};

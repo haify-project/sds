@@ -13,7 +13,7 @@ export function StatBand({ className, children }: { className?: string; children
     <div
       data-slot="stat-band"
       className={cn(
-        'flex items-stretch divide-x divide-border overflow-hidden rounded-[10px] border border-border bg-card',
+        'flex items-stretch divide-x divide-border overflow-hidden rounded-lg border border-border bg-card',
         className
       )}
     >

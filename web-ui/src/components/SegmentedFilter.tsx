@@ -12,8 +12,11 @@ export type SegmentedFilterOption<T extends string> = {
  * part of the label because "Syncing · 0" is itself the answer, and a chip that
  * leads nowhere is worth seeing before it is clicked.
  *
- * tablist/tab roles rather than radios: these switch which rows the table shows,
- * which is what a tab does.
+ * A group of toggle buttons, not a tablist: there is no tabpanel to point
+ * `aria-controls` at, no roving tabindex and no arrow-key handling, so
+ * announcing tabs would promise a keyboard model this does not implement.
+ * `aria-pressed` says exactly what is true — one of these buttons is currently
+ * on — and leaves Tab working the way the markup already behaves.
  */
 export function SegmentedFilter<T extends string>({
   value,
@@ -31,7 +34,7 @@ export function SegmentedFilter<T extends string>({
   return (
     <div
       data-slot="segmented-filter"
-      role="tablist"
+      role="group"
       aria-label={ariaLabel}
       className={cn('inline-flex gap-[3px] rounded-lg bg-secondary p-[3px]', className)}
     >
@@ -41,11 +44,11 @@ export function SegmentedFilter<T extends string>({
           <button
             key={option.value}
             type="button"
-            role="tab"
-            aria-selected={selected}
+            aria-pressed={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              'h-[30px] rounded-[7px] px-2.5 text-[12.5px] text-muted-foreground transition-colors',
+              'h-[30px] rounded-[7px] px-2.5 text-[12.5px] text-secondary-foreground transition-colors',
+              'outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
               selected
                 ? 'bg-card font-medium text-foreground shadow-[0_0_0_1px_var(--border)]'
                 : 'hover:text-foreground'

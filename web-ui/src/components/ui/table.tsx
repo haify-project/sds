@@ -88,8 +88,9 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
       data-slot="table-cell"
       className={cn(
         // Fixed row height instead of vertical padding: rows stay on one rhythm
-        // whether the cell holds bare text, a badge or a chip.
-        "h-[52px] px-4 align-middle text-[13.5px] whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        // whether the cell holds bare text, a badge or a chip. `py-3` changes
+        // nothing for those, and keeps a cell that *does* wrap off the borders.
+        "h-[52px] px-4 py-3 align-middle text-[13.5px] whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
