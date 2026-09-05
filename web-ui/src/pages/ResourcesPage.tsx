@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQueries,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   api,
   Resource,
@@ -9,13 +14,18 @@ import {
   NodeResourceState,
   QuorumInfo,
 } from '../services/api';
-import { StatusBadge } from '@/components/StatusBadge';
+import { cn } from '@/lib/utils';
+import { toneOf, TONE_BG, TONE_SOFT, type StatusTone } from '@/components/status';
+import { PageHeader } from '@/components/PageHeader';
+import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
+import { SegmentedFilter } from '@/components/SegmentedFilter';
+import { RoleChip } from '@/components/RoleChip';
 import { ResourceTopology } from '@/components/ResourceTopology';
 import { ResourceProfilesPage } from './ResourceProfilesPage';
 import { useSearchParams } from 'react-router';
 import { SnapshotsDialog } from '@/components/SnapshotsDialog';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,7 +46,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -68,8 +77,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import {
   Plus,
-  Star,
   ChevronDown,
+  ChevronRight,
   ArrowUpCircle,
   ArrowDownCircle,
   Database,
@@ -83,7 +92,7 @@ import {
   X,
   CalendarClock,
   Globe,
-  Network,
+  Search,
 } from 'lucide-react';
 
 interface NodeOpt {
@@ -119,6 +128,16 @@ function isCsiManaged(resource: Resource): boolean {
   return resource.labels?.[csiManagedLabel] === 'csi';
 }
 
+// The text colour that pairs with each tone. `TONE_SOFT` carries a fill with it,
+// which is too loud for a word sitting on the row's own background. Literal
+// class strings so the Tailwind scanner still sees all four.
+const TONE_TEXT: Record<StatusTone, string> = {
+  ok: 'text-status-ok-text',
+  warn: 'text-status-warn-text',
+  bad: 'text-status-bad-text',
+  idle: 'text-muted-foreground',
+};
+
 // isPeerSyncing reports whether a peer node-state represents a resync in
 // progress. The local node has no replication relationship (empty
 // replicationState) so it never counts as syncing.
@@ -149,6 +168,59 @@ function syncPollInterval(query: {
   return statusHasActiveSync(status) ? 2000 : false;
 }
 
+/** What the Replication column says, and what the row's tick is coloured from. */
+type Replication = {
+  tone: StatusTone;
+  /** The word beside the bar. Tone never carries the meaning on its own. */
+  label: string;
+  percent: number;
+  title?: string;
+};
+
+// replicationSummary condenses a resource's live status into the one line the
+// table has room for.
+//
+// Every role, disk and replication state here comes from `resourceStatus`:
+// ListResources deliberately does not run `drbdadm status` on every node, so a
+// resource straight out of the list has no node states at all.
+function replicationSummary(status?: ResourceStatus): Replication {
+  if (!status) return { tone: 'idle', label: 'unknown', percent: 0 };
+  const states = Object.entries(status.nodeStates ?? {});
+
+  const syncing = states.find(([, st]) => isPeerSyncing(st));
+  if (syncing) {
+    const [host, st] = syncing;
+    const pct = Math.min(100, Math.max(0, st.syncPercent ?? 0));
+    return {
+      tone: 'warn',
+      label: `syncing ${pct.toFixed(0)}%`,
+      percent: pct,
+      title: `${st.replicationState} with ${st.node || host}`,
+    };
+  }
+
+  if (status.quorum && !status.quorum.hasQuorum)
+    return { tone: 'bad', label: 'no quorum', percent: 100 };
+
+  // A tiebreaker or data client is *meant* to be Diskless; only a replica that
+  // is not UpToDate is a degradation, so Diskless is not read as one here.
+  const degraded = states.find(
+    ([, st]) => st.diskState && st.diskState !== 'UpToDate' && st.diskState !== 'Diskless',
+  );
+  if (degraded)
+    return {
+      tone: 'bad',
+      label: degraded[1].diskState,
+      percent: 100,
+      title: `on ${degraded[1].node || degraded[0]}`,
+    };
+
+  if (states.length === 0) return { tone: 'idle', label: 'unknown', percent: 0 };
+  return { tone: 'ok', label: 'UpToDate', percent: 100 };
+}
+
+type FilterKey = 'all' | 'healthy' | 'syncing' | 'offsite';
+
 export function ResourcesPage() {
   const { data: resources, isLoading } = useQuery({
     queryKey: ['resources'],
@@ -170,281 +242,733 @@ export function ResourcesPage() {
     queryFn: () => api.getResourceProfiles(),
   });
 
+  const list = resources?.resources ?? [];
+
+  // One live-status query per resource, held here rather than in each row: the
+  // segmented filter has to count healthy and syncing resources, and those
+  // words exist nowhere in the list response. The rows and the expanded panels
+  // read the same query keys, so they are served from this cache rather than
+  // fetching again, and the adaptive interval still stops polling the moment a
+  // resource settles.
+  const statusQueries = useQueries({
+    queries: list.map((r) => ({
+      queryKey: ['resource-status', r.name],
+      queryFn: () => api.resourceStatus(r.name),
+      refetchInterval: syncPollInterval,
+    })),
+  });
+
+  const replication = new Map<string, Replication>(
+    list.map((r, i) => [r.name, replicationSummary(statusQueries[i]?.data?.status)]),
+  );
+
+  const [params, setParams] = useSearchParams();
   // Profiles live here rather than in their own nav entry: they are templates
   // for resources and do nothing on their own, so they belong beside the things
   // they create. It also matches the CLI, where the command has always been
   // `sds resource profile`.
-  const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'profiles' ? 'profiles' : 'resources';
 
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const matchesFilter = (r: Resource, key: FilterKey) => {
+    if (key === 'all') return true;
+    if (key === 'offsite') return Boolean(r.wanMode);
+    const tone = replication.get(r.name)?.tone;
+    return key === 'healthy' ? tone === 'ok' : tone === 'warn';
+  };
+
+  const counts = {
+    all: list.length,
+    healthy: list.filter((r) => matchesFilter(r, 'healthy')).length,
+    syncing: list.filter((r) => matchesFilter(r, 'syncing')).length,
+    offsite: list.filter((r) => matchesFilter(r, 'offsite')).length,
+  };
+
+  // Name, node names and labels: the three things an operator actually types
+  // when hunting for one resource among many.
+  const needle = query.trim().toLowerCase();
+  const visible = list.filter((r) => {
+    if (!matchesFilter(r, filter)) return false;
+    if (!needle) return true;
+    const haystack = [
+      r.name,
+      ...r.nodes,
+      ...(r.disklessNodes ?? []),
+      ...(r.disklessClients ?? []),
+      r.profile ?? '',
+      ...Object.entries(r.labels ?? {}).map(([k, v]) => `${k}=${v}`),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
+
+  const volumeCount = list.reduce((n, r) => n + r.volumes.length, 0);
+  const offsiteCount = counts.offsite;
+
   return (
-    <Tabs
-      value={tab}
-      onValueChange={(v) => setParams(v === 'profiles' ? { tab: 'profiles' } : {}, { replace: true })}
-      className="space-y-6"
-    >
-      <TabsList>
-        <TabsTrigger value="resources">Resources</TabsTrigger>
-        <TabsTrigger value="profiles">Profiles</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="profiles" className="space-y-6">
-        <ResourceProfilesPage />
-      </TabsContent>
-
-      <TabsContent value="resources" className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">DRBD Resources</h3>
-        <CreateResourceDialog
-          nodes={nodes?.nodes ?? []}
-          pools={pools?.pools ?? []}
-          profiles={profiles?.profiles ?? []}
-        />
-      </div>
-
-      <Card>
-        {isLoading ? (
-          <div className="space-y-3 p-4">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
-        ) : !resources?.resources.length ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-            <Boxes className="h-10 w-10" />
-            <p>No resources found. Create your first resource to get started.</p>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Resource</TableHead>
-                <TableHead>Port</TableHead>
-                <TableHead>Protocol</TableHead>
-                <TableHead>Nodes</TableHead>
-                <TableHead>Volumes</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {resources.resources.map((resource) => (
-                <ResourceRow
-                  key={resource.name}
-                  resource={resource}
-                  pools={pools?.pools ?? []}
-                  nodes={nodes?.nodes ?? []}
+    <div>
+      <PageHeader
+        className="mb-5"
+        title="Resources"
+        description={
+          tab === 'profiles' ? (
+            <>
+              <span className="font-mono tabular-nums text-foreground">
+                {profiles?.profiles?.length ?? 0}
+              </span>{' '}
+              resource profiles
+            </>
+          ) : (
+            <>
+              <span className="font-mono tabular-nums text-foreground">{list.length}</span>{' '}
+              DRBD resources ·{' '}
+              <span className="font-mono tabular-nums text-foreground">{volumeCount}</span>{' '}
+              volumes
+              {offsiteCount > 0 ? (
+                <>
+                  {' '}
+                  ·{' '}
+                  <span className="font-mono tabular-nums text-foreground">
+                    {offsiteCount}
+                  </span>{' '}
+                  replicated off-site
+                </>
+              ) : null}
+            </>
+          )
+        }
+        actions={
+          tab === 'resources' ? (
+            <>
+              <div className="relative w-[210px]">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-[15px] w-[15px] -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filter resources"
+                  aria-label="Filter resources by name, node or label"
+                  className="h-[34px] pl-8 text-[13px]"
                 />
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-      </TabsContent>
-    </Tabs>
+              </div>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                Create resource
+              </Button>
+            </>
+          ) : null
+        }
+      />
+
+      <Tabs
+        value={tab}
+        onValueChange={(v) =>
+          setParams(v === 'profiles' ? { tab: 'profiles' } : {}, { replace: true })
+        }
+        className="space-y-4"
+      >
+        <TabsList>
+          <TabsTrigger value="resources">Resources</TabsTrigger>
+          <TabsTrigger value="profiles">Profiles</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profiles">
+          <ResourceProfilesPage />
+        </TabsContent>
+
+        <TabsContent value="resources" className="space-y-3.5">
+          <SegmentedFilter
+            aria-label="Filter resources by state"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'all', label: 'All', count: counts.all },
+              { value: 'healthy', label: 'Healthy', count: counts.healthy },
+              { value: 'syncing', label: 'Syncing', count: counts.syncing },
+              { value: 'offsite', label: 'Off-site', count: counts.offsite },
+            ]}
+          />
+
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="space-y-3 p-5">
+                  {[0, 1, 2].map((i) => (
+                    <Skeleton key={i} className="h-9 w-full" />
+                  ))}
+                </div>
+              ) : !list.length ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <Boxes className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    No resources found. Create your first resource to get started.
+                  </p>
+                  <Button variant="outline" onClick={() => setCreateOpen(true)}>
+                    <Plus />
+                    Create resource
+                  </Button>
+                </div>
+              ) : !visible.length ? (
+                <p className="py-16 text-center text-sm text-muted-foreground">
+                  No resource matches this filter.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <StatusTickHead />
+                      <TableHead>Resource</TableHead>
+                      <TableHead>Port</TableHead>
+                      <TableHead>Protocol</TableHead>
+                      <TableHead>Nodes</TableHead>
+                      <TableHead>Volumes</TableHead>
+                      <TableHead className="w-[200px]">Replication</TableHead>
+                      <TableHead className="pr-5 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visible.map((resource) => (
+                      <ResourceRow
+                        key={resource.name}
+                        resource={resource}
+                        replication={
+                          replication.get(resource.name) ?? {
+                            tone: 'idle',
+                            label: 'unknown',
+                            percent: 0,
+                          }
+                        }
+                        pools={pools?.pools ?? []}
+                        nodes={nodes?.nodes ?? []}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {list.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Showing{' '}
+              <span className="font-mono tabular-nums">{visible.length}</span> of{' '}
+              <span className="font-mono tabular-nums">{list.length}</span> resources
+            </p>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <CreateResourceDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        nodes={nodes?.nodes ?? []}
+        pools={pools?.pools ?? []}
+        profiles={profiles?.profiles ?? []}
+      />
+    </div>
   );
 }
 
-// SyncIndicator renders a compact "resyncing" badge for a resource in the list,
-// shown only while a peer is actively resyncing. It has its own adaptive query
-// so only resources that are syncing keep polling (2s), stopping at 100%.
-function SyncIndicator({
-  resourceName,
-  localNode,
-}: {
-  resourceName: string;
-  localNode?: string;
-}) {
-  const { data } = useQuery({
-    queryKey: ['resource-status', resourceName],
-    queryFn: () => api.resourceStatus(resourceName),
-    refetchInterval: syncPollInterval,
-  });
-  const status = data?.status;
-  if (!statusHasActiveSync(status)) return null;
+/** Every dialog a row can open. One at a time, so one nullable holds it. */
+type RowDialog =
+  | 'primary'
+  | 'secondary'
+  | 'volumes'
+  | 'add-volume'
+  | 'snapshots'
+  | 'mount'
+  | 'options'
+  | 'schedule'
+  | 'add-dr'
+  | 'dr-failover'
+  | 'delete';
 
-  const syncing = Object.entries(status!.nodeStates || {}).find(([, st]) =>
-    isPeerSyncing(st),
-  );
-  if (!syncing) return null;
-  const [peer, st] = syncing;
-  const pct = st.syncPercent ?? 0;
-  // Direction: a SyncSource peer means the local node is the source
-  // (local → peer); a SyncTarget peer means the local node is receiving
-  // (peer → local).
-  const local = localNode ?? 'local';
-  const flow =
-    st.replicationState === 'SyncTarget'
-      ? `${peer} → ${local}`
-      : `${local} → ${peer}`;
+type NodeChip = {
+  name: string;
+  /** Suffix words that say what this node is; never left to the tint alone. */
+  marks: string[];
+  primary: boolean;
+  title?: string;
+};
 
+// nodeChips flattens a resource's four kinds of participant into one ordered
+// list. They are four separate fields on the API but one column here, and an
+// operator scanning the column wants the node that takes the writes first.
+function nodeChips(resource: Resource, status?: ResourceStatus): NodeChip[] {
+  // The state map is keyed by DRBD host name; each entry carries the SDS node
+  // name so it can be paired back to the node list.
+  const roleOf = new Map<string, string>();
+  for (const [host, st] of Object.entries(status?.nodeStates ?? {}))
+    roleOf.set(st.node || host, st.role);
+
+  const chips: NodeChip[] = [];
+  for (const name of resource.nodes) {
+    const primary = (roleOf.get(name) ?? '').toLowerCase() === 'primary';
+    // The off-site copy is a replica like the others to DRBD, but not to an
+    // operator: it replicates asynchronously and never takes over on its own,
+    // so it must not read as a peer that failover can land on.
+    const isDR = Boolean(resource.wanMode) && name === resource.drNode;
+    chips.push({
+      name,
+      primary,
+      marks: [...(primary ? ['primary'] : []), ...(isDR ? ['DR'] : [])],
+      title: isDR
+        ? 'Off-site disaster-recovery replica: asynchronous (protocol A), reached over a WAN proxy leg, and promoted only by an explicit dr-failover'
+        : undefined,
+    });
+  }
+  for (const name of resource.disklessNodes ?? [])
+    chips.push({
+      name,
+      primary: false,
+      marks: ['tiebreaker'],
+      title:
+        'Diskless quorum tiebreaker (votes for quorum only, never promoted or mounted)',
+    });
+  for (const name of resource.disklessClients ?? []) {
+    const primary = (roleOf.get(name) ?? '').toLowerCase() === 'primary';
+    chips.push({
+      name,
+      primary,
+      marks: [...(primary ? ['primary'] : []), 'client'],
+      title:
+        'Diskless data client: no local replica, mounts the volume over the DRBD network (e.g. a Kubernetes/CSI Pod on a non-replica node)',
+    });
+  }
+  return chips.sort((a, b) => Number(b.primary) - Number(a.primary));
+}
+
+function NodeChips({ chips }: { chips: NodeChip[] }) {
+  // Three fit the column; the rest collapse into a count that still names them
+  // on hover, rather than pushing the row wider than the table.
+  const shown = chips.slice(0, 3);
+  const rest = chips.slice(3);
   return (
-    <Badge
-      variant="outline"
-      className="gap-1 border-blue-500 text-blue-600"
-      title={`Resync in progress: ${st.replicationState}`}
-    >
-      <Loader2 className="h-3 w-3 animate-spin" />
-      同步中 {flow} {pct.toFixed(0)}%
-    </Badge>
+    <div className="flex items-center gap-1.5">
+      {shown.map((chip) => (
+        <span
+          key={chip.name}
+          title={chip.title}
+          className={cn(
+            'inline-flex h-[22px] items-center rounded-[4px] px-2 font-mono text-[11px]',
+            chip.primary
+              ? 'bg-accent font-medium text-accent-foreground'
+              : 'bg-secondary text-secondary-foreground',
+          )}
+        >
+          {chip.name}
+          {chip.marks.length > 0 && (
+            <span className="ml-1 font-sans text-[10px] opacity-75">
+              {chip.marks.join(' · ')}
+            </span>
+          )}
+        </span>
+      ))}
+      {rest.length > 0 && (
+        <span
+          title={rest.map((c) => c.name).join(', ')}
+          className="inline-flex h-[22px] items-center rounded-[4px] bg-secondary px-2 font-mono text-[11px] text-secondary-foreground"
+        >
+          +{rest.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The thin bar plus the word that says what it means. */
+function ReplicationCell({ replication }: { replication: Replication }) {
+  return (
+    <div className="flex items-center gap-2.5" title={replication.title}>
+      <div className="h-1 flex-1 overflow-hidden rounded-[2px] bg-muted">
+        <div
+          className={cn('h-1 transition-all', TONE_BG[replication.tone])}
+          style={{ width: `${replication.percent}%` }}
+        />
+      </div>
+      <span className={cn('font-mono text-[11.5px] tabular-nums', TONE_TEXT[replication.tone])}>
+        {replication.label}
+      </span>
+    </div>
   );
 }
 
 function ResourceRow({
   resource,
+  replication,
   pools,
   nodes,
 }: {
   resource: Resource;
+  replication: Replication;
   pools: PoolOpt[];
   nodes: NodeOpt[];
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [dialog, setDialog] = useState<RowDialog | null>(null);
+  const close = () => setDialog(null);
+
+  // Shares the page's query key, so an expanded row costs no extra request.
+  const { data } = useQuery({
+    queryKey: ['resource-status', resource.name],
+    queryFn: () => api.resourceStatus(resource.name),
+    refetchInterval: syncPollInterval,
+  });
+  const status = data?.status;
+
+  // sizeGb crosses the wire as a proto int64, i.e. a JSON *string*; summing
+  // it without Number() concatenates instead of adding.
+  const totalGb = resource.volumes.reduce((n, v) => n + Number(v.sizeGb), 0);
+  const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
     <>
-    <TableRow
-      data-state={expanded ? 'selected' : undefined}
-      className={expanded ? 'border-b-0' : undefined}
-    >
-      <TableCell>
-        <div className="flex items-start gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded bg-primary/10">
-            <Database className="h-4 w-4 text-primary" />
-          </span>
-          <div className="min-w-0 space-y-1 whitespace-normal">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{resource.name}</span>
-              {isCsiManaged(resource) && (
-                <Badge
-                  variant="outline"
-                  className="border-sky-500/40 text-sky-600 dark:text-sky-400"
-                  title="Provisioned by the Kubernetes CSI driver. Its lifecycle belongs to Kubernetes — delete the PersistentVolumeClaim instead of removing it here."
-                >
-                  <Boxes className="mr-1 h-3 w-3" />
-                  Kubernetes
-                </Badge>
-              )}
-              {resource.quorumRisk && (
-                <Badge
-                  variant="outline"
-                  className="border-amber-500 text-amber-600"
-                  title="2-node resource with no quorum tiebreaker: a single node failure suspends I/O"
-                >
-                  quorum risk
-                </Badge>
-              )}
-              <SyncIndicator
-                resourceName={resource.name}
-                localNode={resource.nodes[0]}
-              />
-            </div>
-            <ResourceMetadata resource={resource} compact />
-          </div>
-        </div>
-      </TableCell>
-      <TableCell className="text-muted-foreground">{resource.port}</TableCell>
-      <TableCell>
-        <Badge variant="secondary">{resource.protocol}</Badge>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-wrap gap-1">
-          {resource.nodes.map((node) => {
-            const state = resource.nodeStates?.[node];
-            const isPrimary = state?.role === 'Primary';
-            // The off-site copy is a replica like the others to DRBD, but not to
-            // an operator: it replicates asynchronously and never takes over on
-            // its own, so it must not read as a peer that failover can land on.
-            const isDR = resource.wanMode && node === resource.drNode;
-            return (
-              <span key={node} className="inline-flex items-center gap-1">
-                {isPrimary && (
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                )}
-                <StatusBadge status={state?.role ?? node} />
-                {isDR && (
-                  <Badge
-                    variant="outline"
-                    className="border-sky-500 text-sky-600"
-                    title="Off-site disaster-recovery replica: asynchronous (protocol A), reached over a WAN proxy leg, and promoted only by an explicit dr-failover"
-                  >
-                    DR
-                  </Badge>
-                )}
-                {state?.role && (
-                  <span className="text-xs text-muted-foreground">{node}</span>
-                )}
+      <TableRow className={expanded ? 'border-b-0' : undefined}>
+        <StatusTickCell tone={replication.tone} />
+        <TableCell>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Hide' : 'Show'} detail for ${resource.name}`}
+              className="-m-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <Chevron className="h-3.5 w-3.5" />
+            </button>
+            <span className="font-mono text-[14px] font-semibold">{resource.name}</span>
+            {isCsiManaged(resource) && (
+              <span
+                className="rounded-[4px] bg-accent px-1.5 py-0.5 text-[11.5px] text-accent-foreground"
+                title="Provisioned by the Kubernetes CSI driver. Its lifecycle belongs to Kubernetes — delete the PersistentVolumeClaim instead of removing it here."
+              >
+                kubernetes
               </span>
-            );
-          })}
-          {resource.disklessNodes?.map((node) => (
-            <span key={node} className="inline-flex items-center gap-1">
-              <Badge variant="outline" title="Diskless quorum tiebreaker (votes for quorum only, never promoted or mounted)">
-                tiebreaker
-              </Badge>
-              <span className="text-xs text-muted-foreground">{node}</span>
-            </span>
-          ))}
-          {resource.disklessClients?.map((node) => {
-            const state = resource.nodeStates?.[node];
-            const isPrimary = state?.role === 'Primary';
-            return (
-              <span key={node} className="inline-flex items-center gap-1">
-                {isPrimary && (
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                )}
-                <Badge
-                  variant="outline"
-                  className="border-sky-500/40 text-sky-600 dark:text-sky-400"
-                  title="Diskless data client: no local replica, mounts the volume over the DRBD network (e.g. a Kubernetes/CSI Pod on a non-replica node)"
-                >
-                  <Network className="mr-1 h-3 w-3" />
-                  data client
-                </Badge>
-                <span className="text-xs text-muted-foreground">{node}</span>
+            )}
+            {resource.wanMode && (
+              <span
+                className="rounded-[4px] bg-secondary px-1.5 py-0.5 text-[11.5px] text-secondary-foreground"
+                title={`Off-site asynchronous replica on ${resource.drNode ?? 'a DR node'}`}
+              >
+                off-site
               </span>
-            );
-          })}
-        </div>
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {resource.volumes.length}
-      </TableCell>
-      <TableCell className="text-right">
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            aria-label={`${expanded ? 'Hide' : 'Show'} status for ${resource.name}`}
-          >
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            />
-            Status
-          </Button>
-          <ResourceActionsMenu
-            resource={resource}
-            pools={pools}
-            nodes={nodes}
-          />
-        </div>
-      </TableCell>
-    </TableRow>
-    {expanded && (
-      <TableRow className="hover:bg-transparent">
-        {/* colSpan spans the whole table so the detail is not squeezed into one
-            column; the panel below lays itself out. */}
-        <TableCell colSpan={6} className="bg-muted/30 p-4">
-          {/* The detail is read top-to-bottom, so cap it at a readable measure
-              rather than letting it stretch across a wide table. */}
-          <div className="max-w-3xl">
-            <ResourceStatusPanel resource={resource} />
+            )}
+            {resource.quorumRisk && (
+              <span
+                className={cn('rounded-[4px] px-1.5 py-0.5 text-[11.5px]', TONE_SOFT.warn)}
+                title="2-node resource with no quorum tiebreaker: a single node failure suspends I/O"
+              >
+                quorum risk
+              </span>
+            )}
           </div>
         </TableCell>
+        <TableCell className="font-mono tabular-nums text-muted-foreground">
+          {resource.port}
+        </TableCell>
+        <TableCell className="font-mono text-muted-foreground">
+          {resource.protocol}
+        </TableCell>
+        <TableCell>
+          <NodeChips chips={nodeChips(resource, status)} />
+        </TableCell>
+        <TableCell className="font-mono tabular-nums text-muted-foreground">
+          {resource.volumes.length} · {totalGb} GB
+        </TableCell>
+        <TableCell>
+          <ReplicationCell replication={replication} />
+        </TableCell>
+        <TableCell className="pr-5 text-right">
+          <ResourceActionsMenu resource={resource} onSelect={setDialog} />
+        </TableCell>
       </TableRow>
-    )}
+
+      {expanded && (
+        <TableRow className="hover:bg-transparent">
+          {/* colSpan spans the whole table so the detail is not squeezed into
+              one column; the panel below lays itself out. */}
+          {/* whitespace-normal: TableCell defaults to nowrap for the sake of
+              one-line data cells, which would keep the panel's prose on one
+              line and push it out of the card. */}
+          <TableCell colSpan={8} className="bg-muted/40 p-0 whitespace-normal">
+            <ResourceDetail
+              resource={resource}
+              onOpenDialog={setDialog}
+            />
+          </TableCell>
+        </TableRow>
+      )}
+
+      <AddDRDialog
+        open={dialog === 'add-dr'}
+        onOpenChange={(o) => (o ? setDialog('add-dr') : close())}
+        resource={resource}
+        nodes={nodes}
+      />
+      <DRFailoverDialog
+        open={dialog === 'dr-failover'}
+        onOpenChange={(o) => (o ? setDialog('dr-failover') : close())}
+        resource={resource}
+      />
+      <SetRoleDialog
+        open={dialog === 'primary'}
+        onOpenChange={(o) => (o ? setDialog('primary') : close())}
+        resource={resource}
+        mode="primary"
+      />
+      <SetRoleDialog
+        open={dialog === 'secondary'}
+        onOpenChange={(o) => (o ? setDialog('secondary') : close())}
+        resource={resource}
+        mode="secondary"
+      />
+      <SnapshotsDialog
+        resource={resource.name}
+        open={dialog === 'snapshots'}
+        onOpenChange={(o) => (o ? setDialog('snapshots') : close())}
+      />
+      <VolumesDialog
+        open={dialog === 'volumes' || dialog === 'add-volume'}
+        onOpenChange={(o) => (o ? setDialog('volumes') : close())}
+        defaultTab={dialog === 'add-volume' ? 'add' : 'volumes'}
+        resource={resource}
+        pools={pools}
+      />
+      <MountDialog
+        open={dialog === 'mount'}
+        onOpenChange={(o) => (o ? setDialog('mount') : close())}
+        resource={resource}
+        nodes={nodes}
+      />
+      <EditOptionsDialog
+        open={dialog === 'options'}
+        onOpenChange={(o) => (o ? setDialog('options') : close())}
+        resource={resource}
+      />
+      <ScheduleDialog
+        open={dialog === 'schedule'}
+        onOpenChange={(o) => (o ? setDialog('schedule') : close())}
+        resource={resource}
+      />
+      <DeleteResourceDialog
+        open={dialog === 'delete'}
+        onOpenChange={(o) => (o ? setDialog('delete') : close())}
+        resourceName={resource.name}
+        csiManaged={isCsiManaged(resource)}
+      />
     </>
+  );
+}
+
+/** A sub-table inside the expanded panel: quieter rows than the main table. */
+function SubTable({ head, children }: { head: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>{head}</TableRow>
+        </TableHeader>
+        <TableBody>{children}</TableBody>
+      </Table>
+    </div>
+  );
+}
+
+const subHead = 'px-3.5 pt-2.5 pb-2';
+const subCell = 'h-10 px-3.5 py-0 text-[12.5px]';
+
+// ResourceDetail renders a resource's live status inline, under its row.
+//
+// It used to be a modal, which forced a choice the operator should not have to
+// make: read one resource's detail, or see the list. Comparing two resources
+// meant opening and closing dialogs and holding the first in your head. Expanded
+// rows let several be open at once and keep every one in the context of the
+// table it belongs to. Only the reading moved: every mutation is still a dialog
+// with its own confirmation.
+function ResourceDetail({
+  resource,
+  onOpenDialog,
+}: {
+  resource: Resource;
+  onOpenDialog: (d: RowDialog) => void;
+}) {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['resource-status', resource.name],
+    queryFn: () => api.resourceStatus(resource.name),
+    refetchInterval: syncPollInterval,
+  });
+  const status = data?.status;
+
+  if (isLoading)
+    return (
+      <div className="space-y-3 px-11 py-5">
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  if (isError)
+    return (
+      <p className="px-11 py-5 text-sm text-destructive">{(error as Error).message}</p>
+    );
+  if (!status) return null;
+
+  const nodeStates = Object.entries(status.nodeStates ?? {});
+  // The status volumes carry the live device; the list volumes carry the
+  // backing LV. Neither alone is the whole row.
+  const backingOf = new Map(resource.volumes.map((v) => [v.volumeId, v]));
+  const volumes = status.volumes?.length ? status.volumes : resource.volumes;
+
+  return (
+    <div className="space-y-6 py-5 pr-6 pl-11">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section>
+          <h4 className="eyebrow mb-2.5">Per-node state</h4>
+          <SubTable
+            head={
+              <>
+                <TableHead className={subHead}>Node</TableHead>
+                <TableHead className={subHead}>Role</TableHead>
+                <TableHead className={subHead}>Disk</TableHead>
+                <TableHead className={subHead}>Replication</TableHead>
+              </>
+            }
+          >
+            {nodeStates.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className={cn(subCell, 'text-muted-foreground')}>
+                  No node states reported.
+                </TableCell>
+              </TableRow>
+            ) : (
+              nodeStates.map(([host, st]) => {
+                const node = st.node || host;
+                const syncing = isPeerSyncing(st);
+                return (
+                  <TableRow key={host}>
+                    <TableCell className={cn(subCell, 'font-mono')}>{node}</TableCell>
+                    <TableCell className={subCell}>
+                      <RoleChip
+                        role={st.role}
+                        suffix={
+                          resource.wanMode && node === resource.drNode ? '· DR' : undefined
+                        }
+                      />
+                    </TableCell>
+                    <TableCell
+                      className={cn(subCell, 'font-mono', TONE_TEXT[toneOf(st.diskState)])}
+                    >
+                      {st.diskState || '—'}
+                    </TableCell>
+                    <TableCell className={subCell}>
+                      {!st.replicationState ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : syncing ? (
+                        <div className="flex min-w-[140px] items-center gap-2">
+                          <div className="h-1 flex-1 overflow-hidden rounded-[2px] bg-muted">
+                            <div
+                              className="h-1 bg-status-warn transition-all"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, st.syncPercent ?? 0))}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="font-mono text-[11.5px] tabular-nums text-status-warn-text">
+                            {(st.syncPercent ?? 0).toFixed(1)}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-mono text-muted-foreground">
+                          {st.replicationState}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </SubTable>
+        </section>
+
+        <section>
+          <h4 className="eyebrow mb-2.5">Volumes</h4>
+          <SubTable
+            head={
+              <>
+                <TableHead className={subHead}>ID</TableHead>
+                <TableHead className={subHead}>Device</TableHead>
+                <TableHead className={subHead}>Backing</TableHead>
+                <TableHead className={cn(subHead, 'text-right')}>Size</TableHead>
+              </>
+            }
+          >
+            {volumes.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className={cn(subCell, 'text-muted-foreground')}>
+                  No volumes.
+                </TableCell>
+              </TableRow>
+            ) : (
+              volumes.map((vol) => {
+                const backing = backingOf.get(vol.volumeId) ?? vol;
+                const path =
+                  backing.pool && backing.backingVolume
+                    ? `${backing.pool}/${backing.backingVolume}`
+                    : backing.backingVolume || '—';
+                return (
+                  <TableRow key={vol.volumeId}>
+                    <TableCell className={cn(subCell, 'font-mono tabular-nums')}>
+                      {vol.volumeId}
+                    </TableCell>
+                    <TableCell className={cn(subCell, 'font-mono')}>{vol.device}</TableCell>
+                    <TableCell className={cn(subCell, 'font-mono text-muted-foreground')}>
+                      {path}
+                    </TableCell>
+                    <TableCell
+                      className={cn(subCell, 'text-right font-mono tabular-nums')}
+                    >
+                      {vol.sizeGb} GB
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </SubTable>
+
+          <div className="mt-3.5 flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenDialog('add-volume')}>
+              <Plus />
+              Add volume
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onOpenDialog('snapshots')}>
+              <Camera />
+              Snapshots
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onOpenDialog('primary')}>
+              <ArrowUpCircle />
+              Set role
+            </Button>
+          </div>
+        </section>
+      </div>
+
+      {(status.quorum || status.wan) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {status.quorum && <QuorumPanel quorum={status.quorum} />}
+          {status.wan && <WANPanel status={status} />}
+        </div>
+      )}
+
+      <ResourceTopology resource={resource} status={status} />
+
+      {(resource.profile || Object.keys(resource.labels ?? {}).length > 0) && (
+        <section>
+          <h4 className="eyebrow mb-2.5">Metadata</h4>
+          <ResourceMetadata resource={resource} />
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -464,7 +988,7 @@ function ResourceMetadata({
   const allLabels = labels.map(([key, value]) => `${key}=${value}`).join(', ');
 
   return (
-    <div className="flex max-w-full flex-wrap items-center gap-1 text-xs text-muted-foreground">
+    <div className="flex max-w-full flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
       {resource.profile && (
         <Badge variant="outline" className="max-w-48 truncate font-normal">
           profile: {resource.profile}
@@ -489,148 +1013,81 @@ function ResourceMetadata({
   );
 }
 
+// Every action a row can take, behind one control. A row of six buttons reads
+// as six decisions to make; a `⋯` reads as one, and the destructive ones stay
+// destructive inside it.
 function ResourceActionsMenu({
   resource,
-  pools,
-  nodes,
+  onSelect,
 }: {
   resource: Resource;
-  pools: PoolOpt[];
-  nodes: NodeOpt[];
+  onSelect: (d: RowDialog) => void;
 }) {
-  const [primaryOpen, setPrimaryOpen] = useState(false);
-  const [secondaryOpen, setSecondaryOpen] = useState(false);
-  const [volumesOpen, setVolumesOpen] = useState(false);
-  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
-  const [mountOpen, setMountOpen] = useState(false);
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [addDrOpen, setAddDrOpen] = useState(false);
-  const [drFailoverOpen, setDrFailoverOpen] = useState(false);
-
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" className="h-8 w-8">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel>{resource.name}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setPrimaryOpen(true)}>
-            <ArrowUpCircle className="h-4 w-4" />
-            Set Primary
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          aria-label={`Actions for ${resource.name}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuLabel className="font-mono">{resource.name}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onSelect('primary')}>
+          <ArrowUpCircle className="h-4 w-4" />
+          Set Primary
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelect('secondary')}>
+          <ArrowDownCircle className="h-4 w-4" />
+          Set Secondary
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelect('volumes')}>
+          <Database className="h-4 w-4" />
+          Volumes
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelect('snapshots')}>
+          <Camera className="h-4 w-4" />
+          Snapshots
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelect('mount')}>
+          <FolderCog className="h-4 w-4" />
+          Filesystem / Mount
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelect('options')}>
+          <SlidersHorizontal className="h-4 w-4" />
+          Edit DRBD Options
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelect('schedule')}>
+          <CalendarClock className="h-4 w-4" />
+          Snapshot Schedule
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* Off-site DR: attach one if there is none, fail over to it if there
+            is. The two are mutually exclusive states of the same resource, so
+            only one of them is ever offered. */}
+        {resource.wanMode ? (
+          <DropdownMenuItem variant="destructive" onSelect={() => onSelect('dr-failover')}>
+            <Globe className="h-4 w-4" />
+            DR Failover
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setSecondaryOpen(true)}>
-            <ArrowDownCircle className="h-4 w-4" />
-            Set Secondary
+        ) : (
+          <DropdownMenuItem onSelect={() => onSelect('add-dr')}>
+            <Globe className="h-4 w-4" />
+            Add DR Site
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setVolumesOpen(true)}>
-            <Database className="h-4 w-4" />
-            Volumes
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setSnapshotsOpen(true)}>
-            <Camera className="h-4 w-4" />
-            Snapshots
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setMountOpen(true)}>
-            <FolderCog className="h-4 w-4" />
-            Filesystem / Mount
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setOptionsOpen(true)}>
-            <SlidersHorizontal className="h-4 w-4" />
-            Edit DRBD Options
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setScheduleOpen(true)}>
-            <CalendarClock className="h-4 w-4" />
-            Snapshot Schedule
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {/* Off-site DR: attach one if there is none, fail over to it if there
-              is. The two are mutually exclusive states of the same resource, so
-              only one of them is ever offered. */}
-          {resource.wanMode ? (
-            <DropdownMenuItem variant="destructive" onSelect={() => setDrFailoverOpen(true)}>
-              <Globe className="h-4 w-4" />
-              DR Failover
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onSelect={() => setAddDrOpen(true)}>
-              <Globe className="h-4 w-4" />
-              Add DR Site
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => setDeleteOpen(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <AddDRDialog
-        open={addDrOpen}
-        onOpenChange={setAddDrOpen}
-        resource={resource}
-        nodes={nodes}
-      />
-      <DRFailoverDialog
-        open={drFailoverOpen}
-        onOpenChange={setDrFailoverOpen}
-        resource={resource}
-      />
-      <SetRoleDialog
-        open={primaryOpen}
-        onOpenChange={setPrimaryOpen}
-        resource={resource}
-        mode="primary"
-      />
-      <SetRoleDialog
-        open={secondaryOpen}
-        onOpenChange={setSecondaryOpen}
-        resource={resource}
-        mode="secondary"
-      />
-      <SnapshotsDialog
-        resource={resource.name}
-        open={snapshotsOpen}
-        onOpenChange={setSnapshotsOpen}
-      />
-      <VolumesDialog
-        open={volumesOpen}
-        onOpenChange={setVolumesOpen}
-        resource={resource}
-        pools={pools}
-      />
-      <MountDialog
-        open={mountOpen}
-        onOpenChange={setMountOpen}
-        resource={resource}
-        nodes={nodes}
-      />
-      <EditOptionsDialog
-        open={optionsOpen}
-        onOpenChange={setOptionsOpen}
-        resource={resource}
-      />
-      <ScheduleDialog
-        open={scheduleOpen}
-        onOpenChange={setScheduleOpen}
-        resource={resource}
-      />
-      <DeleteResourceDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        resourceName={resource.name}
-        csiManaged={isCsiManaged(resource)}
-      />
-    </>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => onSelect('delete')}>
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -935,6 +1392,20 @@ function ScheduleDialog({
   );
 }
 
+/** A tinted word. Tone never travels without the word it is tinting. */
+function ToneWord({ tone, children }: { tone: StatusTone; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-[5px] px-2 py-0.5 text-xs',
+        TONE_SOFT[tone],
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 // QuorumPanel answers the one question that governs availability: how many more
 // nodes can be lost before this resource stops serving?
 //
@@ -947,38 +1418,26 @@ function QuorumPanel({ quorum }: { quorum: QuorumInfo }) {
   const { members, required, online, hasQuorum, tolerated } = quorum;
 
   return (
-    <div className="rounded-lg border p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-sm font-medium">Quorum</h4>
-        <Badge
-          variant="outline"
-          className={
-            hasQuorum
-              ? 'border-emerald-500 text-emerald-600'
-              : 'border-destructive text-destructive'
-          }
-          title={
-            hasQuorum
-              ? 'DRBD reports this node holds quorum; I/O proceeds'
-              : 'DRBD reports no quorum on this node; I/O is suspended'
-          }
-        >
+    <div className="rounded-lg border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="eyebrow">Quorum</h4>
+        <ToneWord tone={hasQuorum ? 'ok' : 'bad'}>
           {hasQuorum ? 'quorum held' : 'no quorum'}
-        </Badge>
+        </ToneWord>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 text-sm">
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <div className="text-xs text-muted-foreground">Members</div>
-          <div className="font-medium">{members}</div>
+          <div className="font-mono text-[15px] tabular-nums">{members}</div>
         </div>
         <div>
           <div className="text-xs text-muted-foreground">Votes needed</div>
-          <div className="font-medium">{required}</div>
+          <div className="font-mono text-[15px] tabular-nums">{required}</div>
         </div>
         <div>
           <div className="text-xs text-muted-foreground">Online</div>
-          <div className="font-medium">
+          <div className="font-mono text-[15px] tabular-nums">
             {online}
             <span className="text-muted-foreground"> / {members}</span>
           </div>
@@ -986,9 +1445,10 @@ function QuorumPanel({ quorum }: { quorum: QuorumInfo }) {
       </div>
 
       <p
-        className={`mt-3 text-sm ${
-          tolerated > 0 ? 'text-muted-foreground' : 'text-amber-600'
-        }`}
+        className={cn(
+          'mt-3 text-[13px]',
+          tolerated > 0 ? 'text-muted-foreground' : 'text-status-warn-text',
+        )}
       >
         {tolerated > 0
           ? `${tolerated} more member${tolerated === 1 ? '' : 's'} may be lost before I/O suspends.`
@@ -1012,29 +1472,22 @@ function WANPanel({ status }: { status: ResourceStatus }) {
     m?.bufferUsedBytes === undefined ? null : Number(m.bufferUsedBytes);
 
   return (
-    <div className="rounded-lg border p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-sm font-medium">Off-site replication</h4>
-        <Badge
-          variant="outline"
-          className={
-            status.wanReachable
-              ? 'border-sky-500 text-sky-600'
-              : 'border-destructive text-destructive'
-          }
-        >
+    <div className="rounded-lg border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="eyebrow">Off-site replication</h4>
+        <ToneWord tone={status.wanReachable ? 'ok' : 'bad'}>
           {status.wanReachable ? 'link reachable' : 'link unreachable'}
-        </Badge>
+        </ToneWord>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <div className="text-xs text-muted-foreground">DR node</div>
-          <div className="font-medium">{status.drNode}</div>
+          <div className="font-mono text-[13px]">{status.drNode}</div>
         </div>
         <div>
           <div className="text-xs text-muted-foreground">Endpoint</div>
-          <div className="font-medium">
+          <div className="font-mono text-[13px] tabular-nums">
             {status.drEndpoint}
             {status.wanPort ? `:${status.wanPort}` : ''}
           </div>
@@ -1047,21 +1500,12 @@ function WANPanel({ status }: { status: ResourceStatus }) {
               whichever replica is Primary after a local failover needs its own
               path to the DR. Listing them separately keeps a dead tunnel from
               hiding behind a healthy one. */}
-          <div className="mb-1 text-xs text-muted-foreground">Proxy legs</div>
-          <div className="flex flex-wrap gap-1">
+          <div className="mb-1.5 text-xs text-muted-foreground">Proxy legs</div>
+          <div className="flex flex-wrap gap-2">
             {legs.map(([label, state]) => (
-              <span key={label} className="inline-flex items-center gap-1">
-                <Badge
-                  variant="outline"
-                  className={
-                    state === 'active'
-                      ? 'border-emerald-500 text-emerald-600'
-                      : 'border-destructive text-destructive'
-                  }
-                >
-                  {state}
-                </Badge>
-                <span className="text-xs text-muted-foreground">{label}</span>
+              <span key={label} className="inline-flex items-center gap-1.5">
+                <ToneWord tone={state === 'active' ? 'ok' : 'bad'}>{state}</ToneWord>
+                <span className="font-mono text-xs text-muted-foreground">{label}</span>
               </span>
             ))}
           </div>
@@ -1072,9 +1516,9 @@ function WANPanel({ status }: { status: ResourceStatus }) {
         <div className="text-xs text-muted-foreground">
           Un-replicated backlog (data a DR failover would lose)
         </div>
-        <div className="font-medium">
+        <div className="font-mono text-[15px] tabular-nums">
           {backlog === null ? (
-            <span className="text-muted-foreground">
+            <span className="font-sans text-[13px] text-muted-foreground">
               unknown (proxy published no metrics)
             </span>
           ) : (
@@ -1085,7 +1529,8 @@ function WANPanel({ status }: { status: ResourceStatus }) {
 
       <p className="mt-3 text-xs text-muted-foreground">
         Asynchronous (protocol A): the DR peer can lag, and it is never promoted
-        automatically. Failover is the explicit <code>dr-failover</code> action.
+        automatically. Failover is the explicit <code className="font-mono">dr-failover</code>{' '}
+        action.
       </p>
     </div>
   );
@@ -1102,146 +1547,6 @@ function formatBytes(n: number): string {
   }
   return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
 }
-
-// ResourceStatusPanel renders a resource's live status inline, under its row.
-//
-// It used to be a modal, which forced a choice the operator should not have to
-// make: read one resource's detail, or see the list. Comparing two resources
-// meant opening and closing dialogs and holding the first in your head. Expanded
-// rows let several be open at once and keep every one in the context of the
-// table it belongs to.
-function ResourceStatusPanel({ resource }: { resource: Resource }) {
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['resource-status', resource.name],
-    queryFn: () => api.resourceStatus(resource.name),
-    // Poll 2s while any peer is resyncing; stop the moment it settles. Only
-    // mounted panels query, so a collapsed row costs nothing.
-    refetchInterval: syncPollInterval,
-  });
-
-  const status = data?.status;
-
-  return (
-    <>
-        {isLoading ? (
-          <div className="space-y-3 py-2">
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        ) : isError ? (
-          <p className="py-4 text-sm text-destructive">
-            {(error as Error).message}
-          </p>
-        ) : status ? (
-          <div className="space-y-5 py-2">
-            <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
-              <span className="text-sm text-muted-foreground">Overall Role</span>
-              <StatusBadge status={status.role} />
-            </div>
-
-            <ResourceTopology resource={resource} status={status} />
-
-            {status.quorum && <QuorumPanel quorum={status.quorum} />}
-
-            {status.wan && <WANPanel status={status} />}
-
-            {(resource.profile || Object.keys(resource.labels ?? {}).length > 0) && (
-              <div>
-                <h4 className="mb-2 text-sm font-medium">Metadata</h4>
-                <ResourceMetadata resource={resource} />
-              </div>
-            )}
-
-            <div>
-              <h4 className="mb-2 text-sm font-medium">Node States</h4>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Node</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Disk</TableHead>
-                    <TableHead>Replication</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(status.nodeStates || {}).map(
-                    ([node, state]) => (
-                      <TableRow key={node}>
-                        <TableCell className="font-medium">{node}</TableCell>
-                        <TableCell>
-                          <StatusBadge status={state.role} />
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={state.diskState} />
-                        </TableCell>
-                        <TableCell>
-                          {state.replicationState ? (
-                            isPeerSyncing(state) ? (
-                              <div className="flex min-w-[150px] items-center gap-2">
-                                <StatusBadge
-                                  status={state.replicationState}
-                                />
-                                <div className="h-1.5 flex-1 overflow-hidden rounded bg-muted">
-                                  <div
-                                    className="h-full rounded bg-primary transition-all"
-                                    style={{
-                                      width: `${Math.min(
-                                        100,
-                                        Math.max(0, state.syncPercent ?? 0),
-                                      )}%`,
-                                    }}
-                                  />
-                                </div>
-                                <span className="text-xs tabular-nums text-muted-foreground">
-                                  {(state.syncPercent ?? 0).toFixed(1)}%
-                                </span>
-                              </div>
-                            ) : (
-                              <StatusBadge status={state.replicationState} />
-                            )
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              —
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div>
-              <h4 className="mb-2 text-sm font-medium">Volumes</h4>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Device</TableHead>
-                    <TableHead>Size</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {status.volumes?.map((vol) => (
-                    <TableRow key={vol.volumeId}>
-                      <TableCell>{vol.volumeId}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {vol.device}
-                      </TableCell>
-                      <TableCell>{vol.sizeGb} GB</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        ) : null}
-    </>
-  );
-}
-
 
 // AddDRDialog attaches an off-site asynchronous replica to a running resource.
 //
@@ -1591,11 +1896,14 @@ function VolumesDialog({
   onOpenChange,
   resource,
   pools,
+  defaultTab = 'volumes',
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   resource: Resource;
   pools: PoolOpt[];
+  /** Which tab the dialog lands on — "Add volume" opens straight on the form. */
+  defaultTab?: 'volumes' | 'add';
 }) {
   const queryClient = useQueryClient();
 
@@ -1622,7 +1930,9 @@ function VolumesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="volumes" className="py-2">
+        {/* Keyed so reopening on a different tab actually lands there: Radix
+            keeps its own state for an uncontrolled `defaultValue`. */}
+        <Tabs key={defaultTab} defaultValue={defaultTab} className="py-2">
           <TabsList>
             <TabsTrigger value="volumes">Volumes</TabsTrigger>
             <TabsTrigger value="add">Add Volume</TabsTrigger>
@@ -2152,16 +2462,19 @@ function DeleteResourceDialog({
 }
 
 function CreateResourceDialog({
+  open,
+  onOpenChange,
   nodes,
   pools,
   profiles,
 }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
   nodes: NodeOpt[];
   pools: PoolOpt[];
   profiles: ResourceProfile[];
 }) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [port, setPort] = useState('7000');
   const [protocol, setProtocol] = useState('C');
@@ -2232,7 +2545,7 @@ function CreateResourceDialog({
     onSuccess: () => {
       toast.success(`Resource "${name}" created`);
       queryClient.invalidateQueries({ queryKey: ['resources'] });
-      setOpen(false);
+      onOpenChange(false);
       reset();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -2312,13 +2625,7 @@ function CreateResourceDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="h-4 w-4" />
-          Create Resource
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -2604,7 +2911,7 @@ function CreateResourceDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               disabled={createMutation.isPending}
             >
               Cancel
