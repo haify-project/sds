@@ -11,6 +11,7 @@ import { SegmentBar } from '@/components/SegmentBar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
 import { RoleChip } from '@/components/RoleChip';
+import { RecordCard, RecordCards } from '@/components/RecordCard';
 import { TONE_BG, TONE_TEXT, toneOf } from '@/components/status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -150,6 +151,18 @@ export function DashboardPage() {
   // control plane. Anything else would be invented.
   const haMembers = new Set(selfHa?.nodes ?? []);
 
+  // The role column's heading and its last-seen formatting are named once and
+  // used by both the card and the row: a value derived twice is a value that
+  // can end up saying two different things about the same node.
+  const roleLabel =
+    selfHa?.enabled && selfHa.resource
+      ? `Role in ${selfHa.resource}`
+      : 'Self-HA role';
+  const lastSeenLabel = (lastSeen: string) => {
+    const ts = Number(lastSeen);
+    return ts ? agoLabel(now - ts * 1000) : '-';
+  };
+
   // Any of this page's queries in flight — the button says so rather than
   // looking inert while a wedged controller keeps it waiting.
   const isFetching = useIsFetching();
@@ -213,7 +226,13 @@ export function DashboardPage() {
       />
 
       <div className="space-y-[18px]">
-        <StatBand>
+        {/* Four 27px figures in a non-wrapping row have ~90px each at 375px:
+            the digits crush and the fourth column falls off the band's own
+            overflow-hidden edge. Stacked below `sm`, with the dividers turning
+            from vertical to horizontal so the band still reads as one object.
+            The 2-up phone grid this wants instead needs StatBand to own its
+            divider rule, which is not this page's to change. */}
+        <StatBand className="flex-col divide-x-0 divide-y sm:flex-row sm:divide-x sm:divide-y-0">
           <StatBandItem
             label="Online nodes"
             value={onlineNodes}
@@ -299,22 +318,25 @@ export function DashboardPage() {
               </div>
             ) : selfHa?.enabled ? (
               <div className="space-y-[18px]">
-                <div className="grid grid-cols-3 gap-3.5">
-                  <div>
+                {/* Three columns of ~90px cannot hold a CIDR: the VIP ran
+                    past the card's edge. Two columns on a phone, and the VIP —
+                    the only long value here — takes both. */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-3">
+                  <div className="min-w-0">
                     <div className="eyebrow">Active node</div>
-                    <div className="mt-1.5 font-mono text-sm">
+                    <div className="mt-1.5 font-mono text-sm break-words">
                       {activeNodeName || '-'}
                     </div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="eyebrow">Resource</div>
-                    <div className="mt-1.5 font-mono text-sm">
+                    <div className="mt-1.5 font-mono text-sm break-words">
                       {selfHa.resource || '-'}
                     </div>
                   </div>
-                  <div>
+                  <div className="col-span-2 min-w-0 sm:col-span-1">
                     <div className="eyebrow">VIP</div>
-                    <div className="mt-1.5 font-mono text-sm tabular-nums">
+                    <div className="mt-1.5 font-mono text-sm break-all tabular-nums">
                       {selfHa.vip || '-'}
                     </div>
                   </div>
@@ -379,74 +401,140 @@ export function DashboardPage() {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <StatusTickHead />
-                  <TableHead>Node</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>
-                    {selfHa?.enabled && selfHa.resource
-                      ? `Role in ${selfHa.resource}`
-                      : 'Self-HA role'}
-                  </TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead className="pr-5 text-right">Last seen</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Below `md` the six columns put role, state and last-seen past
+                  the right edge. The same rows render as cards instead — no
+                  expand on this one: the Dashboard's node list is a summary,
+                  and "Manage nodes" already leads to the full page. */}
+              <RecordCards className="px-5 pb-5">
                 {nodes?.nodes.map((node) => {
-                  const lastSeenTs = Number(node.lastSeen);
                   const isMember = haMembers.has(node.name);
                   return (
-                    <TableRow key={node.name}>
-                      <StatusTickCell status={node.state} />
-                      <TableCell>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="font-mono font-medium">
+                    <RecordCard
+                      key={node.name}
+                      status={node.state}
+                      title={
+                        <>
+                          <span className="font-mono text-[14px] font-semibold">
                             {node.name}
                           </span>
                           <span className="text-[11.5px] text-muted-foreground">
                             {node.hostname}
                           </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono tabular-nums">
-                        {node.address}
-                      </TableCell>
-                      <TableCell>
-                        {!selfHa?.enabled ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : isMember ? (
-                          <RoleChip
-                            role={
-                              node.name === activeNodeName
-                                ? 'Primary'
-                                : 'Secondary'
-                            }
-                          />
-                        ) : (
-                          <span className="text-muted-foreground">
-                            not a member
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={node.state} />
-                      </TableCell>
-                      <TableCell className="pr-5 text-right font-mono tabular-nums text-muted-foreground">
-                        {lastSeenTs ? agoLabel(now - lastSeenTs * 1000) : '-'}
-                      </TableCell>
-                    </TableRow>
+                        </>
+                      }
+                      subtitle={
+                        <span className="font-mono tabular-nums">
+                          {node.address}
+                        </span>
+                      }
+                      facts={[
+                        {
+                          label: roleLabel,
+                          value: (
+                            <NodeRole
+                              selfHaEnabled={!!selfHa?.enabled}
+                              isMember={isMember}
+                              isActive={node.name === activeNodeName}
+                            />
+                          ),
+                        },
+                        {
+                          label: 'State',
+                          value: <StatusBadge status={node.state} />,
+                        },
+                        {
+                          label: 'Last seen',
+                          value: (
+                            <span className="font-mono tabular-nums text-muted-foreground">
+                              {lastSeenLabel(node.lastSeen)}
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
                   );
                 })}
-              </TableBody>
-            </Table>
+              </RecordCards>
+
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <StatusTickHead />
+                      <TableHead>Node</TableHead>
+                      <TableHead>Address</TableHead>
+                      <TableHead>{roleLabel}</TableHead>
+                      <TableHead>State</TableHead>
+                      <TableHead className="pr-5 text-right">
+                        Last seen
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {nodes?.nodes.map((node) => {
+                      const isMember = haMembers.has(node.name);
+                      return (
+                        <TableRow key={node.name}>
+                          <StatusTickCell status={node.state} />
+                          <TableCell>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-mono font-medium">
+                                {node.name}
+                              </span>
+                              <span className="text-[11.5px] text-muted-foreground">
+                                {node.hostname}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono tabular-nums">
+                            {node.address}
+                          </TableCell>
+                          <TableCell>
+                            <NodeRole
+                              selfHaEnabled={!!selfHa?.enabled}
+                              isMember={isMember}
+                              isActive={node.name === activeNodeName}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={node.state} />
+                          </TableCell>
+                          <TableCell className="pr-5 text-right font-mono tabular-nums text-muted-foreground">
+                            {lastSeenLabel(node.lastSeen)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </Card>
       </div>
     </div>
   );
+}
+
+/**
+ * The only role the cluster hands us for a node: self-HA membership, and which
+ * member currently holds the control plane. Rendered by both the card and the
+ * row so neither can call a node Primary while the other calls it a stranger.
+ */
+function NodeRole({
+  selfHaEnabled,
+  isMember,
+  isActive,
+}: {
+  selfHaEnabled: boolean;
+  isMember: boolean;
+  isActive: boolean;
+}) {
+  if (!selfHaEnabled) return <span className="text-muted-foreground">—</span>;
+  if (!isMember)
+    return <span className="text-muted-foreground">not a member</span>;
+  return <RoleChip role={isActive ? 'Primary' : 'Secondary'} />;
 }
 
 /** Severity → the tone vocabulary the rest of the console uses. The controller
