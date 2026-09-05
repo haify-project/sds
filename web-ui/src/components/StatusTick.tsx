@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { TableCell, TableHead } from '@/components/ui/table';
 import { toneOf, TONE_BG, type StatusTone } from '@/components/status';
@@ -31,11 +32,20 @@ export function StatusTick({ tone, status, className }: TickProps) {
   );
 }
 
-/** The tick plus the gutter cell it always lives in. */
-export function StatusTickCell({ className, ...props }: TickProps) {
+/**
+ * The tick plus the gutter cell it always lives in. `children` is where a row
+ * that has nowhere else to say its status out loud puts an `sr-only` word —
+ * the tick is colour only, so something in the row has to carry the meaning.
+ */
+export function StatusTickCell({
+  className,
+  children,
+  ...props
+}: TickProps & { children?: ReactNode }) {
   return (
     <TableCell className={cn('w-[4px] pr-0 pl-5', className)}>
       <StatusTick {...props} />
+      {children}
     </TableCell>
   );
 }

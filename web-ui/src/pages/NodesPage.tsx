@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Server,
@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
-import { TONE_BG, toneOf, type StatusTone } from '@/components/status';
+import { TONE_BG, TONE_TEXT, toneOf, type StatusTone } from '@/components/status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -82,20 +82,8 @@ function formatAge(lastSeen: string): string {
   return `${Math.floor(secs / 86400)}d ago`;
 }
 
-/**
- * Tone → text colour. `TONE_SOFT` bundles a tinted fill with its readable text
- * colour; the readiness word is bare text on the row, so it needs the text
- * half alone. Literal strings so the Tailwind scanner still sees them.
- */
-const TONE_TEXT: Record<StatusTone, string> = {
-  ok: 'text-status-ok-text',
-  warn: 'text-status-warn-text',
-  bad: 'text-status-bad-text',
-  idle: 'text-status-idle-text',
-};
-
 type Readiness = {
-  dots: { label: string; tone: StatusTone }[];
+  dots: { label: string; tone: StatusTone; word: string }[];
   word: string;
   tone: StatusTone;
 };
@@ -107,13 +95,25 @@ type Readiness = {
  * is also stopped.
  */
 function readinessOf(h: HealthInfo): Readiness {
+  // Each dot states its own condition. The summary word below is worst-first,
+  // so on a node with two problems it names only one — the other would exist
+  // as a coloured pixel and nothing else without these.
   const dots: Readiness['dots'] = [
-    { label: 'DRBD', tone: h.drbdInstalled ? 'ok' : 'bad' },
+    {
+      label: 'DRBD',
+      tone: h.drbdInstalled ? 'ok' : 'bad',
+      word: h.drbdInstalled ? 'installed' : 'missing',
+    },
     {
       label: 'drbd-reactor',
       tone: !h.drbdReactorInstalled ? 'bad' : h.drbdReactorRunning ? 'ok' : 'warn',
+      word: !h.drbdReactorInstalled ? 'missing' : h.drbdReactorRunning ? 'running' : 'stopped',
     },
-    { label: 'resource agents', tone: h.resourceAgentsInstalled ? 'ok' : 'bad' },
+    {
+      label: 'resource agents',
+      tone: h.resourceAgentsInstalled ? 'ok' : 'bad',
+      word: h.resourceAgentsInstalled ? 'installed' : 'missing',
+    },
   ];
   if (!h.drbdInstalled) return { dots, word: 'DRBD missing', tone: 'bad' };
   if (!h.drbdReactorInstalled) return { dots, word: 'reactor missing', tone: 'bad' };
@@ -124,7 +124,7 @@ function readinessOf(h: HealthInfo): Readiness {
 
 /** A checked node's result plus when it was taken — the expanded row states the
  *  time, because a health check is a reading, not a live property. */
-type HealthResult = { info: HealthInfo; at: number };
+type HealthResult = { info: HealthInfo; at: number; stale?: boolean };
 
 export function NodesPage() {
   const queryClient = useQueryClient();
@@ -132,6 +132,15 @@ export function NodesPage() {
     queryKey: ['nodes'],
     queryFn: () => api.getNodes(),
   });
+
+  // formatAge renders a relative time, so without a tick the column freezes at
+  // whatever it said when the query last resolved. 5s matches the query's
+  // staleTime — finer would re-render for nothing.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   const [registerOpen, setRegisterOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -158,7 +167,13 @@ export function NodesPage() {
       // now stays where the answer was expected, so a dismissed toast is not
       // the only record of it.
       setHealthErrors((x) => ({ ...x, [nodeName]: e.message }));
-      setExpanded(nodeName);
+      // A previous success is still on screen; a failed re-check does not
+      // refresh it, so say so rather than presenting last hour's reading as
+      // this one's.
+      setHealth((h) => (h[nodeName] ? { ...h, [nodeName]: { ...h[nodeName], stale: true } } : h));
+      // Only steal focus if the operator is not already reading another row —
+      // during "Check all" the last failure to settle would otherwise win.
+      setExpanded((cur) => (cur === null || cur === nodeName ? nodeName : cur));
     },
     onSettled: (_data, _error, nodeName) => {
       setChecking((c) => c.filter((n) => n !== nodeName));
@@ -176,7 +191,24 @@ export function NodesPage() {
 
   const list = nodes?.nodes ?? [];
   const online = list.filter((n) => n.state === 'online');
-  const checkedTimes = Object.values(health).map((h) => h.at);
+
+  // health/healthErrors/confirmNode are keyed by node name, which outlives the
+  // node. Register a different machine under a retired name and its row would
+  // open showing the old cluster's readiness, stamped with the old time, having
+  // never been checked. Drop what the controller no longer lists.
+  useEffect(() => {
+    if (!nodes) return;
+    const live = new Set(list.map((n) => n.name));
+    const prune = <T,>(m: Record<string, T>) =>
+      Object.keys(m).every((k) => live.has(k))
+        ? m
+        : Object.fromEntries(Object.entries(m).filter(([k]) => live.has(k)));
+    setHealth((h) => prune(h));
+    setHealthErrors((x) => prune(x));
+    setConfirmNode((c) => (c && !live.has(c.name) ? null : c));
+  }, [nodes, list]);
+
+  const checkedTimes = list.map((n) => health[n.name]?.at).filter((at): at is number => !!at);
   const lastCheck = checkedTimes.length ? Math.max(...checkedTimes) : null;
 
   const copyAddress = async (address: string) => {
@@ -186,8 +218,18 @@ export function NodesPage() {
   };
 
   // N read-only GETs, one per online node. Offline nodes are excluded for the
-  // same reason the per-row button is disabled for them.
-  const checkAll = () => online.forEach((n) => healthCheckMutation.mutate(n.name));
+  // same reason the per-row button is disabled for them. Each check is an SSH
+  // round-trip on the controller, so they go a few at a time rather than all
+  // at once on a large cluster.
+  const checkAll = async () => {
+    const names = online.map((n) => n.name);
+    const CONCURRENCY = 4;
+    for (let i = 0; i < names.length; i += CONCURRENCY) {
+      await Promise.allSettled(
+        names.slice(i, i + CONCURRENCY).map((n) => healthCheckMutation.mutateAsync(n)),
+      );
+    }
+  };
 
   return (
     <div>
@@ -376,11 +418,17 @@ function NodeRows({
   onUnregister,
 }: NodeRowsProps) {
   const Chevron = isOpen ? ChevronDown : ChevronRight;
+  const stale = result?.stale ?? false;
 
   return (
     <>
-      <TableRow className={cn(isOpen && 'border-b-transparent bg-muted/40')}>
-        <StatusTickCell status={node.state} />
+      <TableRow className={cn(isOpen && 'border-b-transparent')}>
+        {/* The tick is colour only, and StatusTick's contract is that it repeats
+            a status the row already states. Offline says so in the Last seen
+            cell; the sr-only word covers every other state. */}
+        <StatusTickCell status={node.state}>
+          <span className="sr-only">{node.state}</span>
+        </StatusTickCell>
         <TableCell>
           {/* The expand affordance is the name itself, so the target is the
               width of the cell and still a real button for the keyboard. */}
@@ -388,7 +436,9 @@ function NodeRows({
             type="button"
             onClick={onToggle}
             aria-expanded={isOpen}
-            aria-controls={panelId}
+            // The panel row only exists while open, so pointing at it when
+            // closed leaves every collapsed row with a dangling IDREF.
+            aria-controls={isOpen ? panelId : undefined}
             className="flex items-center gap-2.5 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <Chevron
@@ -408,16 +458,27 @@ function NodeRows({
         </TableCell>
         <TableCell>
           {readiness ? (
-            <span className="flex items-center gap-1.5">
-              {readiness.dots.map((dot) => (
-                <span
-                  key={dot.label}
-                  title={dot.label}
-                  className={cn('size-[7px] rounded-full', TONE_BG[dot.tone])}
-                />
-              ))}
-              <span className={cn('ml-1 text-[12.5px]', TONE_TEXT[readiness.tone])}>
+            <span className="flex items-center gap-2.5">
+              <span className="flex items-center gap-1.5" aria-hidden>
+                {readiness.dots.map((dot) => (
+                  <span
+                    key={dot.label}
+                    title={`${dot.label}: ${dot.word}`}
+                    className={cn('size-[7px] rounded-full', TONE_BG[dot.tone])}
+                  />
+                ))}
+              </span>
+              <span className="sr-only">
+                {readiness.dots.map((d) => `${d.label} ${d.word}`).join(', ')}
+              </span>
+              <span
+                className={cn(
+                  'text-[12.5px]',
+                  stale ? 'text-muted-foreground' : TONE_TEXT[readiness.tone],
+                )}
+              >
                 {readiness.word}
+                {stale ? ' · stale' : ''}
               </span>
             </span>
           ) : (
@@ -425,10 +486,13 @@ function NodeRows({
           )}
         </TableCell>
         <TableCell
-          className="font-mono tabular-nums text-muted-foreground"
+          className={cn(
+            'font-mono tabular-nums',
+            isOnline ? 'text-muted-foreground' : TONE_TEXT.bad,
+          )}
           title={formatLastSeen(node.lastSeen)}
         >
-          {formatAge(node.lastSeen)}
+          {isOnline ? formatAge(node.lastSeen) : `offline · ${formatAge(node.lastSeen)}`}
         </TableCell>
         <TableCell className="pr-5 text-right">
           <span className="inline-flex items-center gap-1.5">
@@ -474,7 +538,13 @@ function NodeRows({
 
       {isOpen ? (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={COLUMN_COUNT} id={panelId} className="h-auto bg-muted/40 p-0">
+          <TableCell
+            colSpan={COLUMN_COUNT}
+            id={panelId}
+            role="region"
+            aria-label={`Detail for ${node.name}`}
+            className="h-auto bg-muted/50 p-0"
+          >
             <div className="flex flex-col gap-4 py-1 pr-6 pb-[22px] pl-[46px]">
               <div className="flex items-center justify-between gap-4">
                 <div className="eyebrow">
