@@ -45,8 +45,11 @@ jobs:
       # non-deterministically, so the same commit can fail on different lines
       # in two runs. This repository went from "50 issues" to 255 the moment
       # the caps came off.
+      # Action v7 or newer is required to install a golangci-lint v2.x; v6
+      # rejects the version string outright ("golangci-lint v2 is not supported
+      # by golangci-lint-action v6") and the job dies before it lints anything.
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.13.1
           args: --timeout=5m --max-issues-per-linter=0 --max-same-issues=0
@@ -73,10 +76,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Deliberately the newest released Go rather than go.mod's toolchain: a
+      # stdlib advisory is fixed by upgrading Go, so scanning with anything
+      # older reports findings that are already fixed upstream and drowns the
+      # one signal this job exists for.
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: stable
           cache: true
 
       - name: Ensure embedded UI placeholder

@@ -2,6 +2,13 @@ module github.com/liliang-cn/sds
 
 go 1.26.0
 
+// The go directive is the language floor; this is what CI actually installs.
+// setup-go's go-version-file reads it, and without it CI builds with exactly
+// 1.26.0 — the .0 of a minor is missing every stdlib security patch since, which
+// is how the vulnerability gate went red on 25 findings that a current toolchain
+// does not have. Bump it when a stdlib advisory names a newer patch.
+toolchain go1.26.8
+
 require (
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/charmbracelet/bubbles v1.0.0
