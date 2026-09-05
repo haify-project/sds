@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
+import { RecordCard, RecordCards } from '@/components/RecordCard';
 import { TONE_BG, TONE_TEXT, toneOf, type StatusTone } from '@/components/status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -298,7 +299,94 @@ export function NodesPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <>
+        {/* Phones get the same rows as cards — a six-column table puts
+            readiness and last-seen past the right edge at 375px. */}
+        <RecordCards>
+          {list.map((node) => {
+            const isOnline = node.state === 'online';
+            const isChecking = checking.includes(node.name);
+            const result = health[node.name];
+            const readiness = result ? readinessOf(result.info) : null;
+            const isOpen = expanded === node.name;
+            const panelId = `node-card-${node.name}`;
+            return (
+              <RecordCard
+                key={node.name}
+                status={node.state}
+                open={isOpen}
+                onToggle={() => setExpanded(isOpen ? null : node.name)}
+                detailId={panelId}
+                title={
+                  <>
+                    <span className="font-mono text-[14px] font-semibold">{node.name}</span>
+                    <span className="text-[11.5px] text-muted-foreground">{node.hostname}</span>
+                  </>
+                }
+                subtitle={
+                  <span className="font-mono tabular-nums">{node.address}</span>
+                }
+                actions={
+                  <NodeMenu
+                    node={node}
+                    isDeleting={
+                      unregisterMutation.isPending &&
+                      unregisterMutation.variables === node.address
+                    }
+                    onCopyAddress={() => copyAddress(node.address)}
+                    onUnregister={() => setConfirmNode(node)}
+                  />
+                }
+                facts={[
+                  {
+                    label: 'State',
+                    value: (
+                      <span className={cn(isOnline ? TONE_TEXT.ok : TONE_TEXT.bad)}>
+                        {node.state}
+                      </span>
+                    ),
+                  },
+                  {
+                    label: 'Last seen',
+                    value: (
+                      <span className="font-mono tabular-nums">{formatAge(node.lastSeen)}</span>
+                    ),
+                  },
+                  {
+                    label: 'System',
+                    value: (
+                      <span className="font-mono text-muted-foreground">
+                        {node.version || '-'}
+                      </span>
+                    ),
+                  },
+                  {
+                    label: 'Readiness',
+                    value: readiness ? (
+                      <span className={cn(result?.stale ? 'text-muted-foreground' : TONE_TEXT[readiness.tone])}>
+                        {readiness.word}
+                        {result?.stale ? ' · stale' : ''}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">not checked</span>
+                    ),
+                  },
+                ]}
+              >
+                <NodeDetail
+                  node={node}
+                  isOnline={isOnline}
+                  isChecking={isChecking}
+                  result={result}
+                  error={healthErrors[node.name]}
+                  onCheck={() => healthCheckMutation.mutate(node.name)}
+                />
+              </RecordCard>
+            );
+          })}
+        </RecordCards>
+
+        <Card className="hidden overflow-hidden md:block">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -349,6 +437,7 @@ export function NodesPage() {
             </Table>
           </CardContent>
         </Card>
+        </>
       )}
 
       <RegisterNodeDialog open={registerOpen} onOpenChange={setRegisterOpen} />
@@ -505,33 +594,12 @@ function NodeRows({
               {isChecking ? <Loader2 className="animate-spin" /> : null}
               Check health
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={isDeleting}
-                  aria-label={`Actions for ${node.name}`}
-                >
-                  {isDeleting ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <MoreHorizontal />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[220px]">
-                <DropdownMenuItem onSelect={onCopyAddress}>
-                  <Copy />
-                  Copy address
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onSelect={onUnregister}>
-                  <Trash2 />
-                  Unregister node…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <NodeMenu
+              node={node}
+              isDeleting={isDeleting}
+              onCopyAddress={onCopyAddress}
+              onUnregister={onUnregister}
+            />
           </span>
         </TableCell>
       </TableRow>
@@ -545,8 +613,83 @@ function NodeRows({
             aria-label={`Detail for ${node.name}`}
             className="h-auto bg-muted/50 p-0"
           >
-            <div className="flex flex-col gap-4 py-1 pr-6 pb-[22px] pl-[46px]">
-              <div className="flex items-center justify-between gap-4">
+            <div className="py-1 pr-6 pb-[22px] pl-[46px]">
+              <NodeDetail
+                node={node}
+                isOnline={isOnline}
+                isChecking={isChecking}
+                result={result}
+                error={error}
+                onCheck={onCheck}
+              />
+            </div>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  );
+}
+
+/** The row's actions, shared by the table row and the phone card so the two
+ *  cannot offer different ones. */
+function NodeMenu({
+  node,
+  isDeleting,
+  onCopyAddress,
+  onUnregister,
+}: {
+  node: Node;
+  isDeleting: boolean;
+  onCopyAddress: () => void;
+  onUnregister: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={isDeleting}
+          aria-label={`Actions for ${node.name}`}
+        >
+          {isDeleting ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[220px]">
+        <DropdownMenuItem onSelect={onCopyAddress}>
+          <Copy />
+          Copy address
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={onUnregister}>
+          <Trash2 />
+          Unregister node…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** What a health check found, or the offer to run one. Same body in the
+ *  expanded row and the expanded card. */
+function NodeDetail({
+  node,
+  isOnline,
+  isChecking,
+  result,
+  error,
+  onCheck,
+}: {
+  node: Node;
+  isOnline: boolean;
+  isChecking: boolean;
+  result?: HealthResult;
+  error?: string;
+  onCheck: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <div className="eyebrow">
                   Health check
                   {result ? (
@@ -616,11 +759,7 @@ function NodeRows({
                 <Fact label="Version" value={node.version || '-'} />
                 <Fact label="Last seen" value={formatLastSeen(node.lastSeen)} />
               </div>
-            </div>
-          </TableCell>
-        </TableRow>
-      ) : null}
-    </>
+    </div>
   );
 }
 
