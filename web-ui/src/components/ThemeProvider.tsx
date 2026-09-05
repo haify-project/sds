@@ -12,7 +12,14 @@ import {
   getColorTheme,
 } from '@/lib/themes';
 
-const COLOR_KEY = 'sds-theme-color';
+// `.v2` re-defaults every existing install once. The old key was written on
+// *any* pick, including the shipped default, so a stored `neutral` is
+// indistinguishable from "never chose anything" — and `neutral`'s black
+// primary was drawn for a monochrome white page, not for the warm paper and
+// blue --accent the redesign ships. Bumping the key is the honest, code-free
+// migration: everyone lands back on the designed look, and anyone who
+// deliberately re-picks `neutral` keeps it from then on.
+const COLOR_KEY = 'sds-theme-color.v2';
 const RADIUS_KEY = 'sds-theme-radius';
 
 type ThemeConfig = {
@@ -59,8 +66,9 @@ function ThemeTokens({ children }: { children: ReactNode }) {
     root.style.setProperty('--primary', t.primary);
     root.style.setProperty('--primary-foreground', t.primaryForeground);
     root.style.setProperty('--ring', t.ring);
-    root.style.setProperty('--sidebar-primary', t.primary);
-    root.style.setProperty('--sidebar-primary-foreground', t.primaryForeground);
+    // Only the ring, not --sidebar-primary: the redesign shrank the accent's
+    // sidebar footprint to `text-primary` on the active row's icon, so the
+    // pill-fill tokens have no reader left.
     root.style.setProperty('--sidebar-ring', t.ring);
     root.style.setProperty('--radius', `${radius}rem`);
   }, [color, radius, resolvedTheme]);

@@ -69,8 +69,6 @@ type NavItem = {
   name: string;
   href: string;
   icon: typeof LayoutDashboard;
-  /** Count pill on the right of the row. Omitted means no pill at all. */
-  badge?: number;
 };
 
 // Two groups, because the nine destinations answer two different questions:
@@ -98,8 +96,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-// Flat view of the same data, for the current-section lookup below.
-const navItems = navGroups.flatMap((g) => g.items);
+// Flat view of the same data, for the current-section lookup below. Sorted
+// deepest-path-first once at module load rather than on every render: the
+// lookup wants the most specific match, and the input is a constant.
+const navByDepth = navGroups
+  .flatMap((g) => g.items)
+  .sort((a, b) => b.href.length - a.href.length);
 
 // SidebarContent is the shared nav body, rendered both in the static desktop
 // sidebar and inside the mobile slide-in drawer. onNavigate lets the mobile
@@ -146,7 +148,10 @@ function SidebarContent({
         )}
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto">
+      {/* `overflow-y: auto` forces `overflow-x: auto` too, which would shave
+          the active pill's 1px outward ring on both sides. The px/-mx pair
+          gives the ring the pixel it needs without moving anything. */}
+      <nav className="-mx-px flex-1 space-y-5 overflow-y-auto px-px">
         {navGroups.map((group) => (
           <div key={group.label}>
             {/* The label is the point of the grouping; collapsed there is no
@@ -168,12 +173,12 @@ function SidebarContent({
                     title={collapsed ? item.name : undefined}
                     aria-label={collapsed ? item.name : undefined}
                     className={cn(
-                      'flex h-[34px] items-center gap-2.5 rounded-[7px] text-[13.5px] transition-colors',
+                      'flex h-[34px] items-center gap-2.5 rounded-md text-[13.5px] transition-colors',
                       collapsed ? 'justify-center px-0' : 'px-2.5',
                       isActive
                         ? // A white pill lifted off the paper — no left accent
                           // bar, the elevation alone is the selection.
-                          'bg-sidebar-accent font-semibold text-foreground shadow-[0_1px_2px_oklch(0.3_0.02_260/0.06),0_0_0_1px_var(--sidebar-border)]'
+                          'bg-sidebar-accent font-semibold text-foreground shadow-[0_1px_2px_var(--sidebar-pill-shadow),0_0_0_1px_var(--sidebar-border)]'
                         : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
                     )}
                   >
@@ -184,11 +189,6 @@ function SidebarContent({
                       )}
                     />
                     {!collapsed && item.name}
-                    {!collapsed && item.badge !== undefined && (
-                      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                        {item.badge}
-                      </span>
-                    )}
                   </Link>
                 );
               })}
@@ -197,16 +197,21 @@ function SidebarContent({
         ))}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-2.5 pt-4">
+      {/* No `mt-auto`: the sibling <nav> already carries `flex-1` in this
+          flex-col and pushes the footer down. One mechanism, not two. */}
+      <div className="flex flex-col gap-2.5 pt-4">
         {collapsed ? (
+          // All three Copilot toggles (here, the expanded card below, and the
+          // header button) answer to the same name, so a screen-reader or
+          // voice-control user has one word for one control.
           <button
             type="button"
             onClick={onToggleCopilot}
             aria-pressed={aiOpen}
-            aria-label="SDS Copilot"
-            title="SDS Copilot"
+            aria-label="Copilot"
+            title="Copilot"
             className={cn(
-              'flex h-9 items-center justify-center rounded-[7px] transition-colors',
+              'flex h-9 items-center justify-center rounded-md transition-colors',
               aiOpen
                 ? 'bg-accent text-accent-foreground'
                 : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
@@ -219,9 +224,9 @@ function SidebarContent({
             type="button"
             onClick={onToggleCopilot}
             aria-pressed={aiOpen}
-            title="SDS Copilot"
+            aria-label="Copilot"
             className={cn(
-              'rounded-[9px] border bg-card p-3 text-left transition-colors',
+              'rounded-lg border bg-card p-3 text-left transition-colors',
               aiOpen ? 'border-primary/50' : 'border-border hover:border-ring/40',
             )}
           >
@@ -278,13 +283,10 @@ export function MainLayout() {
   // Match the deepest nav item whose path prefixes the current location, so
   // sub-routes (e.g. /ha/create) still show their section title ("HA") and
   // highlight the right nav item instead of falling back to the default.
-  const current = [...navItems]
-    .sort((a, b) => b.href.length - a.href.length)
-    .find(
-      (n) =>
-        location.pathname === n.href ||
-        location.pathname.startsWith(n.href + '/'),
-    );
+  const current = navByDepth.find(
+    (n) =>
+      location.pathname === n.href || location.pathname.startsWith(n.href + '/'),
+  );
 
   return (
     <div className="flex h-screen bg-background">
@@ -370,7 +372,7 @@ export function MainLayout() {
               type="button"
               onClick={() => setAiOpen((v) => !v)}
               aria-pressed={aiOpen}
-              title="SDS Copilot"
+              aria-label="Copilot"
               className={cn(
                 'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
                 aiOpen

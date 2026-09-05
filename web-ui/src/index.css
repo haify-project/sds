@@ -19,7 +19,11 @@
   --secondary: oklch(0.955 0.005 85);
   --secondary-foreground: oklch(0.44 0.012 260);
   --muted: oklch(0.968 0.005 85);
-  --muted-foreground: oklch(0.56 0.012 260);
+  /* 0.53, not 0.56: this is the colour of `.eyebrow` (11px/500 — normal text,
+     so AA wants 4.5) and of every table column heading. At 0.56 it measured
+     4.35:1 on the paper and 4.24:1 on --muted; at 0.53 it is 4.94:1 and
+     4.81:1, still far subordinate to --foreground's 16.2:1. */
+  --muted-foreground: oklch(0.53 0.012 260);
   /* Blue tint rather than grey: selected and hover fills belong to the accent. */
   --accent: oklch(0.955 0.02 255);
   --accent-foreground: oklch(0.42 0.115 255);
@@ -42,6 +46,9 @@
   --sidebar-accent-foreground: oklch(0.22 0.012 260);
   --sidebar-border: oklch(0.925 0.006 85);
   --sidebar-ring: oklch(0.46 0.115 255);
+  /* The active nav pill's drop shadow. Tokenised because the light value is a
+     near-black ink that is simply invisible on the dark sidebar. */
+  --sidebar-pill-shadow: oklch(0.3 0.02 260 / 0.06);
   /* Health, not decoration: the four states a node, resource or gateway can
      be in. Kept out of the theme presets so a colour pick never restates
      "degraded" in violet. */
@@ -56,6 +63,17 @@
   --status-warn-text: oklch(0.53 0.15 75);
   --status-bad-text: oklch(0.54 0.2 27);
   --status-idle-text: oklch(0.50 0.01 260);
+  /* The badge fill. These are the *flattened* result of the 12% tint the soft
+     variants used to be — literal opaque colours rather than
+     `color-mix(..., transparent)`, because Tailwind emits the un-mixed
+     `var(--status-bad)` as the fallback outside `@supports (color:
+     color-mix(...))`. On a browser without color-mix that fallback paints the
+     badge at full saturation with tone-coloured text on top: illegible, not
+     merely wrong. A literal has no fallback to get wrong. */
+  --status-ok-soft: oklch(0.932 0.019 153);
+  --status-warn-soft: oklch(0.944 0.027 84);
+  --status-bad-soft: oklch(0.922 0.023 27);
+  --status-idle-soft: oklch(0.954 0.003 87);
 }
 
 .dark {
@@ -90,6 +108,10 @@
   --sidebar-accent-foreground: oklch(0.96 0.004 85);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.72 0.11 255);
+  /* Black, and much heavier: the sidebar ground is oklch(0.17), so anything
+     lighter than it — including the light theme's blue-grey ink — reads as
+     nothing at all. */
+  --sidebar-pill-shadow: oklch(0 0 0 / 0.35);
   --status-ok: oklch(0.7 0.14 155);
   --status-warn: oklch(0.78 0.14 75);
   --status-bad: oklch(0.68 0.19 27);
@@ -100,6 +122,11 @@
   --status-warn-text: var(--status-warn);
   --status-bad-text: var(--status-bad);
   --status-idle-text: var(--status-idle);
+  /* Same flattening, over the dark ground. */
+  --status-ok-soft: oklch(0.243 0.023 173);
+  --status-warn-soft: oklch(0.255 0.019 79);
+  --status-bad-soft: oklch(0.235 0.027 12);
+  --status-idle-soft: oklch(0.215 0.008 260);
 }
 
 @theme inline {
@@ -150,24 +177,13 @@
   --color-status-warn-text: var(--status-warn-text);
   --color-status-bad-text: var(--status-bad-text);
   --color-status-idle-text: var(--status-idle-text);
-  /* Soft variants for badge fills — a 12% tint stays legible under foreground
-     text in both themes, which a flat status colour at full chroma does not. */
-  --color-status-ok-soft: color-mix(in oklch, var(--status-ok) 12%, transparent);
-  --color-status-warn-soft: color-mix(
-    in oklch,
-    var(--status-warn) 12%,
-    transparent
-  );
-  --color-status-bad-soft: color-mix(
-    in oklch,
-    var(--status-bad) 12%,
-    transparent
-  );
-  --color-status-idle-soft: color-mix(
-    in oklch,
-    var(--status-idle) 12%,
-    transparent
-  );
+  /* Soft variants for badge fills. Plain `var()` — see the note on
+     --status-*-soft: a color-mix here would make the *unmixed* status colour
+     the fallback on browsers without color-mix. */
+  --color-status-ok-soft: var(--status-ok-soft);
+  --color-status-warn-soft: var(--status-warn-soft);
+  --color-status-bad-soft: var(--status-bad-soft);
+  --color-status-idle-soft: var(--status-idle-soft);
 }
 
 @layer base {

@@ -230,5 +230,10 @@ export const DEFAULT_COLOR = 'sds';
 export const DEFAULT_RADIUS = 0.625;
 
 export function getColorTheme(name: string): ColorTheme {
-  return BASE_COLORS.find((c) => c.name === name) ?? BASE_COLORS[0];
+  // Fall back to the named default, not to whatever happens to sit at index 0
+  // — the two coincide today only because `sds` is first in the list.
+  return (
+    BASE_COLORS.find((c) => c.name === name) ??
+    BASE_COLORS.find((c) => c.name === DEFAULT_COLOR)!
+  );
 }
