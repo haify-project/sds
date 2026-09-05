@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Plus, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { api } from '@/services/api';
+import type { ClusterEvent } from '@/services/events';
+import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 import { StatBand, StatBandItem } from '@/components/StatBand';
 import { SegmentBar } from '@/components/SegmentBar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
 import { RoleChip } from '@/components/RoleChip';
-import { toneOf } from '@/components/status';
+import { TONE_BG, TONE_TEXT, toneOf } from '@/components/status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -29,13 +31,14 @@ import { Separator } from '@/components/ui/separator';
 // to invalidate exactly the keys the page reads, and a key that drifts from its
 // useQuery below produces a button that looks like it works and refreshes
 // nothing.
-const PAGE_QUERY_KEYS = [
-  ['nodes'],
-  ['pools'],
-  ['resources'],
-  ['gateways'],
-  ['selfha'],
-] as const;
+const PAGE_QUERY_KEYS = {
+  nodes: ['nodes'],
+  pools: ['pools'],
+  resources: ['resources'],
+  gateways: ['gateways'],
+  selfHa: ['selfha'],
+  events: ['events', 'recent'],
+} as const;
 
 /** Coarse "how long ago", for a header line and a last-seen column. */
 function agoLabel(ms: number): string {
@@ -55,27 +58,27 @@ export function DashboardPage() {
     isLoading: nodesLoading,
     dataUpdatedAt: nodesUpdatedAt,
   } = useQuery({
-    queryKey: ['nodes'],
+    queryKey: PAGE_QUERY_KEYS.nodes,
     queryFn: () => api.getNodes(),
   });
 
   const { data: pools, isLoading: poolsLoading } = useQuery({
-    queryKey: ['pools'],
+    queryKey: PAGE_QUERY_KEYS.pools,
     queryFn: () => api.getPools(),
   });
 
   const { data: resources, isLoading: resourcesLoading } = useQuery({
-    queryKey: ['resources'],
+    queryKey: PAGE_QUERY_KEYS.resources,
     queryFn: () => api.getResources(),
   });
 
   const { data: gateways, isLoading: gatewaysLoading } = useQuery({
-    queryKey: ['gateways'],
+    queryKey: PAGE_QUERY_KEYS.gateways,
     queryFn: () => api.getGateways(),
   });
 
   const { data: selfHa, isLoading: selfHaLoading } = useQuery({
-    queryKey: ['selfha'],
+    queryKey: PAGE_QUERY_KEYS.selfHa,
     queryFn: () => api.getSelfHaStatus(),
   });
 
@@ -147,8 +150,12 @@ export function DashboardPage() {
   // control plane. Anything else would be invented.
   const haMembers = new Set(selfHa?.nodes ?? []);
 
+  // Any of this page's queries in flight — the button says so rather than
+  // looking inert while a wedged controller keeps it waiting.
+  const isFetching = useIsFetching();
+
   const refresh = () => {
-    for (const queryKey of PAGE_QUERY_KEYS) {
+    for (const queryKey of Object.values(PAGE_QUERY_KEYS)) {
       queryClient.invalidateQueries({ queryKey });
     }
   };
@@ -159,16 +166,20 @@ export function DashboardPage() {
         title="Cluster overview"
         description={
           <>
-            {selfHa?.enabled && activeNodeName ? (
+            {/* Three cases, not two. Self-HA enabled with no active node is
+                the failover window — the moment an operator is most likely to
+                be reading this line, and the one where saying "standalone"
+                would be a flat lie. An errored or unread query says nothing. */}
+            {selfHa === undefined ? null : !selfHa.enabled ? (
+              <>Standalone controller · </>
+            ) : activeNodeName ? (
               <>
                 Control plane on{' '}
-                <span className="font-mono text-foreground">
-                  {activeNodeName}
-                </span>
+                <span className="font-mono text-foreground">{activeNodeName}</span>
                 {' · '}
               </>
-            ) : selfHaLoading ? null : (
-              <>Standalone controller · </>
+            ) : (
+              <>Control plane · no active node · </>
             )}
             {selfHa?.vip ? (
               <>
@@ -177,13 +188,16 @@ export function DashboardPage() {
                 {' · '}
               </>
             ) : null}
-            synced {nodesUpdatedAt ? agoLabel(now - nodesUpdatedAt) : '—'}
+            synced{' '}
+            <span className="font-mono tabular-nums text-foreground">
+              {nodesUpdatedAt ? agoLabel(now - nodesUpdatedAt) : '—'}
+            </span>
           </>
         }
         actions={
           <>
-            <Button variant="outline" onClick={refresh}>
-              <RefreshCw />
+            <Button variant="outline" onClick={refresh} disabled={isFetching > 0}>
+              <RefreshCw className={cn(isFetching > 0 && 'animate-spin')} />
               Refresh
             </Button>
             {/* Resource creation is a dialog on the Resources page, not a route
@@ -266,11 +280,8 @@ export function DashboardPage() {
           />
         </StatBand>
 
-        {/* The mockup pairs this card with a recent-events card at 3/5 + 2/5.
-            There is no recent-events source on the client — services/events.ts
-            offers a live SSE subscription and nothing that can be read back —
-            so rather than a card of invented rows, Self-HA takes the width. */}
-        <Card className="gap-4 py-[18px]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+        <Card className="gap-4 py-[18px] lg:col-span-3">
           <CardHeader className="flex flex-row items-center justify-between px-5">
             <CardTitle className="flex items-center gap-2.5">
               <ShieldCheck className="h-[17px] w-[17px] text-primary" />
@@ -338,6 +349,9 @@ export function DashboardPage() {
             )}
           </CardContent>
         </Card>
+
+        <RecentEvents />
+        </div>
 
         {/* No CardHeader/CardContent here: the table draws its own row rule to
             the card's edges, which the card's padding would inset. */}
@@ -432,5 +446,90 @@ export function DashboardPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Severity → the tone vocabulary the rest of the console uses. The controller
+ *  sends "info" | "warning" | "critical"; `toneOf` does not know those words,
+ *  so the mapping is stated here rather than guessed from the message text. */
+const EVENT_TONE = {
+  critical: 'bad',
+  warning: 'warn',
+  info: 'idle',
+} as const;
+
+/**
+ * What just happened to the cluster, read back from the controller's bounded
+ * in-memory history. The SSE stream in services/events.ts is the live tail of
+ * the same bus — this is how a page that was not open at the time still shows
+ * the failover that woke someone up.
+ */
+function RecentEvents() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: PAGE_QUERY_KEYS.events,
+    queryFn: () => api.listEvents({ limit: 4 }),
+  });
+
+  // The controller returns oldest first; newest belongs at the top of a card
+  // this short.
+  const events: ClusterEvent[] = [...(data?.events ?? [])].reverse();
+
+  return (
+    <Card className="gap-4 py-[18px] lg:col-span-2">
+      <CardHeader className="flex flex-row items-center justify-between px-5">
+        <CardTitle>Recent events</CardTitle>
+        <Link to="/notifications" className="text-[12.5px] text-primary hover:underline">
+          All events
+        </Link>
+      </CardHeader>
+      <CardContent className="px-5">
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        ) : isError ? (
+          <p className="text-sm text-muted-foreground">Could not read the event history.</p>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing yet — the controller has published no events since it started.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {events.map((event, i) => {
+              const tone = EVENT_TONE[event.severity] ?? 'idle';
+              return (
+                <div
+                  key={event.id}
+                  className={cn(
+                    'flex gap-3 py-2.5',
+                    i > 0 && 'border-t border-border/70',
+                  )}
+                >
+                  {/* The rail repeats the severity; the word below carries it. */}
+                  <span
+                    aria-hidden
+                    className={cn('w-[3px] shrink-0 rounded-[2px]', TONE_BG[tone])}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] leading-snug">{event.message}</p>
+                    <p className="mt-1 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+                      <span className={cn('capitalize', TONE_TEXT[tone])}>{event.severity}</span>
+                      <span aria-hidden>·</span>
+                      <span className="font-mono tabular-nums">{event.type}</span>
+                      <span aria-hidden>·</span>
+                      <span className="font-mono tabular-nums">
+                        {new Date(event.timestamp).toLocaleTimeString()}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
