@@ -292,7 +292,8 @@ for the embed) → rebuild `sds-controller`.
 ## 8a. sds-ai — AI Copilot (optional; rides controller Self-HA)
 
 `sds-ai` is a separate Go **submodule** (`cmd/sds-ai`, its own `go.mod`, depends
-on `oss-agent`) that serves the Copilot the Web UI talks to. It also needs
+on `opsdoctor` — the library formerly published as `oss-agent`) that serves the
+Copilot the Web UI talks to. It also needs
 `sds-mcp` (built from `cmd/mcp`) as its MCP tool backend.
 
 - Binaries on every node (any may become the active controller):
@@ -304,7 +305,7 @@ on `oss-agent`) that serves the Copilot the Web UI talks to. It also needs
   ```
 - Config + knowledge live on the **Self-HA DRBD mount** so they follow failover:
   `/var/lib/sds/ai/` with `sds-ai.env` and `domain.toml`. Key env:
-  `OSS_LLM_API_KEY` / `OSS_LLM_BASE_URL` / `OSS_LLM_MODEL` (e.g. DashScope
+  `OPSDOCTOR_LLM_API_KEY` / `_BASE_URL` / `_MODEL` (e.g. DashScope
   `https://dashscope.aliyuncs.com/compatible-mode/v1` + `deepseek-v4-flash`),
   `SDS_AI_CONTROLLER=127.0.0.1:3374`, `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`,
   `SDS_AI_ADDR=:7634`. Routes: `GET /ai/health`, `POST /ai/chat/stream` (NDJSON).
@@ -321,6 +322,15 @@ on `oss-agent`) that serves the Copilot the Web UI talks to. It also needs
   `PartOf=drbd-services@sds-meta.target` / `BindsTo=drbd-promote@sds-meta.service`
   / `Requires=sds-controller.service` drop-in.) Verified: an `sds-cli ha evict
   sds-meta` moved controller + VIP + `sds-ai` together to the standby node.
+- **Upgrading the binary is a failover, not a restart.** The reactor drop-in makes
+  `sds-ai.service` `PartOf` the sds-meta target, so `systemctl restart sds-ai` on
+  the active node stops the *whole* target — VIP, controller and all — and the
+  resource is re-promoted wherever the race is won; the restart itself then fails
+  with `Dependency failed for sds-ai.service`. Measured 2026-09-05: node-b →
+  node-e, control plane down ~4 s. So install the new binary on **every** node
+  first (keep the old one as `/opt/sds/bin/sds-ai.prev`), then either accept that
+  failover or do it deliberately with `sds-cli ha evict sds-meta`. Never
+  `systemctl stop sds-ai` — same teardown, without the automatic re-promotion.
 
 ---
 

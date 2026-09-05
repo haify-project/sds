@@ -1,4 +1,4 @@
-// Command sds-ai hosts the SDS AI Copilot backend. It imports the oss-agent
+// Command sds-ai hosts the SDS AI Copilot backend. It imports the opsdoctor
 // library, wires it to the read-only sds-mcp cluster tools and the drbd-reactor
 // knowledge base, and serves a single NDJSON streaming endpoint the sds web-ui
 // Copilot sidebar talks to.
@@ -16,8 +16,8 @@
 //	SDS_AI_MCP_CMD        sds-mcp executable (default "sds-mcp")
 //	SDS_AI_EMB_DIM        embedding dim of the knowledge index (default 1024)
 //	SDS_AI_ALLOW_ORIGIN   CORS allow-origin (default "*")
-//	OSS_LLM_API_KEY / OSS_LLM_BASE_URL / OSS_LLM_MODEL   LLM (via oss-agent env fallback)
-//	OSS_EMB_MODEL / OSS_EMB_BASE_URL / OSS_EMB_API_KEY   embedder (must match the index)
+//	OPSDOCTOR_LLM_API_KEY / _BASE_URL / _MODEL   LLM (opsdoctor also reads the old OSS_* names)
+//	OPSDOCTOR_EMB_MODEL / _BASE_URL / _API_KEY   embedder (must match the index)
 package main
 
 import (
@@ -27,7 +27,7 @@ import (
 	"os"
 	"strconv"
 
-	ossagent "github.com/liliang-cn/oss-agent"
+	"github.com/liliang-cn/opsdoctor"
 )
 
 func envOr(key, def string) string {
@@ -56,16 +56,16 @@ func main() {
 		log.Fatal("SDS_AI_KNOWLEDGE_DB is required (path to drbd-reactor.db)")
 	}
 
-	ag, err := ossagent.New(ossagent.Config{
+	ag, err := opsdoctor.New(opsdoctor.Config{
 		KnowledgeDBPath: knowledgeDB,
 		DomainFile:      envOr("SDS_AI_DOMAIN", "ai/domain.toml"),
 		// The drbd-reactor.db index is 1024-dim; the embedder model comes from
-		// OSS_EMB_MODEL (must match how the index was built — see spec O1).
+		// OPSDOCTOR_EMB_MODEL (must match how the index was built — see spec O1).
 		EmbDim: atoiOr("SDS_AI_EMB_DIM", 1024),
 		// Mount the sds cluster tools read-only: only observational tools reach
 		// the agent; every change is proposed via suggest_action and approved in
 		// the UI, executed through the controller REST.
-		MCPServers: []ossagent.MCPServerSpec{{
+		MCPServers: []opsdoctor.MCPServerSpec{{
 			Name:      "sds",
 			Transport: "stdio",
 			Command:   envOr("SDS_AI_MCP_CMD", "sds-mcp"),
@@ -129,7 +129,7 @@ type chatBody struct {
 //	{"t":"tool","name":..,"args":{..}}   {"t":"tool_result","name":..}
 //	{"t":"text","d":".."}   {"t":"reset"}   {"t":"suggestion", <Suggestion>}
 //	{"t":"error","d":".."}   {"t":"done"}
-func streamHandler(ag *ossagent.Agent) http.HandlerFunc {
+func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "use POST", http.StatusMethodNotAllowed)
@@ -164,19 +164,19 @@ func streamHandler(ag *ossagent.Agent) http.HandlerFunc {
 		// dropped — so every turn of the sidebar started from nothing and
 		// "so how do I fix it" had no idea what "it" was. An empty id still
 		// runs stateless, which is what a scripted one-shot caller wants.
-		_, _, err := ag.Stream(r.Context(), body.SessionID, body.Message, func(ev ossagent.Event) {
+		_, _, err := ag.Stream(r.Context(), body.SessionID, body.Message, func(ev opsdoctor.Event) {
 			switch ev.Kind {
-			case ossagent.EventText:
+			case opsdoctor.EventText:
 				if ev.Text != "" {
 					frame(map[string]any{"t": "text", "d": ev.Text})
 				}
-			case ossagent.EventReset:
+			case opsdoctor.EventReset:
 				frame(map[string]any{"t": "reset"})
-			case ossagent.EventToolCall:
+			case opsdoctor.EventToolCall:
 				frame(map[string]any{"t": "tool", "name": ev.Tool, "args": ev.Args})
-			case ossagent.EventToolResult:
+			case opsdoctor.EventToolResult:
 				frame(map[string]any{"t": "tool_result", "name": ev.Tool})
-			case ossagent.EventSuggestion:
+			case opsdoctor.EventSuggestion:
 				if s := ev.Suggestion; s != nil {
 					frame(map[string]any{
 						"t":        "suggestion",
@@ -192,7 +192,7 @@ func streamHandler(ag *ossagent.Agent) http.HandlerFunc {
 						},
 					})
 				}
-			case ossagent.EventError:
+			case opsdoctor.EventError:
 				frame(map[string]any{"t": "error", "d": ev.Text})
 			}
 		})
