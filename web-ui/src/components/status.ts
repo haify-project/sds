@@ -6,7 +6,16 @@
  */
 export type StatusTone = 'ok' | 'warn' | 'bad' | 'idle';
 
-const GREEN = ['online', 'running', 'active', 'primary', 'uptodate', 'connected', 'healthy', 'enabled'];
+const GREEN = ['online',
+  'running',
+  // The gateway API says "started" where everything else says "running".
+  'started',
+  'active',
+  'primary',
+  'uptodate',
+  'connected',
+  'healthy',
+  'enabled'];
 const YELLOW = ['secondary', 'syncing', 'inconsistent', 'degraded', 'standby'];
 const RED = ['offline', 'stopped', 'inactive', 'failed', 'error', 'diskless', 'disconnected'];
 

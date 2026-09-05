@@ -99,10 +99,10 @@ function isRunning(state: string | undefined): boolean {
   return state === 'started' || state === 'running';
 }
 
-// `toneOf` knows "running", not the API's "started" — normalise before asking,
-// so the row's tick and the chain's dots cannot disagree about one gateway.
+// Thin alias: `toneOf` now knows "started" itself, so there is nothing to
+// normalise — kept as a name because the call sites read better for it.
 function gatewayTone(state: string | undefined): StatusTone {
-  return toneOf(isRunning(state) ? 'running' : state);
+  return toneOf(state);
 }
 
 function plural(n: number, word: string): string {
