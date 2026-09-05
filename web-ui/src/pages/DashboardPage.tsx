@@ -1,13 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
-import { Server, HardDrive, Boxes, Network, ShieldCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
+import { Plus, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { api } from '@/services/api';
+import { PageHeader } from '@/components/PageHeader';
+import { StatBand, StatBandItem } from '@/components/StatBand';
+import { SegmentBar } from '@/components/SegmentBar';
 import { StatusBadge } from '@/components/StatusBadge';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
+import { RoleChip } from '@/components/RoleChip';
+import { toneOf } from '@/components/status';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -21,8 +25,36 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 
+// The five queries this page is made of, in one place: the Refresh button has
+// to invalidate exactly the keys the page reads, and a key that drifts from its
+// useQuery below produces a button that looks like it works and refreshes
+// nothing.
+const PAGE_QUERY_KEYS = [
+  ['nodes'],
+  ['pools'],
+  ['resources'],
+  ['gateways'],
+  ['selfha'],
+] as const;
+
+/** Coarse "how long ago", for a header line and a last-seen column. */
+function agoLabel(ms: number): string {
+  const secs = Math.max(0, Math.round(ms / 1000));
+  if (secs < 5) return 'now';
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  return `${Math.floor(secs / 86400)}d ago`;
+}
+
 export function DashboardPage() {
-  const { data: nodes, isLoading: nodesLoading } = useQuery({
+  const queryClient = useQueryClient();
+
+  const {
+    data: nodes,
+    isLoading: nodesLoading,
+    dataUpdatedAt: nodesUpdatedAt,
+  } = useQuery({
     queryKey: ['nodes'],
     queryFn: () => api.getNodes(),
   });
@@ -46,6 +78,16 @@ export function DashboardPage() {
     queryKey: ['selfha'],
     queryFn: () => api.getSelfHaStatus(),
   });
+
+  // Everything on this page that reads "n seconds ago" is measured against a
+  // fixed timestamp, so without a tick it freezes at whatever it said when the
+  // page mounted — which is exactly the value an operator would trust. Five
+  // seconds matches the queries' staleTime; it is not a poll.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   const totalNodes = nodes?.nodes.length ?? 0;
   const onlineNodes =
@@ -73,181 +115,244 @@ export function DashboardPage() {
   const runningGateways =
     gateways?.gateways.filter((g) => g.state === 'running').length ?? 0;
 
+  // The segment bar is decorative, so the same node states are also spelled
+  // out beside it — counted by the word the controller actually used rather
+  // than by tone, because "3 online · 1 offline" says more than "3 ok · 1 bad".
+  const nodeStateCounts = new Map<string, number>();
+  for (const n of nodes?.nodes ?? []) {
+    nodeStateCounts.set(n.state, (nodeStateCounts.get(n.state) ?? 0) + 1);
+  }
+  const nodeStateWords = [...nodeStateCounts]
+    .map(([state, count]) => `${count} ${state}`)
+    .join(' · ');
+
+  const totalVolumes =
+    resources?.resources.reduce((acc, r) => acc + r.volumes.length, 0) ?? 0;
+  const drResources = resources?.resources.filter((r) => r.drNode).length ?? 0;
+  const quorumRiskResources =
+    resources?.resources.filter((r) => r.quorumRisk).length ?? 0;
+  const resourceDetail = [
+    `${totalVolumes} volume${totalVolumes === 1 ? '' : 's'}`,
+    drResources > 0 ? `${drResources} replicated off-site` : null,
+    quorumRiskResources > 0 ? `${quorumRiskResources} at quorum risk` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const stoppedGateways =
+    gateways?.gateways.filter((g) => g.state !== 'running') ?? [];
+
+  // Self-HA membership is the only role information the cluster hands us for a
+  // node: /selfha names the members and the address currently holding the
+  // control plane. Anything else would be invented.
+  const haMembers = new Set(selfHa?.nodes ?? []);
+
+  const refresh = () => {
+    for (const queryKey of PAGE_QUERY_KEYS) {
+      queryClient.invalidateQueries({ queryKey });
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Online Nodes
-            </CardTitle>
-            <Server className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {nodesLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
+    <div>
+      <PageHeader
+        title="Cluster overview"
+        description={
+          <>
+            {selfHa?.enabled && activeNodeName ? (
               <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {onlineNodes}
-                  <span className="text-xl text-muted-foreground">
-                    /{totalNodes}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  nodes reporting online
-                </p>
+                Control plane on{' '}
+                <span className="font-mono text-foreground">
+                  {activeNodeName}
+                </span>
+                {' · '}
               </>
+            ) : selfHaLoading ? null : (
+              <>Standalone controller · </>
             )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Storage
-            </CardTitle>
-            <HardDrive className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {poolsLoading ? (
-              <Skeleton className="h-8 w-32" />
-            ) : (
+            {selfHa?.vip ? (
               <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {freeStorage}
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {' '}
-                    / {totalStorage} GB free
-                  </span>
-                </div>
-                <Progress value={usagePct} className="mt-3" />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {usedStorage} GB used ({usagePct.toFixed(0)}%)
-                </p>
+                VIP{' '}
+                <span className="font-mono text-foreground">{selfHa.vip}</span>
+                {' · '}
               </>
-            )}
-          </CardContent>
-        </Card>
+            ) : null}
+            synced {nodesUpdatedAt ? agoLabel(now - nodesUpdatedAt) : '—'}
+          </>
+        }
+        actions={
+          <>
+            <Button variant="outline" onClick={refresh}>
+              <RefreshCw />
+              Refresh
+            </Button>
+            {/* Resource creation is a dialog on the Resources page, not a route
+                of its own, so this lands on the page that owns it. */}
+            <Button asChild>
+              <Link to="/resources">
+                <Plus />
+                New resource
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Resources
-            </CardTitle>
-            <Boxes className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {resourcesLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {totalResources}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  DRBD resources
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Gateways
-            </CardTitle>
-            <Network className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {gatewaysLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {runningGateways}
-                  <span className="text-xl text-muted-foreground">
-                    /{totalGateways}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  running gateways
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Controller Self-HA */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-            Controller Self-HA
-          </CardTitle>
-          {!selfHaLoading && (
-            <StatusBadge status={selfHa?.enabled ? 'enabled' : 'disabled'} />
-          )}
-        </CardHeader>
-        <CardContent>
-          {selfHaLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-48" />
-              <Skeleton className="h-5 w-64" />
-            </div>
-          ) : selfHa?.enabled ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex flex-wrap gap-x-8 gap-y-2">
-                <div>
-                  <span className="text-muted-foreground">VIP: </span>
-                  <span className="font-medium">{selfHa.vip || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Active node: </span>
-                  <span className="font-medium">{activeNodeName || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Resource: </span>
-                  <span className="font-medium">{selfHa.resource || '-'}</span>
-                </div>
+      <div className="space-y-[18px]">
+        <StatBand>
+          <StatBandItem
+            label="Online nodes"
+            value={onlineNodes}
+            unit={`/${totalNodes}`}
+            loading={nodesLoading}
+            detail={
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <SegmentBar
+                  segments={(nodes?.nodes ?? []).map((n) => toneOf(n.state))}
+                />
+                <span className="text-[11.5px]">{nodeStateWords || '—'}</span>
               </div>
-              {selfHa.nodes && selfHa.nodes.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-foreground">Members:</span>
-                    {selfHa.nodes.map((n) => (
-                      <Badge
-                        key={n}
-                        variant={n === activeNodeName ? 'default' : 'secondary'}
-                      >
-                        {n}
-                        {n === activeNodeName && ' (active)'}
-                      </Badge>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Standalone controller — self-HA is not enabled.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            }
+          />
+          <StatBandItem
+            label="Storage"
+            value={freeStorage}
+            unit={`of ${totalStorage} GB free`}
+            grow={1.6}
+            loading={poolsLoading}
+            detail={
+              <>
+                <Progress value={usagePct} className="h-[5px]" />
+                <p className="mt-1.5">
+                  <span className="font-mono tabular-nums">{usedStorage}</span>{' '}
+                  GB used (
+                  <span className="font-mono tabular-nums">
+                    {usagePct.toFixed(0)}%
+                  </span>
+                  )
+                </p>
+              </>
+            }
+          />
+          <StatBandItem
+            label="DRBD resources"
+            value={totalResources}
+            loading={resourcesLoading}
+            detail={resourceDetail}
+          />
+          <StatBandItem
+            label="Gateways"
+            value={runningGateways}
+            unit={`/${totalGateways}`}
+            loading={gatewaysLoading}
+            detail={
+              stoppedGateways.length > 0 ? (
+                <span className="text-status-warn-text">
+                  {stoppedGateways
+                    .slice(0, 2)
+                    .map((g) => g.name)
+                    .join(', ')}
+                  {stoppedGateways.length > 2
+                    ? ` +${stoppedGateways.length - 2} more`
+                    : ''}{' '}
+                  not running
+                </span>
+              ) : totalGateways > 0 ? (
+                'all running'
+              ) : (
+                'none configured'
+              )
+            }
+          />
+        </StatBand>
 
-      {/* Cluster nodes table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Cluster Nodes</CardTitle>
-        </CardHeader>
-        <CardContent>
+        {/* The mockup pairs this card with a recent-events card at 3/5 + 2/5.
+            There is no recent-events source on the client — services/events.ts
+            offers a live SSE subscription and nothing that can be read back —
+            so rather than a card of invented rows, Self-HA takes the width. */}
+        <Card className="gap-4 py-[18px]">
+          <CardHeader className="flex flex-row items-center justify-between px-5">
+            <CardTitle className="flex items-center gap-2.5">
+              <ShieldCheck className="h-[17px] w-[17px] text-primary" />
+              Controller Self-HA
+            </CardTitle>
+            {!selfHaLoading && (
+              <StatusBadge status={selfHa?.enabled ? 'enabled' : 'disabled'} />
+            )}
+          </CardHeader>
+          <CardContent className="px-5">
+            {selfHaLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-5 w-64" />
+              </div>
+            ) : selfHa?.enabled ? (
+              <div className="space-y-[18px]">
+                <div className="grid grid-cols-3 gap-3.5">
+                  <div>
+                    <div className="eyebrow">Active node</div>
+                    <div className="mt-1.5 font-mono text-sm">
+                      {activeNodeName || '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="eyebrow">Resource</div>
+                    <div className="mt-1.5 font-mono text-sm">
+                      {selfHa.resource || '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="eyebrow">VIP</div>
+                    <div className="mt-1.5 font-mono text-sm tabular-nums">
+                      {selfHa.vip || '-'}
+                    </div>
+                  </div>
+                </div>
+                {selfHa.nodes && selfHa.nodes.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="eyebrow">Members</div>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        {selfHa.nodes.map((n) => (
+                          <Badge
+                            key={n}
+                            variant={
+                              n === activeNodeName ? 'default' : 'secondary'
+                            }
+                            className="font-mono font-normal"
+                          >
+                            {n}
+                            {n === activeNodeName && ' (active)'}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Standalone controller — self-HA is not enabled.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* No CardHeader/CardContent here: the table draws its own row rule to
+            the card's edges, which the card's padding would inset. */}
+        <Card className="gap-0 overflow-hidden py-0">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3.5">
+            <div className="text-[14.5px] font-semibold">Cluster nodes</div>
+            <Link
+              to="/nodes"
+              className="text-[12.5px] text-primary hover:underline"
+            >
+              Manage nodes
+            </Link>
+          </div>
           {nodesLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 px-5 pb-5">
               {Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
@@ -263,36 +368,69 @@ export function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <StatusTickHead />
+                  <TableHead>Node</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>Hostname</TableHead>
+                  <TableHead>
+                    {selfHa?.enabled && selfHa.resource
+                      ? `Role in ${selfHa.resource}`
+                      : 'Self-HA role'}
+                  </TableHead>
                   <TableHead>State</TableHead>
-                  <TableHead>Version</TableHead>
+                  <TableHead className="pr-5 text-right">Last seen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {nodes?.nodes.map((node) => (
-                  <TableRow key={node.name}>
-                    <TableCell className="font-medium">{node.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {node.address}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {node.hostname}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={node.state} />
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {node.version}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {nodes?.nodes.map((node) => {
+                  const lastSeenTs = Number(node.lastSeen);
+                  const isMember = haMembers.has(node.name);
+                  return (
+                    <TableRow key={node.name}>
+                      <StatusTickCell status={node.state} />
+                      <TableCell>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-mono font-medium">
+                            {node.name}
+                          </span>
+                          <span className="text-[11.5px] text-muted-foreground">
+                            {node.hostname}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono tabular-nums">
+                        {node.address}
+                      </TableCell>
+                      <TableCell>
+                        {!selfHa?.enabled ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : isMember ? (
+                          <RoleChip
+                            role={
+                              node.name === activeNodeName
+                                ? 'Primary'
+                                : 'Secondary'
+                            }
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">
+                            not a member
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={node.state} />
+                      </TableCell>
+                      <TableCell className="pr-5 text-right font-mono tabular-nums text-muted-foreground">
+                        {lastSeenTs ? agoLabel(now - lastSeenTs * 1000) : '-'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
