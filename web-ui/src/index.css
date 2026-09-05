@@ -61,7 +61,7 @@
      3.97:1). Same hue and chroma, dropped in lightness until they pass. */
   --status-ok-text: oklch(0.50 0.14 155);
   --status-warn-text: oklch(0.53 0.15 75);
-  --status-bad-text: oklch(0.54 0.2 27);
+  --status-bad-text: oklch(0.52 0.2 27);
   --status-idle-text: oklch(0.50 0.01 260);
   /* The badge fill. These are the *flattened* result of the 12% tint the soft
      variants used to be — literal opaque colours rather than
@@ -121,7 +121,9 @@
   --status-ok-text: var(--status-ok);
   --status-warn-text: var(--status-warn);
   --status-bad-text: var(--status-bad);
-  --status-idle-text: var(--status-idle);
+  /* Except idle: its fill and its tint are the same hue a few L apart, so
+     aliasing text to the fill lands at 2.9:1. Lift the text instead. */
+  --status-idle-text: oklch(0.74 0.01 260);
   /* Same flattening, over the dark ground. */
   --status-ok-soft: oklch(0.243 0.023 173);
   --status-warn-soft: oklch(0.255 0.019 79);
