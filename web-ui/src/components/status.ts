@@ -34,6 +34,18 @@ export const TONE_BG: Record<StatusTone, string> = {
 };
 
 /**
+ * Tone → text colour alone. `TONE_SOFT` bundles a tinted fill with its readable
+ * text colour; a status word rendered as bare text on a row needs the text half
+ * on its own. Same `-text` tokens, so a word and a badge cannot drift apart.
+ */
+export const TONE_TEXT: Record<StatusTone, string> = {
+  ok: 'text-status-ok-text',
+  warn: 'text-status-warn-text',
+  bad: 'text-status-bad-text',
+  idle: 'text-status-idle-text',
+};
+
+/**
  * Tinted fill plus the text colour that is actually readable on it — the
  * `-text` tokens, not the fill colours, which fail AA over their own 12% tint
  * in light mode.
