@@ -6,76 +6,91 @@
 
 :root {
   --radius: 0.625rem;
-  /* Tailwind/shadcn neutral default — pure monochrome, no accent hue. */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Warm paper, not white: a console read for hours should not glare. One
+     deep-blue accent carries every affordance; everything else is ink. */
+  --background: oklch(0.977 0.004 85);
+  --foreground: oklch(0.22 0.012 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.22 0.012 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.205 0 0);
-  --chart-2: oklch(0.4 0 0);
-  --chart-3: oklch(0.556 0 0);
-  --chart-4: oklch(0.708 0 0);
-  --chart-5: oklch(0.85 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.22 0.012 260);
+  --primary: oklch(0.46 0.115 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.005 85);
+  --secondary-foreground: oklch(0.44 0.012 260);
+  --muted: oklch(0.968 0.005 85);
+  --muted-foreground: oklch(0.56 0.012 260);
+  /* Blue tint rather than grey: selected and hover fills belong to the accent. */
+  --accent: oklch(0.955 0.02 255);
+  --accent-foreground: oklch(0.42 0.115 255);
+  --destructive: oklch(0.58 0.2 27);
+  --border: oklch(0.915 0.006 85);
+  --input: oklch(0.915 0.006 85);
+  --ring: oklch(0.46 0.115 255);
+  --chart-1: oklch(0.22 0.012 260);
+  --chart-2: oklch(0.38 0.01 260);
+  --chart-3: oklch(0.54 0.01 260);
+  --chart-4: oklch(0.7 0.01 260);
+  --chart-5: oklch(0.85 0.01 260);
+  /* The sidebar is the same paper as the page — only the border separates them. */
+  --sidebar: oklch(0.977 0.004 85);
+  --sidebar-foreground: oklch(0.22 0.012 260);
+  --sidebar-primary: oklch(0.46 0.115 255);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  /* White, because the active nav pill lifts off the paper instead of tinting it. */
+  --sidebar-accent: oklch(1 0 0);
+  --sidebar-accent-foreground: oklch(0.22 0.012 260);
+  --sidebar-border: oklch(0.925 0.006 85);
+  --sidebar-ring: oklch(0.46 0.115 255);
+  /* Health, not decoration: the four states a node, resource or gateway can
+     be in. Kept out of the theme presets so a colour pick never restates
+     "degraded" in violet. */
+  --status-ok: oklch(0.62 0.14 155);
+  --status-warn: oklch(0.72 0.15 75);
+  --status-bad: oklch(0.58 0.2 27);
+  --status-idle: oklch(0.78 0.008 260);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.17 0.008 260);
+  --foreground: oklch(0.96 0.004 85);
+  --card: oklch(0.21 0.008 260);
+  --card-foreground: oklch(0.96 0.004 85);
+  --popover: oklch(0.21 0.008 260);
+  --popover-foreground: oklch(0.96 0.004 85);
+  --primary: oklch(0.72 0.11 255);
+  --primary-foreground: oklch(0.17 0.008 260);
+  --secondary: oklch(0.26 0.01 260);
+  --secondary-foreground: oklch(0.96 0.004 85);
+  --muted: oklch(0.26 0.01 260);
+  --muted-foreground: oklch(0.7 0.01 260);
+  --accent: oklch(0.3 0.04 255);
+  --accent-foreground: oklch(0.85 0.06 255);
+  --destructive: oklch(0.68 0.19 27);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.985 0 0);
-  --chart-2: oklch(0.8 0 0);
-  --chart-3: oklch(0.708 0 0);
-  --chart-4: oklch(0.556 0 0);
-  --chart-5: oklch(0.4 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.922 0 0);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.72 0.11 255);
+  --chart-1: oklch(0.96 0.004 85);
+  --chart-2: oklch(0.82 0.01 260);
+  --chart-3: oklch(0.68 0.01 260);
+  --chart-4: oklch(0.54 0.01 260);
+  --chart-5: oklch(0.4 0.01 260);
+  --sidebar: oklch(0.17 0.008 260);
+  --sidebar-foreground: oklch(0.96 0.004 85);
+  --sidebar-primary: oklch(0.72 0.11 255);
+  --sidebar-primary-foreground: oklch(0.17 0.008 260);
+  --sidebar-accent: oklch(0.24 0.01 260);
+  --sidebar-accent-foreground: oklch(0.96 0.004 85);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.72 0.11 255);
+  --status-ok: oklch(0.7 0.14 155);
+  --status-warn: oklch(0.78 0.14 75);
+  --status-bad: oklch(0.68 0.19 27);
+  --status-idle: oklch(0.5 0.01 260);
 }
 
 @theme inline {
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto,
+  --font-sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI',
     sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo,
     monospace;
@@ -114,6 +129,28 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-status-ok: var(--status-ok);
+  --color-status-warn: var(--status-warn);
+  --color-status-bad: var(--status-bad);
+  --color-status-idle: var(--status-idle);
+  /* Soft variants for badge fills — a 12% tint stays legible under foreground
+     text in both themes, which a flat status colour at full chroma does not. */
+  --color-status-ok-soft: color-mix(in oklch, var(--status-ok) 12%, transparent);
+  --color-status-warn-soft: color-mix(
+    in oklch,
+    var(--status-warn) 12%,
+    transparent
+  );
+  --color-status-bad-soft: color-mix(
+    in oklch,
+    var(--status-bad) 12%,
+    transparent
+  );
+  --color-status-idle-soft: color-mix(
+    in oklch,
+    var(--status-idle) 12%,
+    transparent
+  );
 }
 
 @layer base {
@@ -125,7 +162,6 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv03', 'cv04', 'ss01';
   }
 
   /* Numeric metrics, ports, addresses and identifiers read as data, not prose. */
@@ -164,5 +200,15 @@
   /* Minimal: a plain canvas. The whitespace does the work, not texture. */
   .app-canvas {
     background-color: var(--background);
+  }
+
+  /* The small uppercase label above a section, a column or a metric. One rule
+     rather than five classes repeated, because it appears on every page. */
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--muted-foreground);
   }
 }

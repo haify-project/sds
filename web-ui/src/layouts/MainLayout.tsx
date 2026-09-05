@@ -65,17 +65,41 @@ function PageFallback() {
   );
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Nodes', href: '/nodes', icon: Server },
-  { name: 'Pools', href: '/pools', icon: Database },
-  { name: 'Resources', href: '/resources', icon: Box },
-  { name: 'Gateways', href: '/gateways', icon: Network },
-  { name: 'HA', href: '/ha', icon: ShieldCheck },
-  { name: 'Notifications', href: '/notifications', icon: BellRing },
-  { name: 'Access', href: '/access', icon: Lock },
-  { name: 'Logs', href: '/logs', icon: ScrollText },
+type NavItem = {
+  name: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  /** Count pill on the right of the row. Omitted means no pill at all. */
+  badge?: number;
+};
+
+// Two groups, because the nine destinations answer two different questions:
+// "what is the cluster made of" and "what is it doing / who may touch it".
+// Nine flat rows made the operator read the whole list every time.
+const navGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: 'Cluster',
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Nodes', href: '/nodes', icon: Server },
+      { name: 'Pools', href: '/pools', icon: Database },
+      { name: 'Resources', href: '/resources', icon: Box },
+      { name: 'Gateways', href: '/gateways', icon: Network },
+      { name: 'HA', href: '/ha', icon: ShieldCheck },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { name: 'Notifications', href: '/notifications', icon: BellRing },
+      { name: 'Access', href: '/access', icon: Lock },
+      { name: 'Logs', href: '/logs', icon: ScrollText },
+    ],
+  },
 ];
+
+// Flat view of the same data, for the current-section lookup below.
+const navItems = navGroups.flatMap((g) => g.items);
 
 // SidebarContent is the shared nav body, rendered both in the static desktop
 // sidebar and inside the mobile slide-in drawer. onNavigate lets the mobile
@@ -87,69 +111,139 @@ function SidebarContent({
   pathname,
   onNavigate,
   collapsed = false,
+  aiOpen,
+  onToggleCopilot,
 }: {
   pathname: string;
   onNavigate?: () => void;
   collapsed?: boolean;
+  aiOpen: boolean;
+  onToggleCopilot: () => void;
 }) {
   return (
-    <>
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 flex-col py-5',
+        collapsed ? 'px-2' : 'px-3',
+      )}
+    >
       <div
         className={cn(
-          'flex items-center py-5',
-          collapsed ? 'justify-center px-0' : 'gap-2.5 px-5',
+          'flex items-center pb-5',
+          collapsed ? 'justify-center' : 'gap-2.5 px-2.5',
         )}
       >
-        <HardDrive className="h-5 w-5 shrink-0 text-primary" />
+        <HardDrive className="size-5 shrink-0 text-primary" />
         {!collapsed && (
           <div className="leading-tight">
-            <h1 className="text-sm font-semibold tracking-tight">
+            <h1 className="text-[13.5px] font-semibold tracking-tight">
               SDS Controller
             </h1>
-            <p className="text-[0.7rem] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               Software Defined Storage
             </p>
           </div>
         )}
       </div>
-      <nav className={cn('flex-1 space-y-0.5 py-2', collapsed ? 'px-2' : 'px-3')}>
-        {navigation.map((item) => {
-          const isActive =
-            pathname === item.href || pathname.startsWith(item.href + '/');
-          return (
-            <Link
-              key={item.name}
-              to={item.href}
-              onClick={onNavigate}
-              // Collapsed leaves only an icon, so the name has to survive for
-              // screen readers and as a hover hint.
-              title={collapsed ? item.name : undefined}
-              aria-label={collapsed ? item.name : undefined}
-              className={cn(
-                'flex items-center rounded-md py-2 text-sm transition-colors',
-                collapsed ? 'justify-center px-0' : 'gap-3 px-3',
-                isActive
-                  ? 'bg-sidebar-primary font-medium text-sidebar-primary-foreground'
-                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-              )}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && item.name}
-            </Link>
-          );
-        })}
+
+      <nav className="flex-1 space-y-5 overflow-y-auto">
+        {navGroups.map((group) => (
+          <div key={group.label}>
+            {/* The label is the point of the grouping; collapsed there is no
+                room for it and the gap between blocks carries it instead. */}
+            {!collapsed && (
+              <div className="eyebrow px-2.5 pb-2">{group.label}</div>
+            )}
+            <div className="flex flex-col gap-0.5">
+              {group.items.map((item) => {
+                const isActive =
+                  pathname === item.href || pathname.startsWith(item.href + '/');
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    onClick={onNavigate}
+                    // Collapsed leaves only an icon, so the name has to survive
+                    // for screen readers and as a hover hint.
+                    title={collapsed ? item.name : undefined}
+                    aria-label={collapsed ? item.name : undefined}
+                    className={cn(
+                      'flex h-[34px] items-center gap-2.5 rounded-[7px] text-[13.5px] transition-colors',
+                      collapsed ? 'justify-center px-0' : 'px-2.5',
+                      isActive
+                        ? // A white pill lifted off the paper — no left accent
+                          // bar, the elevation alone is the selection.
+                          'bg-sidebar-accent font-semibold text-foreground shadow-[0_1px_2px_oklch(0.3_0.02_260/0.06),0_0_0_1px_var(--sidebar-border)]'
+                        : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
+                    )}
+                  >
+                    <item.icon
+                      className={cn(
+                        'size-[17px] shrink-0',
+                        isActive && 'text-primary',
+                      )}
+                    />
+                    {!collapsed && item.name}
+                    {!collapsed && item.badge !== undefined && (
+                      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
-      <div
-        className={cn(
-          'border-t border-sidebar-border py-3',
-          collapsed ? 'px-0 text-center' : 'px-4',
+
+      <div className="mt-auto flex flex-col gap-2.5 pt-4">
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={onToggleCopilot}
+            aria-pressed={aiOpen}
+            aria-label="SDS Copilot"
+            title="SDS Copilot"
+            className={cn(
+              'flex h-9 items-center justify-center rounded-[7px] transition-colors',
+              aiOpen
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+            )}
+          >
+            <Sparkles className="size-[17px]" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onToggleCopilot}
+            aria-pressed={aiOpen}
+            title="SDS Copilot"
+            className={cn(
+              'rounded-[9px] border bg-card p-3 text-left transition-colors',
+              aiOpen ? 'border-primary/50' : 'border-border hover:border-ring/40',
+            )}
+          >
+            <span className="flex items-center gap-2 text-[13px] font-semibold">
+              <Sparkles className="size-4 shrink-0 text-primary" />
+              Copilot
+            </span>
+            <span className="mt-1.5 block text-[12px] leading-snug text-muted-foreground">
+              Ask about pools, quorum or a failover.
+            </span>
+          </button>
         )}
-      >
-        <span className="font-mono text-[0.7rem] text-muted-foreground">
+        <span
+          className={cn(
+            'font-mono text-[11px] text-muted-foreground',
+            collapsed ? 'text-center' : 'px-2.5',
+          )}
+        >
           {collapsed ? 'v1.8' : 'v1.8.1'}
         </span>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -184,7 +278,7 @@ export function MainLayout() {
   // Match the deepest nav item whose path prefixes the current location, so
   // sub-routes (e.g. /ha/create) still show their section title ("HA") and
   // highlight the right nav item instead of falling back to the default.
-  const current = [...navigation]
+  const current = [...navItems]
     .sort((a, b) => b.href.length - a.href.length)
     .find(
       (n) =>
@@ -198,10 +292,15 @@ export function MainLayout() {
       <aside
         className={cn(
           'hidden flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex',
-          collapsed ? 'w-16' : 'w-60',
+          collapsed ? 'w-16' : 'w-[244px]',
         )}
       >
-        <SidebarContent pathname={location.pathname} collapsed={collapsed} />
+        <SidebarContent
+          pathname={location.pathname}
+          collapsed={collapsed}
+          aiOpen={aiOpen}
+          onToggleCopilot={() => setAiOpen((v) => !v)}
+        />
       </aside>
 
       {/* Mobile drawer — slides in over the content when the hamburger opens it. */}
@@ -217,6 +316,12 @@ export function MainLayout() {
             <SidebarContent
               pathname={location.pathname}
               onNavigate={() => setNavOpen(false)}
+              aiOpen={aiOpen}
+              // The Copilot panel would open behind the drawer otherwise.
+              onToggleCopilot={() => {
+                setNavOpen(false);
+                setAiOpen((v) => !v);
+              }}
             />
           </aside>
         </div>
@@ -246,7 +351,7 @@ export function MainLayout() {
             >
               <PanelLeft className="h-5 w-5" />
             </button>
-            <h2 className="text-sm font-semibold tracking-tight">
+            <h2 className="text-[13.5px] font-semibold tracking-tight">
               {current?.name ?? 'Dashboard'}
             </h2>
             {isFetching > 0 && (
@@ -269,7 +374,7 @@ export function MainLayout() {
               className={cn(
                 'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
                 aiOpen
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
               )}
             >
@@ -280,7 +385,7 @@ export function MainLayout() {
             <UserMenu />
           </div>
         </header>
-        <main className="app-canvas flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+        <main className="app-canvas flex-1 overflow-auto p-6 lg:px-8 lg:py-6">
           <Suspense fallback={<PageFallback />}>
             <Outlet />
           </Suspense>
