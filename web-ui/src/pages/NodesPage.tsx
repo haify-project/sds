@@ -2,24 +2,40 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Server,
-  HeartPulse,
-  Info,
   Plus,
   Trash2,
   Loader2,
-  CheckCircle2,
-  XCircle,
+  Check,
+  X,
+  ChevronRight,
+  ChevronDown,
+  MoreHorizontal,
+  Copy,
+  Activity,
 } from 'lucide-react';
 import { api, type Node, type HealthInfo } from '@/services/api';
-import { StatusBadge } from '@/components/StatusBadge';
 import { toast } from 'sonner';
+import { cn, copyToClipboard } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
+import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
+import { TONE_BG, toneOf, type StatusTone } from '@/components/status';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -37,19 +53,78 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+
+/** Body cells span the tick gutter plus six columns; one constant so the
+ *  expanded row cannot drift out of the grid when a column is added. */
+const COLUMN_COUNT = 7;
 
 function formatLastSeen(lastSeen: string): string {
   const ts = Number(lastSeen);
   if (!ts) return '-';
   return new Date(ts * 1000).toLocaleString();
 }
+
+/** "41s ago" scans in a column; a locale timestamp does not. The absolute
+ *  value stays reachable as the cell's title and in the expanded facts. */
+function formatAge(lastSeen: string): string {
+  const ts = Number(lastSeen);
+  if (!ts) return '-';
+  const secs = Math.floor(Date.now() / 1000 - ts);
+  if (secs < 0) return 'now';
+  if (secs < 5) return 'now';
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  return `${Math.floor(secs / 86400)}d ago`;
+}
+
+/**
+ * Tone → text colour. `TONE_SOFT` bundles a tinted fill with its readable text
+ * colour; the readiness word is bare text on the row, so it needs the text
+ * half alone. Literal strings so the Tailwind scanner still sees them.
+ */
+const TONE_TEXT: Record<StatusTone, string> = {
+  ok: 'text-status-ok-text',
+  warn: 'text-status-warn-text',
+  bad: 'text-status-bad-text',
+  idle: 'text-status-idle-text',
+};
+
+type Readiness = {
+  dots: { label: string; tone: StatusTone }[];
+  word: string;
+  tone: StatusTone;
+};
+
+/**
+ * What the promoter's start chain needs, reduced to three dots and one word.
+ * The word is not optional: the dots repeat it, they never carry it alone.
+ * Ordering is worst-first — a missing DRBD is the answer even if the reactor
+ * is also stopped.
+ */
+function readinessOf(h: HealthInfo): Readiness {
+  const dots: Readiness['dots'] = [
+    { label: 'DRBD', tone: h.drbdInstalled ? 'ok' : 'bad' },
+    {
+      label: 'drbd-reactor',
+      tone: !h.drbdReactorInstalled ? 'bad' : h.drbdReactorRunning ? 'ok' : 'warn',
+    },
+    { label: 'resource agents', tone: h.resourceAgentsInstalled ? 'ok' : 'bad' },
+  ];
+  if (!h.drbdInstalled) return { dots, word: 'DRBD missing', tone: 'bad' };
+  if (!h.drbdReactorInstalled) return { dots, word: 'reactor missing', tone: 'bad' };
+  if (!h.resourceAgentsInstalled) return { dots, word: 'agents missing', tone: 'bad' };
+  if (!h.drbdReactorRunning) return { dots, word: 'reactor stopped', tone: 'warn' };
+  return { dots, word: 'ready', tone: 'ok' };
+}
+
+/** A checked node's result plus when it was taken — the expanded row states the
+ *  time, because a health check is a reading, not a live property. */
+type HealthResult = { info: HealthInfo; at: number };
 
 export function NodesPage() {
   const queryClient = useQueryClient();
@@ -59,18 +134,34 @@ export function NodesPage() {
   });
 
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [healthNode, setHealthNode] = useState<string | null>(null);
-  const [healthData, setHealthData] = useState<HealthInfo | null>(null);
-  const [detailsNode, setDetailsNode] = useState<Node | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [confirmNode, setConfirmNode] = useState<Node | null>(null);
+
+  // Health is per node, not a single slot: the page can now show every node's
+  // reading at once, and "Check all" fires several checks concurrently.
+  const [health, setHealth] = useState<Record<string, HealthResult>>({});
+  const [healthErrors, setHealthErrors] = useState<Record<string, string>>({});
+  const [checking, setChecking] = useState<string[]>([]);
 
   const healthCheckMutation = useMutation({
     mutationFn: (nodeName: string) => api.healthCheck(nodeName),
-    onSuccess: (data) => {
-      setHealthData(data.health);
+    onMutate: (nodeName) => {
+      setChecking((c) => (c.includes(nodeName) ? c : [...c, nodeName]));
+      setHealthErrors(({ [nodeName]: _dropped, ...rest }) => rest);
     },
-    onError: (e: Error) => {
+    onSuccess: (data, nodeName) => {
+      setHealth((h) => ({ ...h, [nodeName]: { info: data.health, at: Date.now() } }));
+    },
+    onError: (e: Error, nodeName) => {
       toast.error(e.message);
-      setHealthNode(null);
+      // The failure used to close the dialog and survive only as a toast. It
+      // now stays where the answer was expected, so a dismissed toast is not
+      // the only record of it.
+      setHealthErrors((x) => ({ ...x, [nodeName]: e.message }));
+      setExpanded(nodeName);
+    },
+    onSettled: (_data, _error, nodeName) => {
+      setChecking((c) => c.filter((n) => n !== nodeName));
     },
   });
 
@@ -83,184 +174,457 @@ export function NodesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const handleHealthCheck = (nodeName: string) => {
-    setHealthNode(nodeName);
-    setHealthData(null);
-    healthCheckMutation.mutate(nodeName);
+  const list = nodes?.nodes ?? [];
+  const online = list.filter((n) => n.state === 'online');
+  const checkedTimes = Object.values(health).map((h) => h.at);
+  const lastCheck = checkedTimes.length ? Math.max(...checkedTimes) : null;
+
+  const copyAddress = async (address: string) => {
+    const ok = await copyToClipboard(address);
+    if (ok) toast.success('Address copied');
+    else toast.error('Could not copy address');
   };
 
-  const closeHealthDialog = (open: boolean) => {
-    if (!open) {
-      setHealthNode(null);
-      setHealthData(null);
-    }
-  };
+  // N read-only GETs, one per online node. Offline nodes are excluded for the
+  // same reason the per-row button is disabled for them.
+  const checkAll = () => online.forEach((n) => healthCheckMutation.mutate(n.name));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Storage Nodes</h2>
-        <Button onClick={() => setRegisterOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Register Node
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Nodes"
+        description={
+          <>
+            <span className="font-mono tabular-nums text-foreground">{list.length}</span>{' '}
+            registered ·{' '}
+            <span className="font-mono tabular-nums text-foreground">{online.length}</span>{' '}
+            online
+            {lastCheck ? (
+              <>
+                {' '}
+                · last health check{' '}
+                <span className="font-mono tabular-nums text-foreground">
+                  {new Date(lastCheck).toLocaleTimeString()}
+                </span>
+              </>
+            ) : null}
+          </>
+        }
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={checkAll}
+              disabled={!online.length || checking.length > 0}
+            >
+              {checking.length > 0 ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Activity />
+              )}
+              Check all
+            </Button>
+            <Button onClick={() => setRegisterOpen(true)}>
+              <Plus />
+              Register node
+            </Button>
+          </>
+        }
+      />
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-9 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : !nodes?.nodes.length ? (
+        <Card>
+          <CardContent className="p-0">
+            <div className="space-y-3 p-5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-9 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : !list.length ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <Server className="h-10 w-10 text-muted-foreground" />
+            <Server className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               No nodes registered. Register a storage node to get started.
             </p>
-            <Button onClick={() => setRegisterOpen(true)} variant="outline">
-              <Plus className="h-4 w-4" />
-              Register Node
+            <Button variant="outline" onClick={() => setRegisterOpen(true)}>
+              <Plus />
+              Register node
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-          {nodes.nodes.map((node) => {
-            const isOnline = node.state === 'online';
-            const isChecking =
-              healthCheckMutation.isPending && healthNode === node.name;
-            const isDeleting =
-              unregisterMutation.isPending &&
-              unregisterMutation.variables === node.address;
-            return (
-              <Card key={node.name} className="flex flex-col">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                      <Server className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{node.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {node.hostname}
-                      </p>
-                    </div>
-                  </div>
-                  <StatusBadge status={node.state} />
-                </CardHeader>
-                <CardContent className="flex flex-1 flex-col">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">Address</span>
-                      <span className="font-medium">{node.address}</span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">Version</span>
-                      <span className="font-medium">{node.version || '-'}</span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">Last Seen</span>
-                      <span className="font-medium">
-                        {formatLastSeen(node.lastSeen)}
-                      </span>
-                    </div>
-                  </div>
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <StatusTickHead />
+                  <TableHead>Node</TableHead>
+                  <TableHead>Address</TableHead>
+                  <TableHead>System</TableHead>
+                  <TableHead>Readiness</TableHead>
+                  <TableHead>Last seen</TableHead>
+                  <TableHead className="pr-5 text-right">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.map((node) => {
+                  const isOnline = node.state === 'online';
+                  const isChecking = checking.includes(node.name);
+                  const isDeleting =
+                    unregisterMutation.isPending &&
+                    unregisterMutation.variables === node.address;
+                  const result = health[node.name];
+                  const readiness = result ? readinessOf(result.info) : null;
+                  const isOpen = expanded === node.name;
+                  const panelId = `node-detail-${node.name}`;
 
-                  <Separator className="my-4" />
-
-                  <div className="mt-auto flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      disabled={isChecking || !isOnline}
-                      onClick={() => handleHealthCheck(node.name)}
-                    >
-                      {isChecking ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <HeartPulse className="h-4 w-4" />
-                      )}
-                      Health
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDetailsNode(node)}
-                    >
-                      <Info className="h-4 w-4" />
-                      Details
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={isDeleting}
-                        >
-                          {isDeleting ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Unregister node "{node.name}"?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This removes the node from the controller's
-                            inventory. Resources and pools hosted on this node
-                            will no longer be managed. This action cannot be
-                            undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() =>
-                              unregisterMutation.mutate(node.address)
-                            }
-                          >
-                            Unregister
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                  return (
+                    <NodeRows
+                      key={node.name}
+                      node={node}
+                      isOnline={isOnline}
+                      isChecking={isChecking}
+                      isDeleting={isDeleting}
+                      isOpen={isOpen}
+                      panelId={panelId}
+                      result={result}
+                      readiness={readiness}
+                      error={healthErrors[node.name]}
+                      onToggle={() => setExpanded(isOpen ? null : node.name)}
+                      onCheck={() => healthCheckMutation.mutate(node.name)}
+                      onCopyAddress={() => copyAddress(node.address)}
+                      onUnregister={() => setConfirmNode(node)}
+                    />
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       <RegisterNodeDialog open={registerOpen} onOpenChange={setRegisterOpen} />
 
-      <HealthDialog
-        open={!!healthData}
-        nodeName={healthNode}
-        health={healthData}
-        onOpenChange={closeHealthDialog}
-      />
+      {/* One dialog for the page, opened by whichever row's menu asked: a
+          confirmation nested inside a menu unmounts with the menu. */}
+      <AlertDialog
+        open={!!confirmNode}
+        onOpenChange={(open) => !open && setConfirmNode(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unregister node "{confirmNode?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the node from the controller's inventory. Resources and pools
+              hosted on this node will no longer be managed. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (confirmNode) unregisterMutation.mutate(confirmNode.address);
+              }}
+            >
+              Unregister
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
 
-      <DetailsDialog
-        node={detailsNode}
-        onOpenChange={(open) => !open && setDetailsNode(null)}
-      />
+interface NodeRowsProps {
+  node: Node;
+  isOnline: boolean;
+  isChecking: boolean;
+  isDeleting: boolean;
+  isOpen: boolean;
+  panelId: string;
+  result?: HealthResult;
+  readiness: Readiness | null;
+  error?: string;
+  onToggle: () => void;
+  onCheck: () => void;
+  onCopyAddress: () => void;
+  onUnregister: () => void;
+}
+
+/** The summary row and, when open, the detail row beneath it — a fragment
+ *  rather than a component boundary, because both are `<tr>`s of one table. */
+function NodeRows({
+  node,
+  isOnline,
+  isChecking,
+  isDeleting,
+  isOpen,
+  panelId,
+  result,
+  readiness,
+  error,
+  onToggle,
+  onCheck,
+  onCopyAddress,
+  onUnregister,
+}: NodeRowsProps) {
+  const Chevron = isOpen ? ChevronDown : ChevronRight;
+
+  return (
+    <>
+      <TableRow className={cn(isOpen && 'border-b-transparent bg-muted/40')}>
+        <StatusTickCell status={node.state} />
+        <TableCell>
+          {/* The expand affordance is the name itself, so the target is the
+              width of the cell and still a real button for the keyboard. */}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={isOpen}
+            aria-controls={panelId}
+            className="flex items-center gap-2.5 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <Chevron
+              className={cn('size-3.5', isOpen ? 'text-foreground' : 'text-muted-foreground')}
+            />
+            <span className="flex items-baseline gap-[7px]">
+              <span className="font-mono text-[14px] font-semibold">{node.name}</span>
+              <span className="text-[11.5px] text-muted-foreground">{node.hostname}</span>
+            </span>
+          </button>
+        </TableCell>
+        <TableCell className="font-mono tabular-nums text-muted-foreground">
+          {node.address}
+        </TableCell>
+        <TableCell className="font-mono tabular-nums text-muted-foreground">
+          {node.version || '-'}
+        </TableCell>
+        <TableCell>
+          {readiness ? (
+            <span className="flex items-center gap-1.5">
+              {readiness.dots.map((dot) => (
+                <span
+                  key={dot.label}
+                  title={dot.label}
+                  className={cn('size-[7px] rounded-full', TONE_BG[dot.tone])}
+                />
+              ))}
+              <span className={cn('ml-1 text-[12.5px]', TONE_TEXT[readiness.tone])}>
+                {readiness.word}
+              </span>
+            </span>
+          ) : (
+            <span className="text-[12.5px] text-muted-foreground">not checked</span>
+          )}
+        </TableCell>
+        <TableCell
+          className="font-mono tabular-nums text-muted-foreground"
+          title={formatLastSeen(node.lastSeen)}
+        >
+          {formatAge(node.lastSeen)}
+        </TableCell>
+        <TableCell className="pr-5 text-right">
+          <span className="inline-flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isChecking || !isOnline}
+              onClick={onCheck}
+            >
+              {isChecking ? <Loader2 className="animate-spin" /> : null}
+              Check health
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={isDeleting}
+                  aria-label={`Actions for ${node.name}`}
+                >
+                  {isDeleting ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <MoreHorizontal />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[220px]">
+                <DropdownMenuItem onSelect={onCopyAddress}>
+                  <Copy />
+                  Copy address
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={onUnregister}>
+                  <Trash2 />
+                  Unregister node…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </span>
+        </TableCell>
+      </TableRow>
+
+      {isOpen ? (
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={COLUMN_COUNT} id={panelId} className="h-auto bg-muted/40 p-0">
+            <div className="flex flex-col gap-4 py-1 pr-6 pb-[22px] pl-[46px]">
+              <div className="flex items-center justify-between gap-4">
+                <div className="eyebrow">
+                  Health check
+                  {result ? (
+                    <>
+                      {' · '}
+                      <span className="font-mono text-[11px] tracking-normal text-foreground normal-case tabular-nums">
+                        {new Date(result.at).toLocaleTimeString()}
+                      </span>
+                    </>
+                  ) : null}
+                </div>
+                <div className="text-[12px] text-muted-foreground">
+                  what the promoter's start chain needs on this node
+                </div>
+              </div>
+
+              {error ? (
+                <p className="text-[12.5px] text-status-bad-text">
+                  Health check failed: {error}
+                </p>
+              ) : null}
+
+              {result ? (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <HealthTile label="DRBD" ok={result.info.drbdInstalled}>
+                    {result.info.drbdInstalled
+                      ? result.info.drbdVersion || 'installed'
+                      : 'not installed'}
+                  </HealthTile>
+                  <HealthTile label="drbd-reactor" ok={result.info.drbdReactorInstalled}>
+                    {result.info.drbdReactorInstalled
+                      ? `${result.info.drbdReactorVersion || 'installed'} · ${
+                          result.info.drbdReactorRunning ? 'running' : 'stopped'
+                        }`
+                      : 'not installed'}
+                  </HealthTile>
+                  <HealthTile
+                    label="Resource agents"
+                    ok={result.info.resourceAgentsInstalled}
+                  >
+                    <AgentChips agents={result.info.availableAgents} />
+                  </HealthTile>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <p className="text-[12.5px] text-muted-foreground">
+                    {isOnline
+                      ? 'No health check has run for this node yet.'
+                      : 'Node is offline; a health check needs a reachable node.'}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isChecking || !isOnline}
+                    onClick={onCheck}
+                  >
+                    {isChecking ? <Loader2 className="animate-spin" /> : null}
+                    Check health
+                  </Button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 border-t border-border/70 pt-3.5 md:grid-cols-5">
+                <Fact label="Hostname" value={node.hostname || '-'} />
+                <Fact label="Address" value={node.address} />
+                <Fact label="State" value={node.state} tone={toneOf(node.state)} />
+                <Fact label="Version" value={node.version || '-'} />
+                <Fact label="Last seen" value={formatLastSeen(node.lastSeen)} />
+              </div>
+            </div>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  );
+}
+
+/** One prerequisite: whether it is there, and what version answered. The tick
+ *  and the cross are shapes, not two shades of the same dot. */
+function HealthTile({
+  label,
+  ok,
+  children,
+}: {
+  label: string;
+  ok: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-3.5 py-3">
+      <div className="flex items-center gap-2 text-[12.5px] font-medium">
+        {ok ? (
+          <Check className="size-[15px] text-status-ok" />
+        ) : (
+          <X className="size-[15px] text-status-bad" />
+        )}
+        {label}
+        <span className="sr-only">{ok ? ' installed' : ' not installed'}</span>
+      </div>
+      <div className="mt-1.5 font-mono text-[11.5px] tabular-nums text-muted-foreground">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Five agent names is enough to recognise a working node; the rest are a
+ *  count, with the full list on the overflow chip's title. */
+function AgentChips({ agents }: { agents: string[] }) {
+  const all = agents ?? [];
+  if (!all.length) return <>no OCF agents detected</>;
+  const shown = all.slice(0, 5);
+  const rest = all.slice(5);
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {shown.map((agent) => (
+        <span
+          key={agent}
+          className="rounded border border-border bg-secondary px-1.5 py-0.5 text-[11px] text-foreground"
+        >
+          {agent}
+        </span>
+      ))}
+      {rest.length ? (
+        <span className="px-1 py-0.5 text-[11px]" title={rest.join(', ')}>
+          +{rest.length}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function Fact({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: StatusTone;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="eyebrow">{label}</div>
+      <div className="mt-1.5 flex items-center gap-1.5 truncate font-mono text-[13px] tabular-nums">
+        {tone ? <span className={cn('size-1.5 rounded-full', TONE_BG[tone])} /> : null}
+        {value}
+      </div>
     </div>
   );
 }
@@ -276,8 +640,7 @@ function RegisterNodeDialog({ open, onOpenChange }: RegisterNodeDialogProps) {
   const [address, setAddress] = useState('');
 
   const registerMutation = useMutation({
-    mutationFn: (data: { name: string; address: string }) =>
-      api.registerNode(data),
+    mutationFn: (data: { name: string; address: string }) => api.registerNode(data),
     onSuccess: () => {
       toast.success('Node registered');
       queryClient.invalidateQueries({ queryKey: ['nodes'] });
@@ -335,174 +698,11 @@ function RegisterNodeDialog({ open, onOpenChange }: RegisterNodeDialogProps) {
               Cancel
             </Button>
             <Button type="submit" disabled={registerMutation.isPending}>
-              {registerMutation.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              )}
+              {registerMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Register
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface HealthDialogProps {
-  open: boolean;
-  nodeName: string | null;
-  health: HealthInfo | null;
-  onOpenChange: (open: boolean) => void;
-}
-
-function HealthCheckRow({
-  label,
-  ok,
-  detail,
-}: {
-  label: string;
-  ok: boolean;
-  detail?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border p-3">
-      <div className="flex items-center gap-3">
-        {ok ? (
-          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-        ) : (
-          <XCircle className="h-5 w-5 text-red-500" />
-        )}
-        <div>
-          <p className="text-sm font-medium">{label}</p>
-          {detail && (
-            <p className="text-xs text-muted-foreground">{detail}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HealthDialog({
-  open,
-  nodeName,
-  health,
-  onOpenChange,
-}: HealthDialogProps) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col">
-        <DialogHeader>
-          <DialogTitle>
-            Health Check{nodeName ? ` — ${nodeName}` : ''}
-          </DialogTitle>
-          <DialogDescription>
-            Prerequisite software and OCF agents on the node.
-          </DialogDescription>
-        </DialogHeader>
-        {health && (
-          <div className="-mr-2 space-y-4 overflow-y-auto py-2 pr-2">
-            <div className="space-y-2">
-              <HealthCheckRow
-                label="DRBD"
-                ok={health.drbdInstalled}
-                detail={
-                  health.drbdInstalled
-                    ? `Installed${
-                        health.drbdVersion
-                          ? ` · v${health.drbdVersion}`
-                          : ''
-                      }`
-                    : 'Not installed'
-                }
-              />
-              <HealthCheckRow
-                label="DRBD Reactor"
-                ok={health.drbdReactorInstalled}
-                detail={
-                  health.drbdReactorInstalled
-                    ? `Installed${
-                        health.drbdReactorVersion
-                          ? ` · v${health.drbdReactorVersion}`
-                          : ''
-                      } · ${
-                        health.drbdReactorRunning ? 'running' : 'stopped'
-                      }`
-                    : 'Not installed'
-                }
-              />
-              <HealthCheckRow
-                label="Resource Agents"
-                ok={health.resourceAgentsInstalled}
-                detail={
-                  health.resourceAgentsInstalled
-                    ? 'Installed'
-                    : 'Not installed'
-                }
-              />
-            </div>
-
-            <div>
-              <p className="mb-2 text-sm font-medium">Available OCF Agents</p>
-              {health.availableAgents && health.availableAgents.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {health.availableAgents.map((agent) => (
-                    <Badge key={agent} variant="secondary">
-                      {agent}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No OCF agents detected.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface DetailsDialogProps {
-  node: Node | null;
-  onOpenChange: (open: boolean) => void;
-}
-
-function DetailsDialog({ node, onOpenChange }: DetailsDialogProps) {
-  const details: { label: string; value: string }[] = node
-    ? [
-        { label: 'Name', value: node.name },
-        { label: 'Address', value: node.address },
-        { label: 'Hostname', value: node.hostname },
-        { label: 'State', value: node.state },
-        { label: 'Version', value: node.version || '-' },
-        { label: 'Last Seen', value: formatLastSeen(node.lastSeen) },
-      ]
-    : [];
-
-  return (
-    <Dialog open={!!node} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Node Details</DialogTitle>
-          <DialogDescription>{node?.name}</DialogDescription>
-        </DialogHeader>
-        <div className="py-2">
-          {details.map((d, i) => (
-            <div key={d.label}>
-              {i > 0 && <Separator />}
-              <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
-                <span className="text-muted-foreground">{d.label}</span>
-                {d.label === 'State' ? (
-                  <StatusBadge status={d.value} />
-                ) : (
-                  <span className="font-medium">{d.value}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
       </DialogContent>
     </Dialog>
   );
