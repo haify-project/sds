@@ -110,18 +110,34 @@ export function ResourceTopology({
     .filter(Boolean)
     .join(' · ');
 
-  // A leg is only usable when the proxy is running at both ends. Reporting the
-  // primary's end alone would call a tunnel healthy while the far side is dead.
-  const legState = (primary: string): 'active' | 'down' => {
+  // Two independent facts about a WAN leg, and they can disagree.
+  //
+  // `replicating` is DRBD's own verdict on the DR peer — Established means bytes
+  // are crossing, whatever anything else claims. `proxy` is the sds-proxy
+  // process probe at both ends; reporting the near end alone would call a tunnel
+  // healthy while the far side is dead.
+  //
+  // Observed on the live cluster: every proxy leg reads "inactive" while the DR
+  // peer is Established and UpToDate at 100%. So the probe is not a proxy for
+  // link health, and drawing a red broken line over a link that is demonstrably
+  // carrying replication would be the diagram asserting something the data does
+  // not say. Replication decides how the leg is drawn; the probe is an
+  // annotation beside it.
+  const legState = (primary: string) => {
     const proxy = status.wanProxy ?? {};
     const near = proxy[primary];
     const far =
       remote.length > 0
         ? (proxy[`${remote[0].name} (leg ${primary})`] ?? proxy[remote[0].name])
         : undefined;
-    return near === 'active' && (far === undefined || far === 'active')
-      ? 'active'
-      : 'down';
+    const probed = near !== undefined || far !== undefined;
+    const proxyUp = near === 'active' && (far === undefined || far === 'active');
+    const drState = remote[0]?.state?.replicationState ?? '';
+    return {
+      replicating: /^(established|syncsource|synctarget|verif|pausedsync)/i.test(drState),
+      drState,
+      proxy: !probed ? ('unknown' as const) : proxyUp ? ('active' as const) : ('inactive' as const),
+    };
   };
 
   const siteH = (count: number) =>
@@ -211,50 +227,95 @@ export function ResourceTopology({
               path to the DR — drawing a single line to "the site" would hide that
               a leg can be down while the others are fine. */}
           {remote.length > 0 &&
-            local
-              .filter((n) => n.kind === 'replica')
-              .map((n) => {
+            (() => {
+              const legs = local.filter((m) => m.kind === 'replica');
+              // Every leg lands on the same DR box, so three labels saying the
+              // same sentence collide and say it three times. When the legs
+              // agree — the normal case — the sentence is stated once, on the
+              // middle one; only a leg that differs gets its own.
+              const label = (m: PlacedNode) => {
+                const st = legState(m.name);
+                const line = st.replicating
+                  ? status.wanPort
+                    ? `tcp ${status.wanPort} · protocol A`
+                    : 'protocol A'
+                  : st.drState || 'not replicating';
+                const caveat =
+                  st.replicating && st.proxy === 'inactive' ? 'proxy probe: inactive' : '';
+                return { st, line, caveat, key: `${line}|${caveat}` };
+              };
+              const labels = legs.map(label);
+              const uniform = labels.every((l) => l.key === labels[0].key);
+              const spokesman = legs[Math.floor((legs.length - 1) / 2)]?.name;
+              return legs.map((n) => {
                 const i = local.indexOf(n);
                 const s = legState(n.name);
+                const lab = label(n);
+                const showLabel = !uniform || n.name === spokesman;
                 const x1 = localX + SITE_PAD + NODE_W;
                 const y1 = nodeY(localY, i) + NODE_H / 2;
                 const x2 = remoteX + SITE_PAD;
                 const y2 = nodeY(remoteY, 0) + NODE_H / 2;
                 const mid = (x1 + x2) / 2;
+                // Every leg converges on the same DR box, so labels parked at
+                // each curve's midpoint pile up on each other. Slide each one
+                // along its own curve instead — a point on the cubic at t,
+                // staggered per leg.
+                const t =
+                  uniform || legs.length < 2
+                    ? 0.5
+                    : 0.3 + (0.4 * legs.indexOf(n)) / (legs.length - 1);
+                const u = 1 - t;
+                const lx = u * u * u * x1 + 3 * u * u * t * mid + 3 * u * t * t * mid + t * t * t * x2;
+                const ly = y1 * (u * u * u + 3 * u * u * t) + y2 * (3 * u * t * t + t * t * t);
                 return (
                   <g key={`leg-${n.name}`}>
                     <path
                       d={`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
                       fill="none"
                       stroke={
-                        s === 'active'
-                          ? 'var(--muted-foreground)'
-                          : 'var(--status-bad)'
+                        s.replicating ? 'var(--muted-foreground)' : 'var(--status-bad)'
                       }
                       strokeWidth={2}
                       strokeDasharray="6 5"
                     />
-                    {/* A dead leg says so; the red alone is not the message. */}
-                    <text
-                      x={mid}
-                      y={(y1 + y2) / 2 - 8}
-                      textAnchor="middle"
-                      className="font-mono text-[11px]"
-                      fill={
-                        s === 'active'
-                          ? 'var(--muted-foreground)'
-                          : 'var(--status-bad)'
-                      }
-                    >
-                      {s === 'active'
-                        ? status.wanPort
-                          ? `tcp ${status.wanPort} · protocol A`
-                          : 'protocol A'
-                        : 'proxy down'}
-                    </text>
+                    {/* Never colour alone: the line says how it is drawn, the
+                        label says why. */}
+                    {showLabel && (
+                      <text
+                        x={lx}
+                        y={ly - 8}
+                        textAnchor="middle"
+                        className="font-mono text-[11px]"
+                        fill={s.replicating ? 'var(--muted-foreground)' : 'var(--status-bad)'}
+                        stroke="var(--card)"
+                        strokeWidth={4}
+                        paintOrder="stroke"
+                      >
+                        {lab.line}
+                        {uniform && legs.length > 1 ? ` · ${legs.length} legs` : ''}
+                      </text>
+                    )}
+                    {/* The probe disagreeing with DRBD is worth saying out loud
+                        — but as a caveat under a working link, not as its state. */}
+                    {showLabel && lab.caveat && (
+                      <text
+                        x={lx}
+                        y={ly + 6}
+                        textAnchor="middle"
+                        className="font-mono text-[11px]"
+                        fill="var(--status-warn-text)"
+                        stroke="var(--card)"
+                        strokeWidth={4}
+                        paintOrder="stroke"
+                      >
+                        {lab.caveat}
+                      </text>
+                    )}
                   </g>
                 );
-              })}
+              });
+            })()}
 
           {local.map((n, i) => (
             <NodeCard
