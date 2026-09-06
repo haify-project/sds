@@ -124,6 +124,7 @@ func (s *Server) MCPServer() *mcp.Server {
 	s.registerGatewayTools(srv)
 	s.registerHATools(srv)
 	s.registerObservabilityTools(srv)
+	s.registerDiagnoseTools(srv)
 	s.registerNotifyTools(srv)
 	s.registerZFSTools(srv)
 	s.registerTopologyTools(srv)
@@ -212,6 +213,17 @@ func destructiveTool(name, title, description string) *mcp.Tool {
 // addRead registers a read-only tool (available in every mode).
 func addRead[In, Out any](s *Server, srv *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
 	mcp.AddTool(srv, t, instrument(s, t.Name, readTimeout, h))
+}
+
+// addReadWithin registers a read that is not a query.
+//
+// readTimeout is sized for a controller answering from memory. A tool that
+// fans SSH out to every node is still read-only, and still cannot finish in
+// thirty seconds on a cluster with a node that is down — where a timeout would
+// throw away the answers from every node that did reply, which is exactly the
+// case the tool exists for.
+func addReadWithin[In, Out any](s *Server, srv *mcp.Server, t *mcp.Tool, d time.Duration, h mcp.ToolHandlerFor[In, Out]) {
+	mcp.AddTool(srv, t, instrument(s, t.Name, d, h))
 }
 
 // addWrite registers a mutating tool unless the server is read-only and the

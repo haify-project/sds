@@ -2094,6 +2094,21 @@ func (c *SDSClient) ListAuditEvents(ctx context.Context, req *sdspb.ListAuditEve
 }
 
 // ListControllerLogs returns recent lines from the active controller's own log.
+// CollectNodeDiagnostics reads the named read-only collectors on the named
+// nodes. Unlike the three List* calls above, a partial answer is the normal
+// answer: a node that is down is the finding, so the response is returned
+// whole and each node carries its own reachability.
+func (c *SDSClient) CollectNodeDiagnostics(ctx context.Context, req *sdspb.CollectNodeDiagnosticsRequest) (*sdspb.CollectNodeDiagnosticsResponse, error) {
+	resp, err := c.client.CollectNodeDiagnostics(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}
+
 func (c *SDSClient) ListControllerLogs(ctx context.Context, req *sdspb.ListControllerLogsRequest) (*sdspb.ListControllerLogsResponse, error) {
 	resp, err := c.client.ListControllerLogs(ctx, req)
 	if err != nil {

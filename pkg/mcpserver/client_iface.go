@@ -112,6 +112,9 @@ type ControllerClient interface {
 	ListEvents(ctx context.Context, req *sdspb.ListEventsRequest) (*sdspb.ListEventsResponse, error)
 	ListAuditEvents(ctx context.Context, req *sdspb.ListAuditEventsRequest) (*sdspb.ListAuditEventsResponse, error)
 	ListControllerLogs(ctx context.Context, req *sdspb.ListControllerLogsRequest) (*sdspb.ListControllerLogsResponse, error)
+	// The journals and kernel messages the controller does not hold. Read-only
+	// and collector-named: there is no path from here to running a command.
+	CollectNodeDiagnostics(ctx context.Context, req *sdspb.CollectNodeDiagnosticsRequest) (*sdspb.CollectNodeDiagnosticsResponse, error)
 
 	// Notification channels. Listing and testing are exposed; creating one is
 	// not, for the same reason a backup target cannot be created from here — a

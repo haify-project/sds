@@ -132,6 +132,7 @@ const (
 	SDSController_RemovePoolCache_FullMethodName          = "/v1.SDSController/RemovePoolCache"
 	SDSController_ListAuditEvents_FullMethodName          = "/v1.SDSController/ListAuditEvents"
 	SDSController_ListControllerLogs_FullMethodName       = "/v1.SDSController/ListControllerLogs"
+	SDSController_CollectNodeDiagnostics_FullMethodName   = "/v1.SDSController/CollectNodeDiagnostics"
 	SDSController_ListEvents_FullMethodName               = "/v1.SDSController/ListEvents"
 	SDSController_ListNotifyChannels_FullMethodName       = "/v1.SDSController/ListNotifyChannels"
 	SDSController_SaveNotifyChannel_FullMethodName        = "/v1.SDSController/SaveNotifyChannel"
@@ -310,6 +311,19 @@ type SDSControllerClient interface {
 	// not persisted: this is for watching what a running controller is doing, and
 	// a controller that has moved has nothing useful to say about its old node.
 	ListControllerLogs(ctx context.Context, in *ListControllerLogsRequest, opts ...grpc.CallOption) (*ListControllerLogsResponse, error)
+	// The journals and kernel messages the controller does not hold.
+	//
+	// ListControllerLogs above is the controller's own ring buffer, and almost
+	// nothing that breaks DRBD appears in it: a promoter that could not start its
+	// target, a resource that will not connect, a kernel that refused the module,
+	// an LVM pool with no space left. Those are on the nodes, and until now the
+	// only way to read them was for a person to ssh in.
+	//
+	// The collectors are a fixed table, named and read-only. This is deliberately
+	// not a command channel: a request names collectors, never a command line, so
+	// an unknown name is reported back and nothing is run. See
+	// pkg/controller/diagnostics.go for the table and what each one reads.
+	CollectNodeDiagnostics(ctx context.Context, in *CollectNodeDiagnosticsRequest, opts ...grpc.CallOption) (*CollectNodeDiagnosticsResponse, error)
 	// Operational notifications: a replica degraded, a resource's Primary moved,
 	// a node stopped answering. ListEvents serves the controller's bounded
 	// in-memory history — enough to see what just happened, not an archive. The
@@ -1485,6 +1499,16 @@ func (c *sDSControllerClient) ListControllerLogs(ctx context.Context, in *ListCo
 	return out, nil
 }
 
+func (c *sDSControllerClient) CollectNodeDiagnostics(ctx context.Context, in *CollectNodeDiagnosticsRequest, opts ...grpc.CallOption) (*CollectNodeDiagnosticsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CollectNodeDiagnosticsResponse)
+	err := c.cc.Invoke(ctx, SDSController_CollectNodeDiagnostics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListEventsResponse)
@@ -1733,6 +1757,19 @@ type SDSControllerServer interface {
 	// not persisted: this is for watching what a running controller is doing, and
 	// a controller that has moved has nothing useful to say about its old node.
 	ListControllerLogs(context.Context, *ListControllerLogsRequest) (*ListControllerLogsResponse, error)
+	// The journals and kernel messages the controller does not hold.
+	//
+	// ListControllerLogs above is the controller's own ring buffer, and almost
+	// nothing that breaks DRBD appears in it: a promoter that could not start its
+	// target, a resource that will not connect, a kernel that refused the module,
+	// an LVM pool with no space left. Those are on the nodes, and until now the
+	// only way to read them was for a person to ssh in.
+	//
+	// The collectors are a fixed table, named and read-only. This is deliberately
+	// not a command channel: a request names collectors, never a command line, so
+	// an unknown name is reported back and nothing is run. See
+	// pkg/controller/diagnostics.go for the table and what each one reads.
+	CollectNodeDiagnostics(context.Context, *CollectNodeDiagnosticsRequest) (*CollectNodeDiagnosticsResponse, error)
 	// Operational notifications: a replica degraded, a resource's Primary moved,
 	// a node stopped answering. ListEvents serves the controller's bounded
 	// in-memory history — enough to see what just happened, not an archive. The
@@ -2116,6 +2153,9 @@ func (UnimplementedSDSControllerServer) ListAuditEvents(context.Context, *ListAu
 }
 func (UnimplementedSDSControllerServer) ListControllerLogs(context.Context, *ListControllerLogsRequest) (*ListControllerLogsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListControllerLogs not implemented")
+}
+func (UnimplementedSDSControllerServer) CollectNodeDiagnostics(context.Context, *CollectNodeDiagnosticsRequest) (*CollectNodeDiagnosticsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CollectNodeDiagnostics not implemented")
 }
 func (UnimplementedSDSControllerServer) ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListEvents not implemented")
@@ -4193,6 +4233,24 @@ func _SDSController_ListControllerLogs_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_CollectNodeDiagnostics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CollectNodeDiagnosticsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CollectNodeDiagnostics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CollectNodeDiagnostics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CollectNodeDiagnostics(ctx, req.(*CollectNodeDiagnosticsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_ListEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListEventsRequest)
 	if err := dec(in); err != nil {
@@ -4770,6 +4828,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListControllerLogs",
 			Handler:    _SDSController_ListControllerLogs_Handler,
+		},
+		{
+			MethodName: "CollectNodeDiagnostics",
+			Handler:    _SDSController_CollectNodeDiagnostics_Handler,
 		},
 		{
 			MethodName: "ListEvents",

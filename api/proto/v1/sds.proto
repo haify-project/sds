@@ -447,6 +447,22 @@ service SDSController {
     option (google.api.http) = { get: "/v1/logs"; };
   }
 
+  // The journals and kernel messages the controller does not hold.
+  //
+  // ListControllerLogs above is the controller's own ring buffer, and almost
+  // nothing that breaks DRBD appears in it: a promoter that could not start its
+  // target, a resource that will not connect, a kernel that refused the module,
+  // an LVM pool with no space left. Those are on the nodes, and until now the
+  // only way to read them was for a person to ssh in.
+  //
+  // The collectors are a fixed table, named and read-only. This is deliberately
+  // not a command channel: a request names collectors, never a command line, so
+  // an unknown name is reported back and nothing is run. See
+  // pkg/controller/diagnostics.go for the table and what each one reads.
+  rpc CollectNodeDiagnostics(CollectNodeDiagnosticsRequest) returns (CollectNodeDiagnosticsResponse) {
+    option (google.api.http) = { post: "/v1/diagnostics/collect"; body: "*"; };
+  }
+
   // Operational notifications: a replica degraded, a resource's Primary moved,
   // a node stopped answering. ListEvents serves the controller's bounded
   // in-memory history — enough to see what just happened, not an archive. The
@@ -1490,6 +1506,63 @@ message ListControllerLogsResponse {
   string node = 4;
   // True when the buffer has wrapped, i.e. older lines have been discarded.
   bool truncated = 5;
+}
+
+// ==================== Node diagnostics ====================
+
+message CollectNodeDiagnosticsRequest {
+  // Nodes to read. Empty means every registered node, which is what a caller
+  // investigating a cluster-wide symptom wants and is why it is the default.
+  repeated string nodes = 1;
+  // Collector names. Empty means all of them. An unrecognised name is returned
+  // in unknown_collectors and runs nothing — a typo must not silently collect
+  // less than the caller asked for.
+  repeated string collectors = 2;
+  // How far back to read, for the collectors that take a window (journals).
+  // 0 takes the server's default.
+  int32 since_minutes = 3;
+  // Per collector, per node. 0 takes the server's default. A cap is not a
+  // nicety here: dmesg on a node that has been up for a year is megabytes, and
+  // this response is read by an assistant with a context window.
+  int32 max_lines = 4;
+}
+
+// NodeCollectorOutput is one collector's reading on one node.
+message NodeCollectorOutput {
+  string collector = 1;
+  // The exact command that produced these lines, so an operator can repeat it
+  // by hand and see the same thing. A diagnosis nobody can reproduce is a
+  // rumour.
+  string command = 2;
+  repeated string lines = 3;
+  bool ok = 4;
+  string error = 5;
+  // True when max_lines cut this short: what follows is the tail of the record,
+  // not all of it. A count of what was dropped is deliberately not reported —
+  // the collector reads the tail and never sees the rest, so any number here
+  // would be invented.
+  bool truncated = 6;
+}
+
+message NodeDiagnostics {
+  string node = 1;
+  string address = 2;
+  // False when the node could not be reached at all. Distinguished from a
+  // collector that ran and failed: an unreachable node is itself the finding.
+  bool reachable = 3;
+  string error = 4;
+  repeated NodeCollectorOutput collectors = 5;
+}
+
+message CollectNodeDiagnosticsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NodeDiagnostics nodes = 3;
+  repeated string unknown_collectors = 4;
+  // Every collector this controller knows, so a caller that asked for all of
+  // them can tell which ones it got and a caller that mistyped one can see the
+  // list without a second call.
+  repeated string available_collectors = 5;
 }
 
 // ==================== Events / notifications ====================
