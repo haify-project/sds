@@ -93,6 +93,10 @@ type PromoterView = {
   // has on file. See startListFor.
   promoter?: HaPromoterStatus;
   primaryNode?: string;
+  /** Node names that carry a replica of this resource. */
+  members: string[];
+  /** The member currently promoted, resolved from primaryNode's host name. */
+  activeMember?: string;
 };
 
 export function HAPage() {
@@ -129,6 +133,29 @@ export function HAPage() {
   // The promoter as deployed. Separate from the resource status above because
   // it answers a different question — that one is DRBD's view of the replicas,
   // this one is systemd's view of what the promoter starts.
+  // Self-HA reads the same query key the card uses, so this shares one fetch.
+  // The page needs it to know which promoter IS the control plane — the two
+  // used to be separate cards for the same resource.
+  const { data: selfHa } = useQuery({
+    queryKey: ['selfha'],
+    queryFn: () => api.getSelfHaStatus(),
+    refetchInterval: 15000,
+  });
+
+  // DRBD reports the Primary by host name (`sds-e`) and the registry lists
+  // members by node name (`node-e`). Without this map the active member is
+  // never the one highlighted.
+  const { data: nodeList } = useQuery({
+    queryKey: ['nodes'],
+    queryFn: () => api.getNodes(),
+  });
+  const nodeNameByHost = new Map<string, string>();
+  for (const n of nodeList?.nodes ?? []) {
+    if (n.hostname) nodeNameByHost.set(n.hostname, n.name);
+    if (n.address) nodeNameByHost.set(n.address, n.name);
+    nodeNameByHost.set(n.name, n.name);
+  }
+
   const promoterQueries = useQueries({
     queries: configs.map((c) => ({
       queryKey: ['ha-promoter', c.resource],
@@ -153,8 +180,24 @@ export function HAPage() {
     const primaryNode = Object.keys(nodeStates).find(
       (n) => nodeStates[n]?.role === 'Primary'
     );
-    return { config, resource, status, promoter, primaryNode };
+    return {
+      config,
+      resource,
+      status,
+      promoter,
+      primaryNode,
+      members: resource?.nodes ?? [],
+      activeMember: primaryNode ? nodeNameByHost.get(primaryNode) ?? primaryNode : undefined,
+    };
   });
+
+  // Which promoter, if any, IS the control plane — and whether it has a card
+  // for the self-HA panel to fold into.
+  const controlPlaneResource = selfHa?.enabled ? selfHa.resource : undefined;
+  const controlPlaneHasCard =
+    !isLoading &&
+    !!controlPlaneResource &&
+    promoters.some((p) => p.config.resource === controlPlaneResource);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ha'] });
@@ -247,12 +290,22 @@ export function HAPage() {
         <section className="space-y-4">
           <h2 className="text-[14.5px] font-semibold">Promoters</h2>
 
-          {/* Self-HA runs off its own query, so it stays on screen while the
-              HA config list is still in flight — hiding it behind that load
-              would take the controller's own failover controls away for as
-              long as an unrelated call is slow. */}
+          {/* One card per resource.
+              The control plane used to get two: this card and, because its
+              resource is also an HA config, a promoter card beside it — same
+              resource, different fields, different buttons. It is a ROLE a
+              promoter has, so it is a chip on that promoter's card now, and
+              this card only appears when there is nothing to fold it into:
+              self-HA off (the Enable affordance lives here), still loading, or
+              errored — an errored status must never render as "disabled", which
+              would invite a second enablement.
+
+              Self-HA runs off its own query, so this stays on screen while the
+              HA config list is still in flight; hiding it behind that load would
+              take the controller's own failover controls away for as long as an
+              unrelated call is slow. */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <SelfHaCard />
+            <SelfHaCard foldedIntoPromoter={controlPlaneHasCard} />
             {isLoading
               ? Array.from({ length: 2 }).map((_, i) => (
                   <Skeleton key={i} className="h-64 w-full" />
@@ -261,6 +314,9 @@ export function HAPage() {
                   <PromoterCard
                     key={p.config.resource}
                     view={p}
+                    controlPlane={
+                      p.config.resource === controlPlaneResource ? selfHa : undefined
+                    }
                     onShowDetails={showDetails}
                     onEvict={(r, fromNode) =>
                       evictMutation.mutate({ resource: r, fromNode })
@@ -514,33 +570,39 @@ function unmanagedUnits(config: HaConfig, units: StartUnit[]): string[] {
   return units.map((u) => u.name).filter((n) => !known.has(n));
 }
 
-function FactRow({
+/** One labelled fact, label above value.
+ *
+ *  It replaced a leader-line row (label left, value flushed right). On a
+ *  ~380px card that put a long mount path a card's width away from the word
+ *  that named it, and made two cards' rows land at different heights. Stacked,
+ *  the label sits on the value it names and every card's grid lines up. */
+function Fact({
   label,
   value,
   mono,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
-      <span className="text-[13px] text-muted-foreground">{label}</span>
-      <span
+    <div className="min-w-0">
+      <div className="eyebrow">{label}</div>
+      <div
         className={cn(
-          'min-w-0 truncate text-[13px]',
-          mono ? 'font-mono tabular-nums' : 'font-medium'
+          'mt-1 text-[13px] break-words',
+          mono ? 'font-mono tabular-nums' : '',
         )}
       >
         {value}
-      </span>
+      </div>
     </div>
   );
 }
 
 // ==================== Controller Self-HA ====================
 
-function SelfHaCard() {
+function SelfHaCard({ foldedIntoPromoter }: { foldedIntoPromoter: boolean }) {
   const queryClient = useQueryClient();
   const {
     data: status,
@@ -555,6 +617,189 @@ function SelfHaCard() {
   });
 
   const [enableOpen, setEnableOpen] = useState(false);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ['selfha'] });
+
+  if (isLoading) {
+    return (
+      <Card className="gap-4 py-5">
+        <CardHeader className="px-5">
+          <CardTitle className="font-mono text-[15px]">
+            {SELF_HA_RESOURCE}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5">
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // A failed status query is NOT the same as "self-HA disabled" — showing
+  // the disabled state here would invite an accidental second enablement.
+  if (isError) {
+    return (
+      <Card className="gap-4 py-5">
+        <CardHeader className="px-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <CardTitle className="font-mono text-[15px]">
+                {SELF_HA_RESOURCE}
+              </CardTitle>
+              <p className="mt-1 text-[12.5px] text-muted-foreground">
+                Control plane · state unknown
+              </p>
+            </div>
+            <StatusBadge status="unknown" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 px-5">
+          <p className="text-[13px] text-muted-foreground">
+            Could not load self-HA status: {(error as Error).message}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>
+            <Loader2 className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Enabled and already shown as a promoter: that card carries the chip and
+  // these controls, so a second card here would be the duplicate this change
+  // removed. Everything above still renders — a loading or errored status has
+  // no promoter card to have been folded into.
+  if (status?.enabled && foldedIntoPromoter) return null;
+
+  return (
+    <Card className="gap-4 py-5">
+      <CardHeader className="px-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <CardTitle className="font-mono text-[15px]">
+              {status?.resource || SELF_HA_RESOURCE}
+            </CardTitle>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              Control plane ·{' '}
+              {status?.enabled ? 'self-managed promoter' : 'standalone'}
+            </p>
+          </div>
+          {status?.enabled ? (
+            <StatusBadge status="enabled" />
+          ) : (
+            <Button size="sm" onClick={() => setEnableOpen(true)}>
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Enable Self-HA
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="px-5">
+        {status?.enabled ? (
+          <SelfHaEnabled status={status} />
+        ) : (
+          <div className="flex items-start gap-3">
+            <ShieldOff
+              aria-hidden
+              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+            />
+            <p className="text-[13px] text-muted-foreground">
+              Standalone controller. Enable Self-HA to run the management plane
+              on its own DRBD resource with a floating VIP and automatic
+              failover.
+            </p>
+          </div>
+        )}
+      </CardContent>
+
+      <EnableSelfHaDialog
+        open={enableOpen}
+        onOpenChange={setEnableOpen}
+        onEnabled={() => {
+          setEnableOpen(false);
+          invalidate();
+        }}
+      />
+    </Card>
+  );
+}
+
+function SelfHaEnabled({ status }: { status: SelfHaStatus }) {
+  const { data: nodes } = useQuery({
+    queryKey: ['nodes'],
+    queryFn: () => api.getNodes(),
+  });
+
+  // status.activeNode is an address; members are node names. Resolve the
+  // active node's name so it displays as a name and highlights correctly.
+  const nodeNameByAddr = new Map(
+    (nodes?.nodes ?? []).map((n) => [n.address, n.name]),
+  );
+  const activeNodeName = status.activeNode
+    ? nodeNameByAddr.get(status.activeNode) ?? status.activeNode
+    : '';
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[12.5px] text-muted-foreground">
+        Active on{' '}
+        <span className="font-mono text-foreground">
+          {activeNodeName || 'no node'}
+        </span>
+      </p>
+
+      <Fact label="Virtual IP" value={status.vip || '-'} mono />
+
+      <div>
+        <div className="eyebrow">Member nodes</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(status.nodes ?? []).map((node) => {
+            const isActive = node === activeNodeName;
+            return (
+              <span
+                key={node}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-[5px] border px-2 py-1 font-mono text-xs',
+                  isActive
+                    ? 'border-transparent bg-accent text-accent-foreground'
+                    : 'border-border bg-muted text-muted-foreground'
+                )}
+              >
+                {node}
+                {isActive ? (
+                  <span className="text-[10.5px]">active</span>
+                ) : null}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+        <SelfHaControls status={status} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Evict-controller and disable, wherever the control plane is shown.
+ *
+ * They used to live inside the self-HA card and only there. Now the control
+ * plane is normally a promoter card, so these had to be reachable from it —
+ * and lifting them into a shared component rather than copying them is what
+ * keeps one behaviour: the eviction re-reads the active node from the server
+ * before acting and then polls for where the controller actually landed, which
+ * a second copy would drift away from on the first edit.
+ *
+ * Kept as buttons rather than menu items, deliberately: both open an
+ * AlertDialog, and a dialog nested in a dropdown unmounts with the menu.
+ */
+function SelfHaControls({ status }: { status: SelfHaStatus }) {
+  const queryClient = useQueryClient();
+  const [disableNode, setDisableNode] = useState(status.activeNode || '');
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['selfha'] });
@@ -620,179 +865,14 @@ function SelfHaCard() {
     },
   });
 
-  if (isLoading) {
-    return (
-      <Card className="gap-4 py-5">
-        <CardHeader className="px-5">
-          <CardTitle className="font-mono text-[15px]">
-            {SELF_HA_RESOURCE}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-5">
-          <Skeleton className="h-24 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
 
-  // A failed status query is NOT the same as "self-HA disabled" — showing
-  // the disabled state here would invite an accidental second enablement.
-  if (isError) {
-    return (
-      <Card className="gap-4 py-5">
-        <CardHeader className="px-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <CardTitle className="font-mono text-[15px]">
-                {SELF_HA_RESOURCE}
-              </CardTitle>
-              <p className="mt-1 text-[12.5px] text-muted-foreground">
-                Control plane · state unknown
-              </p>
-            </div>
-            <StatusBadge status="unknown" />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 px-5">
-          <p className="text-[13px] text-muted-foreground">
-            Could not load self-HA status: {(error as Error).message}
-          </p>
-          <Button size="sm" variant="outline" onClick={() => refetch()}>
-            <Loader2 className="mr-2 h-4 w-4" />
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
+  const onEvict = () => evictMutation.mutate();
+  const onDisable = (node: string) => disableMutation.mutate(node);
+  const isEvicting = evictMutation.isPending;
+  const isDisabling = disableMutation.isPending;
 
   return (
-    <Card className="gap-4 py-5">
-      <CardHeader className="px-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <CardTitle className="font-mono text-[15px]">
-              {status?.resource || SELF_HA_RESOURCE}
-            </CardTitle>
-            <p className="mt-1 text-[12.5px] text-muted-foreground">
-              Control plane ·{' '}
-              {status?.enabled ? 'self-managed promoter' : 'standalone'}
-            </p>
-          </div>
-          {status?.enabled ? (
-            <StatusBadge status="enabled" />
-          ) : (
-            <Button size="sm" onClick={() => setEnableOpen(true)}>
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              Enable Self-HA
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="px-5">
-        {status?.enabled ? (
-          <SelfHaEnabled
-            status={status}
-            onEvict={() => evictMutation.mutate()}
-            onDisable={(node) => disableMutation.mutate(node)}
-            isEvicting={evictMutation.isPending}
-            isDisabling={disableMutation.isPending}
-          />
-        ) : (
-          <div className="flex items-start gap-3">
-            <ShieldOff
-              aria-hidden
-              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-            />
-            <p className="text-[13px] text-muted-foreground">
-              Standalone controller. Enable Self-HA to run the management plane
-              on its own DRBD resource with a floating VIP and automatic
-              failover.
-            </p>
-          </div>
-        )}
-      </CardContent>
-
-      <EnableSelfHaDialog
-        open={enableOpen}
-        onOpenChange={setEnableOpen}
-        onEnabled={() => {
-          setEnableOpen(false);
-          invalidate();
-        }}
-      />
-    </Card>
-  );
-}
-
-function SelfHaEnabled({
-  status,
-  onEvict,
-  onDisable,
-  isEvicting,
-  isDisabling,
-}: {
-  status: SelfHaStatus;
-  onEvict: () => void;
-  onDisable: (node: string) => void;
-  isEvicting: boolean;
-  isDisabling: boolean;
-}) {
-  const [disableNode, setDisableNode] = useState(status.activeNode || '');
-
-  const { data: nodes } = useQuery({
-    queryKey: ['nodes'],
-    queryFn: () => api.getNodes(),
-  });
-
-  // status.activeNode is an address; members are node names. Resolve the
-  // active node's name so it displays as a name and highlights correctly.
-  const nodeNameByAddr = new Map(
-    (nodes?.nodes ?? []).map((n) => [n.address, n.name]),
-  );
-  const activeNodeName = status.activeNode
-    ? nodeNameByAddr.get(status.activeNode) ?? status.activeNode
-    : '';
-
-  return (
-    <div className="space-y-4">
-      <p className="text-[12.5px] text-muted-foreground">
-        Active on{' '}
-        <span className="font-mono text-foreground">
-          {activeNodeName || 'no node'}
-        </span>
-      </p>
-
-      <div className="space-y-0.5">
-        <FactRow label="Virtual IP" value={status.vip || '-'} mono />
-      </div>
-
-      <div>
-        <div className="eyebrow">Member nodes</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {(status.nodes ?? []).map((node) => {
-            const isActive = node === activeNodeName;
-            return (
-              <span
-                key={node}
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-[5px] border px-2 py-1 font-mono text-xs',
-                  isActive
-                    ? 'border-transparent bg-accent text-accent-foreground'
-                    : 'border-border bg-muted text-muted-foreground'
-                )}
-              >
-                {node}
-                {isActive ? (
-                  <span className="text-[10.5px]">active</span>
-                ) : null}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+    <>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="outline" size="sm" disabled={isEvicting}>
@@ -869,8 +949,7 @@ function SelfHaEnabled({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -989,6 +1068,7 @@ function EnableSelfHaDialog({
 
 function PromoterCard({
   view,
+  controlPlane,
   onShowDetails,
   onEvict,
   onDelete,
@@ -996,13 +1076,18 @@ function PromoterCard({
   isDeleting,
 }: {
   view: PromoterView;
+  /** Set when this promoter is the one the controller itself runs on. It is a
+   *  role, not a separate card: the chip and the self-HA actions below are the
+   *  whole of what used to be a second card for this same resource. */
+  controlPlane?: SelfHaStatus;
   onShowDetails: (resource: string) => void;
   onEvict: (resource: string, fromNode?: string) => void;
   onDelete: (resource: string) => void;
   isEvicting: boolean;
   isDeleting: boolean;
 }) {
-  const { config, resource, status, promoter, primaryNode } = view;
+  const { config, resource, status, promoter, primaryNode, members, activeMember } =
+    view;
   // No primary anywhere means nothing is promoted, so there is nothing to evict.
   const isRunning = Boolean(primaryNode);
   const { units: startList, live: startListIsLive } = startListFor(config, promoter);
@@ -1013,11 +1098,17 @@ function PromoterCard({
       <CardHeader className="px-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <CardTitle className="font-mono text-[15px]">
-              {config.resource}
-            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="font-mono text-[15px]">
+                {config.resource}
+              </CardTitle>
+              {controlPlane ? (
+                <span className="inline-flex items-center rounded-[5px] bg-accent px-1.5 py-0.5 text-[11px] font-medium text-accent-foreground">
+                  control plane
+                </span>
+              ) : null}
+            </div>
             <p className="mt-1 text-[12.5px] text-muted-foreground">
-              Promoter ·{' '}
               {isRunning ? (
                 <>
                   active on{' '}
@@ -1030,7 +1121,10 @@ function PromoterCard({
               )}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          {/* One line, not a stack. Quorum and role answer one question
+              together, and stacking them left the right edge ragged and cost a
+              row of height on every card. */}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <QuorumPill quorum={status?.quorum} />
             <StatusBadge status={isRunning ? 'running' : 'stopped'} />
           </div>
@@ -1038,21 +1132,62 @@ function PromoterCard({
       </CardHeader>
 
       <CardContent className="space-y-4 px-5">
-        <div className="space-y-0.5">
-          <FactRow label="Virtual IP" value={config.vip || '-'} mono />
-          <FactRow
-            label="Mount point"
-            value={config.mountPoint || '-'}
+        {/* A two-column grid with the label above its value, not a leader line
+            from a left label to a right-flushed value across the whole card.
+            Two cards side by side now line up row for row instead of drifting
+            apart with the length of a mount path. */}
+        <div className="grid grid-cols-2 gap-x-5 gap-y-3.5">
+          <Fact label="Virtual IP" value={config.vip || '-'} mono />
+          <Fact
+            label="Replication"
+            value={
+              resource
+                ? `tcp ${resource.port} · protocol ${resource.protocol}`
+                : '-'
+            }
             mono
           />
-          <FactRow label="Filesystem" value={config.fsType || '-'} />
-          {resource ? (
-            <FactRow
-              label="Replication"
-              value={`tcp ${resource.port} · protocol ${resource.protocol}`}
-              mono
-            />
-          ) : null}
+          <Fact
+            label="Mount point"
+            value={
+              <>
+                <span className="font-mono">{config.mountPoint || '-'}</span>
+                {config.fsType ? (
+                  <span className="ml-1.5 text-muted-foreground">
+                    {config.fsType}
+                  </span>
+                ) : null}
+              </>
+            }
+          />
+          {/* Members used to appear only on the control plane's own card. That
+              openclaw has four replicas is the same kind of fact and was
+              nowhere on screen. */}
+          <div className="min-w-0">
+            <div className="eyebrow">Members</div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {members.length > 0 ? (
+                members.map((m) => (
+                  <span
+                    key={m}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-[5px] px-1.5 py-0.5 font-mono text-[11.5px]',
+                      m === activeMember
+                        ? 'bg-accent text-accent-foreground'
+                        : 'bg-muted text-secondary-foreground',
+                    )}
+                  >
+                    {m}
+                    {m === activeMember ? (
+                      <span className="text-[10px] opacity-75">active</span>
+                    ) : null}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[13px] text-muted-foreground">-</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {startList.length > 0 ? (
@@ -1105,6 +1240,15 @@ function PromoterCard({
             Details
           </Button>
 
+          {/* The control plane gets its own eviction, not this one: moving the
+              controller means the API goes away mid-request, so that path
+              re-reads the active node first and then polls for where it landed.
+              Delete is withheld there too — removing the controller's own HA
+              config from a button beside Evict is not an action to offer in
+              passing; the self-HA card does it deliberately when disabled. */}
+          {controlPlane ? (
+            <SelfHaControls status={controlPlane} />
+          ) : (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -1139,7 +1283,9 @@ function PromoterCard({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          )}
 
+          {controlPlane ? null : (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" disabled={isDeleting}>
@@ -1166,6 +1312,7 @@ function PromoterCard({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          )}
         </div>
 
         <div className="border-t border-border pt-4">
