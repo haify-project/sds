@@ -1,33 +1,39 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { toneOf, TONE_BG, TONE_SOFT } from '@/components/status';
 
 /**
- * Cluster status → badge color mapping shared by all pages, so "online",
- * "Primary", "running" etc. look the same everywhere.
+ * Two readings of one status. `pill` is monochrome with a coloured dot — the
+ * safe default, because a table of thirty rows should not be thirty tinted
+ * blocks. `soft` drops the outline for a tinted fill; it reads louder, so it
+ * belongs on the one status a screen is actually about.
+ *
+ * Only what the variants differ in is spelled out here — `Badge` already sets
+ * the pill shape, padding and type scale.
  */
-const GREEN = ['online', 'running', 'active', 'primary', 'uptodate', 'connected', 'healthy', 'enabled'];
-const YELLOW = ['secondary', 'syncing', 'inconsistent', 'degraded', 'standby'];
-const RED = ['offline', 'stopped', 'inactive', 'failed', 'error', 'diskless', 'disconnected'];
-
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const s = (status || 'unknown').toLowerCase();
-  // Monochrome pill; the small dot is the only color, carrying the status signal.
-  const dot = GREEN.includes(s)
-    ? 'bg-emerald-500'
-    : YELLOW.includes(s)
-      ? 'bg-amber-500'
-      : RED.includes(s)
-        ? 'bg-red-500'
-        : 'bg-muted-foreground';
+export function StatusBadge({
+  status,
+  variant = 'pill',
+  className,
+}: {
+  status: string;
+  variant?: 'pill' | 'soft';
+  className?: string;
+}) {
+  const tone = toneOf(status);
+  const soft = variant === 'soft';
   return (
     <Badge
       variant="outline"
       className={cn(
-        'gap-1.5 border-border bg-transparent font-normal capitalize text-foreground',
+        'px-2.5 capitalize',
+        soft && cn('border-transparent', TONE_SOFT[tone]),
+        !soft && 'gap-1.5 bg-card font-normal',
         className
       )}
     >
-      <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />
+      {/* The dot is the pill's only colour, and carries the whole signal. */}
+      {soft ? null : <span className={cn('h-1.5 w-1.5 rounded-full', TONE_BG[tone])} />}
       {status || 'unknown'}
     </Badge>
   );

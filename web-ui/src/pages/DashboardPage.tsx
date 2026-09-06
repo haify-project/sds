@@ -1,13 +1,20 @@
-import { useQuery } from '@tanstack/react-query';
-import { Server, HardDrive, Boxes, Network, ShieldCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
+import { Plus, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { api } from '@/services/api';
+import type { ClusterEvent } from '@/services/events';
+import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
+import { StatBand, StatBandItem } from '@/components/StatBand';
+import { SegmentBar } from '@/components/SegmentBar';
 import { StatusBadge } from '@/components/StatusBadge';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
+import { RoleChip } from '@/components/RoleChip';
+import { RecordCard, RecordCards } from '@/components/RecordCard';
+import { TONE_BG, TONE_TEXT, toneOf } from '@/components/status';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -21,31 +28,70 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 
+// The five queries this page is made of, in one place: the Refresh button has
+// to invalidate exactly the keys the page reads, and a key that drifts from its
+// useQuery below produces a button that looks like it works and refreshes
+// nothing.
+const PAGE_QUERY_KEYS = {
+  nodes: ['nodes'],
+  pools: ['pools'],
+  resources: ['resources'],
+  gateways: ['gateways'],
+  selfHa: ['selfha'],
+  events: ['events', 'recent'],
+} as const;
+
+/** Coarse "how long ago", for a header line and a last-seen column. */
+function agoLabel(ms: number): string {
+  const secs = Math.max(0, Math.round(ms / 1000));
+  if (secs < 5) return 'now';
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  return `${Math.floor(secs / 86400)}d ago`;
+}
+
 export function DashboardPage() {
-  const { data: nodes, isLoading: nodesLoading } = useQuery({
-    queryKey: ['nodes'],
+  const queryClient = useQueryClient();
+
+  const {
+    data: nodes,
+    isLoading: nodesLoading,
+    dataUpdatedAt: nodesUpdatedAt,
+  } = useQuery({
+    queryKey: PAGE_QUERY_KEYS.nodes,
     queryFn: () => api.getNodes(),
   });
 
   const { data: pools, isLoading: poolsLoading } = useQuery({
-    queryKey: ['pools'],
+    queryKey: PAGE_QUERY_KEYS.pools,
     queryFn: () => api.getPools(),
   });
 
   const { data: resources, isLoading: resourcesLoading } = useQuery({
-    queryKey: ['resources'],
+    queryKey: PAGE_QUERY_KEYS.resources,
     queryFn: () => api.getResources(),
   });
 
   const { data: gateways, isLoading: gatewaysLoading } = useQuery({
-    queryKey: ['gateways'],
+    queryKey: PAGE_QUERY_KEYS.gateways,
     queryFn: () => api.getGateways(),
   });
 
   const { data: selfHa, isLoading: selfHaLoading } = useQuery({
-    queryKey: ['selfha'],
+    queryKey: PAGE_QUERY_KEYS.selfHa,
     queryFn: () => api.getSelfHaStatus(),
   });
+
+  // Everything on this page that reads "n seconds ago" is measured against a
+  // fixed timestamp, so without a tick it freezes at whatever it said when the
+  // page mounted — which is exactly the value an operator would trust. Five
+  // seconds matches the queries' staleTime; it is not a poll.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   const totalNodes = nodes?.nodes.length ?? 0;
   const onlineNodes =
@@ -73,181 +119,276 @@ export function DashboardPage() {
   const runningGateways =
     gateways?.gateways.filter((g) => g.state === 'running').length ?? 0;
 
+  // The segment bar is decorative, so the same node states are also spelled
+  // out beside it — counted by the word the controller actually used rather
+  // than by tone, because "3 online · 1 offline" says more than "3 ok · 1 bad".
+  const nodeStateCounts = new Map<string, number>();
+  for (const n of nodes?.nodes ?? []) {
+    nodeStateCounts.set(n.state, (nodeStateCounts.get(n.state) ?? 0) + 1);
+  }
+  const nodeStateWords = [...nodeStateCounts]
+    .map(([state, count]) => `${count} ${state}`)
+    .join(' · ');
+
+  const totalVolumes =
+    resources?.resources.reduce((acc, r) => acc + r.volumes.length, 0) ?? 0;
+  const drResources = resources?.resources.filter((r) => r.drNode).length ?? 0;
+  const quorumRiskResources =
+    resources?.resources.filter((r) => r.quorumRisk).length ?? 0;
+  const resourceDetail = [
+    `${totalVolumes} volume${totalVolumes === 1 ? '' : 's'}`,
+    drResources > 0 ? `${drResources} replicated off-site` : null,
+    quorumRiskResources > 0 ? `${quorumRiskResources} at quorum risk` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const stoppedGateways =
+    gateways?.gateways.filter((g) => g.state !== 'running') ?? [];
+
+  // Self-HA membership is the only role information the cluster hands us for a
+  // node: /selfha names the members and the address currently holding the
+  // control plane. Anything else would be invented.
+  const haMembers = new Set(selfHa?.nodes ?? []);
+
+  // The role column's heading and its last-seen formatting are named once and
+  // used by both the card and the row: a value derived twice is a value that
+  // can end up saying two different things about the same node.
+  const roleLabel =
+    selfHa?.enabled && selfHa.resource
+      ? `Role in ${selfHa.resource}`
+      : 'Self-HA role';
+  const lastSeenLabel = (lastSeen: string) => {
+    const ts = Number(lastSeen);
+    return ts ? agoLabel(now - ts * 1000) : '-';
+  };
+
+  // Any of this page's queries in flight — the button says so rather than
+  // looking inert while a wedged controller keeps it waiting.
+  const isFetching = useIsFetching();
+
+  const refresh = () => {
+    for (const queryKey of Object.values(PAGE_QUERY_KEYS)) {
+      queryClient.invalidateQueries({ queryKey });
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Online Nodes
-            </CardTitle>
-            <Server className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {nodesLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
+    <div>
+      <PageHeader
+        title="Cluster overview"
+        description={
+          <>
+            {/* Three cases, not two. Self-HA enabled with no active node is
+                the failover window — the moment an operator is most likely to
+                be reading this line, and the one where saying "standalone"
+                would be a flat lie. An errored or unread query says nothing. */}
+            {selfHa === undefined ? null : !selfHa.enabled ? (
+              <>Standalone controller · </>
+            ) : activeNodeName ? (
               <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {onlineNodes}
-                  <span className="text-xl text-muted-foreground">
-                    /{totalNodes}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  nodes reporting online
-                </p>
+                Control plane on{' '}
+                <span className="font-mono text-foreground">{activeNodeName}</span>
+                {' · '}
               </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Storage
-            </CardTitle>
-            <HardDrive className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {poolsLoading ? (
-              <Skeleton className="h-8 w-32" />
             ) : (
-              <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {freeStorage}
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {' '}
-                    / {totalStorage} GB free
-                  </span>
-                </div>
-                <Progress value={usagePct} className="mt-3" />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {usedStorage} GB used ({usagePct.toFixed(0)}%)
-                </p>
-              </>
+              <>Control plane · no active node · </>
             )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Resources
-            </CardTitle>
-            <Boxes className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {resourcesLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
+            {selfHa?.vip ? (
               <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {totalResources}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  DRBD resources
-                </p>
+                VIP{' '}
+                <span className="font-mono text-foreground">{selfHa.vip}</span>
+                {' · '}
               </>
-            )}
-          </CardContent>
-        </Card>
+            ) : null}
+            synced{' '}
+            <span className="font-mono tabular-nums text-foreground">
+              {nodesUpdatedAt ? agoLabel(now - nodesUpdatedAt) : '—'}
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <Button variant="outline" onClick={refresh} disabled={isFetching > 0}>
+              <RefreshCw className={cn(isFetching > 0 && 'animate-spin')} />
+              Refresh
+            </Button>
+            {/* Resource creation is a dialog on the Resources page, not a route
+                of its own, so this lands on the page that owns it. */}
+            <Button asChild>
+              <Link to="/resources">
+                <Plus />
+                New resource
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">
-              Gateways
-            </CardTitle>
-            <Network className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {gatewaysLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-                  {runningGateways}
-                  <span className="text-xl text-muted-foreground">
-                    /{totalGateways}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  running gateways
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Controller Self-HA */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-            Controller Self-HA
-          </CardTitle>
-          {!selfHaLoading && (
-            <StatusBadge status={selfHa?.enabled ? 'enabled' : 'disabled'} />
-          )}
-        </CardHeader>
-        <CardContent>
-          {selfHaLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-48" />
-              <Skeleton className="h-5 w-64" />
-            </div>
-          ) : selfHa?.enabled ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex flex-wrap gap-x-8 gap-y-2">
-                <div>
-                  <span className="text-muted-foreground">VIP: </span>
-                  <span className="font-medium">{selfHa.vip || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Active node: </span>
-                  <span className="font-medium">{activeNodeName || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Resource: </span>
-                  <span className="font-medium">{selfHa.resource || '-'}</span>
-                </div>
+      <div className="space-y-[18px]">
+        {/* Four 27px figures in a non-wrapping row have ~90px each at 375px:
+            the digits crush and the fourth column falls off the band's own
+            overflow-hidden edge. Stacked below `sm`, with the dividers turning
+            from vertical to horizontal so the band still reads as one object.
+            The 2-up phone grid this wants instead needs StatBand to own its
+            divider rule, which is not this page's to change. */}
+        <StatBand className="flex-col divide-x-0 divide-y sm:flex-row sm:divide-x sm:divide-y-0">
+          <StatBandItem
+            label="Online nodes"
+            value={onlineNodes}
+            unit={`/${totalNodes}`}
+            loading={nodesLoading}
+            detail={
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <SegmentBar
+                  segments={(nodes?.nodes ?? []).map((n) => toneOf(n.state))}
+                />
+                <span className="text-[11.5px]">{nodeStateWords || '—'}</span>
               </div>
-              {selfHa.nodes && selfHa.nodes.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-foreground">Members:</span>
-                    {selfHa.nodes.map((n) => (
-                      <Badge
-                        key={n}
-                        variant={n === activeNodeName ? 'default' : 'secondary'}
-                      >
-                        {n}
-                        {n === activeNodeName && ' (active)'}
-                      </Badge>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Standalone controller — self-HA is not enabled.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            }
+          />
+          <StatBandItem
+            label="Storage"
+            value={freeStorage}
+            unit={`of ${totalStorage} GB free`}
+            grow={1.6}
+            loading={poolsLoading}
+            detail={
+              <>
+                <Progress value={usagePct} className="h-[5px]" />
+                <p className="mt-1.5">
+                  <span className="font-mono tabular-nums">{usedStorage}</span>{' '}
+                  GB used (
+                  <span className="font-mono tabular-nums">
+                    {usagePct.toFixed(0)}%
+                  </span>
+                  )
+                </p>
+              </>
+            }
+          />
+          <StatBandItem
+            label="DRBD resources"
+            value={totalResources}
+            loading={resourcesLoading}
+            detail={resourceDetail}
+          />
+          <StatBandItem
+            label="Gateways"
+            value={runningGateways}
+            unit={`/${totalGateways}`}
+            loading={gatewaysLoading}
+            detail={
+              stoppedGateways.length > 0 ? (
+                <span className="text-status-warn-text">
+                  {stoppedGateways
+                    .slice(0, 2)
+                    .map((g) => g.name)
+                    .join(', ')}
+                  {stoppedGateways.length > 2
+                    ? ` +${stoppedGateways.length - 2} more`
+                    : ''}{' '}
+                  not running
+                </span>
+              ) : totalGateways > 0 ? (
+                'all running'
+              ) : (
+                'none configured'
+              )
+            }
+          />
+        </StatBand>
 
-      {/* Cluster nodes table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Cluster Nodes</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+        <Card className="gap-4 py-[18px] lg:col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between px-5">
+            <CardTitle className="flex items-center gap-2.5">
+              <ShieldCheck className="h-[17px] w-[17px] text-primary" />
+              Controller Self-HA
+            </CardTitle>
+            {!selfHaLoading && (
+              <StatusBadge status={selfHa?.enabled ? 'enabled' : 'disabled'} />
+            )}
+          </CardHeader>
+          <CardContent className="px-5">
+            {selfHaLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-5 w-64" />
+              </div>
+            ) : selfHa?.enabled ? (
+              <div className="space-y-[18px]">
+                {/* Three columns of ~90px cannot hold a CIDR: the VIP ran
+                    past the card's edge. Two columns on a phone, and the VIP —
+                    the only long value here — takes both. */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-3">
+                  <div className="min-w-0">
+                    <div className="eyebrow">Active node</div>
+                    <div className="mt-1.5 font-mono text-sm break-words">
+                      {activeNodeName || '-'}
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="eyebrow">Resource</div>
+                    <div className="mt-1.5 font-mono text-sm break-words">
+                      {selfHa.resource || '-'}
+                    </div>
+                  </div>
+                  <div className="col-span-2 min-w-0 sm:col-span-1">
+                    <div className="eyebrow">VIP</div>
+                    <div className="mt-1.5 font-mono text-sm break-all tabular-nums">
+                      {selfHa.vip || '-'}
+                    </div>
+                  </div>
+                </div>
+                {selfHa.nodes && selfHa.nodes.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="eyebrow">Members</div>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        {selfHa.nodes.map((n) => (
+                          <Badge
+                            key={n}
+                            variant={
+                              n === activeNodeName ? 'default' : 'secondary'
+                            }
+                            className="font-mono font-normal"
+                          >
+                            {n}
+                            {n === activeNodeName && ' (active)'}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Standalone controller — self-HA is not enabled.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <RecentEvents />
+        </div>
+
+        {/* No CardHeader/CardContent here: the table draws its own row rule to
+            the card's edges, which the card's padding would inset. */}
+        <Card className="gap-0 overflow-hidden py-0">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3.5">
+            <div className="text-[14.5px] font-semibold">Cluster nodes</div>
+            <Link
+              to="/nodes"
+              className="text-[12.5px] text-primary hover:underline"
+            >
+              Manage nodes
+            </Link>
+          </div>
           {nodesLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 px-5 pb-5">
               {Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
@@ -260,39 +401,223 @@ export function DashboardPage() {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Hostname</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Version</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {nodes?.nodes.map((node) => (
-                  <TableRow key={node.name}>
-                    <TableCell className="font-medium">{node.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {node.address}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {node.hostname}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={node.state} />
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {node.version}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <>
+              {/* Below `md` the six columns put role, state and last-seen past
+                  the right edge. The same rows render as cards instead — no
+                  expand on this one: the Dashboard's node list is a summary,
+                  and "Manage nodes" already leads to the full page. */}
+              <RecordCards className="px-5 pb-5">
+                {nodes?.nodes.map((node) => {
+                  const isMember = haMembers.has(node.name);
+                  return (
+                    <RecordCard
+                      key={node.name}
+                      status={node.state}
+                      title={
+                        <>
+                          <span className="font-mono text-[14px] font-semibold">
+                            {node.name}
+                          </span>
+                          <span className="text-[11.5px] text-muted-foreground">
+                            {node.hostname}
+                          </span>
+                        </>
+                      }
+                      subtitle={
+                        <span className="font-mono tabular-nums">
+                          {node.address}
+                        </span>
+                      }
+                      facts={[
+                        {
+                          label: roleLabel,
+                          value: (
+                            <NodeRole
+                              selfHaEnabled={!!selfHa?.enabled}
+                              isMember={isMember}
+                              isActive={node.name === activeNodeName}
+                            />
+                          ),
+                        },
+                        {
+                          label: 'State',
+                          value: <StatusBadge status={node.state} />,
+                        },
+                        {
+                          label: 'Last seen',
+                          value: (
+                            <span className="font-mono tabular-nums text-muted-foreground">
+                              {lastSeenLabel(node.lastSeen)}
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              </RecordCards>
+
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <StatusTickHead />
+                      <TableHead>Node</TableHead>
+                      <TableHead>Address</TableHead>
+                      <TableHead>{roleLabel}</TableHead>
+                      <TableHead>State</TableHead>
+                      <TableHead className="pr-5 text-right">
+                        Last seen
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {nodes?.nodes.map((node) => {
+                      const isMember = haMembers.has(node.name);
+                      return (
+                        <TableRow key={node.name}>
+                          <StatusTickCell status={node.state} />
+                          <TableCell>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-mono font-medium">
+                                {node.name}
+                              </span>
+                              <span className="text-[11.5px] text-muted-foreground">
+                                {node.hostname}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono tabular-nums">
+                            {node.address}
+                          </TableCell>
+                          <TableCell>
+                            <NodeRole
+                              selfHaEnabled={!!selfHa?.enabled}
+                              isMember={isMember}
+                              isActive={node.name === activeNodeName}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={node.state} />
+                          </TableCell>
+                          <TableCell className="pr-5 text-right font-mono tabular-nums text-muted-foreground">
+                            {lastSeenLabel(node.lastSeen)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
+  );
+}
+
+/**
+ * The only role the cluster hands us for a node: self-HA membership, and which
+ * member currently holds the control plane. Rendered by both the card and the
+ * row so neither can call a node Primary while the other calls it a stranger.
+ */
+function NodeRole({
+  selfHaEnabled,
+  isMember,
+  isActive,
+}: {
+  selfHaEnabled: boolean;
+  isMember: boolean;
+  isActive: boolean;
+}) {
+  if (!selfHaEnabled) return <span className="text-muted-foreground">—</span>;
+  if (!isMember)
+    return <span className="text-muted-foreground">not a member</span>;
+  return <RoleChip role={isActive ? 'Primary' : 'Secondary'} />;
+}
+
+/** Severity → the tone vocabulary the rest of the console uses. The controller
+ *  sends "info" | "warning" | "critical"; `toneOf` does not know those words,
+ *  so the mapping is stated here rather than guessed from the message text. */
+const EVENT_TONE = {
+  critical: 'bad',
+  warning: 'warn',
+  info: 'idle',
+} as const;
+
+/**
+ * What just happened to the cluster, read back from the controller's bounded
+ * in-memory history. The SSE stream in services/events.ts is the live tail of
+ * the same bus — this is how a page that was not open at the time still shows
+ * the failover that woke someone up.
+ */
+function RecentEvents() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: PAGE_QUERY_KEYS.events,
+    queryFn: () => api.listEvents({ limit: 4 }),
+  });
+
+  // The controller returns oldest first; newest belongs at the top of a card
+  // this short.
+  const events: ClusterEvent[] = [...(data?.events ?? [])].reverse();
+
+  return (
+    <Card className="gap-4 py-[18px] lg:col-span-2">
+      <CardHeader className="flex flex-row items-center justify-between px-5">
+        <CardTitle>Recent events</CardTitle>
+        <Link to="/notifications" className="text-[12.5px] text-primary hover:underline">
+          All events
+        </Link>
+      </CardHeader>
+      <CardContent className="px-5">
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        ) : isError ? (
+          <p className="text-sm text-muted-foreground">Could not read the event history.</p>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing yet — the controller has published no events since it started.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {events.map((event, i) => {
+              const tone = EVENT_TONE[event.severity] ?? 'idle';
+              return (
+                <div
+                  key={event.id}
+                  className={cn(
+                    'flex gap-3 py-2.5',
+                    i > 0 && 'border-t border-border/70',
+                  )}
+                >
+                  {/* The rail repeats the severity; the word below carries it. */}
+                  <span
+                    aria-hidden
+                    className={cn('w-[3px] shrink-0 rounded-[2px]', TONE_BG[tone])}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] leading-snug">{event.message}</p>
+                    <p className="mt-1 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+                      <span className={cn('capitalize', TONE_TEXT[tone])}>{event.severity}</span>
+                      <span aria-hidden>·</span>
+                      <span className="font-mono tabular-nums">{event.type}</span>
+                      <span aria-hidden>·</span>
+                      <span className="font-mono tabular-nums">
+                        {new Date(event.timestamp).toLocaleTimeString()}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   api,
@@ -8,27 +8,23 @@ import {
   ISCSILUN,
   NVMeNamespace,
 } from '@/services/api';
-import { StatusBadge } from '@/components/StatusBadge';
 import { toast } from 'sonner';
 import {
-  Network,
   Plus,
-  Play,
-  Square,
   Trash2,
-  Info,
-  Settings2,
   Loader2,
   X,
   AlertCircle,
-  Inbox,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Network,
 } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { PageHeader } from '@/components/PageHeader';
+import { SegmentedFilter } from '@/components/SegmentedFilter';
+import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
+import { toneOf, TONE_BG, type StatusTone } from '@/components/status';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -57,6 +53,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -70,6 +73,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+// ==================== Protocol vocabulary ====================
+
+type GwKind = 'nfs' | 'iscsi' | 'nvme';
+
+// The ports are the backend's own constants (pkg/gateway/gateway.go), not a
+// guess: a gateway is reachable on exactly one of them.
+const PROTOCOL: Record<GwKind, { label: string; port: number }> = {
+  nfs: { label: 'NFS', port: 2049 },
+  iscsi: { label: 'iSCSI', port: 3260 },
+  nvme: { label: 'NVMe-oF', port: 4420 },
+};
+
+// The backend reports the NVMe type as "nvmeof" (reactor config naming).
+function gwKind(type: string | undefined): GwKind {
+  if (type === 'nvmeof' || type === 'nvme') return 'nvme';
+  if (type === 'iscsi') return 'iscsi';
+  return 'nfs';
+}
+
+// The list endpoint says "started"; older records and the reactor say
+// "running". Both mean the promoter's services came up.
+function isRunning(state: string | undefined): boolean {
+  return state === 'started' || state === 'running';
+}
+
+// Thin alias: `toneOf` now knows "started" itself, so there is nothing to
+// normalise — kept as a name because the call sites read better for it.
+function gatewayTone(state: string | undefined): StatusTone {
+  return toneOf(state);
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+// ==================== Page ====================
 
 export function GatewaysPage() {
   const queryClient = useQueryClient();
@@ -93,9 +133,14 @@ export function GatewaysPage() {
     queryFn: () => api.getResources(),
   });
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [detailsGateway, setDetailsGateway] = useState<Gateway | null>(null);
+  const [createType, setCreateType] = useState<GwKind | null>(null);
   const [manageGateway, setManageGateway] = useState<Gateway | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  // The delete confirmation lives at page level rather than inside each row's
+  // dropdown: a Radix AlertDialog nested in a menu item is unmounted with the
+  // menu the moment it would open.
+  const [pendingDelete, setPendingDelete] = useState<Gateway | null>(null);
+  const [filter, setFilter] = useState<GwKind | 'all'>('all');
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['gateways'] });
@@ -127,161 +172,118 @@ export function GatewaysPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const showDetails = async (gateway: Gateway) => {
-    try {
-      const data = await api.getGateway(gateway.id);
-      setDetailsGateway(data.gateway);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+  const list = useMemo(() => gateways?.gateways ?? [], [gateways]);
+  const counts = useMemo(() => {
+    const c: Record<GwKind, number> = { nfs: 0, iscsi: 0, nvme: 0 };
+    for (const g of list) c[gwKind(g.type)] += 1;
+    return c;
+  }, [list]);
+  const running = list.filter((g) => isRunning(g.state)).length;
+  const shown = filter === 'all' ? list : list.filter((g) => gwKind(g.type) === filter);
+
+  const openCreate = (kind: GwKind) => {
+    // Pull a fresh resource list so newly created resources show up in the
+    // dropdown without a full page reload.
+    queryClient.invalidateQueries({ queryKey: ['resources'] });
+    setCreateType(kind);
   };
 
-  const list = gateways?.gateways ?? [];
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Storage Gateways</h3>
-          <p className="text-sm text-muted-foreground">
-            Export DRBD resources over NFS, iSCSI and NVMe-oF.
-          </p>
-        </div>
-        <Button
-          onClick={() => {
-            // Pull a fresh resource list so newly created resources show up in
-            // the dropdown without a full page reload.
-            queryClient.invalidateQueries({ queryKey: ['resources'] });
-            setCreateOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Create Gateway
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Gateways"
+        description={
+          <>
+            A gateway is a DRBD resource plus a drbd-reactor promoter config, so
+            the export follows the resource on failover.{' '}
+            <span className="font-mono text-foreground">{list.length}</span>{' '}
+            configured,{' '}
+            <span className="font-mono text-foreground">{running}</span> started.
+          </>
+        }
+        actions={
+          <>
+            <SegmentedFilter
+              aria-label="Filter gateways by protocol"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: 'All', count: list.length },
+                { value: 'nfs', label: 'NFS', count: counts.nfs },
+                { value: 'iscsi', label: 'iSCSI', count: counts.iscsi },
+                { value: 'nvme', label: 'NVMe-oF', count: counts.nvme },
+              ]}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <Plus />
+                  New gateway
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => openCreate('nfs')}>
+                  NFS export
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openCreate('iscsi')}>
+                  iSCSI target
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openCreate('nvme')}>
+                  NVMe-oF subsystem
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="px-0">
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 px-5 py-2">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : list.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-              <Network className="h-8 w-8 text-muted-foreground" />
+          ) : shown.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-14 text-center">
+              <Network className="h-7 w-7 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
-                No gateways yet. Create a gateway to expose your storage.
+                {list.length === 0
+                  ? 'No gateways yet. Create one to export a resource over NFS, iSCSI or NVMe-oF.'
+                  : `No ${PROTOCOL[filter as GwKind].label} gateways configured.`}
               </p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
+                  <StatusTickHead />
+                  <TableHead>Gateway</TableHead>
                   <TableHead>Resource</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Node</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Service IP</TableHead>
+                  <TableHead>Active node</TableHead>
+                  <TableHead>Clients</TableHead>
+                  <TableHead className="pr-5 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((gateway) => {
-                  const isRunning = gateway.state === 'running';
-                  return (
-                    <TableRow key={gateway.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Network className="h-4 w-4 text-muted-foreground" />
-                          {gateway.name || gateway.id}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {gateway.type.toUpperCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {gateway.resource}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={gateway.state || 'unknown'} />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {gateway.node || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setManageGateway(gateway)}
-                          >
-                            <Settings2 className="mr-1 h-3 w-3" />
-                            Manage
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => showDetails(gateway)}
-                          >
-                            <Info className="h-3 w-3" />
-                          </Button>
-                          {isRunning ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={stopMutation.isPending}
-                              onClick={() => stopMutation.mutate(gateway.id)}
-                            >
-                              <Square className="h-3 w-3" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={startMutation.isPending}
-                              onClick={() => startMutation.mutate(gateway.id)}
-                            >
-                              <Play className="h-3 w-3" />
-                            </Button>
-                          )}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <Trash2 className="h-3 w-3 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Delete gateway?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This removes the drbd-reactor config for
-                                  gateway "{gateway.name || gateway.id}". The
-                                  underlying DRBD resource is not affected.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() =>
-                                    deleteMutation.mutate(gateway.id)
-                                  }
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {shown.map((gateway) => (
+                  <GatewayRow
+                    key={gateway.id}
+                    gateway={gateway}
+                    expanded={expanded === gateway.id}
+                    onToggle={() =>
+                      setExpanded((cur) => (cur === gateway.id ? null : gateway.id))
+                    }
+                    onManage={() => setManageGateway(gateway)}
+                    onDelete={() => setPendingDelete(gateway)}
+                    onStart={() => startMutation.mutate(gateway.id)}
+                    onStop={() => stopMutation.mutate(gateway.id)}
+                    startPending={startMutation.isPending}
+                    stopPending={stopMutation.isPending}
+                  />
+                ))}
               </TableBody>
             </Table>
           )}
@@ -289,24 +291,665 @@ export function GatewaysPage() {
       </Card>
 
       <CreateGatewayDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
+        type={createType}
+        onTypeChange={setCreateType}
         resources={resources?.resources ?? []}
         onCreated={() => {
-          setCreateOpen(false);
+          setCreateType(null);
           invalidate();
         }}
-      />
-
-      <DetailsDialog
-        gateway={detailsGateway}
-        onOpenChange={(open) => !open && setDetailsGateway(null)}
       />
 
       <ManageDialog
         gateway={manageGateway}
         onOpenChange={(open) => !open && setManageGateway(null)}
       />
+
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete gateway?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the drbd-reactor config for gateway "
+              {pendingDelete?.name || pendingDelete?.id}". The underlying DRBD
+              resource is not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                pendingDelete && deleteMutation.mutate(pendingDelete.id)
+              }
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ==================== Row ====================
+
+/**
+ * What the row and its expansion both need. The query keys are the ones the
+ * manage dialog already uses, so opening the dialog reuses this cache instead
+ * of re-fetching, and a mutation there invalidates the row too. Only the
+ * queries this gateway's protocol has are enabled; the rest never fire.
+ */
+function useGatewayDetail(kind: GwKind, resource: string) {
+  const nfs = kind === 'nfs';
+  const iscsi = kind === 'iscsi';
+  const nvme = kind === 'nvme';
+  const exports = useQuery({
+    queryKey: ['nfs-exports', resource],
+    queryFn: () => api.listNFSExports(resource),
+    enabled: nfs,
+    retry: false,
+  });
+  const luns = useQuery({
+    queryKey: ['iscsi-luns', resource],
+    queryFn: () => api.listISCSILUNs(resource),
+    enabled: iscsi,
+    retry: false,
+  });
+  const initiators = useQuery({
+    queryKey: ['iscsi-initiators', resource],
+    queryFn: () => api.listISCSIInitiators(resource),
+    enabled: iscsi,
+    retry: false,
+  });
+  const chap = useQuery({
+    queryKey: ['iscsi-chap', resource],
+    queryFn: () => api.getISCSIChap(resource),
+    enabled: iscsi,
+    retry: false,
+  });
+  const namespaces = useQuery({
+    queryKey: ['nvme-namespaces', resource],
+    queryFn: () => api.listNVMeNamespaces(resource),
+    enabled: nvme,
+    retry: false,
+  });
+  const hosts = useQuery({
+    queryKey: ['nvme-hosts', resource],
+    queryFn: () => api.listNVMeHosts(resource),
+    enabled: nvme,
+    retry: false,
+  });
+  return { exports, luns, initiators, chap, namespaces, hosts };
+}
+
+function GatewayRow({
+  gateway,
+  expanded,
+  onToggle,
+  onManage,
+  onDelete,
+  onStart,
+  onStop,
+  startPending,
+  stopPending,
+}: {
+  gateway: Gateway;
+  expanded: boolean;
+  onToggle: () => void;
+  onManage: () => void;
+  onDelete: () => void;
+  onStart: () => void;
+  onStop: () => void;
+  startPending: boolean;
+  stopPending: boolean;
+}) {
+  const kind = gwKind(gateway.type);
+  const proto = PROTOCOL[kind];
+  const detail = useGatewayDetail(kind, gateway.resource);
+  const running = isRunning(gateway.state);
+  const tone = gatewayTone(gateway.state);
+  const options = (gateway.options ?? {}) as Record<string, unknown>;
+  const opt = (key: string) => {
+    const v = options[key];
+    return typeof v === 'string' && v ? v : '';
+  };
+  const serviceIp = opt('service_ip');
+  const name = gateway.name || gateway.id;
+
+  // The subtitle's count comes from the protocol's own list endpoint; while it
+  // is still loading or has errored there is no honest number to print.
+  const items =
+    kind === 'nfs'
+      ? detail.exports.data?.exports
+      : kind === 'iscsi'
+        ? detail.luns.data?.luns
+        : detail.namespaces.data?.namespaces;
+  const itemLabel = kind === 'nfs' ? 'export' : kind === 'iscsi' ? 'LUN' : 'namespace';
+  const subtitle = [
+    proto.label,
+    `port ${proto.port}`,
+    items ? plural(items.length, itemLabel) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <>
+      <TableRow className={expanded ? 'border-b-transparent' : undefined}>
+        <StatusTickCell tone={tone} />
+        <TableCell>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={onToggle}
+            className="flex items-center gap-2.5 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {expanded ? (
+              <ChevronDown className="size-3.5 shrink-0 text-foreground" />
+            ) : (
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+            )}
+            <span className="min-w-0">
+              <span className="block max-w-[220px] truncate font-mono text-sm font-semibold">
+                {name}
+              </span>
+              <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                {subtitle}
+              </span>
+            </span>
+          </button>
+        </TableCell>
+        <TableCell className="font-mono text-muted-foreground">
+          {gateway.resource}
+        </TableCell>
+        <TableCell className="font-mono text-muted-foreground">
+          <span className="block max-w-[170px] truncate" title={serviceIp || undefined}>
+            {serviceIp || '—'}
+          </span>
+        </TableCell>
+        <TableCell>
+          <span className="block font-mono">{gateway.node || '—'}</span>
+          {running ? null : (
+            <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+              {gateway.state || 'unknown'}
+            </span>
+          )}
+        </TableCell>
+        <TableCell className="text-muted-foreground">
+          <ClientsSummary kind={kind} detail={detail} />
+        </TableCell>
+        <TableCell className="pr-5 text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            {running ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={stopPending}
+                onClick={onStop}
+              >
+                {stopPending && <Loader2 className="animate-spin" />}
+                Stop
+              </Button>
+            ) : (
+              <Button size="sm" disabled={startPending} onClick={onStart}>
+                {startPending && <Loader2 className="animate-spin" />}
+                Start
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${name}`}>
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={onManage}>
+                  Manage {proto.label}…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onToggle}>
+                  {expanded ? 'Hide detail' : 'Show detail'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                  Delete gateway
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </TableCell>
+      </TableRow>
+
+      {expanded ? (
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={7} className="h-auto bg-muted/40 p-0">
+            <div className="grid grid-cols-1 gap-6 py-1 pr-6 pb-6 pl-11 lg:grid-cols-5">
+              <div className="min-w-0 lg:col-span-3">
+                {kind === 'nfs' ? (
+                  <NFSDetailPanel detail={detail} onManage={onManage} />
+                ) : kind === 'iscsi' ? (
+                  <ISCSIDetailPanel detail={detail} onManage={onManage} />
+                ) : (
+                  <NVMeDetailPanel detail={detail} onManage={onManage} />
+                )}
+              </div>
+              <div className="min-w-0 lg:col-span-2">
+                <StartChainPanel
+                  kind={kind}
+                  detail={detail}
+                  state={gateway.state}
+                  identity={
+                    kind === 'nfs'
+                      ? [
+                          ['Export directory', opt('export_directory') || opt('export_path')],
+                          ['Filesystem', opt('fs_type')],
+                        ]
+                      : kind === 'iscsi'
+                        ? [
+                            ['Target IQN', opt('iqn')],
+                            ['Implementation', opt('implementation')],
+                          ]
+                        : [
+                            ['Subsystem NQN', opt('nqn')],
+                            ['Transport', opt('transport_type')],
+                          ]
+                  }
+                />
+              </div>
+            </div>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  );
+}
+
+type GatewayDetail = ReturnType<typeof useGatewayDetail>;
+
+/**
+ * Who can reach this gateway, in the terms its protocol actually uses. Nothing
+ * here is inferred: an empty allow-list is reported as empty, and a list we
+ * could not read is reported as unknown rather than as zero.
+ */
+function ClientsSummary({ kind, detail }: { kind: GwKind; detail: GatewayDetail }) {
+  if (kind === 'nfs') {
+    const q = detail.exports;
+    if (q.isLoading) return <span>…</span>;
+    if (q.error || !q.data) return <span>—</span>;
+    const specs = [
+      ...new Set(q.data.exports.map((e) => e.clientspec).filter(Boolean)),
+    ];
+    if (specs.length > 0) {
+      return <span title={specs.join(', ')}>{plural(specs.length, 'allowed client')}</span>;
+    }
+    return <span>{q.data.exports.length > 0 ? 'no client restriction' : 'no exports yet'}</span>;
+  }
+
+  if (kind === 'iscsi') {
+    const q = detail.initiators;
+    if (q.isLoading) return <span>…</span>;
+    if (q.error || !q.data) return <span>—</span>;
+    const n = q.data.initiators.length;
+    const chap = detail.chap.data?.username ? ' · CHAP' : '';
+    return (
+      <span title={q.data.initiators.join(', ') || undefined}>
+        {n === 0 ? 'no initiators allowed yet' : plural(n, 'initiator')}
+        {chap}
+      </span>
+    );
+  }
+
+  const q = detail.hosts;
+  if (q.isLoading) return <span>…</span>;
+  if (q.error || !q.data) return <span>—</span>;
+  const n = q.data.hosts.length;
+  return (
+    <span title={q.data.hosts.join(', ') || undefined}>
+      {n === 0 ? 'no hosts allowed yet' : plural(n, 'allowed host')}
+    </span>
+  );
+}
+
+// ==================== Expanded detail ====================
+
+function PanelLabel({ children }: { children: ReactNode }) {
+  return <div className="eyebrow mb-2.5">{children}</div>;
+}
+
+/** A denser table than the page's own — 40px rows, for a panel inside a row. */
+function MiniTable({ heads, children }: { heads: string[]; children: ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr>
+            {heads.map((h) => (
+              <th key={h} className="eyebrow px-3.5 pt-2.5 pb-2 whitespace-nowrap">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+const MINI_TD =
+  'h-10 border-t border-border/60 px-3.5 text-[12.5px] whitespace-nowrap';
+
+function MiniEmpty({ colSpan, label }: { colSpan: number; label: string }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className={`${MINI_TD} text-center text-muted-foreground`}>
+        {label}
+      </td>
+    </tr>
+  );
+}
+
+/** Long identifiers get one line and a tooltip, never a wrap. */
+function Mono({ value, className }: { value: string; className?: string }) {
+  return (
+    <span
+      title={value || undefined}
+      className={`block max-w-[280px] truncate font-mono ${className ?? ''}`}
+    >
+      {value || '—'}
+    </span>
+  );
+}
+
+function PanelState({ query }: { query: { isLoading: boolean; error: unknown } }) {
+  if (query.error) return <QueryError message={(query.error as Error).message} />;
+  return <Skeleton className="h-24 w-full" />;
+}
+
+function NFSDetailPanel({
+  detail,
+  onManage,
+}: {
+  detail: GatewayDetail;
+  onManage: () => void;
+}) {
+  const q = detail.exports;
+  const exports: NFSExport[] = q.data?.exports ?? [];
+  return (
+    <div>
+      <PanelLabel>Exports</PanelLabel>
+      {q.isLoading || q.error ? (
+        <PanelState query={q} />
+      ) : (
+        <MiniTable heads={['Directory', 'FSID', 'Client', 'Options']}>
+          {exports.length === 0 ? (
+            <MiniEmpty colSpan={4} label="No exports configured" />
+          ) : (
+            exports.map((e) => (
+              <tr key={e.directory}>
+                <td className={MINI_TD}>
+                  <Mono value={e.directory} />
+                </td>
+                <td className={MINI_TD}>
+                  <Mono value={e.fsid} className="text-muted-foreground" />
+                </td>
+                <td className={MINI_TD}>
+                  <Mono value={e.clientspec} />
+                </td>
+                <td className={MINI_TD}>
+                  <Mono value={e.options} className="text-muted-foreground" />
+                </td>
+              </tr>
+            ))
+          )}
+        </MiniTable>
+      )}
+      <Button variant="outline" size="sm" className="mt-3" onClick={onManage}>
+        <Plus />
+        Manage exports
+      </Button>
+    </div>
+  );
+}
+
+function ISCSIDetailPanel({
+  detail,
+  onManage,
+}: {
+  detail: GatewayDetail;
+  onManage: () => void;
+}) {
+  const q = detail.luns;
+  const luns: ISCSILUN[] = q.data?.luns ?? [];
+  const initiators = detail.initiators.data?.initiators ?? [];
+  const chap = detail.chap.data;
+  return (
+    <div>
+      <PanelLabel>LUNs</PanelLabel>
+      {q.isLoading || q.error ? (
+        <PanelState query={q} />
+      ) : (
+        <MiniTable heads={['LUN', 'Device', 'Target IQN']}>
+          {luns.length === 0 ? (
+            <MiniEmpty colSpan={3} label="No LUNs configured" />
+          ) : (
+            luns.map((l) => (
+              <tr key={l.lun}>
+                <td className={`${MINI_TD} font-mono`}>{l.lun}</td>
+                <td className={MINI_TD}>
+                  <Mono value={l.device} />
+                </td>
+                <td className={MINI_TD}>
+                  <Mono value={l.targetIqn} className="text-muted-foreground" />
+                </td>
+              </tr>
+            ))
+          )}
+        </MiniTable>
+      )}
+
+      <div className="mt-4">
+        <PanelLabel>Allowed initiators</PanelLabel>
+        {detail.initiators.error ? (
+          <QueryError message={(detail.initiators.error as Error).message} />
+        ) : initiators.length === 0 ? (
+          <p className="text-[12.5px] text-muted-foreground">
+            None — no initiator could log in.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {initiators.map((iqn) => (
+              <Badge
+                key={iqn}
+                variant="secondary"
+                className="max-w-[280px] font-mono"
+                title={iqn}
+              >
+                <span className="truncate">{iqn}</span>
+              </Badge>
+            ))}
+          </div>
+        )}
+        <p className="mt-2.5 text-[12.5px] text-muted-foreground">
+          {chap?.username ? (
+            <>
+              CHAP on, user{' '}
+              <span className="font-mono text-foreground">{chap.username}</span>
+              {chap.mutual ? ', mutual' : ', one-way'}
+            </>
+          ) : (
+            'CHAP not configured.'
+          )}
+        </p>
+      </div>
+
+      <Button variant="outline" size="sm" className="mt-3" onClick={onManage}>
+        Manage LUNs, initiators and CHAP
+      </Button>
+    </div>
+  );
+}
+
+function NVMeDetailPanel({
+  detail,
+  onManage,
+}: {
+  detail: GatewayDetail;
+  onManage: () => void;
+}) {
+  const q = detail.namespaces;
+  const namespaces: NVMeNamespace[] = q.data?.namespaces ?? [];
+  const hosts = detail.hosts.data?.hosts ?? [];
+  return (
+    <div>
+      <PanelLabel>Namespaces</PanelLabel>
+      {q.isLoading || q.error ? (
+        <PanelState query={q} />
+      ) : (
+        <MiniTable heads={['NSID', 'Backing path', 'UUID']}>
+          {namespaces.length === 0 ? (
+            <MiniEmpty colSpan={3} label="No namespaces configured" />
+          ) : (
+            namespaces.map((ns) => (
+              <tr key={ns.namespaceId}>
+                <td className={`${MINI_TD} font-mono`}>{ns.namespaceId}</td>
+                <td className={MINI_TD}>
+                  <Mono value={ns.backingPath} />
+                </td>
+                <td className={MINI_TD}>
+                  <Mono value={ns.uuid} className="text-muted-foreground" />
+                </td>
+              </tr>
+            ))
+          )}
+        </MiniTable>
+      )}
+
+      <div className="mt-4">
+        <PanelLabel>Allowed hosts</PanelLabel>
+        {detail.hosts.error ? (
+          <QueryError message={(detail.hosts.error as Error).message} />
+        ) : hosts.length === 0 ? (
+          <p className="text-[12.5px] text-muted-foreground">
+            None — no host could connect.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {hosts.map((nqn) => (
+              <Badge
+                key={nqn}
+                variant="secondary"
+                className="max-w-[280px] font-mono"
+                title={nqn}
+              >
+                <span className="truncate">{nqn}</span>
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Button variant="outline" size="sm" className="mt-3" onClick={onManage}>
+        Manage namespaces and hosts
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * The promoter's start[] array, in order. The fixed agents are the ones the
+ * generator writes for this protocol (pkg/gateway/{nfs,iscsi,nvmeof}.go); the
+ * repeated ones are one per export / LUN / namespace, which is exactly what
+ * the list endpoints above parse back out of the same config — so the chain is
+ * as long as the gateway really is, not as long as a template says.
+ *
+ * The dots repeat the gateway state named in words directly above them; no
+ * agent is probed individually, so none of them may claim its own health.
+ */
+function StartChainPanel({
+  kind,
+  detail,
+  state,
+  identity,
+}: {
+  kind: GwKind;
+  detail: GatewayDetail;
+  state: string;
+  identity: [string, string][];
+}) {
+  const running = isRunning(state);
+  const tone = gatewayTone(state);
+
+  let chain: string[];
+  if (kind === 'nfs') {
+    const exports = detail.exports.data?.exports ?? [];
+    chain = [
+      'ocf:heartbeat:Filesystem fs_cluster_private',
+      'ocf:heartbeat:Filesystem fs_export',
+      'ocf:heartbeat:IPaddr2 service_ip',
+      'ocf:heartbeat:nfsserver nfsserver',
+      ...exports.map((_, i) => `ocf:heartbeat:exportfs export_${i}`),
+    ];
+  } else if (kind === 'iscsi') {
+    const luns = detail.luns.data?.luns ?? [];
+    chain = [
+      'ocf:heartbeat:Filesystem fs_cluster_private',
+      'ocf:heartbeat:IPaddr2 service_ip0',
+      'ocf:heartbeat:iSCSITarget target',
+      ...luns.map((l) => `ocf:heartbeat:iSCSILogicalUnit lu${l.lun}`),
+    ];
+  } else {
+    const namespaces = detail.namespaces.data?.namespaces ?? [];
+    chain = [
+      'ocf:heartbeat:Filesystem fs_cluster_private',
+      'ocf:heartbeat:IPaddr2 service_ip',
+      'ocf:heartbeat:nvmet-subsystem subsys',
+      ...namespaces.map((ns) => `ocf:heartbeat:nvmet-namespace ns_${ns.namespaceId}`),
+      'ocf:heartbeat:nvmet-port port',
+    ];
+  }
+
+  const shownIdentity = identity.filter(([, value]) => value);
+
+  return (
+    <div>
+      <PanelLabel>Promoter start chain</PanelLabel>
+      <div className="rounded-lg border border-border bg-card p-4">
+        <p className="mb-3 flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_BG[tone]}`} />
+          {plural(chain.length, 'agent')}, started in order —{' '}
+          {running ? 'currently running' : `gateway ${state || 'not started'}`}
+        </p>
+        <ol className="flex flex-col gap-2">
+          {chain.map((agent, i) => (
+            <li key={agent} className="flex items-center gap-2.5 text-[12.5px]">
+              <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                {i + 1}
+              </span>
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_BG[tone]}`} />
+              <span className="min-w-0 truncate font-mono" title={agent}>
+                {agent}
+              </span>
+            </li>
+          ))}
+        </ol>
+        {shownIdentity.length > 0 ? (
+          <dl className="mt-3.5 space-y-1.5 border-t border-border/70 pt-3">
+            {shownIdentity.map(([label, value]) => (
+              <div key={label} className="flex items-baseline justify-between gap-3">
+                <dt className="shrink-0 text-[11.5px] text-muted-foreground">
+                  {label}
+                </dt>
+                <dd className="min-w-0 truncate font-mono text-[11.5px]" title={value}>
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -314,18 +957,18 @@ export function GatewaysPage() {
 // ==================== Create Dialog ====================
 
 function CreateGatewayDialog({
-  open,
-  onOpenChange,
+  type,
+  onTypeChange,
   resources,
   onCreated,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  type: GwKind | null;
+  onTypeChange: (type: GwKind | null) => void;
   resources: Resource[];
   onCreated: () => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={!!type} onOpenChange={(open) => !open && onTypeChange(null)}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Create Gateway</DialogTitle>
@@ -333,7 +976,10 @@ function CreateGatewayDialog({
             Expose a DRBD resource via NFS, iSCSI or NVMe-oF.
           </DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="nfs">
+        <Tabs
+          value={type ?? 'nfs'}
+          onValueChange={(v) => onTypeChange(v as GwKind)}
+        >
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="nfs">NFS</TabsTrigger>
             <TabsTrigger value="iscsi">iSCSI</TabsTrigger>
@@ -372,7 +1018,7 @@ function ResourceSelect({
         </SelectTrigger>
         <SelectContent>
           {resources.map((r) => (
-            <SelectItem key={r.name} value={r.name}>
+            <SelectItem key={r.name} value={r.name} className="font-mono">
               {r.name}
             </SelectItem>
           ))}
@@ -429,6 +1075,7 @@ function CreateNFSForm({
       <div className="space-y-1.5">
         <Label>Service IP (CIDR)</Label>
         <Input
+          className="font-mono"
           value={serviceIp}
           onChange={(e) => setServiceIp(e.target.value)}
           placeholder="192.168.1.200/24"
@@ -438,6 +1085,7 @@ function CreateNFSForm({
       <div className="space-y-1.5">
         <Label>Export Path</Label>
         <Input
+          className="font-mono"
           value={exportPath}
           onChange={(e) => setExportPath(e.target.value)}
           placeholder="/data"
@@ -447,6 +1095,7 @@ function CreateNFSForm({
       <div className="space-y-1.5">
         <Label>Allowed IPs (comma-separated, optional)</Label>
         <Input
+          className="font-mono"
           value={allowedIps}
           onChange={(e) => setAllowedIps(e.target.value)}
           placeholder="192.168.1.0/24, 10.0.0.0/8"
@@ -527,6 +1176,7 @@ function CreateISCSIForm({
       <div className="space-y-1.5">
         <Label>Service IP (CIDR)</Label>
         <Input
+          className="font-mono"
           value={serviceIp}
           onChange={(e) => setServiceIp(e.target.value)}
           placeholder="192.168.1.100/24"
@@ -536,6 +1186,7 @@ function CreateISCSIForm({
       <div className="space-y-1.5">
         <Label>IQN</Label>
         <Input
+          className="font-mono"
           value={iqn}
           onChange={(e) => setIqn(e.target.value)}
           placeholder="iqn.2024-01.com.example:sds.data"
@@ -545,6 +1196,7 @@ function CreateISCSIForm({
       <div className="space-y-1.5">
         <Label>Allowed Initiators (comma-separated, optional)</Label>
         <Input
+          className="font-mono"
           value={allowedInitiators}
           onChange={(e) => setAllowedInitiators(e.target.value)}
           placeholder="iqn.1994-05.com.redhat:..."
@@ -630,6 +1282,7 @@ function CreateNVMeForm({
       <div className="space-y-1.5">
         <Label>Service IP (CIDR)</Label>
         <Input
+          className="font-mono"
           value={serviceIp}
           onChange={(e) => setServiceIp(e.target.value)}
           placeholder="192.168.1.150/24"
@@ -639,6 +1292,7 @@ function CreateNVMeForm({
       <div className="space-y-1.5">
         <Label>NQN</Label>
         <Input
+          className="font-mono"
           value={nqn}
           onChange={(e) => setNqn(e.target.value)}
           placeholder="nqn.2024-01.com.example:sds.data"
@@ -669,72 +1323,6 @@ function CreateNVMeForm({
   );
 }
 
-// ==================== Details Dialog ====================
-
-function DetailsDialog({
-  gateway,
-  onOpenChange,
-}: {
-  gateway: Gateway | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const rows = gateway
-    ? [
-        ['ID', gateway.id],
-        ['Name', gateway.name],
-        ['Type', gateway.type?.toUpperCase()],
-        ['State', gateway.state],
-        ['Resource', gateway.resource],
-        ['Volume ID', String(gateway.volumeId)],
-        ['Node', gateway.node || '-'],
-        ['Path', gateway.path || '-'],
-      ]
-    : [];
-
-  return (
-    <Dialog open={!!gateway} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Gateway Details</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-[70vh] space-y-1 overflow-y-auto text-sm">
-          {rows.map(([label, value]) => (
-            <div
-              key={label}
-              className="flex items-start justify-between gap-4 border-b py-2 last:border-0"
-            >
-              <span className="shrink-0 text-muted-foreground">{label}</span>
-              <span className="min-w-0 break-words text-right font-medium">
-                {value || '-'}
-              </span>
-            </div>
-          ))}
-          {gateway?.options && Object.keys(gateway.options).length > 0 && (
-            <div className="pt-2">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">
-                Options
-              </p>
-              <div className="space-y-1">
-                {Object.entries(gateway.options).map(([k, v]) => (
-                  <div
-                    key={k}
-                    className="flex items-start justify-between gap-4 rounded bg-muted px-2 py-1 text-xs"
-                  >
-                    <span className="shrink-0 text-muted-foreground">{k}</span>
-                    <span className="min-w-0 break-all text-right font-mono">
-                      {String(v)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ==================== Manage Dialog ====================
 
 function ManageDialog({
@@ -758,29 +1346,28 @@ function ManageDialog({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // The backend reports the NVMe type as "nvmeof" (reactor config naming).
-  const gwType = gateway?.type === 'nvmeof' ? 'nvme' : gateway?.type;
+  const kind = gateway ? gwKind(gateway.type) : null;
 
   return (
     <Dialog open={!!gateway} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            Manage {gateway?.type?.toUpperCase()} Gateway —{' '}
-            {gateway?.name || gateway?.id}
+            Manage {kind ? PROTOCOL[kind].label : ''} gateway —{' '}
+            <span className="font-mono">{gateway?.name || gateway?.id}</span>
           </DialogTitle>
           <DialogDescription>
-            Resource: {gateway?.resource}
+            Resource:{' '}
+            <span className="font-mono text-foreground">{gateway?.resource}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-start justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/60 p-3 text-sm">
           <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <span>
-              Changes are persisted to the gateway config and take effect on
-              the next restart or failover — the running target is not
-              modified live.
+              Changes are persisted to the gateway config and take effect on the
+              next restart or failover — the running target is not modified live.
             </span>
           </div>
           <Button
@@ -797,9 +1384,9 @@ function ManageDialog({
           </Button>
         </div>
 
-        {gwType === 'nfs' && <ManageNFS resource={gateway!.resource} />}
-        {gwType === 'iscsi' && <ManageISCSI resource={gateway!.resource} />}
-        {gwType === 'nvme' && <ManageNVMe resource={gateway!.resource} />}
+        {kind === 'nfs' && <ManageNFS resource={gateway!.resource} />}
+        {kind === 'iscsi' && <ManageISCSI resource={gateway!.resource} />}
+        {kind === 'nvme' && <ManageNVMe resource={gateway!.resource} />}
       </DialogContent>
     </Dialog>
   );
@@ -807,7 +1394,7 @@ function ManageDialog({
 
 function QueryError({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+    <div className="flex items-start gap-2 rounded-lg border border-status-warn/40 bg-status-warn-soft p-3 text-[12.5px] text-status-warn-text">
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <span>{message}</span>
     </div>
@@ -821,10 +1408,7 @@ function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
         colSpan={colSpan}
         className="py-6 text-center text-muted-foreground"
       >
-        <div className="flex flex-col items-center gap-1">
-          <Inbox className="h-5 w-5" />
-          <span className="text-xs">{label}</span>
-        </div>
+        {label}
       </TableCell>
     </TableRow>
   );
@@ -899,17 +1483,17 @@ function ManageNFS({ resource }: { resource: string }) {
             ) : (
               exports.map((exp) => (
                 <TableRow key={exp.directory}>
-                  <TableCell className="font-mono text-xs">
-                    {exp.directory}
+                  <TableCell>
+                    <Mono value={exp.directory} className="text-xs" />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {exp.fsid || '-'}
+                  <TableCell>
+                    <Mono value={exp.fsid} className="text-xs text-muted-foreground" />
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {exp.clientspec || '-'}
+                  <TableCell>
+                    <Mono value={exp.clientspec} className="text-xs" />
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {exp.options || '-'}
+                  <TableCell>
+                    <Mono value={exp.options} className="text-xs" />
                   </TableCell>
                   <TableCell className="text-right">
                     <RemoveButton
@@ -926,7 +1510,7 @@ function ManageNFS({ resource }: { resource: string }) {
       )}
 
       <form
-        className="space-y-3 rounded-md border p-3"
+        className="space-y-3 rounded-lg border border-border p-3"
         onSubmit={(e) => {
           e.preventDefault();
           addMutation.mutate();
@@ -936,6 +1520,7 @@ function ManageNFS({ resource }: { resource: string }) {
         <div className="space-y-1.5">
           <Label>Export Path</Label>
           <Input
+            className="font-mono"
             value={exportPath}
             onChange={(e) => setExportPath(e.target.value)}
             placeholder="/data/share"
@@ -946,6 +1531,7 @@ function ManageNFS({ resource }: { resource: string }) {
           <div className="space-y-1.5">
             <Label>Client Spec</Label>
             <Input
+              className="font-mono"
               value={clientSpec}
               onChange={(e) => setClientSpec(e.target.value)}
               placeholder="192.168.1.0/24"
@@ -954,6 +1540,7 @@ function ManageNFS({ resource }: { resource: string }) {
           <div className="space-y-1.5">
             <Label>Options</Label>
             <Input
+              className="font-mono"
               value={options}
               onChange={(e) => setOptions(e.target.value)}
               placeholder="rw,sync,no_root_squash"
@@ -1058,12 +1645,15 @@ function ISCSILuns({ resource }: { resource: string }) {
             ) : (
               luns.map((l) => (
                 <TableRow key={l.lun}>
-                  <TableCell>{l.lun}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {l.device}
+                  <TableCell className="font-mono">{l.lun}</TableCell>
+                  <TableCell>
+                    <Mono value={l.device} className="text-xs" />
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {l.targetIqn || '-'}
+                  <TableCell>
+                    <Mono
+                      value={l.targetIqn}
+                      className="text-xs text-muted-foreground"
+                    />
                   </TableCell>
                   <TableCell className="text-right">
                     <RemoveButton
@@ -1080,7 +1670,7 @@ function ISCSILuns({ resource }: { resource: string }) {
       )}
 
       <form
-        className="space-y-3 rounded-md border p-3"
+        className="space-y-3 rounded-lg border border-border p-3"
         onSubmit={(e) => {
           e.preventDefault();
           addMutation.mutate();
@@ -1091,6 +1681,7 @@ function ISCSILuns({ resource }: { resource: string }) {
           <div className="space-y-1.5">
             <Label>LUN Number</Label>
             <Input
+              className="font-mono"
               type="number"
               value={lun}
               onChange={(e) => setLun(e.target.value)}
@@ -1101,6 +1692,7 @@ function ISCSILuns({ resource }: { resource: string }) {
           <div className="space-y-1.5">
             <Label>Device</Label>
             <Input
+              className="font-mono"
               value={device}
               onChange={(e) => setDevice(e.target.value)}
               placeholder="/dev/drbd1001"
@@ -1171,12 +1763,18 @@ function ISCSIInitiators({ resource }: { resource: string }) {
       ) : (
         <div className="flex flex-wrap gap-2">
           {initiators.map((iqn) => (
-            <Badge key={iqn} variant="secondary" className="gap-1 font-mono">
-              {iqn}
+            <Badge
+              key={iqn}
+              variant="secondary"
+              className="max-w-[320px] gap-1 font-mono"
+              title={iqn}
+            >
+              <span className="truncate">{iqn}</span>
               <button
                 type="button"
+                aria-label={`Remove initiator ${iqn}`}
                 onClick={() => removeMutation.mutate(iqn)}
-                className="ml-1 rounded-full hover:text-destructive"
+                className="ml-1 shrink-0 rounded-full hover:text-destructive"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -1195,6 +1793,7 @@ function ISCSIInitiators({ resource }: { resource: string }) {
         <div className="flex-1 space-y-1.5">
           <Label>Initiator IQN</Label>
           <Input
+            className="font-mono"
             value={initiator}
             onChange={(e) => setInitiator(e.target.value)}
             placeholder="iqn.1994-05.com.redhat:..."
@@ -1280,7 +1879,7 @@ function ISCSIChap({ resource }: { resource: string }) {
           autoComplete="new-password"
         />
       </div>
-      <div className="flex items-center justify-between rounded-md border p-3">
+      <div className="flex items-center justify-between rounded-lg border border-border p-3">
         <div>
           <Label>Mutual CHAP</Label>
           <p className="text-xs text-muted-foreground">
@@ -1373,12 +1972,15 @@ function NVMeNamespaces({ resource }: { resource: string }) {
             ) : (
               namespaces.map((ns) => (
                 <TableRow key={ns.namespaceId}>
-                  <TableCell>{ns.namespaceId}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {ns.backingPath}
+                  <TableCell className="font-mono">{ns.namespaceId}</TableCell>
+                  <TableCell>
+                    <Mono value={ns.backingPath} className="text-xs" />
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {ns.uuid || '-'}
+                  <TableCell>
+                    <Mono
+                      value={ns.uuid}
+                      className="text-xs text-muted-foreground"
+                    />
                   </TableCell>
                   <TableCell className="text-right">
                     <RemoveButton
@@ -1404,6 +2006,7 @@ function NVMeNamespaces({ resource }: { resource: string }) {
         <div className="flex-1 space-y-1.5">
           <Label>Device Path</Label>
           <Input
+            className="font-mono"
             value={device}
             onChange={(e) => setDevice(e.target.value)}
             placeholder="/dev/drbd1001"
@@ -1468,12 +2071,18 @@ function NVMeHosts({ resource }: { resource: string }) {
       ) : (
         <div className="flex flex-wrap gap-2">
           {hosts.map((nqn) => (
-            <Badge key={nqn} variant="secondary" className="gap-1 font-mono">
-              {nqn}
+            <Badge
+              key={nqn}
+              variant="secondary"
+              className="max-w-[320px] gap-1 font-mono"
+              title={nqn}
+            >
+              <span className="truncate">{nqn}</span>
               <button
                 type="button"
+                aria-label={`Remove host ${nqn}`}
                 onClick={() => removeMutation.mutate(nqn)}
-                className="ml-1 rounded-full hover:text-destructive"
+                className="ml-1 shrink-0 rounded-full hover:text-destructive"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -1492,6 +2101,7 @@ function NVMeHosts({ resource }: { resource: string }) {
         <div className="flex-1 space-y-1.5">
           <Label>Host NQN</Label>
           <Input
+            className="font-mono"
             value={hostNqn}
             onChange={(e) => setHostNqn(e.target.value)}
             placeholder="nqn.2014-08.org.nvmexpress:uuid:..."
@@ -1524,8 +2134,8 @@ function RemoveButton({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <Trash2 className="h-3 w-3 text-destructive" />
+        <Button variant="ghost" size="icon-sm" aria-label={title}>
+          <Trash2 className="text-destructive" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

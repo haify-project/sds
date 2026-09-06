@@ -1,8 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, HaConfig, Resource, SelfHaStatus } from '@/services/api';
+import {
+  useQuery,
+  useQueries,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+import {
+  api,
+  HaConfig,
+  QuorumInfo,
+  Resource,
+  ResourceStatus,
+  SelfHaStatus,
+} from '@/services/api';
+import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
+import { ResourceTopology } from '@/components/ResourceTopology';
+import { TONE_BG } from '@/components/status';
+import { mountUnitFor, vipUnitFor } from '@/lib/toml';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   HeartPulse,
@@ -13,7 +30,6 @@ import {
   Loader2,
   ShieldCheck,
   ShieldOff,
-  Server,
   ChevronDown,
   ChevronRight,
   FileCode,
@@ -48,9 +64,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
@@ -67,6 +81,16 @@ function isRestartError(message: string): boolean {
   return message.includes('fetch') || message.includes('Failed');
 }
 
+/** One HA config joined to the two payloads that describe it: the cluster-wide
+ * resource record and its live per-resource status. Assembled once in the page
+ * so the topology and the promoter card read the same numbers. */
+type PromoterView = {
+  config: HaConfig;
+  resource?: Resource;
+  status?: ResourceStatus;
+  primaryNode?: string;
+};
+
 export function HAPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -82,6 +106,37 @@ export function HAPage() {
   });
 
   const [detailsConfig, setDetailsConfig] = useState<HaConfig | null>(null);
+
+  const configs = haConfigs?.configs ?? [];
+
+  // The resources list endpoint reports Role "Unknown" without node states;
+  // live status comes from the per-resource status RPC instead. Held here
+  // rather than inside each card because the header line and the topology need
+  // the same answer — the query keys and interval are unchanged, so a card
+  // reading ['ha-status', name] still shares this one fetch.
+  const statusQueries = useQueries({
+    queries: configs.map((c) => ({
+      queryKey: ['ha-status', c.resource],
+      queryFn: () => api.resourceStatus(c.resource),
+      refetchInterval: 15000,
+    })),
+  });
+
+  const resourceMap = new Map(
+    (resources?.resources ?? []).map((r) => [r.name, r] as [string, Resource])
+  );
+
+  const promoters: PromoterView[] = configs.map((config, i) => {
+    const resource = resourceMap.get(config.resource);
+    const status = statusQueries[i]?.data?.status;
+    const nodeStates = status?.nodeStates ?? {};
+    // Keyed by DRBD host name, which is what evict and the failover poll
+    // compare against — resolving it to an SDS node name here would break both.
+    const primaryNode = Object.keys(nodeStates).find(
+      (n) => nodeStates[n]?.role === 'Primary'
+    );
+    return { config, resource, status, primaryNode };
+  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ha'] });
@@ -150,69 +205,262 @@ export function HAPage() {
     }
   };
 
-  const resourceMap = new Map(
-    (resources?.resources ?? []).map((r) => [r.name, r] as [string, Resource])
-  );
-
-  const configs = haConfigs?.configs ?? [];
-
   return (
-    <div className="space-y-6">
-      <SelfHaCard />
+    <div>
+      <PageHeader
+        title="High availability"
+        description={<HeaderSummary loading={isLoading} promoters={promoters} />}
+        actions={
+          <Button onClick={() => navigate('/ha/create')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create HA resource
+          </Button>
+        }
+      />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">HA Configurations</h3>
-          <p className="text-sm text-muted-foreground">
-            Make DRBD resources highly available with a floating VIP and
-            automatic failover.
-          </p>
-        </div>
-        <Button onClick={() => navigate('/ha/create')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create HA Config
-        </Button>
+      <div className="space-y-6">
+        {isLoading ? (
+          <Skeleton className="h-72 w-full" />
+        ) : promoters.length > 0 ? (
+          <TopologySection promoters={promoters} />
+        ) : null}
+
+        <section className="space-y-4">
+          <h2 className="text-[14.5px] font-semibold">Promoters</h2>
+
+          {/* Self-HA runs off its own query, so it stays on screen while the
+              HA config list is still in flight — hiding it behind that load
+              would take the controller's own failover controls away for as
+              long as an unrelated call is slow. */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <SelfHaCard />
+            {isLoading
+              ? Array.from({ length: 2 }).map((_, i) => (
+                  <Skeleton key={i} className="h-64 w-full" />
+                ))
+              : promoters.map((p) => (
+                  <PromoterCard
+                    key={p.config.resource}
+                    view={p}
+                    onShowDetails={showDetails}
+                    onEvict={(r, fromNode) =>
+                      evictMutation.mutate({ resource: r, fromNode })
+                    }
+                    onDelete={(r) => deleteMutation.mutate(r)}
+                    isEvicting={evictMutation.isPending}
+                    isDeleting={deleteMutation.isPending}
+                  />
+                ))}
+          </div>
+
+          {!isLoading && promoters.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                <HeartPulse className="h-7 w-7 text-muted-foreground" />
+                <p className="text-[13px] text-muted-foreground">
+                  No HA configurations found. Create a resource first, then
+                  configure HA.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+        </section>
       </div>
-
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <Skeleton key={i} className="h-64 w-full" />
-          ))}
-        </div>
-      ) : configs.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-            <HeartPulse className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              No HA configurations found. Create a resource first, then
-              configure HA.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {configs.map((config) => (
-            <HAConfigCard
-              key={config.resource}
-              config={config}
-              resource={resourceMap.get(config.resource)}
-              onShowDetails={showDetails}
-              onEvict={(r, fromNode) =>
-                evictMutation.mutate({ resource: r, fromNode })
-              }
-              onDelete={(r) => deleteMutation.mutate(r)}
-              isEvicting={evictMutation.isPending}
-              isDeleting={deleteMutation.isPending}
-            />
-          ))}
-        </div>
-      )}
 
       <DetailsDialog
         config={detailsConfig}
         onOpenChange={(open) => !open && setDetailsConfig(null)}
       />
+    </div>
+  );
+}
+
+// ==================== Derived header line ====================
+
+/**
+ * Only facts the payloads actually carry: how many promoters exist, how many
+ * hold quorum, and how many are promoted somewhere right now. Quorum is dropped
+ * from the line entirely when no status has reported it rather than guessed at.
+ */
+function HeaderSummary({
+  loading,
+  promoters,
+}: {
+  loading: boolean;
+  promoters: PromoterView[];
+}) {
+  if (loading) return <>Reading HA configurations…</>;
+  if (promoters.length === 0) return <>No HA resources configured yet</>;
+
+  const n = promoters.length;
+  const quorate = promoters.filter((p) => p.status?.quorum?.hasQuorum).length;
+  const withQuorumInfo = promoters.filter((p) => p.status?.quorum).length;
+  const active = promoters.filter((p) => p.primaryNode).length;
+
+  const parts = [`${n} promoter${n === 1 ? '' : 's'}`];
+  if (withQuorumInfo > 0) {
+    parts.push(
+      quorate === withQuorumInfo
+        ? withQuorumInfo === n
+          ? 'all quorate'
+          : `${quorate} quorate`
+        : `${withQuorumInfo - quorate} without quorum`
+    );
+  }
+  parts.push(active === n ? 'all promoted' : `${active} of ${n} promoted`);
+
+  return <>{parts.join(' · ')}</>;
+}
+
+// ==================== Replication topology ====================
+
+/**
+ * The page's subject, and the first thing on it. This reuses
+ * `ResourceTopology` rather than drawing a second renderer: it already places
+ * the sites, the synchronous mesh and the dashed WAN legs from this same status
+ * payload, and it carries its own legend. What the card adds is the connection
+ * facts the SVG has no room for — the DRBD port, the protocol and the VIP.
+ */
+function TopologySection({ promoters }: { promoters: PromoterView[] }) {
+  return (
+    <section className="space-y-4">
+      <h2 className="text-[14.5px] font-semibold">Replication topology</h2>
+      <div className="space-y-5">
+        {promoters.map(({ config, resource, status }) => (
+          <Card key={config.resource} className="gap-4 py-5">
+            <CardHeader className="gap-1 px-5">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <CardTitle className="font-mono text-[15px]">
+                    {config.resource}
+                  </CardTitle>
+                  {config.vip ? (
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      vip {config.vip}
+                    </span>
+                  ) : null}
+                  {config.mountPoint ? (
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {config.mountPoint}
+                      {config.fsType ? ` · ${config.fsType}` : ''}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  {resource ? (
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      tcp {resource.port} · protocol {resource.protocol}
+                    </span>
+                  ) : null}
+                  {status?.drEndpoint ? (
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      dr {status.drEndpoint}
+                    </span>
+                  ) : null}
+                  <QuorumPill quorum={status?.quorum} />
+                </div>
+              </div>
+            </CardHeader>
+            {/* ResourceTopology draws a viewBox'd SVG at `w-full`, so today it
+                shrinks to whatever it is given rather than overflowing. This is
+                the box it would scroll in the day it stops — the page itself
+                must never scroll sideways. */}
+            <CardContent className="overflow-x-auto px-5">
+              {resource && status ? (
+                <ResourceTopology resource={resource} status={status} />
+              ) : (
+                <p className="text-[13px] text-muted-foreground">
+                  Replication state for{' '}
+                  <span className="font-mono">{config.resource}</span> has not
+                  arrived yet — the resource is not in the cluster resource list,
+                  or its status call has not returned.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ==================== Small shared pieces ====================
+
+/**
+ * Quorum, stated in words first and coloured second: "Quorate" and "No quorum"
+ * carry the whole meaning on their own, and the dot only repeats it.
+ */
+function QuorumPill({ quorum }: { quorum?: QuorumInfo }) {
+  if (!quorum) return null;
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-border px-2.5 py-0.5 text-xs">
+      <span
+        aria-hidden
+        className={cn(
+          'h-1.5 w-1.5 rounded-full',
+          TONE_BG[quorum.hasQuorum ? 'ok' : 'bad']
+        )}
+      />
+      {quorum.hasQuorum ? 'Quorate' : 'No quorum'}
+      <span className="font-mono tabular-nums text-muted-foreground">
+        {quorum.online}/{quorum.members}
+      </span>
+    </span>
+  );
+}
+
+/** One ordered entry of the promoter's start[], numbered so the order — which
+ * is the whole point of the list — is readable without counting rows. */
+function StartListItem({ index, unit }: { index: number; unit: string }) {
+  return (
+    <li className="flex items-center gap-2.5">
+      <span className="w-4 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+        {index}
+      </span>
+      {/* These are long unbreakable mono strings —
+          `service-ip@192.168.123.251-24`. On a phone the chip wraps inside the
+          card rather than pushing its width out; the desktop card has the room
+          to truncate instead and keep the list scannable down its left edge. */}
+      <span className="min-w-0 rounded-[5px] border border-border bg-muted px-2 py-1 font-mono text-xs break-all md:truncate">
+        {unit}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * The promoter's start[] as the backend composes it: the mount unit, then the
+ * VIP's service-ip unit, then the configured services. Derived from the same
+ * config the generator reads, so it cannot disagree with the TOML below it.
+ */
+function startListFor(config: HaConfig): string[] {
+  return [
+    config.mountPoint ? mountUnitFor(config.mountPoint) : '',
+    config.vip ? vipUnitFor(config.vip) : '',
+    ...(config.services ?? []),
+  ].filter((u) => u !== '');
+}
+
+function FactRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1">
+      <span className="text-[13px] text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          'min-w-0 truncate text-[13px]',
+          mono ? 'font-mono tabular-nums' : 'font-medium'
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -301,15 +549,14 @@ function SelfHaCard() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="h-5 w-5" />
-            Controller Self-HA
+      <Card className="gap-4 py-5">
+        <CardHeader className="px-5">
+          <CardTitle className="font-mono text-[15px]">
+            {SELF_HA_RESOURCE}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Skeleton className="h-20 w-full" />
+        <CardContent className="px-5">
+          <Skeleton className="h-24 w-full" />
         </CardContent>
       </Card>
     );
@@ -319,18 +566,22 @@ function SelfHaCard() {
   // the disabled state here would invite an accidental second enablement.
   if (isError) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="gap-4 py-5">
+        <CardHeader className="px-5">
           <div className="flex items-start justify-between gap-4">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldOff className="h-5 w-5 text-amber-500" />
-              Controller Self-HA
-            </CardTitle>
+            <div className="min-w-0">
+              <CardTitle className="font-mono text-[15px]">
+                {SELF_HA_RESOURCE}
+              </CardTitle>
+              <p className="mt-1 text-[12.5px] text-muted-foreground">
+                Control plane · state unknown
+              </p>
+            </div>
             <StatusBadge status="unknown" />
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+        <CardContent className="space-y-3 px-5">
+          <p className="text-[13px] text-muted-foreground">
             Could not load self-HA status: {(error as Error).message}
           </p>
           <Button size="sm" variant="outline" onClick={() => refetch()}>
@@ -343,17 +594,18 @@ function SelfHaCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="gap-4 py-5">
+      <CardHeader className="px-5">
         <div className="flex items-start justify-between gap-4">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {status?.enabled ? (
-              <ShieldCheck className="h-5 w-5 text-emerald-600" />
-            ) : (
-              <ShieldOff className="h-5 w-5 text-muted-foreground" />
-            )}
-            Controller Self-HA
-          </CardTitle>
+          <div className="min-w-0">
+            <CardTitle className="font-mono text-[15px]">
+              {status?.resource || SELF_HA_RESOURCE}
+            </CardTitle>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              Control plane ·{' '}
+              {status?.enabled ? 'self-managed promoter' : 'standalone'}
+            </p>
+          </div>
           {status?.enabled ? (
             <StatusBadge status="enabled" />
           ) : (
@@ -364,7 +616,7 @@ function SelfHaCard() {
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-5">
         {status?.enabled ? (
           <SelfHaEnabled
             status={status}
@@ -374,10 +626,17 @@ function SelfHaCard() {
             isDisabling={disableMutation.isPending}
           />
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Standalone controller. Enable Self-HA to run the management plane on
-            its own DRBD resource with a floating VIP and automatic failover.
-          </p>
+          <div className="flex items-start gap-3">
+            <ShieldOff
+              aria-hidden
+              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+            />
+            <p className="text-[13px] text-muted-foreground">
+              Standalone controller. Enable Self-HA to run the management plane
+              on its own DRBD resource with a floating VIP and automatic
+              failover.
+            </p>
+          </div>
         )}
       </CardContent>
 
@@ -424,46 +683,43 @@ function SelfHaEnabled({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">Virtual IP</p>
-          <p className="font-mono text-sm">{status.vip || '-'}</p>
-        </div>
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">
-            Active Node
-          </p>
-          <Badge className="bg-emerald-600 hover:bg-emerald-600">
-            <Server className="mr-1 h-3 w-3" />
-            {activeNodeName || '-'}
-          </Badge>
+      <p className="text-[12.5px] text-muted-foreground">
+        Active on{' '}
+        <span className="font-mono text-foreground">
+          {activeNodeName || 'no node'}
+        </span>
+      </p>
+
+      <div className="space-y-0.5">
+        <FactRow label="Virtual IP" value={status.vip || '-'} mono />
+      </div>
+
+      <div>
+        <div className="eyebrow">Member nodes</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(status.nodes ?? []).map((node) => {
+            const isActive = node === activeNodeName;
+            return (
+              <span
+                key={node}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-[5px] border px-2 py-1 font-mono text-xs',
+                  isActive
+                    ? 'border-transparent bg-accent text-accent-foreground'
+                    : 'border-border bg-muted text-muted-foreground'
+                )}
+              >
+                {node}
+                {isActive ? (
+                  <span className="text-[10.5px]">active</span>
+                ) : null}
+              </span>
+            );
+          })}
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">Member Nodes</p>
-        <div className="flex flex-wrap gap-2">
-          {(status.nodes ?? []).map((node) => (
-            <Badge
-              key={node}
-              className={
-                node === activeNodeName
-                  ? 'bg-emerald-600 hover:bg-emerald-600'
-                  : undefined
-              }
-              variant={node === activeNodeName ? 'default' : 'secondary'}
-            >
-              {node === activeNodeName && <Server className="mr-1 h-3 w-3" />}
-              {node}
-              {node === activeNodeName && ' (active)'}
-            </Badge>
-          ))}
-        </div>
-      </div>
-
-      <Separator />
-
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="outline" size="sm" disabled={isEvicting}>
@@ -656,83 +912,87 @@ function EnableSelfHaDialog({
   );
 }
 
-// ==================== HA Config Card ====================
+// ==================== Promoter card ====================
 
-function HAConfigCard({
-  config,
-  resource,
+function PromoterCard({
+  view,
   onShowDetails,
   onEvict,
   onDelete,
   isEvicting,
   isDeleting,
 }: {
-  config: HaConfig;
-  resource?: Resource;
+  view: PromoterView;
   onShowDetails: (resource: string) => void;
   onEvict: (resource: string, fromNode?: string) => void;
   onDelete: (resource: string) => void;
   isEvicting: boolean;
   isDeleting: boolean;
 }) {
-  // The resources list endpoint reports Role "Unknown" without node states;
-  // live status comes from the per-resource status RPC instead.
-  const { data: liveStatus } = useQuery({
-    queryKey: ['ha-status', config.resource],
-    queryFn: () => api.resourceStatus(config.resource),
-    refetchInterval: 15000,
-  });
-  const nodeStates = liveStatus?.status?.nodeStates ?? resource?.nodeStates ?? {};
-  const primaryNode = Object.keys(nodeStates).find(
-    (n) => nodeStates[n]?.role === 'Primary'
-  );
+  const { config, resource, status, primaryNode } = view;
+  // No primary anywhere means nothing is promoted, so there is nothing to evict.
   const isRunning = Boolean(primaryNode);
+  const startList = startListFor(config);
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="gap-4 py-5">
+      <CardHeader className="px-5">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <HeartPulse className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div>
-              <CardTitle className="text-base">{config.resource}</CardTitle>
-              {resource && (
-                <p className="text-sm text-muted-foreground">
-                  Port: {resource.port} • Protocol: {resource.protocol}
-                </p>
+          <div className="min-w-0">
+            <CardTitle className="font-mono text-[15px]">
+              {config.resource}
+            </CardTitle>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              Promoter ·{' '}
+              {isRunning ? (
+                <>
+                  active on{' '}
+                  <span className="font-mono text-foreground">
+                    {primaryNode}
+                  </span>
+                </>
+              ) : (
+                'not currently promoted'
               )}
-            </div>
+            </p>
           </div>
-          <StatusBadge status={isRunning ? 'running' : 'stopped'} />
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <QuorumPill quorum={status?.quorum} />
+            <StatusBadge status={isRunning ? 'running' : 'stopped'} />
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1 text-sm">
-          <InfoRow label="VIP" value={config.vip} mono />
-          <InfoRow label="Mount Point" value={config.mountPoint || '-'} mono />
-          <InfoRow label="Filesystem" value={config.fsType || '-'} />
-          <InfoRow label="Primary Node" value={primaryNode || '-'} />
-          <div className="flex items-start justify-between gap-2 py-1">
-            <span className="text-muted-foreground">Services</span>
-            {config.services?.length > 0 ? (
-              <div className="flex flex-wrap justify-end gap-1">
-                {config.services.map((s) => (
-                  <Badge key={s} variant="secondary" className="font-mono">
-                    {s}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <span className="font-medium">-</span>
-            )}
-          </div>
+
+      <CardContent className="space-y-4 px-5">
+        <div className="space-y-0.5">
+          <FactRow label="Virtual IP" value={config.vip || '-'} mono />
+          <FactRow
+            label="Mount point"
+            value={config.mountPoint || '-'}
+            mono
+          />
+          <FactRow label="Filesystem" value={config.fsType || '-'} />
+          {resource ? (
+            <FactRow
+              label="Replication"
+              value={`tcp ${resource.port} · protocol ${resource.protocol}`}
+              mono
+            />
+          ) : null}
         </div>
 
-        <Separator />
+        {startList.length > 0 ? (
+          <div>
+            <div className="eyebrow">Start list</div>
+            <ol className="mt-2 space-y-1.5">
+              {startList.map((unit, i) => (
+                <StartListItem key={unit} index={i + 1} unit={unit} />
+              ))}
+            </ol>
+          </div>
+        ) : null}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
           <Button
             variant="outline"
             size="sm"
@@ -805,9 +1065,9 @@ function HAConfigCard({
           </AlertDialog>
         </div>
 
-        <Separator />
-
-        <TomlEditorSection resource={config.resource} />
+        <div className="border-t border-border pt-4">
+          <TomlEditorSection resource={config.resource} />
+        </div>
       </CardContent>
     </Card>
   );
@@ -844,7 +1104,7 @@ function TomlEditorSection({ resource }: { resource: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center gap-2 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
       >
         {open ? (
           <ChevronDown className="h-4 w-4" />
@@ -852,19 +1112,21 @@ function TomlEditorSection({ resource }: { resource: string }) {
           <ChevronRight className="h-4 w-4" />
         )}
         <FileCode className="h-4 w-4" />
-        DRBD Reactor Promoter Config ({resource}.toml)
+        <span>
+          Promoter config <span className="font-mono">{resource}.toml</span>
+        </span>
       </button>
 
       {open && (
         <div className="space-y-2">
           {data?.path && (
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="font-mono text-xs break-all text-muted-foreground">
               {data.path}
             </p>
           )}
 
           {isFetching && content === null ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading TOML...
             </div>
@@ -878,7 +1140,7 @@ function TomlEditorSection({ resource }: { resource: string }) {
               onChange={(e) => setContent(e.target.value)}
               spellCheck={false}
               rows={12}
-              className="w-full rounded-md border border-input bg-transparent p-3 font-mono text-xs shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+              className="w-full rounded-md border border-input bg-transparent p-3 font-mono text-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
             />
           )}
 
@@ -918,23 +1180,6 @@ function TomlEditorSection({ resource }: { resource: string }) {
   );
 }
 
-function InfoRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex justify-between gap-2 py-1">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={mono ? 'font-mono text-xs' : 'font-medium'}>{value}</span>
-    </div>
-  );
-}
-
 // ==================== Details Dialog ====================
 
 function DetailsDialog({
@@ -945,12 +1190,12 @@ function DetailsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const rows = config
-    ? [
-        ['Resource', config.resource],
-        ['Virtual IP', config.vip],
-        ['Mount Point', config.mountPoint || '-'],
-        ['Filesystem', config.fsType || '-'],
-      ]
+    ? ([
+        ['Resource', config.resource, true],
+        ['Virtual IP', config.vip, true],
+        ['Mount Point', config.mountPoint || '-', true],
+        ['Filesystem', config.fsType || '-', false],
+      ] as [string, string, boolean][])
     : [];
 
   return (
@@ -959,26 +1204,29 @@ function DetailsDialog({
         <DialogHeader>
           <DialogTitle>HA Configuration Details</DialogTitle>
         </DialogHeader>
-        <div className="space-y-1 text-sm">
-          {rows.map(([label, value]) => (
+        <div className="space-y-1 text-[13px]">
+          {rows.map(([label, value, mono]) => (
             <div
               key={label}
-              className="flex justify-between border-b py-2 last:border-0"
+              className="flex justify-between border-b border-border py-2 last:border-0"
             >
               <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium">{value}</span>
+              <span className={mono ? 'font-mono tabular-nums' : 'font-medium'}>
+                {value}
+              </span>
             </div>
           ))}
           {config?.services && config.services.length > 0 && (
-            <div className="pt-2">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">
-                Services
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <div className="pt-3">
+              <div className="eyebrow">Services</div>
+              <div className="mt-2 flex flex-wrap gap-2">
                 {config.services.map((service) => (
-                  <Badge key={service} variant="secondary" className="font-mono">
+                  <span
+                    key={service}
+                    className="rounded-[5px] border border-border bg-muted px-2 py-1 font-mono text-xs"
+                  >
                     {service}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>

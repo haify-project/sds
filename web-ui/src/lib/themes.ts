@@ -1,7 +1,10 @@
 /**
  * shadcn-style theme presets. Each color preset only overrides the accent
- * tokens (primary / ring) for light and dark; the neutral background, borders
- * and text stay monochrome, so "Neutral" reproduces the default black & white.
+ * tokens (primary / ring) for light and dark; the background, borders and text
+ * come from index.css and stay put — which is now warm paper and blue-tinted
+ * ink, not monochrome, so "Neutral" no longer reproduces black & white and is
+ * no longer the default. "SDS" is: it restates the shipped accent, so picking
+ * it always returns the console to the designed look.
  */
 
 export type ThemeTokens = {
@@ -26,6 +29,20 @@ const WHITE = 'oklch(0.985 0 0)';
 const INK = 'oklch(0.205 0 0)';
 
 export const BASE_COLORS: ColorTheme[] = [
+  {
+    name: 'sds',
+    label: 'SDS',
+    light: {
+      primary: 'oklch(0.46 0.115 255)',
+      primaryForeground: 'oklch(0.99 0 0)',
+      ring: 'oklch(0.46 0.115 255)',
+    },
+    dark: {
+      primary: 'oklch(0.72 0.11 255)',
+      primaryForeground: 'oklch(0.17 0.008 260)',
+      ring: 'oklch(0.72 0.11 255)',
+    },
+  },
   {
     name: 'neutral',
     label: 'Neutral',
@@ -209,9 +226,14 @@ export const BASE_COLORS: ColorTheme[] = [
 /** Radius presets, in rem. */
 export const RADII = [0, 0.3, 0.5, 0.625, 0.75, 1] as const;
 
-export const DEFAULT_COLOR = 'neutral';
+export const DEFAULT_COLOR = 'sds';
 export const DEFAULT_RADIUS = 0.625;
 
 export function getColorTheme(name: string): ColorTheme {
-  return BASE_COLORS.find((c) => c.name === name) ?? BASE_COLORS[0];
+  // Fall back to the named default, not to whatever happens to sit at index 0
+  // — the two coincide today only because `sds` is first in the list.
+  return (
+    BASE_COLORS.find((c) => c.name === name) ??
+    BASE_COLORS.find((c) => c.name === DEFAULT_COLOR)!
+  );
 }

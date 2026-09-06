@@ -21,13 +21,26 @@ import (
 	"go.uber.org/zap"
 )
 
+// freePort asks the kernel for a port and gives it straight back. A test that
+// hardcodes one passes or fails on what else happens to be running on the
+// machine — this suite failed on a developer's box because an unrelated process
+// held 43510, which says nothing about the controller.
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+	return port
+}
+
 func TestControllerStartAndStopServers(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
 	ctrl.ctx, ctrl.cancel = context.WithCancel(context.Background())
 	ctrl.db = newTestDB(t)
 	ctrl.config = &config.Config{
-		Server: config.ServerConfig{ListenAddress: "127.0.0.1", Port: 43510},
+		Server: config.ServerConfig{ListenAddress: "127.0.0.1", Port: freePort(t)},
 	}
 
 	require.NoError(t, ctrl.Start())
@@ -40,15 +53,19 @@ func TestControllerStartAndStopServers(t *testing.T) {
 }
 
 func TestControllerStartReportsOccupiedGRPCPort(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:43511")
+	// Hold a port that is genuinely free right now, rather than one chosen in
+	// advance and hoped to be free: the point of the test is that Start reports
+	// a port it cannot bind, not which number that is.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	// The listener exists only to hold 43511 while Start is expected to fail on
-	// it. Its close error says nothing about that assertion, and the port is
+	port := listener.Addr().(*net.TCPAddr).Port
+	// The listener exists only to hold the port while Start is expected to fail
+	// on it. Its close error says nothing about that assertion, and the port is
 	// released by process exit regardless.
 	defer func() { _ = listener.Close() }()
 
 	ctrl := newBasicTestController(&fakeDeploymentClient{})
-	ctrl.config = &config.Config{Server: config.ServerConfig{ListenAddress: "127.0.0.1", Port: 43511}}
+	ctrl.config = &config.Config{Server: config.ServerConfig{ListenAddress: "127.0.0.1", Port: port}}
 	err = ctrl.Start()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to start gRPC server")

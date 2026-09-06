@@ -6,76 +6,133 @@
 
 :root {
   --radius: 0.625rem;
-  /* Tailwind/shadcn neutral default — pure monochrome, no accent hue. */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Warm paper, not white: a console read for hours should not glare. One
+     deep-blue accent carries every affordance; everything else is ink. */
+  --background: oklch(0.977 0.004 85);
+  --foreground: oklch(0.22 0.012 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.22 0.012 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.205 0 0);
-  --chart-2: oklch(0.4 0 0);
-  --chart-3: oklch(0.556 0 0);
-  --chart-4: oklch(0.708 0 0);
-  --chart-5: oklch(0.85 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.22 0.012 260);
+  --primary: oklch(0.46 0.115 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.005 85);
+  --secondary-foreground: oklch(0.44 0.012 260);
+  --muted: oklch(0.968 0.005 85);
+  /* 0.53, not 0.56: this is the colour of `.eyebrow` (11px/500 — normal text,
+     so AA wants 4.5) and of every table column heading. At 0.56 it measured
+     4.35:1 on the paper and 4.24:1 on --muted; at 0.53 it is 4.94:1 and
+     4.81:1, still far subordinate to --foreground's 16.2:1. */
+  --muted-foreground: oklch(0.53 0.012 260);
+  /* Blue tint rather than grey: selected and hover fills belong to the accent. */
+  --accent: oklch(0.955 0.02 255);
+  --accent-foreground: oklch(0.42 0.115 255);
+  --destructive: oklch(0.58 0.2 27);
+  --border: oklch(0.915 0.006 85);
+  --input: oklch(0.915 0.006 85);
+  --ring: oklch(0.46 0.115 255);
+  --chart-1: oklch(0.22 0.012 260);
+  --chart-2: oklch(0.38 0.01 260);
+  --chart-3: oklch(0.54 0.01 260);
+  --chart-4: oklch(0.7 0.01 260);
+  --chart-5: oklch(0.85 0.01 260);
+  /* The sidebar is the same paper as the page — only the border separates them. */
+  --sidebar: oklch(0.977 0.004 85);
+  --sidebar-foreground: oklch(0.22 0.012 260);
+  --sidebar-primary: oklch(0.46 0.115 255);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  /* White, because the active nav pill lifts off the paper instead of tinting it. */
+  --sidebar-accent: oklch(1 0 0);
+  --sidebar-accent-foreground: oklch(0.22 0.012 260);
+  --sidebar-border: oklch(0.925 0.006 85);
+  --sidebar-ring: oklch(0.46 0.115 255);
+  /* The active nav pill's drop shadow. Tokenised because the light value is a
+     near-black ink that is simply invisible on the dark sidebar. */
+  --sidebar-pill-shadow: oklch(0.3 0.02 260 / 0.06);
+  /* Health, not decoration: the four states a node, resource or gateway can
+     be in. Kept out of the theme presets so a colour pick never restates
+     "degraded" in violet. */
+  --status-ok: oklch(0.62 0.14 155);
+  --status-warn: oklch(0.72 0.15 75);
+  --status-bad: oklch(0.58 0.2 27);
+  --status-idle: oklch(0.78 0.008 260);
+  /* Words on the 12% soft tint need their own, darker twin: the fill colours
+     themselves fail AA there in light mode (ok 2.99:1, warn 2.29:1, bad
+     3.97:1). Same hue and chroma, dropped in lightness until they pass. */
+  --status-ok-text: oklch(0.50 0.14 155);
+  --status-warn-text: oklch(0.53 0.15 75);
+  --status-bad-text: oklch(0.52 0.2 27);
+  --status-idle-text: oklch(0.50 0.01 260);
+  /* The badge fill. These are the *flattened* result of the 12% tint the soft
+     variants used to be — literal opaque colours rather than
+     `color-mix(..., transparent)`, because Tailwind emits the un-mixed
+     `var(--status-bad)` as the fallback outside `@supports (color:
+     color-mix(...))`. On a browser without color-mix that fallback paints the
+     badge at full saturation with tone-coloured text on top: illegible, not
+     merely wrong. A literal has no fallback to get wrong. */
+  --status-ok-soft: oklch(0.932 0.019 153);
+  --status-warn-soft: oklch(0.944 0.027 84);
+  --status-bad-soft: oklch(0.922 0.023 27);
+  --status-idle-soft: oklch(0.954 0.003 87);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.17 0.008 260);
+  --foreground: oklch(0.96 0.004 85);
+  --card: oklch(0.21 0.008 260);
+  --card-foreground: oklch(0.96 0.004 85);
+  --popover: oklch(0.21 0.008 260);
+  --popover-foreground: oklch(0.96 0.004 85);
+  --primary: oklch(0.72 0.11 255);
+  --primary-foreground: oklch(0.17 0.008 260);
+  --secondary: oklch(0.26 0.01 260);
+  --secondary-foreground: oklch(0.96 0.004 85);
+  --muted: oklch(0.26 0.01 260);
+  --muted-foreground: oklch(0.7 0.01 260);
+  --accent: oklch(0.3 0.04 255);
+  --accent-foreground: oklch(0.85 0.06 255);
+  --destructive: oklch(0.68 0.19 27);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.985 0 0);
-  --chart-2: oklch(0.8 0 0);
-  --chart-3: oklch(0.708 0 0);
-  --chart-4: oklch(0.556 0 0);
-  --chart-5: oklch(0.4 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.922 0 0);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.72 0.11 255);
+  --chart-1: oklch(0.96 0.004 85);
+  --chart-2: oklch(0.82 0.01 260);
+  --chart-3: oklch(0.68 0.01 260);
+  --chart-4: oklch(0.54 0.01 260);
+  --chart-5: oklch(0.4 0.01 260);
+  --sidebar: oklch(0.17 0.008 260);
+  --sidebar-foreground: oklch(0.96 0.004 85);
+  --sidebar-primary: oklch(0.72 0.11 255);
+  --sidebar-primary-foreground: oklch(0.17 0.008 260);
+  --sidebar-accent: oklch(0.24 0.01 260);
+  --sidebar-accent-foreground: oklch(0.96 0.004 85);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.72 0.11 255);
+  /* Black, and much heavier: the sidebar ground is oklch(0.17), so anything
+     lighter than it — including the light theme's blue-grey ink — reads as
+     nothing at all. */
+  --sidebar-pill-shadow: oklch(0 0 0 / 0.35);
+  --status-ok: oklch(0.7 0.14 155);
+  --status-warn: oklch(0.78 0.14 75);
+  --status-bad: oklch(0.68 0.19 27);
+  --status-idle: oklch(0.5 0.01 260);
+  /* Dark mode already clears AA over the tint, so the fill colour is the text
+     colour and the two themes stay one API. */
+  --status-ok-text: var(--status-ok);
+  --status-warn-text: var(--status-warn);
+  --status-bad-text: var(--status-bad);
+  /* Except idle: its fill and its tint are the same hue a few L apart, so
+     aliasing text to the fill lands at 2.9:1. Lift the text instead. */
+  --status-idle-text: oklch(0.74 0.01 260);
+  /* Same flattening, over the dark ground. */
+  --status-ok-soft: oklch(0.243 0.023 173);
+  --status-warn-soft: oklch(0.255 0.019 79);
+  --status-bad-soft: oklch(0.235 0.027 12);
+  --status-idle-soft: oklch(0.215 0.008 260);
 }
 
 @theme inline {
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto,
+  --font-sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI',
     sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo,
     monospace;
@@ -114,6 +171,21 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-status-ok: var(--status-ok);
+  --color-status-warn: var(--status-warn);
+  --color-status-bad: var(--status-bad);
+  --color-status-idle: var(--status-idle);
+  --color-status-ok-text: var(--status-ok-text);
+  --color-status-warn-text: var(--status-warn-text);
+  --color-status-bad-text: var(--status-bad-text);
+  --color-status-idle-text: var(--status-idle-text);
+  /* Soft variants for badge fills. Plain `var()` — see the note on
+     --status-*-soft: a color-mix here would make the *unmixed* status colour
+     the fallback on browsers without color-mix. */
+  --color-status-ok-soft: var(--status-ok-soft);
+  --color-status-warn-soft: var(--status-warn-soft);
+  --color-status-bad-soft: var(--status-bad-soft);
+  --color-status-idle-soft: var(--status-idle-soft);
 }
 
 @layer base {
@@ -125,7 +197,6 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv03', 'cv04', 'ss01';
   }
 
   /* Numeric metrics, ports, addresses and identifiers read as data, not prose. */
@@ -164,5 +235,15 @@
   /* Minimal: a plain canvas. The whitespace does the work, not texture. */
   .app-canvas {
     background-color: var(--background);
+  }
+
+  /* The small uppercase label above a section, a column or a metric. One rule
+     rather than five classes repeated, because it appears on every page. */
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--muted-foreground);
   }
 }

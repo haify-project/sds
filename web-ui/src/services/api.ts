@@ -8,6 +8,11 @@
 // published and should not be: the page loads and nothing on it works.
 const API_BASE = '/v1';
 
+// Type-only, so this does not create a runtime cycle with events.ts (which
+// imports getApiToken from here). The SSE stream and the history endpoint carry
+// the same event, so they share one type rather than drifting into two.
+import type { ClusterEvent } from './events';
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
@@ -847,6 +852,13 @@ class ApiClient {
   listAuditEvents = (params: AuditQuery = {}) =>
     this.request<AuditEventsResponse>(`/audit${queryString(params)}`);
 
+  // The controller's bounded in-memory event history — what just happened to
+  // the cluster, as opposed to /audit, which records who called what. The SSE
+  // stream in services/events.ts is the live tail of this same bus; this is how
+  // a page that was not open at the time reads back what it missed.
+  listEvents = (params: EventQuery = {}) =>
+    this.request<ClusterEventsResponse>(`/events${queryString(params)}`);
+
   listControllerLogs = (params: ControllerLogQuery = {}) =>
     this.request<ControllerLogsResponse>(`/logs${queryString(params)}`);
 
@@ -1033,6 +1045,26 @@ export interface AuditQuery {
   user?: string;
   failuresOnly?: boolean;
   sinceUnixMs?: number;
+}
+
+export interface ClusterEventsResponse {
+  success: boolean;
+  message: string;
+  /** Oldest first, as the controller returns them. */
+  events?: ClusterEvent[];
+  /** Published since the controller started. Larger than the oldest id
+   *  returned means the buffer has already discarded history. */
+  published?: string;
+  /** Dropped because a subscriber could not keep up. */
+  dropped?: string;
+}
+
+export interface EventQuery {
+  limit?: number;
+  /** "info" (default) | "warning" | "critical" */
+  minSeverity?: string;
+  resource?: string;
+  sinceId?: number;
 }
 
 export interface ControllerLogEntry {
