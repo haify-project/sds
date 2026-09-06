@@ -261,6 +261,13 @@ to   = ["ErrorCode", "State"]
 name = "replicates_to"
 from = ["Replica", "Node", "DRBDResource"]
 to   = ["Replica", "Node", "DRBDResource"]
+# Read by alchemy only (OPSDOCTOR_ALCHEMY_ADDR). Identical ends make this a
+# self-relation for cortexdb's traversal, but alchemy asks a different question
+# — may both directions be true at once? — and its default answer is no. A
+# document saying node-b and node-e replicate to each other is then two sources
+# contradicting each other, and alchemy withholds the WHOLE document's graph
+# while ingest still reports success. Measured, not hypothetical.
+both_ways = true
 
 # Two things that cannot both hold. Same shape as replicates_to and same
 # reason: a conflict is symmetric.
@@ -268,6 +275,9 @@ to   = ["Replica", "Node", "DRBDResource"]
 name = "conflicts_with"
 from = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter", "Replica"]
 to   = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter", "Replica"]
+# Same reason as replicates_to above: a conflict is symmetric, and without this
+# alchemy reads the pair as a contradiction and drops the graph.
+both_ways = true
 
 # ---------------------------------------------------------------------------
 # Code vocabulary — the admission list for `oss-agent ingest-repo`, which
