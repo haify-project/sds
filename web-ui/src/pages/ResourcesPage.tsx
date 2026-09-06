@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
 import { SegmentedFilter } from '@/components/SegmentedFilter';
 import { RoleChip } from '@/components/RoleChip';
+import { RecordCard, RecordCards } from '@/components/RecordCard';
 import { ResourceTopology } from '@/components/ResourceTopology';
 import { ResourceProfilesPage } from './ResourceProfilesPage';
 import { useSearchParams } from 'react-router';
@@ -221,6 +222,15 @@ function replicationSummary(status?: ResourceStatus): Replication {
 
 type FilterKey = 'all' | 'healthy' | 'syncing' | 'offsite';
 
+/** What a resource reads as before its status query has answered. */
+const UNKNOWN_REPLICATION: Replication = { tone: 'idle', label: 'unknown', percent: 0 };
+
+// sizeGb crosses the wire as a proto int64, i.e. a JSON *string*; summing it
+// without Number() concatenates instead of adding.
+function totalGbOf(resource: Resource): number {
+  return resource.volumes.reduce((n, v) => n + Number(v.sizeGb), 0);
+}
+
 export function ResourcesPage() {
   const { data: resources, isLoading } = useQuery({
     queryKey: ['resources'],
@@ -258,8 +268,14 @@ export function ResourcesPage() {
     })),
   });
 
+  // Derived once for both shapes of a row: the table at `md` and up and the
+  // cards below it read these two maps, never a query of their own, so the two
+  // views cannot describe the same resource differently.
+  const statusOf = new Map<string, ResourceStatus | undefined>(
+    list.map((r, i) => [r.name, statusQueries[i]?.data?.status]),
+  );
   const replication = new Map<string, Replication>(
-    list.map((r, i) => [r.name, replicationSummary(statusQueries[i]?.data?.status)]),
+    list.map((r) => [r.name, replicationSummary(statusOf.get(r.name))]),
   );
 
   const [params, setParams] = useSearchParams();
@@ -272,6 +288,19 @@ export function ResourcesPage() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Expansion and the row dialogs live on the page rather than inside the row:
+  // below `md` a resource is a card and above it a table row, and state held in
+  // either would be a second copy that disagrees with the other. Several may be
+  // open at once, which is the whole point of an inline panel over a modal.
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [dialog, setDialog] = useState<{ resource: string; kind: RowDialog } | null>(
+    null,
+  );
+  const toggleExpanded = (name: string) =>
+    setExpanded((cur) =>
+      cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name],
+    );
 
   const matchesFilter = (r: Resource, key: FilterKey) => {
     if (key === 'all') return true;
@@ -344,7 +373,7 @@ export function ResourcesPage() {
         actions={
           tab === 'resources' ? (
             <>
-              <div className="relative w-[210px]">
+              <div className="relative w-full sm:w-[210px]">
                 <Search className="pointer-events-none absolute top-1/2 left-2.5 h-[15px] w-[15px] -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
@@ -370,86 +399,169 @@ export function ResourcesPage() {
         }
         className="space-y-4"
       >
-        <TabsList>
-          <TabsTrigger value="resources">Resources</TabsTrigger>
-          <TabsTrigger value="profiles">Profiles</TabsTrigger>
-        </TabsList>
+        {/* The strip is an inline row that never wraps; it scrolls in its own
+            lane so a longer label cannot widen the page. */}
+        <div className="overflow-x-auto">
+          <TabsList>
+            <TabsTrigger value="resources">Resources</TabsTrigger>
+            <TabsTrigger value="profiles">Profiles</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="profiles">
           <ResourceProfilesPage />
         </TabsContent>
 
         <TabsContent value="resources" className="space-y-3.5">
-          <SegmentedFilter
-            aria-label="Filter resources by state"
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: 'all', label: 'All', count: counts.all },
-              { value: 'healthy', label: 'Healthy', count: counts.healthy },
-              { value: 'syncing', label: 'Syncing', count: counts.syncing },
-              { value: 'offsite', label: 'Off-site', count: counts.offsite },
-            ]}
-          />
+          {/* Four chips with counts are wider than 375px the moment a count
+              reaches two digits. They scroll here rather than widening the page. */}
+          <div className="overflow-x-auto">
+            <SegmentedFilter
+              aria-label="Filter resources by state"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: 'All', count: counts.all },
+                { value: 'healthy', label: 'Healthy', count: counts.healthy },
+                { value: 'syncing', label: 'Syncing', count: counts.syncing },
+                { value: 'offsite', label: 'Off-site', count: counts.offsite },
+              ]}
+            />
+          </div>
 
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              {isLoading ? (
-                <div className="space-y-3 p-5">
-                  {[0, 1, 2].map((i) => (
-                    <Skeleton key={i} className="h-9 w-full" />
-                  ))}
-                </div>
-              ) : !list.length ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                  <Boxes className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    No resources found. Create your first resource to get started.
-                  </p>
-                  <Button variant="outline" onClick={() => setCreateOpen(true)}>
-                    <Plus />
-                    Create resource
-                  </Button>
-                </div>
-              ) : !visible.length ? (
-                <p className="py-16 text-center text-sm text-muted-foreground">
-                  No resource matches this filter.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <StatusTickHead />
-                      <TableHead>Resource</TableHead>
-                      <TableHead>Port</TableHead>
-                      <TableHead>Protocol</TableHead>
-                      <TableHead>Nodes</TableHead>
-                      <TableHead>Volumes</TableHead>
-                      <TableHead className="w-[200px]">Replication</TableHead>
-                      <TableHead className="pr-5 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visible.map((resource) => (
-                      <ResourceRow
-                        key={resource.name}
-                        resource={resource}
-                        replication={
-                          replication.get(resource.name) ?? {
-                            tone: 'idle',
-                            label: 'unknown',
-                            percent: 0,
-                          }
-                        }
-                        pools={pools?.pools ?? []}
-                        nodes={nodes?.nodes ?? []}
-                      />
+          {isLoading || !visible.length ? (
+            <Card className="overflow-hidden">
+              <CardContent className="p-0">
+                {isLoading ? (
+                  <div className="space-y-3 p-5">
+                    {[0, 1, 2].map((i) => (
+                      <Skeleton key={i} className="h-9 w-full" />
                     ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                ) : !list.length ? (
+                  <div className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+                    <Boxes className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-balance text-muted-foreground">
+                      No resources found. Create your first resource to get started.
+                    </p>
+                    <Button variant="outline" onClick={() => setCreateOpen(true)}>
+                      <Plus />
+                      Create resource
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="px-5 py-16 text-center text-sm text-muted-foreground">
+                    No resource matches this filter.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* An eight-column table at 375px puts nodes, volumes and
+                  replication past the right edge. Below `md` each row is a card
+                  built from the same derived values the row below uses. */}
+              <RecordCards>
+                {visible.map((resource) => {
+                  const rep = replication.get(resource.name) ?? UNKNOWN_REPLICATION;
+                  const isOpen = expanded.includes(resource.name);
+                  return (
+                    <RecordCard
+                      key={resource.name}
+                      tone={rep.tone}
+                      open={isOpen}
+                      onToggle={() => toggleExpanded(resource.name)}
+                      detailId={`resource-card-${resource.name}`}
+                      title={
+                        <>
+                          <span className="font-mono text-[14px] font-semibold break-all">
+                            {resource.name}
+                          </span>
+                          <ResourceChips resource={resource} />
+                        </>
+                      }
+                      subtitle={
+                        <span className="font-mono tabular-nums">
+                          port {resource.port} · protocol {resource.protocol}
+                        </span>
+                      }
+                      actions={
+                        <ResourceActionsMenu
+                          resource={resource}
+                          onSelect={(kind) =>
+                            setDialog({ resource: resource.name, kind })
+                          }
+                        />
+                      }
+                      facts={[
+                        {
+                          label: 'Nodes',
+                          value: (
+                            <NodeChips
+                              chips={nodeChips(resource, statusOf.get(resource.name))}
+                              wrap
+                            />
+                          ),
+                        },
+                        {
+                          label: 'Volumes',
+                          value: (
+                            <span className="font-mono tabular-nums">
+                              {resource.volumes.length} · {totalGbOf(resource)} GB
+                            </span>
+                          ),
+                        },
+                        { label: 'Replication', value: <ReplicationCell replication={rep} /> },
+                      ]}
+                    >
+                      <ResourceDetail
+                        resource={resource}
+                        onOpenDialog={(kind) =>
+                          setDialog({ resource: resource.name, kind })
+                        }
+                      />
+                    </RecordCard>
+                  );
+                })}
+              </RecordCards>
+
+              <Card className="hidden overflow-hidden md:block">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <StatusTickHead />
+                        <TableHead>Resource</TableHead>
+                        <TableHead>Port</TableHead>
+                        <TableHead>Protocol</TableHead>
+                        <TableHead>Nodes</TableHead>
+                        <TableHead>Volumes</TableHead>
+                        <TableHead className="w-[200px]">Replication</TableHead>
+                        <TableHead className="pr-5 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visible.map((resource) => (
+                        <ResourceRow
+                          key={resource.name}
+                          resource={resource}
+                          replication={
+                            replication.get(resource.name) ?? UNKNOWN_REPLICATION
+                          }
+                          status={statusOf.get(resource.name)}
+                          expanded={expanded.includes(resource.name)}
+                          onToggle={() => toggleExpanded(resource.name)}
+                          onOpenDialog={(kind) =>
+                            setDialog({ resource: resource.name, kind })
+                          }
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           {list.length > 0 && (
             <p className="text-xs text-muted-foreground">
@@ -458,6 +570,22 @@ export function ResourcesPage() {
               <span className="font-mono tabular-nums">{list.length}</span> resources
             </p>
           )}
+
+          {/* One set of dialogs per resource, mounted here rather than inside a
+              row: the card and the row are two renderings of one resource, and
+              a dialog owned by either would exist twice. */}
+          {visible.map((resource) => (
+            <ResourceDialogs
+              key={resource.name}
+              resource={resource}
+              kind={dialog?.resource === resource.name ? dialog.kind : null}
+              onSelect={(kind) =>
+                setDialog(kind ? { resource: resource.name, kind } : null)
+              }
+              pools={pools?.pools ?? []}
+              nodes={nodes?.nodes ?? []}
+            />
+          ))}
         </TabsContent>
       </Tabs>
 
@@ -541,27 +669,29 @@ function nodeChips(resource: Resource, status?: ResourceStatus): NodeChip[] {
   return chips.sort((a, b) => Number(b.primary) - Number(a.primary));
 }
 
-function NodeChips({ chips }: { chips: NodeChip[] }) {
+function NodeChips({ chips, wrap = false }: { chips: NodeChip[]; wrap?: boolean }) {
   // Three fit the column; the rest collapse into a count that still names them
-  // on hover, rather than pushing the row wider than the table.
-  const shown = chips.slice(0, 3);
-  const rest = chips.slice(3);
+  // on hover, rather than pushing the row wider than the table. A card's fact
+  // has no column to overflow — it wraps instead, and shows every node, because
+  // a "+2" a thumb cannot hover over says nothing at all.
+  const shown = wrap ? chips : chips.slice(0, 3);
+  const rest = wrap ? [] : chips.slice(3);
   return (
-    <div className="flex items-center gap-1.5">
+    <div className={cn('flex items-center gap-1.5', wrap && 'flex-wrap')}>
       {shown.map((chip) => (
         <span
           key={chip.name}
           title={chip.title}
           className={cn(
-            'inline-flex h-[22px] items-center rounded-[4px] px-2 font-mono text-[11px]',
+            'inline-flex h-[22px] max-w-full items-center rounded-[4px] px-2 font-mono text-[11px]',
             chip.primary
               ? 'bg-accent font-medium text-accent-foreground'
               : 'bg-secondary text-secondary-foreground',
           )}
         >
-          {chip.name}
+          <span className="truncate">{chip.name}</span>
           {chip.marks.length > 0 && (
-            <span className="ml-1 font-sans text-[10px] opacity-75">
+            <span className="ml-1 shrink-0 font-sans text-[10px] opacity-75">
               {chip.marks.join(' · ')}
             </span>
           )}
@@ -576,6 +706,40 @@ function NodeChips({ chips }: { chips: NodeChip[] }) {
         </span>
       )}
     </div>
+  );
+}
+
+/** The qualifiers that follow the name. Extracted because the row and the card
+ *  both show them, and a resource that is CSI-managed in one view and not in
+ *  the other would be a lie in whichever view the operator happened to read. */
+function ResourceChips({ resource }: { resource: Resource }) {
+  return (
+    <>
+      {isCsiManaged(resource) && (
+        <span
+          className="rounded-[4px] bg-accent px-1.5 py-0.5 text-[11.5px] text-accent-foreground"
+          title="Provisioned by the Kubernetes CSI driver. Its lifecycle belongs to Kubernetes — delete the PersistentVolumeClaim instead of removing it here."
+        >
+          kubernetes
+        </span>
+      )}
+      {resource.wanMode && (
+        <span
+          className="rounded-[4px] bg-secondary px-1.5 py-0.5 text-[11.5px] text-secondary-foreground"
+          title={`Off-site asynchronous replica on ${resource.drNode ?? 'a DR node'}`}
+        >
+          off-site
+        </span>
+      )}
+      {resource.quorumRisk && (
+        <span
+          className={cn('rounded-[4px] px-1.5 py-0.5 text-[11.5px]', TONE_SOFT.warn)}
+          title="2-node resource with no quorum tiebreaker: a single node failure suspends I/O"
+        >
+          quorum risk
+        </span>
+      )}
+    </>
   );
 }
 
@@ -599,29 +763,19 @@ function ReplicationCell({ replication }: { replication: Replication }) {
 function ResourceRow({
   resource,
   replication,
-  pools,
-  nodes,
+  status,
+  expanded,
+  onToggle,
+  onOpenDialog,
 }: {
   resource: Resource;
   replication: Replication;
-  pools: PoolOpt[];
-  nodes: NodeOpt[];
+  status?: ResourceStatus;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenDialog: (d: RowDialog) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [dialog, setDialog] = useState<RowDialog | null>(null);
-  const close = () => setDialog(null);
-
-  // Shares the page's query key, so an expanded row costs no extra request.
-  const { data } = useQuery({
-    queryKey: ['resource-status', resource.name],
-    queryFn: () => api.resourceStatus(resource.name),
-    refetchInterval: syncPollInterval,
-  });
-  const status = data?.status;
-
-  // sizeGb crosses the wire as a proto int64, i.e. a JSON *string*; summing
-  // it without Number() concatenates instead of adding.
-  const totalGb = resource.volumes.reduce((n, v) => n + Number(v.sizeGb), 0);
+  const totalGb = totalGbOf(resource);
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
@@ -632,7 +786,7 @@ function ResourceRow({
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => setExpanded((v) => !v)}
+              onClick={onToggle}
               aria-expanded={expanded}
               aria-label={`${expanded ? 'Hide' : 'Show'} detail for ${resource.name}`}
               className="-m-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -640,30 +794,7 @@ function ResourceRow({
               <Chevron className="h-3.5 w-3.5" />
             </button>
             <span className="font-mono text-[14px] font-semibold">{resource.name}</span>
-            {isCsiManaged(resource) && (
-              <span
-                className="rounded-[4px] bg-accent px-1.5 py-0.5 text-[11.5px] text-accent-foreground"
-                title="Provisioned by the Kubernetes CSI driver. Its lifecycle belongs to Kubernetes — delete the PersistentVolumeClaim instead of removing it here."
-              >
-                kubernetes
-              </span>
-            )}
-            {resource.wanMode && (
-              <span
-                className="rounded-[4px] bg-secondary px-1.5 py-0.5 text-[11.5px] text-secondary-foreground"
-                title={`Off-site asynchronous replica on ${resource.drNode ?? 'a DR node'}`}
-              >
-                off-site
-              </span>
-            )}
-            {resource.quorumRisk && (
-              <span
-                className={cn('rounded-[4px] px-1.5 py-0.5 text-[11.5px]', TONE_SOFT.warn)}
-                title="2-node resource with no quorum tiebreaker: a single node failure suspends I/O"
-              >
-                quorum risk
-              </span>
-            )}
+            <ResourceChips resource={resource} />
           </div>
         </TableCell>
         <TableCell className="font-mono tabular-nums text-muted-foreground">
@@ -682,7 +813,7 @@ function ResourceRow({
           <ReplicationCell replication={replication} />
         </TableCell>
         <TableCell className="pr-5 text-right">
-          <ResourceActionsMenu resource={resource} onSelect={setDialog} />
+          <ResourceActionsMenu resource={resource} onSelect={onOpenDialog} />
         </TableCell>
       </TableRow>
 
@@ -694,68 +825,90 @@ function ResourceRow({
               one-line data cells, which would keep the panel's prose on one
               line and push it out of the card. */}
           <TableCell colSpan={8} className="bg-muted/40 p-0 whitespace-normal">
-            <ResourceDetail
-              resource={resource}
-              onOpenDialog={setDialog}
-            />
+            <ResourceDetail resource={resource} onOpenDialog={onOpenDialog} />
           </TableCell>
         </TableRow>
       )}
+    </>
+  );
+}
 
+/**
+ * Every dialog a resource can open, mounted once for that resource whichever
+ * view asked. `kind` is null while nothing is open, which is also how each
+ * dialog stays mounted through its own close animation.
+ */
+function ResourceDialogs({
+  resource,
+  kind,
+  onSelect,
+  pools,
+  nodes,
+}: {
+  resource: Resource;
+  kind: RowDialog | null;
+  onSelect: (d: RowDialog | null) => void;
+  pools: PoolOpt[];
+  nodes: NodeOpt[];
+}) {
+  const close = () => onSelect(null);
+
+  return (
+    <>
       <AddDRDialog
-        open={dialog === 'add-dr'}
-        onOpenChange={(o) => (o ? setDialog('add-dr') : close())}
+        open={kind === 'add-dr'}
+        onOpenChange={(o) => (o ? onSelect('add-dr') : close())}
         resource={resource}
         nodes={nodes}
       />
       <DRFailoverDialog
-        open={dialog === 'dr-failover'}
-        onOpenChange={(o) => (o ? setDialog('dr-failover') : close())}
+        open={kind === 'dr-failover'}
+        onOpenChange={(o) => (o ? onSelect('dr-failover') : close())}
         resource={resource}
       />
       <SetRoleDialog
-        open={dialog === 'primary'}
-        onOpenChange={(o) => (o ? setDialog('primary') : close())}
+        open={kind === 'primary'}
+        onOpenChange={(o) => (o ? onSelect('primary') : close())}
         resource={resource}
         mode="primary"
       />
       <SetRoleDialog
-        open={dialog === 'secondary'}
-        onOpenChange={(o) => (o ? setDialog('secondary') : close())}
+        open={kind === 'secondary'}
+        onOpenChange={(o) => (o ? onSelect('secondary') : close())}
         resource={resource}
         mode="secondary"
       />
       <SnapshotsDialog
         resource={resource.name}
-        open={dialog === 'snapshots'}
-        onOpenChange={(o) => (o ? setDialog('snapshots') : close())}
+        open={kind === 'snapshots'}
+        onOpenChange={(o) => (o ? onSelect('snapshots') : close())}
       />
       <VolumesDialog
-        open={dialog === 'volumes' || dialog === 'add-volume'}
-        onOpenChange={(o) => (o ? setDialog('volumes') : close())}
-        defaultTab={dialog === 'add-volume' ? 'add' : 'volumes'}
+        open={kind === 'volumes' || kind === 'add-volume'}
+        onOpenChange={(o) => (o ? onSelect('volumes') : close())}
+        defaultTab={kind === 'add-volume' ? 'add' : 'volumes'}
         resource={resource}
         pools={pools}
       />
       <MountDialog
-        open={dialog === 'mount'}
-        onOpenChange={(o) => (o ? setDialog('mount') : close())}
+        open={kind === 'mount'}
+        onOpenChange={(o) => (o ? onSelect('mount') : close())}
         resource={resource}
         nodes={nodes}
       />
       <EditOptionsDialog
-        open={dialog === 'options'}
-        onOpenChange={(o) => (o ? setDialog('options') : close())}
+        open={kind === 'options'}
+        onOpenChange={(o) => (o ? onSelect('options') : close())}
         resource={resource}
       />
       <ScheduleDialog
-        open={dialog === 'schedule'}
-        onOpenChange={(o) => (o ? setDialog('schedule') : close())}
+        open={kind === 'schedule'}
+        onOpenChange={(o) => (o ? onSelect('schedule') : close())}
         resource={resource}
       />
       <DeleteResourceDialog
-        open={dialog === 'delete'}
-        onOpenChange={(o) => (o ? setDialog('delete') : close())}
+        open={kind === 'delete'}
+        onOpenChange={(o) => (o ? onSelect('delete') : close())}
         resourceName={resource.name}
         csiManaged={isCsiManaged(resource)}
       />
@@ -779,6 +932,51 @@ function SubTable({ head, children }: { head: React.ReactNode; children: React.R
 
 const subHead = 'px-3.5 pt-2.5 pb-2';
 const subCell = 'h-10 px-3.5 py-0 text-[12.5px]';
+
+/**
+ * A sub-table row below `md`, where four columns inside a card that is itself
+ * ~290px wide is not a table but a horizontal scroll. Same values, stacked:
+ * the identifier on its own line, the rest as label/value pairs.
+ */
+function StackedRecord({
+  title,
+  facts,
+}: {
+  title: React.ReactNode;
+  facts: { label: string; value: React.ReactNode }[];
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-3.5 py-3">
+      <div className="font-mono text-[13px] font-medium break-all">{title}</div>
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+        {facts.map((f) => (
+          <div key={f.label} className="min-w-0">
+            <dt className="eyebrow">{f.label}</dt>
+            <dd className="mt-0.5 text-[12.5px] break-words">{f.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** The per-peer resync bar. It needs a floor to stay legible, and a lower one
+ *  in a stacked fact than in the table column it was drawn for. */
+function SyncBar({ percent }: { percent: number }) {
+  return (
+    <div className="flex min-w-[105px] items-center gap-2 md:min-w-[140px]">
+      <div className="h-1 flex-1 overflow-hidden rounded-[2px] bg-muted">
+        <div
+          className="h-1 bg-status-warn transition-all"
+          style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+        />
+      </div>
+      <span className="font-mono text-[11.5px] tabular-nums text-status-warn-text">
+        {percent.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
 
 // ResourceDetail renders a resource's live status inline, under its row.
 //
@@ -804,13 +1002,13 @@ function ResourceDetail({
 
   if (isLoading)
     return (
-      <div className="space-y-3 px-11 py-5">
+      <div className="space-y-3 md:px-11 md:py-5">
         <Skeleton className="h-24 w-full" />
       </div>
     );
   if (isError)
     return (
-      <p className="px-11 py-5 text-sm text-destructive">{(error as Error).message}</p>
+      <p className="text-sm text-destructive md:px-11 md:py-5">{(error as Error).message}</p>
     );
   if (!status) return null;
 
@@ -820,121 +1018,173 @@ function ResourceDetail({
   const backingOf = new Map(resource.volumes.map((v) => [v.volumeId, v]));
   const volumes = status.volumes?.length ? status.volumes : resource.volumes;
 
+  // Derived once, rendered as a table at `md` and up and as stacks below it.
+  // Two hand-written copies of these cells would eventually disagree about what
+  // a Diskless peer or a missing backing volume reads as.
+  const nodeRows = nodeStates.map(([host, st]) => {
+    const node = st.node || host;
+    return {
+      key: host,
+      node,
+      role: (
+        <RoleChip
+          role={st.role}
+          suffix={resource.wanMode && node === resource.drNode ? '· DR' : undefined}
+        />
+      ),
+      disk: (
+        <span className={cn('font-mono', TONE_TEXT[toneOf(st.diskState)])}>
+          {st.diskState || '—'}
+        </span>
+      ),
+      replication: !st.replicationState ? (
+        <span className="text-muted-foreground">—</span>
+      ) : isPeerSyncing(st) ? (
+        <SyncBar percent={st.syncPercent ?? 0} />
+      ) : (
+        <span className="font-mono break-all text-muted-foreground">
+          {st.replicationState}
+        </span>
+      ),
+    };
+  });
+
+  const volumeRows = volumes.map((vol) => {
+    const backing = backingOf.get(vol.volumeId) ?? vol;
+    return {
+      key: vol.volumeId,
+      id: vol.volumeId,
+      device: vol.device,
+      backing:
+        backing.pool && backing.backingVolume
+          ? `${backing.pool}/${backing.backingVolume}`
+          : backing.backingVolume || '—',
+      size: `${vol.sizeGb} GB`,
+    };
+  });
+
   return (
-    <div className="space-y-6 py-5 pr-6 pl-11">
+    <div className="space-y-6 md:py-5 md:pr-6 md:pl-11">
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
           <h4 className="eyebrow mb-2.5">Per-node state</h4>
-          <SubTable
-            head={
-              <>
-                <TableHead className={subHead}>Node</TableHead>
-                <TableHead className={subHead}>Role</TableHead>
-                <TableHead className={subHead}>Disk</TableHead>
-                <TableHead className={subHead}>Replication</TableHead>
-              </>
-            }
-          >
-            {nodeStates.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className={cn(subCell, 'text-muted-foreground')}>
-                  No node states reported.
-                </TableCell>
-              </TableRow>
-            ) : (
-              nodeStates.map(([host, st]) => {
-                const node = st.node || host;
-                const syncing = isPeerSyncing(st);
-                return (
-                  <TableRow key={host}>
-                    <TableCell className={cn(subCell, 'font-mono')}>{node}</TableCell>
-                    <TableCell className={subCell}>
-                      <RoleChip
-                        role={st.role}
-                        suffix={
-                          resource.wanMode && node === resource.drNode ? '· DR' : undefined
-                        }
-                      />
-                    </TableCell>
-                    <TableCell
-                      className={cn(subCell, 'font-mono', TONE_TEXT[toneOf(st.diskState)])}
-                    >
-                      {st.diskState || '—'}
-                    </TableCell>
-                    <TableCell className={subCell}>
-                      {!st.replicationState ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : syncing ? (
-                        <div className="flex min-w-[140px] items-center gap-2">
-                          <div className="h-1 flex-1 overflow-hidden rounded-[2px] bg-muted">
-                            <div
-                              className="h-1 bg-status-warn transition-all"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, st.syncPercent ?? 0))}%`,
-                              }}
-                            />
-                          </div>
-                          <span className="font-mono text-[11.5px] tabular-nums text-status-warn-text">
-                            {(st.syncPercent ?? 0).toFixed(1)}%
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="font-mono text-muted-foreground">
-                          {st.replicationState}
-                        </span>
-                      )}
-                    </TableCell>
+          <div className="hidden md:block">
+            <SubTable
+              head={
+                <>
+                  <TableHead className={subHead}>Node</TableHead>
+                  <TableHead className={subHead}>Role</TableHead>
+                  <TableHead className={subHead}>Disk</TableHead>
+                  <TableHead className={subHead}>Replication</TableHead>
+                </>
+              }
+            >
+              {nodeRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className={cn(subCell, 'text-muted-foreground')}>
+                    No node states reported.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                nodeRows.map((r) => (
+                  <TableRow key={r.key}>
+                    <TableCell className={cn(subCell, 'font-mono')}>{r.node}</TableCell>
+                    <TableCell className={subCell}>{r.role}</TableCell>
+                    <TableCell className={subCell}>{r.disk}</TableCell>
+                    <TableCell className={subCell}>{r.replication}</TableCell>
                   </TableRow>
-                );
-              })
+                ))
+              )}
+            </SubTable>
+          </div>
+          <div className="space-y-2 md:hidden">
+            {nodeRows.length === 0 ? (
+              <p className="text-[12.5px] text-muted-foreground">
+                No node states reported.
+              </p>
+            ) : (
+              nodeRows.map((r) => (
+                <StackedRecord
+                  key={r.key}
+                  title={r.node}
+                  facts={[
+                    { label: 'Role', value: r.role },
+                    { label: 'Disk', value: r.disk },
+                    { label: 'Replication', value: r.replication },
+                  ]}
+                />
+              ))
             )}
-          </SubTable>
+          </div>
         </section>
 
         <section>
           <h4 className="eyebrow mb-2.5">Volumes</h4>
-          <SubTable
-            head={
-              <>
-                <TableHead className={subHead}>ID</TableHead>
-                <TableHead className={subHead}>Device</TableHead>
-                <TableHead className={subHead}>Backing</TableHead>
-                <TableHead className={cn(subHead, 'text-right')}>Size</TableHead>
-              </>
-            }
-          >
-            {volumes.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className={cn(subCell, 'text-muted-foreground')}>
-                  No volumes.
-                </TableCell>
-              </TableRow>
-            ) : (
-              volumes.map((vol) => {
-                const backing = backingOf.get(vol.volumeId) ?? vol;
-                const path =
-                  backing.pool && backing.backingVolume
-                    ? `${backing.pool}/${backing.backingVolume}`
-                    : backing.backingVolume || '—';
-                return (
-                  <TableRow key={vol.volumeId}>
+          <div className="hidden md:block">
+            <SubTable
+              head={
+                <>
+                  <TableHead className={subHead}>ID</TableHead>
+                  <TableHead className={subHead}>Device</TableHead>
+                  <TableHead className={subHead}>Backing</TableHead>
+                  <TableHead className={cn(subHead, 'text-right')}>Size</TableHead>
+                </>
+              }
+            >
+              {volumeRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className={cn(subCell, 'text-muted-foreground')}>
+                    No volumes.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                volumeRows.map((v) => (
+                  <TableRow key={v.key}>
                     <TableCell className={cn(subCell, 'font-mono tabular-nums')}>
-                      {vol.volumeId}
+                      {v.id}
                     </TableCell>
-                    <TableCell className={cn(subCell, 'font-mono')}>{vol.device}</TableCell>
+                    <TableCell className={cn(subCell, 'font-mono')}>{v.device}</TableCell>
                     <TableCell className={cn(subCell, 'font-mono text-muted-foreground')}>
-                      {path}
+                      {v.backing}
                     </TableCell>
-                    <TableCell
-                      className={cn(subCell, 'text-right font-mono tabular-nums')}
-                    >
-                      {vol.sizeGb} GB
+                    <TableCell className={cn(subCell, 'text-right font-mono tabular-nums')}>
+                      {v.size}
                     </TableCell>
                   </TableRow>
-                );
-              })
+                ))
+              )}
+            </SubTable>
+          </div>
+          <div className="space-y-2 md:hidden">
+            {volumeRows.length === 0 ? (
+              <p className="text-[12.5px] text-muted-foreground">No volumes.</p>
+            ) : (
+              volumeRows.map((v) => (
+                <StackedRecord
+                  key={v.key}
+                  title={`volume ${v.id}`}
+                  facts={[
+                    {
+                      label: 'Device',
+                      value: <span className="font-mono break-all">{v.device}</span>,
+                    },
+                    {
+                      label: 'Size',
+                      value: <span className="font-mono tabular-nums">{v.size}</span>,
+                    },
+                    {
+                      label: 'Backing',
+                      value: (
+                        <span className="font-mono break-all text-muted-foreground">
+                          {v.backing}
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              ))
             )}
-          </SubTable>
+          </div>
 
           <div className="mt-3.5 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => onOpenDialog('add-volume')}>
