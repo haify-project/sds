@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Server,
@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
+import { ControllerChip } from '@/components/ControllerChip';
 import { RecordCard, RecordCards } from '@/components/RecordCard';
 import { TONE_BG, TONE_TEXT, toneOf, type StatusTone } from '@/components/status';
 import { Button } from '@/components/ui/button';
@@ -134,6 +135,18 @@ export function NodesPage() {
     queryFn: () => api.getNodes(),
   });
 
+  // Which node is running the controller right now. It is the one fact in this
+  // table that changes without anybody touching a node, and after a failover it
+  // is the only row whose meaning moved.
+  const { data: selfHa } = useQuery({
+    queryKey: ['selfha'],
+    queryFn: () => api.getSelfHaStatus(),
+  });
+  // activeNode is an address; the rows are keyed by name.
+  const controllerNode = nodes?.nodes.find(
+    (n) => n.address === selfHa?.activeNode,
+  )?.name;
+
   // formatAge renders a relative time, so without a tick the column freezes at
   // whatever it said when the query last resolved. 5s matches the query's
   // staleTime — finer would re-render for nothing.
@@ -180,6 +193,27 @@ export function NodesPage() {
       setChecking((c) => c.filter((n) => n !== nodeName));
     },
   });
+
+  // Expanding a row IS the request to see this node's health.
+  //
+  // The panel used to open onto "No health check has run for this node yet"
+  // beside a button — an empty box that made the operator ask for the thing
+  // they had just asked for. The check is a read-only GET, so opening a row
+  // simply runs it.
+  //
+  // Once per node per visit: the ref, not the health map, is what stops a
+  // retry loop. A check that failed leaves no result, so keying off `health`
+  // would re-fire on every render of a row whose node is unreachable — which
+  // is exactly the node whose check takes an SSH timeout to fail.
+  const autoChecked = useRef<Set<string>>(new Set());
+  const runCheck = healthCheckMutation.mutate;
+  useEffect(() => {
+    if (!expanded || autoChecked.current.has(expanded)) return;
+    const node = nodes?.nodes.find((n) => n.name === expanded);
+    if (!node || node.state !== 'online') return;
+    autoChecked.current.add(expanded);
+    runCheck(expanded);
+  }, [expanded, nodes, runCheck]);
 
   const unregisterMutation = useMutation({
     mutationFn: (address: string) => api.unregisterNode(address),
@@ -321,6 +355,7 @@ export function NodesPage() {
                   <>
                     <span className="font-mono text-[14px] font-semibold">{node.name}</span>
                     <span className="text-[11.5px] text-muted-foreground">{node.hostname}</span>
+                    {node.name === controllerNode ? <ControllerChip /> : null}
                   </>
                 }
                 subtitle={
@@ -333,6 +368,9 @@ export function NodesPage() {
                       unregisterMutation.isPending &&
                       unregisterMutation.variables === node.address
                     }
+                    isChecking={isChecking}
+                    isOnline={isOnline}
+                    onCheck={() => healthCheckMutation.mutate(node.name)}
                     onCopyAddress={() => copyAddress(node.address)}
                     onUnregister={() => setConfirmNode(node)}
                   />
@@ -418,6 +456,7 @@ export function NodesPage() {
                     <NodeRows
                       key={node.name}
                       node={node}
+                      isController={node.name === controllerNode}
                       isOnline={isOnline}
                       isChecking={isChecking}
                       isDeleting={isDeleting}
@@ -475,6 +514,7 @@ export function NodesPage() {
 
 interface NodeRowsProps {
   node: Node;
+  isController: boolean;
   isOnline: boolean;
   isChecking: boolean;
   isDeleting: boolean;
@@ -493,6 +533,7 @@ interface NodeRowsProps {
  *  rather than a component boundary, because both are `<tr>`s of one table. */
 function NodeRows({
   node,
+  isController,
   isOnline,
   isChecking,
   isDeleting,
@@ -536,6 +577,7 @@ function NodeRows({
             <span className="flex items-baseline gap-[7px]">
               <span className="font-mono text-[14px] font-semibold">{node.name}</span>
               <span className="text-[11.5px] text-muted-foreground">{node.hostname}</span>
+              {isController ? <ControllerChip /> : null}
             </span>
           </button>
         </TableCell>
@@ -585,18 +627,15 @@ function NodeRows({
         </TableCell>
         <TableCell className="pr-5 text-right">
           <span className="inline-flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isChecking || !isOnline}
-              onClick={onCheck}
-            >
-              {isChecking ? <Loader2 className="animate-spin" /> : null}
-              Check health
-            </Button>
+            {isChecking ? (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            ) : null}
             <NodeMenu
               node={node}
               isDeleting={isDeleting}
+              isChecking={isChecking}
+              isOnline={isOnline}
+              onCheck={onCheck}
               onCopyAddress={onCopyAddress}
               onUnregister={onUnregister}
             />
@@ -635,11 +674,17 @@ function NodeRows({
 function NodeMenu({
   node,
   isDeleting,
+  isChecking,
+  isOnline,
+  onCheck,
   onCopyAddress,
   onUnregister,
 }: {
   node: Node;
   isDeleting: boolean;
+  isChecking: boolean;
+  isOnline: boolean;
+  onCheck: () => void;
   onCopyAddress: () => void;
   onUnregister: () => void;
 }) {
@@ -656,6 +701,13 @@ function NodeMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[220px]">
+        {/* Expanding a row already runs this; the item is here for a re-check
+            without opening the row, and it is the reason the table no longer
+            carries a button per row. */}
+        <DropdownMenuItem disabled={isChecking || !isOnline} onSelect={onCheck}>
+          <Activity />
+          Check health
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCopyAddress}>
           <Copy />
           Copy address
@@ -690,14 +742,28 @@ function NodeDetail({
   return (
     <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                <div className="eyebrow">
+                <div className="eyebrow flex items-center gap-1.5">
                   Health check
-                  {result ? (
+                  {isChecking ? (
+                    <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                  ) : null}
+                  {result && !isChecking ? (
                     <>
-                      {' · '}
+                      <span aria-hidden>·</span>
                       <span className="font-mono text-[11px] tracking-normal text-foreground normal-case tabular-nums">
                         {new Date(result.at).toLocaleTimeString()}
                       </span>
+                      {/* A re-check, not an invitation to run the first one:
+                          opening the row already did that. Text-weight, beside
+                          the timestamp it refreshes. */}
+                      <button
+                        type="button"
+                        onClick={onCheck}
+                        disabled={!isOnline}
+                        className="rounded text-[11px] font-medium tracking-normal text-muted-foreground normal-case underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+                      >
+                        re-check
+                      </button>
                     </>
                   ) : null}
                 </div>
@@ -734,23 +800,38 @@ function NodeDetail({
                   </HealthTile>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
-                  <p className="text-[12.5px] text-muted-foreground">
-                    {isOnline
-                      ? 'No health check has run for this node yet.'
-                      : 'Node is offline; a health check needs a reachable node.'}
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isChecking || !isOnline}
-                    onClick={onCheck}
-                  >
-                    {isChecking ? <Loader2 className="animate-spin" /> : null}
-                    Check health
-                  </Button>
+                // Three tiles' worth of space, held. Without it the panel
+                // jumps a hundred pixels the moment the check lands, under
+                // whatever the reader had already moved on to.
+                <div
+                  className="grid grid-cols-1 gap-3 md:grid-cols-3"
+                  aria-busy={isChecking}
+                >
+                  {['DRBD', 'drbd-reactor', 'Resource agents'].map((label) => (
+                    <div
+                      key={label}
+                      className="rounded-lg border border-dashed border-border bg-card px-3.5 py-3"
+                    >
+                      <div className="text-[12.5px] font-medium text-muted-foreground">
+                        {label}
+                      </div>
+                      <div className="mt-1 text-[12px] text-muted-foreground">
+                        {isChecking
+                          ? 'checking…'
+                          : isOnline
+                            ? 'no answer yet'
+                            : 'node offline'}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
+
+              {!result && !isChecking && !isOnline ? (
+                <p className="text-[12.5px] text-muted-foreground">
+                  A health check runs over SSH, so it needs a reachable node.
+                </p>
+              ) : null}
 
               <div className="grid grid-cols-2 gap-3 border-t border-border/70 pt-3.5 md:grid-cols-5">
                 <Fact label="Hostname" value={node.hostname || '-'} />

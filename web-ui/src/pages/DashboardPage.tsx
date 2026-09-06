@@ -8,9 +8,9 @@ import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 import { StatBand, StatBandItem } from '@/components/StatBand';
 import { SegmentBar } from '@/components/SegmentBar';
+import { ControllerChip } from '@/components/ControllerChip';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusTickCell, StatusTickHead } from '@/components/StatusTick';
-import { RoleChip } from '@/components/RoleChip';
 import { RecordCard, RecordCards } from '@/components/RecordCard';
 import { TONE_BG, TONE_TEXT, toneOf } from '@/components/status';
 import { Button } from '@/components/ui/button';
@@ -146,18 +146,9 @@ export function DashboardPage() {
   const stoppedGateways =
     gateways?.gateways.filter((g) => g.state !== 'running') ?? [];
 
-  // Self-HA membership is the only role information the cluster hands us for a
-  // node: /selfha names the members and the address currently holding the
-  // control plane. Anything else would be invented.
-  const haMembers = new Set(selfHa?.nodes ?? []);
-
-  // The role column's heading and its last-seen formatting are named once and
-  // used by both the card and the row: a value derived twice is a value that
-  // can end up saying two different things about the same node.
-  const roleLabel =
-    selfHa?.enabled && selfHa.resource
-      ? `Role in ${selfHa.resource}`
-      : 'Self-HA role';
+  // Last-seen formatting is named once and used by both the card and the row:
+  // a value derived twice is a value that can end up saying two different
+  // things about the same node.
   const lastSeenLabel = (lastSeen: string) => {
     const ts = Number(lastSeen);
     return ts ? agoLabel(now - ts * 1000) : '-';
@@ -408,7 +399,6 @@ export function DashboardPage() {
                   and "Manage nodes" already leads to the full page. */}
               <RecordCards className="px-5 pb-5">
                 {nodes?.nodes.map((node) => {
-                  const isMember = haMembers.has(node.name);
                   return (
                     <RecordCard
                       key={node.name}
@@ -421,6 +411,7 @@ export function DashboardPage() {
                           <span className="text-[11.5px] text-muted-foreground">
                             {node.hostname}
                           </span>
+                          {node.name === activeNodeName ? <ControllerChip /> : null}
                         </>
                       }
                       subtitle={
@@ -429,16 +420,6 @@ export function DashboardPage() {
                         </span>
                       }
                       facts={[
-                        {
-                          label: roleLabel,
-                          value: (
-                            <NodeRole
-                              selfHaEnabled={!!selfHa?.enabled}
-                              isMember={isMember}
-                              isActive={node.name === activeNodeName}
-                            />
-                          ),
-                        },
                         {
                           label: 'State',
                           value: <StatusBadge status={node.state} />,
@@ -464,7 +445,6 @@ export function DashboardPage() {
                       <StatusTickHead />
                       <TableHead>Node</TableHead>
                       <TableHead>Address</TableHead>
-                      <TableHead>{roleLabel}</TableHead>
                       <TableHead>State</TableHead>
                       <TableHead className="pr-5 text-right">
                         Last seen
@@ -473,7 +453,6 @@ export function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {nodes?.nodes.map((node) => {
-                      const isMember = haMembers.has(node.name);
                       return (
                         <TableRow key={node.name}>
                           <StatusTickCell status={node.state} />
@@ -485,17 +464,11 @@ export function DashboardPage() {
                               <span className="text-[11.5px] text-muted-foreground">
                                 {node.hostname}
                               </span>
+                              {node.name === activeNodeName ? <ControllerChip /> : null}
                             </div>
                           </TableCell>
                           <TableCell className="font-mono tabular-nums">
                             {node.address}
-                          </TableCell>
-                          <TableCell>
-                            <NodeRole
-                              selfHaEnabled={!!selfHa?.enabled}
-                              isMember={isMember}
-                              isActive={node.name === activeNodeName}
-                            />
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={node.state} />
@@ -517,25 +490,6 @@ export function DashboardPage() {
   );
 }
 
-/**
- * The only role the cluster hands us for a node: self-HA membership, and which
- * member currently holds the control plane. Rendered by both the card and the
- * row so neither can call a node Primary while the other calls it a stranger.
- */
-function NodeRole({
-  selfHaEnabled,
-  isMember,
-  isActive,
-}: {
-  selfHaEnabled: boolean;
-  isMember: boolean;
-  isActive: boolean;
-}) {
-  if (!selfHaEnabled) return <span className="text-muted-foreground">—</span>;
-  if (!isMember)
-    return <span className="text-muted-foreground">not a member</span>;
-  return <RoleChip role={isActive ? 'Primary' : 'Secondary'} />;
-}
 
 /** Severity → the tone vocabulary the rest of the console uses. The controller
  *  sends "info" | "warning" | "critical"; `toneOf` does not know those words,
