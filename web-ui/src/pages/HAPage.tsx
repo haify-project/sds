@@ -13,11 +13,12 @@ import {
   Resource,
   ResourceStatus,
   SelfHaStatus,
+  type HaPromoterStatus,
 } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ResourceTopology } from '@/components/ResourceTopology';
-import { TONE_BG } from '@/components/status';
+import { TONE_BG, toneOf } from '@/components/status';
 import { mountUnitFor, vipUnitFor } from '@/lib/toml';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -88,6 +89,9 @@ type PromoterView = {
   config: HaConfig;
   resource?: Resource;
   status?: ResourceStatus;
+  // What drbd-reactor is actually running, as opposed to what the controller
+  // has on file. See startListFor.
+  promoter?: HaPromoterStatus;
   primaryNode?: string;
 };
 
@@ -122,6 +126,17 @@ export function HAPage() {
     })),
   });
 
+  // The promoter as deployed. Separate from the resource status above because
+  // it answers a different question — that one is DRBD's view of the replicas,
+  // this one is systemd's view of what the promoter starts.
+  const promoterQueries = useQueries({
+    queries: configs.map((c) => ({
+      queryKey: ['ha-promoter', c.resource],
+      queryFn: () => api.getHaStatus(c.resource),
+      refetchInterval: 15000,
+    })),
+  });
+
   const resourceMap = new Map(
     (resources?.resources ?? []).map((r) => [r.name, r] as [string, Resource])
   );
@@ -129,18 +144,22 @@ export function HAPage() {
   const promoters: PromoterView[] = configs.map((config, i) => {
     const resource = resourceMap.get(config.resource);
     const status = statusQueries[i]?.data?.status;
+    const promoter = promoterQueries[i]?.data?.promoters?.find(
+      (pr) => pr.drbdResource === config.resource,
+    );
     const nodeStates = status?.nodeStates ?? {};
     // Keyed by DRBD host name, which is what evict and the failover poll
     // compare against — resolving it to an SDS node name here would break both.
     const primaryNode = Object.keys(nodeStates).find(
       (n) => nodeStates[n]?.role === 'Primary'
     );
-    return { config, resource, status, primaryNode };
+    return { config, resource, status, promoter, primaryNode };
   });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ha'] });
     queryClient.invalidateQueries({ queryKey: ['resources'] });
+    queryClient.invalidateQueries({ queryKey: ['ha-promoter'] });
   };
 
   // Confirm the failover actually completed with a second toast. evictHa blocks
@@ -411,12 +430,27 @@ function QuorumPill({ quorum }: { quorum?: QuorumInfo }) {
 
 /** One ordered entry of the promoter's start[], numbered so the order — which
  * is the whole point of the list — is readable without counting rows. */
-function StartListItem({ index, unit }: { index: number; unit: string }) {
+function StartListItem({
+  index,
+  unit,
+  status,
+}: {
+  index: number;
+  unit: string;
+  status?: string;
+}) {
   return (
     <li className="flex items-center gap-2.5">
       <span className="w-4 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
         {index}
       </span>
+      {status ? (
+        <span
+          aria-hidden
+          title={status}
+          className={cn('size-[7px] shrink-0 rounded-full', TONE_BG[toneOf(status)])}
+        />
+      ) : null}
       {/* These are long unbreakable mono strings —
           `service-ip@192.168.123.251-24`. On a phone the chip wraps inside the
           card rather than pushing its width out; the desktop card has the room
@@ -429,16 +463,55 @@ function StartListItem({ index, unit }: { index: number; unit: string }) {
 }
 
 /**
- * The promoter's start[] as the backend composes it: the mount unit, then the
- * VIP's service-ip unit, then the configured services. Derived from the same
- * config the generator reads, so it cannot disagree with the TOML below it.
+ * The promoter's start[], preferring what is deployed over what is configured.
+ *
+ * Composing it from the config is what this used to do, and the comment said it
+ * could not disagree with the TOML. It can: `sds-meta` on this cluster starts
+ * four units and the controller's config lists one service, because sds-ai was
+ * added to the promoter without going back through the controller. A card built
+ * from the config alone told an operator that three things move on a failover
+ * when four do — and the missing one was the Copilot.
+ *
+ * So the live `deps` win when the status call answered. The first dep is
+ * drbd-promote@<resource>, which is the promotion itself rather than an entry
+ * of start[], and it is dropped. Falling back to the config is right when the
+ * resource is down: there is no promoter to ask, and the intended list is still
+ * worth showing.
  */
-function startListFor(config: HaConfig): string[] {
-  return [
+function startListFor(
+  config: HaConfig,
+  promoter?: HaPromoterStatus,
+): { units: StartUnit[]; live: boolean } {
+  const deps = (promoter?.deps ?? []).filter(
+    (d) => !d.name.startsWith('drbd-promote@'),
+  );
+  if (deps.length > 0) {
+    return { units: deps.map((d) => ({ name: d.name, status: d.status })), live: true };
+  }
+  const units = [
     config.mountPoint ? mountUnitFor(config.mountPoint) : '',
     config.vip ? vipUnitFor(config.vip) : '',
     ...(config.services ?? []),
-  ].filter((u) => u !== '');
+  ]
+    .filter((u) => u !== '')
+    .map((name) => ({ name }));
+  return { units, live: false };
+}
+
+type StartUnit = { name: string; status?: string };
+
+/** Units the promoter runs that the controller's own config does not mention.
+ *  Naming them is the point: this is the gap between what the console can
+ *  manage and what a failover will actually carry. */
+function unmanagedUnits(config: HaConfig, units: StartUnit[]): string[] {
+  const known = new Set(
+    [
+      config.mountPoint ? mountUnitFor(config.mountPoint) : '',
+      config.vip ? vipUnitFor(config.vip) : '',
+      ...(config.services ?? []),
+    ].filter((u) => u !== ''),
+  );
+  return units.map((u) => u.name).filter((n) => !known.has(n));
 }
 
 function FactRow({
@@ -929,10 +1002,11 @@ function PromoterCard({
   isEvicting: boolean;
   isDeleting: boolean;
 }) {
-  const { config, resource, status, primaryNode } = view;
+  const { config, resource, status, promoter, primaryNode } = view;
   // No primary anywhere means nothing is promoted, so there is nothing to evict.
   const isRunning = Boolean(primaryNode);
-  const startList = startListFor(config);
+  const { units: startList, live: startListIsLive } = startListFor(config, promoter);
+  const unmanaged = startListIsLive ? unmanagedUnits(config, startList) : [];
 
   return (
     <Card className="gap-4 py-5">
@@ -983,12 +1057,41 @@ function PromoterCard({
 
         {startList.length > 0 ? (
           <div>
-            <div className="eyebrow">Start list</div>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+              <div className="eyebrow">
+                Start list{' '}
+                <span className="font-mono text-[11px] tracking-normal text-foreground normal-case tabular-nums">
+                  {startList.length}
+                </span>
+              </div>
+              <span className="text-[11.5px] text-muted-foreground">
+                {startListIsLive ? 'as the promoter runs it' : 'from the configuration'}
+              </span>
+            </div>
             <ol className="mt-2 space-y-1.5">
               {startList.map((unit, i) => (
-                <StartListItem key={unit} index={i + 1} unit={unit} />
+                <StartListItem
+                  key={unit.name}
+                  index={i + 1}
+                  unit={unit.name}
+                  status={unit.status}
+                />
               ))}
             </ol>
+            {unmanaged.length > 0 ? (
+              // Not a warning: a hand-added unit is a legitimate thing to have
+              // done. What is not legitimate is a console that hides it, so the
+              // card names the units it cannot manage and stops there.
+              <p className="mt-2.5 text-[12px] leading-snug text-muted-foreground">
+                {unmanaged.length === 1 ? 'One unit is' : `${unmanaged.length} units are`} in
+                the promoter but not in this controller&rsquo;s config, so editing the
+                configuration here would drop{' '}
+                {unmanaged.length === 1 ? 'it' : 'them'}:{' '}
+                <span className="font-mono text-[11.5px] text-foreground">
+                  {unmanaged.join(', ')}
+                </span>
+              </p>
+            ) : null}
           </div>
         ) : null}
 

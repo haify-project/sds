@@ -207,6 +207,32 @@ export interface ResourceAgentMetadata {
   parameters: OcfAgentParameter[];
 }
 
+// What drbd-reactor is actually running on the active node, from
+// GET /ha/{resource}/status.
+//
+// This is the promoter as deployed, not as configured. The two can differ — a
+// unit added to the TOML by hand is in `deps` and in no config the controller
+// holds — and a console that shows only the configuration tells an operator
+// that fewer things move on failover than actually do.
+export interface HaUnit {
+  name: string;
+  status: string;
+}
+
+export interface HaPromoterStatus {
+  drbdResource: string;
+  primaryOn: string;
+  status: string;
+  target?: HaUnit;
+  // The promoter's units, live. The first is drbd-promote@<res>, which is the
+  // promotion itself rather than an entry of start[].
+  deps?: HaUnit[];
+}
+
+export interface HaStatusResponse extends ApiResponse {
+  promoters: HaPromoterStatus[];
+}
+
 // Promoter TOML for an HA config from GET /ha/{resource}/toml.
 export interface HaTomlResponse {
   resource: string;
@@ -643,6 +669,9 @@ class ApiClient {
     );
 
   // Read an HA config's drbd-reactor promoter TOML.
+  getHaStatus = (resource: string) =>
+    this.request<HaStatusResponse>(`/ha/${encodeURIComponent(resource)}/status`);
+
   getHaToml = (resource: string) =>
     this.request<HaTomlResponse>(`/ha/${encodeURIComponent(resource)}/toml`);
 
