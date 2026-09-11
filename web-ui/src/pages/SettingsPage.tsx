@@ -35,10 +35,7 @@ export function SettingsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Settings"
-        description="How the Copilot is configured. Changes apply to the running agent — no restart, no failover."
-      />
+      <PageHeader title="Settings" />
 
       {isLoading ? (
         <Skeleton className="h-64 w-full max-w-2xl" />
@@ -49,8 +46,7 @@ export function SettingsPage() {
               Could not read the Copilot's settings: {(error as Error).message}
             </p>
             <p className="mt-2 text-[12.5px] text-muted-foreground">
-              The Copilot runs as its own service. If it is not running, the rest of the
-              console is unaffected.
+              The Copilot is a separate service; the rest of the console is unaffected.
             </p>
           </CardContent>
         </Card>
@@ -108,13 +104,7 @@ function CopilotModelCard({
   return (
     <Card className="max-w-2xl gap-0 py-5">
       <CardContent className="space-y-5 px-5">
-        <div>
-          <h2 className="text-[14.5px] font-semibold">Copilot model</h2>
-          <p className="mt-1 text-[12.5px] text-muted-foreground">
-            Any OpenAI-compatible endpoint. The change reaches the running agent
-            immediately; requests already in flight finish on the old model.
-          </p>
-        </div>
+        <h2 className="text-[14.5px] font-semibold">Copilot model</h2>
 
         {!config.editable ? (
           <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted px-3.5 py-3">
@@ -122,32 +112,28 @@ function CopilotModelCard({
             <div className="text-[12.5px] leading-relaxed">
               <p className="font-medium">Read-only</p>
               <p className="mt-0.5 text-muted-foreground">
-                {config.readOnlyReason ?? 'this backend does not accept settings writes'}.
-                The Copilot serves unauthenticated on loopback and this console
-                proxies it, so a form that accepts an API key stays shut until a
-                token is configured. Set <code className="font-mono">SDS_AI_TOKEN</code>{' '}
-                (or write <code className="font-mono">/etc/sds/token</code>) and restart
-                the Copilot to enable editing.
+                No bearer token is configured, and this form accepts an API key. Set{' '}
+                <code className="font-mono">SDS_AI_TOKEN</code> or write{' '}
+                <code className="font-mono">/etc/sds/token</code>, then restart the
+                Copilot.
               </p>
             </div>
           </div>
         ) : null}
 
         <div className="grid gap-4">
-          <Field
-            label="Base URL"
-            hint="The gateway's OpenAI-compatible root, e.g. https://api.deepseek.com"
-          >
+          <Field label="Base URL">
             <Input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               disabled={!config.editable || save.isPending}
+              placeholder="https://api.deepseek.com"
               className="font-mono text-[13px]"
               spellCheck={false}
             />
           </Field>
 
-          <Field label="Model" hint="Sent verbatim as the model name">
+          <Field label="Model">
             <Input
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -157,13 +143,11 @@ function CopilotModelCard({
             />
           </Field>
 
+          {/* The only hint that survives: it is the one thing a blank field
+              does that is not obvious. */}
           <Field
             label="API key"
-            hint={
-              config.hasApiKey
-                ? 'A key is configured. Leave blank to keep it.'
-                : 'No key is configured yet.'
-            }
+            hint={config.hasApiKey ? 'Leave blank to keep the current key.' : undefined}
           >
             <Input
               type="password"
@@ -177,7 +161,7 @@ function CopilotModelCard({
           </Field>
         </div>
 
-        <div className="flex items-center gap-3 border-t border-border pt-4">
+        <div className="border-t border-border pt-4">
           <Button
             disabled={!config.editable || !dirty || save.isPending}
             onClick={() => save.mutate()}
@@ -185,12 +169,6 @@ function CopilotModelCard({
             {save.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
             Save
           </Button>
-          {/* Saving is not proof the endpoint answers — that takes a question.
-              Say so rather than let a green toast imply a working gateway. */}
-          <p className="text-[12px] text-muted-foreground">
-            Saved settings are applied and kept, not tested. Ask the Copilot something
-            to confirm the endpoint answers.
-          </p>
         </div>
 
         <div className="border-t border-border pt-4">
@@ -201,12 +179,11 @@ function CopilotModelCard({
               {config.embDim} dimensions
             </span>
           </div>
-          {/* Not an oversight that this has no form. */}
-          <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-            Shown, not settable. The knowledge base was indexed with this embedder at
-            this dimension and can only be searched by the same one — changing it here
-            would not re-index anything, it would make every stored vector
-            unreadable. Re-indexing is an ingest, not a setting.
+          {/* One line, because a field with no input and no reason reads as a
+              bug — and more than a line is a lecture. */}
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            Fixed at index time. Changing it would not re-index; it would make the
+            stored vectors unreadable.
           </p>
         </div>
       </CardContent>
@@ -220,14 +197,14 @@ function Field({
   children,
 }: {
   label: string;
-  hint: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="grid gap-1.5">
       <Label className="text-[13px]">{label}</Label>
       {children}
-      <p className="text-[11.5px] text-muted-foreground">{hint}</p>
+      {hint ? <p className="text-[11.5px] text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
