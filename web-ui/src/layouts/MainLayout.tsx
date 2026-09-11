@@ -15,6 +15,7 @@ import {
   Menu,
   PanelLeft,
   ScrollText,
+  SlidersHorizontal,
   BellRing,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -92,6 +93,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { name: 'Notifications', href: '/notifications', icon: BellRing },
       { name: 'Access', href: '/access', icon: Lock },
       { name: 'Logs', href: '/logs', icon: ScrollText },
+      { name: 'Settings', href: '/settings', icon: SlidersHorizontal },
     ],
   },
 ];

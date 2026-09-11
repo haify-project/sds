@@ -175,3 +175,54 @@ export async function streamChat(
   }
   return { sessionId: sid };
 }
+
+// ── Copilot settings ────────────────────────────────────────────────────
+//
+// Which model answers, read and written while the Copilot runs. It used to take
+// an edit to the unit's environment file and a restart — and that restart is a
+// failover, because sds-ai is in the promoter's start list for sds-meta.
+
+export interface AIConfig {
+  llmBaseUrl: string;
+  llmModel: string;
+  /** A key is configured; a blank key field leaves it in place. */
+  hasApiKey: boolean;
+  /** Reported, never set: an index can only be queried by the embedder that built it. */
+  embModel: string;
+  embDim: number;
+  /** False when this backend refuses writes; then readOnlyReason says why. */
+  editable: boolean;
+  readOnlyReason?: string;
+}
+
+export async function getAIConfig(): Promise<AIConfig> {
+  const token = getApiToken();
+  const res = await fetch(`${aiBase()}/ai/config`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) {
+    throw new Error(`${res.status}: ${(await res.text().catch(() => '')) || res.statusText}`);
+  }
+  return res.json();
+}
+
+/** Omit or blank a field to keep what is running — notably the API key, so
+ *  renaming a model never means pasting the credential again. */
+export async function saveAIConfig(patch: {
+  llmBaseUrl?: string;
+  llmModel?: string;
+  llmApiKey?: string;
+}): Promise<AIConfig> {
+  const token = getApiToken();
+  const res = await fetch(`${aiBase()}/ai/config`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(patch),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || `${res.status} ${res.statusText}`);
+  return JSON.parse(text);
+}

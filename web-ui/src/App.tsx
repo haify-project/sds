@@ -42,6 +42,9 @@ const NotificationsPage = lazy(() =>
 const LogsPage = lazy(() =>
   import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })),
 );
+const SettingsPage = lazy(() =>
+  import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+);
 // The Suspense boundary lives in MainLayout, around the Outlet, so the sidebar
 // and header stay put while a route's chunk arrives.
 
@@ -88,6 +91,7 @@ function App() {
               />
               <Route path="access" element={<AccessPage />} />
               <Route path="logs" element={<LogsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Routes>
         </BrowserRouter>
