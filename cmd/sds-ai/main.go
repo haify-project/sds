@@ -56,12 +56,34 @@ func main() {
 		log.Fatal("SDS_AI_KNOWLEDGE_DB is required (path to drbd-reactor.db)")
 	}
 
+	// Settings saved from the UI, layered over the environment. The file lives
+	// beside the knowledge DB — on the replicated volume — so a model chosen on
+	// one node is already in place when the promoter starts the agent on
+	// another.
+	setPath := settingsPath(knowledgeDB)
+	saved, err := loadSettings(setPath)
+	if err != nil {
+		log.Fatalf("read settings %s: %v", setPath, err)
+	}
+	if saved.LLMModel != "" || saved.LLMBaseURL != "" {
+		log.Printf("sds-ai: settings from %s override the environment (model=%q base=%q)",
+			setPath, saved.LLMModel, saved.LLMBaseURL)
+	}
+
+	embDim := atoiOr("SDS_AI_EMB_DIM", 1024)
+	embModel := envOr("OPSDOCTOR_EMB_MODEL", os.Getenv("OSS_EMB_MODEL"))
+
 	ag, err := opsdoctor.New(opsdoctor.Config{
 		KnowledgeDBPath: knowledgeDB,
 		DomainFile:      envOr("SDS_AI_DOMAIN", "ai/domain.toml"),
+		// Empty fields fall through to the environment, which is what makes the
+		// settings file an override rather than a replacement.
+		LLMBaseURL: saved.LLMBaseURL,
+		LLMModel:   saved.LLMModel,
+		LLMAPIKey:  saved.LLMAPIKey,
 		// The drbd-reactor.db index is 1024-dim; the embedder model comes from
 		// OPSDOCTOR_EMB_MODEL (must match how the index was built — see spec O1).
-		EmbDim: atoiOr("SDS_AI_EMB_DIM", 1024),
+		EmbDim: embDim,
 		// Mount the sds cluster tools read-only: only observational tools reach
 		// the agent; every change is proposed via suggest_action and approved in
 		// the UI, executed through the controller REST.
@@ -92,6 +114,9 @@ func main() {
 	mux.HandleFunc("/ai/chat/stream", streamHandler(ag))
 	// Knowledge-base update surface (POST /ai/kb/{doc,ingest,refresh,purge}).
 	registerKBRoutes(mux, ag)
+	// Which model answers, readable always and writable only with a token.
+	registerConfigRoutes(mux, ag, &configStore{path: setPath, cur: saved},
+		embModel, embDim, resolveToken() != "")
 
 	handler, err := guard(addr, withCORS(allowOrigin, mux))
 	if err != nil {
