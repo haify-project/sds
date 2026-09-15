@@ -3,7 +3,7 @@ import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Plus, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { api } from '@/services/api';
-import type { ClusterEvent } from '@/services/events';
+import { eventTime, type ClusterEvent } from '@/services/events';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 import { StatBand, StatBandItem } from '@/components/StatBand';
@@ -42,6 +42,14 @@ const PAGE_QUERY_KEYS = {
 } as const;
 
 /** Coarse "how long ago", for a header line and a last-seen column. */
+
+// The clock on a recent-events row. Events read over REST carry epoch millis,
+// not an RFC 3339 string; eventTime is what knows the difference.
+function eventClock(event: ClusterEvent): string {
+  const at = eventTime(event);
+  return at === null ? '—' : new Date(at).toLocaleTimeString();
+}
+
 function agoLabel(ms: number): string {
   const secs = Math.max(0, Math.round(ms / 1000));
   if (secs < 5) return 'now';
@@ -562,7 +570,7 @@ function RecentEvents() {
                       <span className="font-mono tabular-nums">{event.type}</span>
                       <span aria-hidden>·</span>
                       <span className="font-mono tabular-nums">
-                        {new Date(event.timestamp).toLocaleTimeString()}
+                        {eventClock(event)}
                       </span>
                     </p>
                   </div>

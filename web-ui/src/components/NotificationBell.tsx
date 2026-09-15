@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import {
+  eventTime,
   eventTypeLabel,
   subscribeEvents,
   type ClusterEvent,
@@ -66,9 +67,9 @@ function severityIcon(event: ClusterEvent) {
   }
 }
 
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
+function relativeTime(event: ClusterEvent): string {
+  const then = eventTime(event);
+  if (then === null) return '';
   const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
   if (secs < 60) return `${secs}s ago`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
@@ -113,8 +114,8 @@ export function NotificationBell() {
     // Nothing is lost by holding off: the bell records the event either way.
     if (document.readyState !== 'complete') return;
 
-    const age = Date.now() - new Date(event.timestamp).getTime();
-    if (age > TOAST_WINDOW_MS || Number.isNaN(age)) return;
+    const at = eventTime(event);
+    if (at === null || Date.now() - at > TOAST_WINDOW_MS) return;
 
     if (event.status === 'resolved') {
       toast.success(eventTitle(event), { description: event.message });
@@ -237,7 +238,7 @@ export function NotificationBell() {
                         {eventTitle(event)}
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {relativeTime(event.timestamp)}
+                        {relativeTime(event)}
                       </span>
                     </div>
                     <p className="mt-0.5 break-words text-xs text-muted-foreground">

@@ -20,7 +20,34 @@ export interface ClusterEvent {
   node?: string;
   message: string;
   details?: Record<string, string>;
-  timestamp: string;
+  /**
+   * When the event happened — under whichever name the transport it arrived on
+   * uses.
+   *
+   * The SSE stream marshals `event.Event` directly, so its time is RFC 3339
+   * under `timestamp`. `GET /v1/events` is served by the gRPC gateway from a
+   * proto whose field is `timestamp_unix_ms`, so the same event arrives as
+   * epoch milliseconds under `timestampUnixMs`. One type described both and
+   * declared only the first, which type-checks and yields `Invalid Date` on
+   * every event the REST endpoint returns.
+   *
+   * Read them with `eventTime`, never directly.
+   */
+  timestamp?: string;
+  timestampUnixMs?: string;
+}
+
+/** Epoch milliseconds for an event, or null when it carries no usable time. */
+export function eventTime(event: ClusterEvent): number | null {
+  if (event.timestampUnixMs !== undefined) {
+    const ms = Number(event.timestampUnixMs);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (event.timestamp !== undefined) {
+    const ms = new Date(event.timestamp).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+  return null;
 }
 
 export interface EventStreamHandlers {
