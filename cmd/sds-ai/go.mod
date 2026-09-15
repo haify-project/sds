@@ -2,7 +2,7 @@ module github.com/liliang-cn/sds/cmd/sds-ai
 
 go 1.25.5
 
-require github.com/liliang-cn/opsdoctor v0.42.0
+require github.com/liliang-cn/opsdoctor v0.43.0
 
 require (
 	github.com/0x51-dev/rdf v0.1.0 // indirect
@@ -72,14 +72,14 @@ require (
 	github.com/json-iterator/go v0.0.0-20171115153421-f7279a603ede // indirect
 	github.com/liliang-cn/agent-go/v3 v3.32.0 // indirect
 	github.com/liliang-cn/agentexec v0.5.0 // indirect
-	github.com/liliang-cn/alchemy v0.4.0 // indirect
-	github.com/liliang-cn/cortexdb/v2 v2.98.0 // indirect
+	github.com/liliang-cn/alchemy v0.7.7 // indirect
+	github.com/liliang-cn/cortexdb/v2 v2.110.0 // indirect
 	github.com/liliang-cn/mcp-swagger-server v1.3.0 // indirect
 	github.com/liliang-cn/pipeit v0.1.0 // indirect
 	github.com/liliang-cn/skills-go v1.9.0 // indirect
 	github.com/mark3labs/mcp-go v1.0.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/modelcontextprotocol/go-sdk v1.7.0 // indirect
+	github.com/modelcontextprotocol/go-sdk v1.8.0 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/oasdiff/yaml v0.1.0 // indirect
