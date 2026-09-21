@@ -63,6 +63,26 @@ type NodeStateInfo struct {
 	// only carries its own quorum, and a peer's would be a guess. Carried for
 	// Observer; the quorum alerts are the operator's to write from the metric.
 	Quorum *bool
+	// Connection is the peer's DRBD connection state ("Connected",
+	// "Connecting", "StandAlone", ...) as the node that answered the status
+	// query sees it. Empty for that answering node itself, which has no
+	// connection to describe, and for status sources that do not report one.
+	//
+	// A peer that is not Connected tells us nothing else about itself: DRBD
+	// prints its name and its connection state and stops. Role, DiskState and
+	// ReplicationState are all empty for such a peer, and reading those empties
+	// as facts is what this field exists to prevent.
+	Connection string
+}
+
+// connected reports whether this replica's link is usable, which is the
+// precondition for believing anything else the view says about it.
+//
+// An empty Connection is the answering node itself (or a status source with no
+// connection field) and counts as connected: it is the one node whose state was
+// read locally rather than across a link.
+func (st NodeStateInfo) connected() bool {
+	return st.Connection == "" || strings.EqualFold(st.Connection, "Connected")
 }
 
 // ResourceStatusInfo is one resource's health across its replicas.
@@ -524,7 +544,22 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 	recovering := m.firing[noPrimary.Key()]
 	m.mu.Unlock()
 
-	m.level(noPrimary, sc, sourceResources, expectPrimary && cur == "",
+	// "Nobody reports Primary" only means there is no Primary when every replica
+	// was actually asked. The controller reads a resource from whichever node
+	// answers first, and that node describes its unreachable peers as one line
+	// — "<peer> connection:Connecting" — carrying no role. So a node rebooting
+	// back into the cluster produces, for the few seconds its links take to
+	// establish, a view in which no node anywhere is Primary.
+	//
+	// That is measured, not hypothetical: on 2026-09-21 a node rejoining raised
+	// this CRITICAL against a resource whose Primary had been serving
+	// uninterrupted for two days — same second as the node.unreachable clear,
+	// with no role change in the Primary's kernel log and no service restart.
+	// A false CRITICAL on "the control plane lost its Primary" is worse than a
+	// late true one: it is the alert people stop believing.
+	partialView := !fullyConnected(res)
+
+	m.level(noPrimary, sc, sourceResources, expectPrimary && cur == "" && !partialView,
 		fmt.Sprintf("resource %s has no Primary: %s was demoted and nothing took over", res.Name, demoted),
 		fmt.Sprintf("resource %s has a Primary again on %s", res.Name, cur))
 
@@ -872,6 +907,17 @@ func (m *Monitor) publish(e event.Event) {
 		zap.String("message", published.Message))
 }
 
+// fullyConnected reports whether every replica in this view was actually
+// reachable, which is what makes an absence in the view evidence of anything.
+func fullyConnected(res ResourceStatusInfo) bool {
+	for _, st := range res.NodeStates {
+		if !st.connected() {
+			return false
+		}
+	}
+	return true
+}
+
 // primarySet renders the nodes currently holding the Primary role as a stable,
 // comparable string. Sorting matters: map iteration order would otherwise make
 // a dual-primary resource look like it flapped between every pair of polls.
@@ -888,6 +934,22 @@ func primarySet(res ResourceStatusInfo) string {
 
 // isDegraded reports whether a replica's DRBD state indicates a fault.
 func isDegraded(st NodeStateInfo) (bool, string) {
+	// A replica whose link is down is a replica that is not protecting
+	// anything, and the connection state is the only thing DRBD says about it —
+	// there is no disk state to fall through to. StandAlone in particular is
+	// not a transient: DRBD sets it deliberately, most often after refusing to
+	// resolve a split brain, and it stays until someone intervenes.
+	//
+	// This is measured. A replica of the openclaw resource sat StandAlone from
+	// 2026-09-20 02:54 after a split-brain disconnect, and nothing fired for a
+	// day: the peer carried no entry in the view at all, and a replica that is
+	// absent is a replica nobody checks.
+	if !st.connected() {
+		if strings.EqualFold(st.Connection, "StandAlone") {
+			return true, "connection is StandAlone (DRBD disconnected it; a split brain leaves it here until resolved)"
+		}
+		return true, fmt.Sprintf("connection is %s", st.Connection)
+	}
 	switch st.DiskState {
 	case "Diskless":
 		// Expected for tiebreakers and diskless clients; a fault anywhere else,

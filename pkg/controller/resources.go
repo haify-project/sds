@@ -82,6 +82,19 @@ type ResourceNodeState struct {
 	// status only carries its own quorum — and for the plain-text parse, which
 	// does not surface quorum at all.
 	Quorum *bool
+	// Connection is the peer's DRBD connection state as the answering node sees
+	// it: "Connected", "Connecting", "StandAlone", ... Empty for the answering
+	// node itself, which has no connection to describe.
+	//
+	// It exists because a peer that is not Connected reports no role, no disk
+	// and no replication at all — drbdadm prints one line, "<peer>
+	// connection:Connecting", and nothing else. Until this field, such a peer
+	// was simply absent from the map, and absent reads as "nothing wrong with
+	// it" everywhere downstream. Two real failures came out of that: a replica
+	// sat StandAlone after a split brain for a day with no alert, and a node
+	// rejoining the cluster — whose peers are all Connecting for a few seconds
+	// — made the whole resource look like it had no Primary.
+	Connection string
 }
 
 // ResourceVolumeInfo represents DRBD volume information
@@ -4976,6 +4989,25 @@ func isIndentedStatusLine(line string) bool {
 	return strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")
 }
 
+// fieldValue returns the value of the first "key:value" field in fields, or ""
+// when none carries that key. drbdadm separates fields by spaces and sometimes
+// trails them with a comma.
+func fieldValue(fields []string, key string) string {
+	for _, f := range fields {
+		if strings.HasPrefix(f, key) {
+			return strings.TrimSuffix(strings.TrimPrefix(f, key), ",")
+		}
+	}
+	return ""
+}
+
+// isPeerDiskLine reports whether a status line describes a peer's disk rather
+// than the peer itself. "peer-disk:" contains "disk:", so anything matching on
+// the latter has to exclude the former first.
+func isPeerDiskLine(trimmed string) bool {
+	return strings.Contains(trimmed, "peer-disk:")
+}
+
 // localStatusLine returns the trimmed local resource line from drbdadm or
 // drbdsetup status output. The local line is the first unindented line that
 // carries a "role:" field; unindented lines without one (such as the
@@ -5099,6 +5131,30 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 				// currentNode so its following peer-disk line is not
 				// misattributed to the previously matched node.
 				if !matched {
+					currentNode = ""
+				}
+			}
+		}
+
+		// A peer that is not Connected prints exactly one line and no role:
+		//   "  sds-e connection:Connecting"
+		// Recording it is the whole point — see ResourceNodeState.Connection.
+		// It also resets currentNode, because the line carries no role and the
+		// next peer-disk line (if any) is not this peer's.
+		if len(parts) >= 2 && !isPeerDiskLine(trimmed) {
+			if conn := fieldValue(parts[1:], "connection:"); conn != "" {
+				for _, node := range nodeAddresses {
+					if node == nodeAddresses[0] || parts[0] != node {
+						continue
+					}
+					if st, exists := nodeStates[node]; exists {
+						st.Connection = conn
+					} else {
+						nodeStates[node] = &ResourceNodeState{Connection: conn}
+					}
+					break
+				}
+				if fieldValue(parts[1:], "role:") == "" {
 					currentNode = ""
 				}
 			}
@@ -5537,6 +5593,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 				Role:             st.Role,
 				ExpectedDiskless: diskless[node] || diskless[rm.controller.ResolveHost(node)],
 				Quorum:           st.Quorum,
+				Connection:       st.Connection,
 			}
 			// Only forward completion the status source actually reported. A
 			// text-parsed state has none, and passing its zero on would export

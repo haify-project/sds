@@ -509,3 +509,99 @@ func TestOneFailedSourceDoesNotBlockTheOther(t *testing.T) {
 	require.Len(t, evts, 1, "the resource alert clears; the node alert is left alone")
 	assert.Equal(t, "data", evts[0].Resource)
 }
+
+// A node rejoining the cluster must not raise "no Primary".
+//
+// This is the 2026-09-21 incident, reproduced. The controller reads a resource
+// from whichever node answers its status query first, and a node that has just
+// booted describes every peer as one line — "<peer> connection:Connecting" —
+// with no role on it. So for the seconds its links take to establish, the view
+// it returns contains no Primary anywhere, while the real Primary has been
+// serving uninterrupted. The monitor published a CRITICAL saying the control
+// plane had lost its Primary; nothing had happened.
+func TestRejoiningNodeDoesNotFakeALostPrimary(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name: "res1",
+		NodeStates: map[string]NodeStateInfo{
+			"n1": healthy("Primary"),
+			"n2": healthy("Secondary"),
+		},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	drain()
+
+	// n2 reboots and answers the next status query itself. From where it sits,
+	// it is Secondary and n1 is merely "Connecting" — which is all DRBD says
+	// about a peer whose link is not up, so n1 carries no role at all.
+	lister.list[0].NodeStates = map[string]NodeStateInfo{
+		"n2": {DiskState: "Outdated", Role: "Secondary"},
+		"n1": {Connection: "Connecting"},
+	}
+	mon.Poll(ctx)
+
+	for _, e := range drain() {
+		if e.Type == event.TypeResourceNoPrimary && e.Status == event.StatusFiring {
+			t.Fatalf("raised a CRITICAL lost-Primary from a view that never asked n1: %s", e.Message)
+		}
+	}
+}
+
+// And the alert is not merely deferred: once every link is back and the
+// Primary is genuinely gone, it still fires.
+func TestLostPrimaryStillFiresOnceEveryReplicaAnswered(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name: "res1",
+		NodeStates: map[string]NodeStateInfo{
+			"n1": healthy("Primary"),
+			"n2": healthy("Secondary"),
+		},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	drain()
+
+	lister.list[0].NodeStates = map[string]NodeStateInfo{
+		"n1": {DiskState: "UpToDate", ReplicationState: "Established", Role: "Secondary", Connection: "Connected"},
+		"n2": {DiskState: "UpToDate", ReplicationState: "Established", Role: "Secondary", Connection: "Connected"},
+	}
+	mon.Poll(ctx)
+
+	var got *event.Event
+	for _, e := range drain() {
+		if e.Type == event.TypeResourceNoPrimary && e.Status == event.StatusFiring {
+			got = &e
+		}
+	}
+	require.NotNil(t, got, "a genuinely demoted Primary must still raise the critical")
+	assert.Equal(t, event.SeverityCritical, got.Severity)
+}
+
+// A replica DRBD has disconnected is a replica that protects nothing, and it
+// is invisible unless the connection state itself is checked: a peer that is
+// not Connected reports no disk state to fall through to.
+//
+// Measured: a replica of the openclaw resource sat StandAlone from 2026-09-20
+// 02:54, after DRBD refused to resolve a split brain, and no alert fired for a
+// day. StandAlone is not transient — DRBD stays there until someone acts.
+func TestDisconnectedReplicaIsDegraded(t *testing.T) {
+	standalone := NodeStateInfo{Connection: "StandAlone"}
+	degraded, reason := isDegraded(standalone)
+	require.True(t, degraded, "a StandAlone replica must be reported as degraded")
+	assert.Contains(t, reason, "StandAlone")
+
+	connecting := NodeStateInfo{Connection: "Connecting"}
+	degraded, reason = isDegraded(connecting)
+	require.True(t, degraded, "a replica whose link is down must be reported as degraded")
+	assert.Contains(t, reason, "Connecting")
+
+	// The node that answered the query has no connection to describe, and its
+	// own disk state is the thing to judge it on.
+	local := NodeStateInfo{DiskState: "UpToDate", ReplicationState: "Established", Role: "Primary"}
+	degraded, _ = isDegraded(local)
+	assert.False(t, degraded, "the answering node carries no Connection and must not be called degraded for it")
+}

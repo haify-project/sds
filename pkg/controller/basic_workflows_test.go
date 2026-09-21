@@ -1601,3 +1601,66 @@ func TestResourceManagerEvictHaUsesResourceNodesOnly(t *testing.T) {
 	assert.False(t, sawRemoteStatus)
 	assert.True(t, sawEvict)
 }
+
+// A peer whose link is down prints its connection state and nothing else — no
+// role, no peer-disk. Recording it is what lets everything downstream tell
+// "this peer is not Primary" apart from "nobody asked this peer".
+//
+// The output below is verbatim from lima-sds-a on 2026-09-21, seconds after it
+// booted back into the cluster. Parsed without the connection lines it yields
+// exactly one node state, and a resource whose Primary was serving the whole
+// time reads as a resource with no Primary at all.
+func TestPeersThatAreNotConnectedAreStillRecorded(t *testing.T) {
+	output := `openclaw role:Secondary
+  disk:Outdated quorum:no open:no
+  iZ2vca1rjuuxbqtpm9hy7zZ connection:Connecting
+  sds-b connection:Connecting
+  sds-e connection:Connecting`
+
+	states := parseNodeStatesFromStatus(output, []string{"lima-sds-a", "sds-b", "sds-e", "iZ2vca1rjuuxbqtpm9hy7zZ"})
+
+	if len(states) != 4 {
+		t.Fatalf("got %d node states, want 4 — an unreachable peer that is absent from the map is a peer nobody checks: %+v", len(states), states)
+	}
+	if got := states["lima-sds-a"]; got == nil || got.Role != "Secondary" || got.DiskState != "Outdated" {
+		t.Errorf("answering node = %+v, want the locally read Secondary/Outdated", got)
+	}
+	if got := states["lima-sds-a"]; got != nil && got.Connection != "" {
+		t.Errorf("the answering node has no connection to describe, got %q", got.Connection)
+	}
+	for _, peer := range []string{"sds-b", "sds-e", "iZ2vca1rjuuxbqtpm9hy7zZ"} {
+		st := states[peer]
+		if st == nil {
+			t.Fatalf("peer %s is missing from the parsed states", peer)
+		}
+		if st.Connection != "Connecting" {
+			t.Errorf("peer %s connection = %q, want Connecting", peer, st.Connection)
+		}
+		if st.Role != "" {
+			t.Errorf("peer %s role = %q; DRBD reported none, and inventing one is the bug", peer, st.Role)
+		}
+	}
+}
+
+// StandAlone is the state DRBD parks a peer in after refusing to resolve a
+// split brain. It has to survive the parse for anything to alert on it.
+func TestStandAlonePeerIsRecorded(t *testing.T) {
+	output := `openclaw role:Primary
+  disk:UpToDate open:yes
+  lima-sds-a connection:StandAlone
+  sds-b role:Secondary
+    peer-disk:UpToDate`
+
+	states := parseNodeStatesFromStatus(output, []string{"sds-e", "lima-sds-a", "sds-b"})
+
+	if got := states["lima-sds-a"]; got == nil || got.Connection != "StandAlone" {
+		t.Fatalf("lima-sds-a = %+v, want Connection StandAlone", got)
+	}
+	// The peer-disk line after it belongs to sds-b, not to the StandAlone peer.
+	if got := states["lima-sds-a"]; got != nil && got.DiskState != "" {
+		t.Errorf("StandAlone peer picked up a disk state %q from a following line", got.DiskState)
+	}
+	if got := states["sds-b"]; got == nil || got.Role != "Secondary" || got.DiskState != "UpToDate" {
+		t.Errorf("sds-b = %+v, want Secondary/UpToDate", got)
+	}
+}
