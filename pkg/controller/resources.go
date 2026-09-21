@@ -5252,9 +5252,14 @@ type drbdsetupStatus struct {
 		Quorum *bool `json:"quorum"`
 	} `json:"devices"`
 	Connections []struct {
-		Name        string `json:"name"`
-		PeerRole    string `json:"peer-role"`
-		PeerDevices []struct {
+		Name string `json:"name"`
+		// ConnectionState is "Connected", "Connecting", "StandAlone", ... It is
+		// the only field a peer whose link is down carries any truth in: DRBD
+		// leaves peer-role and every peer_device empty for such a peer, and
+		// reading those empties as facts is the whole reason this is parsed.
+		ConnectionState string `json:"connection-state"`
+		PeerRole        string `json:"peer-role"`
+		PeerDevices     []struct {
 			Volume           int    `json:"volume"`
 			ReplicationState string `json:"replication-state"`
 			PeerDiskState    string `json:"peer-disk-state"`
@@ -5305,7 +5310,12 @@ func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNode
 		if conn.Name == "" {
 			continue
 		}
-		peer := &ResourceNodeState{Role: conn.PeerRole, SyncPercent: 100, SyncPercentKnown: true}
+		peer := &ResourceNodeState{
+			Role:             conn.PeerRole,
+			Connection:       conn.ConnectionState,
+			SyncPercent:      100,
+			SyncPercentKnown: true,
+		}
 		if len(conn.PeerDevices) > 0 {
 			pd := conn.PeerDevices[0]
 			peer.DiskState = pd.PeerDiskState

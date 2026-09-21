@@ -1664,3 +1664,46 @@ func TestStandAlonePeerIsRecorded(t *testing.T) {
 		t.Errorf("sds-b = %+v, want Secondary/UpToDate", got)
 	}
 }
+
+// The JSON path has to carry the connection state too, and this test exists
+// because the text parser alone did not catch it.
+//
+// GetResource prefers `drbdsetup status --json` and replaces the text-parsed
+// states with it wholesale. So a Connection recorded only by the text parser
+// is silently discarded on every cluster new enough to have --json — which is
+// every cluster this runs on. The first cut of this fix did exactly that: unit
+// tests green, and a live replica disconnected for ninety seconds still raised
+// nothing.
+//
+// The shape below is verbatim drbdsetup output: a peer whose link is down has
+// a connection-state and nothing else — no peer-role, no peer_devices.
+func TestJSONParseCarriesPeerConnectionState(t *testing.T) {
+	output := `[{
+	  "name": "openclaw",
+	  "role": "Secondary",
+	  "devices": [{"volume": 0, "disk-state": "Inconsistent", "quorum": true}],
+	  "connections": [
+	    {"name": "iZ2vca1rjuuxbqtpm9hy7zZ", "connection-state": "Connected", "peer-role": "Secondary",
+	     "peer_devices": [{"volume": 0, "replication-state": "SyncTarget", "peer-disk-state": "UpToDate", "done": 43.13}]},
+	    {"name": "sds-b", "connection-state": "Connecting", "peer-role": "Unknown", "peer_devices": []},
+	    {"name": "sds-e", "connection-state": "Connected", "peer-role": "Primary",
+	     "peer_devices": [{"volume": 0, "replication-state": "PausedSyncT", "peer-disk-state": "UpToDate"}]}
+	  ]
+	}]`
+
+	states, err := parseNodeStatesFromJSON(output, "lima-sds-a")
+	if err != nil {
+		t.Fatalf("parseNodeStatesFromJSON: %v", err)
+	}
+
+	if got := states["sds-b"]; got == nil || got.Connection != "Connecting" {
+		t.Fatalf("sds-b = %+v, want Connection Connecting — without it a disconnected replica is invisible", got)
+	}
+	if got := states["sds-e"]; got == nil || got.Connection != "Connected" || got.Role != "Primary" {
+		t.Errorf("sds-e = %+v, want a Connected Primary", got)
+	}
+	// The answering node has no connection to itself to describe.
+	if got := states["lima-sds-a"]; got == nil || got.Connection != "" {
+		t.Errorf("answering node = %+v, want an empty Connection", got)
+	}
+}
