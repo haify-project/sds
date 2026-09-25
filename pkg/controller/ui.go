@@ -37,8 +37,11 @@ The API and <code>sds-cli</code> are unaffected.</p>
 // defaultAIPort where the optional AI Copilot (cmd/sds-ai) does. The UI proxies
 // to both on loopback so a single published port serves the whole app.
 // defaultGRPCPort is the fallback when the config leaves Server.Port unset.
-const (
-	defaultGRPCPort = 3374
+const defaultGRPCPort = 3374
+
+// Variables rather than constants so tests can move them off ports a real
+// controller on the same machine may hold.
+var (
 	defaultRESTPort = 3375
 	defaultAIPort   = 7634
 )

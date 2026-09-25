@@ -19,7 +19,9 @@ import (
 // not published and should not be. The page loaded and nothing on it worked,
 // which is a worse failure than not loading at all.
 func TestUIServerProxiesAPIOnItsOwnOrigin(t *testing.T) {
-	srv, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, 3375, 7634)
+	// Free ports: nothing may answer, or a controller running on this machine
+	// would serve the request and the proxy would look like a file server.
+	srv, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, freePort(t), freePort(t))
 	require.NoError(t, err)
 
 	for _, path := range []string{"/v1/nodes", "/v1/rbac/whoami", "/ai/chat/stream"} {

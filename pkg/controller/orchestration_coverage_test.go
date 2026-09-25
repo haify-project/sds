@@ -42,6 +42,9 @@ func TestControllerStartAndStopServers(t *testing.T) {
 	ctrl.config = &config.Config{
 		Server: config.ServerConfig{ListenAddress: "127.0.0.1", Port: freePort(t)},
 	}
+	origREST := defaultRESTPort
+	defaultRESTPort = freePort(t)
+	t.Cleanup(func() { defaultRESTPort = origREST })
 
 	require.NoError(t, ctrl.Start())
 	require.NotNil(t, ctrl.server)
