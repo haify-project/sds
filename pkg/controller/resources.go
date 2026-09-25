@@ -1101,8 +1101,21 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// so there is no data anywhere to lose. This path only ever runs for a
 	// brand-new resource — adopting an existing resource goes through
 	// AdoptResource, which never reaches here.
-	if err := rm.establishInitialSync(ctx, name, nodeIPs[0]); err != nil {
-		return fmt.Errorf("failed to establish initial sync for %s: %w", name, err)
+	//
+	// On thin storage there is nothing to sync; see initial_sync.go.
+	skipped := false
+	if rm.backedByZeroReadingStorage(ctx, storageType, nodeIPs, resolved) {
+		if err := rm.skipInitialSync(ctx, name, nodeIPs[0]); err != nil {
+			rm.controller.logger.Warn("Could not skip the initial sync; running a full one",
+				zap.String("resource", name), zap.Error(err))
+		} else {
+			skipped = true
+		}
+	}
+	if !skipped {
+		if err := rm.establishInitialSync(ctx, name, nodeIPs[0]); err != nil {
+			return fmt.Errorf("failed to establish initial sync for %s: %w", name, err)
+		}
 	}
 
 	// 5a. WAN only: now that the resource exists and its peers are configured,
@@ -2100,6 +2113,13 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		if s == "net" {
 			config.WriteString("\n    net {\n")
 			fmt.Fprintf(&config, "        protocol %s;\n", protocol)
+			// Without a verify algorithm `drbdadm verify` refuses to start,
+			// so the one tool that proves two replicas hold the same data is
+			// unavailable exactly when someone needs it. It costs nothing
+			// until a verify runs. An explicit option still wins.
+			if _, set := opts["verify-alg"]; !set {
+				config.WriteString("        verify-alg crc32c;\n")
+			}
 			if ok {
 				var keys []string
 				for k := range opts {
