@@ -13,9 +13,15 @@ func healthCommand() *cobra.Command {
 	var nodes string
 
 	cmd := &cobra.Command{
-		Use:   "health-check",
+		Use:   "health-check [node...]",
 		Short: "Check node health (drbd, drbd-reactor, resource-agents)",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Nodes may be named as arguments too; they used to be ignored
+			// without a word and every node checked instead.
+			if len(args) > 0 {
+				nodes = strings.Join(append(args, strings.Split(nodes, ",")...), ",")
+				nodes = strings.Trim(nodes, ",")
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
