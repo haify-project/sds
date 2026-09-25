@@ -189,7 +189,7 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 			return fmt.Errorf("failed to create PV on %s: %w", disk, err)
 		}
 		if !result.AllSuccess() {
-			return fmt.Errorf("PV creation failed on %s for disk %s: %v", node, disk, result.FailedHosts())
+			return fmt.Errorf("PV creation failed on %s for disk %s: %s", node, disk, result.FailureDetails())
 		}
 	}
 

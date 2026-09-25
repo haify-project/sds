@@ -103,3 +103,51 @@ func TestRestoreKeepsTheReplicasInStep(t *testing.T) {
 	assert.True(t, down < merge && merge < up && up < reset, "order: down, merge, up, reset peers")
 	assert.True(t, strings.HasPrefix((*calls)[reset], "10.0.0.1 "), "only the other replica is reset: %s", (*calls)[reset])
 }
+
+// An encrypted resource names its LUKS container in the DRBD config, not the
+// LV, so the restore used to miss that it was replicated at all — and with the
+// container holding the LV open, LVM only scheduled the merge for the next
+// activation. The container is closed around the merge and reopened after.
+func TestRestoreOfAnEncryptedVolume(t *testing.T) {
+	var calls []string
+	cfg := strings.ReplaceAll(r3Config, "/dev/sds_tp/r3_data", "/dev/mapper/sds_sds_tp_r3_data")
+	dep := &fakeDeploymentClient{}
+	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		calls = append(calls, strings.Join(hosts, ",")+" "+decodeWrapped(cmd))
+		switch {
+		case strings.HasPrefix(cmd, "grep -lE") && strings.Contains(cmd, "mapper"):
+			return successExecResult(hosts, "/etc/drbd.d/r3.res"), nil
+		case strings.HasPrefix(cmd, "grep -lE"):
+			return successExecResult(hosts, ""), nil
+		case strings.HasPrefix(cmd, "cat /etc/drbd.d/r3.res"):
+			return successExecResult(hosts, cfg), nil
+		case strings.Contains(cmd, "drbdsetup status r3"):
+			return successExecResult(hosts, "r3 role:Secondary"), nil
+		}
+		return successExecResult(hosts, ""), nil
+	}
+	ctrl := newBasicTestController(dep)
+	ctrl.db = newTestDB(t)
+	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
+		Name: "r3", Port: 7102, Nodes: "sdt1,sdt3", Protocol: "C", Replicas: 2, Encrypted: true,
+	}))
+	for n, a := range map[string]string{"sdt1": "10.0.0.1", "sdt3": "10.0.0.3"} {
+		ctrl.nodes.nodes[a] = &NodeInfo{Name: n, Address: a}
+		ctrl.hostsMap[n] = a
+	}
+
+	require.NoError(t, ctrl.snapshots.RestoreSnapshot(context.Background(), "sds_tp/r3_data", "s1", "sdt3"))
+	at := func(sub string) int {
+		for i, c := range calls {
+			if strings.Contains(c, sub) {
+				return i
+			}
+		}
+		t.Fatalf("never ran %q: %v", sub, calls)
+		return -1
+	}
+	down, closeC, merge := at("drbdadm down r3"), at("cryptsetup close sds_sds_tp_r3_data"), at("lvconvert --merge")
+	open, up := at("cryptsetup open"), at("10.0.0.3 sudo drbdadm up r3")
+	assert.True(t, down < closeC && closeC < merge && merge < open && open < up,
+		"order: down, close container, merge, reopen, up: %v", calls)
+}

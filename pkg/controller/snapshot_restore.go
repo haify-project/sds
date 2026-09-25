@@ -41,7 +41,7 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 	sm.controller.logger.Info("Restoring snapshot",
 		zap.String("volume", volume), zap.String("snapshot", snapshotName), zap.String("node", node))
 
-	resource, err := sm.resourceBackedBy(ctx, address, backing)
+	resource, disk, err := sm.resourceBackedBy(ctx, address, backing)
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,22 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 		// Not under DRBD: a plain LV has no replicas to keep in step.
 		return sm.mergeSnapshot(ctx, address, snapshotPath, backing)
 	}
-	return sm.restoreReplicated(ctx, resource, address, node, backing, func() error {
+	return sm.restoreReplicated(ctx, resource, address, node, disk, func() error {
+		// An encrypted volume's LV is held open by its LUKS container even
+		// with DRBD down, so LVM would only schedule the merge — the deferred
+		// rollback this path exists to prevent. Close the container around
+		// the merge and reopen it with the node's own key.
+		if disk != backing {
+			name := strings.TrimPrefix(disk, "/dev/mapper/")
+			if err := sm.controller.resources.execAllSuccess(ctx, []string{address},
+				"sudo cryptsetup close "+name, "close the LUKS container "+name); err != nil {
+				return err
+			}
+			defer func() {
+				_, _ = sm.controller.deployment.Exec(ctx, []string{address}, fmt.Sprintf(
+					"sudo cryptsetup open --type luks --key-file %s %s %s", luksKeyPath(name), backing, name))
+			}()
+		}
 		return sm.mergeSnapshot(ctx, address, snapshotPath, backing)
 	})
 }
@@ -69,14 +84,14 @@ func (sm *SnapshotManager) RestoreZFSSnapshot(ctx context.Context, dataset, snap
 		}
 		return nil
 	}
-	resource, err := sm.resourceBackedBy(ctx, address, backing)
+	resource, disk, err := sm.resourceBackedBy(ctx, address, backing)
 	if err != nil {
 		return err
 	}
 	if resource == "" {
 		return rollback()
 	}
-	return sm.restoreReplicated(ctx, resource, address, node, backing, rollback)
+	return sm.restoreReplicated(ctx, resource, address, node, disk, rollback)
 }
 
 // RestoreLVMSnapshotByName restores a snapshot known only by its name within
@@ -102,26 +117,37 @@ func (sm *SnapshotManager) RestoreLVMSnapshotByName(ctx context.Context, vg, sna
 }
 
 // resourceBackedBy names the DRBD resource whose config uses backing as a
-// disk on this node, or "" when none does.
-func (sm *SnapshotManager) resourceBackedBy(ctx context.Context, address, backing string) (string, error) {
-	cmd := fmt.Sprintf("grep -lE '^[[:space:]]*disk[[:space:]]+%s;' /etc/drbd.d/*.res 2>/dev/null || true",
-		regexp.QuoteMeta(backing))
-	res, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
-	if err != nil {
-		return "", fmt.Errorf("look up the resource using %s: %w", backing, err)
+// disk on this node, or "" when none does. An encrypted volume is configured
+// by its LUKS container rather than the LV, so that path is looked for too;
+// disk is whichever the config names.
+func (sm *SnapshotManager) resourceBackedBy(ctx context.Context, address, backing string) (resource, disk string, err error) {
+	candidates := []string{backing}
+	if vg, lv := parseVolumePath(strings.TrimPrefix(backing, "/dev/")); vg != "" && !strings.HasPrefix(backing, "/dev/zvol/") {
+		candidates = append(candidates, luksMapperPath(vg, lv))
 	}
-	for _, h := range res.Hosts {
-		if !h.Success {
-			return "", fmt.Errorf("failed to look up the resource using %s: %s", backing, strings.TrimSpace(h.Output))
+	for _, disk := range candidates {
+		cmd := fmt.Sprintf("grep -lE '^[[:space:]]*disk[[:space:]]+%s;' /etc/drbd.d/*.res 2>/dev/null || true",
+			regexp.QuoteMeta(disk))
+		res, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
+		if err != nil {
+			return "", "", fmt.Errorf("look up the resource using %s: %w", backing, err)
 		}
-		for _, f := range strings.Fields(h.Output) {
-			return strings.TrimSuffix(filepath.Base(f), ".res"), nil
+		for _, h := range res.Hosts {
+			if !h.Success {
+				return "", "", fmt.Errorf("failed to look up the resource using %s: %s", backing, strings.TrimSpace(h.Output))
+			}
+			for _, f := range strings.Fields(h.Output) {
+				return strings.TrimSuffix(filepath.Base(f), ".res"), disk, nil
+			}
 		}
 	}
-	return "", nil
+	return "", "", nil
 }
 
-func (sm *SnapshotManager) restoreReplicated(ctx context.Context, resource, address, node, backing string, rollback func() error) error {
+// restoreReplicated runs rollback with resource down on every replica, then
+// resyncs the other replicas from address. disk is the device the resource's
+// config names for the restored volume — the LV, a zvol, or a LUKS container.
+func (sm *SnapshotManager) restoreReplicated(ctx context.Context, resource, address, node, disk string, rollback func() error) error {
 	rm := sm.controller.resources
 	hosts, err := rm.resourceHosts(ctx, resource)
 	if err != nil {
@@ -142,13 +168,13 @@ func (sm *SnapshotManager) restoreReplicated(ctx context.Context, resource, addr
 	volID := -1
 	for _, h := range cfg.Hosts {
 		for _, v := range parseResourceConfigVolumes(h.Output) {
-			if v.DiskPath == backing {
+			if v.DiskPath == disk {
 				volID = v.VolumeID
 			}
 		}
 	}
 	if volID < 0 {
-		return fmt.Errorf("%s is not a volume of %s", backing, resource)
+		return fmt.Errorf("%s is not a volume of %s", disk, resource)
 	}
 
 	// Nothing may be using the resource: a restore under a mounted filesystem

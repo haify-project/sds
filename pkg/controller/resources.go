@@ -4201,7 +4201,7 @@ func (rm *ResourceManager) Mount(ctx context.Context, resource, mountPoint strin
 		return fmt.Errorf("failed to mount: %w", err)
 	}
 	if !result.AllSuccess() {
-		return fmt.Errorf("mount failed on %s: %v", node, result.FailedHosts())
+		return fmt.Errorf("mount failed on %s: %s", node, result.FailureDetails())
 	}
 
 	return nil
@@ -4234,7 +4234,7 @@ func (rm *ResourceManager) Unmount(ctx context.Context, resource string, volumeI
 		return fmt.Errorf("failed to unmount: %w", err)
 	}
 	if !result.AllSuccess() {
-		return fmt.Errorf("unmount failed on %s: %v", node, result.FailedHosts())
+		return fmt.Errorf("unmount failed on %s: %s", node, result.FailureDetails())
 	}
 
 	return nil
