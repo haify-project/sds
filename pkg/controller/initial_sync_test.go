@@ -54,3 +54,20 @@ func TestGeneratedConfigCanRunOnlineVerify(t *testing.T) {
 		t.Fatalf("an explicit verify-alg must replace the default:\n%s", cfg)
 	}
 }
+
+// A resource with a replica on an unreachable node is refused up front, not
+// after volumes were built on the reachable ones.
+func TestResourceCreationRefusesAnOfflineNode(t *testing.T) {
+	ctrl := newBasicTestController(&fakeDeploymentClient{})
+	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "n1", Address: "10.0.0.1", State: NodeStateOnline}
+	ctrl.nodes.nodes["10.0.0.3"] = &NodeInfo{Name: "n3", Address: "10.0.0.3", State: NodeStateOffline}
+	ctrl.hostsMap["n1"], ctrl.hostsMap["n3"] = "10.0.0.1", "10.0.0.3"
+
+	if err := ctrl.resources.assertNodesOnline([]string{"n1"}); err != nil {
+		t.Fatalf("an online node was refused: %v", err)
+	}
+	err := ctrl.resources.assertNodesOnline([]string{"n1", "n3"})
+	if err == nil || !strings.Contains(err.Error(), "n3") || strings.Contains(err.Error(), "n1,") {
+		t.Fatalf("err = %v, want n3 named as offline", err)
+	}
+}

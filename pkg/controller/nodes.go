@@ -510,7 +510,9 @@ func (nm *NodeManager) CheckNodeHealth(ctx context.Context, address string) erro
 			n.State = NodeStateOffline
 		}
 		nm.mu.Unlock()
-		return fmt.Errorf("health check failed")
+		// Why it failed is what an operator needs: an SSH host key that
+		// changed, a refused connection and a timeout are fixed differently.
+		return fmt.Errorf("health check failed: %s", result.FailureDetails())
 	}
 
 	nm.mu.Lock()
@@ -772,4 +774,25 @@ func (nm *NodeManager) addHostsEntry(ctx context.Context, ip, hostname string) {
 				zap.String("output", r.Output))
 		}
 	}
+}
+
+// assertNodesOnline refuses nodes the health check last found offline. A node
+// the controller does not know is left to the steps that follow, which report
+// it in their own terms.
+func (rm *ResourceManager) assertNodesOnline(nodes []string) error {
+	var offline []string
+	for _, n := range nodes {
+		addr := rm.controller.ResolveHost(n)
+		rm.controller.nodes.mu.RLock()
+		info := rm.controller.nodes.nodes[addr]
+		rm.controller.nodes.mu.RUnlock()
+		if info != nil && info.State == NodeStateOffline {
+			offline = append(offline, n)
+		}
+	}
+	if len(offline) > 0 {
+		return fmt.Errorf("node(s) %s offline: the controller cannot reach them (see sds-cli node list and the node.unreachable alert for why)",
+			strings.Join(offline, ", "))
+	}
+	return nil
 }

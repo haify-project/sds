@@ -611,12 +611,23 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 		// stdout is why failures used to surface as an empty message ("creation
 		// failed on 10.0.0.1: "), leaving callers nothing to act on. Callers
 		// treat Output as "what the command said", so give them both streams.
-		execResult.Hosts[host] = &HostResult{
+		hr := &HostResult{
 			Host:    host,
 			Output:  combineStreams(string(r.Output), string(r.Error)),
 			Success: r.Success,
 			Error:   fmt.Errorf("%s", string(r.Error)),
 		}
+		// A command that never ran has no output at all: the reason is the
+		// connection's — a changed SSH host key, a refused or timed-out
+		// connection — and dispatch reports it in ErrorMsg. Dropping it made
+		// an unreachable node read as "no output" in every error and alert.
+		if r.ErrorMsg != nil {
+			hr.Error = r.ErrorMsg
+			if hr.Output == "" {
+				hr.Output = r.ErrorMsg.Error()
+			}
+		}
+		execResult.Hosts[host] = hr
 	}
 
 	return execResult, nil
@@ -921,7 +932,13 @@ func (c *Client) DRBDAttach(ctx context.Context, host, resource string) (*ExecRe
 func singleHostOutput(res *ExecResult, what string) (string, error) {
 	for _, hr := range res.Hosts {
 		if !hr.Success {
-			return "", fmt.Errorf("failed to %s: %s", what, strings.TrimSpace(hr.Output))
+			// A command that never ran — the SSH connection itself failed —
+			// has no output; its reason is in Error.
+			reason := strings.TrimSpace(hr.Output)
+			if reason == "" && hr.Error != nil {
+				reason = strings.TrimSpace(hr.Error.Error())
+			}
+			return "", fmt.Errorf("failed to %s: %s", what, reason)
 		}
 		return hr.Output, nil
 	}

@@ -893,6 +893,13 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		}
 	}
 
+	// A replica on a node the controller cannot reach fails part-way — after
+	// volumes exist on the others — with an error about whatever step first
+	// touched that node. Say so before anything is built.
+	if err := rm.assertNodesOnline(nodes); err != nil {
+		return err
+	}
+
 	rm.controller.logger.Info("Creating DRBD resource",
 		zap.String("name", name),
 		zap.Uint32("port", port),

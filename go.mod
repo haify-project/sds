@@ -18,7 +18,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0
 	github.com/kubernetes-csi/csi-test/v5 v5.6.0
-	github.com/liliang-cn/dispatch v1.1.6
+	github.com/liliang-cn/dispatch v1.1.8
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
