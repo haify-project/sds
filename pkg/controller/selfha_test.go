@@ -47,9 +47,12 @@ func withSelfHaFixtureFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfg, []byte("[server]\nport = 3374\n"), 0o644))
 	require.NoError(t, os.WriteFile(unit, []byte("[Service]\nExecStart=/opt/sds/bin/sds-controller\n"), 0o644))
 
-	origCfg, origUnit := controllerConfigPath, controllerUnitPath
-	controllerConfigPath, controllerUnitPath = cfg, unit
-	t.Cleanup(func() { controllerConfigPath, controllerUnitPath = origCfg, origUnit })
+	disp := filepath.Join(dir, "dispatch.toml")
+	require.NoError(t, os.WriteFile(disp, []byte("[ssh]\nkey_path = \"/root/.ssh/id_ed25519\"\n"), 0o600))
+
+	origCfg, origUnit, origDisp := controllerConfigPath, controllerUnitPath, dispatchConfigOverride
+	controllerConfigPath, controllerUnitPath, dispatchConfigOverride = cfg, unit, disp
+	t.Cleanup(func() { controllerConfigPath, controllerUnitPath, dispatchConfigOverride = origCfg, origUnit, origDisp })
 }
 
 func selfHaFakeDeployment() *fakeDeploymentClient {
@@ -110,8 +113,14 @@ func TestEnableSelfHaRejectsExistingResource(t *testing.T) {
 		Nodes: "node1,node2",
 	}))
 
+	// Left behind by a disable: the error must say how to go on.
 	_, err := ctrl.resources.EnableSelfHa(context.Background(), "10.0.0.50/24", "p0", 0, 0, nil)
-	assert.ErrorContains(t, err, "already exists")
+	assert.ErrorContains(t, err, "sds-cli resource delete "+SelfHaResource)
+
+	// With the HA record present it is simply already enabled.
+	require.NoError(t, ctrl.db.SaveHaConfig(context.Background(), &database.HaConfig{Resource: SelfHaResource}))
+	_, err = ctrl.resources.EnableSelfHa(context.Background(), "10.0.0.50/24", "p0", 0, 0, nil)
+	assert.ErrorContains(t, err, "already enabled")
 }
 
 func TestEnableSelfHaOrchestration(t *testing.T) {
@@ -126,9 +135,11 @@ func TestEnableSelfHaOrchestration(t *testing.T) {
 	// The reactor promoter config must be distributed DISABLED to all nodes
 	// and must wire mount + VIP + controller service.
 	var reactorCfg, handoffScript string
-	var reactorHosts []string
+	var reactorHosts, dispatchHosts []string
 	for _, dc := range dep.distributedConfigs {
 		switch dc.remotePath {
+		case dispatchConfigOverride:
+			dispatchHosts = dc.hosts
 		case selfHaReactorConfig + ".disabled":
 			reactorCfg = dc.content
 			reactorHosts = dc.hosts
@@ -140,6 +151,9 @@ func TestEnableSelfHaOrchestration(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, reactorCfg, "reactor config not distributed")
+	// Without it a standby's controller exits at startup, and the first
+	// failover moves the VIP to a node where nothing answers.
+	assert.Equal(t, []string{"10.0.0.2"}, dispatchHosts, "the dispatch config must reach every standby")
 	assert.ElementsMatch(t, []string{selfAddr, "10.0.0.2"}, reactorHosts)
 	assert.Contains(t, reactorCfg, "var-lib-sds.mount")
 	assert.Contains(t, reactorCfg, "service-ip@10.0.0.50-24.service")

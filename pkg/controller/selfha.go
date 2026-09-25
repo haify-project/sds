@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/liliang-cn/sds/pkg/database"
@@ -40,6 +42,9 @@ const (
 var (
 	controllerConfigPath = "/etc/sds/controller.toml"
 	controllerUnitPath   = "/etc/systemd/system/sds-controller.service"
+	// dispatchConfigOverride replaces the configured dispatch config path;
+	// tests point it at a fixture.
+	dispatchConfigOverride = ""
 )
 
 // selfHaExtraServices returns the configured systemd units that should ride the
@@ -103,7 +108,16 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 
 	// The metadata resource must not already exist.
 	if _, err := rm.controller.db.GetResource(ctx, SelfHaResource); err == nil {
-		return "", fmt.Errorf("resource %s already exists; self-HA may already be enabled", SelfHaResource)
+		// Disable keeps the metadata resource — it holds the database copy the
+		// cluster ran on — and only the HA record says self-HA is on. Telling
+		// an operator who just disabled it that it "may already be enabled"
+		// left them no way forward.
+		if cfg, _ := rm.controller.db.GetHaConfig(ctx, SelfHaResource); cfg == nil {
+			return "", fmt.Errorf("self-HA is disabled, but its metadata resource %s from the previous time is still there; "+
+				"the controller now runs on its local database, so remove it and enable again: sds-cli resource delete %s",
+				SelfHaResource, SelfHaResource)
+		}
+		return "", fmt.Errorf("self-HA is already enabled (resource %s); see sds-cli ha self status", SelfHaResource)
 	}
 
 	if err := rm.selfHaPreflight(ctx, selfAddr, standbyAddrs); err != nil {
@@ -324,6 +338,25 @@ func (rm *ResourceManager) selfNodeAddress(nodeNames, nodeAddrs []string) (strin
 func (rm *ResourceManager) selfHaPreflight(ctx context.Context, selfAddr string, standbyAddrs []string) error {
 	all := append([]string{selfAddr}, standbyAddrs...)
 
+	// A standby that takes over starts the controller with the dispatch
+	// config enable copies to it, and reaches the nodes with the key that
+	// config names. The key is not copied — it is each node's own — so it has
+	// to be there already.
+	dispatchContent, err := os.ReadFile(rm.dispatchConfigPath())
+	if err != nil {
+		return fmt.Errorf("the dispatch config %s is needed on every node and cannot be read here: %w",
+			rm.dispatchConfigPath(), err)
+	}
+	if m := dispatchKeyPath.FindSubmatch(dispatchContent); m != nil {
+		key := string(m[1])
+		for _, addr := range standbyAddrs {
+			if err := rm.execAllSuccess(ctx, []string{addr}, "sudo test -r "+key,
+				fmt.Sprintf("%s has no SSH key at %s, which the dispatch config uses to reach the nodes", addr, key)); err != nil {
+				return err
+			}
+		}
+	}
+
 	// drbd-reactor must be running everywhere.
 	if err := rm.execAllSuccess(ctx, all, "systemctl is-active --quiet drbd-reactor",
 		"drbd-reactor is not active"); err != nil {
@@ -395,6 +428,21 @@ func (rm *ResourceManager) distributeControllerArtifacts(ctx context.Context, se
 	}
 	if err := rm.distributeToAll(ctx, standbyAddrs, string(cfgContent), controllerConfigPath, ""); err != nil {
 		return fmt.Errorf("failed to distribute controller config: %w", err)
+	}
+
+	// Dispatch config: the controller cannot start without it — it is how the
+	// controller reaches every node — and it lives outside controller.toml.
+	// It used to be left behind, so enable reported success, and the first
+	// failover brought the controller up on a standby that exited at once
+	// ("dispatch config ... no such file"): the VIP moved and nothing answered
+	// on it.
+	dispatchPath := rm.dispatchConfigPath()
+	dispatchContent, err := os.ReadFile(dispatchPath)
+	if err != nil {
+		return fmt.Errorf("failed to read the dispatch config %s: %w", dispatchPath, err)
+	}
+	if err := rm.distributeToAll(ctx, standbyAddrs, string(dispatchContent), dispatchPath, ""); err != nil {
+		return fmt.Errorf("failed to distribute the dispatch config: %w", err)
 	}
 
 	// Systemd unit: replicate and daemon-reload.
@@ -493,3 +541,31 @@ func containsString(list []string, s string) bool {
 	}
 	return false
 }
+
+// dispatchConfigPath is the dispatch config this controller runs with: the
+// configured path, or dispatch's default under the controller's home.
+func (rm *ResourceManager) dispatchConfigPath() string {
+	if dispatchConfigOverride != "" {
+		return dispatchConfigOverride
+	}
+	p := ""
+	if rm.controller.config != nil {
+		p = strings.TrimSpace(rm.controller.config.Dispatch.ConfigPath)
+	}
+	if p != "" {
+		if strings.HasPrefix(p, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				return filepath.Join(home, p[2:])
+			}
+		}
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "/root"
+	}
+	return filepath.Join(home, ".dispatch", "config.toml")
+}
+
+// dispatchKeyPath finds the private key a dispatch config authenticates with.
+var dispatchKeyPath = regexp.MustCompile(`(?m)^\s*key_path\s*=\s*"([^"]+)"`)
