@@ -120,7 +120,7 @@ func (nm *NotifyManager) Test(ctx context.Context, name string) error {
 	cfg.Retries = 0
 
 	return event.NewWebhook(cfg, nm.controller.logger).Deliver(ctx, event.Event{
-		Type:     event.TypeResourceDegraded,
+		Type:     event.TypeChannelTest,
 		Severity: event.SeverityInfo,
 		Status:   event.StatusInfo,
 		Message: fmt.Sprintf("Test message from SDS for channel %q. "+

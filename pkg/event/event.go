@@ -30,6 +30,10 @@ const (
 	// TypeResourceDegraded fires when a replica's disk or replication state
 	// leaves the healthy set (Diskless, Failed, StandAlone, ...).
 	TypeResourceDegraded Type = "resource.degraded"
+	// TypeChannelTest is the message `channel test` sends. It has a type of
+	// its own so a receiver that acts on event types — opens a ticket on
+	// resource.degraded — does not act on a test.
+	TypeChannelTest Type = "channel.test"
 	// TypeResourceFailover fires when a resource's Primary role moves from one
 	// set of nodes to a different one — the event an operator most wants pushed
 	// at them, because by the time it happens the cluster has already reacted.
