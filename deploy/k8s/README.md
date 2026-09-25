@@ -35,8 +35,10 @@ The driver implements the CSI `CREATE_DELETE_SNAPSHOT` capability, so a
 backing store. This is what Kubernetes-native backup tools (Velero, Kasten)
 orchestrate.
 
-`LIST_SNAPSHOTS` is deliberately not advertised: snapshots live on individual
-storage nodes with no cluster-wide index, so the driver cannot enumerate them.
+Snapshots live on individual storage nodes with no cluster-wide index, so
+`ListSnapshots` walks the driver's volumes and asks each replica node. Only
+snapshots the driver created (`sdssnap_*`) are listed; the controller's own
+scheduled snapshots of the same LV never are.
 
 ### Cluster prerequisites (install once)
 
@@ -108,3 +110,33 @@ Application-level consistency is still the application's job: snapshot a
 database after a `CHECKPOINT`/`FSYNC` (or quiesce it) if you want more than
 crash consistency. PostgreSQL and Redis both replay cleanly from a
 crash-consistent snapshot in practice.
+
+## What the driver does beyond provisioning
+
+- **Expansion.** `allowVolumeExpansion: true` plus the `csi-resizer` sidecar:
+  raise a PVC's request and the volume and its filesystem grow online.
+- **Capacity-aware scheduling.** `storageCapacity: true` and the provisioner's
+  `--enable-capacity` publish one `CSIStorageCapacity` per node from its pool's
+  free space, so the scheduler does not pick a node that cannot hold the volume.
+- **Usage metrics.** `NodeGetVolumeStats` feeds `kubelet_volume_stats_*` for
+  filesystem volumes. (Kubelet does not collect usage for raw block volumes.)
+- **Raw block.** `volumeMode: Block` hands the Pod the DRBD device itself.
+- **ReadWriteOncePod.** Supported. `ReadWriteMany` and the other multi-node
+  modes are refused at provisioning: a DRBD resource has one Primary.
+- **Replica health on the PVC.** The controller plugin checks each volume's
+  replicas every `--health-interval` (default 1m) and posts
+  `Warning VolumeDegraded` / `Normal VolumeRecovered` events on its PVC when a
+  replica disconnects, loses its disk or falls out of date. A new volume's
+  initial sync is not reported.
+
+## Image pulls behind the GFW
+
+`registry.k8s.io` redirects to regional Google Artifact Registry hosts that are
+unreachable from mainland networks. Point k3s at a mirror in
+`/etc/rancher/k3s/registries.yaml` on every node and restart k3s:
+
+```yaml
+mirrors:
+  registry.k8s.io:
+    endpoint: ["https://k8s.m.daocloud.io"]
+```

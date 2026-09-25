@@ -28,6 +28,17 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list", "watch", "create", "update", "patch"]
+  # --enable-capacity: one CSIStorageCapacity object per node, owned by the
+  # controller's ReplicaSet so they are cleaned up with it.
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csistoragecapacities"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -75,4 +86,67 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: sds-csi-snapshotter
+  apiGroup: rbac.authorization.k8s.io
+---
+# csi-resizer sidecar: turns a larger PVC request into ControllerExpandVolume.
+# The driver has implemented expansion all along; without this sidecar nothing
+# ever called it, and editing a PVC's size did nothing.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: sds-csi-resizer }
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattributesclasses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: sds-csi-resizer }
+subjects:
+  - kind: ServiceAccount
+    name: sds-csi-controller
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: sds-csi-resizer
+  apiGroup: rbac.authorization.k8s.io
+---
+# The plugin's own health reporter: reads this driver's PVs and posts
+# VolumeDegraded/VolumeRecovered events on their PVCs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: sds-csi-health }
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: sds-csi-health }
+subjects:
+  - kind: ServiceAccount
+    name: sds-csi-controller
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: sds-csi-health
   apiGroup: rbac.authorization.k8s.io

@@ -26,6 +26,30 @@ spec:
             # well over the 15s default; give it room so provisioning doesn't
             # deadline-exceed on slower storage.
             - "--timeout=120s"
+            # Publish each node's free pool space for the scheduler. Level 2
+            # makes the objects owned by the ReplicaSet, so a rollout does not
+            # orphan them.
+            - "--enable-capacity"
+            - "--capacity-ownerref-level=2"
+            - "--capacity-poll-interval=1m"
+            - "--v=2"
+          env:
+            - name: NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+          volumeMounts:
+            - { name: socket-dir, mountPath: /csi }
+        # Turns a larger PVC request into ControllerExpandVolume; the node
+        # plugin then grows the filesystem online.
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v1.13.2
+          args:
+            - "--csi-address=/csi/csi.sock"
+            # Growing a DRBD volume resizes the LV and runs drbdadm resize on
+            # every replica over SSH.
+            - "--timeout=120s"
+            - "--handle-volume-inuse-error=false"
             - "--v=2"
           volumeMounts:
             - { name: socket-dir, mountPath: /csi }

@@ -1,0 +1,8 @@
+.git
+bin
+coverage*
+*.out
+web-ui/node_modules
+web-ui/dist
+ui/dist
+.playwright-mcp

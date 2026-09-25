@@ -7,4 +7,9 @@ spec:
   podInfoOnMount: false
   volumeLifecycleModes:
     - Persistent
-  storageCapacity: false
+  # external-provisioner publishes each node's free pool space as
+  # CSIStorageCapacity objects, and the scheduler does not place a Pod on a node
+  # whose pool cannot hold its volume.
+  storageCapacity: true
+  # fsGroup ownership is applied on mount, so Pods running as non-root can write.
+  fsGroupPolicy: File

@@ -1,11 +1,16 @@
 # Build both CSI plugin binaries into a minimal image.
-FROM golang:1.25 AS build
+#
+# The build stage runs on the builder's own platform and cross-compiles for
+# the target, so an amd64 image built on an arm64 machine (or the reverse)
+# compiles natively instead of under emulation.
+FROM --platform=$BUILDPLATFORM golang:1.26 AS build
+ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/csi-controller ./cmd/csi-controller && \
-    CGO_ENABLED=0 go build -o /out/csi-node ./cmd/csi-node
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /out/csi-controller ./cmd/csi-controller && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /out/csi-node ./cmd/csi-node
 
 # Node plugin needs mount/umount/mkfs from the host PATH; use a small base that
 # has util-linux + e2fsprogs + xfsprogs.
