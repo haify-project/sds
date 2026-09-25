@@ -113,7 +113,7 @@ func nodeGet() *cobra.Command {
 			fmt.Printf("Hostname:  %s\n", foundNode.Hostname)
 			fmt.Printf("State:     %s\n", foundNode.State)
 			fmt.Printf("Version:   %s\n", foundNode.Version)
-			fmt.Printf("Last Seen: %d\n", foundNode.LastSeen)
+			fmt.Printf("Last Seen: %s\n", formatLastSeen(foundNode.LastSeen))
 			if len(foundNode.Labels) > 0 {
 				fmt.Printf("Labels:    %s\n", formatLabels(foundNode.Labels))
 			}
@@ -246,13 +246,18 @@ func nodeUnregister() *cobra.Command {
 	var address string
 
 	cmd := &cobra.Command{
-		Use:   "unregister --address <ip>",
+		Use:   "unregister <node>",
 		Short: "Unregister a storage node",
-		Long: `Unregister a storage node from the cluster.
+		Long: `Unregister a storage node from the cluster, by name or address.
 This removes the node from the database but does not affect the node itself.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if address == "" {
-				return fmt.Errorf("--address is required")
+			ref := address
+			if len(args) == 1 {
+				ref = args[0]
+			}
+			if ref == "" {
+				return fmt.Errorf("name the node to unregister: sds-cli node unregister <name|address>")
 			}
 
 			ctx := cmd.Context()
@@ -263,20 +268,27 @@ This removes the node from the database but does not affect the node itself.`,
 			}
 			defer closeClient(sdsClient)
 
-			err = sdsClient.UnregisterNode(ctx, address)
+			// The controller removes nodes by address; every other node command
+			// takes a name, so resolve one here rather than make the operator
+			// look the address up.
+			node, err := sdsClient.GetNode(ctx, ref)
 			if err != nil {
+				return fmt.Errorf("failed to find node %q: %w", ref, err)
+			}
+
+			if err := sdsClient.UnregisterNode(ctx, node.Address); err != nil {
 				return fmt.Errorf("failed to unregister node: %w", err)
 			}
 
 			fmt.Printf("✓ Node unregistered successfully\n")
-			fmt.Printf("  Address: %s\n", address)
+			fmt.Printf("  Name:    %s\n", node.Name)
+			fmt.Printf("  Address: %s\n", node.Address)
 
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&address, "address", "", "Node address (IP:port)")
-	_ = cmd.MarkFlagRequired("address")
+	cmd.Flags().StringVar(&address, "address", "", "Node address (same as passing it as the argument)")
 
 	return cmd
 }
@@ -340,4 +352,14 @@ func nodeUndrain() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// formatLastSeen renders a node's last-contact Unix time for a person: the
+// local time and how long ago it was.
+func formatLastSeen(unix int64) string {
+	if unix <= 0 {
+		return "never"
+	}
+	t := time.Unix(unix, 0)
+	return fmt.Sprintf("%s (%s ago)", t.Format("2006-01-02 15:04:05 MST"), time.Since(t).Round(time.Second))
 }

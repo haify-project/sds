@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"os"
 	"strings"
 	"time"
@@ -122,7 +123,11 @@ func poolCreate() *cobra.Command {
 				} else if sizeBytes > 0 {
 					fmt.Printf("Pool '%s' created successfully on node '%s' (type: %s, size: %s)\n", name, n, poolType, util.FormatBytes(sizeBytes))
 				} else {
-					fmt.Printf("Pool '%s' created successfully on node '%s' (type: %s)\n", name, n, poolType)
+					shown := poolType
+					if shown == "" {
+						shown = "controller default"
+					}
+					fmt.Printf("Pool '%s' created successfully on node '%s' (type: %s)\n", name, n, shown)
 				}
 			}
 
@@ -222,15 +227,17 @@ func poolGet() *cobra.Command {
 			}
 
 			fmt.Printf("Pool: %s\n", pool.Name)
-			fmt.Printf("  Type: %s\n", pool.Type)
+			kind, free, total := poolSpace(pool)
+			fmt.Printf("  Type: %s\n", kind)
 			fmt.Printf("  Node: %s\n", pool.Node)
-			fmt.Printf("  Total: %d GB (%s)\n", pool.TotalGb, util.FormatBytes(pool.TotalGb*1000*1000*1000))
-			fmt.Printf("  Free: %d GB (%s)\n", pool.FreeGb, util.FormatBytes(pool.FreeGb*1000*1000*1000))
-			// The two lines above describe the volume group, whose free space
-			// SDS drives to zero by building the thin pool from every free
-			// extent. When there is a thin pool, its utilisation is the figure
-			// that decides whether the next write succeeds.
+			fmt.Printf("  Total: %s\n", util.FormatBytes(total))
+			fmt.Printf("  Free: %s\n", util.FormatBytes(free))
+			// For a thin pool Total and Free are the thin pool's own. The
+			// volume group around it is left with only the extents SDS did not
+			// give the thin pool, which is worth knowing when growing it and
+			// misleading as a measure of how full the pool is.
 			if pool.ThinPoolLv != "" {
+				fmt.Printf("  Volume group: %d GB, %d GB unallocated\n", pool.TotalGb, pool.FreeGb)
 				fmt.Printf("  Thin pool: %s (%s)\n", pool.ThinPoolLv, util.FormatBytes(pool.ThinSizeBytes))
 				fmt.Printf("    Data: %.2f%%  Metadata: %.2f%%\n",
 					pool.ThinDataPercent, pool.ThinMetadataPercent)
@@ -287,6 +294,15 @@ func poolList() *cobra.Command {
 				return nil
 			}
 
+			// Pools report their node by address; the operator knows nodes by
+			// name, which is what every other command takes.
+			nodeNames := map[string]string{}
+			if nodes, err := sdsClient.ListNodes(ctx); err == nil {
+				for _, n := range nodes {
+					nodeNames[n.GetAddress()] = n.GetName()
+				}
+			}
+
 			fmt.Println("Pools:")
 			for _, p := range pools {
 				// A tiered pool has to be recognisable here, not only in `pool
@@ -310,9 +326,13 @@ func poolList() *cobra.Command {
 						usage += ", OUT OF SPACE"
 					}
 				}
-				fmt.Printf("  - %s (type=%s, node=%s, %d/%d GB free - %s%s)%s\n",
-					p.Name, p.Type, p.Node, p.FreeGb, p.TotalGb,
-					util.FormatBytes(p.FreeGb*1000*1000*1000), usage, tier)
+				node := p.Node
+				if name := nodeNames[p.Node]; name != "" {
+					node = name
+				}
+				kind, free, total := poolSpace(p)
+				fmt.Printf("  - %s (type=%s, node=%s, %s free of %s%s)%s\n",
+					p.Name, kind, node, util.FormatBytes(free), util.FormatBytes(total), usage, tier)
 			}
 
 			return nil
@@ -574,4 +594,27 @@ lvconvert --uncache --force needed to accept that loss deliberately.
 	cmd.Flags().StringVar(&node, "node", "", "Node whose pool cache is removed")
 	cmd.Flags().StringVar(&pool, "pool", "", "Pool (volume group) to uncache")
 	return cmd
+}
+
+// poolSpace is what a pool can still hold, in the pool's own terms. A thin
+// pool lives inside a volume group whose free extents are what is left after
+// the thin pool was carved out — a full-looking "1 of 10 GB" on a pool that is
+// empty. Its capacity is the thin pool's size less the data it holds.
+func poolSpace(p *sdspb.PoolInfo) (kind string, free, total uint64) {
+	if p.GetThinPoolLv() != "" && p.GetThinSizeBytes() > 0 {
+		used := uint64(float64(p.GetThinSizeBytes()) * p.GetThinDataPercent() / 100)
+		if used > p.GetThinSizeBytes() {
+			used = p.GetThinSizeBytes()
+		}
+		return "thin", p.GetThinSizeBytes() - used, p.GetThinSizeBytes()
+	}
+	kind = p.GetType()
+	if kind == "vg" {
+		kind = "lvm"
+	}
+	free, total = p.GetFreeBytes(), p.GetTotalBytes()
+	if total == 0 {
+		free, total = p.GetFreeGb()*1000*1000*1000, p.GetTotalGb()*1000*1000*1000
+	}
+	return kind, free, total
 }
