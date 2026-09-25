@@ -251,8 +251,8 @@ func parseVolumePath(volume string) (vg, lv string) {
 // read. LVM creates thin snapshots with the activation-skip flag, so a thin
 // snapshot has no /dev node until activated with -K; reading it failed with
 // "No such file or directory". That made every backup, and every CSI restore
-// from a snapshot, fail on thin pools. Harmless for an already-active
-// snapshot and a no-op for anything that is not an LV path.
+// from a snapshot, fail on thin pools. A no-op for a snapshot that is already
+// active and for anything that is not an LV path.
 func activateSnapshotCmd(device string) string {
 	if !strings.HasPrefix(device, "/dev/") || strings.HasPrefix(device, "/dev/zvol/") ||
 		strings.HasPrefix(device, "/dev/mapper/") || strings.HasPrefix(device, "/dev/drbd") {
@@ -262,5 +262,8 @@ func activateSnapshotCmd(device string) string {
 	if strings.Count(lv, "/") != 1 {
 		return ""
 	}
-	return fmt.Sprintf("sudo lvchange -ay -K %s;", lv)
+	// Only when the node is missing: activating an already-active (thick)
+	// snapshot makes lvchange ask whether to change its origin too, and the
+	// unanswered prompt fails the command.
+	return fmt.Sprintf("[ -e %s ] || sudo lvchange -ay -K %s;", device, lv)
 }

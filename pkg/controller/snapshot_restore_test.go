@@ -155,7 +155,8 @@ func TestRestoreOfAnEncryptedVolume(t *testing.T) {
 // Thin snapshots are created with activation skipped; anything that reads one
 // has to activate it first, and nothing else may be touched.
 func TestSnapshotsAreActivatedBeforeTheyAreRead(t *testing.T) {
-	assert.Equal(t, "sudo lvchange -ay -K sds_tp/r3_data_bk_1;", activateSnapshotCmd("/dev/sds_tp/r3_data_bk_1"))
+	assert.Equal(t, "[ -e /dev/sds_tp/r3_data_bk_1 ] || sudo lvchange -ay -K sds_tp/r3_data_bk_1;",
+		activateSnapshotCmd("/dev/sds_tp/r3_data_bk_1"))
 	for _, d := range []string{"/dev/zvol/tank/v@s", "/dev/mapper/sds_x", "/dev/drbd3", "/dev/vdb", "relative"} {
 		assert.Empty(t, activateSnapshotCmd(d), d)
 	}
