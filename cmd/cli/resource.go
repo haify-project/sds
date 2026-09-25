@@ -952,8 +952,11 @@ func resourceAddVolume() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&name, "name", "", "Volume name (required)")
+	cmd.Flags().StringVar(&name, "name", "", "Volume name (alias of --volume)")
 	cmd.Flags().StringVar(&volume, "volume", "", "Volume name (required)")
+	// Kept so existing scripts work, hidden so the help does not list two
+	// required flags that mean the same thing.
+	_ = cmd.Flags().MarkHidden("name")
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool (required)")
 	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, required)")
 

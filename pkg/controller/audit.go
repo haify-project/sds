@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -115,15 +116,22 @@ type auditSink func(ev *database.AuditEvent)
 // writeAuditEntry emits a single structured audit record describing the
 // outcome of an RPC, to the process log and — when configured — to the
 // persistent trail.
-func writeAuditEntry(log *zap.Logger, sink auditSink, method, addr, user, target string, start time.Time, err error) {
+func writeAuditEntry(log *zap.Logger, sink auditSink, method, addr, user, target string, start time.Time, err, softFailure error) {
 	code := codes.OK
 	if err != nil {
 		code = status.Code(err)
 	}
+	result := code.String()
+	if err == nil && softFailure != nil {
+		// Reported through the response, not as an RPC error; see
+		// softFailureOf.
+		result = "FAILED"
+		err = softFailure
+	}
 	fields := []zap.Field{
 		zap.String("method", method),
 		zap.String("client", addr),
-		zap.String("result", code.String()),
+		zap.String("result", result),
 		zap.Bool("granted", code != codes.Unauthenticated && code != codes.PermissionDenied),
 		zap.Duration("latency", time.Since(start)),
 	}
@@ -147,7 +155,7 @@ func writeAuditEntry(log *zap.Logger, sink auditSink, method, addr, user, target
 		Client:    addr,
 		User:      user,
 		Target:    target,
-		Result:    code.String(),
+		Result:    result,
 		Granted:   code != codes.Unauthenticated && code != codes.PermissionDenied,
 		Latency:   time.Since(start),
 	}
@@ -155,6 +163,24 @@ func writeAuditEntry(log *zap.Logger, sink auditSink, method, addr, user, target
 		ev.Error = status.Convert(err).Message()
 	}
 	sink(ev)
+}
+
+// softFailureOf reads a failure a handler reported in its response rather than
+// as an RPC error. Most handlers here answer a failed operation with
+// Success=false and a nil error, so the call completes as gRPC OK — and the
+// audit trail recorded every failed add-volume, delete and failover as
+// succeeded. The trail exists to answer what happened; a failure written down
+// as a success is the one answer it must not give.
+func softFailureOf(resp interface{}) error {
+	r, ok := resp.(interface{ GetSuccess() bool })
+	if !ok || r.GetSuccess() {
+		return nil
+	}
+	msg := "operation reported failure"
+	if m, ok := resp.(interface{ GetMessage() string }); ok && m.GetMessage() != "" {
+		msg = m.GetMessage()
+	}
+	return errors.New(msg)
 }
 
 func resolveUser(resolve userResolver, ctx context.Context) string {
@@ -176,7 +202,7 @@ func auditUnaryInterceptor(log *zap.Logger, includeReads bool, resolve userResol
 		}
 		start := time.Now()
 		resp, err := handler(ctx, req)
-		writeAuditEntry(log, sink, method, clientAddr(ctx), resolveUser(resolve, ctx), auditTarget(req), start, err)
+		writeAuditEntry(log, sink, method, clientAddr(ctx), resolveUser(resolve, ctx), auditTarget(req), start, err, softFailureOf(resp))
 		return resp, err
 	}
 }
@@ -193,7 +219,7 @@ func auditStreamInterceptor(log *zap.Logger, includeReads bool, resolve userReso
 		}
 		start := time.Now()
 		err := handler(srv, ss)
-		writeAuditEntry(log, sink, method, clientAddr(ss.Context()), resolveUser(resolve, ss.Context()), "", start, err)
+		writeAuditEntry(log, sink, method, clientAddr(ss.Context()), resolveUser(resolve, ss.Context()), "", start, err, nil)
 		return err
 	}
 }

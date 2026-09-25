@@ -206,3 +206,132 @@ func TestRepairReconcilesTheTiebreakerAndAdjustsItFirst(t *testing.T) {
 	assert.Equal(t, "192.168.123.216", order[0], "the tiebreaker is adjusted first")
 	assert.Equal(t, "192.168.123.214,192.168.123.215", order[1])
 }
+
+// On a thin pool the added volume is a thin LV, exactly as resource creation
+// makes it. It used to be a thick lvcreate that failed on every node — the thin
+// pool had taken the volume group — and the add carried on to create-md
+// against a device that did not exist.
+func TestAddVolumeOnAThinPoolMakesAThinVolume(t *testing.T) {
+	var thin []string
+	dep := &fakeDeploymentClient{
+		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+			if strings.HasPrefix(cmd, "cat /etc/drbd.d/xplat.res") {
+				return successExecResult(hosts, xplatBeforeStateVolume), nil
+			}
+			return successExecResult(hosts, ""), nil
+		},
+		lvThinPoolInFunc: func(_ context.Context, _, vg string) (string, error) { return vg + "_thin", nil },
+		lvCreateThinVolumeFunc: func(_ context.Context, hosts []string, _, _, lv, _ string) (*deployment.ExecResult, error) {
+			thin = append(thin, lv)
+			return successExecResult(hosts, ""), nil
+		},
+		lvCreateFunc: func(_ context.Context, hosts []string, _, _, _ string) (*deployment.ExecResult, error) {
+			t.Error("a thick lvcreate must not be used on a thin pool")
+			return successExecResult(hosts, ""), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+	ctrl.db = newTestDB(t)
+	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
+		Name: "xplat", Port: 7420, Nodes: "orange1,orange2", DisklessNodes: "orange3", Protocol: "C", Replicas: 2,
+	}))
+	for i, n := range []string{"orange1", "orange2", "orange3"} {
+		addr := "192.168.123." + []string{"214", "215", "216"}[i]
+		ctrl.nodes.nodes[addr] = &NodeInfo{Name: n, Address: addr}
+		ctrl.hostsMap[n] = addr
+	}
+
+	require.NoError(t, ctrl.resources.AddVolume(context.Background(), "xplat", "xplat_state1", "vg0", 1))
+	assert.Equal(t, []string{"xplat_state1", "xplat_state1"}, thin, "one thin LV on each diskful node")
+}
+
+// A backing volume that cannot be created stops the add there, before any
+// metadata is written or the config is extended on the peers.
+func TestAddVolumeStopsWhenTheBackingVolumeFails(t *testing.T) {
+	dep := &fakeDeploymentClient{
+		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+			if strings.HasPrefix(cmd, "cat /etc/drbd.d/xplat.res") {
+				return successExecResult(hosts, xplatBeforeStateVolume), nil
+			}
+			if strings.Contains(cmd, "create-md") {
+				t.Error("create-md ran after the backing volume failed")
+			}
+			return successExecResult(hosts, ""), nil
+		},
+		lvCreateFunc: func(_ context.Context, hosts []string, _, _, _ string) (*deployment.ExecResult, error) {
+			r := successExecResult(hosts, "")
+			for _, h := range r.Hosts {
+				h.Success, h.Output = false, "Volume group \"vg0\" has insufficient free space"
+			}
+			return r, nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+	ctrl.db = newTestDB(t)
+	require.NoError(t, ctrl.db.SaveResource(context.Background(), &database.Resource{
+		Name: "xplat", Port: 7420, Nodes: "orange1,orange2", Protocol: "C", Replicas: 2,
+	}))
+	for i, n := range []string{"orange1", "orange2"} {
+		addr := "192.168.123." + []string{"214", "215"}[i]
+		ctrl.nodes.nodes[addr] = &NodeInfo{Name: n, Address: addr}
+		ctrl.hostsMap[n] = addr
+	}
+
+	err := ctrl.resources.AddVolume(context.Background(), "xplat", "xplat_state1", "vg0", 1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "insufficient free space")
+}
+
+// The tiebreaker's `volume 1 { disk none; }` override can come before the
+// resource's own volume 1 in the file. Taking the first "volume 1" found the
+// override, and resize ran `lvresize ... none`.
+func TestConfigVolumesAreTheTopLevelOnesNotPerHostOverrides(t *testing.T) {
+	cfg := `resource r5 {
+    volume 0 {
+        device    minor 4;
+        disk      /dev/sds_tp/r5_data;
+        meta-disk internal;
+    }
+    on sdt1 {
+        address   192.168.123.232:7104;
+        node-id   0;
+    }
+    on sdt3 {
+        address   192.168.123.233:7104;
+        node-id   2;
+        volume 0 {
+            device    minor 4;
+            disk      none;
+        }
+        volume 1 {
+            device    minor 5;
+            disk      none;
+        }
+    }
+    volume 1 {
+        device    minor 5;
+        disk      /dev/sds_tp/r5_extra;
+        meta-disk internal;
+    }
+}
+`
+	vols := parseResourceConfigVolumes(cfg)
+	require.Len(t, vols, 2)
+	assert.Equal(t, "/dev/sds_tp/r5_data", vols[0].DiskPath)
+	assert.Equal(t, 1, vols[1].VolumeID)
+	assert.Equal(t, "/dev/sds_tp/r5_extra", vols[1].DiskPath, "not the tiebreaker's disk none")
+
+	// A resource written per host, with no top-level volumes, is still read.
+	perHost := `resource old {
+    on a {
+        volume 0 {
+            device minor 1;
+            disk /dev/vg/old;
+        }
+    }
+}
+`
+	vols = parseResourceConfigVolumes(perHost)
+	require.Len(t, vols, 1)
+	assert.Equal(t, "/dev/vg/old", vols[0].DiskPath)
+}

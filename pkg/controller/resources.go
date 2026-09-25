@@ -235,12 +235,21 @@ type resourceConfigVolume struct {
 
 func parseResourceConfigVolumes(content string) []resourceConfigVolume {
 	lines := strings.Split(content, "\n")
-	var volumes []resourceConfigVolume
+	// A resource's volumes are the blocks directly inside `resource { }`. The
+	// same "volume N {" also opens a per-host override inside an `on` section —
+	// the `disk none` a tiebreaker or diskless client carries for each volume.
+	// Taking the first "volume N" in the file used to find the tiebreaker's
+	// override whenever it came first, and resize then ran `lvresize ... none`.
+	// Only when a file has no top-level volumes at all (an adopted resource
+	// written per host) are the nested ones what describes the volumes.
+	var top, nested []resourceConfigVolume
 	var current *resourceConfigVolume
-	depth := 0
+	currentNested := false
+	fileDepth, depth := 0, 0
 
 	for idx, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		opens, closes := strings.Count(line, "{"), strings.Count(line, "}")
 
 		if current == nil && strings.HasPrefix(trimmed, "volume ") && strings.Contains(trimmed, "{") {
 			parts := strings.Fields(trimmed)
@@ -248,10 +257,16 @@ func parseResourceConfigVolumes(content string) []resourceConfigVolume {
 				volID, err := strconv.Atoi(strings.TrimSuffix(parts[1], "{"))
 				if err == nil {
 					current = &resourceConfigVolume{VolumeID: volID, Minor: -1, StartLine: idx}
-					depth = strings.Count(line, "{") - strings.Count(line, "}")
+					currentNested = fileDepth > 1
+					fileDepth += opens - closes
+					depth = opens - closes
 					if depth <= 0 {
 						current.EndLine = idx
-						volumes = append(volumes, *current)
+						if currentNested {
+							nested = append(nested, *current)
+						} else {
+							top = append(top, *current)
+						}
 						current = nil
 						depth = 0
 					}
@@ -259,6 +274,7 @@ func parseResourceConfigVolumes(content string) []resourceConfigVolume {
 				}
 			}
 		}
+		fileDepth += opens - closes
 
 		if current == nil {
 			continue
@@ -283,13 +299,22 @@ func parseResourceConfigVolumes(content string) []resourceConfigVolume {
 			}
 		}
 
-		depth += strings.Count(line, "{") - strings.Count(line, "}")
+		depth += opens - closes
 		if depth <= 0 {
 			current.EndLine = idx
-			volumes = append(volumes, *current)
+			if currentNested {
+				nested = append(nested, *current)
+			} else {
+				top = append(top, *current)
+			}
 			current = nil
 			depth = 0
 		}
+	}
+
+	volumes := top
+	if len(volumes) == 0 {
+		volumes = nested
 	}
 
 	// Fall back to the older single-volume syntax (device/disk declared at the
@@ -2786,11 +2811,17 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		_, _ = rm.deployment.LVRemove(cleanupCtx, hosts, backingDevice)
 	}()
 
-	// Create LVs on all nodes
+	// Create the backing volume on every diskful node, shaped by the node's
+	// pool the way resource creation and add-replica do it. This used to be a
+	// thick lvcreate whose per-host result was never looked at: on a thin
+	// pool — which leaves the volume group next to nothing — it failed on
+	// every node, and the add went on to create-md against a device that did
+	// not exist. Sized like every other backing volume, so a volume added
+	// later has the same usable capacity as one the resource was created with.
+	sizeBytes := backingVolumeSizeBytes(sizeGB, len(hosts)-1, encrypt)
 	for _, host := range hosts {
-		_, err := rm.deployment.LVCreate(ctx, []string{host}, pool, volume, fmt.Sprintf("%dG", sizeGB))
-		if err != nil {
-			return fmt.Errorf("failed to create LV on %s: %w", host, err)
+		if err := rm.createBackingVolumeOn(ctx, host, pool, volume, sizeBytes); err != nil {
+			return fmt.Errorf("failed to create volume %s/%s on %s: %w", pool, volume, host, err)
 		}
 		if encrypt {
 			if err := rm.encryptBackingVolumeOn(ctx, host, host, pool, volume, backingDevice); err != nil {
@@ -3864,11 +3895,24 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 	}
 
 	adjustRes, err := rm.deployment.Exec(ctx, allHosts, fmt.Sprintf("sudo drbdadm adjust %s", resource))
-	if err != nil {
-		return fmt.Errorf("failed to adjust resource after config update: %w", err)
+	if err == nil && !adjustRes.AllSuccess() {
+		err = fmt.Errorf("drbdadm adjust failed after removing volume %d: %s", volumeID, adjustRes.FailureDetails())
 	}
-	if !adjustRes.AllSuccess() {
-		return fmt.Errorf("drbdadm adjust failed after removing volume %d: %s", volumeID, adjustRes.FailureDetails())
+	if err != nil {
+		// Nothing has been deleted yet, so put every node's config back the
+		// way it was. Left alone, the nodes keep a config the kernel refused,
+		// and the next adjust of this resource — for any reason — fails the
+		// same way.
+		restoreCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if _, rerr := rm.deployment.DistributeConfig(restoreCtx, allHosts, configContent,
+			fmt.Sprintf("/etc/drbd.d/%s.res", resource)); rerr != nil {
+			rm.controller.logger.Error("Could not restore the config after a failed volume removal",
+				zap.String("resource", resource), zap.Error(rerr))
+		} else {
+			_, _ = rm.deployment.Exec(restoreCtx, allHosts, fmt.Sprintf("sudo drbdadm adjust %s", resource))
+		}
+		return fmt.Errorf("failed to adjust resource after config update (config restored): %w", err)
 	}
 
 	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {

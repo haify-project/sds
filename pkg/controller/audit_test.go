@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -95,5 +97,35 @@ func TestAuditRecordsDeniedAttempt(t *testing.T) {
 	}
 	if m["error"] != "no token" {
 		t.Errorf("error = %v, want 'no token'", m["error"])
+	}
+}
+
+// A handler that reports failure in its response completes the RPC as gRPC OK.
+// The trail must still say it failed, and why.
+func TestAuditRecordsAFailureReportedInTheResponse(t *testing.T) {
+	log, logs := newObservedLogger()
+	interceptor := auditUnaryInterceptor(log, false, nil, nil)
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return &sdspb.AddVolumeResponse{Success: false, Message: "insufficient free space"}, nil
+	}
+	_, _ = interceptor(context.Background(), nameReq{name: "r5"},
+		&grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/AddVolume"}, handler)
+
+	m := logs.All()[0].ContextMap()
+	if m["result"] != "FAILED" || m["error"] != "insufficient free space" {
+		t.Errorf("result=%v error=%v, want FAILED with the handler's message", m["result"], m["error"])
+	}
+	if m["granted"] != true {
+		t.Errorf("a failed operation was still permitted: granted = %v", m["granted"])
+	}
+
+	logs.TakeAll()
+	ok := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return &sdspb.AddVolumeResponse{Success: true}, nil
+	}
+	_, _ = interceptor(context.Background(), nameReq{name: "r5"},
+		&grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/AddVolume"}, ok)
+	if r := logs.All()[0].ContextMap()["result"]; r != codes.OK.String() {
+		t.Errorf("a successful response was recorded as %v", r)
 	}
 }
