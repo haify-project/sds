@@ -1765,6 +1765,11 @@ message NodeResourceState {
   // the node name the rest of the API uses — so without this a caller cannot
   // pair a state with the entry of `nodes` it describes.
   string node = 5;
+  // Peer DRBD connection state as the answering node sees it ("Connected",
+  // "Connecting", "StandAlone", ...). Empty for the answering node itself. A
+  // peer that is not Connected reports no role, disk or replication state, so
+  // this is the only field that tells an unreachable replica from a healthy one.
+  string connection = 6;
 }
 
 message VolumeInfo {

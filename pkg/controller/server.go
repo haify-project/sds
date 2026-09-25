@@ -520,6 +520,7 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 			DiskState:        state.DiskState,
 			ReplicationState: state.Replication,
 			SyncPercent:      state.SyncPercent,
+			Connection:       state.Connection,
 		}
 	}
 
@@ -770,6 +771,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 			ReplicationState: nodeState.Replication,
 			SyncPercent:      nodeState.SyncPercent,
 			Node:             nodeName,
+			Connection:       nodeState.Connection,
 		}
 	}
 

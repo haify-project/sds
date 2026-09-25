@@ -9945,7 +9945,12 @@ type NodeResourceState struct {
 	// DRBD host name, which is the machine's real hostname and generally is NOT
 	// the node name the rest of the API uses — so without this a caller cannot
 	// pair a state with the entry of `nodes` it describes.
-	Node          string `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
+	Node string `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
+	// Peer DRBD connection state as the answering node sees it ("Connected",
+	// "Connecting", "StandAlone", ...). Empty for the answering node itself. A
+	// peer that is not Connected reports no role, disk or replication state, so
+	// this is the only field that tells an unreachable replica from a healthy one.
+	Connection    string `protobuf:"bytes,6,opt,name=connection,proto3" json:"connection,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10011,6 +10016,13 @@ func (x *NodeResourceState) GetSyncPercent() float64 {
 func (x *NodeResourceState) GetNode() string {
 	if x != nil {
 		return x.Node
+	}
+	return ""
+}
+
+func (x *NodeResourceState) GetConnection() string {
+	if x != nil {
+		return x.Connection
 	}
 	return ""
 }
@@ -18027,14 +18039,17 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"reconnects\x18\n" +
 	" \x01(\x04R\n" +
 	"reconnects\x12(\n" +
-	"\x10ring_full_events\x18\v \x01(\x04R\x0eringFullEvents\"\xaa\x01\n" +
+	"\x10ring_full_events\x18\v \x01(\x04R\x0eringFullEvents\"\xca\x01\n" +
 	"\x11NodeResourceState\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x1d\n" +
 	"\n" +
 	"disk_state\x18\x02 \x01(\tR\tdiskState\x12+\n" +
 	"\x11replication_state\x18\x03 \x01(\tR\x10replicationState\x12!\n" +
 	"\fsync_percent\x18\x04 \x01(\x01R\vsyncPercent\x12\x12\n" +
-	"\x04node\x18\x05 \x01(\tR\x04node\"\xb3\x01\n" +
+	"\x04node\x18\x05 \x01(\tR\x04node\x12\x1e\n" +
+	"\n" +
+	"connection\x18\x06 \x01(\tR\n" +
+	"connection\"\xb3\x01\n" +
 	"\n" +
 	"VolumeInfo\x12\x1b\n" +
 	"\tvolume_id\x18\x01 \x01(\rR\bvolumeId\x12\x16\n" +
