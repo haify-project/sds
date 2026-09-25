@@ -142,8 +142,6 @@ func haDelete() *cobra.Command {
 
 			fmt.Printf("HA configuration deleted successfully\n")
 			fmt.Printf("  Resource: %s\n", resource)
-			fmt.Printf("\nNote: Configuration files have been removed from all nodes\n")
-			fmt.Printf("      You may need to reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
 
 			return nil
 		},

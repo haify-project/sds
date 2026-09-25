@@ -99,9 +99,7 @@ func iscsiCreate() *cobra.Command {
 			fmt.Printf("  IQN:          %s\n", iqn)
 			fmt.Printf("  Service IP:   %s\n", serviceIP)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
-			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. Reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
-			fmt.Printf("  2. Check gateway status: sudo journalctl -u drbd-reactor -f\n")
+			fmt.Printf("\nCheck gateway status: sds-cli gateway list\n")
 
 			return nil
 		},
@@ -246,9 +244,8 @@ func nfsCreate() *cobra.Command {
 			fmt.Printf("  Export Path:  %s\n", exportPath)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
 			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. Reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
-			fmt.Printf("  2. Check gateway status: sudo journalctl -u drbd-reactor -f\n")
-			fmt.Printf("  3. Mount on client: sudo mount -t nfs %s:%s /mnt\n", gatewayServiceHost(serviceIP), gatewayExportDirectory(resource, exportPath))
+			fmt.Printf("  1. Check gateway status: sds-cli gateway list\n")
+			fmt.Printf("  2. Mount on client: sudo mount -t nfs %s:%s /mnt\n", gatewayServiceHost(serviceIP), gatewayExportDirectory(resource, exportPath))
 
 			return nil
 		},
@@ -381,9 +378,7 @@ func nvmeCreate() *cobra.Command {
 			fmt.Printf("  NQN:          %s\n", nqn)
 			fmt.Printf("  Service IP:   %s\n", serviceIP)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
-			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. Reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
-			fmt.Printf("  2. Check gateway status: sudo journalctl -u drbd-reactor -f\n")
+			fmt.Printf("\nCheck gateway status: sds-cli gateway list\n")
 
 			return nil
 		},
@@ -517,8 +512,6 @@ func gatewayDelete() *cobra.Command {
 
 			fmt.Printf("✓ Gateway deleted successfully\n")
 			fmt.Printf("  Resource: %s\n", resource)
-			fmt.Printf("\nNote: Configuration files have been removed from all nodes\n")
-			fmt.Printf("      You may need to reload drbd-reactor: sudo systemctl reload drbd-reactor\n")
 
 			return nil
 		},
