@@ -681,6 +681,20 @@ func (c *Controller) GetMetrics() *metrics.Metrics {
 }
 
 // ResolveHost resolves a hostname to an address
+// NodeName is the reverse of ResolveHost: the node name registered for an
+// address, or the address itself when none is. Messages meant for an operator
+// name nodes the way every command takes them.
+func (c *Controller) NodeName(address string) string {
+	c.hostsLock.RLock()
+	defer c.hostsLock.RUnlock()
+	for name, addr := range c.hostsMap {
+		if addr == address && name != address {
+			return name
+		}
+	}
+	return address
+}
+
 func (c *Controller) ResolveHost(hostOrAddr string) string {
 	c.hostsLock.RLock()
 	defer c.hostsLock.RUnlock()

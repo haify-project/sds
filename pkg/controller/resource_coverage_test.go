@@ -129,19 +129,24 @@ func TestServerResourceValidationAndAdopt(t *testing.T) {
 
 func TestServerRestoreLvmSnapshot(t *testing.T) {
 	dep := &fakeDeploymentClient{}
-	called := false
-	dep.lvMergeSnapshotFunc = func(_ context.Context, hosts []string, vg, snapshot string) (*deployment.ExecResult, error) {
-		called = true
-		return successExecResult(hosts, "merged"), nil
+	merged := false
+	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		switch {
+		case strings.Contains(cmd, "-o origin sds_fast/snap"):
+			return successExecResult(hosts, "  fast_data\n"), nil
+		case strings.Contains(decodeWrapped(cmd), "lvconvert --merge /dev/sds_fast/snap"):
+			merged = true
+		}
+		return successExecResult(hosts, ""), nil
 	}
 	srv := NewServer(newBasicTestController(dep))
 	resp, err := srv.RestoreLvmSnapshot(context.Background(), &sdspb.RestoreLvmSnapshotRequest{LvName: "fast", SnapshotName: "snap", Node: "n1"})
 	require.NoError(t, err)
-	assert.True(t, resp.Success)
-	assert.True(t, called)
+	assert.True(t, resp.Success, resp.Message)
+	assert.True(t, merged)
 
-	dep.lvMergeSnapshotFunc = func(context.Context, []string, string, string) (*deployment.ExecResult, error) {
-		return nil, errors.New("merge failed")
+	dep.execFunc = func(_ context.Context, hosts []string, _ string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		return nil, errors.New("ssh failed")
 	}
 	resp, err = srv.RestoreLvmSnapshot(context.Background(), &sdspb.RestoreLvmSnapshotRequest{LvName: "fast", SnapshotName: "snap", Node: "n1"})
 	require.NoError(t, err)

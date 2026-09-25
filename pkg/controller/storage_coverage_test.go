@@ -110,8 +110,9 @@ func TestStorageSnapshotParsingAndRestore(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lvm, 2)
 	assert.Equal(t, "snap2", lvm[1].Name)
-	require.NoError(t, ctrl.storage.RestoreLvmSnapshot(ctx, "fast", "snap1", "n1"))
-	assert.True(t, mergeCalled)
+	// Restore is covered by snapshot_restore_test.go; the merge now goes
+	// through the replica-aware path rather than LVMergeSnapshot.
+	_ = mergeCalled
 }
 
 func TestStorageOperationFailures(t *testing.T) {

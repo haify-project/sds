@@ -152,38 +152,6 @@ func (sm *SnapshotManager) ListSnapshots(ctx context.Context, volume, node strin
 	return snapshots, nil
 }
 
-// RestoreSnapshot restores a snapshot
-func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshotName, node string) error {
-	address := sm.controller.ResolveHost(node)
-
-	sm.controller.logger.Info("Restoring snapshot",
-		zap.String("volume", volume),
-		zap.String("snapshot", snapshotName),
-		zap.String("node", node))
-
-	// Parse volume path and build paths
-	vg, _ := parseVolumePath(volume)
-	snapshotPath := fmt.Sprintf("/dev/%s/%s", vg, snapshotName)
-
-	// Merge snapshot back into origin
-	// First, unmount if mounted (caller should handle this)
-	// Then use lvconvert --merge
-	cmd := fmt.Sprintf("sudo lvconvert --merge %s", snapshotPath)
-	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
-	if err != nil {
-		return fmt.Errorf("failed to restore snapshot: %w", err)
-	}
-
-	if !result.AllSuccess() {
-		return fmt.Errorf("failed to restore snapshot: %s", result.FailureDetails())
-	}
-
-	sm.controller.logger.Info("Snapshot restored successfully",
-		zap.String("snapshot", snapshotName))
-
-	return nil
-}
-
 // PopulateVolume copies sourceDevice into an already-created, still-empty DRBD
 // resource. It is how a CSI restore-from-snapshot (and volume clone) gets data
 // into a brand-new volume; RestoreSnapshot, by contrast, merges a snapshot back

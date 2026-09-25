@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,10 +84,15 @@ func TestServerSnapshotRestoreBranches(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		dep := &fakeDeploymentClient{}
+		var merged bool
 		dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
-			assert.Contains(t, cmd, "lvconvert --merge /dev/vg0/snap1")
-			return successExecResult(hosts, "merged"), nil
+			if strings.Contains(decodeWrapped(cmd), "lvconvert --merge /dev/vg0/snap1") {
+				merged = true
+			}
+			// No resource config names the volume: it is a plain LV.
+			return successExecResult(hosts, ""), nil
 		}
+		defer func() { assert.True(t, merged, "the snapshot was never merged") }()
 		ctrl := newBasicTestController(dep)
 		resp, err := NewServer(ctrl).RestoreSnapshot(ctx, &sdspb.RestoreSnapshotRequest{Volume: "vg0/data", SnapshotName: "snap1", Node: "n1"})
 		require.NoError(t, err)

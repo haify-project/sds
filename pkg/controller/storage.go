@@ -898,23 +898,11 @@ func (sm *StorageManager) ZFSDeleteSnapshot(ctx context.Context, snapshot, node 
 // ZFSRestoreSnapshot restores a ZFS snapshot (rollback)
 func (sm *StorageManager) ZFSRestoreSnapshot(ctx context.Context, dataset, snapshotName, node string) error {
 	dataset = normalizeManagedZFSPath(dataset)
-	address := sm.controller.ResolveHost(node)
-
 	sm.controller.logger.Info("Restoring ZFS snapshot",
 		zap.String("dataset", dataset),
 		zap.String("snapshot", snapshotName),
 		zap.String("node", node))
-
-	result, err := sm.controller.deployment.ZFSRollback(ctx, []string{address}, dataset, snapshotName)
-	if err != nil {
-		return fmt.Errorf("failed to restore ZFS snapshot: %w", err)
-	}
-
-	if !result.AllSuccess() {
-		return fmt.Errorf("failed to restore ZFS snapshot: %s", result.FailureDetails())
-	}
-
-	return nil
+	return sm.controller.snapshots.RestoreZFSSnapshot(ctx, dataset, snapshotName, node)
 }
 
 // ZFSCloneSnapshot creates a clone from a ZFS snapshot
@@ -1106,28 +1094,16 @@ func (sm *StorageManager) DeleteLvmSnapshot(ctx context.Context, vgName, snapsho
 	return nil
 }
 
-// RestoreLvmSnapshot restores an LVM snapshot (merges it back to the origin)
+// RestoreLvmSnapshot restores an LVM snapshot (merges it back to the origin).
+// A snapshot of a DRBD backing volume is restored the way that keeps the
+// resource's replicas in step; see snapshot_restore.go.
 func (sm *StorageManager) RestoreLvmSnapshot(ctx context.Context, vgName, snapshotName, node string) error {
 	vgName = normalizeManagedName(vgName)
-
 	sm.controller.logger.Info("Restoring LVM snapshot",
 		zap.String("vg_name", vgName),
 		zap.String("snapshot", snapshotName),
 		zap.String("node", node))
-
-	// Resolve node address
-	address := sm.controller.ResolveHost(node)
-
-	result, err := sm.controller.deployment.LVMergeSnapshot(ctx, []string{address}, vgName, snapshotName)
-	if err != nil {
-		return fmt.Errorf("failed to restore LVM snapshot: %w", err)
-	}
-
-	if !result.AllSuccess() {
-		return fmt.Errorf("failed to restore LVM snapshot: %s", result.FailureDetails())
-	}
-
-	return nil
+	return sm.controller.snapshots.RestoreLVMSnapshotByName(ctx, vgName, snapshotName, node)
 }
 
 // ZFSResizeVolume resizes a ZFS volume

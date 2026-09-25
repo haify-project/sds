@@ -1782,11 +1782,11 @@ func resourceSnapshotDelete() *cobra.Command {
 			if snapshotName == "" {
 				return fmt.Errorf("snapshot name is required")
 			}
-			if node == "" {
-				return fmt.Errorf("node is required")
-			}
-			if pool == "" {
-				pool = "data-pool"
+			if pool == "" || node == "" {
+				var err error
+				if pool, node, err = snapshotTarget(resource, pool, node); err != nil {
+					return err
+				}
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1829,11 +1829,10 @@ func resourceSnapshotDelete() *cobra.Command {
 	cmd.Flags().StringVar(&snapshotName, "name", "", "Snapshot name")
 	cmd.Flags().StringVar(&node, "node", "", "Node where resource exists")
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
-	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
+	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: the resource's own pool)")
 
 	_ = cmd.MarkFlagRequired("resource")
 	_ = cmd.MarkFlagRequired("name")
-	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -1856,11 +1855,11 @@ func resourceSnapshotCreate() *cobra.Command {
 			if snapshotName == "" {
 				return fmt.Errorf("snapshot name is required")
 			}
-			if node == "" {
-				return fmt.Errorf("node is required")
-			}
-			if pool == "" {
-				pool = "data-pool"
+			if pool == "" || node == "" {
+				var err error
+				if pool, node, err = snapshotTarget(resource, pool, node); err != nil {
+					return err
+				}
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1903,11 +1902,10 @@ func resourceSnapshotCreate() *cobra.Command {
 	cmd.Flags().StringVar(&node, "node", "", "Node where resource exists")
 	cmd.Flags().StringVar(&size, "size", "1G", "Snapshot size for LVM (e.g., 1G)")
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
-	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
+	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: the resource's own pool)")
 
 	_ = cmd.MarkFlagRequired("resource")
 	_ = cmd.MarkFlagRequired("name")
-	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -1925,11 +1923,11 @@ func resourceSnapshotList() *cobra.Command {
 			if resource == "" {
 				return fmt.Errorf("resource name is required")
 			}
-			if node == "" {
-				return fmt.Errorf("node is required")
-			}
-			if pool == "" {
-				pool = "data-pool"
+			if pool == "" || node == "" {
+				var err error
+				if pool, node, err = snapshotTarget(resource, pool, node); err != nil {
+					return err
+				}
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1992,10 +1990,9 @@ func resourceSnapshotList() *cobra.Command {
 	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
 	cmd.Flags().StringVar(&node, "node", "", "Node where resource exists")
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
-	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
+	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: the resource's own pool)")
 
 	_ = cmd.MarkFlagRequired("resource")
-	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }
@@ -2017,11 +2014,11 @@ func resourceSnapshotRestore() *cobra.Command {
 			if snapshotName == "" {
 				return fmt.Errorf("snapshot name is required")
 			}
-			if node == "" {
-				return fmt.Errorf("node is required")
-			}
-			if pool == "" {
-				pool = "data-pool"
+			if pool == "" || node == "" {
+				var err error
+				if pool, node, err = snapshotTarget(resource, pool, node); err != nil {
+					return err
+				}
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -2060,11 +2057,48 @@ func resourceSnapshotRestore() *cobra.Command {
 	cmd.Flags().StringVar(&snapshotName, "name", "", "Snapshot name")
 	cmd.Flags().StringVar(&node, "node", "", "Node where resource exists")
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm or zfs")
-	cmd.Flags().StringVar(&pool, "pool", "data-pool", "Storage pool name")
+	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: the resource's own pool)")
 
 	_ = cmd.MarkFlagRequired("resource")
 	_ = cmd.MarkFlagRequired("name")
-	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
+}
+
+// snapshotTarget fills in what a snapshot command left out from the resource
+// itself: the pool its volumes live in, and a node holding a replica. The pool
+// used to default to "data-pool", a name no cluster is required to have, so
+// every snapshot command failed unless --pool was given — although the
+// controller has always known which pool a resource is in.
+func snapshotTarget(resource, pool, node string) (string, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c, err := newSDSClient()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to connect to controller: %w", err)
+	}
+	defer closeClient(c)
+	info, err := c.GetResource(ctx, resource)
+	if err != nil {
+		return "", "", fmt.Errorf("look up resource %s: %w", resource, err)
+	}
+	if pool == "" {
+		for _, v := range info.GetVolumes() {
+			if v.GetPool() != "" {
+				pool = strings.TrimPrefix(v.GetPool(), "sds_")
+				break
+			}
+		}
+		if pool == "" {
+			return "", "", fmt.Errorf("resource %s does not record its pool; pass --pool", resource)
+		}
+	}
+	if node == "" {
+		if nodes := info.GetNodes(); len(nodes) > 0 {
+			node = nodes[0]
+		} else {
+			return "", "", fmt.Errorf("resource %s has no replica node; pass --node", resource)
+		}
+	}
+	return pool, node, nil
 }
