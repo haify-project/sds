@@ -814,11 +814,16 @@ func (a *GatewayResourceManager) GetResource(ctx context.Context, name string) (
 		}
 	}
 
+	// Diskful replicas only: resourceHosts reads the resource's own node list,
+	// which never includes its tiebreakers or diskless clients.
+	hosts, _ := a.rm.resourceHosts(ctx, name)
+
 	return &gateway.ResourceInfo{
 		Name:       info.Name,
 		Port:       info.Port,
 		Protocol:   info.Protocol,
 		Nodes:      info.Nodes,
+		Hosts:      hosts,
 		Role:       info.Role,
 		Volumes:    gwVolumes,
 		NodeStates: gwNodeStates,

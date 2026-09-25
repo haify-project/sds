@@ -53,11 +53,101 @@ func TestManagerStartGatewayReenablesConfig(t *testing.T) {
 
 	err := manager.StartGateway(context.Background(), "test-resource")
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(mockDeployment.ExecCommands), 3)
-	// Command 0 flushes stale portblock rules (failback safety); command 1
-	// re-enables the config.
-	flushed := decodeScriptCommand(t, mockDeployment.ExecCommands[0])
-	assert.Contains(t, flushed, "iptables -D INPUT")
-	decoded := decodeScriptCommand(t, mockDeployment.ExecCommands[1])
-	assert.Contains(t, decoded, `mv "$f.disabled" "$f"`)
+	// Stale portblock rules are flushed (failback safety) before the config
+	// is re-enabled.
+	scripts := scriptsOn(t, mockDeployment, "node1")
+	flushAt, enableAt := -1, -1
+	for i, s := range scripts {
+		if strings.Contains(s, "iptables -D INPUT") && flushAt < 0 {
+			flushAt = i
+		}
+		if strings.Contains(s, `mv "$f.disabled" "$f"`) {
+			enableAt = i
+		}
+	}
+	require.GreaterOrEqual(t, flushAt, 0)
+	require.Greater(t, enableAt, flushAt)
+}
+
+// scriptsOn returns the decoded runScript payloads that ran on host.
+func scriptsOn(t *testing.T, d *MockDeploymentClient, host string) []string {
+	t.Helper()
+	var out []string
+	for i, cmd := range d.ExecCommands {
+		if !strings.Contains(cmd, "base64 -d") {
+			continue
+		}
+		for _, h := range d.ExecHosts[i] {
+			if h == host {
+				out = append(out, decodeScriptCommand(t, cmd))
+			}
+		}
+	}
+	return out
+}
+
+// tiebreakerCluster is three managed hosts where only two hold the resource;
+// orange3 is its diskless tiebreaker.
+func tiebreakerCluster() (*Manager, *MockDeploymentClient) {
+	d := &MockDeploymentClient{}
+	rm := &MockResourceManager{Resources: map[string]*ResourceInfo{
+		"xplat": {Name: "xplat", Nodes: []string{"orange1", "orange2"}, Hosts: []string{"orange1", "orange2"}},
+	}}
+	return New(rm, d, zap.NewNop(), []string{"orange1", "orange2", "orange3"}), d
+}
+
+func TestPromoterConfigGoesOnlyToReplicas(t *testing.T) {
+	m, d := tiebreakerCluster()
+	require.NoError(t, m.writeReactorConfig(context.Background(), "xplat", "sds-nfs-xplat", "cfg"))
+
+	assert.Equal(t, []string{"orange1", "orange2"}, d.ConfigHosts["/etc/drbd-reactor.d/sds-nfs-xplat.toml"])
+	// The tiebreaker loses any promoter it already has, and the gateway is
+	// stopped there in case it is the node currently running it.
+	retired := strings.Join(scriptsOn(t, d, "orange3"), "\n")
+	assert.Contains(t, retired, `rm -f "$f"`)
+	assert.Contains(t, retired, "systemctl stop 'drbd-services@xplat.target'")
+	for _, s := range scriptsOn(t, d, "orange1") {
+		assert.NotContains(t, s, "rm -f", "a replica's promoter must not be retired")
+	}
+}
+
+func TestUnknownResourceKeepsPromoterEverywhere(t *testing.T) {
+	d := &MockDeploymentClient{}
+	m := New(&MockResourceManager{}, d, zap.NewNop(), []string{"n1", "n2"})
+	require.NoError(t, m.writeReactorConfig(context.Background(), "gone", "sds-iscsi-gone", "cfg"))
+
+	assert.Equal(t, []string{"n1", "n2"}, d.ConfigHosts["/etc/drbd-reactor.d/sds-iscsi-gone.toml"])
+	for _, h := range []string{"n1", "n2"} {
+		for _, s := range scriptsOn(t, d, h) {
+			assert.NotContains(t, s, "rm -f", "nothing may be retired on a guess")
+		}
+	}
+}
+
+func TestStartGatewayRetiresTheTiebreakersPromoter(t *testing.T) {
+	m, d := tiebreakerCluster()
+	require.NoError(t, m.StartGateway(context.Background(), "xplat"))
+
+	// The drop-in is guarded to hosts that carry this gateway's NFS promoter.
+	assert.Contains(t, strings.Join(scriptsOn(t, d, "orange1"), "\n"), "sds-nfs-xplat.toml* >/dev/null 2>&1 || exit 0")
+	onTiebreaker := strings.Join(scriptsOn(t, d, "orange3"), "\n")
+	assert.Contains(t, onTiebreaker, `rm -f "$f"`)
+	assert.NotContains(t, onTiebreaker, `mv "$f.disabled" "$f"`,
+		"re-enabling on the tiebreaker hands it the resource again")
+	assert.Contains(t, strings.Join(scriptsOn(t, d, "orange1"), "\n"), `mv "$f.disabled" "$f"`)
+}
+
+func TestNFSGatewayTiesHelperDaemonsToServer(t *testing.T) {
+	m, d := tiebreakerCluster()
+	require.NoError(t, m.writeReactorConfig(context.Background(), "xplat", "sds-nfs-xplat", "cfg"))
+
+	onReplica := strings.Join(scriptsOn(t, d, "orange1"), "\n")
+	assert.Contains(t, onReplica, "for u in fsidd nfsdcld")
+	assert.Contains(t, onReplica, "PartOf=nfs-server.service")
+	assert.NotContains(t, strings.Join(scriptsOn(t, d, "orange3"), "\n"), "PartOf=")
+
+	d2 := &MockDeploymentClient{}
+	m2 := New(&MockResourceManager{}, d2, zap.NewNop(), []string{"n1"})
+	require.NoError(t, m2.writeReactorConfig(context.Background(), "blk", "sds-iscsi-blk", "cfg"))
+	assert.NotContains(t, strings.Join(scriptsOn(t, d2, "n1"), "\n"), "PartOf=")
 }

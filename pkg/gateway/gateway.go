@@ -47,10 +47,14 @@ type ResourceVolumeInfo struct {
 
 // ResourceInfo represents DRBD resource information
 type ResourceInfo struct {
-	Name       string
-	Port       uint32
-	Protocol   string
-	Nodes      []string
+	Name     string
+	Port     uint32
+	Protocol string
+	Nodes    []string
+	// Hosts are the managed hosts of the diskful replicas: the only machines
+	// a gateway's promoter may run on. Empty when the controller cannot say,
+	// in which case Nodes is used.
+	Hosts      []string
 	Role       string
 	Volumes    []*ResourceVolumeInfo
 	NodeStates map[string]*ResourceNodeState

@@ -216,8 +216,12 @@ func (m *MockResourceManager) EnsureGatewayVolumes(ctx context.Context, resource
 }
 
 type MockDeploymentClient struct {
-	Configs       map[string]string
-	ExecCommands  []string
+	Configs      map[string]string
+	ExecCommands []string
+	// ExecHosts[i] is the host list ExecCommands[i] ran on; ConfigHosts maps a
+	// distributed path to the hosts it went to.
+	ExecHosts     [][]string
+	ConfigHosts   map[string][]string
 	DistributeErr error
 	ExecErr       error
 }
@@ -245,6 +249,10 @@ func (m *MockDeploymentClient) DistributeConfig(ctx context.Context, hosts []str
 		m.Configs = make(map[string]string)
 	}
 	m.Configs[remotePath] = content
+	if m.ConfigHosts == nil {
+		m.ConfigHosts = make(map[string][]string)
+	}
+	m.ConfigHosts[remotePath] = append([]string(nil), hosts...)
 	return nil
 }
 
@@ -253,6 +261,7 @@ func (m *MockDeploymentClient) Exec(ctx context.Context, hosts []string, cmd str
 		return m.ExecErr
 	}
 	m.ExecCommands = append(m.ExecCommands, cmd)
+	m.ExecHosts = append(m.ExecHosts, append([]string(nil), hosts...))
 	return nil
 }
 

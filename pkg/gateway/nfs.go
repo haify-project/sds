@@ -132,6 +132,45 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 	}, nil
 }
 
+// ensureNFSHelpersFollowServer makes fsidd and nfsdcld stop with nfs-server.
+//
+// Both daemons (nfs-utils 2.6+) keep files open under /var/lib/nfs, which the
+// nfsserver agent bind-mounts from the cluster-private volume. The agent stops
+// nfs-server and then unmounts, but nothing stops those two, so the unmount
+// fails with "target is busy". The failed stop leaves the old node with the
+// cluster-private volume still mounted and open, and it cannot be promoted
+// again: after one switchover the gateway can move away from a node but never
+// back, and after two it has nowhere left to run.
+//
+// PartOf carries nfs-server's stop to them; nfs-server's own Requires/Wants
+// start them again with it. Best-effort: on a node without the units the
+// drop-in is inert. A non-empty onlyIfNFS skips hosts that hold no NFS
+// promoter for that gateway, so starting an iSCSI or NVMe-oF gateway leaves
+// the NFS units alone.
+func (m *Manager) ensureNFSHelpersFollowServer(ctx context.Context, hosts []string, onlyIfNFS string) {
+	if len(hosts) == 0 {
+		return
+	}
+	guard := ""
+	if onlyIfNFS != "" {
+		guard = fmt.Sprintf("ls /etc/drbd-reactor.d/sds-nfs-%s.toml* >/dev/null 2>&1 || exit 0\n", onlyIfNFS)
+	}
+	script := guard + `changed=
+for u in fsidd nfsdcld; do
+  d=/etc/systemd/system/$u.service.d
+  f=$d/50-sds-nfs-gateway.conf
+  want='[Unit]
+PartOf=nfs-server.service'
+  [ "$(cat "$f" 2>/dev/null)" = "$want" ] && continue
+  mkdir -p "$d" && printf '%s\n' "$want" > "$f" && changed=1
+done
+[ -z "$changed" ] || systemctl daemon-reload
+true`
+	if err := m.runScript(ctx, hosts, script); err != nil {
+		m.logger.Warn("Failed to tie NFS helper daemons to nfs-server", zap.Error(err))
+	}
+}
+
 // generateNFSGatewayConfig generates drbd-reactor TOML configuration for NFS gateway
 func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, serviceIP *ServiceIP, drbdDevice string, volumes []*ResourceVolumeInfo) (string, error) {
 	clusterPrivateDev, payload := clusterPrivateAndPayload(volumes, drbdDevice)
