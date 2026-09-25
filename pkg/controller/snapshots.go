@@ -212,10 +212,10 @@ func (sm *SnapshotManager) PopulateVolume(ctx context.Context, resource string, 
 	// peers) before dd exits, so a later promote elsewhere cannot read stale
 	// data. Errors are fatal: a partial copy must never look like success.
 	cmd := fmt.Sprintf(
-		"set -e; SZ=$(sudo blockdev --getsize64 %s); "+
+		"set -e; %s SZ=$(sudo blockdev --getsize64 %s); "+
 			"sudo dd if=%s of=%s bs=4M count=$SZ iflag=fullblock,count_bytes oflag=direct conv=fsync status=none; "+
 			"sudo blockdev --flushbufs %s; echo $SZ",
-		target, sourceDevice, target, target)
+		activateSnapshotCmd(sourceDevice), target, sourceDevice, target, target)
 	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err != nil {
 		return 0, fmt.Errorf("copy %s -> %s on %s: %w", sourceDevice, target, node, err)
@@ -245,4 +245,22 @@ func parseVolumePath(volume string) (vg, lv string) {
 		return parts[0], parts[1]
 	}
 	return "", volume
+}
+
+// activateSnapshotCmd makes an LVM snapshot's device node exist before it is
+// read. LVM creates thin snapshots with the activation-skip flag, so a thin
+// snapshot has no /dev node until activated with -K; reading it failed with
+// "No such file or directory". That made every backup, and every CSI restore
+// from a snapshot, fail on thin pools. Harmless for an already-active
+// snapshot and a no-op for anything that is not an LV path.
+func activateSnapshotCmd(device string) string {
+	if !strings.HasPrefix(device, "/dev/") || strings.HasPrefix(device, "/dev/zvol/") ||
+		strings.HasPrefix(device, "/dev/mapper/") || strings.HasPrefix(device, "/dev/drbd") {
+		return ""
+	}
+	lv := strings.TrimPrefix(device, "/dev/")
+	if strings.Count(lv, "/") != 1 {
+		return ""
+	}
+	return fmt.Sprintf("sudo lvchange -ay -K %s;", lv)
 }

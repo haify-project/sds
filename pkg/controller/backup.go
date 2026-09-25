@@ -421,9 +421,21 @@ func (bm *BackupManager) snapshotVolumes(ctx context.Context, host string, info 
 			return snaps, fmt.Errorf("snapshot volume %d of %q: %w", v.VolumeID, info.Name, execErr)
 		}
 		if res == nil || !res.AllSuccess() {
-			return snaps, fmt.Errorf("snapshot volume %d of %q failed on %s", v.VolumeID, info.Name, host)
+			details := ""
+			if res != nil {
+				details = ": " + res.FailureDetails()
+			}
+			return snaps, fmt.Errorf("snapshot volume %d of %q failed on %s%s", v.VolumeID, info.Name, host, details)
 		}
 		snaps[v.VolumeID] = name
+		// A thin snapshot is created with activation skipped and has no device
+		// node to read until it is activated; see activateSnapshotCmd.
+		if cmd := activateSnapshotCmd(fmt.Sprintf("/dev/%s/%s", v.Pool, name)); cmd != "" {
+			if err := bm.controller.resources.execAllSuccess(ctx, []string{host}, cmd,
+				fmt.Sprintf("activate the backup snapshot %s/%s", v.Pool, name)); err != nil {
+				return snaps, err
+			}
+		}
 	}
 	return snaps, nil
 }
