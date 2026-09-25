@@ -7,7 +7,9 @@ import (
 )
 
 func TestGatewayExportDirectory(t *testing.T) {
-	assert.Equal(t, "/srv/gateway-exports/data/mysql", gatewayExportDirectory("data", "/mysql"))
+	// An absolute path is exported as given; the hint must name that path.
+	assert.Equal(t, "/mysql", gatewayExportDirectory("data", "/mysql"))
+	assert.Equal(t, "/srv/gateway-exports/data/mysql", gatewayExportDirectory("data", "mysql"))
 	assert.Equal(t, "/srv/gateway-exports/data/mysql", gatewayExportDirectory("data", "/srv/gateway-exports/data/mysql"))
 	assert.Equal(t, "/srv/gateway-exports/data", gatewayExportDirectory("data", ""))
 }

@@ -374,27 +374,27 @@ func TestNFSExportPath(t *testing.T) {
 
 func TestResolveNFSExportPath(t *testing.T) {
 	// Empty defaults under the base path, grouped by resource.
-	got, err := resolveNFSExportPath("res1", "")
+	got, err := ResolveNFSExportPath("res1", "")
 	require.NoError(t, err)
 	assert.Equal(t, DefaultExportBasePath+"/res1", got)
 
 	// Relative paths are grouped under the base path too.
-	got, err = resolveNFSExportPath("res1", "exports/a")
+	got, err = ResolveNFSExportPath("res1", "exports/a")
 	require.NoError(t, err)
 	assert.Equal(t, DefaultExportBasePath+"/res1/exports/a", got)
 
 	// Absolute paths are honored verbatim (cleaned).
-	got, err = resolveNFSExportPath("res1", "/srv/nfs-test/")
+	got, err = ResolveNFSExportPath("res1", "/srv/nfs-test/")
 	require.NoError(t, err)
 	assert.Equal(t, "/srv/nfs-test", got)
 
 	// The root and system directories are refused: the export directory
 	// becomes a gateway-owned mount point.
-	_, err = resolveNFSExportPath("res1", "/")
+	_, err = ResolveNFSExportPath("res1", "/")
 	assert.Error(t, err)
-	_, err = resolveNFSExportPath("res1", "/etc/exports")
+	_, err = ResolveNFSExportPath("res1", "/etc/exports")
 	assert.Error(t, err)
-	_, err = resolveNFSExportPath("res1", "/var/lib/sds/x")
+	_, err = ResolveNFSExportPath("res1", "/var/lib/sds/x")
 	assert.Error(t, err)
 }
 

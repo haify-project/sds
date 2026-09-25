@@ -219,7 +219,7 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
 	}
 
 	// Prepare export path (the directory clients mount)
-	exportsPath, err := resolveNFSExportPath(req.Resource, req.ExportPath)
+	exportsPath, err := ResolveNFSExportPath(req.Resource, req.ExportPath)
 	if err != nil {
 		return "", err
 	}
@@ -389,7 +389,7 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		options = "rw,all_squash,anonuid=0,anongid=0"
 	}
 
-	resolvedPath, err := resolveNFSExportPath(resource, exportPath)
+	resolvedPath, err := ResolveNFSExportPath(resource, exportPath)
 	if err != nil {
 		return err
 	}
@@ -420,7 +420,7 @@ func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath s
 		return err
 	}
 
-	normalizedPath, err := resolveNFSExportPath(resource, exportPath)
+	normalizedPath, err := ResolveNFSExportPath(resource, exportPath)
 	if err != nil {
 		return err
 	}

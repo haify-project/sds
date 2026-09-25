@@ -337,13 +337,13 @@ func nextExportID(lines []string) int {
 	return maxID + 1
 }
 
-// resolveNFSExportPath turns the user-supplied export path into the
+// ResolveNFSExportPath turns the user-supplied export path into the
 // directory that is mounted and exported. An absolute path is honored
 // verbatim — when an admin asks for /srv/nfs-test, clients mount
 // <vip>:/srv/nfs-test, not a path nested under the gateway base directory.
 // Relative or empty paths land under DefaultExportBasePath/<resource> so
 // quick setups stay grouped and collision-free.
-func resolveNFSExportPath(resource, exportPath string) (string, error) {
+func ResolveNFSExportPath(resource, exportPath string) (string, error) {
 	exportPath = strings.TrimSpace(exportPath)
 	if exportPath == "" {
 		return filepath.Join(DefaultExportBasePath, resource), nil

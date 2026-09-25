@@ -31,14 +31,14 @@ func gatewayServiceHost(serviceIP string) string {
 }
 
 func gatewayExportDirectory(resource, exportPath string) string {
-	exportPath = strings.TrimSpace(exportPath)
-	if exportPath == "" {
+	// The same rule the gateway exports by. A copy of it here assumed every
+	// export lived under the gateway base directory, so an absolute
+	// --export-path got a mount hint for a directory that did not exist.
+	dir, err := gateway.ResolveNFSExportPath(resource, exportPath)
+	if err != nil {
 		return filepath.Join(gateway.DefaultExportBasePath, resource)
 	}
-	if strings.HasPrefix(exportPath, gateway.DefaultExportBasePath+string(filepath.Separator)) {
-		return exportPath
-	}
-	return filepath.Join(gateway.DefaultExportBasePath, resource, strings.TrimPrefix(exportPath, "/"))
+	return dir
 }
 
 func nfsExportCommand() *cobra.Command {
