@@ -14,7 +14,7 @@ func TestEventRecordsKeepTheNewestOldestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 	for i := 1; i <= 5; i++ {
 		if err := db.AppendEventRecord(ctx, []byte(fmt.Sprintf(`{"id":%d}`, i)), 100); err != nil {
