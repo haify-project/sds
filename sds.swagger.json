@@ -7482,6 +7482,10 @@
         "node": {
           "type": "string",
           "description": "node is the SDS node name this state belongs to. The map itself is keyed by\nDRBD host name, which is the machine's real hostname and generally is NOT\nthe node name the rest of the API uses — so without this a caller cannot\npair a state with the entry of `nodes` it describes."
+        },
+        "connection": {
+          "type": "string",
+          "description": "Peer DRBD connection state as the answering node sees it (\"Connected\",\n\"Connecting\", \"StandAlone\", ...). Empty for the answering node itself. A\npeer that is not Connected reports no role, disk or replication state, so\nthis is the only field that tells an unreachable replica from a healthy one."
         }
       }
     },
