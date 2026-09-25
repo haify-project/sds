@@ -1738,13 +1738,16 @@ func resourceSnapshotScheduleList() *cobra.Command {
 }
 
 func resourceSnapshotScheduleDelete() *cobra.Command {
-	var name string
+	var name, resourceFlag string
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete a snapshot schedule (existing snapshots are kept)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
-				return fmt.Errorf("--name is required (the resource name)")
+				name = resourceFlag
+			}
+			if name == "" {
+				return fmt.Errorf("--resource is required")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -1761,7 +1764,10 @@ func resourceSnapshotScheduleDelete() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&name, "name", "", "Schedule name (= resource name) (required)")
+	// --resource matches schedule create; --name is the older spelling.
+	cmd.Flags().StringVar(&resourceFlag, "resource", "", "Resource whose schedule to delete (required)")
+	cmd.Flags().StringVar(&name, "name", "", "Same as --resource")
+	_ = cmd.Flags().MarkHidden("name")
 	return cmd
 }
 
