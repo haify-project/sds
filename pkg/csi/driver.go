@@ -27,6 +27,9 @@ const (
 type SDSBackend interface {
 	CreateResourceWithPoolAndType(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool, storageType string, drbdOptions map[string]string) error
 	GetResource(ctx context.Context, name string) (*sdspb.ResourceInfo, error)
+	// ListResources returns every resource the controller manages. ListVolumes
+	// and ListSnapshots filter it down to the ones this driver created.
+	ListResources(ctx context.Context) ([]*sdspb.ResourceInfo, error)
 	DeleteResource(ctx context.Context, name string) error
 	ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error)
 	// ListPools returns every storage pool known to the controller (one entry
@@ -54,8 +57,8 @@ type SDSBackend interface {
 	// DeleteSnapshot removes a snapshot created by CreateSnapshot. Idempotent.
 	DeleteSnapshot(ctx context.Context, volume, snapshotName, node string) error
 	// ListSnapshots returns the snapshots of a backing volume on one node. The
-	// CSI driver uses it to make CreateSnapshot idempotent; it does not expose a
-	// ListSnapshots RPC (there is no cluster-wide snapshot index to enumerate).
+	// CSI driver uses it to make CreateSnapshot idempotent and, walking every
+	// volume's replica nodes, to answer the ListSnapshots RPC.
 	ListSnapshots(ctx context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error)
 	// PopulateVolume copies sourceDevice into an already-created, still-empty
 	// resource, on a node that holds one of its replicas. It backs

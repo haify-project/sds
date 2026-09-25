@@ -2,6 +2,7 @@ package csi
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
@@ -30,15 +31,11 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	if len(req.GetVolumeCapabilities()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "volume capabilities are required")
 	}
-	// Raw block volumes (volumeMode: Block) are not implemented: the node
-	// plugin only ever formats and mounts a filesystem. Rejecting the request
-	// here, where the message reaches the PVC's events, is far kinder than
-	// letting provisioning succeed and having kubelet fail much later with an
-	// opaque "MapVolume.MapBlockVolume ... bind mount ... exit status 32".
+	// Refuse what cannot work here, where the message reaches the PVC's events,
+	// rather than provisioning a volume that kubelet fails to attach later.
 	for _, c := range req.GetVolumeCapabilities() {
-		if c.GetBlock() != nil {
-			return nil, status.Error(codes.InvalidArgument,
-				"volumeMode: Block is not supported by this driver; use volumeMode: Filesystem")
+		if reason := unsupportedCapability(c); reason != "" {
+			return nil, status.Error(codes.InvalidArgument, reason)
 		}
 	}
 	name := sanitizeResourceName(req.GetName())
@@ -243,11 +240,15 @@ func (s *controllerServer) ControllerGetCapabilities(context.Context, *csi.Contr
 	return &csi.ControllerGetCapabilitiesResponse{Capabilities: []*csi.ControllerServiceCapability{
 		cap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME),
 		cap(csi.ControllerServiceCapability_RPC_EXPAND_VOLUME),
-		// LIST_SNAPSHOTS is deliberately NOT advertised: snapshots live on
-		// individual nodes with no cluster-wide index, so the driver cannot
-		// enumerate them. Create/Delete are fully supported.
 		cap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT),
+		// Snapshots live on one node each with no cluster-wide index, so
+		// ListSnapshots walks the CSI volumes and asks each replica node.
+		cap(csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS),
 		cap(csi.ControllerServiceCapability_RPC_CLONE_VOLUME),
+		cap(csi.ControllerServiceCapability_RPC_LIST_VOLUMES),
+		cap(csi.ControllerServiceCapability_RPC_GET_VOLUME),
+		cap(csi.ControllerServiceCapability_RPC_GET_CAPACITY),
+		cap(csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER),
 	}}, nil
 }
 
@@ -262,13 +263,8 @@ func (s *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 		return nil, status.Errorf(codes.NotFound, "volume %q not found", req.GetVolumeId())
 	}
 	for _, c := range req.GetVolumeCapabilities() {
-		if c.GetAccessMode().GetMode() != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
-			return &csi.ValidateVolumeCapabilitiesResponse{}, nil // unsupported -> empty Confirmed
-		}
-		// Same reason as in CreateVolume: the node plugin only mounts
-		// filesystems, so a block capability must not be confirmed.
-		if c.GetBlock() != nil {
-			return &csi.ValidateVolumeCapabilitiesResponse{}, nil
+		if reason := unsupportedCapability(c); reason != "" {
+			return &csi.ValidateVolumeCapabilitiesResponse{Message: reason}, nil // unsupported -> empty Confirmed
 		}
 	}
 	return &csi.ValidateVolumeCapabilitiesResponse{Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
@@ -302,4 +298,31 @@ func bytesToGiB(b int64) uint32 {
 	}
 	g := (b + giB - 1) / giB
 	return uint32(g)
+}
+
+// unsupportedCapability explains why a volume capability cannot be honoured, or
+// returns "" when it can.
+//
+// DRBD runs one Primary per resource, and only the Primary can do I/O. So every
+// single-node mode works — including ReadWriteOncePod, which only narrows
+// single-node further to single-Pod — and no multi-node mode does. Before this
+// check CreateVolume looked at no access mode at all: a ReadWriteMany PVC was
+// provisioned, and failed only when a second node tried to promote.
+//
+// Filesystem and raw block are both fine; a DRBD device is a block device.
+func unsupportedCapability(c *csi.VolumeCapability) string {
+	switch c.GetAccessMode().GetMode() {
+	case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER:
+	case csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER:
+		return fmt.Sprintf("access mode %s is not supported: a DRBD resource has one Primary, so a volume is usable from one node at a time; use ReadWriteOnce or ReadWriteOncePod",
+			c.GetAccessMode().GetMode())
+	default:
+		return fmt.Sprintf("access mode %s is not supported", c.GetAccessMode().GetMode())
+	}
+	return ""
 }

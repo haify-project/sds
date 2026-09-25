@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
+	"time"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 )
@@ -41,14 +43,19 @@ func (b *sanityBackend) CreateResourceWithPoolAndType(_ context.Context, name st
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.resources[name] = &sdspb.ResourceInfo{
-		Name:  name,
-		Nodes: nodes,
-		Port:  port,
+		Name:   name,
+		Nodes:  nodes,
+		Port:   port,
+		Labels: map[string]string{managedByLabel: managedByValue},
 		Volumes: []*sdspb.VolumeInfo{{
 			VolumeId: 0,
 			Device:   "/dev/drbd100",
 			SizeGb:   uint64(sizeGB),
 			Pool:     pool,
+			// The controller names every backing LV "<resource>_data" and
+			// reports it. Leaving it empty here made every snapshot and clone
+			// path fail before reaching the code under test.
+			BackingVolume: name + "_data",
 		}},
 	}
 	return nil
@@ -61,6 +68,16 @@ func (b *sanityBackend) GetResource(_ context.Context, name string) (*sdspb.Reso
 		return r, nil
 	}
 	return nil, fmt.Errorf("resource %q not found", name)
+}
+
+func (b *sanityBackend) ListResources(context.Context) ([]*sdspb.ResourceInfo, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]*sdspb.ResourceInfo, 0, len(b.resources))
+	for _, r := range b.resources {
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 func (b *sanityBackend) DeleteResource(_ context.Context, name string) error {
@@ -102,7 +119,10 @@ func (b *sanityBackend) CreateSnapshot(_ context.Context, volume, snapshotName, 
 			return nil // idempotent
 		}
 	}
-	b.snapshots[k] = append(b.snapshots[k], &sdspb.SnapshotInfo{Name: snapshotName, Volume: volume})
+	// The controller reports each snapshot's creation time (lv_time), and CSI
+	// makes creation_time required, so the fake has to carry one too.
+	b.snapshots[k] = append(b.snapshots[k], &sdspb.SnapshotInfo{Name: snapshotName, Volume: volume,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339)})
 	return nil
 }
 
@@ -188,5 +208,25 @@ func (m *nopMounter) EnsureDir(target string) error {
 }
 
 func (m *nopMounter) ResizeFS(_, _ string) error { return nil }
+
+func (m *nopMounter) EnsureFile(target string) error {
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(target, os.O_CREATE|os.O_RDONLY, 0o640)
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+// FSStats reports a fixed 1GiB filesystem, a quarter used: the sanity suite
+// checks that stats come back for a published volume, not what they say.
+func (m *nopMounter) FSStats(string) (FSStats, error) {
+	return FSStats{TotalBytes: giB, AvailableBytes: 3 * giB / 4, UsedBytes: giB / 4,
+		TotalInodes: 65536, AvailableInodes: 65000, UsedInodes: 536}, nil
+}
+
+func (m *nopMounter) BlockSize(string) (int64, error) { return giB, nil }
 
 var _ Mounter = (*nopMounter)(nil)

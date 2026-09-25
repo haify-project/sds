@@ -17,6 +17,10 @@ type recordingMounter struct {
 	bind      []string
 	unmounted []string
 	mounted   map[string]bool
+	files     []string
+	stats     FSStats
+	statsErr  error
+	blockSize int64
 }
 
 func newRecordingMounter() *recordingMounter { return &recordingMounter{mounted: map[string]bool{}} }
@@ -39,6 +43,12 @@ func (m *recordingMounter) Unmount(target string) error {
 func (m *recordingMounter) IsMountPoint(target string) (bool, error) { return m.mounted[target], nil }
 func (m *recordingMounter) EnsureDir(string) error                   { return nil }
 func (m *recordingMounter) ResizeFS(_, _ string) error               { return nil }
+func (m *recordingMounter) EnsureFile(target string) error {
+	m.files = append(m.files, target)
+	return nil
+}
+func (m *recordingMounter) FSStats(string) (FSStats, error) { return m.stats, m.statsErr }
+func (m *recordingMounter) BlockSize(string) (int64, error) { return m.blockSize, nil }
 
 func newTestNode(b SDSBackend, m Mounter) *nodeServer {
 	return NewNodeServer(b, m, "n1", "10.0.0.1", zap.NewNop()).(*nodeServer)

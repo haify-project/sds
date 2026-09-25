@@ -116,7 +116,13 @@ func newFakeBackend(nodeNames ...string) *fakeBackend {
 
 func (f *fakeBackend) CreateResourceRequest(ctx context.Context, req *sdspb.CreateResourceRequest) error {
 	f.requestCalls = append(f.requestCalls, req)
-	return f.CreateResourceWithPoolAndType(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool, req.StorageType, req.DrbdOptions)
+	if err := f.CreateResourceWithPoolAndType(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool, req.StorageType, req.DrbdOptions); err != nil {
+		return err
+	}
+	// The controller persists the request's labels and returns them from
+	// Get/ListResources; ListVolumes depends on that to recognise its volumes.
+	f.resources[req.Name].Labels = req.Labels
+	return nil
 }
 
 func (f *fakeBackend) GetResourceProfile(_ context.Context, name string) (*sdspb.ResourceProfile, error) {
@@ -168,6 +174,14 @@ func (f *fakeBackend) GetResource(_ context.Context, name string) (*sdspb.Resour
 		return nil, fmt.Errorf("resource %q not found", name)
 	}
 	return r, nil
+}
+
+func (f *fakeBackend) ListResources(context.Context) ([]*sdspb.ResourceInfo, error) {
+	out := make([]*sdspb.ResourceInfo, 0, len(f.resources))
+	for _, r := range f.resources {
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 func (f *fakeBackend) DeleteResource(_ context.Context, name string) error {

@@ -23,8 +23,6 @@ func TestControllerCapabilitiesAndValidation(t *testing.T) {
 	// ControllerGetCapabilities
 	caps, err := ctrl.ControllerGetCapabilities(context.Background(), &csi.ControllerGetCapabilitiesRequest{})
 	require.NoError(t, err)
-	// CREATE_DELETE_VOLUME, EXPAND_VOLUME, CREATE_DELETE_SNAPSHOT. LIST_SNAPSHOTS
-	// is intentionally absent (no cluster-wide snapshot index to enumerate).
 	var types []csi.ControllerServiceCapability_RPC_Type
 	for _, c := range caps.Capabilities {
 		types = append(types, c.GetRpc().GetType())
@@ -33,7 +31,12 @@ func TestControllerCapabilitiesAndValidation(t *testing.T) {
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+		csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
 		csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
+		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
+		csi.ControllerServiceCapability_RPC_GET_VOLUME,
+		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
+		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
 	}, types)
 
 	// ValidateVolumeCapabilities
@@ -90,7 +93,16 @@ func TestNodeCapabilitiesAndUnpublish(t *testing.T) {
 	// NodeGetCapabilities
 	caps, err := node.NodeGetCapabilities(context.Background(), &csi.NodeGetCapabilitiesRequest{})
 	require.NoError(t, err)
-	assert.Len(t, caps.Capabilities, 2)
+	var nodeTypes []csi.NodeServiceCapability_RPC_Type
+	for _, c := range caps.Capabilities {
+		nodeTypes = append(nodeTypes, c.GetRpc().GetType())
+	}
+	assert.ElementsMatch(t, []csi.NodeServiceCapability_RPC_Type{
+		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+		csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+		csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+		csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
+	}, nodeTypes)
 
 	// NodeUnpublishVolume
 	_, err = node.NodeUnpublishVolume(context.Background(), &csi.NodeUnpublishVolumeRequest{})

@@ -118,6 +118,16 @@ func (s *controllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 		}
 	}
 
+	// A name the CO already used for a snapshot of another volume is a
+	// conflict, not a second snapshot. Kubernetes names snapshots after their
+	// UID so it never asks, but the spec requires the answer, and giving it
+	// costs one walk of the driver's volumes on the uncommon path — the
+	// idempotent retry above has already returned.
+	if other := s.snapshotNamedElsewhere(ctx, snapName, source); other != "" {
+		return nil, status.Errorf(codes.AlreadyExists,
+			"snapshot name %q is already used by a snapshot of volume %q", req.GetName(), other)
+	}
+
 	if err := s.backend.CreateSnapshot(ctx, volumePath, snapName, node); err != nil {
 		return nil, status.Errorf(codes.Internal, "create snapshot %q of %q: %v", snapName, volumePath, err)
 	}
@@ -176,4 +186,24 @@ func snapshotCreationTime(raw string) *timestamppb.Timestamp {
 		}
 	}
 	return nil
+}
+
+// snapshotNamedElsewhere returns the volume that already has a CSI snapshot
+// called snapName, other than source, or "" when none does.
+func (s *controllerServer) snapshotNamedElsewhere(ctx context.Context, snapName, source string) string {
+	all, err := s.backend.ListResources(ctx)
+	if err != nil {
+		return ""
+	}
+	for _, r := range all {
+		if !isCSIVolume(r) || r.GetName() == source {
+			continue
+		}
+		for _, snap := range s.snapshotsOf(ctx, r) {
+			if strings.HasSuffix(snap.GetSnapshotId(), snapshotIDSep+snapName) {
+				return r.GetName()
+			}
+		}
+	}
+	return ""
 }

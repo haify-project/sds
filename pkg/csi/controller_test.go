@@ -235,26 +235,17 @@ func TestCreateVolumeRejectsProfileOnLegacyBackend(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not support resource profiles")
 }
 
-// Raw block volumes are not implemented — the node plugin only formats and
-// mounts filesystems. Provisioning used to succeed for volumeMode: Block and
-// then fail deep in kubelet with "MapVolume.MapBlockVolume ... bind mount ...
-// exit status 32", which says nothing about the actual cause. Reject it up
-// front so the reason lands in the PVC's events instead.
-func TestCreateVolumeRejectsBlockMode(t *testing.T) {
+// Raw block volumes are provisioned: a DRBD device is a block device, and the
+// node plugin publishes it as one.
+func TestCreateVolumeAcceptsBlockMode(t *testing.T) {
 	b := newFakeBackend("n1", "n2", "n3")
 	req := validCreateReq("blockvol")
 	req.VolumeCapabilities[0].AccessType = &csi.VolumeCapability_Block{
 		Block: &csi.VolumeCapability_BlockVolume{},
 	}
-
 	_, err := newTestController(b).CreateVolume(context.Background(), req)
-	require.Error(t, err, "block mode must be rejected")
-
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.InvalidArgument, st.Code())
-	assert.Contains(t, err.Error(), "Filesystem", "the error should name the supported mode")
-	assert.Empty(t, b.createCalls, "nothing should be provisioned for a rejected request")
+	require.NoError(t, err)
+	assert.Len(t, b.createCalls, 1)
 }
 
 // Filesystem mode — the mode the driver actually implements — must keep working.
