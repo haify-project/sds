@@ -67,6 +67,9 @@ type Server struct {
 	// reported instead of silently doing nothing.
 	writeToolNames map[string]bool
 	version        string
+	// apps and k8s make this the sds-k8s server (see NewK8s).
+	apps AppManager
+	k8s  bool
 }
 
 // New creates a Server. The client is typically *client.SDSClient; tests
@@ -113,6 +116,9 @@ func (s *Server) UnmatchedAllowed() []string {
 
 // MCPServer builds the underlying MCP server with all tools registered.
 func (s *Server) MCPServer() *mcp.Server {
+	if s.k8s {
+		return s.k8sMCPServer()
+	}
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "sds",
 		Title:   "SDS Software Defined Storage",

@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/liliang-cn/sds/pkg/client"
+	"github.com/liliang-cn/sds/pkg/k8sapp"
 	"github.com/liliang-cn/sds/pkg/mcpserver"
 )
 
@@ -74,6 +75,8 @@ func main() {
 			"Implies --read-only. Refuses to start on a name no tool answers to")
 	rootCmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging on stderr")
 
+	rootCmd.AddCommand(k8sCmd())
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -92,4 +95,44 @@ func newStderrLogger(debug bool) (*zap.Logger, error) {
 		cfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	}
 	return cfg.Build()
+}
+
+// k8sCmd serves the Kubernetes (CSI) tools as their own MCP server, sds-k8s.
+// It talks to a Kubernetes API server, not the SDS controller.
+func k8sCmd() *cobra.Command {
+	var (
+		kubeconfig string
+		readOnly   bool
+		allowWrite []string
+		debug      bool
+	)
+	cmd := &cobra.Command{
+		Use:   "k8s",
+		Short: "MCP server for SDS on Kubernetes (sds_k8s_* tools)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			logger, err := newStderrLogger(debug)
+			if err != nil {
+				return fmt.Errorf("init logger: %w", err)
+			}
+			defer func() { _ = logger.Sync() }()
+			apps, err := k8sapp.NewManager(kubeconfig)
+			if err != nil {
+				return err
+			}
+			if apps == nil {
+				return fmt.Errorf("no Kubernetes cluster: pass --kubeconfig (or SDS_KUBECONFIG), or run inside a pod")
+			}
+			return mcpserver.NewK8s(apps, logger, mcpserver.Options{
+				ReadOnly:   readOnly,
+				AllowWrite: allowWrite,
+				Version:    version,
+			}).Run(cmd.Context())
+		},
+	}
+	cmd.Flags().StringVar(&kubeconfig, "kubeconfig", os.Getenv("SDS_KUBECONFIG"),
+		"kubeconfig (env SDS_KUBECONFIG; in-cluster config inside a pod when empty)")
+	cmd.Flags().BoolVar(&readOnly, "read-only", false, "register only read-only tools")
+	cmd.Flags().StringSliceVar(&allowWrite, "allow", nil, "mutating tools to register despite --read-only")
+	cmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging on stderr")
+	return cmd
 }
