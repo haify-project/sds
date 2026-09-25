@@ -539,6 +539,9 @@ func resourceList() *cobra.Command {
 				if len(r.DisklessNodes) > 0 {
 					line += fmt.Sprintf(" tiebreaker=%v", r.DisklessNodes)
 				}
+				if len(r.DisklessClients) > 0 {
+					line += fmt.Sprintf(" clients=%v", r.DisklessClients)
+				}
 				if r.QuorumRisk {
 					line += " ⚠quorum-risk"
 				}

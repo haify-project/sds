@@ -313,11 +313,14 @@ func (rm *ResourceManager) AttachDisklessClient(ctx context.Context, resource, n
 			return fmt.Errorf("node %q already holds a diskful replica of %q", node, resource)
 		}
 	}
-	// A quorum tiebreaker is diskless-in-config but must never be promoted;
-	// refuse rather than silently reclassify it as a mountable client.
+	// A tiebreaker is already a diskless participant: in DRBD's config it is
+	// exactly what a diskless client is. Refusing it left a three-node
+	// cluster — two replicas and a tiebreaker on every resource — with no
+	// node that could ever mount a resource remotely. Asked for explicitly,
+	// the tiebreaker becomes a client; it keeps its quorum vote either way.
 	for _, n := range splitCSV(dbRes.DisklessNodes) {
 		if n == node {
-			return fmt.Errorf("node %q is a quorum tiebreaker of %q and cannot be a diskless client", node, resource)
+			return rm.tiebreakerToClient(ctx, dbRes, node)
 		}
 	}
 	clients := splitCSV(dbRes.DisklessClients)
@@ -458,6 +461,10 @@ func (rm *ResourceManager) DetachDisklessClient(ctx context.Context, resource, n
 
 	rm.controller.logger.Info("Detaching diskless client from resource",
 		zap.String("resource", resource), zap.String("node", node))
+
+	if lastVoteBesidesTwoReplicas(dbRes, node) {
+		return rm.clientToTiebreaker(ctx, dbRes, node)
+	}
 
 	ip := rm.controller.nodes.GetNodeAddressByName(node)
 	if ip == "" {
@@ -691,4 +698,61 @@ func reconcileDisklessVolumeOverrides(content string) string {
 		content = addDisklessVolumeOverrides(content, v.VolumeID, v.Minor)
 	}
 	return content
+}
+
+// lastVoteBesidesTwoReplicas reports whether node, a diskless client, is the
+// only participant besides a resource's two diskful replicas. Removing it
+// would leave a two-node resource that loses quorum when either node does.
+func lastVoteBesidesTwoReplicas(dbRes *database.Resource, node string) bool {
+	if len(splitCSV(dbRes.Nodes)) != 2 || len(splitCSV(dbRes.DisklessNodes)) != 0 {
+		return false
+	}
+	clients := splitCSV(dbRes.DisklessClients)
+	return len(clients) == 1 && clients[0] == node
+}
+
+// tiebreakerToClient reclassifies a resource's tiebreaker as a diskless
+// client. Nothing changes in DRBD: both are `disk none` participants. What
+// changes is that SDS lets this node be promoted and mount the resource.
+func (rm *ResourceManager) tiebreakerToClient(ctx context.Context, dbRes *database.Resource, node string) error {
+	ip := resolveToIP(rm.controller.ResolveHost(node))
+	if _, err := rm.deployment.DRBDUp(ctx, []string{ip}, dbRes.Name); err != nil {
+		return fmt.Errorf("bring up %s on %s: %w", dbRes.Name, node, err)
+	}
+	dbRes.DisklessNodes = strings.Join(without(splitCSV(dbRes.DisklessNodes), node), ",")
+	dbRes.DisklessClients = strings.Join(append(without(splitCSV(dbRes.DisklessClients), node), node), ",")
+	if err := rm.controller.db.SaveResource(ctx, dbRes); err != nil {
+		return fmt.Errorf("record %s as a diskless client of %s: %w", node, dbRes.Name, err)
+	}
+	rm.controller.logger.Info("Tiebreaker is now a diskless client; it keeps its quorum vote",
+		zap.String("resource", dbRes.Name), zap.String("node", node))
+	return nil
+}
+
+// clientToTiebreaker is the reverse, used when detaching the client would take
+// away the resource's third vote. The node stays in the resource, demoted.
+func (rm *ResourceManager) clientToTiebreaker(ctx context.Context, dbRes *database.Resource, node string) error {
+	ip := resolveToIP(rm.controller.ResolveHost(node))
+	if err := rm.execAllSuccess(ctx, []string{ip}, "sudo drbdadm secondary "+dbRes.Name,
+		"demote "+dbRes.Name+" on "+node+" (unmount it first)"); err != nil {
+		return err
+	}
+	dbRes.DisklessClients = strings.Join(without(splitCSV(dbRes.DisklessClients), node), ",")
+	dbRes.DisklessNodes = strings.Join(append(without(splitCSV(dbRes.DisklessNodes), node), node), ",")
+	if err := rm.controller.db.SaveResource(ctx, dbRes); err != nil {
+		return fmt.Errorf("record %s as the tiebreaker of %s: %w", node, dbRes.Name, err)
+	}
+	rm.controller.logger.Info("Detached client kept as the resource's tiebreaker: it was the third vote",
+		zap.String("resource", dbRes.Name), zap.String("node", node))
+	return nil
+}
+
+func without(list []string, drop string) []string {
+	out := make([]string, 0, len(list))
+	for _, v := range list {
+		if v != drop {
+			out = append(out, v)
+		}
+	}
+	return out
 }

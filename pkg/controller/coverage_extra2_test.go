@@ -34,7 +34,7 @@ func TestSelectPlacementNodesValidation(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestAttachDisklessClientRejectsReplicaAndTiebreaker(t *testing.T) {
+func TestAttachDisklessClientRejectsAReplicaAndConvertsTheTiebreaker(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := newBasicTestController(dep)
 	ctrl.db = newTestDB(t)
@@ -51,10 +51,20 @@ func TestAttachDisklessClientRejectsReplicaAndTiebreaker(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "diskful replica")
 
-	// A quorum tiebreaker cannot become a client.
-	err = ctrl.resources.AttachDisklessClient(ctx, "res1", "n3")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tiebreaker")
+	// The tiebreaker becomes a client, keeping its place in the resource.
+	require.NoError(t, ctrl.resources.AttachDisklessClient(ctx, "res1", "n3"))
+	got, err := ctrl.db.GetResource(ctx, "res1")
+	require.NoError(t, err)
+	assert.Equal(t, "", got.DisklessNodes)
+	assert.Equal(t, "n3", got.DisklessClients)
+
+	// Detaching it would leave two replicas and no third vote, so it goes
+	// back to being the tiebreaker rather than leaving the resource.
+	require.NoError(t, ctrl.resources.DetachDisklessClient(ctx, "res1", "n3"))
+	got, err = ctrl.db.GetResource(ctx, "res1")
+	require.NoError(t, err)
+	assert.Equal(t, "n3", got.DisklessNodes)
+	assert.Equal(t, "", got.DisklessClients)
 
 	// Missing resource.
 	err = ctrl.resources.AttachDisklessClient(ctx, "ghost", "n9")

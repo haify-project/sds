@@ -2543,9 +2543,10 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		NodeStates:      nodeStates,
 		DisklessNodes:   disklessNodes,
 		DisklessClients: splitCSV(dbRes.DisklessClients),
-		// Two diskful nodes with no tiebreaker means a single failure drops
-		// below quorum majority and suspends I/O.
-		QuorumRisk: len(nodeAddresses) == 2 && len(disklessNodes) == 0,
+		// Two diskful nodes with no third vote means a single failure drops
+		// below quorum majority and suspends I/O. A diskless client votes as
+		// a tiebreaker does.
+		QuorumRisk: len(nodeAddresses) == 2 && len(disklessNodes) == 0 && dbRes.DisklessClients == "",
 		Labels:     cloneStringMap(dbRes.Labels),
 		Profile:    dbRes.Profile,
 		WANMode:    dbRes.WANMode,
@@ -2625,7 +2626,7 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 			// here left the list unable to flag a two-node resource with no
 			// tiebreaker, or to tell an off-site DR from a local replica —
 			// precisely the things a list is for.
-			QuorumRisk: len(nodeAddresses) == 2 && dbRes.DisklessNodes == "",
+			QuorumRisk: len(nodeAddresses) == 2 && dbRes.DisklessNodes == "" && dbRes.DisklessClients == "",
 			WANMode:    dbRes.WANMode,
 			DRNode:     dbRes.DRNode,
 			Encrypted:  dbRes.Encrypted,
