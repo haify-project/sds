@@ -15,6 +15,7 @@
 //	SDS_AI_CONTROLLER     sds controller addr for sds-mcp (default "192.168.123.250:3374")
 //	SDS_AI_MCP_CMD        sds-mcp executable (default "sds-mcp")
 //	SDS_AI_EMB_DIM        embedding dim of the knowledge index (default 1024)
+//	SDS_AI_KUBECONFIG     kubeconfig for the sds-k8s tools (`sds-mcp k8s`); unset = bare-metal tools only
 //	SDS_AI_ALLOW_ORIGIN   CORS allow-origin (default "*")
 //	OPSDOCTOR_LLM_API_KEY / _BASE_URL / _MODEL   LLM (opsdoctor also reads the old OSS_* names)
 //	OPSDOCTOR_EMB_MODEL / _BASE_URL / _API_KEY   embedder (must match the index)
@@ -26,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/liliang-cn/opsdoctor"
 )
@@ -84,16 +86,10 @@ func main() {
 		// The drbd-reactor.db index is 1024-dim; the embedder model comes from
 		// OPSDOCTOR_EMB_MODEL (must match how the index was built — see spec O1).
 		EmbDim: embDim,
-		// Mount the sds cluster tools read-only: only observational tools reach
-		// the agent; every change is proposed via suggest_action and approved in
-		// the UI, executed through the controller REST.
-		MCPServers: []opsdoctor.MCPServerSpec{{
-			Name:      "sds",
-			Transport: "stdio",
-			Command:   envOr("SDS_AI_MCP_CMD", "sds-mcp"),
-			Args:      []string{"--controller", envOr("SDS_AI_CONTROLLER", "192.168.123.250:3374")},
-			ReadOnly:  true,
-		}},
+		// Mount the sds cluster tools read-only: observational tools reach the
+		// agent, and every change to storage is proposed via suggest_action and
+		// approved in the UI, executed through the controller REST.
+		MCPServers: mcpServers(),
 	})
 	if err != nil {
 		log.Fatalf("init agent: %v", err)
@@ -127,6 +123,81 @@ func main() {
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// dailyOps are the sds-mcp write tools the agent calls directly: the ones the
+// server marks non-destructive (create, add, start, mount, resize up, set).
+// Deleting, restoring, evicting, draining and stopping stay behind
+// suggest_action and the operator's approval.
+var dailyOps = []string{
+	"sds_backup_create",
+	"sds_gateway_create_iscsi",
+	"sds_gateway_create_nfs",
+	"sds_gateway_create_nvme",
+	"sds_gateway_start",
+	"sds_ha_create",
+	"sds_iscsi_chap",
+	"sds_node_register",
+	"sds_node_set_labels",
+	"sds_node_undrain",
+	"sds_notify_channel_test",
+	"sds_pool_add_cache",
+	"sds_pool_add_disk",
+	"sds_pool_create",
+	"sds_resource_add_dr",
+	"sds_resource_add_replica",
+	"sds_resource_add_volume",
+	"sds_resource_adopt",
+	"sds_resource_attach_diskless",
+	"sds_resource_create",
+	"sds_resource_detach_diskless",
+	"sds_resource_dual_primary",
+	"sds_resource_mount",
+	"sds_resource_profile_create",
+	"sds_resource_resize_volume",
+	"sds_resource_set_options",
+	"sds_resource_set_role",
+	"sds_resource_set_tiebreaker",
+	"sds_resource_unmount",
+	"sds_snapshot_create",
+	"sds_snapshot_schedule_create",
+	"sds_wan_repair",
+	"sds_zfs_dataset_create",
+	"sds_zfs_snapshot_clone",
+	"sds_zfs_volume_create",
+	"sds_zfs_volume_resize",
+}
+
+// k8sDailyOps are the sds-k8s write tools the agent calls directly.
+var k8sDailyOps = []string{"sds_k8s_app_create"}
+
+// mcpServers mounts the two sds-mcp servers: the bare-metal tools, which talk
+// to the controller, and — when a kubeconfig is set — the Kubernetes (CSI)
+// tools, which talk to the API server. Both are read-only except for their
+// day-to-day operations, enforced on both sides: sds-mcp registers nothing
+// else that writes, and opsdoctor mounts nothing else that does.
+func mcpServers() []opsdoctor.MCPServerSpec {
+	cmd := envOr("SDS_AI_MCP_CMD", "sds-mcp")
+	specs := []opsdoctor.MCPServerSpec{{
+		Name:      "sds",
+		Transport: "stdio",
+		Command:   cmd,
+		Args: []string{"--controller", envOr("SDS_AI_CONTROLLER", "192.168.123.250:3374"),
+			"--allow", strings.Join(dailyOps, ",")},
+		ReadOnly:       true,
+		WriteToolAllow: dailyOps,
+	}}
+	if kc := os.Getenv("SDS_AI_KUBECONFIG"); kc != "" {
+		specs = append(specs, opsdoctor.MCPServerSpec{
+			Name:           "sds-k8s",
+			Transport:      "stdio",
+			Command:        cmd,
+			Args:           []string{"k8s", "--kubeconfig", kc, "--allow", strings.Join(k8sDailyOps, ",")},
+			ReadOnly:       true,
+			WriteToolAllow: k8sDailyOps,
+		})
+	}
+	return specs
 }
 
 func withCORS(origin string, next http.Handler) http.Handler {
