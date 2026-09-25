@@ -65,22 +65,31 @@ var diagCollectors = []diagCollector{
 		},
 	},
 	{
+		Name: "drbd_config_peers",
+		What: "the hosts each DRBD resource's configuration names — a peer listed here is a replica, even when it is down",
+		cmd: func(_, max int) string {
+			return fmt.Sprintf("grep -HE '^[[:space:]]*on [^ ]+ *\\{' /etc/drbd.d/*.res 2>/dev/null | tail -n %d", max+1)
+		},
+	},
+	{
 		Name: "drbd_kernel",
 		What: "the kernel's own DRBD messages — split brain, refused connections, IO errors",
 		cmd: func(since, max int) string {
-			// dmesg -T is not on every build; the fallback keeps the raw
-			// timestamps rather than reporting nothing.
+			// Windowed like every other log here. dmesg has no notion of
+			// "since": it returned everything since boot, so an error a node
+			// recovered from hours ago was reported as a current fault.
 			return fmt.Sprintf(
-				"(dmesg -T 2>/dev/null || dmesg 2>&1) | grep -iE 'drbd|split.?brain' | tail -n %d", max+1)
+				"journalctl -k --since '-%dmin' --no-pager -o short-iso 2>&1 | grep -iE 'drbd|split.?brain' | tail -n %d",
+				since, max+1)
 		},
 	},
 	{
 		Name: "kernel_errors",
 		What: "kernel messages at error level and above: IO errors, OOM kills, filesystem aborts",
-		cmd: func(_, max int) string {
+		cmd: func(since, max int) string {
 			return fmt.Sprintf(
-				"(dmesg -T --level=emerg,alert,crit,err 2>/dev/null || dmesg 2>&1 | grep -iE 'error|fail|oom|I/O') | tail -n %d",
-				max+1)
+				"journalctl -k -p err --since '-%dmin' --no-pager -o short-iso 2>&1 | tail -n %d",
+				since, max+1)
 		},
 	},
 	{

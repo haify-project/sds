@@ -398,3 +398,41 @@ func TestUnreachableNodeIsItsOwnFinding(t *testing.T) {
 		t.Errorf("scanned.unreachable = %v, want [sds-e]", r.Scanned.Unreachable)
 	}
 }
+
+// A peer the resource's own configuration names is a replica, not a leftover
+// slot — here a Proxmox host SDS never registered, powered off. It was
+// reported as a phantom with forget-peer as the fix, which would have thrown
+// away a recoverable replica.
+func TestAConfiguredPeerThatIsDownIsNotAPhantom(t *testing.T) {
+	in := Input{
+		Window: time.Hour,
+		Nodes: []NodeReport{
+			node("sds-b", "drbd_status", strings.Split(phantomStatus, "\n")...),
+			node("sds-e", "drbd_config_peers",
+				"/etc/drbd.d/sds-meta.res:    on sds-b {",
+				"/etc/drbd.d/sds-meta.res:    on sds-d {",
+				"/etc/drbd.d/sds-meta.res:    on sds-e {"),
+		},
+	}
+	findings := Analyze(in)
+	if _, ok := findingByID(findings, "phantom-peer"); ok {
+		t.Fatal("a peer named in the resource's configuration was reported as a phantom")
+	}
+	f, ok := findingByID(findings, "peer-down")
+	if !ok {
+		t.Fatal("the unreachable replica was not reported at all")
+	}
+	for _, a := range f.Advice[:2] {
+		if strings.Contains(a, "forget-peer") {
+			t.Errorf("the first steps for a replica that is only down must not be forget-peer: %v", f.Advice)
+		}
+	}
+
+	// The same peer with no configuration reported stays a phantom, but the
+	// advice says to check the configuration first.
+	in.Nodes[1] = NodeReport{Node: "sds-e", Address: "sds-e", Reachable: true}
+	f, ok = findingByID(Analyze(in), "phantom-peer")
+	if !ok || !strings.Contains(f.Advice[0], "/etc/drbd.d/sds-meta.res") {
+		t.Errorf("without configuration the advice must say to check it first: %v", f.Advice)
+	}
+}

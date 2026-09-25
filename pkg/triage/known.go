@@ -55,8 +55,13 @@ func knownFindings(in Input) []Finding {
 // reports it as an error — the phantom simply sits in `Connecting` forever,
 // which is also what a peer that is merely down looks like.
 //
-// What makes it identifiable is the registry: a peer name DRBD knows and the
-// controller does not is not a node that is down, it is a node that is gone.
+// The registry alone cannot tell a phantom from a replica on a host SDS never
+// registered — a Proxmox node, say — that is merely powered off: both are
+// unregistered and both sit in Connecting. Reading the first as the second
+// told an operator to forget-peer a real, recoverable replica. The resource's
+// own configuration settles it: a peer it names is a replica that is down; a
+// peer it does not name is a leftover slot. When no node reported its
+// configuration, the finding says it could not tell rather than guessing.
 func matchPhantomPeer(in Input) []Finding {
 	known := map[string]bool{}
 	for _, n := range in.Nodes {
@@ -110,11 +115,44 @@ func matchPhantomPeer(in Input) []Finding {
 		}
 	}
 
+	configured, haveConfig := configuredPeers(in)
+
 	out := make([]Finding, 0, len(seen))
 	for _, p := range seen {
 		res := p.resource
 		if res == "" {
 			res = "<resource>"
+		}
+		if configured[p.resource+"/"+strings.ToLower(p.peer)] {
+			out = append(out, Finding{
+				ID:       "peer-down",
+				Title:    fmt.Sprintf("%s cannot reach its replica on %q", res, p.peer),
+				Severity: SeverityError,
+				Count:    len(p.lines),
+				Nodes:    sortedKeys(p.nodes),
+				Resource: p.resource,
+				Known:    true,
+				Cause: fmt.Sprintf("%q is a replica in %s's configuration, on a host that is not a "+
+					"registered SDS node. It has not connected: the host is down, unreachable, or not "+
+					"running DRBD. The resource runs on fewer copies until it returns.", p.peer, res),
+				Advice: []string{
+					fmt.Sprintf("Bring %s back (power it on, or fix its network) and it resyncs on its own", p.peer),
+					fmt.Sprintf("Watch it reconnect: drbdsetup status %s", res),
+					fmt.Sprintf("Only if %s is gone for good: remove the replica from the resource first, then drbdadm forget-peer %s:%s", p.peer, res, p.peer),
+				},
+				Caution:  "Do not forget-peer a replica that is only powered off: it would need a full resync to rejoin.",
+				Evidence: p.lines,
+			})
+			continue
+		}
+		advice := []string{
+			fmt.Sprintf("Confirm the slot is a leftover and not a node you meant to keep: drbdsetup status %s --verbose", res),
+			fmt.Sprintf("On every surviving node, clear it: drbdadm forget-peer %s:%s", res, p.peer),
+			fmt.Sprintf("Check the majority is now reachable: drbdsetup status %s", res),
+		}
+		if !haveConfig {
+			advice = append([]string{fmt.Sprintf(
+				"No node reported its DRBD configuration, so this could also be a replica that is only down: check /etc/drbd.d/%s.res for an `on %s` stanza before touching it", res, p.peer)}, advice...)
 		}
 		out = append(out, Finding{
 			ID:       "phantom-peer",
@@ -128,11 +166,7 @@ func matchPhantomPeer(in Input) []Finding {
 				"The slot still counts toward quorum, so the surviving nodes can never form a " +
 				"majority and the resource will not promote — while every node that is actually " +
 				"present looks healthy.",
-			Advice: []string{
-				fmt.Sprintf("Confirm the slot is a leftover and not a node you meant to keep: drbdsetup status %s --verbose", res),
-				fmt.Sprintf("On every surviving node, clear it: drbdadm forget-peer %s:%s", res, p.peer),
-				fmt.Sprintf("Check the majority is now reachable: drbdsetup status %s", res),
-			},
+			Advice: advice,
 			Caution: "forget-peer is not reversible. A node that is merely powered off will need a " +
 				"full resync to rejoin after this, so be sure the peer is gone for good.",
 			Evidence: p.lines,
@@ -140,6 +174,36 @@ func matchPhantomPeer(in Input) []Finding {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
 	return out
+}
+
+// configuredPeers reads the drbd_config_peers collector into a set of
+// "<resource>/<host>" for every host a resource's configuration names. The
+// second result is false when no node reported its configuration.
+func configuredPeers(in Input) (map[string]bool, bool) {
+	set := map[string]bool{}
+	have := false
+	for _, n := range in.Nodes {
+		out, ok := n.Collector("drbd_config_peers")
+		if !ok || !out.Ok {
+			continue
+		}
+		have = true
+		for _, line := range out.Lines {
+			// /etc/drbd.d/<resource>.res:    on <host> {
+			file, rest, found := strings.Cut(line, ":")
+			if !found {
+				continue
+			}
+			f := strings.Fields(rest)
+			if len(f) < 2 || f[0] != "on" {
+				continue
+			}
+			base := file[strings.LastIndex(file, "/")+1:]
+			res := strings.TrimSuffix(base, ".res")
+			set[res+"/"+strings.ToLower(strings.TrimSuffix(f[1], "{"))] = true
+		}
+	}
+	return set, have
 }
 
 // drbdResourceLine recognises the un-indented line that names a resource in
