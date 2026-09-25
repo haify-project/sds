@@ -9,6 +9,12 @@ spec:
     metadata: { labels: { app: sds-csi-node } }
     spec:
       serviceAccountName: sds-csi-node
+      # The kubelet never evicts a node-critical pod. Under disk pressure it
+      # evicted this plugin along with the workloads, and a node with no plugin
+      # cannot unmount: every volume on it stayed mounted and DRBD Primary, so
+      # the evicted database could not start anywhere else until someone
+      # unmounted it by hand.
+      priorityClassName: system-node-critical
       hostNetwork: true
       # With hostNetwork the pod otherwise uses the node's resolv.conf and cannot
       # resolve the in-cluster `sds-controller` Service name. ClusterFirstWithHostNet

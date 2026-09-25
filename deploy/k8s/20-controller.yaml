@@ -9,6 +9,9 @@ spec:
   template:
     metadata: { labels: { app: sds-csi-controller } }
     spec:
+      # Provisioning, resizing and snapshots stop with this pod; keep it off the
+      # list the kubelet evicts from when a node runs short.
+      priorityClassName: system-cluster-critical
       # Reach the external sds-controller VIP over the host network (a
       # flannel pod cannot hairpin to a VIP on its own node). DNS via CoreDNS.
       hostNetwork: true
