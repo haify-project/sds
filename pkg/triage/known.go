@@ -239,11 +239,26 @@ func drbdPeerLine(line string) (peer, state string, ok bool) {
 
 // ── 2. split brain ──────────────────────────────────────────────────────
 
+// isSplitBrainReport recognises DRBD saying a split brain happened, and only
+// that. Matching the words alone caught drbd-reactor's startup line
+// "Detected split-brain avoidance policy: 'quorum'" — a statement that the
+// cluster is protected — and turned every failover into a critical split-brain
+// finding telling the operator to discard one side's data.
+func isSplitBrainReport(l string) bool {
+	ll := strings.ToLower(l)
+	if !strings.Contains(ll, "split-brain") && !strings.Contains(ll, "split brain") {
+		return false
+	}
+	if strings.Contains(ll, "avoidance policy") || strings.Contains(ll, "automatically solved") {
+		return false
+	}
+	// "Split-Brain detected but unresolved, dropping connection!" from the
+	// kernel, and the split-brain handler being invoked.
+	return strings.Contains(ll, "detected") || strings.Contains(ll, "helper command")
+}
+
 func matchSplitBrain(in Input) []Finding {
-	ev, nodes := nodeLinesMatching(in, func(l string) bool {
-		ll := strings.ToLower(l)
-		return strings.Contains(ll, "split-brain") || strings.Contains(ll, "split brain")
-	}, "drbd_kernel", "kernel_errors", "reactor_journal")
+	ev, nodes := nodeLinesMatching(in, isSplitBrainReport, "drbd_kernel", "kernel_errors", "reactor_journal")
 	if len(ev) == 0 {
 		return nil
 	}

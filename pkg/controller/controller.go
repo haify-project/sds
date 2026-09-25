@@ -368,6 +368,7 @@ func (c *Controller) startNotifications() {
 	}
 
 	c.events = event.NewBus(c.config.Alert.HistorySize)
+	c.persistEvents()
 
 	opts := c.alertOptions()
 	c.alertMonitor = alert.NewMonitor(c.events, opts)
@@ -1030,4 +1031,43 @@ func (c *Controller) Close() error {
 	c.cancel()
 
 	return nil
+}
+
+// persistEvents keeps the event history in the database, so it survives the
+// controller restarting — which under Self-HA is every failover, the moment an
+// operator most wants to read what just happened.
+func (c *Controller) persistEvents() {
+	if c.db == nil {
+		return
+	}
+	retention := c.config.Alert.HistorySize
+	if retention <= 0 {
+		retention = event.DefaultHistory
+	}
+	records, err := c.db.RecentEventRecords(c.ctx, retention)
+	if err != nil {
+		c.logger.Warn("Could not load the event history", zap.Error(err))
+	}
+	restored := make([]event.Event, 0, len(records))
+	for _, r := range records {
+		var e event.Event
+		if json.Unmarshal(r, &e) == nil {
+			restored = append(restored, e)
+		}
+	}
+	c.events.Restore(restored)
+	c.events.SetPersister(func(e event.Event) {
+		data, err := json.Marshal(e)
+		if err != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := c.db.AppendEventRecord(ctx, data, retention); err != nil {
+			c.logger.Warn("Could not record an event", zap.Error(err))
+		}
+	})
+	if len(restored) > 0 {
+		c.logger.Info("Event history restored", zap.Int("events", len(restored)))
+	}
 }

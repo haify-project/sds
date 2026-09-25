@@ -223,6 +223,9 @@ type Bus struct {
 	subs     map[uint64]*subscription
 	nextSub  uint64
 	dropped  uint64
+	// persist, when set, records each published event outside the process,
+	// so the history outlives a controller restart. See SetPersister.
+	persist func(Event)
 }
 
 // NewBus creates a bus retaining the last history events. history <= 0 uses
@@ -279,7 +282,41 @@ func (b *Bus) Publish(e Event) Event {
 			b.dropped++
 		}
 	}
+	if b.persist != nil {
+		b.persist(e)
+	}
 	return e
+}
+
+// SetPersister records every event published from now on with fn. It is
+// called with the bus lock held, so fn must not publish.
+func (b *Bus) SetPersister(fn func(Event)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.persist = fn
+}
+
+// Restore loads earlier events into the history — what the controller that ran
+// before this one saw — and continues numbering after the highest ID among
+// them, so a client resuming with ?since= does not skip or repeat any.
+// Subscribers are not told: these events were delivered when they happened.
+func (b *Bus) Restore(events []Event) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, e := range events {
+		if e.ID == 0 {
+			continue
+		}
+		b.hist[b.histNext] = e
+		b.histNext++
+		if b.histNext == len(b.hist) {
+			b.histNext = 0
+			b.histWrap = true
+		}
+		if e.ID > b.nextID {
+			b.nextID = e.ID
+		}
+	}
 }
 
 // Subscribe returns a channel of events matching filter and a cancel function.

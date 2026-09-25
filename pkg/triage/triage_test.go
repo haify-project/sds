@@ -436,3 +436,27 @@ func TestAConfiguredPeerThatIsDownIsNotAPhantom(t *testing.T) {
 		t.Errorf("without configuration the advice must say to check it first: %v", f.Advice)
 	}
 }
+
+// drbd-reactor announces the policy that prevents split brain on every start,
+// in a line containing "split-brain". It is a statement that the cluster is
+// protected, and reading it as a split brain made every failover a critical
+// finding that told the operator to discard one side's data.
+func TestReactorsSplitBrainPolicyLineIsNotASplitBrain(t *testing.T) {
+	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{
+		node("sdt1", "reactor_journal",
+			"2026-09-26T00:43:26+08:00 sdt1 drbd-reactor[1156]: INFO [drbd_reactor::plugin::promoter] Detected split-brain avoidance policy: 'quorum'"),
+		node("sdt2", "drbd_kernel",
+			"kernel: drbd r2: Split-Brain detected, 1 primaries, automatically solved. Sync from this node"),
+	}})
+	for _, f := range r.Findings {
+		if f.ID == "split-brain" {
+			t.Fatalf("reported a split brain from a policy line or one DRBD resolved itself: %+v", f.Evidence)
+		}
+	}
+	r = Analyze(Input{Window: time.Hour, Nodes: []NodeReport{
+		node("sdt2", "drbd_kernel", "kernel: drbd r2 sdt3: Split-Brain detected but unresolved, dropping connection!"),
+	}})
+	if len(r.Findings) == 0 || r.Findings[0].ID != "split-brain" {
+		t.Fatalf("a real unresolved split brain was not reported: %+v", r.Findings)
+	}
+}
