@@ -357,6 +357,9 @@ func TestIsDegradedStates(t *testing.T) {
 		{NodeStateInfo{DiskState: "UpToDate", ReplicationState: "Disconnecting"}, "Disconnecting"},
 		{NodeStateInfo{DiskState: "UpToDate", ReplicationState: "Unconnected"}, "Unconnected"},
 		{NodeStateInfo{DiskState: "UpToDate", ReplicationState: "StandAlone"}, "StandAlone"},
+		// Connected again but still catching up: not a complete copy yet.
+		{NodeStateInfo{DiskState: "Inconsistent", ReplicationState: "SyncTarget"}, "Inconsistent"},
+		{NodeStateInfo{DiskState: "Outdated"}, "Outdated"},
 	} {
 		deg, reason := isDegraded(tc.state)
 		assert.True(t, deg, tc.want)

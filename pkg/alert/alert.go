@@ -961,6 +961,15 @@ func isDegraded(st NodeStateInfo) (bool, string) {
 		// Not exempted by ExpectedDiskless: a node with no disk by design still
 		// should not be reporting a failed one.
 		return true, fmt.Sprintf("disk state is %s", st.DiskState)
+	case "Inconsistent":
+		// Connected is not recovered. A replica catching up after an outage
+		// holds a partial copy until the resync ends, and a second failure in
+		// that window leaves one copy of the data. Reporting it recovered the
+		// moment the link came back told an operator the redundancy was there
+		// while it was still being rebuilt.
+		return true, "disk is Inconsistent (resyncing; not yet a complete copy)"
+	case "Outdated":
+		return true, "disk is Outdated (holds data older than its peers)"
 	}
 	switch st.ReplicationState {
 	case "StandAlone", "Disconnecting", "Unconnected":
