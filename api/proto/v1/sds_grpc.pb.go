@@ -43,6 +43,7 @@ const (
 	SDSController_RemoveVolume_FullMethodName             = "/v1.SDSController/RemoveVolume"
 	SDSController_ResizeVolume_FullMethodName             = "/v1.SDSController/ResizeVolume"
 	SDSController_UpdateResourceOptions_FullMethodName    = "/v1.SDSController/UpdateResourceOptions"
+	SDSController_RepairResource_FullMethodName           = "/v1.SDSController/RepairResource"
 	SDSController_ResourceStatus_FullMethodName           = "/v1.SDSController/ResourceStatus"
 	SDSController_SetPrimary_FullMethodName               = "/v1.SDSController/SetPrimary"
 	SDSController_SetSecondary_FullMethodName             = "/v1.SDSController/SetSecondary"
@@ -175,6 +176,9 @@ type SDSControllerClient interface {
 	RemoveVolume(ctx context.Context, in *RemoveVolumeRequest, opts ...grpc.CallOption) (*RemoveVolumeResponse, error)
 	ResizeVolume(ctx context.Context, in *ResizeVolumeRequest, opts ...grpc.CallOption) (*ResizeVolumeResponse, error)
 	UpdateResourceOptions(ctx context.Context, in *UpdateResourceOptionsRequest, opts ...grpc.CallOption) (*UpdateResourceOptionsResponse, error)
+	// Brings every participant's copy of a resource's DRBD config back into
+	// agreement, tiebreakers and diskless clients included, and applies it.
+	RepairResource(ctx context.Context, in *RepairResourceRequest, opts ...grpc.CallOption) (*RepairResourceResponse, error)
 	ResourceStatus(ctx context.Context, in *ResourceStatusRequest, opts ...grpc.CallOption) (*ResourceStatusResponse, error)
 	SetPrimary(ctx context.Context, in *SetPrimaryRequest, opts ...grpc.CallOption) (*SetPrimaryResponse, error)
 	SetSecondary(ctx context.Context, in *SetSecondaryRequest, opts ...grpc.CallOption) (*SetSecondaryResponse, error)
@@ -603,6 +607,16 @@ func (c *sDSControllerClient) UpdateResourceOptions(ctx context.Context, in *Upd
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateResourceOptionsResponse)
 	err := c.cc.Invoke(ctx, SDSController_UpdateResourceOptions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RepairResource(ctx context.Context, in *RepairResourceRequest, opts ...grpc.CallOption) (*RepairResourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RepairResourceResponse)
+	err := c.cc.Invoke(ctx, SDSController_RepairResource_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1621,6 +1635,9 @@ type SDSControllerServer interface {
 	RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error)
 	ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error)
 	UpdateResourceOptions(context.Context, *UpdateResourceOptionsRequest) (*UpdateResourceOptionsResponse, error)
+	// Brings every participant's copy of a resource's DRBD config back into
+	// agreement, tiebreakers and diskless clients included, and applies it.
+	RepairResource(context.Context, *RepairResourceRequest) (*RepairResourceResponse, error)
 	ResourceStatus(context.Context, *ResourceStatusRequest) (*ResourceStatusResponse, error)
 	SetPrimary(context.Context, *SetPrimaryRequest) (*SetPrimaryResponse, error)
 	SetSecondary(context.Context, *SetSecondaryRequest) (*SetSecondaryResponse, error)
@@ -1886,6 +1903,9 @@ func (UnimplementedSDSControllerServer) ResizeVolume(context.Context, *ResizeVol
 }
 func (UnimplementedSDSControllerServer) UpdateResourceOptions(context.Context, *UpdateResourceOptionsRequest) (*UpdateResourceOptionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateResourceOptions not implemented")
+}
+func (UnimplementedSDSControllerServer) RepairResource(context.Context, *RepairResourceRequest) (*RepairResourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RepairResource not implemented")
 }
 func (UnimplementedSDSControllerServer) ResourceStatus(context.Context, *ResourceStatusRequest) (*ResourceStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResourceStatus not implemented")
@@ -2627,6 +2647,24 @@ func _SDSController_UpdateResourceOptions_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).UpdateResourceOptions(ctx, req.(*UpdateResourceOptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RepairResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RepairResourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RepairResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RepairResource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RepairResource(ctx, req.(*RepairResourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4472,6 +4510,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateResourceOptions",
 			Handler:    _SDSController_UpdateResourceOptions_Handler,
+		},
+		{
+			MethodName: "RepairResource",
+			Handler:    _SDSController_RepairResource_Handler,
 		},
 		{
 			MethodName: "ResourceStatus",

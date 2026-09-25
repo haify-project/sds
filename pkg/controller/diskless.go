@@ -561,3 +561,134 @@ func splitCSV(s string) []string {
 	}
 	return out
 }
+
+// addDisklessVolumeOverrides returns content with volume volNum added, as
+// `disk none` on the given minor, to every `on` stanza that is diskless.
+//
+// A node is diskless in a resource's config exactly when its `on` stanza
+// overrides its volumes with `disk none` — tiebreakers and diskless clients
+// alike. When a volume is added to the resource, those stanzas must gain an
+// override for it too. Without one, every node reads the new volume as having
+// a disk on the tiebreaker, and the tiebreaker's own copy of the config (if it
+// is rewritten at all) has no such volume: DRBD then refuses the connection
+// ("packet received for volume 1, which is not configured locally") and the
+// tiebreaker retries forever. A two-replica resource left with its tiebreaker
+// disconnected has no quorum to spare, so the next node failure does not fail
+// over — which is the state two gateways on the test cluster were found in.
+func addDisklessVolumeOverrides(content string, volNum, minor int) string {
+	lines := strings.Split(content, "\n")
+	var out []string
+	depth := 0
+	inOn := false
+	onHasDiskNone := false
+	onHasThisVolume := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !inOn && depth == 1 && strings.HasPrefix(trimmed, "on ") && strings.Contains(trimmed, "{") {
+			inOn, onHasDiskNone, onHasThisVolume = true, false, false
+		}
+		if inOn {
+			if strings.HasPrefix(trimmed, "disk") && strings.Contains(trimmed, "none") {
+				onHasDiskNone = true
+			}
+			if f := strings.Fields(trimmed); len(f) >= 2 && f[0] == "volume" && strings.TrimSuffix(f[1], "{") == strconv.Itoa(volNum) {
+				onHasThisVolume = true
+			}
+		}
+		opens := strings.Count(line, "{")
+		closes := strings.Count(line, "}")
+		// The line that closes the `on` stanza: depth returns to 1 after it.
+		if inOn && closes > 0 && depth+opens-closes == 1 {
+			if onHasDiskNone && !onHasThisVolume {
+				out = append(out,
+					fmt.Sprintf("        volume %d {", volNum),
+					fmt.Sprintf("            device    minor %d;", minor),
+					"            disk      none;",
+					"        }")
+			}
+			inOn = false
+		}
+		out = append(out, line)
+		depth += opens - closes
+	}
+	return strings.Join(out, "\n")
+}
+
+// disklessParticipantHosts returns the resolved addresses of every node that
+// takes part in a resource without a disk: quorum tiebreakers and diskless data
+// clients. They hold a copy of the resource config like any other node, so any
+// change to the resource's volume set has to reach them as well.
+func (rm *ResourceManager) disklessParticipantHosts(ctx context.Context, resource string) []string {
+	hosts := rm.disklessHosts(ctx, resource)
+	if rm.controller.db == nil {
+		return hosts
+	}
+	dbRes, err := rm.controller.db.GetResource(ctx, resource)
+	if err != nil || dbRes == nil {
+		return hosts
+	}
+	seen := map[string]bool{}
+	for _, h := range hosts {
+		seen[h] = true
+	}
+	for _, n := range splitCSV(dbRes.DisklessClients) {
+		if h := rm.controller.ResolveHost(n); h != "" && !seen[h] {
+			seen[h] = true
+			hosts = append(hosts, h)
+		}
+	}
+	return hosts
+}
+
+// removeDisklessVolumeOverrides returns content with volume volNum's override
+// removed from every `on` stanza — the counterpart of
+// addDisklessVolumeOverrides. Removing a volume leaves its `disk none` override
+// behind otherwise, and a diskless node whose config still describes a volume
+// its peers no longer have fails the handshake exactly as one missing a volume
+// does.
+func removeDisklessVolumeOverrides(content string, volNum int) string {
+	lines := strings.Split(content, "\n")
+	var out []string
+	depth := 0
+	inOn := false
+	skipping := false
+	skipDepth := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		opens := strings.Count(line, "{")
+		closes := strings.Count(line, "}")
+		if !inOn && depth == 1 && strings.HasPrefix(trimmed, "on ") && strings.Contains(trimmed, "{") {
+			inOn = true
+		}
+		if inOn && !skipping && depth == 2 {
+			if f := strings.Fields(trimmed); len(f) >= 2 && f[0] == "volume" && strings.TrimSuffix(f[1], "{") == strconv.Itoa(volNum) {
+				skipping, skipDepth = true, depth
+			}
+		}
+		next := depth + opens - closes
+		if skipping {
+			if next == skipDepth {
+				skipping = false
+			}
+			depth = next
+			continue
+		}
+		out = append(out, line)
+		if inOn && next == 1 {
+			inOn = false
+		}
+		depth = next
+	}
+	return strings.Join(out, "\n")
+}
+
+// reconcileDisklessVolumeOverrides gives every diskless stanza a `disk none`
+// override for every volume the resource has. It is addDisklessVolumeOverrides
+// applied for each volume, and like it, a no-op on a config already in
+// agreement.
+func reconcileDisklessVolumeOverrides(content string) string {
+	for _, v := range dedupResourceVolumes(parseResourceConfigVolumes(content)) {
+		content = addDisklessVolumeOverrides(content, v.VolumeID, v.Minor)
+	}
+	return content
+}

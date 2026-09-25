@@ -203,7 +203,9 @@ func (rm *ResourceManager) resourceHosts(ctx context.Context, resource string) (
 // disklessHosts returns the resolved addresses of a resource's diskless quorum
 // tiebreaker nodes, or nil when it has none. Kept separate from resourceHosts
 // because tiebreakers must never be treated as data-bearing nodes (e.g. as
-// failover Primary candidates) — only teardown needs them.
+// failover Primary candidates). They do hold a copy of the resource config,
+// though, so teardown and every change to the volume set must reach them —
+// see disklessParticipantHosts.
 func (rm *ResourceManager) disklessHosts(ctx context.Context, resource string) []string {
 	if rm.controller.db == nil {
 		return nil
@@ -2661,6 +2663,11 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	if err != nil {
 		return err
 	}
+	// Tiebreakers and diskless clients carry the resource config too. They get
+	// no LV and no metadata, but the new volume has to appear in their copy —
+	// as `disk none` — or DRBD refuses their connection. See
+	// addDisklessVolumeOverrides.
+	allHosts := append(append([]string(nil), hosts...), rm.disklessParticipantHosts(ctx, resource)...)
 
 	// Get current config to find next volume number and minor
 	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("cat /etc/drbd.d/%s.res", resource))
@@ -2723,7 +2730,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	// device-minor". Collect minors across every resource file instead.
 	// (The previous in-file scan was additionally broken — it required 4
 	// fields on a 3-field line and always allocated minor 0.)
-	newMinor, err := rm.nextGlobalMinor(ctx, hosts)
+	newMinor, err := rm.nextGlobalMinor(ctx, allHosts)
 	if err != nil {
 		return fmt.Errorf("failed to allocate device minor: %w", err)
 	}
@@ -2750,7 +2757,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 			zap.String("volume", volume))
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		_, _ = rm.deployment.DistributeConfig(cleanupCtx, hosts, originalConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource))
+		_, _ = rm.deployment.DistributeConfig(cleanupCtx, allHosts, originalConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource))
 		if encrypt {
 			// Close before removing: the open container holds the LV, and a key
 			// left behind outlives the volume it was protecting.
@@ -2783,9 +2790,9 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	updatedLines := append([]string{}, lines[:insertIdx]...)
 	updatedLines = append(updatedLines, volumeBlock)
 	updatedLines = append(updatedLines, lines[insertIdx:]...)
-	updatedConfig := strings.Join(updatedLines, "\n")
+	updatedConfig := addDisklessVolumeOverrides(strings.Join(updatedLines, "\n"), newVolNum, newMinor)
 
-	if _, err := rm.deployment.DistributeConfig(ctx, hosts, updatedConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
+	if _, err := rm.deployment.DistributeConfig(ctx, allHosts, updatedConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
 		return fmt.Errorf("failed to distribute updated config: %w", err)
 	}
 
@@ -2801,7 +2808,7 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	}
 
 	adjustCmd := fmt.Sprintf("sudo drbdadm adjust %s", resource)
-	adjustResult, err := rm.deployment.Exec(ctx, hosts, adjustCmd)
+	adjustResult, err := rm.deployment.Exec(ctx, allHosts, adjustCmd)
 	if err != nil {
 		return fmt.Errorf("failed to adjust resource after volume add: %w", err)
 	}
@@ -2857,6 +2864,45 @@ func (rm *ResourceManager) SetOptions(ctx context.Context, resource string, opti
 	if len(options) == 0 {
 		return fmt.Errorf("no options provided")
 	}
+	if err := rm.rewriteResourceConfig(ctx, resource, func(current string) (string, error) {
+		updated, err := applyDrbdOptions(current, options)
+		if err != nil {
+			return "", fmt.Errorf("failed to apply options: %w", err)
+		}
+		return updated, nil
+	}); err != nil {
+		return err
+	}
+	rm.controller.logger.Info("Updated DRBD options",
+		zap.String("resource", resource),
+		zap.Any("options", options))
+	return nil
+}
+
+// RepairResourceConfig brings every participant's copy of a resource's config
+// back into agreement and applies it.
+//
+// What it fixes is a config that disagrees with itself about the diskless
+// nodes: a volume the tiebreaker's stanza has no `disk none` override for, and
+// a tiebreaker whose copy of the file never heard of that volume. Resources
+// that gained a volume before AddVolume learned to update diskless nodes — every
+// gateway on a cluster with a tiebreaker — are in exactly that state, their
+// tiebreaker retrying a connection DRBD keeps refusing.
+func (rm *ResourceManager) RepairResourceConfig(ctx context.Context, resource string) error {
+	return rm.rewriteResourceConfig(ctx, resource, func(current string) (string, error) {
+		return current, nil
+	})
+}
+
+// rewriteResourceConfig reads a resource's config from a diskful node, applies
+// change, reconciles the diskless nodes' volume overrides, and — when anything
+// differs from what the diskless nodes hold — installs the result on every
+// participant and adjusts it.
+//
+// Every participant, not every diskful node: tiebreakers and diskless clients
+// hold the same file. Rewriting it on the diskful nodes alone is how their
+// copies drifted in the first place.
+func (rm *ResourceManager) rewriteResourceConfig(ctx context.Context, resource string, change func(string) (string, error)) error {
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
@@ -2867,9 +2913,13 @@ func (rm *ResourceManager) SetOptions(ctx context.Context, resource string, opti
 	if len(hosts) == 0 {
 		return fmt.Errorf("resource %q has no nodes", resource)
 	}
+	diskless := rm.disklessParticipantHosts(ctx, resource)
+	allHosts := append(append([]string(nil), hosts...), diskless...)
+	resPath := fmt.Sprintf("/etc/drbd.d/%s.res", resource)
 
-	// Read the current config from one node; the mesh keeps them identical.
-	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("cat /etc/drbd.d/%s.res", resource))
+	// Read the current config from a diskful node: it is the one that
+	// describes the resource's volumes.
+	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, "cat "+resPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
@@ -2883,24 +2933,42 @@ func (rm *ResourceManager) SetOptions(ctx context.Context, resource string, opti
 		return fmt.Errorf("resource %q config not found on %s", resource, hosts[0])
 	}
 
-	updated, err := applyDrbdOptions(current, options)
+	updated, err := change(current)
 	if err != nil {
-		return fmt.Errorf("failed to apply options: %w", err)
+		return err
 	}
+	updated = reconcileDisklessVolumeOverrides(updated)
 
-	if _, err := rm.deployment.DistributeConfig(ctx, hosts, updated, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
+	if _, err := rm.deployment.DistributeConfig(ctx, allHosts, updated, resPath); err != nil {
 		return fmt.Errorf("failed to distribute updated config: %w", err)
 	}
 
-	if err := rm.execAllSuccess(ctx, hosts, fmt.Sprintf("sudo drbdadm adjust %s", resource),
-		"failed to apply DRBD options"); err != nil {
-		return err
+	// Diskless nodes first. When a diskful node learns that a peer's volume
+	// is diskless it drops the bitmap it keeps for that peer, and the kernel
+	// refuses that ("Can not drop the bitmap when both sides have a disk")
+	// until the peer has actually connected as diskless. Adjusting everyone at
+	// once lost that race on the first repair of a live gateway.
+	adjust := fmt.Sprintf("sudo drbdadm adjust %s", resource)
+	if len(diskless) > 0 {
+		if err := rm.execAllSuccess(ctx, diskless, adjust, "failed to apply the resource config on the diskless nodes"); err != nil {
+			return err
+		}
 	}
-
-	rm.controller.logger.Info("Updated DRBD options",
-		zap.String("resource", resource),
-		zap.Any("options", options))
-	return nil
+	// The diskless nodes connect asynchronously, so the diskful adjust can
+	// still arrive first. Give it a few seconds' grace; with no diskless node
+	// there is nothing to wait for and the first answer stands.
+	var err2 error
+	for attempt := 0; attempt < 5; attempt++ {
+		if err2 = rm.execAllSuccess(ctx, hosts, adjust, "failed to apply the resource config"); err2 == nil || len(diskless) == 0 {
+			return err2
+		}
+		select {
+		case <-ctx.Done():
+			return err2
+		case <-time.After(3 * time.Second):
+		}
+	}
+	return err2
 }
 
 // DeleteResource deletes a DRBD resource from all nodeAddresses
@@ -3732,6 +3800,8 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 	if err != nil {
 		return err
 	}
+	// The diskless participants' copies of the config lose the volume too.
+	allHosts := append(append([]string(nil), hosts...), rm.disklessParticipantHosts(ctx, resource)...)
 
 	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("cat /etc/drbd.d/%s.res", resource))
 	if err != nil {
@@ -3767,13 +3837,13 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 	}
 	updatedLines := append([]string{}, lines[:start]...)
 	updatedLines = append(updatedLines, lines[target.EndLine+1:]...)
-	newConfig := strings.Join(updatedLines, "\n")
+	newConfig := removeDisklessVolumeOverrides(strings.Join(updatedLines, "\n"), int(volumeID))
 
-	if _, err := rm.deployment.DistributeConfig(ctx, hosts, newConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
+	if _, err := rm.deployment.DistributeConfig(ctx, allHosts, newConfig, fmt.Sprintf("/etc/drbd.d/%s.res", resource)); err != nil {
 		return fmt.Errorf("failed to distribute updated config: %w", err)
 	}
 
-	adjustRes, err := rm.deployment.Exec(ctx, hosts, fmt.Sprintf("sudo drbdadm adjust %s", resource))
+	adjustRes, err := rm.deployment.Exec(ctx, allHosts, fmt.Sprintf("sudo drbdadm adjust %s", resource))
 	if err != nil {
 		return fmt.Errorf("failed to adjust resource after config update: %w", err)
 	}

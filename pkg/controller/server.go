@@ -692,6 +692,13 @@ func (s *Server) AddVolume(ctx context.Context, req *sdspb.AddVolumeRequest) (*s
 	}, nil
 }
 
+func (s *Server) RepairResource(ctx context.Context, req *sdspb.RepairResourceRequest) (*sdspb.RepairResourceResponse, error) {
+	if err := s.resources.RepairResourceConfig(ctx, req.Name); err != nil {
+		return &sdspb.RepairResourceResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.RepairResourceResponse{Success: true, Message: "Resource config reconciled on every participant and applied"}, nil
+}
+
 func (s *Server) UpdateResourceOptions(ctx context.Context, req *sdspb.UpdateResourceOptionsRequest) (*sdspb.UpdateResourceOptionsResponse, error) {
 	if err := s.resources.SetOptions(ctx, req.Name, req.Options); err != nil {
 		return &sdspb.UpdateResourceOptionsResponse{

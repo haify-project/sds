@@ -724,6 +724,18 @@ func (c *SDSClient) AddVolume(ctx context.Context, resource, volume, pool string
 
 // UpdateResourceOptions applies DRBD options ("section/key" -> value) to an
 // existing resource and runs drbdadm adjust across the cluster.
+// RepairResource reconciles every participant's copy of a resource's config.
+func (c *SDSClient) RepairResource(ctx context.Context, resource string) error {
+	resp, err := c.client.RepairResource(ctx, &sdspb.RepairResourceRequest{Name: resource})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 func (c *SDSClient) UpdateResourceOptions(ctx context.Context, resource string, options map[string]string) error {
 	resp, err := c.client.UpdateResourceOptions(ctx, &sdspb.UpdateResourceOptionsRequest{
 		Name:    resource,

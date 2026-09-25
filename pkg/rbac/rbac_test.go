@@ -21,6 +21,9 @@ func TestClassify(t *testing.T) {
 		{"/v1.SDSController/RegisterNode", "node", ActWrite},
 		{"/v1.SDSController/ListNodes", "node", ActRead},
 		{"/v1.SDSController/CreateResource", "resource", ActWrite},
+		// Rewrites and adjusts the config on every node: a write, not a read,
+		// however much it sounds like maintenance.
+		{"/v1.SDSController/RepairResource", "resource", ActWrite},
 		{"/v1.SDSController/ResourceStatus", "resource", ActRead},
 		{"/v1.SDSController/SetPrimary", "resource", ActWrite},
 		// Off-cluster backups must not fall through to "system", where an

@@ -58,9 +58,39 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceDemote())
 	cmd.AddCommand(resourceDiskless())
 	cmd.AddCommand(resourceSnapshot())
+	cmd.AddCommand(resourceRepair())
 	cmd.AddCommand(resourceProfileCommand())
 
 	return cmd
+}
+
+func resourceRepair() *cobra.Command {
+	return &cobra.Command{
+		Use:   "repair <resource>",
+		Short: "Bring every node's copy of a resource's DRBD config back into agreement",
+		Long: "Rewrite a resource's DRBD config on every participant — diskful replicas, " +
+			"quorum tiebreakers and diskless clients — so they agree on the resource's " +
+			"volumes, then apply it with `drbdadm adjust`.\n\n" +
+			"Use it when a tiebreaker or diskless client of a multi-volume resource stays " +
+			"in `connection:Connecting` and its kernel log says a packet was received " +
+			"\"for volume N, which is not configured locally\". Gateways created on a " +
+			"cluster with a tiebreaker before this was fixed are in that state.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			if err := sdsClient.RepairResource(ctx, args[0]); err != nil {
+				return fmt.Errorf("failed to repair %s: %w", args[0], err)
+			}
+			fmt.Printf("Config for '%s' reconciled on every node and adjusted\n", args[0])
+			return nil
+		},
+	}
 }
 
 func resourceSetOptions() *cobra.Command {

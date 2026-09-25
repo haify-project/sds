@@ -85,6 +85,11 @@ service SDSController {
   rpc UpdateResourceOptions(UpdateResourceOptionsRequest) returns (UpdateResourceOptionsResponse) {
     option (google.api.http) = { post: "/v1/resources/{name}/options"; body: "*"; };
   }
+  // Brings every participant's copy of a resource's DRBD config back into
+  // agreement, tiebreakers and diskless clients included, and applies it.
+  rpc RepairResource(RepairResourceRequest) returns (RepairResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/repair"; body: "*"; };
+  }
   rpc ResourceStatus(ResourceStatusRequest) returns (ResourceStatusResponse) {
     option (google.api.http) = { get: "/v1/resources/{name}/status"; };
   }
@@ -1097,6 +1102,15 @@ message UpdateResourceOptionsRequest {
 }
 
 message UpdateResourceOptionsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RepairResourceRequest {
+  string name = 1;
+}
+
+message RepairResourceResponse {
   bool success = 1;
   string message = 2;
 }
