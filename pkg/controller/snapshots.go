@@ -212,10 +212,12 @@ func (sm *SnapshotManager) PopulateVolume(ctx context.Context, resource string, 
 	// peers) before dd exits, so a later promote elsewhere cannot read stale
 	// data. Errors are fatal: a partial copy must never look like success.
 	cmd := fmt.Sprintf(
-		"set -e; %s SZ=$(sudo blockdev --getsize64 %s); "+
-			"sudo dd if=%s of=%s bs=4M count=$SZ iflag=fullblock,count_bytes oflag=direct conv=fsync status=none; "+
+		"set -e; %s SZ=$(sudo blockdev --getsize64 %s); %s"+
+			"sudo dd if=%s of=%s bs=4M count=$SZ iflag=fullblock,count_bytes oflag=direct conv=$CONV status=none; "+
 			"sudo blockdev --flushbufs %s; echo $SZ",
-		activateSnapshotCmd(sourceDevice), target, sourceDevice, target, target)
+		activateSnapshotCmd(sourceDevice), target,
+		sparseWriteSetup(sm.controller.resources.zeroReadingReplicas(ctx, resource), target),
+		sourceDevice, target, target)
 	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err != nil {
 		return 0, fmt.Errorf("copy %s -> %s on %s: %w", sourceDevice, target, node, err)

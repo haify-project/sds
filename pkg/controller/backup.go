@@ -336,14 +336,22 @@ func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session,
 			return fmt.Errorf("volume %d of %q reports a zero-byte DRBD device; refusing to record an empty backup",
 				v.VolumeID, info.Name)
 		}
-		object := backup.ObjectPath(rec.Prefix, fmt.Sprintf("volume-%d.img", v.VolumeID))
+		// Compressed on the way out. A thin volume holding 1 GiB of data in a
+		// 100 GiB device used to upload — and store, and bill for — all 100
+		// GiB, most of it zeros. gzip is on every node SDS supports, so the
+		// restoring node never lacks the tool to read it back.
+		object := backup.ObjectPath(rec.Prefix, fmt.Sprintf("volume-%d.img.gz", v.VolumeID))
 		snapDev := fmt.Sprintf("/dev/%s/%s", v.Pool, snaps[v.VolumeID])
 
 		// pipefail is what makes a truncated read a failed backup: without it
 		// the pipeline's exit status is rclone's alone, and rclone happily
-		// stores whatever bytes reached it before dd died.
-		cmd := fmt.Sprintf("set -e -o pipefail; sudo dd if=%s bs=4M count=%d iflag=fullblock,count_bytes status=none | %s",
-			snapDev, size, sess.PushCmd(object, size))
+		// stores whatever bytes reached it before dd died. The compressed
+		// byte count is taken on the way through, so what the target stored
+		// can still be checked against what was sent.
+		cmd := fmt.Sprintf(`set -e -o pipefail; CNT=$(mktemp); trap 'rm -f "$CNT"' EXIT
+sudo dd if=%s bs=4M count=%d iflag=fullblock,count_bytes status=none | gzip -1 -c | tee >(wc -c > "$CNT") | %s
+for i in $(seq 1 100); do [ -s "$CNT" ] && break; sleep 0.1; done
+echo "SDS_SENT=$(cat "$CNT")"`, snapDev, size, sess.PushCmd(object, size))
 		*uploaded = append(*uploaded, object)
 		res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
 		if err != nil {
@@ -352,6 +360,10 @@ func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session,
 		if !res.AllSuccess() {
 			return fmt.Errorf("upload volume %d of %q failed: %s", v.VolumeID, info.Name, res.FailureDetails())
 		}
+		sent, err := sentBytes(res)
+		if err != nil {
+			return fmt.Errorf("upload volume %d of %q: %w", v.VolumeID, info.Name, err)
+		}
 
 		// Ask the far end how much it actually stored. An upload command that
 		// exits 0 is not evidence: this is.
@@ -359,10 +371,10 @@ func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session,
 		if err != nil {
 			return fmt.Errorf("verify volume %d of %q: %w", v.VolumeID, info.Name, err)
 		}
-		if stored != size {
+		if stored != sent {
 			return fmt.Errorf(
 				"volume %d of %q uploaded short: sent %d bytes, target holds %d",
-				v.VolumeID, info.Name, size, stored)
+				v.VolumeID, info.Name, sent, stored)
 		}
 
 		rec.Volumes = append(rec.Volumes, database.BackupVolume{
@@ -577,4 +589,20 @@ func (bm *BackupManager) drbdDeviceBytes(ctx context.Context, host, resource str
 // shellSingleQuote renders s as a single-quoted shell word.
 func shellSingleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// sentBytes reads the compressed byte count an upload reports.
+func sentBytes(res *deployment.ExecResult) (uint64, error) {
+	for _, h := range res.Hosts {
+		for _, line := range strings.Split(h.Output, "\n") {
+			if v, ok := strings.CutPrefix(strings.TrimSpace(line), "SDS_SENT="); ok {
+				n, err := strconv.ParseUint(strings.TrimSpace(v), 10, 64)
+				if err != nil || n == 0 {
+					return 0, fmt.Errorf("the upload did not report how much it sent (%q)", v)
+				}
+				return n, nil
+			}
+		}
+	}
+	return 0, fmt.Errorf("the upload did not report how much it sent")
 }

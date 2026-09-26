@@ -138,9 +138,12 @@ func (bm *BackupManager) restoreVolume(ctx context.Context, sess backup.Session,
 	// pipefail makes a failed download fail the whole restore instead of
 	// leaving dd to write a short stream and exit 0; `set -e` is what stops the
 	// trailing flushbufs from overwriting that failure with its own exit 0.
+	// On all-thin, unencrypted replicas the zero runs are skipped rather than
+	// written; see sparse_write.go.
 	cmd := fmt.Sprintf(
-		"set -e -o pipefail; %s | sudo dd of=%s bs=4M count=%d iflag=fullblock,count_bytes oflag=direct conv=fsync status=none; sudo blockdev --flushbufs %s",
-		sess.PullCmd(v.Object), target, v.Bytes, target)
+		"set -e -o pipefail; %s%s%s | sudo dd of=%s bs=4M count=%d iflag=fullblock,count_bytes oflag=direct conv=$CONV status=none; sudo blockdev --flushbufs %s",
+		sparseWriteSetup(bm.controller.resources.zeroReadingReplicas(ctx, resource), target),
+		sess.PullCmd(v.Object), decompressFor(v.Object), target, v.Bytes, target)
 	// Same 30-second default, same consequence in the other direction: a
 	// truncated restore that reports success. See execDataMove.
 	res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
@@ -356,4 +359,14 @@ func formatBytes(n uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// decompressFor is the pipeline stage that turns a stored image back into raw
+// blocks: backups taken before images were compressed have no suffix and are
+// written as they are.
+func decompressFor(object string) string {
+	if strings.HasSuffix(object, ".gz") {
+		return " | gzip -dc"
+	}
+	return ""
 }

@@ -161,3 +161,8 @@ func TestSnapshotsAreActivatedBeforeTheyAreRead(t *testing.T) {
 		assert.Empty(t, activateSnapshotCmd(d), d)
 	}
 }
+
+func TestRestoreDecompressesOnlyCompressedImages(t *testing.T) {
+	assert.Equal(t, " | gzip -dc", decompressFor("data/b1/volume-0.img.gz"))
+	assert.Equal(t, "", decompressFor("data/b1/volume-0.img"), "a backup from before compression is raw")
+}

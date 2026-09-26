@@ -62,6 +62,11 @@ func (s *backupExecStub) exec(hosts []string, cmd string) (*deployment.ExecResul
 		if s.uploadFails {
 			return failedExecResult(hosts, "dd: reading '/dev/vg0/...': Input/output error"), nil
 		}
+		if strings.Contains(cmd, "sudo dd if=") {
+			// The image pipeline reports the compressed bytes it sent; the
+			// fixture's target stores storedBytes of them.
+			return successExecResult(hosts, fmt.Sprintf("SDS_SENT=%d\n", backupVolumeBytes)), nil
+		}
 		return successExecResult(hosts, ""), nil
 	case strings.Contains(cmd, "/sys/class/block/"):
 		return successExecResult(hosts, fmt.Sprintf("%d\n", backupVolumeBytes/512)), nil
@@ -116,7 +121,8 @@ func TestBackupCreateRecordsACompletedBackup(t *testing.T) {
 	assert.Equal(t, database.BackupStateCompleted, rec.State)
 	assert.Equal(t, backupVolumeBytes, rec.TotalBytes)
 	require.Len(t, rec.Volumes, 1)
-	assert.Equal(t, "data/"+rec.ID+"/volume-0.img", rec.Volumes[0].Object)
+	assert.Equal(t, "data/"+rec.ID+"/volume-0.img.gz", rec.Volumes[0].Object)
+	assert.Contains(t, stub.uploads[0], "gzip -1 -c", "images are compressed on the way out")
 
 	// The image must be bounded by the DRBD device's size, not by the backing
 	// LV's: with meta-disk internal the LV is larger, and its tail is DRBD
@@ -324,7 +330,10 @@ func TestRestoreWritesThroughTheDRBDDeviceBoundedByTheImage(t *testing.T) {
 	// replicate the restore to the peers as part of the write path.
 	assert.Contains(t, restoreCmd, "of=/dev/drbd/by-res/data/0")
 	assert.Contains(t, restoreCmd, fmt.Sprintf("count=%d", backupVolumeBytes))
-	assert.Contains(t, restoreCmd, "conv=fsync")
+	// The fixture's replicas are not thin, so every byte is written.
+	assert.Contains(t, restoreCmd, "CONV=fsync; ")
+	assert.Contains(t, restoreCmd, "conv=$CONV")
+	assert.NotContains(t, restoreCmd, "sparse")
 	assert.Contains(t, restoreCmd, "set -e -o pipefail")
 }
 

@@ -2,6 +2,9 @@ package controller
 
 import (
 	"context"
+	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 )
@@ -70,4 +73,28 @@ func TestResourceCreationRefusesAnOfflineNode(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "n3") || strings.Contains(err.Error(), "n1,") {
 		t.Fatalf("err = %v, want n3 named as offline", err)
 	}
+}
+
+// Zero runs are skipped only when every replica reads unwritten blocks as
+// zeros and the device was discarded first; otherwise the full write stays.
+func TestSparseWritesOnlyOntoDiscardedThinReplicas(t *testing.T) {
+	assert.Equal(t, "CONV=fsync; ", sparseWriteSetup(false, "/dev/drbd/by-res/r/0"))
+	on := sparseWriteSetup(true, "/dev/drbd/by-res/r/0")
+	assert.Contains(t, on, "blkdiscard -f /dev/drbd/by-res/r/0")
+	assert.Contains(t, on, "then CONV=sparse,fsync; else CONV=fsync; fi")
+
+	thin := map[string]bool{"10.0.0.1": true, "10.0.0.2": true}
+	dep := &fakeDeploymentClient{lvIsThinFunc: func(_ context.Context, h, _, _ string) (bool, error) { return thin[h], nil }}
+	ctrl := newBasicTestController(dep)
+	ctrl.db = newTestDB(t)
+	ctx := context.Background()
+	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "r", Nodes: "n1,n2"}))
+	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeName: "r_data", Pool: "sds_tp", VolumeID: 0}))
+	ctrl.hostsMap["n1"], ctrl.hostsMap["n2"] = "10.0.0.1", "10.0.0.2"
+	assert.True(t, ctrl.resources.zeroReadingReplicas(ctx, "r"))
+	thin["10.0.0.2"] = false
+	assert.False(t, ctrl.resources.zeroReadingReplicas(ctx, "r"), "one thick replica keeps the full write")
+	thin["10.0.0.2"] = true
+	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "r", Nodes: "n1,n2", Encrypted: true}))
+	assert.False(t, ctrl.resources.zeroReadingReplicas(ctx, "r"), "an encrypted replica reads noise, not zeros")
 }
