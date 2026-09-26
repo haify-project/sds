@@ -93,7 +93,7 @@ func (m *Manager) writeReactorConfig(ctx context.Context, resource, pluginID, co
 		zap.String("path", remotePath))
 
 	if strings.HasPrefix(pluginID, "sds-nfs-") {
-		m.ensureNFSHelpersFollowServer(ctx, run, "")
+		m.prepareNFSNode(ctx, run, "")
 	}
 	if err := m.deployment.DistributeConfig(ctx, run, config, remotePath); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -176,12 +176,12 @@ func (m *Manager) StartGateway(ctx context.Context, id string) error {
 	// have one on every host; re-enabling it there would hand the resource
 	// back to a node without a copy of the data.
 	m.retirePromoter(ctx, rest, id)
-	m.ensureNFSHelpersFollowServer(ctx, run, id)
+	m.prepareNFSNode(ctx, run, id)
 	if err := m.moveClusterPrivatePath(ctx, run, id); err != nil {
 		return err
 	}
-	if err := m.runScript(ctx, run, iscsiServiceIPLastScript(id)); err != nil {
-		return fmt.Errorf("move the iSCSI service IP to the end of the chain: %w", err)
+	if err := m.runScript(ctx, run, serviceIPLastScript(id)); err != nil {
+		return fmt.Errorf("move the service IP to the end of the chain: %w", err)
 	}
 
 	enableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
@@ -227,13 +227,14 @@ true`, oldDir, newDir, legacyClusterPrivateMountPath, id)
 	return nil
 }
 
-// iscsiServiceIPLastScript moves the service IP to the end of a stopped iSCSI
-// gateway's chain, where the template now puts it (see the iSCSI template for
-// why). Like moveClusterPrivatePath it touches only a disabled config.
-func iscsiServiceIPLastScript(id string) string {
-	return fmt.Sprintf(`f=/etc/drbd-reactor.d/sds-iscsi-%s.toml.disabled
-[ -f "$f" ] || exit 0
-awk '/"ocf:heartbeat:IPaddr2 / {ip = $0; next} /^[ \t]*\][ \t]*$/ && ip != "" {print ip; ip = ""} {print}' "$f" >"$f.new" && mv "$f.new" "$f"
+// serviceIPLastScript moves the service IP to the end of a stopped iSCSI or
+// NFS gateway's chain, where the templates now put it (see them for why). Like
+// moveClusterPrivatePath it touches only a disabled config.
+func serviceIPLastScript(id string) string {
+	return fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-iscsi-%[1]s.toml.disabled /etc/drbd-reactor.d/sds-nfs-%[1]s.toml.disabled; do
+  [ -f "$f" ] || continue
+  awk '/"ocf:heartbeat:IPaddr2 / {ip = $0; next} /^[ \t]*\][ \t]*$/ && ip != "" {print ip; ip = ""} {print}' "$f" >"$f.new" && mv "$f.new" "$f"
+done
 `, id)
 }
 

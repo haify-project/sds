@@ -47,22 +47,18 @@ func TestAddLUNUpdatesConfig(t *testing.T) {
 	assertServiceIPLast(t, updated)
 }
 
-// assertServiceIPLast checks the chain order the iSCSI gateway depends on: the
-// service IP after the target and every LUN, so a stop removes it first and
-// initiators never reach a target whose LUNs are being deleted.
+// assertServiceIPLast checks the chain order the iSCSI and NFS gateways depend
+// on: the service IP is the last agent started, so a stop removes it first and
+// clients never reach a target or export that is being taken apart.
 func assertServiceIPLast(t *testing.T, config string) {
 	t.Helper()
-	ipAt, lastOther := -1, -1
-	for i, line := range strings.Split(config, "\n") {
-		switch {
-		case strings.Contains(line, "ocf:heartbeat:IPaddr2 "):
-			ipAt = i
-		case strings.Contains(line, "ocf:heartbeat:iSCSITarget "), strings.Contains(line, "ocf:heartbeat:iSCSILogicalUnit "):
-			lastOther = i
+	last := ""
+	for _, line := range strings.Split(config, "\n") {
+		if strings.Contains(line, `"ocf:`) {
+			last = line
 		}
 	}
-	require.GreaterOrEqual(t, ipAt, 0)
-	assert.Greater(t, ipAt, lastOther, "the service IP must come after the target and its LUNs")
+	assert.Contains(t, last, "ocf:heartbeat:IPaddr2 ", "the service IP must be the last agent in the chain")
 }
 
 func TestISCSIConfigStartsServiceIPLast(t *testing.T) {
@@ -90,7 +86,7 @@ func TestISCSIServiceIPLastScriptReordersLegacyConfig(t *testing.T) {
 	dir := t.TempDir()
 	conf := filepath.Join(dir, "sds-iscsi-r.toml.disabled")
 	require.NoError(t, os.WriteFile(conf, []byte(legacy), 0644))
-	script := strings.ReplaceAll(iscsiServiceIPLastScript("r"), "/etc/drbd-reactor.d", dir)
+	script := strings.ReplaceAll(serviceIPLastScript("r"), "/etc/drbd-reactor.d", dir)
 	for i := 0; i < 2; i++ { // idempotent
 		out, err := exec.Command("/bin/sh", "-c", script).CombinedOutput()
 		require.NoError(t, err, string(out))

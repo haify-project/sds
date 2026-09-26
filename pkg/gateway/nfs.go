@@ -132,22 +132,25 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 	}, nil
 }
 
-// ensureNFSHelpersFollowServer makes fsidd and nfsdcld stop with nfs-server.
+// prepareNFSNode readies a node to run an NFS gateway's chain.
 //
-// Both daemons (nfs-utils 2.6+) keep files open under /var/lib/nfs, which the
-// nfsserver agent bind-mounts from the cluster-private volume. The agent stops
-// nfs-server and then unmounts, but nothing stops those two, so the unmount
-// fails with "target is busy". The failed stop leaves the old node with the
-// cluster-private volume still mounted and open, and it cannot be promoted
+// fsidd and nfsdcld (nfs-utils 2.6+) keep files open under /var/lib/nfs, which
+// the nfsserver agent bind-mounts from the cluster-private volume. The agent
+// stops nfs-server and then unmounts, but nothing stops those two, so the
+// unmount fails with "target is busy". The failed stop leaves the old node with
+// the cluster-private volume still mounted and open, and it cannot be promoted
 // again: after one switchover the gateway can move away from a node but never
-// back, and after two it has nowhere left to run.
+// back, and after two it has nowhere left to run. PartOf carries nfs-server's
+// stop to them; nfs-server's own Requires/Wants start them again with it.
 //
-// PartOf carries nfs-server's stop to them; nfs-server's own Requires/Wants
-// start them again with it. Best-effort: on a node without the units the
-// drop-in is inert. A non-empty onlyIfNFS skips hosts that hold no NFS
-// promoter for that gateway, so starting an iSCSI or NVMe-oF gateway leaves
-// the NFS units alone.
-func (m *Manager) ensureNFSHelpersFollowServer(ctx context.Context, hosts []string, onlyIfNFS string) {
+// ip_nonlocal_bind lets nfsserver's sm-notify bind to the service IP, which
+// the chain now brings up after nfsserver (see the NFS template). Without it
+// NFSv3 clients are never told to reclaim their locks after a switchover.
+//
+// Best-effort: on a node without the units the drop-in is inert. A non-empty
+// onlyIfNFS skips hosts that hold no NFS promoter for that gateway, so starting
+// an iSCSI or NVMe-oF gateway leaves the NFS settings alone.
+func (m *Manager) prepareNFSNode(ctx context.Context, hosts []string, onlyIfNFS string) {
 	if len(hosts) == 0 {
 		return
 	}
@@ -165,9 +168,14 @@ PartOf=nfs-server.service'
   mkdir -p "$d" && printf '%s\n' "$want" > "$f" && changed=1
 done
 [ -z "$changed" ] || systemctl daemon-reload
+f=/etc/sysctl.d/90-sds-nfs-gateway.conf
+want='# SDS NFS gateway: sm-notify binds to the service IP before it is up.
+net.ipv4.ip_nonlocal_bind = 1'
+[ "$(cat "$f" 2>/dev/null)" = "$want" ] || printf '%s\n' "$want" > "$f"
+sysctl -q -w net.ipv4.ip_nonlocal_bind=1
 true`
 	if err := m.runScript(ctx, hosts, script); err != nil {
-		m.logger.Warn("Failed to tie NFS helper daemons to nfs-server", zap.Error(err))
+		m.logger.Warn("Failed to prepare node for the NFS gateway", zap.Error(err))
 	}
 }
 
@@ -197,19 +205,25 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
       start = [
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
         "ocf:heartbeat:Filesystem fs_export device={{ .ExportDevice }} directory={{ .ExportPath }} fstype={{ .FSType }} run_fsck=no",
-        "ocf:heartbeat:IPaddr2 service_ip ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
         "ocf:heartbeat:nfsserver nfsserver nfs_ip={{ .IPAddress }} nfs_shared_infodir={{ .NFSInfoDir }} nfs_server_scope={{ .IPAddress }}",
 {{ range $idx, $client := .AllowedClients }}
         "ocf:heartbeat:exportfs export_{{ $idx }} directory={{ $.ExportPath }} fsid={{ $.FSID }} clientspec={{ $client }} options={{ $.Options }}",
 {{ end }}
+        "ocf:heartbeat:IPaddr2 service_ip ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
       ]
 `
-	// NFS deliberately omits the portblock/portunblock OCF pair. The floating
-	// service IP (IPaddr2) already ensures only the active node answers on the
-	// VIP, and NFS clients reconnect when it moves. The portblock pair is only
-	// needed for iSCSI/NVMe TCP-session fencing; on NFS it added no benefit and
-	// could strand a DROP rule on the new active node after a failover (the
-	// unblock step is not guaranteed to clear it), firewalling clients off 2049.
+	// The service IP comes last so that it goes first: drbd-reactor stops the
+	// chain in reverse, and with the IP ahead of the exports every request in
+	// the second between unexport and the IP leaving was refused — writes on a
+	// hard mount failed outright across a switchover. With the IP gone first
+	// the client sees only a server that stopped answering, and retries.
+	// nfsserver then starts before the IP exists; its sm-notify binds to the
+	// service IP to send NFSv3 lock-recovery notices, which is why NFS nodes
+	// get ip_nonlocal_bind (see prepareNFSNode).
+	//
+	// Taking the IP down first does what the portblock/portunblock OCF pair was
+	// for, without its failure: that pair could strand a DROP rule on the new
+	// active node after a failover, firewalling clients off 2049.
 
 	ipAddr := serviceIP.IP.String()
 	prefix := serviceIP.Prefix
@@ -394,15 +408,20 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		return err
 	}
 	newLine := buildNFSExportLine(exportID, resolvedPath, strconv.Itoa(fsid), clientSpec, options)
-	// Insert the new export as the last entry of the start = [ ... ] array,
-	// i.e. just before its closing bracket. (Previously anchored on the
-	// portunblock line, which NFS no longer emits.)
-	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
-		return strings.TrimSpace(line) == "]"
+	// After the last export (or nfsserver): the service IP that follows must
+	// stay last in the chain — see the NFS template.
+	anchor := findLineIndex(lines, func(line string) bool {
+		return strings.Contains(line, "ocf:heartbeat:nfsserver ")
 	})
-	if err != nil {
-		return err
+	for i, line := range lines {
+		if _, ok := parseNFSExportLine(line); ok {
+			anchor = i
+		}
 	}
+	if anchor < 0 {
+		return fmt.Errorf("failed to locate the nfsserver entry in %s", configPath)
+	}
+	lines = append(lines[:anchor+1], append([]string{newLine}, lines[anchor+1:]...)...)
 
 	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
 }

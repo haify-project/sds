@@ -2,6 +2,9 @@ package gateway
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -258,6 +261,32 @@ func TestAddNFSExportUpdatesConfig(t *testing.T) {
 	assert.NotEmpty(t, exports)
 	// Absolute paths are honored verbatim under the new semantics.
 	assert.True(t, strings.Contains(mockDeployment.Configs[gatewayConfigPath("sds-nfs-resource")], "directory=/backup"))
+	assertServiceIPLast(t, config)
+	assertServiceIPLast(t, mockDeployment.Configs[gatewayConfigPath("sds-nfs-resource")])
+}
+
+// An NFS gateway written with the service IP ahead of nfsserver is reordered
+// when it is started from stopped.
+func TestServiceIPLastScriptReordersLegacyNFSConfig(t *testing.T) {
+	legacy := `      start = [
+        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd1 directory=/var/lib/sds-gateway/n fstype=ext4 run_fsck=no",
+        "ocf:heartbeat:IPaddr2 service_ip ip=10.0.0.9 cidr_netmask=24",
+        "ocf:heartbeat:nfsserver nfsserver nfs_ip=10.0.0.9 nfs_shared_infodir=/var/lib/sds-gateway/n/nfs nfs_server_scope=10.0.0.9",
+
+        "ocf:heartbeat:exportfs export_0 directory=/data fsid=1 clientspec=0.0.0.0/0.0.0.0 options=rw",
+
+      ]
+`
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "sds-nfs-n.toml.disabled")
+	require.NoError(t, os.WriteFile(conf, []byte(legacy), 0644))
+	script := strings.ReplaceAll(serviceIPLastScript("n"), "/etc/drbd-reactor.d", dir)
+	out, err := exec.Command("/bin/sh", "-c", script).CombinedOutput()
+	require.NoError(t, err, string(out))
+	got, err := os.ReadFile(conf)
+	require.NoError(t, err)
+	assertServiceIPLast(t, string(got))
+	assert.Equal(t, 1, strings.Count(string(got), "IPaddr2"))
 }
 
 func TestRemoveNFSExportUpdatesConfig(t *testing.T) {
