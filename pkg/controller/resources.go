@@ -3547,6 +3547,27 @@ func (rm *ResourceManager) SetPrimary(ctx context.Context, resource, node string
 	if err == nil && result.Success {
 		return nil
 	}
+	if force && err == nil && rm.isDRNodeOf(ctx, resource, node) &&
+		strings.Contains(result.Output, "Multiple primaries not allowed") {
+		// A forced promote of a WAN resource's DR node is a DR failover: the
+		// operator has declared the primary site lost. The DR's DRBD talks to
+		// a proxy on its own loopback, which stays up when the far side dies,
+		// so it keeps believing the old primary is Primary until its ping
+		// timeout runs out — tens of seconds on a WAN profile — and refuses to
+		// promote in the meantime. Cut it loose from the primary site first,
+		// with --force: a clean disconnect negotiates with the peer, which is
+		// the one thing that cannot answer.
+		rm.controller.logger.Warn("DR failover: disconnecting the DR node from the primary site before promoting",
+			zap.String("resource", resource), zap.String("node", node))
+		if derr := rm.execAllSuccess(ctx, []string{address}, "sudo drbdadm disconnect --force "+resource,
+			"disconnect the DR node from the primary site"); derr != nil {
+			return derr
+		}
+		result, err = rm.deployment.DRBDPrimary(ctx, address, resource, true)
+		if err == nil && result.Success {
+			return nil
+		}
+	}
 
 	// A brand-new resource comes up Inconsistent on every node with NO UpToDate
 	// replica anywhere, so a normal `drbdsetup primary` fails with "Need access
@@ -3582,6 +3603,19 @@ func (rm *ResourceManager) SetPrimary(ctx context.Context, resource, node string
 		return fmt.Errorf("failed to set primary: %w", err)
 	}
 	return fmt.Errorf("failed to set primary on %s: %s", node, result.Output)
+}
+
+// isDRNodeOf reports whether node is the DR node of a WAN resource.
+func (rm *ResourceManager) isDRNodeOf(ctx context.Context, resource, node string) bool {
+	if rm.controller.db == nil {
+		return false
+	}
+	r, err := rm.controller.db.GetResource(ctx, resource)
+	if err != nil || r == nil {
+		return false
+	}
+	return r.WANMode && r.DRNode != "" &&
+		(r.DRNode == node || rm.controller.ResolveHost(r.DRNode) == rm.controller.ResolveHost(node))
 }
 
 // resourceNeedsInitialForce reports whether a failed non-forced promote should
