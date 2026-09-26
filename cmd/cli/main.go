@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -19,6 +20,13 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "sds",
 		Short: "HA-SDS CLI - Software Defined Storage Management",
+		// main prints the error, once.
+		SilenceErrors: true,
+		// Usage is for a command line that did not parse. Once a command runs,
+		// its error comes from the cluster, and forty lines of flags printed
+		// after it bury the one line that matters. Cobra validates arguments
+		// before this hook and required flags after it; main covers those.
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) { cmd.SilenceUsage = true },
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "Controller address")
@@ -47,8 +55,11 @@ func main() {
 	rootCmd.AddCommand(wanCommand())
 	rootCmd.AddCommand(backupCommand())
 
-	if err := rootCmd.Execute(); err != nil {
+	if cmd, err := rootCmd.ExecuteC(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if strings.HasPrefix(err.Error(), "required flag") {
+			fmt.Fprint(os.Stderr, "\n"+cmd.UsageString())
+		}
 		os.Exit(1)
 	}
 }
