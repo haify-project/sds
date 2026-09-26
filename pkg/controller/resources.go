@@ -4625,57 +4625,71 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 		return nil
 	}
 
-	// Get local hostname to check if active node is local
-	hostnameBytes, _ := exec.Command("hostname").Output()
-	localHostname := strings.TrimSpace(string(hostnameBytes))
-
-	var errExec error
-	var output []byte
-
-	if activeNode == localHostname {
-		// Execute locally using os/exec
-		rm.controller.logger.Info("Executing evict locally",
-			zap.String("hostname", activeNode))
-		cmd := exec.Command("drbd-reactorctl", "evict", configName)
-		output, errExec = cmd.CombinedOutput()
-		if errExec != nil {
-			rm.controller.logger.Error("Local evict failed",
-				zap.String("output", string(output)),
-				zap.Error(errExec))
-			return fmt.Errorf("failed to evict HA resource: %w, output: %s", errExec, string(output))
+	// The promoter that owns the resource is an HA config or a gateway, and
+	// only the node can say which: its config file is what exists there.
+	// drbd-reactorctl itself is no help — handed a config name that does not
+	// exist it prints "ignoring" and exits 0, so evicting a gateway under the
+	// HA config's name reported success and moved nothing.
+	script := evictScript(resource)
+	var out string
+	if activeNode == localHostname() {
+		o, err := exec.Command("/bin/bash", "-c", script).CombinedOutput()
+		out = strings.TrimSpace(string(o))
+		if err != nil {
+			return fmt.Errorf("failed to evict %s on %s: %s", resource, activeNode, out)
 		}
-		rm.controller.logger.Info("Local evict output",
-			zap.String("output", string(output)))
 	} else {
-		// Execute on remote node via dispatch
-		evictCmd := fmt.Sprintf("sudo drbd-reactorctl evict %s", configName)
-		rm.controller.logger.Debug("Executing evict command remotely",
-			zap.String("host", activeNode),
-			zap.String("command", evictCmd))
-
-		result, err := rm.deployment.Exec(ctx, []string{activeNode}, evictCmd)
+		result, err := rm.deployment.Exec(ctx, []string{rm.controller.ResolveHost(activeNode)},
+			"echo "+base64Std(script)+" | base64 -d | sudo /bin/bash")
 		if err != nil {
 			return fmt.Errorf("failed to evict HA resource: %w", err)
 		}
-
-		// Log result for debugging
-		for host, hr := range result.Hosts {
-			rm.controller.logger.Debug("Evict command result",
-				zap.String("host", host),
-				zap.Bool("success", hr.Success),
-				zap.String("output", hr.Output),
-				zap.Any("error", hr.Error))
-		}
-
 		if !result.AllSuccess() {
 			return fmt.Errorf("evict failed: %s", result.FailureDetails())
 		}
+		for _, hr := range result.Hosts {
+			out = strings.TrimSpace(hr.Output)
+		}
 	}
+	rm.controller.logger.Info("Evict output", zap.String("node", activeNode), zap.String("output", out))
 
 	rm.controller.logger.Info("HA resource evicted successfully",
 		zap.String("resource", resource))
 
 	return nil
+}
+
+// evictPromoterConfigs are the promoter configs SDS writes for a resource, in
+// the order evictScript tries them.
+var evictPromoterConfigs = []string{"sds-ha-%s", "sds-nfs-%s", "sds-iscsi-%s", "sds-nvmeof-%s"}
+
+// evictScript evicts the resource from the node it runs on through whichever
+// SDS promoter config for it exists there, and fails when none does — or when
+// no other node took the resource over. drbd-reactorctl exits 0 either way:
+// when the local services do not stop in time it re-enables the resource
+// where it was and says so only in its output.
+func evictScript(resource string) string {
+	names := make([]string, len(evictPromoterConfigs))
+	for i, f := range evictPromoterConfigs {
+		names[i] = fmt.Sprintf(f, resource)
+	}
+	return fmt.Sprintf(`for n in %[1]s; do
+  [ -f /etc/drbd-reactor.d/$n.toml ] || continue
+  out=$(drbd-reactorctl evict "$n" 2>&1); rc=$?
+  printf '%%s\n' "$out"
+  [ $rc -eq 0 ] || exit $rc
+  printf '%%s\n' "$out" | grep -qE "Node '[^']+' took over" && exit 0
+  echo "no other node took over %[2]s; it is still running here" >&2
+  exit 4
+done
+echo "no drbd-reactor promoter manages %[2]s on this node (no HA config or gateway)" >&2
+exit 3
+`, strings.Join(names, " "), resource)
+}
+
+func localHostname() string {
+	h, _ := os.Hostname()
+	return h
 }
 
 // findActiveNode finds the node where the DRBD resource is currently Primary

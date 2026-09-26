@@ -1604,8 +1604,6 @@ func TestResourceManagerEvictHaUsesResourceNodesOnly(t *testing.T) {
 		},
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			switch {
-			case strings.HasPrefix(cmd, "sudo drbd-reactorctl evict sds-ha-res1"):
-				return successExecResult(hosts, ""), nil
 			default:
 				return successExecResult(hosts, ""), nil
 			}
@@ -1640,7 +1638,7 @@ func TestResourceManagerEvictHaUsesResourceNodesOnly(t *testing.T) {
 			sawRemoteStatus = true
 			assert.Equal(t, []string{"10.0.0.1"}, call.hosts)
 		}
-		if call.cmd == "sudo drbd-reactorctl evict sds-ha-res1" {
+		if strings.Contains(call.cmd, base64Std(evictScript("res1"))) {
 			sawEvict = true
 			assert.Equal(t, []string{"10.0.0.1"}, call.hosts)
 		}
