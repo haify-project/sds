@@ -379,6 +379,9 @@ func Provision(ctx context.Context, deploy DeploymentClient, spec ProxySpec) err
 	if err := ensureBinaries(ctx, deploy, both, spec); err != nil {
 		return err
 	}
+	if err := requireBinaries(ctx, deploy, both); err != nil {
+		return err
+	}
 
 	// 5. Per-resource configs: dialer on the primary, acceptor on the DR.
 	if err := distribute(ctx, deploy, []string{primary}, RenderDialerConfig(spec), NodeConfigPath(spec.Resource), "distribute dialer config"); err != nil {
@@ -467,6 +470,18 @@ func VerifyReachability(ctx context.Context, deploy DeploymentClient, spec Proxy
 			case <-time.After(reachRetryDelay):
 			}
 		}
+	}
+	// A closed port is a firewall only if something is listening behind it.
+	unit := UnitInstance(spec.Resource)
+	if res, err := deploy.Exec(ctx, []string{spec.DRNodeAddr}, "systemctl is-active "+unit); err == nil && res != nil && !res.AllSuccess() {
+		state := ""
+		for _, h := range res.Hosts {
+			if h != nil {
+				state = strings.TrimSpace(h.Output)
+			}
+		}
+		return fmt.Errorf("wanproxy: the acceptor %s on the DR node %s is not running (%s), so nothing listens on :%d; see journalctl -u %s there",
+			unit, spec.DRNodeAddr, state, spec.WANPort, unit)
 	}
 	return fmt.Errorf(
 		"wanproxy: DR endpoint %s:%d is not reachable over TCP from the primary node %s after %d attempts — open inbound TCP :%d on the DR firewall/security group (last error: %s)",
@@ -709,6 +724,25 @@ func distribute(ctx context.Context, deploy DeploymentClient, hosts []string, co
 	return nil
 }
 
+// requireBinaries fails unless every host now has a runnable sds-proxy, pushed
+// by ensureBinaries or staged beforehand. Without one the unit crash-loops with
+// 203/EXEC on the node, and the only symptom anywhere else is a WAN port that
+// never opens — which the reachability probe used to report as a firewall.
+func requireBinaries(ctx context.Context, deploy DeploymentClient, hosts []string) error {
+	res, err := deploy.Exec(ctx, hosts, "test -x "+NodeBinaryPath)
+	if err != nil {
+		return fmt.Errorf("wanproxy: check for %s: %w", NodeBinaryPath, err)
+	}
+	if res != nil && !res.AllSuccess() {
+		missing := res.FailedHosts()
+		sort.Strings(missing)
+		return fmt.Errorf("wanproxy: no executable %s on %s, and the controller has none for that node's architecture "+
+			"(it looks for %s-<arch>, or %s for its own); install sds-proxy there",
+			NodeBinaryPath, strings.Join(missing, ", "), NodeBinaryPath, NodeBinaryPath)
+	}
+	return nil
+}
+
 // run executes cmd on hosts and surfaces per-host failures.
 func run(ctx context.Context, deploy DeploymentClient, hosts []string, cmd, desc string) error {
 	res, err := deploy.Exec(ctx, hosts, cmd)
@@ -881,10 +915,14 @@ func ProvisionMulti(ctx context.Context, deploy DeploymentClient, spec MultiSpec
 	if err := distribute(ctx, deploy, allNodes, string(pki.KeyPEM), NodeKeyPath, "distribute key"); err != nil {
 		return err
 	}
-	if spec.BinaryPath != "" {
-		if err := ensureBinary(ctx, deploy, allNodes, spec.BinaryPath); err != nil {
-			return err
-		}
+	// Per node, like Provision: BinaryFor used to be ignored here, so a
+	// controller holding the right binary for each architecture pushed nothing.
+	if err := ensureBinaries(ctx, deploy, allNodes,
+		ProxySpec{BinaryPath: spec.BinaryPath, BinaryFor: spec.BinaryFor}); err != nil {
+		return err
+	}
+	if err := requireBinaries(ctx, deploy, allNodes); err != nil {
+		return err
 	}
 	if err := run(ctx, deploy, allNodes, "sudo systemctl daemon-reload", "systemd daemon-reload"); err != nil {
 		return err

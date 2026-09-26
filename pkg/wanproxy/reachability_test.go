@@ -48,8 +48,14 @@ func TestVerifyReachabilityRetriesThenFails(t *testing.T) {
 		t.Fatal("expected VerifyReachability to fail when the port is blocked")
 	}
 	// It must retry the full budget.
-	if len(f.events) != 3 {
-		t.Fatalf("want 3 probe attempts, got %d", len(f.events))
+	probes := 0
+	for _, e := range f.events {
+		if strings.Contains(e.cmd, "/dev/tcp/") {
+			probes++
+		}
+	}
+	if probes != 3 {
+		t.Fatalf("want 3 probe attempts, got %d", probes)
 	}
 	// The error must name the port and point at the firewall/security group.
 	for _, want := range []string{"not reachable", "security group", "37901"} {
@@ -147,5 +153,24 @@ func TestStatusReportsUnreachableAndInactive(t *testing.T) {
 	}
 	if st.Healthy() {
 		t.Fatal("Healthy() must be false when nothing is up")
+	}
+}
+
+// A closed port with nothing behind it is not a firewall problem: when the
+// acceptor is not running the error must say so, not send the operator to
+// the security group.
+func TestVerifyReachabilityBlamesADeadAcceptorNotTheFirewall(t *testing.T) {
+	fastReach(t, 2)
+	spec := sampleSpec()
+	f := &fakeDeploy{
+		failExecSubstr:       "/dev/tcp/",
+		execFailSubstrOutput: map[string]string{"systemctl is-active": "activating"},
+	}
+	err := VerifyReachability(context.Background(), f, spec)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "is not running (activating)") || strings.Contains(err.Error(), "security group") {
+		t.Fatalf("error should name the dead acceptor, got %q", err.Error())
 	}
 }

@@ -106,6 +106,7 @@ func TestProvisionSequence(t *testing.T) {
 		{kind: "distribute", hosts: both, path: NodeCAPath},
 		{kind: "distribute", hosts: both, path: NodeCertPath},
 		{kind: "distribute", hosts: both, path: NodeKeyPath},
+		{kind: "exec", hosts: both, cmd: "test -x " + NodeBinaryPath}, // pushed or pre-staged
 		{kind: "distribute", hosts: []string{primary}, path: cfgPath}, // dialer
 		{kind: "distribute", hosts: []string{dr}, path: cfgPath},      // acceptor
 		{kind: "exec", hosts: both, cmd: "sudo systemctl daemon-reload"},
@@ -135,10 +136,10 @@ func TestProvisionSequence(t *testing.T) {
 	}
 
 	// The dialer config went to the primary, the acceptor config to the DR.
-	if got := f.events[4].content; got != RenderDialerConfig(spec) {
+	if got := f.events[5].content; got != RenderDialerConfig(spec) {
 		t.Fatalf("primary did not receive the dialer config:\n%s", got)
 	}
-	if got := f.events[5].content; got != RenderAcceptorConfig(spec) {
+	if got := f.events[6].content; got != RenderAcceptorConfig(spec) {
 		t.Fatalf("DR did not receive the acceptor config:\n%s", got)
 	}
 
@@ -363,5 +364,63 @@ func TestProvisionMultiRestartsEveryLeg(t *testing.T) {
 			t.Fatalf("leg %s was never restarted; it would keep its old certificates",
 				leg.Resource)
 		}
+	}
+}
+
+// A node without the binary used to get a unit that crash-looped with
+// 203/EXEC, reported only as a closed WAN port.
+func TestProvisionFailsWhenANodeHasNoBinary(t *testing.T) {
+	spec := newSpecWithTempPKI(t)
+	f := &fakeDeploy{failExecSubstr: "test -x " + NodeBinaryPath}
+	err := Provision(context.Background(), f, spec)
+	if err == nil || !strings.Contains(err.Error(), "no executable "+NodeBinaryPath) {
+		t.Fatalf("want a missing-binary error, got %v", err)
+	}
+	if lastExecIndex(f.events, "sudo systemctl restart "+UnitInstance(spec.Resource)) >= 0 {
+		t.Fatal("the proxy was started on a node with no binary")
+	}
+}
+
+// ProvisionMulti used to ignore BinaryFor, so a controller holding the right
+// binary for each node pushed none of them.
+func TestProvisionMultiPushesThePerNodeBinary(t *testing.T) {
+	prev := PKIDir
+	PKIDir = t.TempDir()
+	t.Cleanup(func() { PKIDir = prev })
+	bin := filepath.Join(t.TempDir(), "sds-proxy-arm64")
+	if err := os.WriteFile(bin, []byte("binary"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	f := &fakeDeploy{}
+	spec := MultiSpec{
+		Resource:              "data",
+		PrimaryNodeAddrs:      []string{"10.0.0.1"},
+		DRNodeAddr:            "203.0.113.7",
+		DRPublicEndpoint:      "203.0.113.7",
+		BaseWANPort:           6600,
+		BaseDRBDPort:          7300,
+		SkipReachabilityCheck: true,
+		BinaryFor: func(addr string) string {
+			if addr == "203.0.113.7" {
+				return bin
+			}
+			return ""
+		},
+	}
+	if err := ProvisionMulti(context.Background(), f, spec); err != nil {
+		t.Fatalf("ProvisionMulti: %v", err)
+	}
+	pushed := false
+	for _, e := range f.events {
+		if e.kind == "distribute" && e.path == NodeBinaryPath {
+			pushed = true
+			if !sameHosts(e.hosts, []string{"203.0.113.7"}) {
+				t.Fatalf("binary pushed to %v, want only the DR node", e.hosts)
+			}
+		}
+	}
+	if !pushed {
+		t.Fatal("the DR node's binary was never pushed")
 	}
 }
