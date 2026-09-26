@@ -61,14 +61,15 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 	}
 
 	newLine := buildISCSILUNLine(lunNumber, iqn, device)
-	// Insert the new LUN as the last entry of the start array (before its
-	// closing bracket); portunblock no longer exists to anchor on.
-	lines, err = insertLineBefore(lines, newLine, func(line string) bool {
-		return strings.TrimSpace(line) == "]"
-	})
-	if err != nil {
-		return err
+	// After the last LUN (or the target, when there is none): the service IP
+	// that follows must stay last in the chain — see the iSCSI template.
+	anchor := targetIdx
+	for i, line := range lines {
+		if _, ok := parseISCSILUNLine(line); ok {
+			anchor = i
+		}
 	}
+	lines = append(lines[:anchor+1], append([]string{newLine}, lines[anchor+1:]...)...)
 
 	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
 }

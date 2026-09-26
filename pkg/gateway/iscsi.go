@@ -167,13 +167,23 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 
       start = [
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
-        "ocf:heartbeat:IPaddr2 service_ip0 ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
         "ocf:heartbeat:iSCSITarget target iqn={{ .IQN }} portals={{ .Portal }} {{ .CHAPArgs }}allowed_initiators={{ .AllowedInitiators }} implementation={{ .Implementation }}",
 {{ range $idx, $lun := .LUNs }}
         "ocf:heartbeat:iSCSILogicalUnit lu{{ $lun.Number }} target_iqn={{ $.IQN }} lun={{ $lun.Number }} path={{ $lun.Device }} product_id={{ $lun.Serial }} scsi_sn={{ $lun.Serial }}",
 {{ end }}
+        "ocf:heartbeat:IPaddr2 service_ip0 ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
       ]
 `
+	// The service IP comes last so that it goes first. drbd-reactor stops the
+	// chain in reverse, and with the IP ahead of the target the LUNs were
+	// deleted while initiators could still reach the portal: every command in
+	// that window came back "LUN not supported", a hard error the initiator
+	// passes up, and a client filesystem under write load went read-only on
+	// every switchover. With the IP gone first the initiator sees only a lost
+	// connection, which it rides out (replacement_timeout) until the target is
+	// back on the other node. LIO binds the portal to the service IP before
+	// the address is up.
+	//
 	// portblock/portunblock removed: on failover the unblock step did not
 	// reliably clear the block's DROP rule on the new active node, firewalling
 	// clients off the iSCSI port (verified on real node failover). The data

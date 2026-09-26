@@ -3,6 +3,9 @@ package gateway
 import (
 	"context"
 	"encoding/base64"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -150,4 +153,59 @@ func TestNFSGatewayTiesHelperDaemonsToServer(t *testing.T) {
 	m2 := New(&MockResourceManager{}, d2, zap.NewNop(), []string{"n1"})
 	require.NoError(t, m2.writeReactorConfig(context.Background(), "blk", "sds-iscsi-blk", "cfg"))
 	assert.NotContains(t, strings.Join(scriptsOn(t, d2, "n1"), "\n"), "PartOf=")
+}
+
+// A gateway's state mount must leave /var/lib/sds, where the controller's own
+// Self-HA mount covers it. Starting a stopped legacy gateway rewrites its
+// disabled config — and only that — before re-enabling it.
+func TestStartGatewayMovesStateMountOutOfSelfHaPath(t *testing.T) {
+	mockDeployment := &MockDeploymentClient{}
+	manager := New(nil, mockDeployment, zap.NewNop(), []string{"node1"})
+	require.NoError(t, manager.StartGateway(context.Background(), "isc1"))
+
+	scripts := scriptsOn(t, mockDeployment, "node1")
+	moveAt, enableAt := -1, -1
+	for i, s := range scripts {
+		if strings.Contains(s, "old=/var/lib/sds/isc1 new=/var/lib/sds-gateway/isc1") {
+			moveAt = i
+		}
+		if strings.Contains(s, `mv "$f.disabled" "$f"`) {
+			enableAt = i
+		}
+	}
+	require.GreaterOrEqual(t, moveAt, 0)
+	require.Greater(t, enableAt, moveAt)
+
+	// Run the rewrite for real against a copy of a legacy config.
+	dir := t.TempDir()
+	legacy := `      start = [
+        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd15 directory=/var/lib/sds/isc1 fstype=ext4 run_fsck=no",
+        "ocf:heartbeat:nfsserver nfsserver nfs_ip=10.0.0.9 nfs_shared_infodir=/var/lib/sds/isc1/nfs nfs_server_scope=10.0.0.9",
+        "ocf:heartbeat:Filesystem other directory=/var/lib/sds/isc10 fstype=ext4",
+        "ocf:heartbeat:portblock portunblock0 ip=10.0.0.9 portno=3260 action=unblock protocol=tcp tickle_dir=/var/lib/sds/isc1",
+      ]
+`
+	conf := filepath.Join(dir, "sds-iscsi-isc1.toml.disabled")
+	require.NoError(t, os.WriteFile(conf, []byte(legacy), 0644))
+	mountinfo := filepath.Join(dir, "mountinfo")
+	require.NoError(t, os.WriteFile(mountinfo, []byte("66 32 147:7 / /var/lib/sds rw - ext4 /dev/drbd7 rw\n"), 0644))
+
+	script := scripts[moveAt]
+	script = strings.ReplaceAll(script, "/etc/drbd-reactor.d", dir)
+	script = strings.ReplaceAll(script, "/proc/self/mountinfo", mountinfo)
+	out, err := exec.Command("/bin/sh", "-c", script).CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	got, err := os.ReadFile(conf)
+	require.NoError(t, err)
+	assert.Contains(t, string(got), "directory=/var/lib/sds-gateway/isc1 fstype")
+	assert.Contains(t, string(got), "nfs_shared_infodir=/var/lib/sds-gateway/isc1/nfs ")
+	assert.Contains(t, string(got), `tickle_dir=/var/lib/sds-gateway/isc1",`)
+	assert.Contains(t, string(got), "directory=/var/lib/sds/isc10 ", "another gateway's path must be left alone")
+
+	// The old mount still exists but is not reachable by path: refuse.
+	require.NoError(t, os.WriteFile(mountinfo, []byte("325 32 147:15 / /var/lib/sds/isc1 rw - ext4 /dev/drbd15 rw\n"), 0644))
+	out, err = exec.Command("/bin/sh", "-c", script).CombinedOutput()
+	require.Error(t, err)
+	assert.Contains(t, string(out), "hidden under the controller database mount")
 }

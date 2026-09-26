@@ -177,6 +177,12 @@ func (m *Manager) StartGateway(ctx context.Context, id string) error {
 	// back to a node without a copy of the data.
 	m.retirePromoter(ctx, rest, id)
 	m.ensureNFSHelpersFollowServer(ctx, run, id)
+	if err := m.moveClusterPrivatePath(ctx, run, id); err != nil {
+		return err
+	}
+	if err := m.runScript(ctx, run, iscsiServiceIPLastScript(id)); err != nil {
+		return fmt.Errorf("move the iSCSI service IP to the end of the chain: %w", err)
+	}
 
 	enableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
   [ -f "$f.disabled" ] && mv "$f.disabled" "$f"
@@ -186,6 +192,49 @@ true`, id, id, id)
 		return fmt.Errorf("failed to re-enable gateway config: %w", err)
 	}
 	return m.deployment.Exec(ctx, run, "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor")
+}
+
+// moveClusterPrivatePath moves a stopped gateway's state mount out from under
+// the controller's Self-HA mount point (see DefaultClusterPrivateMountPath). It
+// rewrites only a disabled config: a running gateway's promoter would restart
+// its whole chain on the change, and a chain that cannot stop is what this is
+// here to prevent. `gateway stop` then `gateway start` moves a running one.
+//
+// A node may still hold the old mount. Visible, it is unmounted here — the
+// gateway is stopped, so nothing uses it. Covered by the controller's own
+// mount it cannot be reached by path at all, and would keep the device open
+// through the next demote; that node is named and the start refused.
+func (m *Manager) moveClusterPrivatePath(ctx context.Context, hosts []string, id string) error {
+	oldDir := filepath.Join(legacyClusterPrivateMountPath, id)
+	newDir := filepath.Join(DefaultClusterPrivateMountPath, id)
+	script := fmt.Sprintf(`old=%[1]s new=%[2]s
+if awk -v p="$old" '$5 == p {f=1} END {exit !f}' /proc/self/mountinfo; then
+  if mountpoint -q "$old"; then
+    umount "$old" || { echo "$(hostname): cannot unmount the gateway's old state mount $old" >&2; exit 3; }
+  else
+    echo "$(hostname): the gateway's old state mount $old is hidden under the controller database mount %[3]s; move the controller off this node (sds-cli ha evict sds-meta), then start the gateway again" >&2
+    exit 3
+  fi
+fi
+for f in /etc/drbd-reactor.d/sds-nfs-%[4]s.toml.disabled /etc/drbd-reactor.d/sds-iscsi-%[4]s.toml.disabled /etc/drbd-reactor.d/sds-nvmeof-%[4]s.toml.disabled; do
+  [ -f "$f" ] || continue
+  sed "s#=$old\([/ \"]\)#=$new\1#g" "$f" >"$f.new" && mv "$f.new" "$f"
+done
+true`, oldDir, newDir, legacyClusterPrivateMountPath, id)
+	if err := m.runScript(ctx, hosts, script); err != nil {
+		return fmt.Errorf("move gateway state mount out of %s: %w", legacyClusterPrivateMountPath, err)
+	}
+	return nil
+}
+
+// iscsiServiceIPLastScript moves the service IP to the end of a stopped iSCSI
+// gateway's chain, where the template now puts it (see the iSCSI template for
+// why). Like moveClusterPrivatePath it touches only a disabled config.
+func iscsiServiceIPLastScript(id string) string {
+	return fmt.Sprintf(`f=/etc/drbd-reactor.d/sds-iscsi-%s.toml.disabled
+[ -f "$f" ] || exit 0
+awk '/"ocf:heartbeat:IPaddr2 / {ip = $0; next} /^[ \t]*\][ \t]*$/ && ip != "" {print ip; ip = ""} {print}' "$f" >"$f.new" && mv "$f.new" "$f"
+`, id)
 }
 
 // StopGateway stops a gateway. Simply stopping the systemd target is not

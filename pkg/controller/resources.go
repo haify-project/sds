@@ -21,6 +21,7 @@ import (
 	"github.com/liliang-cn/sds/pkg/alert"
 	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/liliang-cn/sds/pkg/gateway"
 	"github.com/liliang-cn/sds/pkg/wanproxy"
 	"go.uber.org/zap"
 )
@@ -4271,6 +4272,9 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 	if rm.controller.db == nil {
 		return "", fmt.Errorf("database not available")
 	}
+	if err := checkHaMountPoint(mountPoint); err != nil {
+		return "", err
+	}
 
 	// Get resource info to find nodeAddresses
 	dbResource, err := rm.controller.db.GetResource(ctx, resource)
@@ -4656,6 +4660,24 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 	rm.controller.logger.Info("HA resource evicted successfully",
 		zap.String("resource", resource))
 
+	return nil
+}
+
+// checkHaMountPoint refuses a mount point inside a directory another promoter
+// mounts over: the controller's Self-HA database and the gateways' state. The
+// promoters move independently, so whichever mounts second covers or is
+// covered by the other, and a covered mount cannot be unmounted by path — its
+// promoter then cannot stop, and the resource cannot be demoted.
+func checkHaMountPoint(mountPoint string) error {
+	if strings.TrimSpace(mountPoint) == "" {
+		return nil
+	}
+	cleaned := filepath.Clean(mountPoint)
+	for _, taken := range []string{selfHaMountPoint, gateway.DefaultClusterPrivateMountPath} {
+		if cleaned == taken || strings.HasPrefix(cleaned, taken+"/") {
+			return fmt.Errorf("mount point %s is inside %s, which SDS mounts itself; choose another directory", cleaned, taken)
+		}
+	}
 	return nil
 }
 

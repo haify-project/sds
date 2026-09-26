@@ -29,8 +29,17 @@ const (
 	// Default export base path
 	DefaultExportBasePath = "/srv/gateway-exports"
 
-	// Default cluster private mount path
-	DefaultClusterPrivateMountPath = "/var/lib/sds"
+	// DefaultClusterPrivateMountPath is where the active node mounts a
+	// gateway's own state volume, one directory per gateway. It must not lie
+	// under the controller's Self-HA mount point (/var/lib/sds): the two
+	// promoters move independently, so whichever mounts second covers or is
+	// covered by the other — a covered mount can no longer be found by path,
+	// its promoter cannot stop, and the resource cannot be demoted.
+	DefaultClusterPrivateMountPath = "/var/lib/sds-gateway"
+
+	// legacyClusterPrivateMountPath is where gateways created before that was
+	// understood keep their state volume; StartGateway moves them.
+	legacyClusterPrivateMountPath = "/var/lib/sds"
 )
 
 // ResourceVolumeInfo represents a DRBD volume

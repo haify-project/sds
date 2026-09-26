@@ -2,6 +2,10 @@ package gateway
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	v1 "github.com/liliang-cn/sds/api/proto/v1"
@@ -40,6 +44,62 @@ func TestAddLUNUpdatesConfig(t *testing.T) {
 	require.True(t, ok)
 	assert.Contains(t, updated, "lun=3")
 	assert.Contains(t, updated, "path=/dev/drbd3")
+	assertServiceIPLast(t, updated)
+}
+
+// assertServiceIPLast checks the chain order the iSCSI gateway depends on: the
+// service IP after the target and every LUN, so a stop removes it first and
+// initiators never reach a target whose LUNs are being deleted.
+func assertServiceIPLast(t *testing.T, config string) {
+	t.Helper()
+	ipAt, lastOther := -1, -1
+	for i, line := range strings.Split(config, "\n") {
+		switch {
+		case strings.Contains(line, "ocf:heartbeat:IPaddr2 "):
+			ipAt = i
+		case strings.Contains(line, "ocf:heartbeat:iSCSITarget "), strings.Contains(line, "ocf:heartbeat:iSCSILogicalUnit "):
+			lastOther = i
+		}
+	}
+	require.GreaterOrEqual(t, ipAt, 0)
+	assert.Greater(t, ipAt, lastOther, "the service IP must come after the target and its LUNs")
+}
+
+func TestISCSIConfigStartsServiceIPLast(t *testing.T) {
+	iscsiManager := NewISCSIManager(New(nil, &MockDeploymentClient{}, zap.NewNop(), []string{"node1"}))
+	req := &v1.CreateISCSIGatewayRequest{Resource: "r", Iqn: "iqn.2024-01.com.example:r", ServiceIp: "192.168.1.200/24"}
+	serviceIP, err := parseServiceIP(req.ServiceIp)
+	require.NoError(t, err)
+	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(3))
+	require.NoError(t, err)
+	assertServiceIPLast(t, config)
+}
+
+// A gateway written with the service IP ahead of the target is reordered when
+// it is started from stopped.
+func TestISCSIServiceIPLastScriptReordersLegacyConfig(t *testing.T) {
+	legacy := `      start = [
+        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd15 directory=/var/lib/sds-gateway/r fstype=ext4 run_fsck=no",
+        "ocf:heartbeat:IPaddr2 service_ip0 ip=10.0.0.9 cidr_netmask=24",
+        "ocf:heartbeat:iSCSITarget target iqn=iqn.x:r portals=10.0.0.9:3260 implementation=lio-t",
+
+        "ocf:heartbeat:iSCSILogicalUnit lu1 target_iqn=iqn.x:r lun=1 path=/dev/drbd14",
+
+      ]
+`
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "sds-iscsi-r.toml.disabled")
+	require.NoError(t, os.WriteFile(conf, []byte(legacy), 0644))
+	script := strings.ReplaceAll(iscsiServiceIPLastScript("r"), "/etc/drbd-reactor.d", dir)
+	for i := 0; i < 2; i++ { // idempotent
+		out, err := exec.Command("/bin/sh", "-c", script).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
+	got, err := os.ReadFile(conf)
+	require.NoError(t, err)
+	assertServiceIPLast(t, string(got))
+	assert.Equal(t, 1, strings.Count(string(got), "IPaddr2"))
+	assert.Equal(t, strings.Count(legacy, "\n"), strings.Count(string(got), "\n"))
 }
 
 func TestListLUNs(t *testing.T) {
