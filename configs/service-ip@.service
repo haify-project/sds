@@ -1,0 +1,14 @@
+[Unit]
+Description=High Availability Service IP %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Go handles parsing the instance ID (e.g., 192.168.1.1-24_eth0)
+ExecStart=/usr/local/bin/service-ip up --instance %i --arp-count 5
+ExecStop=/usr/local/bin/service-ip down --instance %i
+
+[Install]
+WantedBy=multi-user.target

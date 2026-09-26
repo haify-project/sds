@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -100,6 +101,10 @@ type fakeDeploymentClient struct {
 		content string
 		relPath string
 	}
+	installedFiles []struct {
+		hosts                 []string
+		localPath, remotePath string
+	}
 	deleteConfigCalls []struct {
 		hosts      []string
 		remotePath string
@@ -167,6 +172,18 @@ func (f *fakeDeploymentClient) DistributeSecret(ctx context.Context, hosts []str
 		return f.distributeSecretFunc(ctx, hosts, content, relPath)
 	}
 	return &deployment.ConfigResult{Success: true, Path: relPath}, nil
+}
+
+func (f *fakeDeploymentClient) InstallFile(ctx context.Context, hosts []string, localPath, remotePath string, mode os.FileMode) (*deployment.ConfigResult, error) {
+	f.installedFiles = append(f.installedFiles, struct {
+		hosts                 []string
+		localPath, remotePath string
+	}{hosts: cloneStrings(hosts), localPath: localPath, remotePath: remotePath})
+	res := &deployment.ConfigResult{Success: true, Path: remotePath, Hosts: map[string]*deployment.HostResult{}}
+	for _, h := range hosts {
+		res.Hosts[h] = &deployment.HostResult{Host: h, Success: true}
+	}
+	return res, nil
 }
 
 func (f *fakeDeploymentClient) DeleteConfig(ctx context.Context, hosts []string, remotePath string) error {

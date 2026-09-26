@@ -344,7 +344,7 @@ must be installed (they ship with drbd-reactor) or the promoter fails to start.
 ### Per-resource HA (mount failover)
 
 ```bash
-sds-cli ha create data --mount /mnt/data --fstype ext4 [--service-ip 192.168.1.210/24]
+sds-cli ha create data --mount /mnt/data --fstype ext4 [--vip 192.168.1.210/24]
 ```
 
 Reactor promotes the resource + mounts it on the surviving node when the Primary
@@ -354,8 +354,8 @@ a 2-diskful resource keeps quorum through a diskless tiebreaker (auto-added).
 ### Controller Self-HA (the controller itself becomes HA)
 
 Makes `sds-controller` float on a DRBD-backed VIP so the control plane survives a
-node loss. Requires **full-mesh root SSH**, the `service-ip` helper + its systemd
-template on all nodes, and the controller binary on all nodes.
+node loss. Requires **full-mesh root SSH**; the controller binary and the
+`service-ip` helper + its systemd template are copied to the nodes by `enable`.
 
 ```bash
 sds-cli ha self enable --pool vg0 --vip 192.168.1.250/24 [--port 7999 --size 1]

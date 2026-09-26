@@ -417,6 +417,79 @@ func (c *Client) DistributeSecret(ctx context.Context, hosts []string, content, 
 	return result, nil
 }
 
+// InstallFile installs a local file — typically a binary — at an absolute
+// path on every host, owned by root at the given mode. DistributeConfig cannot
+// carry it: that path puts the content on a command line, which an executable
+// of several megabytes does not fit on. The file travels by SFTP into the login
+// user's home instead and is moved into place with sudo install.
+func (c *Client) InstallFile(ctx context.Context, hosts []string, localPath, remotePath string, mode os.FileMode) (*ConfigResult, error) {
+	if !filepath.IsAbs(remotePath) {
+		return nil, fmt.Errorf("InstallFile: %q must be absolute", remotePath)
+	}
+	result := &ConfigResult{Path: remotePath, Success: true, Hosts: make(map[string]*HostResult)}
+	modeArg := strconv.FormatUint(uint64(mode.Perm()), 8)
+
+	var localHosts, remoteHosts []string
+	localAddrs := getLocalIPs()
+	for _, host := range hosts {
+		if isLocalIP(host, localAddrs) {
+			localHosts = append(localHosts, host)
+		} else {
+			remoteHosts = append(remoteHosts, host)
+		}
+	}
+
+	for _, host := range localHosts {
+		hr := &HostResult{Host: host, Success: true}
+		if out, err := exec.CommandContext(ctx, "sudo", "install", "-D", "-m", modeArg, localPath, remotePath).CombinedOutput(); err != nil {
+			hr.Success, hr.Error = false, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+			result.Success = false
+		}
+		result.Hosts[host] = hr
+	}
+
+	if len(remoteHosts) > 0 {
+		staged := ".sds-install-" + filepath.Base(remotePath)
+		copyResult, err := c.dispatch.Copy(ctx, remoteHosts, localPath, staged, dispatch.WithCopyMode(0700))
+		if err != nil {
+			return nil, fmt.Errorf("InstallFile: copy to %v: %w", remoteHosts, err)
+		}
+		var copied []string
+		for _, host := range remoteHosts {
+			r := copyResult.Hosts[host]
+			if r == nil || !r.Success {
+				hr := &HostResult{Host: host, Error: fmt.Errorf("copy failed")}
+				if r != nil && r.Error != nil {
+					hr.Error = r.Error
+				}
+				result.Hosts[host] = hr
+				result.Success = false
+				continue
+			}
+			copied = append(copied, host)
+		}
+		if len(copied) > 0 {
+			cmd := fmt.Sprintf(`sudo install -D -m %s "$HOME/%s" %s; rc=$?; rm -f "$HOME/%s"; exit $rc`,
+				modeArg, staged, remotePath, staged)
+			execResult, err := c.Exec(ctx, copied, cmd)
+			if err != nil {
+				return nil, fmt.Errorf("InstallFile: install on %v: %w", copied, err)
+			}
+			for _, host := range copied {
+				hr := &HostResult{Host: host, Error: fmt.Errorf("no result for host")}
+				if r := execResult.Hosts[host]; r != nil {
+					hr = r
+				}
+				if !hr.Success {
+					result.Success = false
+				}
+				result.Hosts[host] = hr
+			}
+		}
+	}
+	return result, nil
+}
+
 // maxInlineB64Len bounds the base64 payload sent as a single `echo` argument.
 // Linux caps one argument at MAX_ARG_STRLEN (128 KiB); stay well under it so the
 // fast single-command path never trips "Argument list too long".

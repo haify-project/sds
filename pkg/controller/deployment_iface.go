@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"os"
 
 	"github.com/liliang-cn/sds/pkg/deployment"
 )
@@ -12,6 +13,9 @@ type deploymentClient interface {
 	// home without it ever reaching a command line. DistributeConfig is not an
 	// alternative for credentials; see its implementation for why.
 	DistributeSecret(ctx context.Context, hosts []string, content, relPath string) (*deployment.ConfigResult, error)
+	// InstallFile installs a local file (a binary) at an absolute path on
+	// every host, root-owned at mode.
+	InstallFile(ctx context.Context, hosts []string, localPath, remotePath string, mode os.FileMode) (*deployment.ConfigResult, error)
 	DeleteConfig(ctx context.Context, hosts []string, remotePath string) error
 	Exec(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error)
 

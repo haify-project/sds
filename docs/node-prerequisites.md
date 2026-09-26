@@ -166,26 +166,17 @@ Symptom when missing: `ocf.rs@target_<res>.service` exits `5/NOTINSTALLED`.
 ## 5. HA configs & Self-HA VIP: the `service-ip` helper (all nodes)
 
 HA configs (`MakeHa`) and Self-HA float a VIP via a systemd template
-`service-ip@<IP>-<MASK>.service`, which runs the **`service-ip`** helper. This is
-a separate Go project (not a distro package):
+`service-ip@<IP>-<MASK>.service`, which runs the **`service-ip`** helper: it
+adds/removes the VIP on the auto-detected interface and sends Gratuitous ARP.
+Both ship with SDS (`cmd/service-ip`, `configs/service-ip@.service`);
+`make install-controller` puts the binary next to the controller and in
+`/usr/local/bin`.
 
-- Repo: `~/Things/dev/storage/service-ip` (module `service-ip`)
-- Adds/removes a VIP on the auto-detected interface + sends Gratuitous ARP,
-  OCF-style exit codes, `Type=oneshot` unit that stays `active (exited)`.
-
-Build and install on every node (set `GOARCH` to the node arch — `amd64` for
-orange, `arm64` for the Lima/信创 clusters):
-
-```bash
-cd ~/Things/dev/storage/service-ip
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/service-ip .   # or GOARCH=arm64
-scp bin/service-ip <node>:/tmp/ && ssh <node> 'sudo install -m755 /tmp/service-ip /usr/local/bin/service-ip'
-scp deployment/service-ip@.service <node>:/tmp/ && ssh <node> 'sudo mv /tmp/service-ip@.service /etc/systemd/system/service-ip@.service && sudo systemctl daemon-reload'
-```
-
-sds pre-flight-checks `/usr/local/bin/service-ip` before writing an HA VIP
-config, so a missing helper now fails with a clear message instead of a silently
-broken promoter.
+Nothing to do on the other nodes: `ha create` with a VIP and `ha self enable`
+install the helper and the unit on every node that lacks them, copying the
+controller node's own build. A node of a different architecture is refused
+with a message naming it — install `service-ip` there by hand
+(`GOOS=linux GOARCH=<arch> go build -o service-ip ./cmd/service-ip`).
 
 The reactor promoter references the unit as `service-ip@<IP>-<MASK>.service`
 (e.g. `service-ip@192.168.104.101-24.service` for VIP `192.168.104.101/24`).

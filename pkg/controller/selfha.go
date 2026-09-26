@@ -362,9 +362,8 @@ func (rm *ResourceManager) selfHaPreflight(ctx context.Context, selfAddr string,
 		"drbd-reactor is not active"); err != nil {
 		return err
 	}
-	// service-ip must be installed everywhere (VIP unit depends on it).
-	if err := rm.execAllSuccess(ctx, all, "test -x /usr/local/bin/service-ip",
-		"service-ip is not installed at /usr/local/bin/service-ip"); err != nil {
+	// The VIP unit runs service-ip; install it where it is missing.
+	if err := rm.ensureServiceIP(ctx, all); err != nil {
 		return err
 	}
 	// The handoff and disable scripts run AS ROOT (via systemd-run) on

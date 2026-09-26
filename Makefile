@@ -37,6 +37,7 @@ build: ui-sync
 	go build -o bin/sds-cli ./cmd/cli
 	@echo "Building sds-mcp..."
 	go build -o bin/sds-mcp ./cmd/mcp
+	GOOS=linux go build -o bin/service-ip ./cmd/service-ip
 	go build -o bin/csi-controller ./cmd/csi-controller
 	go build -o bin/csi-node ./cmd/csi-node
 
@@ -52,8 +53,9 @@ clean:
 install-controller: build
 	@echo "Installing sds-controller..."
 	sudo mkdir -p /opt/sds/bin
-	sudo cp bin/sds-controller /opt/sds/bin/
-	sudo cp configs/sds-controller.service /etc/systemd/system/
+	sudo cp bin/sds-controller bin/service-ip /opt/sds/bin/
+	sudo install -m 755 bin/service-ip /usr/local/bin/service-ip
+	sudo cp configs/sds-controller.service configs/service-ip@.service /etc/systemd/system/
 	sudo cp configs/controller.toml.example /etc/sds/controller.toml.example
 	sudo systemctl daemon-reload
 	@echo "Controller installed. Edit /etc/sds/controller.toml then run:"

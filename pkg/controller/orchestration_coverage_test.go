@@ -194,6 +194,8 @@ func TestMakeHaSuccessAndRemove(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 		switch {
+		case strings.Contains(cmd, serviceIPUnitPath):
+			return successExecResult(hosts, ""), nil
 		case strings.Contains(cmd, "drbdadm status"):
 			return successExecResult(hosts, "res1 role:Primary"), nil
 		case strings.Contains(cmd, "systemctl show"):
@@ -249,7 +251,7 @@ func TestMakeHaValidationFailures(t *testing.T) {
 		require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "res1", Nodes: "n1"}))
 		_, err = ctrl.resources.MakeHa(ctx, "res1", nil, "", "", "10.0.0.50/24", nil, nil)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "service-ip helper")
+		assert.Contains(t, err.Error(), "check for service-ip on n1")
 	})
 
 	t.Run("missing service", func(t *testing.T) {

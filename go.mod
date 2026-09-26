@@ -17,6 +17,7 @@ require (
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0
+	github.com/j-keck/arping v1.0.3
 	github.com/kubernetes-csi/csi-test/v5 v5.6.0
 	github.com/liliang-cn/dispatch v1.1.8
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -26,6 +27,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
+	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/sys v0.47.0
@@ -106,6 +108,7 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
+	github.com/vishvananda/netns v0.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
