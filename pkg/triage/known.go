@@ -244,12 +244,21 @@ func drbdPeerLine(line string) (peer, state string, ok bool) {
 // "Detected split-brain avoidance policy: 'quorum'" — a statement that the
 // cluster is protected — and turned every failover into a critical split-brain
 // finding telling the operator to discard one side's data.
+//
+// A split brain that was resolved is not one either: DRBD logs "detected,
+// manually solved" (or "automatically solved") and runs the initial-split-brain
+// handler on every detection, resolved or not. Only the split-brain handler
+// and "detected but unresolved" mean it is still there. Counting the resolved
+// ones sent the operator through discarding data again after a DR failback
+// that had already done it.
 func isSplitBrainReport(l string) bool {
 	ll := strings.ToLower(l)
 	if !strings.Contains(ll, "split-brain") && !strings.Contains(ll, "split brain") {
 		return false
 	}
-	if strings.Contains(ll, "avoidance policy") || strings.Contains(ll, "automatically solved") {
+	if strings.Contains(ll, "avoidance policy") ||
+		strings.Contains(ll, "automatically solved") || strings.Contains(ll, "manually solved") ||
+		strings.Contains(ll, "initial-split-brain") {
 		return false
 	}
 	// "Split-Brain detected but unresolved, dropping connection!" from the

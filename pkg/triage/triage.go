@@ -327,6 +327,9 @@ func groupedFindings(in Input, claimed map[string]bool) []Finding {
 	}
 
 	for _, e := range in.Events {
+		if resolvedLater(e, in.Events) {
+			continue
+		}
 		if sev, ok := eventSeverity(e); ok {
 			add(sev, "event", e.Node, stamp(e.At), e.Type+": "+e.Message)
 		}
@@ -390,6 +393,24 @@ func withRepeat(ev []Evidence, count int) []Evidence {
 	return ev
 }
 
+// resolvedLater reports whether a later event closed this one: the same type
+// on the same resource, resolved, on the same node or on none. The event log
+// keeps every firing record; without this, a fault that came and went five
+// times read as five current faults, and a report about the one still open
+// named the ones already over as its cause.
+func resolvedLater(e Event, all []Event) bool {
+	if strings.EqualFold(e.Status, "resolved") {
+		return false
+	}
+	for _, r := range all {
+		if r.At.After(e.At) && strings.EqualFold(r.Status, "resolved") &&
+			r.Type == e.Type && r.Resource == e.Resource && (r.Node == "" || r.Node == e.Node) {
+			return true
+		}
+	}
+	return false
+}
+
 func eventSeverity(e Event) (Severity, bool) {
 	// A resolved event is the record of something that ended. Reporting it as
 	// a current problem is how a report about a cluster that recovered an hour
@@ -412,9 +433,18 @@ func eventSeverity(e Event) (Severity, bool) {
 // normal boot into forty findings.
 func lineSeverity(line string) (Severity, bool) {
 	l := strings.ToLower(line)
+	// Most lines naming a split brain are not one: the reactor's policy line,
+	// one DRBD resolved, the handler that runs on every detection. The known
+	// matcher decides which are; the rest are not worth a finding.
+	if containsAny(l, "split-brain", "split brain") {
+		if isSplitBrainReport(line) {
+			return SeverityCritical, true
+		}
+		return "", false
+	}
 	switch {
 	case containsAny(l, "kernel bug", "general protection fault", "segfault",
-		"out of memory", "oom-killer", "i/o error", "split-brain", "split brain",
+		"out of memory", "oom-killer", "i/o error",
 		"panic:", "emergency", "aborting journal", "remounting filesystem read-only"):
 		return SeverityCritical, true
 	case containsAny(l, "error", "failed with result", "failed to", "cannot ",

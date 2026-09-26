@@ -460,3 +460,70 @@ func TestReactorsSplitBrainPolicyLineIsNotASplitBrain(t *testing.T) {
 		t.Fatalf("a real unresolved split brain was not reported: %+v", r.Findings)
 	}
 }
+
+// A split brain DRBD was told how to resolve — `connect --discard-my-data` on
+// one side, as in a DR failback — logs "manually solved" and runs the
+// initial-split-brain handler. Neither is a split brain that is still there.
+func TestResolvedSplitBrainIsNotReported(t *testing.T) {
+	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{
+		node("sdt2", "drbd_kernel",
+			"2026-09-26T11:13:43+08:00 sdt2 kernel: drbd wan1/0 drbd20 sdt3: helper command: /sbin/drbdadm initial-split-brain",
+			"2026-09-26T11:13:43+08:00 sdt2 kernel: drbd wan1/0 drbd20 sdt3: helper command: /sbin/drbdadm initial-split-brain exit code 0",
+			"2026-09-26T11:13:43+08:00 sdt2 kernel: drbd wan1/0 drbd20 sdt3: Split-Brain detected, manually solved. Sync from peer node"),
+	}})
+	for _, f := range r.Findings {
+		if f.ID == "split-brain" {
+			t.Fatalf("reported a resolved split brain: %+v", f.Evidence)
+		}
+	}
+	r = Analyze(Input{Window: time.Hour, Nodes: []NodeReport{
+		node("sdt2", "drbd_kernel", "kernel: drbd wan1/0 drbd20 sdt3: helper command: /sbin/drbdadm split-brain"),
+	}})
+	if len(r.Findings) == 0 || r.Findings[0].ID != "split-brain" {
+		t.Fatalf("the unresolved split-brain handler was not reported: %+v", r.Findings)
+	}
+}
+
+// Lines that name a split brain without reporting one must not surface as a
+// critical grouped finding either.
+func TestSplitBrainChatterIsNotACriticalLine(t *testing.T) {
+	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{
+		node("sdt1", "reactor_journal",
+			"2026-09-26T11:20:46+08:00 sdt1 drbd-reactor[1156]: INFO [drbd_reactor::plugin::promoter] Detected split-brain avoidance policy: 'quorum'"),
+		node("sdt3", "drbd_kernel",
+			"2026-09-26T11:13:43+08:00 sdt3 kernel: drbd wan1/0 drbd20 sdt2: Split-Brain detected, manually solved. Sync from this node",
+			"2026-09-26T11:13:43+08:00 sdt3 kernel: drbd wan1/0 drbd20 sdt2: helper command: /sbin/drbdadm initial-split-brain"),
+	}})
+	for _, f := range r.Findings {
+		if f.Severity == SeverityCritical {
+			t.Fatalf("split-brain chatter produced a critical finding: %s %+v", f.ID, f.Evidence)
+		}
+	}
+}
+
+// A firing event that a later one resolved is history, not a current fault.
+func TestFiringEventResolvedLaterIsNotAFinding(t *testing.T) {
+	t0 := time.Date(2026, 9, 26, 3, 9, 0, 0, time.UTC)
+	ev := func(id uint64, min int, status, node, msg string) Event {
+		return Event{ID: id, Type: "wan.degraded", Severity: "critical", Status: status,
+			Resource: "wan1", Node: node, Message: msg, At: t0.Add(time.Duration(min) * time.Minute)}
+	}
+	r := Analyze(Input{Window: time.Hour, Events: []Event{
+		ev(1, 0, "firing", "", "proxy inactive on 192.168.123.234"),
+		ev(2, 4, "resolved", "", "WAN replication recovered"),
+		ev(3, 16, "firing", "", "DR proxy inactive for leg 192.168.123.234"),
+	}})
+	var msgs []string
+	for _, f := range r.Findings {
+		for _, e := range f.Evidence {
+			msgs = append(msgs, e.Line)
+		}
+	}
+	joined := strings.Join(msgs, "\n")
+	if strings.Contains(joined, "proxy inactive on 192.168.123.234") {
+		t.Fatalf("a resolved fault was reported as current:\n%s", joined)
+	}
+	if !strings.Contains(joined, "DR proxy inactive") {
+		t.Fatalf("the fault still firing was dropped:\n%s", joined)
+	}
+}
