@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -510,7 +511,7 @@ else
 fi`, name)) + " | base64 -d | sudo /bin/bash"
 	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
 	if err == nil && !result.AllSuccess() && strings.Contains(result.FailureDetails(), "still holds volumes") {
-		return fmt.Errorf("failed to delete pool: %s", result.FailureDetails())
+		return errors.New(result.FailureDetails())
 	}
 	if err != nil {
 		if zfsErr := sm.DeleteZFSPool(ctx, name, node); zfsErr == nil {
@@ -731,7 +732,7 @@ func (sm *StorageManager) DeleteZFSPool(ctx context.Context, name, node string) 
 	if err == nil {
 		for _, h := range check.Hosts {
 			if held := strings.TrimSpace(h.Output); h.Success && held != "" {
-				return fmt.Errorf("failed to delete ZFS pool: pool %s still holds %s— delete or move the resources on it first", name, held)
+				return fmt.Errorf("pool %s still holds %s— delete or move the resources on it first", name, held)
 			}
 		}
 	}
