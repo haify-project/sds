@@ -488,9 +488,30 @@ func (sm *StorageManager) DeletePool(ctx context.Context, name, node string) err
 		zap.String("name", name),
 		zap.String("node", node))
 
-	// Remove VG using LVM
-	cmd := fmt.Sprintf("sudo vgremove -f %s", name)
+	// Remove the VG — but only an empty one. `vgremove -f` takes every LV
+	// with it without asking, so deleting a pool that still held replicas
+	// used to destroy them on the spot. The thin pool LV itself is the pool,
+	// not a volume in it, and does not count. The PVs are wiped afterwards:
+	// a disk left with a PV label is still claimed by LVM and cannot be
+	// given to another pool without being cleared by hand.
+	cmd := "echo " + base64Std(fmt.Sprintf(`set -e
+vg=%[1]s
+if vgs "$vg" >/dev/null 2>&1; then
+  used=$(lvs --noheadings -o lv_name,lv_attr "$vg" | awk '$2 !~ /^t/ {print $1}' | tr '\n' ' ')
+  if [ -n "$used" ]; then
+    echo "pool $vg still holds volumes: $used— delete or move the resources on it first" >&2
+    exit 3
+  fi
+  pvs=$(pvs --noheadings -o pv_name -S vg_name="$vg")
+  vgremove -f "$vg"
+  for pv in $pvs; do pvremove -y "$pv" >/dev/null; done
+else
+  exit 4
+fi`, name)) + " | base64 -d | sudo /bin/bash"
 	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
+	if err == nil && !result.AllSuccess() && strings.Contains(result.FailureDetails(), "still holds volumes") {
+		return fmt.Errorf("failed to delete pool: %s", result.FailureDetails())
+	}
 	if err != nil {
 		if zfsErr := sm.DeleteZFSPool(ctx, name, node); zfsErr == nil {
 			return nil
@@ -702,6 +723,18 @@ func (sm *StorageManager) DeleteZFSPool(ctx context.Context, name, node string) 
 	sm.controller.logger.Info("Deleting ZFS pool",
 		zap.String("name", name),
 		zap.String("node", node))
+
+	// zpool destroy -f takes every dataset and zvol with it; refuse a pool
+	// that still holds any, as the LVM path does.
+	check, err := sm.controller.deployment.Exec(ctx, []string{address},
+		fmt.Sprintf("sudo zfs list -H -o name -r %s 2>/dev/null | tail -n +2 | tr '\n' ' '", name))
+	if err == nil {
+		for _, h := range check.Hosts {
+			if held := strings.TrimSpace(h.Output); h.Success && held != "" {
+				return fmt.Errorf("failed to delete ZFS pool: pool %s still holds %s— delete or move the resources on it first", name, held)
+			}
+		}
+	}
 
 	result, err := sm.controller.deployment.ZFSDestroyPool(ctx, []string{address}, name)
 	if err != nil {

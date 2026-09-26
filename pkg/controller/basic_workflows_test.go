@@ -770,7 +770,28 @@ func TestStorageManagerAddAndDeletePoolUseNormalizedName(t *testing.T) {
 
 	err = ctrl.storage.DeletePool(context.Background(), "data-pool", "node1")
 	require.NoError(t, err)
-	assert.Equal(t, "sudo vgremove -f sds_data-pool", dep.execCalls[len(dep.execCalls)-1].cmd)
+	script := decodeWrapped(dep.execCalls[len(dep.execCalls)-1].cmd)
+	assert.Contains(t, script, "vg=sds_data-pool")
+	assert.Contains(t, script, `vgremove -f "$vg"`)
+	assert.Contains(t, script, "pvremove", "the disks must be released for reuse")
+}
+
+// vgremove -f takes every LV with it. A pool that still holds replicas must be
+// refused, not emptied.
+func TestStorageManagerRefusesToDeleteAPoolInUse(t *testing.T) {
+	dep := &fakeDeploymentClient{
+		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
+			return failedExecResult(hosts, "pool sds_tp still holds volumes: r3_data r5_data — delete or move the resources on it first"), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
+	ctrl.hostsMap["node1"] = "10.0.0.1"
+
+	err := ctrl.storage.DeletePool(context.Background(), "tp", "node1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "r3_data")
+	assert.Empty(t, dep.zfsDestroyPoolCalls, "an LVM pool in use must not fall through to a ZFS destroy")
 }
 
 func TestStorageManagerCreatePoolPersistsDatabaseState(t *testing.T) {
@@ -941,7 +962,10 @@ func TestStorageManagerDeletePoolUsesZFSPathFromPersistedType(t *testing.T) {
 	require.Len(t, dep.zfsDestroyPoolCalls, 1)
 	assert.Equal(t, []string{"10.0.0.1"}, dep.zfsDestroyPoolCalls[0].hosts)
 	assert.Equal(t, "sds_tank", dep.zfsDestroyPoolCalls[0].poolName)
-	assert.Empty(t, dep.execCalls)
+	// The only command besides the destroy is the check that it is empty.
+	for _, c := range dep.execCalls {
+		assert.Contains(t, c.cmd, "zfs list -H -o name -r sds_tank")
+	}
 
 	_, err = ctrl.db.GetPool(context.Background(), "sds_tank")
 	assert.ErrorContains(t, err, "not found")
@@ -951,7 +975,10 @@ func TestStorageManagerDeletePoolFallsBackToZFS(t *testing.T) {
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			require.Equal(t, []string{"10.0.0.1"}, hosts)
-			require.Equal(t, "sudo vgremove -f sds_tank", cmd)
+			if strings.Contains(cmd, "zfs list") {
+				return successExecResult(hosts, ""), nil
+			}
+			require.Contains(t, decodeWrapped(cmd), "vg=sds_tank")
 			return nil, assert.AnError
 		},
 	}
@@ -961,7 +988,6 @@ func TestStorageManagerDeletePoolFallsBackToZFS(t *testing.T) {
 
 	err := ctrl.storage.DeletePool(context.Background(), "tank", "node1")
 	require.NoError(t, err)
-	require.Len(t, dep.execCalls, 1)
 	require.Len(t, dep.zfsDestroyPoolCalls, 1)
 	assert.Equal(t, "sds_tank", dep.zfsDestroyPoolCalls[0].poolName)
 }

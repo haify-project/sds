@@ -284,7 +284,7 @@ func (rm *ResourceManager) GetSelfHaStatus(ctx context.Context) (*SelfHaStatus, 
 			hosts[i] = rm.controller.ResolveHost(n)
 		}
 		if active, err := rm.findActiveNode(ctx, SelfHaResource, hosts); err == nil {
-			status.ActiveNode = active
+			status.ActiveNode = rm.controller.NodeName(active)
 		}
 	}
 	return status, nil

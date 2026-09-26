@@ -317,8 +317,10 @@ func (sm *StorageManager) GetPoolStatusList(ctx context.Context) ([]alert.PoolSt
 			continue
 		}
 		info := alert.PoolStatusInfo{
-			Name:       p.Name,
-			Node:       p.Node,
+			Name: p.Name,
+			// Pools report their node by address; alerts are read by people,
+			// who know nodes by name.
+			Node:       sm.controller.NodeName(p.Node),
 			TotalBytes: p.TotalBytes,
 			FreeBytes:  p.FreeBytes,
 		}
