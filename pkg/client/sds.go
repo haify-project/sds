@@ -2189,3 +2189,16 @@ func (c *SDSClient) SetResourceProfile(ctx context.Context, resource, profile st
 	}
 	return nil
 }
+
+// SetWanEndpoint changes where a WAN resource's primary site reaches its DR
+// site; see SetWanEndpointRequest for the fields.
+func (c *SDSClient) SetWanEndpoint(ctx context.Context, req *sdspb.SetWanEndpointRequest) (*sdspb.SetWanEndpointResponse, error) {
+	resp, err := c.client.SetWanEndpoint(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}

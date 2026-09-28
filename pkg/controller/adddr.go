@@ -53,6 +53,9 @@ func (rm *ResourceManager) AddDR(ctx context.Context, resource, drNode, drEndpoi
 	if drEndpoint == "" {
 		return fmt.Errorf("a DR endpoint is required (the address the primary site dials)")
 	}
+	if err := validDREndpoint(drEndpoint); err != nil {
+		return err
+	}
 	if rm.controller.nodes.GetNodeAddressByName(drNode) == "" {
 		return fmt.Errorf("DR node %q is not a registered node", drNode)
 	}

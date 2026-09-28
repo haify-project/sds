@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	pb "github.com/liliang-cn/sds/api/proto/v1"
+	"github.com/liliang-cn/sds/pkg/database"
 	"github.com/liliang-cn/sds/pkg/wanproxy"
 )
 
@@ -41,7 +42,14 @@ func (s *Server) RepairWanProxy(ctx context.Context, req *pb.RepairWanProxyReque
 			Message: fmt.Sprintf("resource %q is not a WAN resource", name),
 		}, nil
 	}
+	return s.repairWanLegs(ctx, dbRes, req.GetDryRun(), false), nil
+}
 
+// repairWanLegs converges a WAN resource's tunnels on its database record.
+// skipCheck provisions without probing that the DR endpoint answers — for an
+// endpoint the operator knows is not reachable yet.
+func (s *Server) repairWanLegs(ctx context.Context, dbRes *database.Resource, dryRun, skipCheck bool) *pb.RepairWanProxyResponse {
+	name := dbRes.Name
 	rm := s.ctrl.resources
 	multi := rm.wanMultiSpecFor(dbRes)
 	deploy := rm.wanproxyDeployClient()
@@ -54,19 +62,20 @@ func (s *Server) RepairWanProxy(ctx context.Context, req *pb.RepairWanProxyReque
 
 	stale, err := wanproxy.FindStaleLegs(ctx, deploy, multi)
 	if err != nil {
-		return &pb.RepairWanProxyResponse{Success: false, Message: err.Error()}, nil
+		return &pb.RepairWanProxyResponse{Success: false, Message: err.Error()}
 	}
 	for _, st := range stale {
 		resp.RemovedLegs = append(resp.RemovedLegs, fmt.Sprintf("%s: %s", st.Host, st.LegID))
 	}
 
-	if req.GetDryRun() {
+	if dryRun {
 		resp.AlreadyConsistent = len(stale) == 0
 		resp.Message = fmt.Sprintf("dry run: %d leg(s) expected, %d stale instance(s) would be removed",
 			len(resp.ExpectedLegs), len(stale))
-		return resp, nil
+		return resp
 	}
 
+	multi.SkipReachabilityCheck = skipCheck
 	multi.BinaryFor = rm.wanproxyBinaryResolver(ctx,
 		append(append([]string{}, multi.PrimaryNodeAddrs...), multi.DRNodeAddr))
 	s.ctrl.logger.Info("Repairing WAN proxy legs",
@@ -90,17 +99,17 @@ func (s *Server) RepairWanProxy(ctx context.Context, req *pb.RepairWanProxyReque
 		return &pb.RepairWanProxyResponse{
 			Success: false,
 			Message: fmt.Sprintf("remove stale legs for %s: %v", name, err),
-		}, nil
+		}
 	}
 	if err := wanproxy.ProvisionMulti(ctx, deploy, multi); err != nil {
 		return &pb.RepairWanProxyResponse{
 			Success: false,
 			Message: fmt.Sprintf("provision legs for %s: %v", name, err),
-		}, nil
+		}
 	}
 
 	resp.AlreadyConsistent = len(stale) == 0
 	resp.Message = fmt.Sprintf("repaired %d leg(s); removed %d stale instance(s)",
 		len(resp.ExpectedLegs), len(stale))
-	return resp, nil
+	return resp
 }

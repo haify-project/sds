@@ -524,6 +524,9 @@ service SDSController {
   rpc RepairWanProxy(RepairWanProxyRequest) returns (RepairWanProxyResponse) {
     option (google.api.http) = { post: "/v1/resources/{name}/wan/repair"; body: "*"; };
   }
+  rpc SetWanEndpoint(SetWanEndpointRequest) returns (SetWanEndpointResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/wan/endpoint"; body: "*"; };
+  }
 
   // WatchEvents streams notifications as they happen, so an operator (or the
   // web UI, or a script) can react without polling. Over REST this is a
@@ -2665,4 +2668,28 @@ message SetResourceProfileRequest {
 message SetResourceProfileResponse {
   bool success = 1;
   string message = 2;
+}
+
+// SetWanEndpointRequest changes where a WAN resource's primary site reaches its
+// DR site, and rebuilds the tunnels on it. An empty field keeps its value.
+message SetWanEndpointRequest {
+  string name = 1;
+  // dr_endpoint is the DR site's address the primary dials: an IP or a host
+  // name, without a port (the WAN port is the resource's own).
+  string dr_endpoint = 2;
+  // egress_address pins the source address the primary dials from.
+  string egress_address = 3;
+  // clear_egress lets the routing table choose the source again.
+  bool clear_egress = 4;
+  // skip_reachability_check saves and provisions without checking that the DR
+  // endpoint answers — for a DR site whose firewall is not open yet. Without
+  // it, an endpoint that does not answer is refused and the old one restored.
+  bool skip_reachability_check = 5;
+}
+
+message SetWanEndpointResponse {
+  bool success = 1;
+  string message = 2;
+  string dr_endpoint = 3;
+  string egress_address = 4;
 }

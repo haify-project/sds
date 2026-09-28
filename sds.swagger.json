@@ -2835,6 +2835,44 @@
         ]
       }
     },
+    "/v1/resources/{name}/wan/endpoint": {
+      "post": {
+        "operationId": "SDSController_SetWanEndpoint",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetWanEndpointResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetWanEndpointBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{name}/wan/repair": {
       "post": {
         "summary": "RepairWanProxy reconciles a WAN resource's replication tunnels with what\nthe controller currently believes its nodes are: it re-provisions the legs\nthat should exist and removes instances left behind by a node that was\nrenumbered or removed. Safe to run on a healthy resource — it converges.",
@@ -5274,6 +5312,28 @@
         }
       },
       "description": "SetTiebreakerRequest moves a resource's diskless quorum tiebreaker to\nanother node. An empty node removes the tiebreaker without adding one."
+    },
+    "SDSControllerSetWanEndpointBody": {
+      "type": "object",
+      "properties": {
+        "drEndpoint": {
+          "type": "string",
+          "description": "dr_endpoint is the DR site's address the primary dials: an IP or a host\nname, without a port (the WAN port is the resource's own)."
+        },
+        "egressAddress": {
+          "type": "string",
+          "description": "egress_address pins the source address the primary dials from."
+        },
+        "clearEgress": {
+          "type": "boolean",
+          "description": "clear_egress lets the routing table choose the source again."
+        },
+        "skipReachabilityCheck": {
+          "type": "boolean",
+          "description": "skip_reachability_check saves and provisions without checking that the DR\nendpoint answers — for a DR site whose firewall is not open yet. Without\nit, an endpoint that does not answer is refused and the old one restored."
+        }
+      },
+      "description": "SetWanEndpointRequest changes where a WAN resource's primary site reaches its\nDR site, and rebuilds the tunnels on it. An empty field keeps its value."
     },
     "SDSControllerStartGatewayBody": {
       "type": "object"
@@ -8761,6 +8821,23 @@
           "type": "string"
         },
         "node": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetWanEndpointResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "drEndpoint": {
+          "type": "string"
+        },
+        "egressAddress": {
           "type": "string"
         }
       }

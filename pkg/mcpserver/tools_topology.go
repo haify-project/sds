@@ -220,6 +220,25 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			}, nil
 		})
 
+	if c, supported := s.client.(interface {
+		SetWanEndpoint(context.Context, *sdspb.SetWanEndpointRequest) (*sdspb.SetWanEndpointResponse, error)
+	}); supported {
+		addWrite(s, srv, writeTool("sds_wan_set_endpoint", "Change a WAN resource's DR endpoint",
+			"Change the DR site's address a WAN resource's primary dials (IP or host name, no port) and/or the source "+
+				"address it dials from, and rebuild the tunnels on it. A new DR endpoint that does not answer is refused "+
+				"and the old one kept, unless skip_check is set for a DR site not reachable yet."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in wanEndpointIn) (*mcp.CallToolResult, opResult, error) {
+				resp, err := c.SetWanEndpoint(ctx, &sdspb.SetWanEndpointRequest{
+					Name: in.Resource, DrEndpoint: in.DREndpoint, EgressAddress: in.EgressAddress,
+					ClearEgress: in.ClearEgress, SkipReachabilityCheck: in.SkipCheck,
+				})
+				if err != nil {
+					return nil, opResult{}, err
+				}
+				return nil, ok(resp.Message), nil
+			})
+	}
+
 	addWrite(s, srv, destructiveTool("sds_node_drain", "Drain a node",
 		"Move every resource off a node so it can be taken out of service. Interrupts whatever was running there."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeNameIn) (*mcp.CallToolResult, drainOut, error) {
@@ -380,4 +399,12 @@ type nodeAddressOut struct {
 	Message   string   `json:"message"`
 	Resources []string `json:"resources"`
 	Failed    []string `json:"failed,omitempty"`
+}
+
+type wanEndpointIn struct {
+	Resource      string `json:"resource" jsonschema:"WAN resource name"`
+	DREndpoint    string `json:"dr_endpoint,omitempty" jsonschema:"DR site's address the primary dials: IP or host name, no port; empty keeps it"`
+	EgressAddress string `json:"egress_address,omitempty" jsonschema:"source address the primary dials from; empty keeps it"`
+	ClearEgress   bool   `json:"clear_egress,omitempty" jsonschema:"let the routing table choose the source address again"`
+	SkipCheck     bool   `json:"skip_check,omitempty" jsonschema:"save and provision even if the DR endpoint does not answer yet"`
 }

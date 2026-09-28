@@ -546,11 +546,27 @@ uses protocol A (asynchronous): the primary does not wait for the DR site.
 ```bash
 sds-cli resource create --name db --size 100G --port 7000 \
     --nodes orange1,orange2 \
-    --wan --dr-node aliyun1 --dr-endpoint dr.example.com:0
+    --wan --dr-node aliyun1 --dr-endpoint dr.example.com
 ```
 
-`--wan-port 0` picks a random free port above 3000. `--wan-egress-address` pins
-the outbound side to one interface when the primary has several.
+`--dr-endpoint` is an address or host name, without a port: the WAN port is
+`--wan-port`, and 0 (the default) picks a random free port above 3000.
+`--wan-egress-address` pins the outbound side to one interface when the primary
+has several.
+
+When the DR site's address changes, or the primary should dial out from
+another interface:
+
+```bash
+sds-cli wan set-endpoint db --dr-endpoint dr2.example.com
+sds-cli wan set-endpoint db --egress-address 203.0.113.20     # or --clear-egress
+```
+
+The tunnels are rebuilt on the new address at once. A new endpoint that does
+not answer is refused and the old one kept — the old tunnel was working. For a
+DR site whose firewall is not open yet, `--skip-check` saves it anyway; run
+`wan repair` once it answers. Renumbering the DR node with `node set-address`
+moves an endpoint that was that node's address by itself.
 
 DR is manual on purpose — an automatic cross-site promotion during a network
 partition is how you get two live copies:

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -14,6 +15,40 @@ func wanCommand() *cobra.Command {
 		Short: "Cross-site (WAN) replication maintenance",
 	}
 	cmd.AddCommand(wanRepairCommand())
+	cmd.AddCommand(wanSetEndpointCommand())
+	return cmd
+}
+
+func wanSetEndpointCommand() *cobra.Command {
+	var req sdspb.SetWanEndpointRequest
+	cmd := &cobra.Command{
+		Use:   "set-endpoint <resource> [--dr-endpoint <address>] [--egress-address <ip> | --clear-egress]",
+		Short: "Change where a WAN resource reaches its DR site, and rebuild its tunnels there",
+		Long: "The DR endpoint is the DR site's address the primary dials; the egress address\n" +
+			"pins the source it dials from. Both are rebuilt into the tunnels at once.\n\n" +
+			"A new DR endpoint that does not answer is refused and the old one kept, since\n" +
+			"the old tunnel was working. --skip-check saves it anyway, for a DR site whose\n" +
+			"firewall is not open yet; run wan repair once it is.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req.Name = args[0]
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			resp, err := sdsClient.SetWanEndpoint(cmd.Context(), &req)
+			if err != nil {
+				return err
+			}
+			fmt.Println(resp.Message)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&req.DrEndpoint, "dr-endpoint", "", "DR site's address the primary dials (IP or host name, no port)")
+	cmd.Flags().StringVar(&req.EgressAddress, "egress-address", "", "Source address the primary dials from")
+	cmd.Flags().BoolVar(&req.ClearEgress, "clear-egress", false, "Let the routing table choose the source address again")
+	cmd.Flags().BoolVar(&req.SkipReachabilityCheck, "skip-check", false, "Save and provision even if the DR endpoint does not answer yet")
 	return cmd
 }
 

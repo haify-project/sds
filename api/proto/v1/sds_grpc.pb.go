@@ -145,6 +145,7 @@ const (
 	SDSController_DeleteNotifyChannel_FullMethodName       = "/v1.SDSController/DeleteNotifyChannel"
 	SDSController_TestNotifyChannel_FullMethodName         = "/v1.SDSController/TestNotifyChannel"
 	SDSController_RepairWanProxy_FullMethodName            = "/v1.SDSController/RepairWanProxy"
+	SDSController_SetWanEndpoint_FullMethodName            = "/v1.SDSController/SetWanEndpoint"
 	SDSController_WatchEvents_FullMethodName               = "/v1.SDSController/WatchEvents"
 )
 
@@ -365,6 +366,7 @@ type SDSControllerClient interface {
 	// that should exist and removes instances left behind by a node that was
 	// renumbered or removed. Safe to run on a healthy resource — it converges.
 	RepairWanProxy(ctx context.Context, in *RepairWanProxyRequest, opts ...grpc.CallOption) (*RepairWanProxyResponse, error)
+	SetWanEndpoint(ctx context.Context, in *SetWanEndpointRequest, opts ...grpc.CallOption) (*SetWanEndpointResponse, error)
 	// WatchEvents streams notifications as they happen, so an operator (or the
 	// web UI, or a script) can react without polling. Over REST this is a
 	// newline-delimited JSON stream; `curl -N .../v1/events/watch` works.
@@ -1643,6 +1645,16 @@ func (c *sDSControllerClient) RepairWanProxy(ctx context.Context, in *RepairWanP
 	return out, nil
 }
 
+func (c *sDSControllerClient) SetWanEndpoint(ctx context.Context, in *SetWanEndpointRequest, opts ...grpc.CallOption) (*SetWanEndpointResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetWanEndpointResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetWanEndpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Event], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &SDSController_ServiceDesc.Streams[0], SDSController_WatchEvents_FullMethodName, cOpts...)
@@ -1879,6 +1891,7 @@ type SDSControllerServer interface {
 	// that should exist and removes instances left behind by a node that was
 	// renumbered or removed. Safe to run on a healthy resource — it converges.
 	RepairWanProxy(context.Context, *RepairWanProxyRequest) (*RepairWanProxyResponse, error)
+	SetWanEndpoint(context.Context, *SetWanEndpointRequest) (*SetWanEndpointResponse, error)
 	// WatchEvents streams notifications as they happen, so an operator (or the
 	// web UI, or a script) can react without polling. Over REST this is a
 	// newline-delimited JSON stream; `curl -N .../v1/events/watch` works.
@@ -2274,6 +2287,9 @@ func (UnimplementedSDSControllerServer) TestNotifyChannel(context.Context, *Test
 }
 func (UnimplementedSDSControllerServer) RepairWanProxy(context.Context, *RepairWanProxyRequest) (*RepairWanProxyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RepairWanProxy not implemented")
+}
+func (UnimplementedSDSControllerServer) SetWanEndpoint(context.Context, *SetWanEndpointRequest) (*SetWanEndpointResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetWanEndpoint not implemented")
 }
 func (UnimplementedSDSControllerServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[Event]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchEvents not implemented")
@@ -4567,6 +4583,24 @@ func _SDSController_RepairWanProxy_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_SetWanEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetWanEndpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetWanEndpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetWanEndpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetWanEndpoint(ctx, req.(*SetWanEndpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_WatchEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchEventsRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -5088,6 +5122,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RepairWanProxy",
 			Handler:    _SDSController_RepairWanProxy_Handler,
+		},
+		{
+			MethodName: "SetWanEndpoint",
+			Handler:    _SDSController_SetWanEndpoint_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

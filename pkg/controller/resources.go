@@ -796,6 +796,9 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		if strings.TrimSpace(wan.DREndpoint) == "" {
 			return fmt.Errorf("WAN resource %q requires a DR endpoint (--dr-endpoint)", name)
 		}
+		if err := validDREndpoint(strings.TrimSpace(wan.DREndpoint)); err != nil {
+			return err
+		}
 		// WAN legs are systemd instances named "<resource>_<node>". A resource
 		// named like one of those would be indistinguishable from another
 		// resource's leg, and leg reconciliation would treat one's tunnels as
