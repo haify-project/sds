@@ -169,6 +169,7 @@ var dailyOps = []string{
 	"sds_snapshot_create",
 	"sds_snapshot_schedule_create",
 	"sds_wan_repair",
+	"sds_wan_set_endpoint",
 	"sds_zfs_dataset_create",
 	"sds_zfs_snapshot_clone",
 	"sds_zfs_volume_create",
