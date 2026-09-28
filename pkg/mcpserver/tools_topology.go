@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -251,6 +252,22 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("%d label(s) %s %s", len(in.Labels), verb, in.Node)), nil
 		})
 
+	if c, supported := s.client.(interface {
+		SetNodeAddress(context.Context, string, string, string) (*sdspb.SetNodeAddressResponse, error)
+	}); supported {
+		addWrite(s, srv, destructiveTool("sds_node_set_address", "Renumber a node",
+			"Move a registered node to a new IP address everywhere SDS records it: the node registry, /etc/hosts on the nodes, "+
+				"and the DRBD config of every resource it takes part in, each of which reconnects on the new address. "+
+				"The node must already answer on the new address as the same machine."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in nodeAddressIn) (*mcp.CallToolResult, nodeAddressOut, error) {
+				resp, err := c.SetNodeAddress(ctx, in.Node, in.Address, in.ReplicationAddress)
+				if err != nil {
+					return nil, nodeAddressOut{}, err
+				}
+				return nil, nodeAddressOut{OK: resp.Success, Message: resp.Message, Resources: resp.Resources, Failed: resp.Failed}, nil
+			})
+	}
+
 	addWrite(s, srv, destructiveTool("sds_pool_convert_thin", "Convert a pool to thin",
 		"Rebuild an LVM volume group as a thin pool in place. A thick pool reserves a fixed copy-on-write area per "+
 			"snapshot and so cannot hold a snapshot history. Every resource on the pool is rebuilt one copy at a "+
@@ -350,4 +367,17 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			}
 			return nil, out, nil
 		})
+}
+
+type nodeAddressIn struct {
+	Node               string `json:"node" jsonschema:"registered node name"`
+	Address            string `json:"address" jsonschema:"the node's new IP address"`
+	ReplicationAddress string `json:"replication_address,omitempty" jsonschema:"move DRBD traffic to this address too; empty keeps the node's current arrangement"`
+}
+
+type nodeAddressOut struct {
+	OK        bool     `json:"ok"`
+	Message   string   `json:"message"`
+	Resources []string `json:"resources"`
+	Failed    []string `json:"failed,omitempty"`
 }

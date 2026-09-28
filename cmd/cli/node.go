@@ -23,6 +23,7 @@ func nodeCommand() *cobra.Command {
 	cmd.AddCommand(nodeRegister())
 	cmd.AddCommand(nodeUnregister())
 	cmd.AddCommand(nodeLabel())
+	cmd.AddCommand(nodeSetAddress())
 	cmd.AddCommand(nodeDrain())
 	cmd.AddCommand(nodeUndrain())
 
@@ -362,4 +363,45 @@ func formatLastSeen(unix int64) string {
 	}
 	t := time.Unix(unix, 0)
 	return fmt.Sprintf("%s (%s ago)", t.Format("2006-01-02 15:04:05 MST"), time.Since(t).Round(time.Second))
+}
+
+func nodeSetAddress() *cobra.Command {
+	var replication string
+	cmd := &cobra.Command{
+		Use:   "set-address <node> <new-address>",
+		Short: "Renumber a node: move it to a new IP everywhere SDS records one",
+		Long: "The node must already answer on the new address. The registry, /etc/hosts on\n" +
+			"the nodes and the DRBD config of every resource the node takes part in are\n" +
+			"rewritten; each resource reconnects on the new address.",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			resp, err := sdsClient.SetNodeAddress(cmd.Context(), args[0], args[1], replication)
+			if err != nil {
+				return err
+			}
+			if resp.Message != "" && (resp.Success || len(resp.Resources) > 0 || len(resp.Failed) > 0) {
+				fmt.Println(resp.Message)
+			}
+			for _, r := range resp.Resources {
+				fmt.Printf("  %-24s on the new address\n", r)
+			}
+			for _, f := range resp.Failed {
+				fmt.Printf("  FAILED %s\n", f)
+			}
+			if !resp.Success {
+				if len(resp.Resources) == 0 && len(resp.Failed) == 0 {
+					return fmt.Errorf("%s", resp.Message)
+				}
+				return fmt.Errorf("renumbered, but %d step(s) failed; fix them and run resource repair on those resources", len(resp.Failed))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&replication, "replication-address", "", "Move DRBD traffic to this address too (default: keep the node's current arrangement)")
+	return cmd
 }

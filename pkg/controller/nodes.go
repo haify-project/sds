@@ -232,15 +232,12 @@ func (nm *NodeManager) SetNodeLabels(ctx context.Context, nodeRef string, labels
 		if err != nil {
 			return nil, fmt.Errorf("encode labels: %w", err)
 		}
-		dbNode := &database.Node{
-			Name:     snapshot.Name,
-			Address:  snapshot.Address,
-			Hostname: snapshot.Hostname,
-			State:    string(snapshot.State),
-			LastSeen: snapshot.LastSeen,
-			Version:  snapshot.Version,
-			Labels:   string(encoded),
-		}
+		// The whole record, replication address included: this used to be
+		// rebuilt field by field without it, so labelling a node silently
+		// moved its DRBD traffic back onto the management network at the next
+		// config it took part in.
+		dbNode := nodeRecord(&snapshot)
+		dbNode.Labels = string(encoded)
 		if err := nm.controller.db.SaveNode(ctx, dbNode); err != nil {
 			return nil, fmt.Errorf("persist node labels: %w", err)
 		}
@@ -795,4 +792,23 @@ func (rm *ResourceManager) assertNodesOnline(nodes []string) error {
 			strings.Join(offline, ", "))
 	}
 	return nil
+}
+
+// nodeRecord is the database form of a node.
+func nodeRecord(n *NodeInfo) *database.Node {
+	rec := &database.Node{
+		Name:               n.Name,
+		Address:            n.Address,
+		ReplicationAddress: n.ReplicationAddress,
+		Hostname:           n.Hostname,
+		State:              string(n.State),
+		LastSeen:           n.LastSeen,
+		Version:            n.Version,
+	}
+	if len(n.Labels) > 0 {
+		if encoded, err := json.Marshal(n.Labels); err == nil {
+			rec.Labels = string(encoded)
+		}
+	}
+	return rec
 }

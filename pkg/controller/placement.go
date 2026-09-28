@@ -35,6 +35,11 @@ type placementNode struct {
 	// either one simply sorts behind every node able to prove it has room.
 	freeGB uint64
 	labels map[string]string
+	// thin marks an over-provisioned pool, where freeGB does not cap a volume.
+	thin bool
+	// freeBytes is the exact figure behind freeGB, which is rounded to the
+	// nearest GiB — fine for ranking, wrong for "the largest volume that fits".
+	freeBytes uint64
 }
 
 // placementConstraints are the label-based rules a placement must satisfy.
@@ -216,6 +221,8 @@ func placementError(replicas int, c placementConstraints, eligible int) error {
 type poolCapacity struct {
 	// freeGB is what the pool has left, for ranking. Meaningless unless known.
 	freeGB uint64
+	// freeBytes is the same, unrounded.
+	freeBytes uint64
 	// known is false when nothing in the pool report describes usable room.
 	known bool
 	// thin marks an over-provisioned pool, where freeGB is a health signal
@@ -290,16 +297,17 @@ func poolPlacementCapacity(p *PoolInfo, recordedThin bool) poolCapacity {
 		}
 		free := float64(u.SizeBytes) * (100 - used) / 100
 		return poolCapacity{
-			freeGB: bytesToGB(uint64(free)),
-			known:  true,
-			thin:   true,
-			full:   thinPoolExhausted(u),
+			freeGB:    bytesToGB(uint64(free)),
+			freeBytes: uint64(free),
+			known:     true,
+			thin:      true,
+			full:      thinPoolExhausted(u),
 		}
 	}
 	if p.Thin || recordedThin {
 		return poolCapacity{thin: true}
 	}
-	return poolCapacity{freeGB: p.FreeGB, known: true}
+	return poolCapacity{freeGB: p.FreeGB, freeBytes: p.FreeBytes, known: true}
 }
 
 // thinPoolExhausted reports whether a thin pool is too full to be seeded with
@@ -320,7 +328,31 @@ func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string
 		return nil, fmt.Errorf("replicas must be >= 1, got %d", replicas)
 	}
 	pool = normalizeManagedName(pool)
+	cands, err := rm.placementCandidates(ctx, pool, uint64(sizeGB), doNotPlaceWith)
+	if err != nil {
+		return nil, err
+	}
 
+	constraints := placementConstraints{onDifferent: onDifferent, onSame: onSame}
+	picked, err := selectConstrained(cands, replicas, constraints)
+	if err != nil {
+		// "%dGB per replica" rather than "%dGB free per replica": on a thin pool
+		// the volume is not required to fit in what is free, so naming free
+		// space as the requirement would misdescribe why the placement failed.
+		return nil, fmt.Errorf("%w (pool %q, %dGB per replica)", err, pool, sizeGB)
+	}
+	rm.controller.logger.Info("auto-placed resource replicas",
+		zap.Strings("nodes", picked), zap.String("pool", pool),
+		zap.Uint32("size_gb", sizeGB), zap.Int("replicas", replicas),
+		zap.Strings("on_different", onDifferent), zap.Strings("on_same", onSame),
+		zap.Strings("do_not_place_with", doNotPlaceWith))
+	return picked, nil
+}
+
+// placementCandidates lists the online nodes whose copy of pool admits a
+// volume of sizeGB, minus every node holding a diskful replica of a
+// doNotPlaceWith resource. Zero admits any size.
+func (rm *ResourceManager) placementCandidates(ctx context.Context, pool string, sizeGB uint64, doNotPlaceWith []string) ([]placementNode, error) {
 	pools, err := rm.controller.storage.ListPools(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list pools for placement: %w", err)
@@ -359,7 +391,7 @@ func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string
 			continue
 		}
 		capacity := poolPlacementCapacity(p, recordedThin)
-		if !capacity.admits(uint64(sizeGB)) {
+		if !capacity.admits(sizeGB) {
 			continue
 		}
 		name := nameByAddr[p.Node]
@@ -370,23 +402,67 @@ func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string
 			continue
 		}
 		seen[name] = true
-		cands = append(cands, placementNode{node: name, freeGB: capacity.freeGB, labels: labelsByName[name]})
+		cands = append(cands, placementNode{node: name, freeGB: capacity.freeGB, labels: labelsByName[name],
+			thin: capacity.thin, freeBytes: capacity.freeBytes})
+	}
+	return cands, nil
+}
+
+// selectAdditionalReplicas picks count more nodes for a resource that already
+// has replicas on existing, keeping the constraints true of the whole set: a
+// new node may not repeat an existing replica's value for an onDifferent key,
+// and must share the existing replicas' value for an onSame key.
+func (rm *ResourceManager) selectAdditionalReplicas(ctx context.Context, pool string, sizeGB uint64, count int, existing, onDifferent, onSame []string) ([]string, error) {
+	pool = normalizeManagedName(pool)
+	cands, err := rm.placementCandidates(ctx, pool, sizeGB, nil)
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := rm.controller.nodes.ListNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	labelsByName := make(map[string]map[string]string, len(nodes))
+	for _, n := range nodes {
+		labelsByName[n.Name] = n.Labels
+	}
+	have := make(map[string]bool, len(existing))
+	for _, n := range existing {
+		have[n] = true
 	}
 
-	constraints := placementConstraints{onDifferent: onDifferent, onSame: onSame}
-	picked, err := selectConstrained(cands, replicas, constraints)
-	if err != nil {
-		// "%dGB per replica" rather than "%dGB free per replica": on a thin pool
-		// the volume is not required to fit in what is free, so naming free
-		// space as the requirement would misdescribe why the placement failed.
-		return nil, fmt.Errorf("%w (pool %q, %dGB per replica)", err, pool, sizeGB)
+	var filtered []placementNode
+	for _, c := range cands {
+		if have[c.node] || !fitsExistingReplicas(c.labels, existing, labelsByName, onDifferent, onSame) {
+			continue
+		}
+		filtered = append(filtered, c)
 	}
-	rm.controller.logger.Info("auto-placed resource replicas",
-		zap.Strings("nodes", picked), zap.String("pool", pool),
-		zap.Uint32("size_gb", sizeGB), zap.Int("replicas", replicas),
-		zap.Strings("on_different", onDifferent), zap.Strings("on_same", onSame),
-		zap.Strings("do_not_place_with", doNotPlaceWith))
+	picked, err := selectConstrained(filtered, count, placementConstraints{onDifferent: onDifferent, onSame: onSame})
+	if err != nil {
+		return nil, fmt.Errorf("%w (pool %q, %d more replica(s) beside %s)", err, pool, count, strings.Join(existing, ", "))
+	}
 	return picked, nil
+}
+
+// fitsExistingReplicas reports whether a node with these labels may join the
+// existing replicas under the constraints.
+func fitsExistingReplicas(labels map[string]string, existing []string, labelsByName map[string]map[string]string, onDifferent, onSame []string) bool {
+	for _, k := range onDifferent {
+		for _, e := range existing {
+			if v, ok := labelsByName[e][k]; ok && labels[k] == v {
+				return false
+			}
+		}
+	}
+	for _, k := range onSame {
+		for _, e := range existing {
+			if v, ok := labelsByName[e][k]; ok && labels[k] != v {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // poolRecordedThin reports whether the controller created this pool as a thin

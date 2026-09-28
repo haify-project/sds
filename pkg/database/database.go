@@ -350,8 +350,9 @@ type Resource struct {
 	Nodes    string
 	Protocol string
 	Replicas int
-	// Profile records the creation profile for attribution only. Existing
-	// resources do not depend on the profile continuing to exist.
+	// Profile is the resource profile the resource is a member of: options
+	// set on the profile are applied to it, and adjusting the profile brings
+	// its replica count into line. Empty for a resource in no profile.
 	Profile string
 	// Labels are arbitrary resource metadata used for organization and search.
 	Labels map[string]string

@@ -35,6 +35,9 @@ service SDSController {
   rpc SetNodeLabels(SetNodeLabelsRequest) returns (SetNodeLabelsResponse) {
     option (google.api.http) = { post: "/v1/nodes/{node}/labels"; body: "*"; };
   }
+  rpc SetNodeAddress(SetNodeAddressRequest) returns (SetNodeAddressResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/address"; body: "*"; };
+  }
   rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {
     option (google.api.http) = { get: "/v1/nodes/{address}"; };
   }
@@ -72,6 +75,18 @@ service SDSController {
   }
   rpc DeleteResourceProfile(DeleteResourceProfileRequest) returns (DeleteResourceProfileResponse) {
     option (google.api.http) = { delete: "/v1/resource-profiles/{name}"; };
+  }
+  rpc SetResourceProfileOptions(SetResourceProfileOptionsRequest) returns (SetResourceProfileOptionsResponse) {
+    option (google.api.http) = { post: "/v1/resource-profiles/{name}/options"; body: "*"; };
+  }
+  rpc AdjustResourceProfile(AdjustResourceProfileRequest) returns (AdjustResourceProfileResponse) {
+    option (google.api.http) = { post: "/v1/resource-profiles/{name}/adjust"; body: "*"; };
+  }
+  rpc GetResourceProfileMaxSize(GetResourceProfileMaxSizeRequest) returns (GetResourceProfileMaxSizeResponse) {
+    option (google.api.http) = { get: "/v1/resource-profiles/{name}/max-size"; };
+  }
+  rpc SetResourceProfile(SetResourceProfileRequest) returns (SetResourceProfileResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/profile"; body: "*"; };
   }
   rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/volumes"; body: "*"; };
@@ -1028,7 +1043,10 @@ message GetResourceResponse {
   ResourceInfo resource = 3;
 }
 
-message ListResourcesRequest {}
+message ListResourcesRequest {
+  // profile, when set, lists only that profile's members.
+  string profile = 1;
+}
 
 message ListResourcesResponse {
   bool success = 1;
@@ -2563,6 +2581,88 @@ message UndrainNodeRequest {
 }
 
 message UndrainNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// SetNodeAddressRequest renumbers a registered node: the controller reaches it
+// at the new address, checks it is the same machine, and rewrites every place
+// the old address was recorded — the node registry, /etc/hosts on the nodes,
+// and the DRBD config of each resource the node takes part in.
+message SetNodeAddressRequest {
+  string node = 1;
+  string address = 2;
+  // replication_address moves DRBD traffic to a separate network; empty keeps
+  // the node's current choice (none = the management address).
+  string replication_address = 3;
+}
+
+message SetNodeAddressResponse {
+  bool success = 1;
+  string message = 2;
+  // resources whose DRBD config now carries the new address.
+  repeated string resources = 3;
+  // failed names each resource that could not be rewritten, with the reason.
+  repeated string failed = 4;
+}
+
+// ProfileMemberResult is what a profile operation did to one member resource.
+message ProfileMemberResult {
+  string resource = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// SetResourceProfileOptionsRequest records DRBD options on a profile and
+// applies them to every member.
+message SetResourceProfileOptionsRequest {
+  string name = 1;
+  map<string, string> options = 2;
+}
+
+message SetResourceProfileOptionsResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceProfile profile = 3;
+  repeated ProfileMemberResult members = 4;
+}
+
+// AdjustResourceProfileRequest brings every member into line with its profile:
+// DRBD options applied, missing replicas added. Replicas beyond the profile's
+// count are reported, never removed.
+message AdjustResourceProfileRequest {
+  string name = 1;
+  bool dry_run = 2;
+}
+
+message AdjustResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ProfileMemberResult members = 3;
+}
+
+message GetResourceProfileMaxSizeRequest { string name = 1; }
+
+// GetResourceProfileMaxSizeResponse is the largest volume a new member could
+// get now, and the nodes it would land on.
+message GetResourceProfileMaxSizeResponse {
+  bool success = 1;
+  string message = 2;
+  uint64 max_size_gb = 3;
+  repeated string nodes = 4;
+  // thin: the pool is over-provisioned, so the size is what fits without
+  // overcommitting rather than a hard limit.
+  bool thin = 5;
+}
+
+// SetResourceProfileRequest makes a resource a member of a profile (applying
+// its DRBD options), or takes it out with an empty profile.
+message SetResourceProfileRequest {
+  string resource = 1;
+  string profile = 2;
+}
+
+message SetResourceProfileResponse {
   bool success = 1;
   string message = 2;
 }

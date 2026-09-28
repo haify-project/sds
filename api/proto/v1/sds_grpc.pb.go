@@ -19,128 +19,133 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SDSController_CreatePool_FullMethodName               = "/v1.SDSController/CreatePool"
-	SDSController_DeletePool_FullMethodName               = "/v1.SDSController/DeletePool"
-	SDSController_GetPool_FullMethodName                  = "/v1.SDSController/GetPool"
-	SDSController_ListPools_FullMethodName                = "/v1.SDSController/ListPools"
-	SDSController_AddDiskToPool_FullMethodName            = "/v1.SDSController/AddDiskToPool"
-	SDSController_RegisterNode_FullMethodName             = "/v1.SDSController/RegisterNode"
-	SDSController_UnregisterNode_FullMethodName           = "/v1.SDSController/UnregisterNode"
-	SDSController_SetNodeLabels_FullMethodName            = "/v1.SDSController/SetNodeLabels"
-	SDSController_GetNode_FullMethodName                  = "/v1.SDSController/GetNode"
-	SDSController_ListNodes_FullMethodName                = "/v1.SDSController/ListNodes"
-	SDSController_HealthCheck_FullMethodName              = "/v1.SDSController/HealthCheck"
-	SDSController_CreateResource_FullMethodName           = "/v1.SDSController/CreateResource"
-	SDSController_AdoptResource_FullMethodName            = "/v1.SDSController/AdoptResource"
-	SDSController_DeleteResource_FullMethodName           = "/v1.SDSController/DeleteResource"
-	SDSController_GetResource_FullMethodName              = "/v1.SDSController/GetResource"
-	SDSController_ListResources_FullMethodName            = "/v1.SDSController/ListResources"
-	SDSController_CreateResourceProfile_FullMethodName    = "/v1.SDSController/CreateResourceProfile"
-	SDSController_GetResourceProfile_FullMethodName       = "/v1.SDSController/GetResourceProfile"
-	SDSController_ListResourceProfiles_FullMethodName     = "/v1.SDSController/ListResourceProfiles"
-	SDSController_DeleteResourceProfile_FullMethodName    = "/v1.SDSController/DeleteResourceProfile"
-	SDSController_AddVolume_FullMethodName                = "/v1.SDSController/AddVolume"
-	SDSController_RemoveVolume_FullMethodName             = "/v1.SDSController/RemoveVolume"
-	SDSController_ResizeVolume_FullMethodName             = "/v1.SDSController/ResizeVolume"
-	SDSController_UpdateResourceOptions_FullMethodName    = "/v1.SDSController/UpdateResourceOptions"
-	SDSController_RepairResource_FullMethodName           = "/v1.SDSController/RepairResource"
-	SDSController_ResourceStatus_FullMethodName           = "/v1.SDSController/ResourceStatus"
-	SDSController_SetPrimary_FullMethodName               = "/v1.SDSController/SetPrimary"
-	SDSController_SetSecondary_FullMethodName             = "/v1.SDSController/SetSecondary"
-	SDSController_SetDualPrimary_FullMethodName           = "/v1.SDSController/SetDualPrimary"
-	SDSController_AttachDisklessClient_FullMethodName     = "/v1.SDSController/AttachDisklessClient"
-	SDSController_DetachDisklessClient_FullMethodName     = "/v1.SDSController/DetachDisklessClient"
-	SDSController_CreateFilesystem_FullMethodName         = "/v1.SDSController/CreateFilesystem"
-	SDSController_MountResource_FullMethodName            = "/v1.SDSController/MountResource"
-	SDSController_UnmountResource_FullMethodName          = "/v1.SDSController/UnmountResource"
-	SDSController_MakeHa_FullMethodName                   = "/v1.SDSController/MakeHa"
-	SDSController_EvictHa_FullMethodName                  = "/v1.SDSController/EvictHa"
-	SDSController_SetTiebreaker_FullMethodName            = "/v1.SDSController/SetTiebreaker"
-	SDSController_AddDR_FullMethodName                    = "/v1.SDSController/AddDR"
-	SDSController_AddReplica_FullMethodName               = "/v1.SDSController/AddReplica"
-	SDSController_RemoveReplica_FullMethodName            = "/v1.SDSController/RemoveReplica"
-	SDSController_DeleteHa_FullMethodName                 = "/v1.SDSController/DeleteHa"
-	SDSController_GetHa_FullMethodName                    = "/v1.SDSController/GetHa"
-	SDSController_ListHa_FullMethodName                   = "/v1.SDSController/ListHa"
-	SDSController_GetHaStatus_FullMethodName              = "/v1.SDSController/GetHaStatus"
-	SDSController_ListResourceAgents_FullMethodName       = "/v1.SDSController/ListResourceAgents"
-	SDSController_GetResourceAgentMetadata_FullMethodName = "/v1.SDSController/GetResourceAgentMetadata"
-	SDSController_GetHaToml_FullMethodName                = "/v1.SDSController/GetHaToml"
-	SDSController_SyncHaToml_FullMethodName               = "/v1.SDSController/SyncHaToml"
-	SDSController_EnableSelfHa_FullMethodName             = "/v1.SDSController/EnableSelfHa"
-	SDSController_DisableSelfHa_FullMethodName            = "/v1.SDSController/DisableSelfHa"
-	SDSController_GetSelfHaStatus_FullMethodName          = "/v1.SDSController/GetSelfHaStatus"
-	SDSController_CreateSnapshot_FullMethodName           = "/v1.SDSController/CreateSnapshot"
-	SDSController_DeleteSnapshot_FullMethodName           = "/v1.SDSController/DeleteSnapshot"
-	SDSController_RestoreSnapshot_FullMethodName          = "/v1.SDSController/RestoreSnapshot"
-	SDSController_ListSnapshots_FullMethodName            = "/v1.SDSController/ListSnapshots"
-	SDSController_PopulateVolume_FullMethodName           = "/v1.SDSController/PopulateVolume"
-	SDSController_CreateSnapshotSchedule_FullMethodName   = "/v1.SDSController/CreateSnapshotSchedule"
-	SDSController_ListSnapshotSchedules_FullMethodName    = "/v1.SDSController/ListSnapshotSchedules"
-	SDSController_DeleteSnapshotSchedule_FullMethodName   = "/v1.SDSController/DeleteSnapshotSchedule"
-	SDSController_AddBackupTarget_FullMethodName          = "/v1.SDSController/AddBackupTarget"
-	SDSController_ListBackupTargets_FullMethodName        = "/v1.SDSController/ListBackupTargets"
-	SDSController_DeleteBackupTarget_FullMethodName       = "/v1.SDSController/DeleteBackupTarget"
-	SDSController_CreateBackup_FullMethodName             = "/v1.SDSController/CreateBackup"
-	SDSController_ListBackups_FullMethodName              = "/v1.SDSController/ListBackups"
-	SDSController_RestoreBackup_FullMethodName            = "/v1.SDSController/RestoreBackup"
-	SDSController_DeleteBackup_FullMethodName             = "/v1.SDSController/DeleteBackup"
-	SDSController_CreateNFSGateway_FullMethodName         = "/v1.SDSController/CreateNFSGateway"
-	SDSController_CreateISCSIGateway_FullMethodName       = "/v1.SDSController/CreateISCSIGateway"
-	SDSController_CreateNVMeGateway_FullMethodName        = "/v1.SDSController/CreateNVMeGateway"
-	SDSController_DeleteGateway_FullMethodName            = "/v1.SDSController/DeleteGateway"
-	SDSController_GetGateway_FullMethodName               = "/v1.SDSController/GetGateway"
-	SDSController_ListGateways_FullMethodName             = "/v1.SDSController/ListGateways"
-	SDSController_StartGateway_FullMethodName             = "/v1.SDSController/StartGateway"
-	SDSController_StopGateway_FullMethodName              = "/v1.SDSController/StopGateway"
-	SDSController_AddNFSExport_FullMethodName             = "/v1.SDSController/AddNFSExport"
-	SDSController_RemoveNFSExport_FullMethodName          = "/v1.SDSController/RemoveNFSExport"
-	SDSController_ListNFSExports_FullMethodName           = "/v1.SDSController/ListNFSExports"
-	SDSController_AddISCSILUN_FullMethodName              = "/v1.SDSController/AddISCSILUN"
-	SDSController_RemoveISCSILUN_FullMethodName           = "/v1.SDSController/RemoveISCSILUN"
-	SDSController_ListISCSILUNs_FullMethodName            = "/v1.SDSController/ListISCSILUNs"
-	SDSController_AddISCSIInitiator_FullMethodName        = "/v1.SDSController/AddISCSIInitiator"
-	SDSController_RemoveISCSIInitiator_FullMethodName     = "/v1.SDSController/RemoveISCSIInitiator"
-	SDSController_ListISCSIInitiators_FullMethodName      = "/v1.SDSController/ListISCSIInitiators"
-	SDSController_SetISCSIChap_FullMethodName             = "/v1.SDSController/SetISCSIChap"
-	SDSController_GetISCSIChap_FullMethodName             = "/v1.SDSController/GetISCSIChap"
-	SDSController_AddNVMeNamespace_FullMethodName         = "/v1.SDSController/AddNVMeNamespace"
-	SDSController_RemoveNVMeNamespace_FullMethodName      = "/v1.SDSController/RemoveNVMeNamespace"
-	SDSController_ListNVMeNamespaces_FullMethodName       = "/v1.SDSController/ListNVMeNamespaces"
-	SDSController_AddNVMeHost_FullMethodName              = "/v1.SDSController/AddNVMeHost"
-	SDSController_RemoveNVMeHost_FullMethodName           = "/v1.SDSController/RemoveNVMeHost"
-	SDSController_ListNVMeHosts_FullMethodName            = "/v1.SDSController/ListNVMeHosts"
-	SDSController_CreateZFSPool_FullMethodName            = "/v1.SDSController/CreateZFSPool"
-	SDSController_DeleteZFSPool_FullMethodName            = "/v1.SDSController/DeleteZFSPool"
-	SDSController_ListZFSpools_FullMethodName             = "/v1.SDSController/ListZFSpools"
-	SDSController_CreateZFSDataset_FullMethodName         = "/v1.SDSController/CreateZFSDataset"
-	SDSController_CreateZFSVolume_FullMethodName          = "/v1.SDSController/CreateZFSVolume"
-	SDSController_ResizeZFSVolume_FullMethodName          = "/v1.SDSController/ResizeZFSVolume"
-	SDSController_DeleteZFSDataset_FullMethodName         = "/v1.SDSController/DeleteZFSDataset"
-	SDSController_CreateZFSSnapshot_FullMethodName        = "/v1.SDSController/CreateZFSSnapshot"
-	SDSController_DeleteZFSSnapshot_FullMethodName        = "/v1.SDSController/DeleteZFSSnapshot"
-	SDSController_ListZFSSnapshots_FullMethodName         = "/v1.SDSController/ListZFSSnapshots"
-	SDSController_RestoreZFSSnapshot_FullMethodName       = "/v1.SDSController/RestoreZFSSnapshot"
-	SDSController_CloneZFSSnapshot_FullMethodName         = "/v1.SDSController/CloneZFSSnapshot"
-	SDSController_CreateLvmSnapshot_FullMethodName        = "/v1.SDSController/CreateLvmSnapshot"
-	SDSController_DeleteLvmSnapshot_FullMethodName        = "/v1.SDSController/DeleteLvmSnapshot"
-	SDSController_ListLvmSnapshots_FullMethodName         = "/v1.SDSController/ListLvmSnapshots"
-	SDSController_RestoreLvmSnapshot_FullMethodName       = "/v1.SDSController/RestoreLvmSnapshot"
-	SDSController_DrainNode_FullMethodName                = "/v1.SDSController/DrainNode"
-	SDSController_UndrainNode_FullMethodName              = "/v1.SDSController/UndrainNode"
-	SDSController_ConvertPoolToThin_FullMethodName        = "/v1.SDSController/ConvertPoolToThin"
-	SDSController_AddPoolCache_FullMethodName             = "/v1.SDSController/AddPoolCache"
-	SDSController_RemovePoolCache_FullMethodName          = "/v1.SDSController/RemovePoolCache"
-	SDSController_ListAuditEvents_FullMethodName          = "/v1.SDSController/ListAuditEvents"
-	SDSController_ListControllerLogs_FullMethodName       = "/v1.SDSController/ListControllerLogs"
-	SDSController_CollectNodeDiagnostics_FullMethodName   = "/v1.SDSController/CollectNodeDiagnostics"
-	SDSController_ListEvents_FullMethodName               = "/v1.SDSController/ListEvents"
-	SDSController_ListNotifyChannels_FullMethodName       = "/v1.SDSController/ListNotifyChannels"
-	SDSController_SaveNotifyChannel_FullMethodName        = "/v1.SDSController/SaveNotifyChannel"
-	SDSController_DeleteNotifyChannel_FullMethodName      = "/v1.SDSController/DeleteNotifyChannel"
-	SDSController_TestNotifyChannel_FullMethodName        = "/v1.SDSController/TestNotifyChannel"
-	SDSController_RepairWanProxy_FullMethodName           = "/v1.SDSController/RepairWanProxy"
-	SDSController_WatchEvents_FullMethodName              = "/v1.SDSController/WatchEvents"
+	SDSController_CreatePool_FullMethodName                = "/v1.SDSController/CreatePool"
+	SDSController_DeletePool_FullMethodName                = "/v1.SDSController/DeletePool"
+	SDSController_GetPool_FullMethodName                   = "/v1.SDSController/GetPool"
+	SDSController_ListPools_FullMethodName                 = "/v1.SDSController/ListPools"
+	SDSController_AddDiskToPool_FullMethodName             = "/v1.SDSController/AddDiskToPool"
+	SDSController_RegisterNode_FullMethodName              = "/v1.SDSController/RegisterNode"
+	SDSController_UnregisterNode_FullMethodName            = "/v1.SDSController/UnregisterNode"
+	SDSController_SetNodeLabels_FullMethodName             = "/v1.SDSController/SetNodeLabels"
+	SDSController_SetNodeAddress_FullMethodName            = "/v1.SDSController/SetNodeAddress"
+	SDSController_GetNode_FullMethodName                   = "/v1.SDSController/GetNode"
+	SDSController_ListNodes_FullMethodName                 = "/v1.SDSController/ListNodes"
+	SDSController_HealthCheck_FullMethodName               = "/v1.SDSController/HealthCheck"
+	SDSController_CreateResource_FullMethodName            = "/v1.SDSController/CreateResource"
+	SDSController_AdoptResource_FullMethodName             = "/v1.SDSController/AdoptResource"
+	SDSController_DeleteResource_FullMethodName            = "/v1.SDSController/DeleteResource"
+	SDSController_GetResource_FullMethodName               = "/v1.SDSController/GetResource"
+	SDSController_ListResources_FullMethodName             = "/v1.SDSController/ListResources"
+	SDSController_CreateResourceProfile_FullMethodName     = "/v1.SDSController/CreateResourceProfile"
+	SDSController_GetResourceProfile_FullMethodName        = "/v1.SDSController/GetResourceProfile"
+	SDSController_ListResourceProfiles_FullMethodName      = "/v1.SDSController/ListResourceProfiles"
+	SDSController_DeleteResourceProfile_FullMethodName     = "/v1.SDSController/DeleteResourceProfile"
+	SDSController_SetResourceProfileOptions_FullMethodName = "/v1.SDSController/SetResourceProfileOptions"
+	SDSController_AdjustResourceProfile_FullMethodName     = "/v1.SDSController/AdjustResourceProfile"
+	SDSController_GetResourceProfileMaxSize_FullMethodName = "/v1.SDSController/GetResourceProfileMaxSize"
+	SDSController_SetResourceProfile_FullMethodName        = "/v1.SDSController/SetResourceProfile"
+	SDSController_AddVolume_FullMethodName                 = "/v1.SDSController/AddVolume"
+	SDSController_RemoveVolume_FullMethodName              = "/v1.SDSController/RemoveVolume"
+	SDSController_ResizeVolume_FullMethodName              = "/v1.SDSController/ResizeVolume"
+	SDSController_UpdateResourceOptions_FullMethodName     = "/v1.SDSController/UpdateResourceOptions"
+	SDSController_RepairResource_FullMethodName            = "/v1.SDSController/RepairResource"
+	SDSController_ResourceStatus_FullMethodName            = "/v1.SDSController/ResourceStatus"
+	SDSController_SetPrimary_FullMethodName                = "/v1.SDSController/SetPrimary"
+	SDSController_SetSecondary_FullMethodName              = "/v1.SDSController/SetSecondary"
+	SDSController_SetDualPrimary_FullMethodName            = "/v1.SDSController/SetDualPrimary"
+	SDSController_AttachDisklessClient_FullMethodName      = "/v1.SDSController/AttachDisklessClient"
+	SDSController_DetachDisklessClient_FullMethodName      = "/v1.SDSController/DetachDisklessClient"
+	SDSController_CreateFilesystem_FullMethodName          = "/v1.SDSController/CreateFilesystem"
+	SDSController_MountResource_FullMethodName             = "/v1.SDSController/MountResource"
+	SDSController_UnmountResource_FullMethodName           = "/v1.SDSController/UnmountResource"
+	SDSController_MakeHa_FullMethodName                    = "/v1.SDSController/MakeHa"
+	SDSController_EvictHa_FullMethodName                   = "/v1.SDSController/EvictHa"
+	SDSController_SetTiebreaker_FullMethodName             = "/v1.SDSController/SetTiebreaker"
+	SDSController_AddDR_FullMethodName                     = "/v1.SDSController/AddDR"
+	SDSController_AddReplica_FullMethodName                = "/v1.SDSController/AddReplica"
+	SDSController_RemoveReplica_FullMethodName             = "/v1.SDSController/RemoveReplica"
+	SDSController_DeleteHa_FullMethodName                  = "/v1.SDSController/DeleteHa"
+	SDSController_GetHa_FullMethodName                     = "/v1.SDSController/GetHa"
+	SDSController_ListHa_FullMethodName                    = "/v1.SDSController/ListHa"
+	SDSController_GetHaStatus_FullMethodName               = "/v1.SDSController/GetHaStatus"
+	SDSController_ListResourceAgents_FullMethodName        = "/v1.SDSController/ListResourceAgents"
+	SDSController_GetResourceAgentMetadata_FullMethodName  = "/v1.SDSController/GetResourceAgentMetadata"
+	SDSController_GetHaToml_FullMethodName                 = "/v1.SDSController/GetHaToml"
+	SDSController_SyncHaToml_FullMethodName                = "/v1.SDSController/SyncHaToml"
+	SDSController_EnableSelfHa_FullMethodName              = "/v1.SDSController/EnableSelfHa"
+	SDSController_DisableSelfHa_FullMethodName             = "/v1.SDSController/DisableSelfHa"
+	SDSController_GetSelfHaStatus_FullMethodName           = "/v1.SDSController/GetSelfHaStatus"
+	SDSController_CreateSnapshot_FullMethodName            = "/v1.SDSController/CreateSnapshot"
+	SDSController_DeleteSnapshot_FullMethodName            = "/v1.SDSController/DeleteSnapshot"
+	SDSController_RestoreSnapshot_FullMethodName           = "/v1.SDSController/RestoreSnapshot"
+	SDSController_ListSnapshots_FullMethodName             = "/v1.SDSController/ListSnapshots"
+	SDSController_PopulateVolume_FullMethodName            = "/v1.SDSController/PopulateVolume"
+	SDSController_CreateSnapshotSchedule_FullMethodName    = "/v1.SDSController/CreateSnapshotSchedule"
+	SDSController_ListSnapshotSchedules_FullMethodName     = "/v1.SDSController/ListSnapshotSchedules"
+	SDSController_DeleteSnapshotSchedule_FullMethodName    = "/v1.SDSController/DeleteSnapshotSchedule"
+	SDSController_AddBackupTarget_FullMethodName           = "/v1.SDSController/AddBackupTarget"
+	SDSController_ListBackupTargets_FullMethodName         = "/v1.SDSController/ListBackupTargets"
+	SDSController_DeleteBackupTarget_FullMethodName        = "/v1.SDSController/DeleteBackupTarget"
+	SDSController_CreateBackup_FullMethodName              = "/v1.SDSController/CreateBackup"
+	SDSController_ListBackups_FullMethodName               = "/v1.SDSController/ListBackups"
+	SDSController_RestoreBackup_FullMethodName             = "/v1.SDSController/RestoreBackup"
+	SDSController_DeleteBackup_FullMethodName              = "/v1.SDSController/DeleteBackup"
+	SDSController_CreateNFSGateway_FullMethodName          = "/v1.SDSController/CreateNFSGateway"
+	SDSController_CreateISCSIGateway_FullMethodName        = "/v1.SDSController/CreateISCSIGateway"
+	SDSController_CreateNVMeGateway_FullMethodName         = "/v1.SDSController/CreateNVMeGateway"
+	SDSController_DeleteGateway_FullMethodName             = "/v1.SDSController/DeleteGateway"
+	SDSController_GetGateway_FullMethodName                = "/v1.SDSController/GetGateway"
+	SDSController_ListGateways_FullMethodName              = "/v1.SDSController/ListGateways"
+	SDSController_StartGateway_FullMethodName              = "/v1.SDSController/StartGateway"
+	SDSController_StopGateway_FullMethodName               = "/v1.SDSController/StopGateway"
+	SDSController_AddNFSExport_FullMethodName              = "/v1.SDSController/AddNFSExport"
+	SDSController_RemoveNFSExport_FullMethodName           = "/v1.SDSController/RemoveNFSExport"
+	SDSController_ListNFSExports_FullMethodName            = "/v1.SDSController/ListNFSExports"
+	SDSController_AddISCSILUN_FullMethodName               = "/v1.SDSController/AddISCSILUN"
+	SDSController_RemoveISCSILUN_FullMethodName            = "/v1.SDSController/RemoveISCSILUN"
+	SDSController_ListISCSILUNs_FullMethodName             = "/v1.SDSController/ListISCSILUNs"
+	SDSController_AddISCSIInitiator_FullMethodName         = "/v1.SDSController/AddISCSIInitiator"
+	SDSController_RemoveISCSIInitiator_FullMethodName      = "/v1.SDSController/RemoveISCSIInitiator"
+	SDSController_ListISCSIInitiators_FullMethodName       = "/v1.SDSController/ListISCSIInitiators"
+	SDSController_SetISCSIChap_FullMethodName              = "/v1.SDSController/SetISCSIChap"
+	SDSController_GetISCSIChap_FullMethodName              = "/v1.SDSController/GetISCSIChap"
+	SDSController_AddNVMeNamespace_FullMethodName          = "/v1.SDSController/AddNVMeNamespace"
+	SDSController_RemoveNVMeNamespace_FullMethodName       = "/v1.SDSController/RemoveNVMeNamespace"
+	SDSController_ListNVMeNamespaces_FullMethodName        = "/v1.SDSController/ListNVMeNamespaces"
+	SDSController_AddNVMeHost_FullMethodName               = "/v1.SDSController/AddNVMeHost"
+	SDSController_RemoveNVMeHost_FullMethodName            = "/v1.SDSController/RemoveNVMeHost"
+	SDSController_ListNVMeHosts_FullMethodName             = "/v1.SDSController/ListNVMeHosts"
+	SDSController_CreateZFSPool_FullMethodName             = "/v1.SDSController/CreateZFSPool"
+	SDSController_DeleteZFSPool_FullMethodName             = "/v1.SDSController/DeleteZFSPool"
+	SDSController_ListZFSpools_FullMethodName              = "/v1.SDSController/ListZFSpools"
+	SDSController_CreateZFSDataset_FullMethodName          = "/v1.SDSController/CreateZFSDataset"
+	SDSController_CreateZFSVolume_FullMethodName           = "/v1.SDSController/CreateZFSVolume"
+	SDSController_ResizeZFSVolume_FullMethodName           = "/v1.SDSController/ResizeZFSVolume"
+	SDSController_DeleteZFSDataset_FullMethodName          = "/v1.SDSController/DeleteZFSDataset"
+	SDSController_CreateZFSSnapshot_FullMethodName         = "/v1.SDSController/CreateZFSSnapshot"
+	SDSController_DeleteZFSSnapshot_FullMethodName         = "/v1.SDSController/DeleteZFSSnapshot"
+	SDSController_ListZFSSnapshots_FullMethodName          = "/v1.SDSController/ListZFSSnapshots"
+	SDSController_RestoreZFSSnapshot_FullMethodName        = "/v1.SDSController/RestoreZFSSnapshot"
+	SDSController_CloneZFSSnapshot_FullMethodName          = "/v1.SDSController/CloneZFSSnapshot"
+	SDSController_CreateLvmSnapshot_FullMethodName         = "/v1.SDSController/CreateLvmSnapshot"
+	SDSController_DeleteLvmSnapshot_FullMethodName         = "/v1.SDSController/DeleteLvmSnapshot"
+	SDSController_ListLvmSnapshots_FullMethodName          = "/v1.SDSController/ListLvmSnapshots"
+	SDSController_RestoreLvmSnapshot_FullMethodName        = "/v1.SDSController/RestoreLvmSnapshot"
+	SDSController_DrainNode_FullMethodName                 = "/v1.SDSController/DrainNode"
+	SDSController_UndrainNode_FullMethodName               = "/v1.SDSController/UndrainNode"
+	SDSController_ConvertPoolToThin_FullMethodName         = "/v1.SDSController/ConvertPoolToThin"
+	SDSController_AddPoolCache_FullMethodName              = "/v1.SDSController/AddPoolCache"
+	SDSController_RemovePoolCache_FullMethodName           = "/v1.SDSController/RemovePoolCache"
+	SDSController_ListAuditEvents_FullMethodName           = "/v1.SDSController/ListAuditEvents"
+	SDSController_ListControllerLogs_FullMethodName        = "/v1.SDSController/ListControllerLogs"
+	SDSController_CollectNodeDiagnostics_FullMethodName    = "/v1.SDSController/CollectNodeDiagnostics"
+	SDSController_ListEvents_FullMethodName                = "/v1.SDSController/ListEvents"
+	SDSController_ListNotifyChannels_FullMethodName        = "/v1.SDSController/ListNotifyChannels"
+	SDSController_SaveNotifyChannel_FullMethodName         = "/v1.SDSController/SaveNotifyChannel"
+	SDSController_DeleteNotifyChannel_FullMethodName       = "/v1.SDSController/DeleteNotifyChannel"
+	SDSController_TestNotifyChannel_FullMethodName         = "/v1.SDSController/TestNotifyChannel"
+	SDSController_RepairWanProxy_FullMethodName            = "/v1.SDSController/RepairWanProxy"
+	SDSController_WatchEvents_FullMethodName               = "/v1.SDSController/WatchEvents"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -159,6 +164,7 @@ type SDSControllerClient interface {
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
 	UnregisterNode(ctx context.Context, in *UnregisterNodeRequest, opts ...grpc.CallOption) (*UnregisterNodeResponse, error)
 	SetNodeLabels(ctx context.Context, in *SetNodeLabelsRequest, opts ...grpc.CallOption) (*SetNodeLabelsResponse, error)
+	SetNodeAddress(ctx context.Context, in *SetNodeAddressRequest, opts ...grpc.CallOption) (*SetNodeAddressResponse, error)
 	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
@@ -172,6 +178,10 @@ type SDSControllerClient interface {
 	GetResourceProfile(ctx context.Context, in *GetResourceProfileRequest, opts ...grpc.CallOption) (*GetResourceProfileResponse, error)
 	ListResourceProfiles(ctx context.Context, in *ListResourceProfilesRequest, opts ...grpc.CallOption) (*ListResourceProfilesResponse, error)
 	DeleteResourceProfile(ctx context.Context, in *DeleteResourceProfileRequest, opts ...grpc.CallOption) (*DeleteResourceProfileResponse, error)
+	SetResourceProfileOptions(ctx context.Context, in *SetResourceProfileOptionsRequest, opts ...grpc.CallOption) (*SetResourceProfileOptionsResponse, error)
+	AdjustResourceProfile(ctx context.Context, in *AdjustResourceProfileRequest, opts ...grpc.CallOption) (*AdjustResourceProfileResponse, error)
+	GetResourceProfileMaxSize(ctx context.Context, in *GetResourceProfileMaxSizeRequest, opts ...grpc.CallOption) (*GetResourceProfileMaxSizeResponse, error)
+	SetResourceProfile(ctx context.Context, in *SetResourceProfileRequest, opts ...grpc.CallOption) (*SetResourceProfileResponse, error)
 	AddVolume(ctx context.Context, in *AddVolumeRequest, opts ...grpc.CallOption) (*AddVolumeResponse, error)
 	RemoveVolume(ctx context.Context, in *RemoveVolumeRequest, opts ...grpc.CallOption) (*RemoveVolumeResponse, error)
 	ResizeVolume(ctx context.Context, in *ResizeVolumeRequest, opts ...grpc.CallOption) (*ResizeVolumeResponse, error)
@@ -453,6 +463,16 @@ func (c *sDSControllerClient) SetNodeLabels(ctx context.Context, in *SetNodeLabe
 	return out, nil
 }
 
+func (c *sDSControllerClient) SetNodeAddress(ctx context.Context, in *SetNodeAddressRequest, opts ...grpc.CallOption) (*SetNodeAddressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeAddressResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetNodeAddress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetNodeResponse)
@@ -567,6 +587,46 @@ func (c *sDSControllerClient) DeleteResourceProfile(ctx context.Context, in *Del
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteResourceProfileResponse)
 	err := c.cc.Invoke(ctx, SDSController_DeleteResourceProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetResourceProfileOptions(ctx context.Context, in *SetResourceProfileOptionsRequest, opts ...grpc.CallOption) (*SetResourceProfileOptionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetResourceProfileOptionsResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetResourceProfileOptions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) AdjustResourceProfile(ctx context.Context, in *AdjustResourceProfileRequest, opts ...grpc.CallOption) (*AdjustResourceProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdjustResourceProfileResponse)
+	err := c.cc.Invoke(ctx, SDSController_AdjustResourceProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetResourceProfileMaxSize(ctx context.Context, in *GetResourceProfileMaxSizeRequest, opts ...grpc.CallOption) (*GetResourceProfileMaxSizeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetResourceProfileMaxSizeResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetResourceProfileMaxSize_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetResourceProfile(ctx context.Context, in *SetResourceProfileRequest, opts ...grpc.CallOption) (*SetResourceProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetResourceProfileResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetResourceProfile_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1618,6 +1678,7 @@ type SDSControllerServer interface {
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
 	UnregisterNode(context.Context, *UnregisterNodeRequest) (*UnregisterNodeResponse, error)
 	SetNodeLabels(context.Context, *SetNodeLabelsRequest) (*SetNodeLabelsResponse, error)
+	SetNodeAddress(context.Context, *SetNodeAddressRequest) (*SetNodeAddressResponse, error)
 	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
@@ -1631,6 +1692,10 @@ type SDSControllerServer interface {
 	GetResourceProfile(context.Context, *GetResourceProfileRequest) (*GetResourceProfileResponse, error)
 	ListResourceProfiles(context.Context, *ListResourceProfilesRequest) (*ListResourceProfilesResponse, error)
 	DeleteResourceProfile(context.Context, *DeleteResourceProfileRequest) (*DeleteResourceProfileResponse, error)
+	SetResourceProfileOptions(context.Context, *SetResourceProfileOptionsRequest) (*SetResourceProfileOptionsResponse, error)
+	AdjustResourceProfile(context.Context, *AdjustResourceProfileRequest) (*AdjustResourceProfileResponse, error)
+	GetResourceProfileMaxSize(context.Context, *GetResourceProfileMaxSizeRequest) (*GetResourceProfileMaxSizeResponse, error)
+	SetResourceProfile(context.Context, *SetResourceProfileRequest) (*SetResourceProfileResponse, error)
 	AddVolume(context.Context, *AddVolumeRequest) (*AddVolumeResponse, error)
 	RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error)
 	ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error)
@@ -1856,6 +1921,9 @@ func (UnimplementedSDSControllerServer) UnregisterNode(context.Context, *Unregis
 func (UnimplementedSDSControllerServer) SetNodeLabels(context.Context, *SetNodeLabelsRequest) (*SetNodeLabelsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetNodeLabels not implemented")
 }
+func (UnimplementedSDSControllerServer) SetNodeAddress(context.Context, *SetNodeAddressRequest) (*SetNodeAddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetNodeAddress not implemented")
+}
 func (UnimplementedSDSControllerServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNode not implemented")
 }
@@ -1891,6 +1959,18 @@ func (UnimplementedSDSControllerServer) ListResourceProfiles(context.Context, *L
 }
 func (UnimplementedSDSControllerServer) DeleteResourceProfile(context.Context, *DeleteResourceProfileRequest) (*DeleteResourceProfileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteResourceProfile not implemented")
+}
+func (UnimplementedSDSControllerServer) SetResourceProfileOptions(context.Context, *SetResourceProfileOptionsRequest) (*SetResourceProfileOptionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetResourceProfileOptions not implemented")
+}
+func (UnimplementedSDSControllerServer) AdjustResourceProfile(context.Context, *AdjustResourceProfileRequest) (*AdjustResourceProfileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AdjustResourceProfile not implemented")
+}
+func (UnimplementedSDSControllerServer) GetResourceProfileMaxSize(context.Context, *GetResourceProfileMaxSizeRequest) (*GetResourceProfileMaxSizeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetResourceProfileMaxSize not implemented")
+}
+func (UnimplementedSDSControllerServer) SetResourceProfile(context.Context, *SetResourceProfileRequest) (*SetResourceProfileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetResourceProfile not implemented")
 }
 func (UnimplementedSDSControllerServer) AddVolume(context.Context, *AddVolumeRequest) (*AddVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddVolume not implemented")
@@ -2363,6 +2443,24 @@ func _SDSController_SetNodeLabels_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_SetNodeAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeAddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetNodeAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetNodeAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetNodeAddress(ctx, req.(*SetNodeAddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetNodeRequest)
 	if err := dec(in); err != nil {
@@ -2575,6 +2673,78 @@ func _SDSController_DeleteResourceProfile_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).DeleteResourceProfile(ctx, req.(*DeleteResourceProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetResourceProfileOptions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetResourceProfileOptionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetResourceProfileOptions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetResourceProfileOptions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetResourceProfileOptions(ctx, req.(*SetResourceProfileOptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_AdjustResourceProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdjustResourceProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).AdjustResourceProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_AdjustResourceProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).AdjustResourceProfile(ctx, req.(*AdjustResourceProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetResourceProfileMaxSize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResourceProfileMaxSizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetResourceProfileMaxSize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetResourceProfileMaxSize_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetResourceProfileMaxSize(ctx, req.(*GetResourceProfileMaxSizeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetResourceProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetResourceProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetResourceProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetResourceProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetResourceProfile(ctx, req.(*SetResourceProfileRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4448,6 +4618,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SDSController_SetNodeLabels_Handler,
 		},
 		{
+			MethodName: "SetNodeAddress",
+			Handler:    _SDSController_SetNodeAddress_Handler,
+		},
+		{
 			MethodName: "GetNode",
 			Handler:    _SDSController_GetNode_Handler,
 		},
@@ -4494,6 +4668,22 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteResourceProfile",
 			Handler:    _SDSController_DeleteResourceProfile_Handler,
+		},
+		{
+			MethodName: "SetResourceProfileOptions",
+			Handler:    _SDSController_SetResourceProfileOptions_Handler,
+		},
+		{
+			MethodName: "AdjustResourceProfile",
+			Handler:    _SDSController_AdjustResourceProfile_Handler,
+		},
+		{
+			MethodName: "GetResourceProfileMaxSize",
+			Handler:    _SDSController_GetResourceProfileMaxSize_Handler,
+		},
+		{
+			MethodName: "SetResourceProfile",
+			Handler:    _SDSController_SetResourceProfile_Handler,
 		},
 		{
 			MethodName: "AddVolume",

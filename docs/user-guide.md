@@ -128,6 +128,34 @@ sds-cli node label orange1 rack=A zone=east
 sds-cli node label orange1 rack=          # trailing = deletes the label
 ```
 
+**Renumbering** a node — its IP changed, or it moved subnet — is one command
+once the node answers on the new address:
+
+```bash
+sds-cli node set-address orange1 192.168.1.21
+sds-cli node set-address orange1 192.168.1.21 --replication-address 10.10.0.21
+```
+
+It checks the new address reaches the same machine, then moves the node in the
+registry, rewrites its entry in every node's `/etc/hosts`, and rewrites the
+DRBD config of each resource it takes part in; each reconnects on the new
+address. Renumber one node at a time: the controller needs the others to keep
+quorum while it works.
+
+If every node changed address at once — a DHCP server that handed out new
+leases to all of them — the controller cannot start, because its own database
+lives on a DRBD resource whose peers can no longer find each other. Bring that
+one resource back by hand, then let `set-address` do the rest:
+
+```bash
+# on every node: point sds-meta at the new addresses (old → new, per node)
+sed -i 's/192.168.1.11:/192.168.1.21:/; s/192.168.1.12:/192.168.1.22:/; s/192.168.1.13:/192.168.1.23:/' \
+    /etc/drbd.d/sds-meta.res
+drbdadm adjust sds-meta
+# once the controller is up on its VIP:
+sds-cli node set-address orange1 192.168.1.21     # and so on for each node
+```
+
 **Draining** a node moves every Primary off it and refuses to place new ones
 there — do this before maintenance, not after:
 
@@ -203,12 +231,31 @@ sds-cli resource create --name db --size 100G --port 7000 --replicas 3 \
 (anti-affinity). Placement is pool-aware: a volume only lands on a node that
 actually hosts the requested pool.
 
-**Profiles** save a set of choices so a fleet of resources is consistent:
+**Profiles** group resources that should be alike. A resource created with
+`--profile` — or attached later — is a member, and what is set on the profile
+reaches every member:
 
 ```bash
-sds-cli resource profile create --name db-tier --pool thin-pool --protocol C ...
+sds-cli resource profile create --name db-tier --pool thin-pool --protocol C --replicas 2 ...
 sds-cli resource create --name db --size 100G --port 7000 --profile db-tier
+sds-cli resource set-profile legacy-db db-tier      # attach an existing resource
+sds-cli resource list --profile db-tier             # the members
+sds-cli resource profile get db-tier                # settings and members
+
+# one change, every member: saved on the profile, applied to each resource
+sds-cli resource profile set-options db-tier --drbd-options net/max-buffers=8000
+
+# after raising --replicas, or for a member attached with fewer copies:
+sds-cli resource profile adjust db-tier --dry-run   # what would change
+sds-cli resource profile adjust db-tier             # add the missing replicas
+
+sds-cli resource profile max-size db-tier           # largest volume a new member could get
 ```
+
+`adjust` adds replicas where the profile asks for more, placed by its pool and
+label constraints, and never removes one: a member with more copies than the
+profile is reported and left alone. A profile with members cannot be deleted;
+take them out first with `resource set-profile <resource> --none`.
 
 **DRBD options** can be set at creation or changed later:
 

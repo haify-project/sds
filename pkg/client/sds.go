@@ -626,7 +626,7 @@ func (c *SDSClient) ListResourceProfiles(ctx context.Context) ([]*sdspb.Resource
 	return resp.Profiles, nil
 }
 
-// DeleteResourceProfile deletes a profile without affecting existing resources.
+// DeleteResourceProfile deletes a profile that has no members.
 func (c *SDSClient) DeleteResourceProfile(ctx context.Context, name string) error {
 	resp, err := c.client.DeleteResourceProfile(ctx, &sdspb.DeleteResourceProfileRequest{Name: name})
 	if err != nil {
@@ -2130,4 +2130,62 @@ func (c *SDSClient) ListControllerLogs(ctx context.Context, req *sdspb.ListContr
 		return nil, fmt.Errorf("%s", resp.Message)
 	}
 	return resp, nil
+}
+
+// SetNodeAddress renumbers a registered node. The response lists the
+// resources whose DRBD config was rewritten and any that failed; Success is
+// false when one did, so read both.
+func (c *SDSClient) SetNodeAddress(ctx context.Context, node, address, replicationAddress string) (*sdspb.SetNodeAddressResponse, error) {
+	return c.client.SetNodeAddress(ctx, &sdspb.SetNodeAddressRequest{
+		Node: node, Address: address, ReplicationAddress: replicationAddress,
+	})
+}
+
+// ListProfileMembers lists the resources that belong to a profile.
+func (c *SDSClient) ListProfileMembers(ctx context.Context, profile string) ([]*sdspb.ResourceInfo, error) {
+	resp, err := c.client.ListResources(ctx, &sdspb.ListResourcesRequest{Profile: profile})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Resources, nil
+}
+
+// SetResourceProfileOptions records DRBD options on a profile and applies
+// them to every member; the response has each member's outcome.
+func (c *SDSClient) SetResourceProfileOptions(ctx context.Context, name string, options map[string]string) (*sdspb.SetResourceProfileOptionsResponse, error) {
+	return c.client.SetResourceProfileOptions(ctx, &sdspb.SetResourceProfileOptionsRequest{Name: name, Options: options})
+}
+
+// AdjustResourceProfile brings every member into line with the profile, or
+// with dryRun says what it would change.
+func (c *SDSClient) AdjustResourceProfile(ctx context.Context, name string, dryRun bool) (*sdspb.AdjustResourceProfileResponse, error) {
+	return c.client.AdjustResourceProfile(ctx, &sdspb.AdjustResourceProfileRequest{Name: name, DryRun: dryRun})
+}
+
+// GetResourceProfileMaxSize is the largest volume a new member could get now.
+func (c *SDSClient) GetResourceProfileMaxSize(ctx context.Context, name string) (*sdspb.GetResourceProfileMaxSizeResponse, error) {
+	resp, err := c.client.GetResourceProfileMaxSize(ctx, &sdspb.GetResourceProfileMaxSizeRequest{Name: name})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}
+
+// SetResourceProfile makes a resource a member of a profile, or takes it out
+// of the one it is in when profile is empty.
+func (c *SDSClient) SetResourceProfile(ctx context.Context, resource, profile string) error {
+	resp, err := c.client.SetResourceProfile(ctx, &sdspb.SetResourceProfileRequest{Resource: resource, Profile: profile})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
 }

@@ -60,6 +60,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceSnapshot())
 	cmd.AddCommand(resourceRepair())
 	cmd.AddCommand(resourceProfileCommand())
+	cmd.AddCommand(resourceSetProfile())
 
 	return cmd
 }
@@ -510,6 +511,7 @@ func resourceDelete() *cobra.Command {
 }
 
 func resourceList() *cobra.Command {
+	var profile string
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all resources",
@@ -523,7 +525,12 @@ func resourceList() *cobra.Command {
 			}
 			defer closeClient(sdsClient)
 
-			resources, err := sdsClient.ListResources(ctx)
+			var resources []*sdspb.ResourceInfo
+			if profile != "" {
+				resources, err = sdsClient.ListProfileMembers(ctx, profile)
+			} else {
+				resources, err = sdsClient.ListResources(ctx)
+			}
 			if err != nil {
 				return fmt.Errorf("failed to list resources: %w", err)
 			}
@@ -552,6 +559,7 @@ func resourceList() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&profile, "profile", "", "Only the resources in this profile")
 	return cmd
 }
 
@@ -593,7 +601,107 @@ func resourceProfileCommand() *cobra.Command {
 	cmd.AddCommand(resourceProfileGet())
 	cmd.AddCommand(resourceProfileList())
 	cmd.AddCommand(resourceProfileDelete())
+	cmd.AddCommand(resourceProfileSetOptions())
+	cmd.AddCommand(resourceProfileAdjust())
+	cmd.AddCommand(resourceProfileMaxSize())
 	return cmd
+}
+
+func printMemberResults(members []*sdspb.ProfileMemberResult) {
+	for _, m := range members {
+		mark := "ok    "
+		if !m.Success {
+			mark = "FAILED"
+		}
+		fmt.Printf("  %s %-24s %s\n", mark, m.Resource, m.Message)
+	}
+}
+
+func resourceProfileSetOptions() *cobra.Command {
+	var options map[string]string
+	cmd := &cobra.Command{
+		Use:   "set-options <profile> --drbd-options key=value[,...]",
+		Short: "Set DRBD options on a profile and on every resource in it",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(options) == 0 {
+				return fmt.Errorf("give at least one --drbd-options key=value")
+			}
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			resp, err := sdsClient.SetResourceProfileOptions(cmd.Context(), args[0], options)
+			if err != nil {
+				return err
+			}
+			fmt.Println(resp.Message)
+			printMemberResults(resp.Members)
+			if !resp.Success {
+				return fmt.Errorf("not every member took the options")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringToStringVar(&options, "drbd-options", nil, "DRBD options as key=value pairs (e.g., net/max-buffers=8000)")
+	return cmd
+}
+
+func resourceProfileAdjust() *cobra.Command {
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:   "adjust <profile>",
+		Short: "Bring every resource in a profile into line with it (options, missing replicas)",
+		Long: "Applies the profile's DRBD options to each member and adds replicas to members\n" +
+			"with fewer than the profile asks for, placed by its pool and label constraints.\n" +
+			"Replicas beyond the profile's count are reported, never removed.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			resp, err := sdsClient.AdjustResourceProfile(cmd.Context(), args[0], dryRun)
+			if err != nil {
+				return err
+			}
+			fmt.Println(resp.Message)
+			printMemberResults(resp.Members)
+			if !resp.Success {
+				return fmt.Errorf("not every member could be adjusted")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would change without changing it")
+	return cmd
+}
+
+func resourceProfileMaxSize() *cobra.Command {
+	return &cobra.Command{
+		Use:   "max-size <profile>",
+		Short: "Largest volume a new resource in this profile could get now",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			resp, err := sdsClient.GetResourceProfileMaxSize(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			note := ""
+			if resp.Thin {
+				note = " (thin pool: what fits without overcommitting)"
+			}
+			fmt.Printf("%d GB on %s%s\n", resp.MaxSizeGb, strings.Join(resp.Nodes, ", "), note)
+			return nil
+		},
+	}
 }
 
 func resourceProfileCreate() *cobra.Command {
@@ -654,6 +762,15 @@ func resourceProfileGet() *cobra.Command {
 				return fmt.Errorf("failed to get resource profile: %s", resp.Message)
 			}
 			printResourceProfile(resp.Profile)
+			members, err := grpcClient.ListResources(cmd.Context(), &sdspb.ListResourcesRequest{Profile: args[0]})
+			if err == nil && members.Success {
+				names := make([]string, 0, len(members.Resources))
+				for _, r := range members.Resources {
+					names = append(names, r.Name)
+				}
+				sort.Strings(names)
+				fmt.Printf("  Members: %s\n", displayValue(strings.Join(names, ", ")))
+			}
 			return nil
 		},
 	}
@@ -2112,4 +2229,40 @@ func snapshotTarget(resource, pool, node string) (string, string, error) {
 		}
 	}
 	return pool, node, nil
+}
+
+func resourceSetProfile() *cobra.Command {
+	var none bool
+	cmd := &cobra.Command{
+		Use:   "set-profile <resource> [profile]",
+		Short: "Make a resource a member of a profile (its options are applied), or --none to take it out",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profile := ""
+			switch {
+			case none && len(args) == 2:
+				return fmt.Errorf("give a profile or --none, not both")
+			case !none && len(args) == 1:
+				return fmt.Errorf("give a profile, or --none to take %s out of its profile", args[0])
+			case len(args) == 2:
+				profile = args[1]
+			}
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			if err := sdsClient.SetResourceProfile(cmd.Context(), args[0], profile); err != nil {
+				return err
+			}
+			if profile == "" {
+				fmt.Printf("%s is in no profile\n", args[0])
+			} else {
+				fmt.Printf("%s is a member of %s; run resource profile adjust %s to bring its replicas into line\n", args[0], profile, profile)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&none, "none", false, "Take the resource out of its profile")
+	return cmd
 }

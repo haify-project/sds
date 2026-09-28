@@ -345,6 +345,51 @@ func local_request_SDSController_SetNodeLabels_0(ctx context.Context, marshaler 
 	return msg, metadata, err
 }
 
+func request_SDSController_SetNodeAddress_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetNodeAddressRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["node"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node")
+	}
+	protoReq.Node, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.SetNodeAddress(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_SDSController_SetNodeAddress_0(ctx context.Context, marshaler runtime.Marshaler, server SDSControllerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetNodeAddressRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["node"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node")
+	}
+	protoReq.Node, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node", err)
+	}
+	msg, err := server.SetNodeAddress(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_SDSController_GetNode_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq GetNodeRequest
@@ -594,11 +639,19 @@ func local_request_SDSController_GetResource_0(ctx context.Context, marshaler ru
 	return msg, metadata, err
 }
 
+var filter_SDSController_ListResources_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
 func request_SDSController_ListResources_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq ListResourcesRequest
 		metadata runtime.ServerMetadata
 	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_SDSController_ListResources_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -611,6 +664,12 @@ func local_request_SDSController_ListResources_0(ctx context.Context, marshaler 
 		protoReq ListResourcesRequest
 		metadata runtime.ServerMetadata
 	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_SDSController_ListResources_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 	msg, err := server.ListResources(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -738,6 +797,180 @@ func local_request_SDSController_DeleteResourceProfile_0(ctx context.Context, ma
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
 	msg, err := server.DeleteResourceProfile(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_SDSController_SetResourceProfileOptions_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetResourceProfileOptionsRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.SetResourceProfileOptions(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_SDSController_SetResourceProfileOptions_0(ctx context.Context, marshaler runtime.Marshaler, server SDSControllerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetResourceProfileOptionsRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	msg, err := server.SetResourceProfileOptions(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_SDSController_AdjustResourceProfile_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq AdjustResourceProfileRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.AdjustResourceProfile(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_SDSController_AdjustResourceProfile_0(ctx context.Context, marshaler runtime.Marshaler, server SDSControllerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq AdjustResourceProfileRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	msg, err := server.AdjustResourceProfile(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_SDSController_GetResourceProfileMaxSize_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetResourceProfileMaxSizeRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.GetResourceProfileMaxSize(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_SDSController_GetResourceProfileMaxSize_0(ctx context.Context, marshaler runtime.Marshaler, server SDSControllerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetResourceProfileMaxSizeRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	msg, err := server.GetResourceProfileMaxSize(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_SDSController_SetResourceProfile_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetResourceProfileRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["resource"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "resource")
+	}
+	protoReq.Resource, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "resource", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.SetResourceProfile(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_SDSController_SetResourceProfile_0(ctx context.Context, marshaler runtime.Marshaler, server SDSControllerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetResourceProfileRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["resource"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "resource")
+	}
+	protoReq.Resource, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "resource", err)
+	}
+	msg, err := server.SetResourceProfile(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -5525,6 +5758,26 @@ func RegisterSDSControllerHandlerServer(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_SDSController_SetNodeLabels_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_SDSController_SetNodeAddress_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/v1.SDSController/SetNodeAddress", runtime.WithHTTPPathPattern("/v1/nodes/{node}/address"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_SDSController_SetNodeAddress_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_SetNodeAddress_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_SDSController_GetNode_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -5764,6 +6017,86 @@ func RegisterSDSControllerHandlerServer(ctx context.Context, mux *runtime.ServeM
 			return
 		}
 		forward_SDSController_DeleteResourceProfile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_SDSController_SetResourceProfileOptions_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/v1.SDSController/SetResourceProfileOptions", runtime.WithHTTPPathPattern("/v1/resource-profiles/{name}/options"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_SDSController_SetResourceProfileOptions_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_SetResourceProfileOptions_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_SDSController_AdjustResourceProfile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/v1.SDSController/AdjustResourceProfile", runtime.WithHTTPPathPattern("/v1/resource-profiles/{name}/adjust"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_SDSController_AdjustResourceProfile_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_AdjustResourceProfile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_SDSController_GetResourceProfileMaxSize_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/v1.SDSController/GetResourceProfileMaxSize", runtime.WithHTTPPathPattern("/v1/resource-profiles/{name}/max-size"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_SDSController_GetResourceProfileMaxSize_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_GetResourceProfileMaxSize_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_SDSController_SetResourceProfile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/v1.SDSController/SetResourceProfile", runtime.WithHTTPPathPattern("/v1/resources/{resource}/profile"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_SDSController_SetResourceProfile_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_SetResourceProfile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_SDSController_AddVolume_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -8188,6 +8521,23 @@ func RegisterSDSControllerHandlerClient(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_SDSController_SetNodeLabels_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_SDSController_SetNodeAddress_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/v1.SDSController/SetNodeAddress", runtime.WithHTTPPathPattern("/v1/nodes/{node}/address"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_SDSController_SetNodeAddress_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_SetNodeAddress_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_SDSController_GetNode_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -8391,6 +8741,74 @@ func RegisterSDSControllerHandlerClient(ctx context.Context, mux *runtime.ServeM
 			return
 		}
 		forward_SDSController_DeleteResourceProfile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_SDSController_SetResourceProfileOptions_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/v1.SDSController/SetResourceProfileOptions", runtime.WithHTTPPathPattern("/v1/resource-profiles/{name}/options"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_SDSController_SetResourceProfileOptions_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_SetResourceProfileOptions_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_SDSController_AdjustResourceProfile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/v1.SDSController/AdjustResourceProfile", runtime.WithHTTPPathPattern("/v1/resource-profiles/{name}/adjust"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_SDSController_AdjustResourceProfile_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_AdjustResourceProfile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_SDSController_GetResourceProfileMaxSize_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/v1.SDSController/GetResourceProfileMaxSize", runtime.WithHTTPPathPattern("/v1/resource-profiles/{name}/max-size"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_SDSController_GetResourceProfileMaxSize_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_GetResourceProfileMaxSize_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_SDSController_SetResourceProfile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/v1.SDSController/SetResourceProfile", runtime.WithHTTPPathPattern("/v1/resources/{resource}/profile"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_SDSController_SetResourceProfile_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_SDSController_SetResourceProfile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_SDSController_AddVolume_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -10317,273 +10735,283 @@ func RegisterSDSControllerHandlerClient(ctx context.Context, mux *runtime.ServeM
 }
 
 var (
-	pattern_SDSController_CreatePool_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "pools"}, ""))
-	pattern_SDSController_DeletePool_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "pools", "name"}, ""))
-	pattern_SDSController_GetPool_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "pools", "name"}, ""))
-	pattern_SDSController_ListPools_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "pools"}, ""))
-	pattern_SDSController_AddDiskToPool_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "pools", "pool", "disks"}, ""))
-	pattern_SDSController_RegisterNode_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "nodes"}, ""))
-	pattern_SDSController_UnregisterNode_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "nodes", "address"}, ""))
-	pattern_SDSController_SetNodeLabels_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "node", "labels"}, ""))
-	pattern_SDSController_GetNode_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "nodes", "address"}, ""))
-	pattern_SDSController_ListNodes_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "nodes"}, ""))
-	pattern_SDSController_HealthCheck_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "node", "health"}, ""))
-	pattern_SDSController_CreateResource_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resources"}, ""))
-	pattern_SDSController_AdoptResource_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "adopt"}, ""))
-	pattern_SDSController_DeleteResource_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resources", "name"}, ""))
-	pattern_SDSController_GetResource_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resources", "name"}, ""))
-	pattern_SDSController_ListResources_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resources"}, ""))
-	pattern_SDSController_CreateResourceProfile_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resource-profiles"}, ""))
-	pattern_SDSController_GetResourceProfile_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resource-profiles", "name"}, ""))
-	pattern_SDSController_ListResourceProfiles_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resource-profiles"}, ""))
-	pattern_SDSController_DeleteResourceProfile_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resource-profiles", "name"}, ""))
-	pattern_SDSController_AddVolume_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "volumes"}, ""))
-	pattern_SDSController_RemoveVolume_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "volumes", "volume_id"}, ""))
-	pattern_SDSController_ResizeVolume_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "volumes", "volume_id"}, ""))
-	pattern_SDSController_UpdateResourceOptions_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "options"}, ""))
-	pattern_SDSController_RepairResource_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "repair"}, ""))
-	pattern_SDSController_ResourceStatus_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "status"}, ""))
-	pattern_SDSController_SetPrimary_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "primary"}, ""))
-	pattern_SDSController_SetSecondary_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "secondary"}, ""))
-	pattern_SDSController_SetDualPrimary_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "dual-primary"}, ""))
-	pattern_SDSController_AttachDisklessClient_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "diskless-clients"}, ""))
-	pattern_SDSController_DetachDisklessClient_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "diskless-clients", "node"}, ""))
-	pattern_SDSController_CreateFilesystem_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "resources", "resource", "volumes", "volume_id", "filesystem"}, ""))
-	pattern_SDSController_MountResource_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "resources", "resource", "volumes", "volume_id", "mount"}, ""))
-	pattern_SDSController_UnmountResource_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "resources", "resource", "volumes", "volume_id", "unmount"}, ""))
-	pattern_SDSController_MakeHa_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
-	pattern_SDSController_EvictHa_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "resources", "resource", "ha", "evict"}, ""))
-	pattern_SDSController_SetTiebreaker_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "resources", "resource", "ha", "tiebreaker"}, ""))
-	pattern_SDSController_AddDR_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "dr"}, ""))
-	pattern_SDSController_AddReplica_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "replicas"}, ""))
-	pattern_SDSController_RemoveReplica_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "replicas", "node"}, ""))
-	pattern_SDSController_DeleteHa_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
-	pattern_SDSController_GetHa_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
-	pattern_SDSController_ListHa_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "ha"}, ""))
-	pattern_SDSController_GetHaStatus_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "ha", "resource", "status"}, ""))
-	pattern_SDSController_ListResourceAgents_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "ha", "resource-agents"}, ""))
-	pattern_SDSController_GetResourceAgentMetadata_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "ha", "resource-agents", "provider", "name"}, ""))
-	pattern_SDSController_GetHaToml_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "ha", "resource", "toml"}, ""))
-	pattern_SDSController_SyncHaToml_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "ha", "resource", "toml"}, ""))
-	pattern_SDSController_EnableSelfHa_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "selfha", "enable"}, ""))
-	pattern_SDSController_DisableSelfHa_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "selfha", "disable"}, ""))
-	pattern_SDSController_GetSelfHaStatus_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "selfha"}, ""))
-	pattern_SDSController_CreateSnapshot_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
-	pattern_SDSController_CreateSnapshot_1           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
-	pattern_SDSController_DeleteSnapshot_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name"}, ""))
-	pattern_SDSController_DeleteSnapshot_1           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name"}, ""))
-	pattern_SDSController_RestoreSnapshot_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name", "restore"}, ""))
-	pattern_SDSController_RestoreSnapshot_1          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name", "restore"}, ""))
-	pattern_SDSController_ListSnapshots_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
-	pattern_SDSController_ListSnapshots_1            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
-	pattern_SDSController_PopulateVolume_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "populate"}, ""))
-	pattern_SDSController_CreateSnapshotSchedule_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "snapshot-schedules"}, ""))
-	pattern_SDSController_ListSnapshotSchedules_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "snapshot-schedules"}, ""))
-	pattern_SDSController_DeleteSnapshotSchedule_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "snapshot-schedules", "name"}, ""))
-	pattern_SDSController_AddBackupTarget_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backup-targets"}, ""))
-	pattern_SDSController_ListBackupTargets_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backup-targets"}, ""))
-	pattern_SDSController_DeleteBackupTarget_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backup-targets", "name"}, ""))
-	pattern_SDSController_CreateBackup_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backups"}, ""))
-	pattern_SDSController_ListBackups_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backups"}, ""))
-	pattern_SDSController_RestoreBackup_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "backups", "id", "restore"}, ""))
-	pattern_SDSController_DeleteBackup_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backups", "id"}, ""))
-	pattern_SDSController_CreateNFSGateway_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "gateways", "nfs"}, ""))
-	pattern_SDSController_CreateISCSIGateway_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "gateways", "iscsi"}, ""))
-	pattern_SDSController_CreateNVMeGateway_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "gateways", "nvme"}, ""))
-	pattern_SDSController_DeleteGateway_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "gateways", "id"}, ""))
-	pattern_SDSController_GetGateway_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "gateways", "id"}, ""))
-	pattern_SDSController_ListGateways_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "gateways"}, ""))
-	pattern_SDSController_StartGateway_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "gateways", "id", "start"}, ""))
-	pattern_SDSController_StopGateway_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "gateways", "id", "stop"}, ""))
-	pattern_SDSController_AddNFSExport_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nfs", "exports"}, "add"))
-	pattern_SDSController_RemoveNFSExport_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nfs", "exports"}, "remove"))
-	pattern_SDSController_ListNFSExports_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nfs", "exports"}, "list"))
-	pattern_SDSController_AddISCSILUN_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "luns"}, "add"))
-	pattern_SDSController_RemoveISCSILUN_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "luns"}, "remove"))
-	pattern_SDSController_ListISCSILUNs_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "luns"}, "list"))
-	pattern_SDSController_AddISCSIInitiator_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "initiators"}, "add"))
-	pattern_SDSController_RemoveISCSIInitiator_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "initiators"}, "remove"))
-	pattern_SDSController_ListISCSIInitiators_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "initiators"}, "list"))
-	pattern_SDSController_SetISCSIChap_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "chap"}, "set"))
-	pattern_SDSController_GetISCSIChap_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "chap"}, "get"))
-	pattern_SDSController_AddNVMeNamespace_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "namespaces"}, "add"))
-	pattern_SDSController_RemoveNVMeNamespace_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "namespaces"}, "remove"))
-	pattern_SDSController_ListNVMeNamespaces_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "namespaces"}, "list"))
-	pattern_SDSController_AddNVMeHost_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "hosts"}, "add"))
-	pattern_SDSController_RemoveNVMeHost_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "hosts"}, "remove"))
-	pattern_SDSController_ListNVMeHosts_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "hosts"}, "list"))
-	pattern_SDSController_CreateZFSPool_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "pools"}, ""))
-	pattern_SDSController_DeleteZFSPool_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "pools", "name"}, ""))
-	pattern_SDSController_ListZFSpools_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "pools"}, ""))
-	pattern_SDSController_CreateZFSDataset_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "datasets"}, ""))
-	pattern_SDSController_CreateZFSVolume_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "volumes"}, ""))
-	pattern_SDSController_ResizeZFSVolume_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3}, []string{"v1", "zfs", "volumes", "volume_path"}, ""))
-	pattern_SDSController_ResizeZFSVolume_1          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "volumes", "volume_path"}, ""))
-	pattern_SDSController_DeleteZFSDataset_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3}, []string{"v1", "zfs", "datasets", "dataset_path"}, ""))
-	pattern_SDSController_DeleteZFSDataset_1         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "datasets", "dataset_path"}, ""))
-	pattern_SDSController_CreateZFSSnapshot_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
-	pattern_SDSController_CreateZFSSnapshot_1        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
-	pattern_SDSController_DeleteZFSSnapshot_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3}, []string{"v1", "zfs", "snapshots", "snapshot"}, ""))
-	pattern_SDSController_DeleteZFSSnapshot_1        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "snapshots", "snapshot"}, ""))
-	pattern_SDSController_ListZFSSnapshots_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
-	pattern_SDSController_ListZFSSnapshots_1         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
-	pattern_SDSController_RestoreZFSSnapshot_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "zfs", "datasets", "dataset", "snapshots", "snapshot_name", "restore"}, ""))
-	pattern_SDSController_RestoreZFSSnapshot_1       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "zfs", "datasets", "dataset", "snapshots", "snapshot_name", "restore"}, ""))
-	pattern_SDSController_CloneZFSSnapshot_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4}, []string{"v1", "zfs", "snapshots", "snapshot", "clone"}, ""))
-	pattern_SDSController_CloneZFSSnapshot_1         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "zfs", "snapshots", "snapshot", "clone"}, ""))
-	pattern_SDSController_CreateLvmSnapshot_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots"}, ""))
-	pattern_SDSController_DeleteLvmSnapshot_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots", "snapshot_name"}, ""))
-	pattern_SDSController_ListLvmSnapshots_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots"}, ""))
-	pattern_SDSController_RestoreLvmSnapshot_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots", "snapshot_name", "restore"}, ""))
-	pattern_SDSController_DrainNode_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "name", "drain"}, ""))
-	pattern_SDSController_UndrainNode_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "name", "undrain"}, ""))
-	pattern_SDSController_ConvertPoolToThin_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "nodes", "node", "pools", "pool", "convert-thin"}, ""))
-	pattern_SDSController_AddPoolCache_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "nodes", "node", "pools", "pool", "cache"}, ""))
-	pattern_SDSController_RemovePoolCache_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "nodes", "node", "pools", "pool", "cache"}, ""))
-	pattern_SDSController_ListAuditEvents_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "audit"}, ""))
-	pattern_SDSController_ListControllerLogs_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "logs"}, ""))
-	pattern_SDSController_CollectNodeDiagnostics_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "diagnostics", "collect"}, ""))
-	pattern_SDSController_ListEvents_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "events"}, ""))
-	pattern_SDSController_ListNotifyChannels_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "notify-channels"}, ""))
-	pattern_SDSController_SaveNotifyChannel_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "notify-channels"}, ""))
-	pattern_SDSController_DeleteNotifyChannel_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "notify-channels", "name"}, ""))
-	pattern_SDSController_TestNotifyChannel_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "notify-channels", "name", "test"}, ""))
-	pattern_SDSController_RepairWanProxy_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "resources", "name", "wan", "repair"}, ""))
-	pattern_SDSController_WatchEvents_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "events", "watch"}, ""))
+	pattern_SDSController_CreatePool_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "pools"}, ""))
+	pattern_SDSController_DeletePool_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "pools", "name"}, ""))
+	pattern_SDSController_GetPool_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "pools", "name"}, ""))
+	pattern_SDSController_ListPools_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "pools"}, ""))
+	pattern_SDSController_AddDiskToPool_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "pools", "pool", "disks"}, ""))
+	pattern_SDSController_RegisterNode_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "nodes"}, ""))
+	pattern_SDSController_UnregisterNode_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "nodes", "address"}, ""))
+	pattern_SDSController_SetNodeLabels_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "node", "labels"}, ""))
+	pattern_SDSController_SetNodeAddress_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "node", "address"}, ""))
+	pattern_SDSController_GetNode_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "nodes", "address"}, ""))
+	pattern_SDSController_ListNodes_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "nodes"}, ""))
+	pattern_SDSController_HealthCheck_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "node", "health"}, ""))
+	pattern_SDSController_CreateResource_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resources"}, ""))
+	pattern_SDSController_AdoptResource_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "adopt"}, ""))
+	pattern_SDSController_DeleteResource_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resources", "name"}, ""))
+	pattern_SDSController_GetResource_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resources", "name"}, ""))
+	pattern_SDSController_ListResources_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resources"}, ""))
+	pattern_SDSController_CreateResourceProfile_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resource-profiles"}, ""))
+	pattern_SDSController_GetResourceProfile_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resource-profiles", "name"}, ""))
+	pattern_SDSController_ListResourceProfiles_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "resource-profiles"}, ""))
+	pattern_SDSController_DeleteResourceProfile_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "resource-profiles", "name"}, ""))
+	pattern_SDSController_SetResourceProfileOptions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resource-profiles", "name", "options"}, ""))
+	pattern_SDSController_AdjustResourceProfile_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resource-profiles", "name", "adjust"}, ""))
+	pattern_SDSController_GetResourceProfileMaxSize_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resource-profiles", "name", "max-size"}, ""))
+	pattern_SDSController_SetResourceProfile_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "profile"}, ""))
+	pattern_SDSController_AddVolume_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "volumes"}, ""))
+	pattern_SDSController_RemoveVolume_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "volumes", "volume_id"}, ""))
+	pattern_SDSController_ResizeVolume_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "volumes", "volume_id"}, ""))
+	pattern_SDSController_UpdateResourceOptions_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "options"}, ""))
+	pattern_SDSController_RepairResource_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "repair"}, ""))
+	pattern_SDSController_ResourceStatus_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "name", "status"}, ""))
+	pattern_SDSController_SetPrimary_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "primary"}, ""))
+	pattern_SDSController_SetSecondary_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "secondary"}, ""))
+	pattern_SDSController_SetDualPrimary_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "dual-primary"}, ""))
+	pattern_SDSController_AttachDisklessClient_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "diskless-clients"}, ""))
+	pattern_SDSController_DetachDisklessClient_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "diskless-clients", "node"}, ""))
+	pattern_SDSController_CreateFilesystem_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "resources", "resource", "volumes", "volume_id", "filesystem"}, ""))
+	pattern_SDSController_MountResource_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "resources", "resource", "volumes", "volume_id", "mount"}, ""))
+	pattern_SDSController_UnmountResource_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "resources", "resource", "volumes", "volume_id", "unmount"}, ""))
+	pattern_SDSController_MakeHa_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
+	pattern_SDSController_EvictHa_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "resources", "resource", "ha", "evict"}, ""))
+	pattern_SDSController_SetTiebreaker_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "resources", "resource", "ha", "tiebreaker"}, ""))
+	pattern_SDSController_AddDR_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "dr"}, ""))
+	pattern_SDSController_AddReplica_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "replicas"}, ""))
+	pattern_SDSController_RemoveReplica_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "resources", "resource", "replicas", "node"}, ""))
+	pattern_SDSController_DeleteHa_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
+	pattern_SDSController_GetHa_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "ha"}, ""))
+	pattern_SDSController_ListHa_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "ha"}, ""))
+	pattern_SDSController_GetHaStatus_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "ha", "resource", "status"}, ""))
+	pattern_SDSController_ListResourceAgents_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "ha", "resource-agents"}, ""))
+	pattern_SDSController_GetResourceAgentMetadata_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "ha", "resource-agents", "provider", "name"}, ""))
+	pattern_SDSController_GetHaToml_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "ha", "resource", "toml"}, ""))
+	pattern_SDSController_SyncHaToml_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "ha", "resource", "toml"}, ""))
+	pattern_SDSController_EnableSelfHa_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "selfha", "enable"}, ""))
+	pattern_SDSController_DisableSelfHa_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "selfha", "disable"}, ""))
+	pattern_SDSController_GetSelfHaStatus_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "selfha"}, ""))
+	pattern_SDSController_CreateSnapshot_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
+	pattern_SDSController_CreateSnapshot_1            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
+	pattern_SDSController_DeleteSnapshot_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name"}, ""))
+	pattern_SDSController_DeleteSnapshot_1            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name"}, ""))
+	pattern_SDSController_RestoreSnapshot_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name", "restore"}, ""))
+	pattern_SDSController_RestoreSnapshot_1           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "volumes", "volume", "snapshots", "snapshot_name", "restore"}, ""))
+	pattern_SDSController_ListSnapshots_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
+	pattern_SDSController_ListSnapshots_1             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "volumes", "volume", "snapshots"}, ""))
+	pattern_SDSController_PopulateVolume_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "resources", "resource", "populate"}, ""))
+	pattern_SDSController_CreateSnapshotSchedule_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "snapshot-schedules"}, ""))
+	pattern_SDSController_ListSnapshotSchedules_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "snapshot-schedules"}, ""))
+	pattern_SDSController_DeleteSnapshotSchedule_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "snapshot-schedules", "name"}, ""))
+	pattern_SDSController_AddBackupTarget_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backup-targets"}, ""))
+	pattern_SDSController_ListBackupTargets_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backup-targets"}, ""))
+	pattern_SDSController_DeleteBackupTarget_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backup-targets", "name"}, ""))
+	pattern_SDSController_CreateBackup_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backups"}, ""))
+	pattern_SDSController_ListBackups_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backups"}, ""))
+	pattern_SDSController_RestoreBackup_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "backups", "id", "restore"}, ""))
+	pattern_SDSController_DeleteBackup_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backups", "id"}, ""))
+	pattern_SDSController_CreateNFSGateway_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "gateways", "nfs"}, ""))
+	pattern_SDSController_CreateISCSIGateway_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "gateways", "iscsi"}, ""))
+	pattern_SDSController_CreateNVMeGateway_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "gateways", "nvme"}, ""))
+	pattern_SDSController_DeleteGateway_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "gateways", "id"}, ""))
+	pattern_SDSController_GetGateway_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "gateways", "id"}, ""))
+	pattern_SDSController_ListGateways_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "gateways"}, ""))
+	pattern_SDSController_StartGateway_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "gateways", "id", "start"}, ""))
+	pattern_SDSController_StopGateway_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "gateways", "id", "stop"}, ""))
+	pattern_SDSController_AddNFSExport_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nfs", "exports"}, "add"))
+	pattern_SDSController_RemoveNFSExport_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nfs", "exports"}, "remove"))
+	pattern_SDSController_ListNFSExports_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nfs", "exports"}, "list"))
+	pattern_SDSController_AddISCSILUN_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "luns"}, "add"))
+	pattern_SDSController_RemoveISCSILUN_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "luns"}, "remove"))
+	pattern_SDSController_ListISCSILUNs_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "luns"}, "list"))
+	pattern_SDSController_AddISCSIInitiator_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "initiators"}, "add"))
+	pattern_SDSController_RemoveISCSIInitiator_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "initiators"}, "remove"))
+	pattern_SDSController_ListISCSIInitiators_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "initiators"}, "list"))
+	pattern_SDSController_SetISCSIChap_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "chap"}, "set"))
+	pattern_SDSController_GetISCSIChap_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "iscsi", "chap"}, "get"))
+	pattern_SDSController_AddNVMeNamespace_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "namespaces"}, "add"))
+	pattern_SDSController_RemoveNVMeNamespace_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "namespaces"}, "remove"))
+	pattern_SDSController_ListNVMeNamespaces_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "namespaces"}, "list"))
+	pattern_SDSController_AddNVMeHost_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "hosts"}, "add"))
+	pattern_SDSController_RemoveNVMeHost_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "hosts"}, "remove"))
+	pattern_SDSController_ListNVMeHosts_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "gateways", "nvme", "hosts"}, "list"))
+	pattern_SDSController_CreateZFSPool_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "pools"}, ""))
+	pattern_SDSController_DeleteZFSPool_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "pools", "name"}, ""))
+	pattern_SDSController_ListZFSpools_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "pools"}, ""))
+	pattern_SDSController_CreateZFSDataset_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "datasets"}, ""))
+	pattern_SDSController_CreateZFSVolume_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "zfs", "volumes"}, ""))
+	pattern_SDSController_ResizeZFSVolume_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3}, []string{"v1", "zfs", "volumes", "volume_path"}, ""))
+	pattern_SDSController_ResizeZFSVolume_1           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "volumes", "volume_path"}, ""))
+	pattern_SDSController_DeleteZFSDataset_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3}, []string{"v1", "zfs", "datasets", "dataset_path"}, ""))
+	pattern_SDSController_DeleteZFSDataset_1          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "datasets", "dataset_path"}, ""))
+	pattern_SDSController_CreateZFSSnapshot_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
+	pattern_SDSController_CreateZFSSnapshot_1         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
+	pattern_SDSController_DeleteZFSSnapshot_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3}, []string{"v1", "zfs", "snapshots", "snapshot"}, ""))
+	pattern_SDSController_DeleteZFSSnapshot_1         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "zfs", "snapshots", "snapshot"}, ""))
+	pattern_SDSController_ListZFSSnapshots_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
+	pattern_SDSController_ListZFSSnapshots_1          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "zfs", "datasets", "dataset", "snapshots"}, ""))
+	pattern_SDSController_RestoreZFSSnapshot_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "zfs", "datasets", "dataset", "snapshots", "snapshot_name", "restore"}, ""))
+	pattern_SDSController_RestoreZFSSnapshot_1        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "zfs", "datasets", "dataset", "snapshots", "snapshot_name", "restore"}, ""))
+	pattern_SDSController_CloneZFSSnapshot_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 1, 0, 4, 2, 5, 3, 2, 4}, []string{"v1", "zfs", "snapshots", "snapshot", "clone"}, ""))
+	pattern_SDSController_CloneZFSSnapshot_1          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "zfs", "snapshots", "snapshot", "clone"}, ""))
+	pattern_SDSController_CreateLvmSnapshot_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots"}, ""))
+	pattern_SDSController_DeleteLvmSnapshot_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots", "snapshot_name"}, ""))
+	pattern_SDSController_ListLvmSnapshots_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots"}, ""))
+	pattern_SDSController_RestoreLvmSnapshot_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "lvm", "volumes", "lv_name", "snapshots", "snapshot_name", "restore"}, ""))
+	pattern_SDSController_DrainNode_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "name", "drain"}, ""))
+	pattern_SDSController_UndrainNode_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "nodes", "name", "undrain"}, ""))
+	pattern_SDSController_ConvertPoolToThin_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "nodes", "node", "pools", "pool", "convert-thin"}, ""))
+	pattern_SDSController_AddPoolCache_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "nodes", "node", "pools", "pool", "cache"}, ""))
+	pattern_SDSController_RemovePoolCache_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "nodes", "node", "pools", "pool", "cache"}, ""))
+	pattern_SDSController_ListAuditEvents_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "audit"}, ""))
+	pattern_SDSController_ListControllerLogs_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "logs"}, ""))
+	pattern_SDSController_CollectNodeDiagnostics_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "diagnostics", "collect"}, ""))
+	pattern_SDSController_ListEvents_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "events"}, ""))
+	pattern_SDSController_ListNotifyChannels_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "notify-channels"}, ""))
+	pattern_SDSController_SaveNotifyChannel_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "notify-channels"}, ""))
+	pattern_SDSController_DeleteNotifyChannel_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "notify-channels", "name"}, ""))
+	pattern_SDSController_TestNotifyChannel_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "notify-channels", "name", "test"}, ""))
+	pattern_SDSController_RepairWanProxy_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "resources", "name", "wan", "repair"}, ""))
+	pattern_SDSController_WatchEvents_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "events", "watch"}, ""))
 )
 
 var (
-	forward_SDSController_CreatePool_0               = runtime.ForwardResponseMessage
-	forward_SDSController_DeletePool_0               = runtime.ForwardResponseMessage
-	forward_SDSController_GetPool_0                  = runtime.ForwardResponseMessage
-	forward_SDSController_ListPools_0                = runtime.ForwardResponseMessage
-	forward_SDSController_AddDiskToPool_0            = runtime.ForwardResponseMessage
-	forward_SDSController_RegisterNode_0             = runtime.ForwardResponseMessage
-	forward_SDSController_UnregisterNode_0           = runtime.ForwardResponseMessage
-	forward_SDSController_SetNodeLabels_0            = runtime.ForwardResponseMessage
-	forward_SDSController_GetNode_0                  = runtime.ForwardResponseMessage
-	forward_SDSController_ListNodes_0                = runtime.ForwardResponseMessage
-	forward_SDSController_HealthCheck_0              = runtime.ForwardResponseMessage
-	forward_SDSController_CreateResource_0           = runtime.ForwardResponseMessage
-	forward_SDSController_AdoptResource_0            = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteResource_0           = runtime.ForwardResponseMessage
-	forward_SDSController_GetResource_0              = runtime.ForwardResponseMessage
-	forward_SDSController_ListResources_0            = runtime.ForwardResponseMessage
-	forward_SDSController_CreateResourceProfile_0    = runtime.ForwardResponseMessage
-	forward_SDSController_GetResourceProfile_0       = runtime.ForwardResponseMessage
-	forward_SDSController_ListResourceProfiles_0     = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteResourceProfile_0    = runtime.ForwardResponseMessage
-	forward_SDSController_AddVolume_0                = runtime.ForwardResponseMessage
-	forward_SDSController_RemoveVolume_0             = runtime.ForwardResponseMessage
-	forward_SDSController_ResizeVolume_0             = runtime.ForwardResponseMessage
-	forward_SDSController_UpdateResourceOptions_0    = runtime.ForwardResponseMessage
-	forward_SDSController_RepairResource_0           = runtime.ForwardResponseMessage
-	forward_SDSController_ResourceStatus_0           = runtime.ForwardResponseMessage
-	forward_SDSController_SetPrimary_0               = runtime.ForwardResponseMessage
-	forward_SDSController_SetSecondary_0             = runtime.ForwardResponseMessage
-	forward_SDSController_SetDualPrimary_0           = runtime.ForwardResponseMessage
-	forward_SDSController_AttachDisklessClient_0     = runtime.ForwardResponseMessage
-	forward_SDSController_DetachDisklessClient_0     = runtime.ForwardResponseMessage
-	forward_SDSController_CreateFilesystem_0         = runtime.ForwardResponseMessage
-	forward_SDSController_MountResource_0            = runtime.ForwardResponseMessage
-	forward_SDSController_UnmountResource_0          = runtime.ForwardResponseMessage
-	forward_SDSController_MakeHa_0                   = runtime.ForwardResponseMessage
-	forward_SDSController_EvictHa_0                  = runtime.ForwardResponseMessage
-	forward_SDSController_SetTiebreaker_0            = runtime.ForwardResponseMessage
-	forward_SDSController_AddDR_0                    = runtime.ForwardResponseMessage
-	forward_SDSController_AddReplica_0               = runtime.ForwardResponseMessage
-	forward_SDSController_RemoveReplica_0            = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteHa_0                 = runtime.ForwardResponseMessage
-	forward_SDSController_GetHa_0                    = runtime.ForwardResponseMessage
-	forward_SDSController_ListHa_0                   = runtime.ForwardResponseMessage
-	forward_SDSController_GetHaStatus_0              = runtime.ForwardResponseMessage
-	forward_SDSController_ListResourceAgents_0       = runtime.ForwardResponseMessage
-	forward_SDSController_GetResourceAgentMetadata_0 = runtime.ForwardResponseMessage
-	forward_SDSController_GetHaToml_0                = runtime.ForwardResponseMessage
-	forward_SDSController_SyncHaToml_0               = runtime.ForwardResponseMessage
-	forward_SDSController_EnableSelfHa_0             = runtime.ForwardResponseMessage
-	forward_SDSController_DisableSelfHa_0            = runtime.ForwardResponseMessage
-	forward_SDSController_GetSelfHaStatus_0          = runtime.ForwardResponseMessage
-	forward_SDSController_CreateSnapshot_0           = runtime.ForwardResponseMessage
-	forward_SDSController_CreateSnapshot_1           = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteSnapshot_0           = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteSnapshot_1           = runtime.ForwardResponseMessage
-	forward_SDSController_RestoreSnapshot_0          = runtime.ForwardResponseMessage
-	forward_SDSController_RestoreSnapshot_1          = runtime.ForwardResponseMessage
-	forward_SDSController_ListSnapshots_0            = runtime.ForwardResponseMessage
-	forward_SDSController_ListSnapshots_1            = runtime.ForwardResponseMessage
-	forward_SDSController_PopulateVolume_0           = runtime.ForwardResponseMessage
-	forward_SDSController_CreateSnapshotSchedule_0   = runtime.ForwardResponseMessage
-	forward_SDSController_ListSnapshotSchedules_0    = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteSnapshotSchedule_0   = runtime.ForwardResponseMessage
-	forward_SDSController_AddBackupTarget_0          = runtime.ForwardResponseMessage
-	forward_SDSController_ListBackupTargets_0        = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteBackupTarget_0       = runtime.ForwardResponseMessage
-	forward_SDSController_CreateBackup_0             = runtime.ForwardResponseMessage
-	forward_SDSController_ListBackups_0              = runtime.ForwardResponseMessage
-	forward_SDSController_RestoreBackup_0            = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteBackup_0             = runtime.ForwardResponseMessage
-	forward_SDSController_CreateNFSGateway_0         = runtime.ForwardResponseMessage
-	forward_SDSController_CreateISCSIGateway_0       = runtime.ForwardResponseMessage
-	forward_SDSController_CreateNVMeGateway_0        = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteGateway_0            = runtime.ForwardResponseMessage
-	forward_SDSController_GetGateway_0               = runtime.ForwardResponseMessage
-	forward_SDSController_ListGateways_0             = runtime.ForwardResponseMessage
-	forward_SDSController_StartGateway_0             = runtime.ForwardResponseMessage
-	forward_SDSController_StopGateway_0              = runtime.ForwardResponseMessage
-	forward_SDSController_AddNFSExport_0             = runtime.ForwardResponseMessage
-	forward_SDSController_RemoveNFSExport_0          = runtime.ForwardResponseMessage
-	forward_SDSController_ListNFSExports_0           = runtime.ForwardResponseMessage
-	forward_SDSController_AddISCSILUN_0              = runtime.ForwardResponseMessage
-	forward_SDSController_RemoveISCSILUN_0           = runtime.ForwardResponseMessage
-	forward_SDSController_ListISCSILUNs_0            = runtime.ForwardResponseMessage
-	forward_SDSController_AddISCSIInitiator_0        = runtime.ForwardResponseMessage
-	forward_SDSController_RemoveISCSIInitiator_0     = runtime.ForwardResponseMessage
-	forward_SDSController_ListISCSIInitiators_0      = runtime.ForwardResponseMessage
-	forward_SDSController_SetISCSIChap_0             = runtime.ForwardResponseMessage
-	forward_SDSController_GetISCSIChap_0             = runtime.ForwardResponseMessage
-	forward_SDSController_AddNVMeNamespace_0         = runtime.ForwardResponseMessage
-	forward_SDSController_RemoveNVMeNamespace_0      = runtime.ForwardResponseMessage
-	forward_SDSController_ListNVMeNamespaces_0       = runtime.ForwardResponseMessage
-	forward_SDSController_AddNVMeHost_0              = runtime.ForwardResponseMessage
-	forward_SDSController_RemoveNVMeHost_0           = runtime.ForwardResponseMessage
-	forward_SDSController_ListNVMeHosts_0            = runtime.ForwardResponseMessage
-	forward_SDSController_CreateZFSPool_0            = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteZFSPool_0            = runtime.ForwardResponseMessage
-	forward_SDSController_ListZFSpools_0             = runtime.ForwardResponseMessage
-	forward_SDSController_CreateZFSDataset_0         = runtime.ForwardResponseMessage
-	forward_SDSController_CreateZFSVolume_0          = runtime.ForwardResponseMessage
-	forward_SDSController_ResizeZFSVolume_0          = runtime.ForwardResponseMessage
-	forward_SDSController_ResizeZFSVolume_1          = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteZFSDataset_0         = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteZFSDataset_1         = runtime.ForwardResponseMessage
-	forward_SDSController_CreateZFSSnapshot_0        = runtime.ForwardResponseMessage
-	forward_SDSController_CreateZFSSnapshot_1        = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteZFSSnapshot_0        = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteZFSSnapshot_1        = runtime.ForwardResponseMessage
-	forward_SDSController_ListZFSSnapshots_0         = runtime.ForwardResponseMessage
-	forward_SDSController_ListZFSSnapshots_1         = runtime.ForwardResponseMessage
-	forward_SDSController_RestoreZFSSnapshot_0       = runtime.ForwardResponseMessage
-	forward_SDSController_RestoreZFSSnapshot_1       = runtime.ForwardResponseMessage
-	forward_SDSController_CloneZFSSnapshot_0         = runtime.ForwardResponseMessage
-	forward_SDSController_CloneZFSSnapshot_1         = runtime.ForwardResponseMessage
-	forward_SDSController_CreateLvmSnapshot_0        = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteLvmSnapshot_0        = runtime.ForwardResponseMessage
-	forward_SDSController_ListLvmSnapshots_0         = runtime.ForwardResponseMessage
-	forward_SDSController_RestoreLvmSnapshot_0       = runtime.ForwardResponseMessage
-	forward_SDSController_DrainNode_0                = runtime.ForwardResponseMessage
-	forward_SDSController_UndrainNode_0              = runtime.ForwardResponseMessage
-	forward_SDSController_ConvertPoolToThin_0        = runtime.ForwardResponseMessage
-	forward_SDSController_AddPoolCache_0             = runtime.ForwardResponseMessage
-	forward_SDSController_RemovePoolCache_0          = runtime.ForwardResponseMessage
-	forward_SDSController_ListAuditEvents_0          = runtime.ForwardResponseMessage
-	forward_SDSController_ListControllerLogs_0       = runtime.ForwardResponseMessage
-	forward_SDSController_CollectNodeDiagnostics_0   = runtime.ForwardResponseMessage
-	forward_SDSController_ListEvents_0               = runtime.ForwardResponseMessage
-	forward_SDSController_ListNotifyChannels_0       = runtime.ForwardResponseMessage
-	forward_SDSController_SaveNotifyChannel_0        = runtime.ForwardResponseMessage
-	forward_SDSController_DeleteNotifyChannel_0      = runtime.ForwardResponseMessage
-	forward_SDSController_TestNotifyChannel_0        = runtime.ForwardResponseMessage
-	forward_SDSController_RepairWanProxy_0           = runtime.ForwardResponseMessage
-	forward_SDSController_WatchEvents_0              = runtime.ForwardResponseStream
+	forward_SDSController_CreatePool_0                = runtime.ForwardResponseMessage
+	forward_SDSController_DeletePool_0                = runtime.ForwardResponseMessage
+	forward_SDSController_GetPool_0                   = runtime.ForwardResponseMessage
+	forward_SDSController_ListPools_0                 = runtime.ForwardResponseMessage
+	forward_SDSController_AddDiskToPool_0             = runtime.ForwardResponseMessage
+	forward_SDSController_RegisterNode_0              = runtime.ForwardResponseMessage
+	forward_SDSController_UnregisterNode_0            = runtime.ForwardResponseMessage
+	forward_SDSController_SetNodeLabels_0             = runtime.ForwardResponseMessage
+	forward_SDSController_SetNodeAddress_0            = runtime.ForwardResponseMessage
+	forward_SDSController_GetNode_0                   = runtime.ForwardResponseMessage
+	forward_SDSController_ListNodes_0                 = runtime.ForwardResponseMessage
+	forward_SDSController_HealthCheck_0               = runtime.ForwardResponseMessage
+	forward_SDSController_CreateResource_0            = runtime.ForwardResponseMessage
+	forward_SDSController_AdoptResource_0             = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteResource_0            = runtime.ForwardResponseMessage
+	forward_SDSController_GetResource_0               = runtime.ForwardResponseMessage
+	forward_SDSController_ListResources_0             = runtime.ForwardResponseMessage
+	forward_SDSController_CreateResourceProfile_0     = runtime.ForwardResponseMessage
+	forward_SDSController_GetResourceProfile_0        = runtime.ForwardResponseMessage
+	forward_SDSController_ListResourceProfiles_0      = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteResourceProfile_0     = runtime.ForwardResponseMessage
+	forward_SDSController_SetResourceProfileOptions_0 = runtime.ForwardResponseMessage
+	forward_SDSController_AdjustResourceProfile_0     = runtime.ForwardResponseMessage
+	forward_SDSController_GetResourceProfileMaxSize_0 = runtime.ForwardResponseMessage
+	forward_SDSController_SetResourceProfile_0        = runtime.ForwardResponseMessage
+	forward_SDSController_AddVolume_0                 = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveVolume_0              = runtime.ForwardResponseMessage
+	forward_SDSController_ResizeVolume_0              = runtime.ForwardResponseMessage
+	forward_SDSController_UpdateResourceOptions_0     = runtime.ForwardResponseMessage
+	forward_SDSController_RepairResource_0            = runtime.ForwardResponseMessage
+	forward_SDSController_ResourceStatus_0            = runtime.ForwardResponseMessage
+	forward_SDSController_SetPrimary_0                = runtime.ForwardResponseMessage
+	forward_SDSController_SetSecondary_0              = runtime.ForwardResponseMessage
+	forward_SDSController_SetDualPrimary_0            = runtime.ForwardResponseMessage
+	forward_SDSController_AttachDisklessClient_0      = runtime.ForwardResponseMessage
+	forward_SDSController_DetachDisklessClient_0      = runtime.ForwardResponseMessage
+	forward_SDSController_CreateFilesystem_0          = runtime.ForwardResponseMessage
+	forward_SDSController_MountResource_0             = runtime.ForwardResponseMessage
+	forward_SDSController_UnmountResource_0           = runtime.ForwardResponseMessage
+	forward_SDSController_MakeHa_0                    = runtime.ForwardResponseMessage
+	forward_SDSController_EvictHa_0                   = runtime.ForwardResponseMessage
+	forward_SDSController_SetTiebreaker_0             = runtime.ForwardResponseMessage
+	forward_SDSController_AddDR_0                     = runtime.ForwardResponseMessage
+	forward_SDSController_AddReplica_0                = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveReplica_0             = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteHa_0                  = runtime.ForwardResponseMessage
+	forward_SDSController_GetHa_0                     = runtime.ForwardResponseMessage
+	forward_SDSController_ListHa_0                    = runtime.ForwardResponseMessage
+	forward_SDSController_GetHaStatus_0               = runtime.ForwardResponseMessage
+	forward_SDSController_ListResourceAgents_0        = runtime.ForwardResponseMessage
+	forward_SDSController_GetResourceAgentMetadata_0  = runtime.ForwardResponseMessage
+	forward_SDSController_GetHaToml_0                 = runtime.ForwardResponseMessage
+	forward_SDSController_SyncHaToml_0                = runtime.ForwardResponseMessage
+	forward_SDSController_EnableSelfHa_0              = runtime.ForwardResponseMessage
+	forward_SDSController_DisableSelfHa_0             = runtime.ForwardResponseMessage
+	forward_SDSController_GetSelfHaStatus_0           = runtime.ForwardResponseMessage
+	forward_SDSController_CreateSnapshot_0            = runtime.ForwardResponseMessage
+	forward_SDSController_CreateSnapshot_1            = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteSnapshot_0            = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteSnapshot_1            = runtime.ForwardResponseMessage
+	forward_SDSController_RestoreSnapshot_0           = runtime.ForwardResponseMessage
+	forward_SDSController_RestoreSnapshot_1           = runtime.ForwardResponseMessage
+	forward_SDSController_ListSnapshots_0             = runtime.ForwardResponseMessage
+	forward_SDSController_ListSnapshots_1             = runtime.ForwardResponseMessage
+	forward_SDSController_PopulateVolume_0            = runtime.ForwardResponseMessage
+	forward_SDSController_CreateSnapshotSchedule_0    = runtime.ForwardResponseMessage
+	forward_SDSController_ListSnapshotSchedules_0     = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteSnapshotSchedule_0    = runtime.ForwardResponseMessage
+	forward_SDSController_AddBackupTarget_0           = runtime.ForwardResponseMessage
+	forward_SDSController_ListBackupTargets_0         = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteBackupTarget_0        = runtime.ForwardResponseMessage
+	forward_SDSController_CreateBackup_0              = runtime.ForwardResponseMessage
+	forward_SDSController_ListBackups_0               = runtime.ForwardResponseMessage
+	forward_SDSController_RestoreBackup_0             = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteBackup_0              = runtime.ForwardResponseMessage
+	forward_SDSController_CreateNFSGateway_0          = runtime.ForwardResponseMessage
+	forward_SDSController_CreateISCSIGateway_0        = runtime.ForwardResponseMessage
+	forward_SDSController_CreateNVMeGateway_0         = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteGateway_0             = runtime.ForwardResponseMessage
+	forward_SDSController_GetGateway_0                = runtime.ForwardResponseMessage
+	forward_SDSController_ListGateways_0              = runtime.ForwardResponseMessage
+	forward_SDSController_StartGateway_0              = runtime.ForwardResponseMessage
+	forward_SDSController_StopGateway_0               = runtime.ForwardResponseMessage
+	forward_SDSController_AddNFSExport_0              = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveNFSExport_0           = runtime.ForwardResponseMessage
+	forward_SDSController_ListNFSExports_0            = runtime.ForwardResponseMessage
+	forward_SDSController_AddISCSILUN_0               = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveISCSILUN_0            = runtime.ForwardResponseMessage
+	forward_SDSController_ListISCSILUNs_0             = runtime.ForwardResponseMessage
+	forward_SDSController_AddISCSIInitiator_0         = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveISCSIInitiator_0      = runtime.ForwardResponseMessage
+	forward_SDSController_ListISCSIInitiators_0       = runtime.ForwardResponseMessage
+	forward_SDSController_SetISCSIChap_0              = runtime.ForwardResponseMessage
+	forward_SDSController_GetISCSIChap_0              = runtime.ForwardResponseMessage
+	forward_SDSController_AddNVMeNamespace_0          = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveNVMeNamespace_0       = runtime.ForwardResponseMessage
+	forward_SDSController_ListNVMeNamespaces_0        = runtime.ForwardResponseMessage
+	forward_SDSController_AddNVMeHost_0               = runtime.ForwardResponseMessage
+	forward_SDSController_RemoveNVMeHost_0            = runtime.ForwardResponseMessage
+	forward_SDSController_ListNVMeHosts_0             = runtime.ForwardResponseMessage
+	forward_SDSController_CreateZFSPool_0             = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteZFSPool_0             = runtime.ForwardResponseMessage
+	forward_SDSController_ListZFSpools_0              = runtime.ForwardResponseMessage
+	forward_SDSController_CreateZFSDataset_0          = runtime.ForwardResponseMessage
+	forward_SDSController_CreateZFSVolume_0           = runtime.ForwardResponseMessage
+	forward_SDSController_ResizeZFSVolume_0           = runtime.ForwardResponseMessage
+	forward_SDSController_ResizeZFSVolume_1           = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteZFSDataset_0          = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteZFSDataset_1          = runtime.ForwardResponseMessage
+	forward_SDSController_CreateZFSSnapshot_0         = runtime.ForwardResponseMessage
+	forward_SDSController_CreateZFSSnapshot_1         = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteZFSSnapshot_0         = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteZFSSnapshot_1         = runtime.ForwardResponseMessage
+	forward_SDSController_ListZFSSnapshots_0          = runtime.ForwardResponseMessage
+	forward_SDSController_ListZFSSnapshots_1          = runtime.ForwardResponseMessage
+	forward_SDSController_RestoreZFSSnapshot_0        = runtime.ForwardResponseMessage
+	forward_SDSController_RestoreZFSSnapshot_1        = runtime.ForwardResponseMessage
+	forward_SDSController_CloneZFSSnapshot_0          = runtime.ForwardResponseMessage
+	forward_SDSController_CloneZFSSnapshot_1          = runtime.ForwardResponseMessage
+	forward_SDSController_CreateLvmSnapshot_0         = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteLvmSnapshot_0         = runtime.ForwardResponseMessage
+	forward_SDSController_ListLvmSnapshots_0          = runtime.ForwardResponseMessage
+	forward_SDSController_RestoreLvmSnapshot_0        = runtime.ForwardResponseMessage
+	forward_SDSController_DrainNode_0                 = runtime.ForwardResponseMessage
+	forward_SDSController_UndrainNode_0               = runtime.ForwardResponseMessage
+	forward_SDSController_ConvertPoolToThin_0         = runtime.ForwardResponseMessage
+	forward_SDSController_AddPoolCache_0              = runtime.ForwardResponseMessage
+	forward_SDSController_RemovePoolCache_0           = runtime.ForwardResponseMessage
+	forward_SDSController_ListAuditEvents_0           = runtime.ForwardResponseMessage
+	forward_SDSController_ListControllerLogs_0        = runtime.ForwardResponseMessage
+	forward_SDSController_CollectNodeDiagnostics_0    = runtime.ForwardResponseMessage
+	forward_SDSController_ListEvents_0                = runtime.ForwardResponseMessage
+	forward_SDSController_ListNotifyChannels_0        = runtime.ForwardResponseMessage
+	forward_SDSController_SaveNotifyChannel_0         = runtime.ForwardResponseMessage
+	forward_SDSController_DeleteNotifyChannel_0       = runtime.ForwardResponseMessage
+	forward_SDSController_TestNotifyChannel_0         = runtime.ForwardResponseMessage
+	forward_SDSController_RepairWanProxy_0            = runtime.ForwardResponseMessage
+	forward_SDSController_WatchEvents_0               = runtime.ForwardResponseStream
 )

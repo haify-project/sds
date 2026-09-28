@@ -236,6 +236,33 @@ func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb
 	}, nil
 }
 
+func (s *Server) SetNodeAddress(ctx context.Context, req *sdspb.SetNodeAddressRequest) (*sdspb.SetNodeAddressResponse, error) {
+	change, err := s.nodes.SetNodeAddress(ctx, req.Node, req.Address, req.ReplicationAddress)
+	if err != nil {
+		return &sdspb.SetNodeAddressResponse{Success: false, Message: err.Error()}, nil
+	}
+	s.resources.RenumberInResources(ctx, change)
+	for _, name := range change.WANResources {
+		resp, err := s.RepairWanProxy(ctx, &sdspb.RepairWanProxyRequest{Name: name})
+		switch {
+		case err != nil:
+			change.Failed = append(change.Failed, fmt.Sprintf("%s: rebuild WAN proxy: %v", name, err))
+		case !resp.Success:
+			change.Failed = append(change.Failed, fmt.Sprintf("%s: rebuild WAN proxy: %s", name, resp.Message))
+		}
+	}
+	msg := fmt.Sprintf("%s moved from %s to %s", change.Node, change.OldAddress, change.Address)
+	if change.ReplicationAddress != change.Address {
+		msg += fmt.Sprintf(" (DRBD on %s)", change.ReplicationAddress)
+	}
+	return &sdspb.SetNodeAddressResponse{
+		Success:   len(change.Failed) == 0,
+		Message:   msg,
+		Resources: change.Resources,
+		Failed:    change.Failed,
+	}, nil
+}
+
 func (s *Server) SetNodeLabels(ctx context.Context, req *sdspb.SetNodeLabelsRequest) (*sdspb.SetNodeLabelsResponse, error) {
 	node, err := s.nodes.SetNodeLabels(ctx, req.Node, req.Labels, req.Replace)
 	if err != nil {
@@ -558,6 +585,9 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 
 	var pbResources []*sdspb.ResourceInfo
 	for _, r := range resources {
+		if req.GetProfile() != "" && r.Profile != req.GetProfile() {
+			continue
+		}
 		var pbVolumes []*sdspb.VolumeInfo
 		for _, v := range r.Volumes {
 			pbVolumes = append(pbVolumes, &sdspb.VolumeInfo{
@@ -672,10 +702,76 @@ func (s *Server) DeleteResourceProfile(ctx context.Context, req *sdspb.DeleteRes
 	if s.ctrl == nil || s.ctrl.db == nil {
 		return &sdspb.DeleteResourceProfileResponse{Success: false, Message: "database not available"}, nil
 	}
+	// A profile with members is their group: deleting it would leave each
+	// pointing at nothing, and the next adjust or option change would miss
+	// them without a word.
+	if members, err := s.resources.profileMembers(ctx, req.Name); err == nil && len(members) > 0 {
+		names := make([]string, len(members))
+		for i, m := range members {
+			names[i] = m.Name
+		}
+		return &sdspb.DeleteResourceProfileResponse{Success: false, Message: fmt.Sprintf(
+			"profile %s still has %d member(s): %s; take them out first (resource set-profile <resource> --none)",
+			req.Name, len(names), strings.Join(names, ", "))}, nil
+	}
 	if err := s.ctrl.db.DeleteResourceProfile(ctx, req.Name); err != nil {
 		return &sdspb.DeleteResourceProfileResponse{Success: false, Message: err.Error()}, nil
 	}
 	return &sdspb.DeleteResourceProfileResponse{Success: true, Message: "Resource profile deleted"}, nil
+}
+
+func memberResultsToProto(results []ProfileMemberResult) ([]*sdspb.ProfileMemberResult, bool) {
+	out := make([]*sdspb.ProfileMemberResult, 0, len(results))
+	ok := true
+	for _, r := range results {
+		out = append(out, &sdspb.ProfileMemberResult{Resource: r.Resource, Success: r.OK, Message: r.Message})
+		ok = ok && r.OK
+	}
+	return out, ok
+}
+
+func (s *Server) SetResourceProfileOptions(ctx context.Context, req *sdspb.SetResourceProfileOptionsRequest) (*sdspb.SetResourceProfileOptionsResponse, error) {
+	profile, results, err := s.resources.SetProfileOptions(ctx, req.Name, req.Options)
+	if err != nil {
+		return &sdspb.SetResourceProfileOptionsResponse{Success: false, Message: err.Error(), Profile: profileToProto(profile)}, nil
+	}
+	members, ok := memberResultsToProto(results)
+	msg := fmt.Sprintf("options saved on %s and applied to %d member(s)", req.Name, len(members))
+	if !ok {
+		msg = fmt.Sprintf("options saved on %s; some members failed", req.Name)
+	}
+	return &sdspb.SetResourceProfileOptionsResponse{Success: ok, Message: msg, Profile: profileToProto(profile), Members: members}, nil
+}
+
+func (s *Server) AdjustResourceProfile(ctx context.Context, req *sdspb.AdjustResourceProfileRequest) (*sdspb.AdjustResourceProfileResponse, error) {
+	results, err := s.resources.AdjustProfile(ctx, req.Name, req.DryRun)
+	if err != nil {
+		return &sdspb.AdjustResourceProfileResponse{Success: false, Message: err.Error()}, nil
+	}
+	members, ok := memberResultsToProto(results)
+	msg := fmt.Sprintf("%d member(s) adjusted", len(members))
+	if req.DryRun {
+		msg = fmt.Sprintf("dry run over %d member(s); nothing changed", len(members))
+	}
+	return &sdspb.AdjustResourceProfileResponse{Success: ok, Message: msg, Members: members}, nil
+}
+
+func (s *Server) GetResourceProfileMaxSize(ctx context.Context, req *sdspb.GetResourceProfileMaxSizeRequest) (*sdspb.GetResourceProfileMaxSizeResponse, error) {
+	size, nodes, thin, err := s.resources.ProfileMaxSize(ctx, req.Name)
+	if err != nil {
+		return &sdspb.GetResourceProfileMaxSizeResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.GetResourceProfileMaxSizeResponse{Success: true, MaxSizeGb: size, Nodes: nodes, Thin: thin}, nil
+}
+
+func (s *Server) SetResourceProfile(ctx context.Context, req *sdspb.SetResourceProfileRequest) (*sdspb.SetResourceProfileResponse, error) {
+	if err := s.resources.AssignProfile(ctx, req.Resource, req.Profile); err != nil {
+		return &sdspb.SetResourceProfileResponse{Success: false, Message: err.Error()}, nil
+	}
+	if req.Profile == "" {
+		return &sdspb.SetResourceProfileResponse{Success: true, Message: req.Resource + " is in no profile"}, nil
+	}
+	return &sdspb.SetResourceProfileResponse{Success: true, Message: fmt.Sprintf("%s is a member of %s", req.Resource, req.Profile)}, nil
 }
 
 func (s *Server) AddVolume(ctx context.Context, req *sdspb.AddVolumeRequest) (*sdspb.AddVolumeResponse, error) {

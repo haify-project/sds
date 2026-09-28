@@ -1846,6 +1846,44 @@
         ]
       }
     },
+    "/v1/nodes/{node}/address": {
+      "post": {
+        "operationId": "SDSController_SetNodeAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetNodeAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetNodeAddressBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/nodes/{node}/health": {
       "get": {
         "operationId": "SDSController_HealthCheck",
@@ -2426,6 +2464,112 @@
         ]
       }
     },
+    "/v1/resource-profiles/{name}/adjust": {
+      "post": {
+        "operationId": "SDSController_AdjustResourceProfile",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AdjustResourceProfileResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerAdjustResourceProfileBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resource-profiles/{name}/max-size": {
+      "get": {
+        "operationId": "SDSController_GetResourceProfileMaxSize",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetResourceProfileMaxSizeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resource-profiles/{name}/options": {
+      "post": {
+        "operationId": "SDSController_SetResourceProfileOptions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetResourceProfileOptionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetResourceProfileOptionsBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources": {
       "get": {
         "operationId": "SDSController_ListResources",
@@ -2443,6 +2587,15 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "profile",
+            "description": "profile, when set, lists only that profile's members.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
         "tags": [
           "SDSController"
         ]
@@ -3112,6 +3265,44 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/SDSControllerSetPrimaryBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/profile": {
+      "post": {
+        "operationId": "SDSController_SetResourceProfile",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetResourceProfileResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetResourceProfileBody"
             }
           }
         ],
@@ -4741,6 +4932,15 @@
         }
       }
     },
+    "SDSControllerAdjustResourceProfileBody": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        }
+      },
+      "description": "AdjustResourceProfileRequest brings every member into line with its profile:\nDRBD options applied, missing replicas added. Replicas beyond the profile's\ncount are reported, never removed."
+    },
     "SDSControllerAdoptResourceBody": {
       "type": "object",
       "properties": {
@@ -4994,6 +5194,19 @@
       },
       "description": "SetDualPrimary toggles DRBD's allow-two-primaries for a resource. It exists\nfor the live-migration hand-off in the Proxmox VE storage plugin, where the\nsource and target hypervisor both hold the disk open for a moment.\n\nThe toggle is applied at RUNTIME only (drbdadm net-options) and never written\ninto the .res file, so a reboot or `drbdadm adjust` restores single-primary\non its own."
     },
+    "SDSControllerSetNodeAddressBody": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "replicationAddress": {
+          "type": "string",
+          "description": "replication_address moves DRBD traffic to a separate network; empty keeps\nthe node's current choice (none = the management address)."
+        }
+      },
+      "description": "SetNodeAddressRequest renumbers a registered node: the controller reaches it\nat the new address, checks it is the same machine, and rewrites every place\nthe old address was recorded — the node registry, /etc/hosts on the nodes,\nand the DRBD config of each resource the node takes part in."
+    },
     "SDSControllerSetNodeLabelsBody": {
       "type": "object",
       "properties": {
@@ -5023,6 +5236,27 @@
           "description": "quorum_guarded requests a SAFE hard-failover promote: the controller tries\na normal (non-forced) promote first and only escalates to `drbdadm primary\n--force` if the target node currently holds DRBD quorum (majority). If the\nnode lacks quorum the promote is REFUSED (forcing without quorum could\nsplit-brain). When set, `force` is ignored. Used by the CSI node plugin so\na Pod rescheduled after a hard node failure promotes the survivor iff it is\nsafe to do so."
         }
       }
+    },
+    "SDSControllerSetResourceProfileBody": {
+      "type": "object",
+      "properties": {
+        "profile": {
+          "type": "string"
+        }
+      },
+      "description": "SetResourceProfileRequest makes a resource a member of a profile (applying\nits DRBD options), or takes it out with an empty profile."
+    },
+    "SDSControllerSetResourceProfileOptionsBody": {
+      "type": "object",
+      "properties": {
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "SetResourceProfileOptionsRequest records DRBD options on a profile and\napplies them to every member."
     },
     "SDSControllerSetSecondaryBody": {
       "type": "object",
@@ -5346,6 +5580,24 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1AdjustResourceProfileResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ProfileMemberResult"
+          }
         }
       }
     },
@@ -6684,6 +6936,32 @@
         }
       }
     },
+    "v1GetResourceProfileMaxSizeResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "maxSizeGb": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "thin": {
+          "type": "boolean",
+          "description": "thin: the pool is over-provisioned, so the size is what fits without\novercommitting rather than a hard limit."
+        }
+      },
+      "description": "GetResourceProfileMaxSizeResponse is the largest volume a new member could\nget now, and the nodes it would land on."
+    },
     "v1GetResourceProfileResponse": {
       "type": "object",
       "properties": {
@@ -7715,6 +7993,21 @@
         }
       }
     },
+    "v1ProfileMemberResult": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "description": "ProfileMemberResult is what a profile operation did to one member resource."
+    },
     "v1QuorumInfo": {
       "type": "object",
       "properties": {
@@ -8362,6 +8655,31 @@
         }
       }
     },
+    "v1SetNodeAddressResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "resources whose DRBD config now carries the new address."
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "failed names each resource that could not be rewritten, with the reason."
+        }
+      }
+    },
     "v1SetNodeLabelsResponse": {
       "type": "object",
       "properties": {
@@ -8377,6 +8695,38 @@
       }
     },
     "v1SetPrimaryResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetResourceProfileOptionsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/definitions/v1ResourceProfile"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ProfileMemberResult"
+          }
+        }
+      }
+    },
+    "v1SetResourceProfileResponse": {
       "type": "object",
       "properties": {
         "success": {
