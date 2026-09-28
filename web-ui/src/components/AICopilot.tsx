@@ -17,7 +17,10 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import {
+  ApprovalGoneError,
+  decideApproval,
   streamChat,
+  type AIApproval,
   type AIEvent,
   type AISuggestion,
 } from '@/lib/aiClient';
@@ -42,6 +45,7 @@ interface Msg {
   text: string;
   tools: ToolTrace[];
   suggestions: AISuggestion[];
+  approvals: AIApproval[];
   error?: string;
 }
 
@@ -156,15 +160,7 @@ function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
       </div>
 
       <div className="mt-1.5 font-mono font-medium">{suggestion.action}</div>
-      {Object.keys(suggestion.params).length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {Object.entries(suggestion.params).map(([k, v]) => (
-            <span key={k} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">
-              {k}=<span className="text-foreground">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
-            </span>
-          ))}
-        </div>
-      )}
+      <ArgChips args={suggestion.params} />
       {suggestion.reason && <p className="mt-1.5 text-muted-foreground">{suggestion.reason}</p>}
 
       {blocked && (
@@ -211,6 +207,83 @@ function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
             onClick={() => setState('dismissed')}
           >
             Dismiss
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArgChips({ args }: { args: Record<string, unknown> }) {
+  if (Object.keys(args).length === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {Object.entries(args).map(([k, v]) => (
+        <span key={k} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">
+          {k}=<span className="text-foreground">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ApprovalCard answers a write call the agent is holding. Nothing has run yet:
+// Approve runs exactly these arguments, Reject tells the agent it may not.
+function ApprovalCard({ approval }: { approval: AIApproval }) {
+  const [state, setState] = useState<'waiting' | 'sending' | 'approved' | 'rejected' | 'gone'>('waiting');
+
+  const decide = async (approve: boolean) => {
+    setState('sending');
+    try {
+      await decideApproval(approval.id, approve);
+      setState(approve ? 'approved' : 'rejected');
+    } catch (e) {
+      if (e instanceof ApprovalGoneError) {
+        setState('gone');
+        return;
+      }
+      setState('waiting');
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  return (
+    <div className="mt-2 rounded-md border border-l-2 border-border border-l-amber-500 bg-card p-3 text-xs">
+      <div className="flex items-center gap-1.5">
+        <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+        <span className="text-[0.7rem] font-medium text-muted-foreground">Approval required</span>
+      </div>
+      <div className="mt-1.5 font-mono font-medium">{approval.name}</div>
+      <ArgChips args={approval.args} />
+
+      {state === 'approved' || state === 'rejected' || state === 'gone' ? (
+        <div
+          className={cn(
+            'mt-2 flex items-center gap-1.5',
+            state === 'approved' ? 'text-emerald-500' : 'text-muted-foreground',
+          )}
+        >
+          {state === 'approved' ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+          <span>{state === 'approved' ? 'Approved' : state === 'rejected' ? 'Rejected' : 'No longer pending'}</span>
+        </div>
+      ) : (
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            className="h-7 px-2 text-xs"
+            disabled={state === 'sending'}
+            onClick={() => decide(true)}
+          >
+            {state === 'sending' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Approve'}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            disabled={state === 'sending'}
+            onClick={() => decide(false)}
+          >
+            Reject
           </Button>
         </div>
       )}
@@ -292,8 +365,8 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
     if (!q || busy) return;
     setInput('');
     setBusy(true);
-    const userMsg: Msg = { id: nextId(), role: 'user', text: q, tools: [], suggestions: [] };
-    const botMsg: Msg = { id: nextId(), role: 'assistant', text: '', tools: [], suggestions: [] };
+    const userMsg: Msg = { id: nextId(), role: 'user', text: q, tools: [], suggestions: [], approvals: [] };
+    const botMsg: Msg = { id: nextId(), role: 'assistant', text: '', tools: [], suggestions: [], approvals: [] };
     setMessages((prev) => [...prev, userMsg, botMsg]);
 
     const onEvent = (e: AIEvent) => {
@@ -333,6 +406,11 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
             const key = (s: AISuggestion) => `${s.action}|${JSON.stringify(s.params)}`;
             if (m.suggestions.some((s) => key(s) === key(e.suggestion))) return;
             m.suggestions = [...m.suggestions, e.suggestion];
+          });
+          break;
+        case 'approval':
+          patchLast((m) => {
+            m.approvals = [...m.approvals, e.approval];
           });
           break;
         case 'error':
@@ -428,6 +506,9 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
                     })}
                   </div>
                 )}
+                {m.approvals.map((a) => (
+                  <ApprovalCard key={a.id} approval={a} />
+                ))}
                 {m.text && <StreamingMarkdown text={m.text} />}
                 {m.suggestions.map((s, i) => (
                   <SuggestionCard key={i} suggestion={s} />

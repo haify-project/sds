@@ -23,6 +23,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -86,10 +87,11 @@ func main() {
 		// The drbd-reactor.db index is 1024-dim; the embedder model comes from
 		// OPSDOCTOR_EMB_MODEL (must match how the index was built — see spec O1).
 		EmbDim: embDim,
-		// Mount the sds cluster tools read-only: observational tools reach the
-		// agent, and every change to storage is proposed via suggest_action and
-		// approved in the UI, executed through the controller REST.
-		MCPServers: mcpServers(),
+		// Mount the sds cluster tools read-only plus the day-to-day writes
+		// (dailyOps). Every write is held until the operator approves it in
+		// the chat panel, with the arguments it will run with in front of them.
+		MCPServers:    mcpServers(),
+		ApproveWrites: true,
 	})
 	if err != nil {
 		log.Fatalf("init agent: %v", err)
@@ -108,6 +110,7 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "mcp": ag.MCPStatus()})
 	})
 	mux.HandleFunc("/ai/chat/stream", streamHandler(ag))
+	mux.HandleFunc("/ai/chat/approve", approveHandler(ag))
 	// Knowledge-base update surface (POST /ai/kb/{doc,ingest,refresh,purge}).
 	registerKBRoutes(mux, ag)
 	// Which model answers, readable always and writable only with a token.
@@ -125,10 +128,11 @@ func main() {
 	}
 }
 
-// dailyOps are the sds-mcp write tools the agent calls directly: the ones the
-// server marks non-destructive (create, add, start, mount, resize up, set).
-// Deleting, restoring, evicting, draining and stopping stay behind
-// suggest_action and the operator's approval.
+// dailyOps are the sds-mcp write tools the agent may call, each only after the
+// operator approves that call in the chat panel: the ones the server marks
+// non-destructive (create, add, start, mount, resize up, set). Deleting,
+// restoring, evicting, draining and stopping are not mounted at all; the agent
+// proposes them with suggest_action and the operator runs them from the UI.
 var dailyOps = []string{
 	"sds_backup_create",
 	"sds_gateway_create_iscsi",
@@ -288,6 +292,10 @@ func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 						},
 					})
 				}
+			case opsdoctor.EventApproval:
+				if a := ev.Approval; a != nil {
+					frame(map[string]any{"t": "approval", "id": a.ID, "server": a.Server, "name": a.Tool, "args": a.Args})
+				}
 			case opsdoctor.EventError:
 				frame(map[string]any{"t": "error", "d": ev.Text})
 			}
@@ -296,5 +304,36 @@ func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 			frame(map[string]any{"t": "error", "d": err.Error()})
 		}
 		frame(map[string]any{"t": "done"})
+	}
+}
+
+// approveHandler takes the operator's decision on a write call the agent is
+// holding (an "approval" frame on its stream): {"id", "approve", "reason"}.
+// It answers 404 when nothing is waiting under the id — decided already, or
+// its conversation ended — so a second click cannot run a call twice.
+func approveHandler(ag *opsdoctor.Agent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "use POST", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			ID      string `json:"id"`
+			Approve bool   `json:"approve"`
+			Reason  string `json:"reason"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
+			http.Error(w, "missing id", http.StatusBadRequest)
+			return
+		}
+		if err := ag.Decide(body.ID, body.Approve, body.Reason); err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, opsdoctor.ErrNoSuchApproval) {
+				status = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

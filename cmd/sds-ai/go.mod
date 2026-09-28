@@ -2,7 +2,7 @@ module github.com/liliang-cn/sds/cmd/sds-ai
 
 go 1.26.0
 
-require github.com/liliang-cn/opsdoctor v0.46.0
+require github.com/liliang-cn/opsdoctor v0.48.0
 
 require (
 	github.com/0x51-dev/rdf v0.1.0 // indirect

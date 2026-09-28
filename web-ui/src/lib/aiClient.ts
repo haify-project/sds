@@ -9,6 +9,8 @@ import { getApiToken } from '@/services/api';
 //   {"t":"tool_result","name":..}         that tool returned
 //   {"t":"text","d":".."}                 answer delta
 //   {"t":"suggestion", ...}               a guarded action proposal (v0.4.0)
+//   {"t":"approval","id":..,"name":..,"args":{..}}  a write call held until
+//                                         decideApproval answers it
 //   {"t":"error","d":".."} | {"t":"done"}
 //
 // The `suggestion` frame shape is normalized in parseSuggestion() below and will
@@ -41,18 +43,29 @@ export interface AISuggestion {
   verdict?: AIVerdict; // red-line wall result attached by the agent
 }
 
+/** A write tool call the agent is holding until the operator decides. */
+export interface AIApproval {
+  id: string;
+  server: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
 export type AIEvent =
   | { type: 'text'; delta: string }
   | { type: 'reset' } // discard answer text streamed so far (a preamble)
   | { type: 'tool'; name: string; args?: unknown }
   | { type: 'tool_result'; name: string }
   | { type: 'suggestion'; suggestion: AISuggestion }
+  | { type: 'approval'; approval: AIApproval }
   | { type: 'error'; message: string }
   | { type: 'done' };
 
 // Raw NDJSON frame as emitted by oss-agent serve.
 interface RawFrame {
   t: string;
+  id?: string;
+  server?: string;
   name?: string;
   args?: unknown;
   d?: string;
@@ -99,6 +112,18 @@ function frameToEvent(f: RawFrame): AIEvent | null {
       const s = parseSuggestion(f);
       return s ? { type: 'suggestion', suggestion: s } : null;
     }
+    case 'approval':
+      return f.id
+        ? {
+            type: 'approval',
+            approval: {
+              id: f.id,
+              server: f.server ?? '',
+              name: f.name ?? '',
+              args: (f.args as Record<string, unknown>) ?? {},
+            },
+          }
+        : null;
     case 'error':
       return { type: 'error', message: f.d ?? 'stream error' };
     case 'done':
@@ -174,6 +199,27 @@ export async function streamChat(
     }
   }
   return { sessionId: sid };
+}
+
+/** The call is no longer waiting: decided already, or its conversation ended. */
+export class ApprovalGoneError extends Error {}
+
+// decideApproval answers a held write call. Approving runs it with exactly the
+// arguments in its approval frame; the agent then continues from the result.
+export async function decideApproval(id: string, approve: boolean, reason?: string): Promise<void> {
+  const token = getApiToken();
+  const res = await fetch(`${aiBase()}/ai/chat/approve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ id, approve, reason: reason ?? '' }),
+  });
+  if (res.status === 404) throw new ApprovalGoneError('no longer waiting for a decision');
+  if (!res.ok) {
+    throw new Error(`${res.status}: ${(await res.text().catch(() => '')) || res.statusText}`);
+  }
 }
 
 // ── Copilot settings ────────────────────────────────────────────────────
