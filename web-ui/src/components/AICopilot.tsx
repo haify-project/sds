@@ -22,6 +22,7 @@ import {
   streamChat,
   type AIApproval,
   type AIEvent,
+  type AIOutcome,
   type AISuggestion,
 } from '@/lib/aiClient';
 
@@ -46,6 +47,7 @@ interface Msg {
   tools: ToolTrace[];
   suggestions: AISuggestion[];
   approvals: AIApproval[];
+  outcome?: AIOutcome;
   error?: string;
 }
 
@@ -291,6 +293,30 @@ function ApprovalCard({ approval }: { approval: AIApproval }) {
   );
 }
 
+function OutcomeStrip({ outcome }: { outcome: AIOutcome }) {
+  const blocked = outcome.status === 'blocked';
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-1.5 rounded-md border p-2 text-xs',
+        blocked
+          ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      )}
+    >
+      {blocked ? (
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      ) : (
+        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      )}
+      <span>
+        <span className="font-medium">{blocked ? 'Blocked' : 'Done'}</span>
+        {outcome.text && <span className="text-foreground/80"> — {outcome.text}</span>}
+      </span>
+    </div>
+  );
+}
+
 export function AICopilot({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -413,6 +439,11 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
             m.approvals = [...m.approvals, e.approval];
           });
           break;
+        case 'outcome':
+          patchLast((m) => {
+            m.outcome = e.outcome;
+          });
+          break;
         case 'error':
           patchLast((m) => {
             m.error = e.message;
@@ -510,6 +541,7 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
                   <ApprovalCard key={a.id} approval={a} />
                 ))}
                 {m.text && <StreamingMarkdown text={m.text} />}
+                {m.outcome && <OutcomeStrip outcome={m.outcome} />}
                 {m.suggestions.map((s, i) => (
                   <SuggestionCard key={i} suggestion={s} />
                 ))}

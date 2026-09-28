@@ -296,6 +296,10 @@ func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 				if a := ev.Approval; a != nil {
 					frame(map[string]any{"t": "approval", "id": a.ID, "server": a.Server, "name": a.Tool, "args": a.Args})
 				}
+			case opsdoctor.EventOutcome:
+				if o := ev.Outcome; o != nil {
+					frame(map[string]any{"t": "outcome", "status": o.Status, "d": o.Text})
+				}
 			case opsdoctor.EventError:
 				frame(map[string]any{"t": "error", "d": ev.Text})
 			}

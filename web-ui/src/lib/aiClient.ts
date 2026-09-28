@@ -11,6 +11,7 @@ import { getApiToken } from '@/services/api';
 //   {"t":"suggestion", ...}               a guarded action proposal (v0.4.0)
 //   {"t":"approval","id":..,"name":..,"args":{..}}  a write call held until
 //                                         decideApproval answers it
+//   {"t":"outcome","status":"complete"|"blocked","d":".."}  how the turn ended
 //   {"t":"error","d":".."} | {"t":"done"}
 //
 // The `suggestion` frame shape is normalized in parseSuggestion() below and will
@@ -51,6 +52,12 @@ export interface AIApproval {
   args: Record<string, unknown>;
 }
 
+/** How a turn ended. text is empty when the answer already says it. */
+export interface AIOutcome {
+  status: 'complete' | 'blocked';
+  text: string;
+}
+
 export type AIEvent =
   | { type: 'text'; delta: string }
   | { type: 'reset' } // discard answer text streamed so far (a preamble)
@@ -58,6 +65,7 @@ export type AIEvent =
   | { type: 'tool_result'; name: string }
   | { type: 'suggestion'; suggestion: AISuggestion }
   | { type: 'approval'; approval: AIApproval }
+  | { type: 'outcome'; outcome: AIOutcome }
   | { type: 'error'; message: string }
   | { type: 'done' };
 
@@ -65,6 +73,7 @@ export type AIEvent =
 interface RawFrame {
   t: string;
   id?: string;
+  status?: string;
   server?: string;
   name?: string;
   args?: unknown;
@@ -124,6 +133,11 @@ function frameToEvent(f: RawFrame): AIEvent | null {
             },
           }
         : null;
+    case 'outcome':
+      return {
+        type: 'outcome',
+        outcome: { status: f.status === 'blocked' ? 'blocked' : 'complete', text: f.d ?? '' },
+      };
     case 'error':
       return { type: 'error', message: f.d ?? 'stream error' };
     case 'done':
