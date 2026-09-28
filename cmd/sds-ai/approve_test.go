@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liliang-cn/opsdoctor"
+	"github.com/liliang-cn/opspilot"
 )
 
 func TestApproveNeedsAnID(t *testing.T) {
-	h := approveHandler(&opsdoctor.Agent{})
+	h := approveHandler(&opspilot.Agent{})
 	for _, tc := range []struct {
 		method, body string
 		want         int

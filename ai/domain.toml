@@ -281,7 +281,7 @@ to   = ["ErrorCode", "State"]
 name = "replicates_to"
 from = ["Replica", "Node", "DRBDResource"]
 to   = ["Replica", "Node", "DRBDResource"]
-# Read by alchemy only (OPSDOCTOR_ALCHEMY_ADDR). Identical ends make this a
+# Read by alchemy only (OPSPILOT_ALCHEMY_ADDR). Identical ends make this a
 # self-relation for cortexdb's traversal, but alchemy asks a different question
 # — may both directions be true at once? — and its default answer is no. A
 # document saying node-b and node-e replicate to each other is then two sources

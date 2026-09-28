@@ -423,7 +423,7 @@ backend and an LLM/embedder (e.g. DashScope).
 - Binaries on every node (so it can ride Self-HA): `/opt/sds/bin/{sds-ai,sds-mcp}`.
 - Config on the Self-HA DRBD mount (so it follows failover): `/var/lib/sds/ai/`
   with `sds-ai.env` + `domain.toml`. Key env:
-  `OPSDOCTOR_LLM_API_KEY/BASE_URL/MODEL`, `OPSDOCTOR_EMB_*`, `SDS_AI_EMB_DIM`,
+  `OPSPILOT_LLM_API_KEY/BASE_URL/MODEL`, `OPSPILOT_EMB_*`, `SDS_AI_EMB_DIM`,
   `SDS_AI_KNOWLEDGE_DB`,
   `SDS_AI_CONTROLLER=127.0.0.1:3374`, `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`,
   `SDS_AI_ADDR=:7634`.

@@ -1,4 +1,4 @@
-// Command sds-ai hosts the SDS AI Copilot backend. It imports the opsdoctor
+// Command sds-ai hosts the SDS AI Copilot backend. It imports the opspilot
 // library, wires it to the read-only sds-mcp cluster tools and the drbd-reactor
 // knowledge base, and serves a single NDJSON streaming endpoint the sds web-ui
 // Copilot sidebar talks to.
@@ -17,8 +17,8 @@
 //	SDS_AI_EMB_DIM        embedding dim of the knowledge index (default 1024)
 //	SDS_AI_KUBECONFIG     kubeconfig for the sds-k8s tools (`sds-mcp k8s`); unset = bare-metal tools only
 //	SDS_AI_ALLOW_ORIGIN   CORS allow-origin (default "*")
-//	OPSDOCTOR_LLM_API_KEY / _BASE_URL / _MODEL   LLM (opsdoctor also reads the old OSS_* names)
-//	OPSDOCTOR_EMB_MODEL / _BASE_URL / _API_KEY   embedder (must match the index)
+//	OPSPILOT_LLM_API_KEY / _BASE_URL / _MODEL   LLM (opspilot also reads the old OPSDOCTOR_* and OSS_* names)
+//	OPSPILOT_EMB_MODEL / _BASE_URL / _API_KEY   embedder (must match the index)
 package main
 
 import (
@@ -30,7 +30,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liliang-cn/opsdoctor"
+	"github.com/liliang-cn/opspilot"
 )
 
 func envOr(key, def string) string {
@@ -74,9 +74,9 @@ func main() {
 	}
 
 	embDim := atoiOr("SDS_AI_EMB_DIM", 1024)
-	embModel := envOr("OPSDOCTOR_EMB_MODEL", os.Getenv("OSS_EMB_MODEL"))
+	embModel := envOr("OPSPILOT_EMB_MODEL", envOr("OPSDOCTOR_EMB_MODEL", os.Getenv("OSS_EMB_MODEL")))
 
-	ag, err := opsdoctor.New(opsdoctor.Config{
+	ag, err := opspilot.New(opspilot.Config{
 		KnowledgeDBPath: knowledgeDB,
 		DomainFile:      envOr("SDS_AI_DOMAIN", "ai/domain.toml"),
 		// Empty fields fall through to the environment, which is what makes the
@@ -85,7 +85,7 @@ func main() {
 		LLMModel:   saved.LLMModel,
 		LLMAPIKey:  saved.LLMAPIKey,
 		// The drbd-reactor.db index is 1024-dim; the embedder model comes from
-		// OPSDOCTOR_EMB_MODEL (must match how the index was built — see spec O1).
+		// OPSPILOT_EMB_MODEL (must match how the index was built — see spec O1).
 		EmbDim: embDim,
 		// Mount the sds cluster tools read-only plus the day-to-day writes
 		// (dailyOps). Every write is held until the operator approves it in
@@ -179,10 +179,10 @@ var k8sDailyOps = []string{"sds_k8s_app_create"}
 // to the controller, and — when a kubeconfig is set — the Kubernetes (CSI)
 // tools, which talk to the API server. Both are read-only except for their
 // day-to-day operations, enforced on both sides: sds-mcp registers nothing
-// else that writes, and opsdoctor mounts nothing else that does.
-func mcpServers() []opsdoctor.MCPServerSpec {
+// else that writes, and opspilot mounts nothing else that does.
+func mcpServers() []opspilot.MCPServerSpec {
 	cmd := envOr("SDS_AI_MCP_CMD", "sds-mcp")
-	specs := []opsdoctor.MCPServerSpec{{
+	specs := []opspilot.MCPServerSpec{{
 		Name:      "sds",
 		Transport: "stdio",
 		Command:   cmd,
@@ -192,7 +192,7 @@ func mcpServers() []opsdoctor.MCPServerSpec {
 		WriteToolAllow: dailyOps,
 	}}
 	if kc := os.Getenv("SDS_AI_KUBECONFIG"); kc != "" {
-		specs = append(specs, opsdoctor.MCPServerSpec{
+		specs = append(specs, opspilot.MCPServerSpec{
 			Name:           "sds-k8s",
 			Transport:      "stdio",
 			Command:        cmd,
@@ -229,7 +229,7 @@ type chatBody struct {
 //	{"t":"tool","name":..,"args":{..}}   {"t":"tool_result","name":..}
 //	{"t":"text","d":".."}   {"t":"reset"}   {"t":"suggestion", <Suggestion>}
 //	{"t":"error","d":".."}   {"t":"done"}
-func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
+func streamHandler(ag *opspilot.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "use POST", http.StatusMethodNotAllowed)
@@ -264,19 +264,19 @@ func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 		// dropped — so every turn of the sidebar started from nothing and
 		// "so how do I fix it" had no idea what "it" was. An empty id still
 		// runs stateless, which is what a scripted one-shot caller wants.
-		_, _, err := ag.Stream(r.Context(), body.SessionID, body.Message, func(ev opsdoctor.Event) {
+		_, _, err := ag.Stream(r.Context(), body.SessionID, body.Message, func(ev opspilot.Event) {
 			switch ev.Kind {
-			case opsdoctor.EventText:
+			case opspilot.EventText:
 				if ev.Text != "" {
 					frame(map[string]any{"t": "text", "d": ev.Text})
 				}
-			case opsdoctor.EventReset:
+			case opspilot.EventReset:
 				frame(map[string]any{"t": "reset"})
-			case opsdoctor.EventToolCall:
+			case opspilot.EventToolCall:
 				frame(map[string]any{"t": "tool", "name": ev.Tool, "args": ev.Args})
-			case opsdoctor.EventToolResult:
+			case opspilot.EventToolResult:
 				frame(map[string]any{"t": "tool_result", "name": ev.Tool})
-			case opsdoctor.EventSuggestion:
+			case opspilot.EventSuggestion:
 				if s := ev.Suggestion; s != nil {
 					frame(map[string]any{
 						"t":        "suggestion",
@@ -292,15 +292,15 @@ func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 						},
 					})
 				}
-			case opsdoctor.EventApproval:
+			case opspilot.EventApproval:
 				if a := ev.Approval; a != nil {
 					frame(map[string]any{"t": "approval", "id": a.ID, "server": a.Server, "name": a.Tool, "args": a.Args})
 				}
-			case opsdoctor.EventOutcome:
+			case opspilot.EventOutcome:
 				if o := ev.Outcome; o != nil {
 					frame(map[string]any{"t": "outcome", "status": o.Status, "d": o.Text})
 				}
-			case opsdoctor.EventError:
+			case opspilot.EventError:
 				frame(map[string]any{"t": "error", "d": ev.Text})
 			}
 		})
@@ -315,7 +315,7 @@ func streamHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 // holding (an "approval" frame on its stream): {"id", "approve", "reason"}.
 // It answers 404 when nothing is waiting under the id — decided already, or
 // its conversation ended — so a second click cannot run a call twice.
-func approveHandler(ag *opsdoctor.Agent) http.HandlerFunc {
+func approveHandler(ag *opspilot.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "use POST", http.StatusMethodNotAllowed)
@@ -332,7 +332,7 @@ func approveHandler(ag *opsdoctor.Agent) http.HandlerFunc {
 		}
 		if err := ag.Decide(body.ID, body.Approve, body.Reason); err != nil {
 			status := http.StatusInternalServerError
-			if errors.Is(err, opsdoctor.ErrNoSuchApproval) {
+			if errors.Is(err, opspilot.ErrNoSuchApproval) {
 				status = http.StatusNotFound
 			}
 			http.Error(w, err.Error(), status)
