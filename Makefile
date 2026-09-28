@@ -120,6 +120,13 @@ ci: ui-ensure
 	@go vet ./...
 	@echo "==> golangci-lint"
 	@golangci-lint run ./... --max-issues-per-linter=0 --max-same-issues=0
+	@echo "==> go vet + golangci-lint + go build as linux"
+	@# CI runs on Linux. Code built only there (cmd/service-ip, pkg/serviceip)
+	@# is invisible to vet and lint on a Mac, so without this pass the local run
+	@# is green while CI fails on it.
+	@GOOS=linux go vet ./...
+	@GOOS=linux golangci-lint run ./... --max-issues-per-linter=0 --max-same-issues=0
+	@GOOS=linux go build ./...
 	@echo "==> go build"
 	@go build ./...
 	@echo "==> go test (race, uncached)"

@@ -205,7 +205,7 @@ func FindInterfaceForCIDR(targetNet *net.IPNet) (string, error) {
 			if !sameIPFamily(targetNet.IP, addr.IP) || addr.IPNet == nil {
 				continue
 			}
-			if addr.IPNet.Contains(targetNet.IP) {
+			if addr.Contains(targetNet.IP) {
 				return link.Attrs().Name, nil
 			}
 		}
