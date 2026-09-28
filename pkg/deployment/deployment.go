@@ -521,8 +521,15 @@ func (c *Client) writeRemoteFileChunked(ctx context.Context, host, remotePath, e
 			return fmt.Errorf("append chunk on %s failed", host)
 		}
 	}
-	// Decode into place and drop the temp file.
-	cmd := fmt.Sprintf("sudo sh -c 'base64 -d %s | tee %s > /dev/null && rm -f %s'", tmp, remotePath, tmp)
+	// Decode beside the target and rename it into place. Writing through the
+	// target — what this used to do — fails with "Text file busy" when it is a
+	// running executable: every re-push of the sds-proxy binary to a node
+	// whose proxy was up. A rename replaces a busy file, and leaves the target
+	// whole if anything before it fails. The new file takes the old one's mode
+	// and owner, as writing into it did.
+	next := remotePath + ".sds-new"
+	cmd := fmt.Sprintf("sudo sh -c 'base64 -d %[1]s > %[2]s && { [ ! -e %[3]s ] || { chmod --reference=%[3]s %[2]s && chown --reference=%[3]s %[2]s; }; } && mv -f %[2]s %[3]s && rm -f %[1]s'",
+		tmp, next, remotePath)
 	if r, err := c.Exec(ctx, []string{host}, cmd); err != nil {
 		return fmt.Errorf("decode remote file: %w", err)
 	} else if !r.AllSuccess() {
