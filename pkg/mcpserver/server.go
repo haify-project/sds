@@ -51,15 +51,22 @@ type Options struct {
 	// anything else connects to it. An unregistered tool cannot be called at
 	// all.
 	AllowWrite []string
+	// NoDestructive registers the mutating tools that are not marked
+	// destructive — create, grow, snapshot, start, mount — and leaves out
+	// delete, restore, evict, drain and the like. It is the "operate" role of
+	// the remote server: day-to-day work without the calls that lose data or
+	// interrupt service.
+	NoDestructive bool
 	// Version reported in the MCP initialize handshake.
 	Version string
 }
 
 // Server bridges MCP tool calls to the SDS controller client.
 type Server struct {
-	client   ControllerClient
-	logger   *zap.Logger
-	readOnly bool
+	client        ControllerClient
+	logger        *zap.Logger
+	readOnly      bool
+	noDestructive bool
 	// allow names the write tools registered despite readOnly.
 	allow map[string]bool
 	// writeToolNames records every write tool the server knows how to offer,
@@ -87,11 +94,12 @@ func New(c ControllerClient, logger *zap.Logger, opts Options) *Server {
 		}
 	}
 	return &Server{
-		client:   c,
-		logger:   logger,
-		readOnly: opts.ReadOnly || len(allow) > 0,
-		allow:    allow,
-		version:  version,
+		client:        c,
+		logger:        logger,
+		readOnly:      opts.ReadOnly || len(allow) > 0,
+		noDestructive: opts.NoDestructive,
+		allow:         allow,
+		version:       version,
 	}
 }
 
@@ -243,6 +251,9 @@ func addWrite[In, Out any](s *Server, srv *mcp.Server, t *mcp.Tool, h mcp.ToolHa
 	if s.readOnly && !s.allow[t.Name] {
 		return
 	}
+	if s.noDestructive && t.Annotations != nil && t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint {
+		return
+	}
 	mcp.AddTool(srv, t, instrument(s, t.Name, writeTimeout, h))
 }
 
@@ -253,17 +264,18 @@ func instrument[In, Out any](s *Server, name string, timeout time.Duration, h mc
 		defer cancel()
 		start := time.Now()
 		res, out, err := h(ctx, req, in)
+		fields := []zap.Field{zap.String("tool", name), zap.Duration("duration", time.Since(start))}
+		// Over HTTP the caller is known: log who, so a change to the cluster
+		// can be traced to a token. Arguments are not logged; some tools take
+		// secrets (CHAP passwords), and the name of the tool says what was done.
+		if req != nil && req.Extra != nil && req.Extra.TokenInfo != nil {
+			extra := req.Extra.TokenInfo.Extra
+			fields = append(fields, zap.Any("caller", extra["name"]), zap.Any("role", extra["role"]))
+		}
 		if err != nil {
-			s.logger.Warn("tool call failed",
-				zap.String("tool", name),
-				zap.Duration("duration", time.Since(start)),
-				zap.Error(err),
-			)
+			s.logger.Warn("tool call failed", append(fields, zap.Error(err))...)
 		} else {
-			s.logger.Info("tool call ok",
-				zap.String("tool", name),
-				zap.Duration("duration", time.Since(start)),
-			)
+			s.logger.Info("tool call ok", fields...)
 		}
 		return res, out, err
 	}

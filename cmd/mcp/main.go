@@ -76,6 +76,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging on stderr")
 
 	rootCmd.AddCommand(k8sCmd())
+	rootCmd.AddCommand(serveCmd(), tokenCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
