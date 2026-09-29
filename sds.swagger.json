@@ -5487,7 +5487,7 @@
           "type": "boolean"
         }
       },
-      "description": "VerifyResourceRequest compares a resource's replicas block by block (DRBD\nonline verify) from one node against each of its connected peers. Run it\nagain while phase is \"running\" to follow it; with resync it instead copies\nthe source's data over the blocks a finished verify found different."
+      "description": "VerifyResourceRequest compares a resource's replicas block by block (DRBD\nonline verify) from one node against each of its connected peers. Run it\nagain while phase is \"running\" to follow it; with resync it instead copies\nthe source's data over every block marked out of sync, which makes the\ncopies identical and clears the marks."
     },
     "protobufAny": {
       "type": "object",
@@ -9143,11 +9143,20 @@
         },
         "outOfSyncKib": {
           "type": "string",
-          "format": "uint64"
+          "format": "uint64",
+          "description": "out_of_sync_kib is how much DRBD has marked out of sync with this peer in\nall: what this verify found, plus whatever was marked before it. Marks\nare set by verify and never cleared by it — only a resync clears them."
         },
         "percentDone": {
           "type": "number",
           "format": "double"
+        },
+        "foundKib": {
+          "type": "string",
+          "format": "uint64",
+          "description": "found_kib is the part of out_of_sync_kib this verify added. It is only\nmeaningful when baseline_known: a verify that is followed from another\ncall, or across a controller restart, has no record of what was marked\nbefore it started."
+        },
+        "baselineKnown": {
+          "type": "boolean"
         }
       }
     },

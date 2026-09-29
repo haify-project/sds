@@ -242,7 +242,9 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 		addWrite(s, srv, writeTool("sds_resource_verify", "Verify a resource's replicas hold the same data",
 			"Compare a resource's replicas block by block (DRBD online verify) from node, default the Primary. It reads "+
 				"every replica in full, so it loads the disks while it runs. Call again while phase is running to follow "+
-				"it. When peers report out_of_sync_kib, call with resync to copy node's data over those blocks."),
+				"it. Marks left by earlier verifies, interrupted resyncs or reconnects count in out_of_sync_kib even when the copies "+
+				"are identical; found_kib is what this verify itself found. Call with resync to copy node's data over the marked "+
+				"blocks: harmless when the copies are identical, and it clears the marks."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in verifyIn) (*mcp.CallToolResult, verifyOut, error) {
 				resp, err := c.VerifyResource(ctx, &sdspb.VerifyResourceRequest{
 					Name: in.Resource, Node: in.Node, WaitSeconds: in.WaitSeconds, Resync: in.Resync,
@@ -252,7 +254,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 				}
 				out := verifyOut{OK: resp.Success, Phase: resp.Phase, Source: resp.Source, Message: resp.Message, Steps: resp.Steps}
 				for _, p := range resp.Peers {
-					out.Peers = append(out.Peers, verifyPeerOut{Node: p.Node, State: p.State, OutOfSyncKiB: p.OutOfSyncKib, PercentDone: p.PercentDone})
+					out.Peers = append(out.Peers, verifyPeerOut{Node: p.Node, State: p.State, OutOfSyncKiB: p.OutOfSyncKib, FoundKiB: p.FoundKib, BaselineKnown: p.BaselineKnown, PercentDone: p.PercentDone})
 				}
 				return nil, out, nil
 			})
@@ -487,10 +489,12 @@ type verifyIn struct {
 }
 
 type verifyPeerOut struct {
-	Node         string  `json:"node"`
-	State        string  `json:"state"`
-	OutOfSyncKiB uint64  `json:"out_of_sync_kib"`
-	PercentDone  float64 `json:"percent_done,omitempty"`
+	Node          string  `json:"node"`
+	State         string  `json:"state"`
+	OutOfSyncKiB  uint64  `json:"out_of_sync_kib" jsonschema:"everything DRBD has marked out of sync with this peer: what this verify found plus marks that were already there"`
+	FoundKiB      uint64  `json:"found_kib,omitempty" jsonschema:"the part of out_of_sync_kib this verify added; meaningful only when baseline_known"`
+	BaselineKnown bool    `json:"baseline_known,omitempty"`
+	PercentDone   float64 `json:"percent_done,omitempty"`
 }
 
 type verifyOut struct {

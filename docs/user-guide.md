@@ -847,16 +847,24 @@ wrong block, a write that never reached one copy. Only reading both finds it:
 ```bash
 sds-cli resource verify db --wait 30m     # compare every replica with the Primary
 sds-cli resource verify db                # still running? run it again to follow it
-sds-cli resource verify db --resync       # copy the Primary's data over what differed
+sds-cli resource verify db --resync       # make the copies identical
 ```
 
-`--resync` copies from `--node` (default the Primary) and resyncs only the
-blocks the verify marked. It refuses a source that is not Primary unless another
-replica agrees with it, and never overwrites a Primary.
+DRBD records what may differ in an out-of-sync bitmap. A verify **adds** to it
+and never clears it, and marks outlive whatever made them — an earlier verify,
+an interrupted resync, a reconnect at equal generation. So a peer can show KiB
+"marked out of sync" while its data is in fact identical to the source; on one
+production volume 97% was marked and a block-by-block comparison found nothing
+different. `verify` therefore reports the two apart: what it found itself, and
+what was already marked. `--resync` copies the source's data over every marked
+block, which is harmless when the copies are identical and is the only thing
+that clears the marks. It copies from `--node` (default the Primary), refuses a
+source that is not Primary unless another replica agrees with it, and never
+overwrites a Primary.
 
 The controller verifies every resource on its own, one at a time, on
 `storage.verify_schedule` (cron, default `0 3 1 * *`: monthly; `""` turns it
-off). Differences raise `resource.out_of_sync`; repairing them is left to you.
+off). Marked blocks raise `resource.out_of_sync`; clearing them is left to you.
 
 Resources on thin pools resync with `rs-discard-granularity`, so a full resync
 (a new replica, a failback) keeps the target thin instead of allocating every

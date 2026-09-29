@@ -125,6 +125,9 @@ type ResourceManager struct {
 	hosts      []string
 	hostMap    map[string]string // hostname -> IP for config generation
 	mu         sync.RWMutex
+	// verifyMarks remembers, per resource and peer, how much was marked out of
+	// sync when a verify started; see verifyMarks.
+	verifyMarks sync.Map
 }
 
 // NewResourceManager creates a new resource manager

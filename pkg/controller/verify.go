@@ -73,8 +73,8 @@ func (rm *ResourceManager) Verify(ctx context.Context, req *pb.VerifyResourceReq
 			return fail("read %s on %s: %v", name, source, err)
 		}
 		resp.Success, resp.Phase = true, verifyResynced
-		resp.Peers = verifyPeers(st)
-		resp.Message = fmt.Sprintf("%s: the blocks that differed were copied from %s", name, source)
+		resp.Peers = verifyPeers(st, nil)
+		resp.Message = fmt.Sprintf("%s: the blocks marked out of sync were copied from %s; the copies are identical and the marks are cleared", name, source)
 		return resp
 	default:
 		added, err := rm.ensureVerifyAlg(ctx, name, addr)
@@ -84,6 +84,7 @@ func (rm *ResourceManager) Verify(ctx context.Context, req *pb.VerifyResourceReq
 		if added {
 			step("verify-alg %s added to %s", defaultVerifyAlg, name)
 		}
+		rm.rememberMarks(name, st)
 		started, err := rm.startVerify(ctx, name, addr, st, step)
 		if err != nil {
 			return fail("%v", err)
@@ -107,7 +108,7 @@ func (rm *ResourceManager) Verify(ctx context.Context, req *pb.VerifyResourceReq
 		case <-time.After(verifyPollInterval):
 		}
 	}
-	resp.Peers = verifyPeers(st)
+	resp.Peers = verifyPeers(st, func(peer string) (uint64, bool) { return rm.marksBefore(name, peer) })
 	resp.Success = true
 	if verifying(st) {
 		resp.Phase = verifyRunning
@@ -116,19 +117,9 @@ func (rm *ResourceManager) Verify(ctx context.Context, req *pb.VerifyResourceReq
 	}
 	resp.Phase = verifyDone
 	var differ []string
-	for _, p := range resp.Peers {
-		if p.OutOfSyncKib > 0 {
-			differ = append(differ, fmt.Sprintf("%s (%d KiB)", p.Node, p.OutOfSyncKib))
-		}
-	}
-	if len(differ) == 0 {
-		resp.Message = fmt.Sprintf("%s: every verified replica holds the same data as %s", name, source)
-	} else {
-		resp.Message = fmt.Sprintf("%s: %s differ from %s; resource verify %s --node %s --resync copies %s's data over them",
-			name, strings.Join(differ, ", "), source, name, source, source)
-	}
+	resp.Message, differ = verifyMessage(name, source, resp.Peers)
 	rm.controller.logger.Info("Online verify", zap.String("resource", name), zap.String("source", source),
-		zap.String("phase", resp.Phase), zap.Strings("differ", differ))
+		zap.String("phase", resp.Phase), zap.Strings("marked", differ))
 	return resp
 }
 
@@ -322,7 +313,7 @@ func verifying(st *drbdsetupStatus) bool {
 
 // verifyPeers reports each diskful peer's out-of-sync amount and, while a
 // verify runs against it, its progress.
-func verifyPeers(st *drbdsetupStatus) []*pb.VerifyPeer {
+func verifyPeers(st *drbdsetupStatus, before func(peer string) (uint64, bool)) []*pb.VerifyPeer {
 	var out []*pb.VerifyPeer
 	for _, c := range st.Connections {
 		p := &pb.VerifyPeer{Node: c.Name, State: verifyDone}
@@ -341,6 +332,14 @@ func verifyPeers(st *drbdsetupStatus) []*pb.VerifyPeer {
 		}
 		if diskless {
 			continue
+		}
+		if before != nil {
+			if was, ok := before(c.Name); ok {
+				p.BaselineKnown = true
+				if p.OutOfSyncKib > was {
+					p.FoundKib = p.OutOfSyncKib - was
+				}
+			}
 		}
 		if reason := verifiable(c.ConnectionState, c.PeerDevices); reason != "" && p.State != "verifying" {
 			p.State = reason
@@ -379,4 +378,64 @@ func (sm *ScheduleManager) runVerifySweep() {
 		log.Info("Verify sweep", zap.String("resource", r.Name), zap.Bool("ok", resp.Success),
 			zap.String("phase", resp.Phase), zap.String("message", resp.Message))
 	}
+}
+
+// DRBD's verify only ever adds to the out-of-sync bitmap: a block found equal
+// is left as it was, and the total it prints when it finishes — "found N
+// blocks out of sync" — is the whole bitmap, not what this run added. Marks
+// also outlive the event that made them: a resync-free reconnect at equal
+// current UUIDs, an interrupted resync or an earlier verify all leave them,
+// and they stay until a resync copies the blocks. On sds-meta of the openclaw
+// cluster 97% of the volume was marked while a block-by-block comparison of
+// the two replicas found them identical. Reading the total as "differences"
+// made every such mark a false alarm, so a verify records what was marked
+// before it started and reports what it added separately.
+
+func marksKey(resource, peer string) string { return resource + "\x00" + peer }
+
+// rememberMarks records each peer's marks as a verify of resource begins.
+func (rm *ResourceManager) rememberMarks(resource string, st *drbdsetupStatus) {
+	for _, c := range st.Connections {
+		var kib uint64
+		for _, pd := range c.PeerDevices {
+			kib += pd.OutOfSyncKiB
+		}
+		rm.verifyMarks.Store(marksKey(resource, c.Name), kib)
+	}
+}
+
+// marksBefore is what was marked out of sync with peer when the last verify of
+// resource started, if this controller saw it start.
+func (rm *ResourceManager) marksBefore(resource, peer string) (uint64, bool) {
+	v, ok := rm.verifyMarks.Load(marksKey(resource, peer))
+	if !ok {
+		return 0, false
+	}
+	return v.(uint64), true
+}
+
+// verifyMessage says what a finished verify found, and returns the peers with
+// marks for the log.
+func verifyMessage(name, source string, peers []*pb.VerifyPeer) (string, []string) {
+	var marked, notes []string
+	for _, p := range peers {
+		if p.OutOfSyncKib == 0 {
+			continue
+		}
+		marked = append(marked, fmt.Sprintf("%s (%d KiB)", p.Node, p.OutOfSyncKib))
+		switch {
+		case !p.BaselineKnown:
+			notes = append(notes, fmt.Sprintf("%s: %d KiB marked out of sync; this call cannot say how much of that this verify found", p.Node, p.OutOfSyncKib))
+		case p.FoundKib > 0:
+			notes = append(notes, fmt.Sprintf("%s: this verify found %d KiB that differ from %s (%d KiB were marked before it)", p.Node, p.FoundKib, source, p.OutOfSyncKib-p.FoundKib))
+		default:
+			notes = append(notes, fmt.Sprintf("%s: this verify found no new difference; %d KiB were already marked out of sync", p.Node, p.OutOfSyncKib))
+		}
+	}
+	if len(marked) == 0 {
+		return fmt.Sprintf("%s: every verified replica holds the same data as %s", name, source), nil
+	}
+	return fmt.Sprintf("%s: %s. Marks are left by verifies, interrupted resyncs and reconnects, and only a resync clears them — "+
+		"`resource verify %s --node %s --resync` copies %s's data over the marked blocks, which is harmless when the copies are in fact identical",
+		name, strings.Join(notes, "; "), name, source, source), marked
 }

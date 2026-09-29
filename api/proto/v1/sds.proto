@@ -2727,7 +2727,8 @@ message DRFailbackRequest {
 // VerifyResourceRequest compares a resource's replicas block by block (DRBD
 // online verify) from one node against each of its connected peers. Run it
 // again while phase is "running" to follow it; with resync it instead copies
-// the source's data over the blocks a finished verify found different.
+// the source's data over every block marked out of sync, which makes the
+// copies identical and clears the marks.
 message VerifyResourceRequest {
   string name = 1;
   // node is the node to verify from and, with resync, whose data wins. Empty
@@ -2743,8 +2744,17 @@ message VerifyPeer {
   string node = 1;
   // state is "verifying", "done", or why the peer was skipped.
   string state = 2;
+  // out_of_sync_kib is how much DRBD has marked out of sync with this peer in
+  // all: what this verify found, plus whatever was marked before it. Marks
+  // are set by verify and never cleared by it — only a resync clears them.
   uint64 out_of_sync_kib = 3;
   double percent_done = 4;
+  // found_kib is the part of out_of_sync_kib this verify added. It is only
+  // meaningful when baseline_known: a verify that is followed from another
+  // call, or across a controller restart, has no record of what was marked
+  // before it started.
+  uint64 found_kib = 5;
+  bool baseline_known = 6;
 }
 
 message VerifyResourceResponse {

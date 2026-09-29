@@ -604,7 +604,7 @@ func (m *Monitor) checkOutOfSync(res ResourceStatusInfo, sc *pollScope) {
 			Node:     node,
 			Details:  map[string]string{"out_of_sync_kib": fmt.Sprint(state.OutOfSyncKiB)},
 		}, sc, sourceResources, active,
-			fmt.Sprintf("resource %s: %d KiB on %s differ from its peer; resource verify %s shows which copies disagree", res.Name, state.OutOfSyncKiB, node, res.Name),
+			fmt.Sprintf("resource %s: %d KiB on %s are marked out of sync with its peer — the copies may differ, or the marks may be left over from a verify or an interrupted resync; resource verify %s --resync makes them identical and clears the marks", res.Name, state.OutOfSyncKiB, node, res.Name),
 			fmt.Sprintf("resource %s on %s holds the same data as its peer again", res.Name, node))
 	}
 }

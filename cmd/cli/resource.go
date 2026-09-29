@@ -2341,7 +2341,10 @@ func resourceVerify() *cobra.Command {
 					line += fmt.Sprintf(" %.1f%%", p.PercentDone)
 				}
 				if p.OutOfSyncKib > 0 {
-					line += fmt.Sprintf(", %d KiB differ", p.OutOfSyncKib)
+					line += fmt.Sprintf(", %d KiB marked out of sync", p.OutOfSyncKib)
+					if p.BaselineKnown {
+						line += fmt.Sprintf(" (%d KiB found by this verify)", p.FoundKib)
+					}
 				}
 				fmt.Println(line)
 			}

@@ -18344,7 +18344,8 @@ func (x *DRFailbackRequest) GetWaitSeconds() uint32 {
 // VerifyResourceRequest compares a resource's replicas block by block (DRBD
 // online verify) from one node against each of its connected peers. Run it
 // again while phase is "running" to follow it; with resync it instead copies
-// the source's data over the blocks a finished verify found different.
+// the source's data over every block marked out of sync, which makes the
+// copies identical and clears the marks.
 type VerifyResourceRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -18421,9 +18422,18 @@ type VerifyPeer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Node  string                 `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
 	// state is "verifying", "done", or why the peer was skipped.
-	State         string  `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	OutOfSyncKib  uint64  `protobuf:"varint,3,opt,name=out_of_sync_kib,json=outOfSyncKib,proto3" json:"out_of_sync_kib,omitempty"`
-	PercentDone   float64 `protobuf:"fixed64,4,opt,name=percent_done,json=percentDone,proto3" json:"percent_done,omitempty"`
+	State string `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	// out_of_sync_kib is how much DRBD has marked out of sync with this peer in
+	// all: what this verify found, plus whatever was marked before it. Marks
+	// are set by verify and never cleared by it — only a resync clears them.
+	OutOfSyncKib uint64  `protobuf:"varint,3,opt,name=out_of_sync_kib,json=outOfSyncKib,proto3" json:"out_of_sync_kib,omitempty"`
+	PercentDone  float64 `protobuf:"fixed64,4,opt,name=percent_done,json=percentDone,proto3" json:"percent_done,omitempty"`
+	// found_kib is the part of out_of_sync_kib this verify added. It is only
+	// meaningful when baseline_known: a verify that is followed from another
+	// call, or across a controller restart, has no record of what was marked
+	// before it started.
+	FoundKib      uint64 `protobuf:"varint,5,opt,name=found_kib,json=foundKib,proto3" json:"found_kib,omitempty"`
+	BaselineKnown bool   `protobuf:"varint,6,opt,name=baseline_known,json=baselineKnown,proto3" json:"baseline_known,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -18484,6 +18494,20 @@ func (x *VerifyPeer) GetPercentDone() float64 {
 		return x.PercentDone
 	}
 	return 0
+}
+
+func (x *VerifyPeer) GetFoundKib() uint64 {
+	if x != nil {
+		return x.FoundKib
+	}
+	return 0
+}
+
+func (x *VerifyPeer) GetBaselineKnown() bool {
+	if x != nil {
+		return x.BaselineKnown
+	}
+	return false
 }
 
 type VerifyResourceResponse struct {
@@ -20014,13 +20038,15 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12!\n" +
 	"\fwait_seconds\x18\x03 \x01(\rR\vwaitSeconds\x12\x16\n" +
-	"\x06resync\x18\x04 \x01(\bR\x06resync\"\x80\x01\n" +
+	"\x06resync\x18\x04 \x01(\bR\x06resync\"\xc4\x01\n" +
 	"\n" +
 	"VerifyPeer\x12\x12\n" +
 	"\x04node\x18\x01 \x01(\tR\x04node\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12%\n" +
 	"\x0fout_of_sync_kib\x18\x03 \x01(\x04R\foutOfSyncKib\x12!\n" +
-	"\fpercent_done\x18\x04 \x01(\x01R\vpercentDone\"\xb6\x01\n" +
+	"\fpercent_done\x18\x04 \x01(\x01R\vpercentDone\x12\x1b\n" +
+	"\tfound_kib\x18\x05 \x01(\x04R\bfoundKib\x12%\n" +
+	"\x0ebaseline_known\x18\x06 \x01(\bR\rbaselineKnown\"\xb6\x01\n" +
 	"\x16VerifyResourceResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
