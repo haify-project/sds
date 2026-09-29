@@ -664,7 +664,7 @@ history_size = 500
 ```
 
 Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
-`resource.promoted`, `node.unreachable`, `wan.degraded`. Each carries a severity
+`resource.promoted`, `node.unreachable`, `wan.degraded`, `resource.out_of_sync`. Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,
 `resolved` when it clears — so a receiver can pair an alert with its recovery
 instead of reading the recovery as a new fault.
@@ -813,6 +813,30 @@ ssh <node> "sudo systemctl stop sds-controller && \
 
 With Self-HA on, upgrade the standby nodes first, then evict the controller onto
 one of them, then upgrade the last node.
+
+**Checking that replicas really hold the same data**
+
+Every replica can say `UpToDate` and still differ — a disk that returned the
+wrong block, a write that never reached one copy. Only reading both finds it:
+
+```bash
+sds-cli resource verify db --wait 30m     # compare every replica with the Primary
+sds-cli resource verify db                # still running? run it again to follow it
+sds-cli resource verify db --resync       # copy the Primary's data over what differed
+```
+
+`--resync` copies from `--node` (default the Primary) and resyncs only the
+blocks the verify marked. It refuses a source that is not Primary unless another
+replica agrees with it, and never overwrites a Primary.
+
+The controller verifies every resource on its own, one at a time, on
+`storage.verify_schedule` (cron, default `0 3 1 * *`: monthly; `""` turns it
+off). Differences raise `resource.out_of_sync`; repairing them is left to you.
+
+Resources on thin pools resync with `rs-discard-granularity`, so a full resync
+(a new replica, a failback) keeps the target thin instead of allocating every
+block. Resources created before this was a default can get it with
+`sds-cli resource set-options <name> --drbd-options disk/rs-discard-granularity=65536`.
 
 **Checking a cluster you have not looked at in a while**
 

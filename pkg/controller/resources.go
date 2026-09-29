@@ -78,6 +78,9 @@ type ResourceNodeState struct {
 	// text-parsed zero graphed as "0% synced" turns a perfectly healthy cluster
 	// into one whose resync appears never to have started.
 	SyncPercentKnown bool
+	// OutOfSyncKiB is how much differs between this peer and the node whose
+	// status was read, summed over volumes. Zero for that node itself.
+	OutOfSyncKiB uint64
 	// Quorum is whether this node holds DRBD quorum for the resource, or nil
 	// when DRBD did not report it. Nil is the normal case for peers — a node's
 	// status only carries its own quorum — and for the plain-text parse, which
@@ -1054,6 +1057,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	}
 	// wanCfg is nil for a LAN resource (output unchanged); non-nil renders the
 	// WAN variant (protocol A + pull-ahead + loopback addresses).
+	drbdOptions = rm.withThinResyncDefaults(ctx, drbdOptions, storageType, resolved)
 	drbdConfig := rm.generateDrbdConfig(name, port, resolved, nodes, disklessNodes, protocol, storageType, drbdOptions, wanCfg)
 
 	// 3. Distribute config to all nodes (diskful + diskless tiebreaker)
@@ -5470,26 +5474,38 @@ type drbdsetupStatus struct {
 		// force-promote of a quorate survivor safe.
 		Quorum *bool `json:"quorum"`
 	} `json:"devices"`
-	Connections []struct {
-		Name string `json:"name"`
-		// ConnectionState is "Connected", "Connecting", "StandAlone", ... It is
-		// the only field a peer whose link is down carries any truth in: DRBD
-		// leaves peer-role and every peer_device empty for such a peer, and
-		// reading those empties as facts is the whole reason this is parsed.
-		ConnectionState string `json:"connection-state"`
-		PeerRole        string `json:"peer-role"`
-		PeerDevices     []struct {
-			Volume           int    `json:"volume"`
-			ReplicationState string `json:"replication-state"`
-			PeerDiskState    string `json:"peer-disk-state"`
-			// Done is the resync completion percentage (0..100) drbdsetup emits
-			// on a peer_device while resyncing. PercentInSync is accepted as an
-			// alias for robustness across drbd versions. Both are absent in
-			// steady state, so a nil value means "fully in sync".
-			Done          *float64 `json:"done"`
-			PercentInSync *float64 `json:"percent-in-sync"`
-		} `json:"peer_devices"`
-	} `json:"connections"`
+	Connections []drbdConnection `json:"connections"`
+}
+
+// drbdConnection is one peer in drbdsetup status --json.
+type drbdConnection struct {
+	Name string `json:"name"`
+	// ConnectionState is "Connected", "Connecting", "StandAlone", ... It is
+	// the only field a peer whose link is down carries any truth in: DRBD
+	// leaves peer-role and every peer_device empty for such a peer, and
+	// reading those empties as facts is the whole reason this is parsed.
+	ConnectionState string           `json:"connection-state"`
+	PeerRole        string           `json:"peer-role"`
+	PeerDevices     []drbdPeerDevice `json:"peer_devices"`
+}
+
+// drbdPeerDevice is one volume of one connection in drbdsetup status --json.
+type drbdPeerDevice struct {
+	Volume           int    `json:"volume"`
+	ReplicationState string `json:"replication-state"`
+	PeerDiskState    string `json:"peer-disk-state"`
+	// Done is the resync completion percentage (0..100) drbdsetup emits
+	// on a peer_device while resyncing. PercentInSync is accepted as an
+	// alias for robustness across drbd versions. Both are absent in
+	// steady state, so a nil value means "fully in sync".
+	Done          *float64 `json:"done"`
+	PercentInSync *float64 `json:"percent-in-sync"`
+	// OutOfSyncKiB is how much of the volume DRBD knows differs from
+	// this peer. On an Established peer it is only ever non-zero after
+	// an online verify found blocks that disagree.
+	OutOfSyncKiB uint64 `json:"out-of-sync"`
+	// PercentResyncDone is a running resync's or verify's progress.
+	PercentResyncDone *float64 `json:"percent-resync-done"`
 }
 
 // parseNodeStatesFromJSON parses `drbdsetup status <res> --json` into per-node
@@ -5534,6 +5550,9 @@ func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNode
 			Connection:       conn.ConnectionState,
 			SyncPercent:      100,
 			SyncPercentKnown: true,
+		}
+		for _, pd := range conn.PeerDevices {
+			peer.OutOfSyncKiB += pd.OutOfSyncKiB
 		}
 		if len(conn.PeerDevices) > 0 {
 			pd := conn.PeerDevices[0]
@@ -5823,6 +5842,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 				ExpectedDiskless: diskless[node] || diskless[rm.controller.ResolveHost(node)],
 				Quorum:           st.Quorum,
 				Connection:       st.Connection,
+				OutOfSyncKiB:     st.OutOfSyncKiB,
 			}
 			// Only forward completion the status source actually reported. A
 			// text-parsed state has none, and passing its zero on would export

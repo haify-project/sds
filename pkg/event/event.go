@@ -50,6 +50,11 @@ const (
 	// TypeWANDegraded fires when a WAN-replicated resource's cross-site link is
 	// broken, which local replica states cannot reveal on their own.
 	TypeWANDegraded Type = "wan.degraded"
+	// TypeResourceOutOfSync fires when two connected, fully replicating copies
+	// of a resource hold different data — what an online verify finds. Nothing
+	// else reports it: both replicas say UpToDate, and whichever one a read
+	// lands on decides what the application sees.
+	TypeResourceOutOfSync Type = "resource.out_of_sync"
 
 	// Thin pool capacity. Data and metadata are separate types rather than one
 	// "pool full" event because they are separate failure modes with unrelated

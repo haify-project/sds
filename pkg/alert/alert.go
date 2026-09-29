@@ -73,6 +73,10 @@ type NodeStateInfo struct {
 	// ReplicationState are all empty for such a peer, and reading those empties
 	// as facts is what this field exists to prevent.
 	Connection string
+	// OutOfSyncKiB is how much of this replica DRBD knows differs from the node
+	// whose status was read. On a connected, Established replica it is non-zero
+	// only after an online verify found blocks that disagree.
+	OutOfSyncKiB uint64
 }
 
 // connected reports whether this replica's link is usable, which is the
@@ -478,6 +482,7 @@ func (m *Monitor) checkResources(ctx context.Context, sc *pollScope, obs *Observ
 		m.checkReplicas(res, sc)
 		m.checkPrimary(res, sc)
 		m.checkWAN(res, sc)
+		m.checkOutOfSync(res, sc)
 	}
 
 	m.mu.Lock()
@@ -507,6 +512,25 @@ func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
 		}, sc, sourceResources, degraded,
 			fmt.Sprintf("resource %s on %s degraded: %s", res.Name, node, reason),
 			fmt.Sprintf("resource %s on %s recovered to normal state", res.Name, node))
+	}
+}
+
+// checkOutOfSync raises one condition per replica that is connected and
+// replicating yet holds data that differs from its peer. While a replica is
+// disconnected or resyncing the same counter only measures how far it has to
+// catch up, which checkReplicas already reports.
+func (m *Monitor) checkOutOfSync(res ResourceStatusInfo, sc *pollScope) {
+	for node, state := range res.NodeStates {
+		active := state.connected() && state.ReplicationState == "Established" && state.OutOfSyncKiB > 0
+		m.level(event.Event{
+			Type:     event.TypeResourceOutOfSync,
+			Severity: event.SeverityWarning,
+			Resource: res.Name,
+			Node:     node,
+			Details:  map[string]string{"out_of_sync_kib": fmt.Sprint(state.OutOfSyncKiB)},
+		}, sc, sourceResources, active,
+			fmt.Sprintf("resource %s: %d KiB on %s differ from its peer; resource verify %s shows which copies disagree", res.Name, state.OutOfSyncKiB, node, res.Name),
+			fmt.Sprintf("resource %s on %s holds the same data as its peer again", res.Name, node))
 	}
 }
 

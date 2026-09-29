@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -114,6 +115,9 @@ type ScheduleManager struct {
 	mu         sync.Mutex
 	cron       *cron.Cron
 	started    bool
+	// verifying is set while a verify sweep runs, so a slow one is not
+	// joined by the next.
+	verifying atomic.Bool
 }
 
 // NewScheduleManager creates a snapshot schedule manager.
@@ -261,8 +265,21 @@ func (sm *ScheduleManager) rebuildLocked(ctx context.Context) error {
 				zap.Error(err))
 		}
 	}
+	if spec := sm.verifySchedule(); spec != "" {
+		if _, err := c.AddFunc(spec, sm.runVerifySweep); err != nil {
+			sm.controller.logger.Warn("Skipping the verify schedule: invalid cron",
+				zap.String("cron", spec), zap.Error(err))
+		}
+	}
 	sm.cron = c
 	return nil
+}
+
+func (sm *ScheduleManager) verifySchedule() string {
+	if sm.controller.config == nil {
+		return ""
+	}
+	return strings.TrimSpace(sm.controller.config.Storage.VerifySchedule)
 }
 
 // runSchedule executes one schedule: snapshot the resource's volumes on every

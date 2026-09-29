@@ -237,6 +237,28 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	}
 
 	if c, supported := s.client.(interface {
+		VerifyResource(context.Context, *sdspb.VerifyResourceRequest) (*sdspb.VerifyResourceResponse, error)
+	}); supported {
+		addWrite(s, srv, writeTool("sds_resource_verify", "Verify a resource's replicas hold the same data",
+			"Compare a resource's replicas block by block (DRBD online verify) from node, default the Primary. It reads "+
+				"every replica in full, so it loads the disks while it runs. Call again while phase is running to follow "+
+				"it. When peers report out_of_sync_kib, call with resync to copy node's data over those blocks."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in verifyIn) (*mcp.CallToolResult, verifyOut, error) {
+				resp, err := c.VerifyResource(ctx, &sdspb.VerifyResourceRequest{
+					Name: in.Resource, Node: in.Node, WaitSeconds: in.WaitSeconds, Resync: in.Resync,
+				})
+				if err != nil {
+					return nil, verifyOut{}, err
+				}
+				out := verifyOut{OK: resp.Success, Phase: resp.Phase, Source: resp.Source, Message: resp.Message, Steps: resp.Steps}
+				for _, p := range resp.Peers {
+					out.Peers = append(out.Peers, verifyPeerOut{Node: p.Node, State: p.State, OutOfSyncKiB: p.OutOfSyncKib, PercentDone: p.PercentDone})
+				}
+				return nil, out, nil
+			})
+	}
+
+	if c, supported := s.client.(interface {
 		SetWanEndpoint(context.Context, *sdspb.SetWanEndpointRequest) (*sdspb.SetWanEndpointResponse, error)
 	}); supported {
 		addWrite(s, srv, writeTool("sds_wan_set_endpoint", "Change a WAN resource's DR endpoint",
@@ -455,4 +477,27 @@ type drFailbackOut struct {
 	Phase   string   `json:"phase"`
 	Message string   `json:"message"`
 	Steps   []string `json:"steps,omitempty"`
+}
+
+type verifyIn struct {
+	Resource    string `json:"resource" jsonschema:"resource name"`
+	Node        string `json:"node,omitempty" jsonschema:"node to verify from and whose data resync keeps; empty takes the Primary"`
+	WaitSeconds uint32 `json:"wait_seconds,omitempty" jsonschema:"how long to wait for the verify to finish"`
+	Resync      bool   `json:"resync,omitempty" jsonschema:"copy node's data over the blocks a finished verify found different"`
+}
+
+type verifyPeerOut struct {
+	Node         string  `json:"node"`
+	State        string  `json:"state"`
+	OutOfSyncKiB uint64  `json:"out_of_sync_kib"`
+	PercentDone  float64 `json:"percent_done,omitempty"`
+}
+
+type verifyOut struct {
+	OK      bool            `json:"ok"`
+	Phase   string          `json:"phase"`
+	Source  string          `json:"source"`
+	Message string          `json:"message"`
+	Peers   []verifyPeerOut `json:"peers,omitempty"`
+	Steps   []string        `json:"steps,omitempty"`
 }

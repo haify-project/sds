@@ -249,3 +249,19 @@ func TestSetNodeAddressesSwapsTwoNodes(t *testing.T) {
 		}
 	}
 }
+
+// Two nodes trading addresses: every stale entry must be gone before either
+// node's key is written, or the second removal deletes the first node's fresh
+// entry.
+func TestKnownHostsScriptForgetsBeforeAdding(t *testing.T) {
+	script := knownHostsScript([]string{"10.0.0.1", "10.0.0.2", "10.0.0.2", "10.0.0.1", ""},
+		"10.0.0.2 ssh-ed25519 AAAAa\n10.0.0.1 ssh-ed25519 AAAAb\n")
+	lastForget := strings.LastIndex(script, "ssh-keygen -R")
+	add := strings.Index(script, "SDS_KNOWN_HOSTS")
+	if lastForget < 0 || add < 0 || lastForget > add {
+		t.Fatalf("every ssh-keygen -R must come before the keys are added:\n%s", script)
+	}
+	if n := strings.Count(script, "ssh-keygen -R"); n != 2 {
+		t.Fatalf("each address is forgotten once, got %d:\n%s", n, script)
+	}
+}

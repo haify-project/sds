@@ -185,6 +185,8 @@ export function eventTypeLabel(type: string): string {
       return 'Node unreachable';
     case 'wan.degraded':
       return 'WAN replication';
+    case 'resource.out_of_sync':
+      return 'Replicas differ';
     default:
       return type;
   }

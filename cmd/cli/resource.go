@@ -49,6 +49,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceAddDR())
 	cmd.AddCommand(resourceDRFailover())
 	cmd.AddCommand(resourceDRFailback())
+	cmd.AddCommand(resourceVerify())
 	cmd.AddCommand(resourceSecondary())
 	cmd.AddCommand(resourceDualPrimary())
 	cmd.AddCommand(resourceFs())
@@ -2303,5 +2304,56 @@ func resourceDRFailback() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&node, "node", "", "Primary-site node to make Primary (default: the first)")
 	cmd.Flags().DurationVar(&wait, "wait", 0, "How long to wait for the resync before returning (e.g. 10m)")
+	return cmd
+}
+
+func resourceVerify() *cobra.Command {
+	var node string
+	var wait time.Duration
+	var resync bool
+	cmd := &cobra.Command{
+		Use:   "verify <resource>",
+		Short: "Compare a resource's replicas block by block, and repair what differs",
+		Long: "Reads every replica and compares it with the one on --node (default: the Primary).\n" +
+			"Run it again while it says running to follow it. When it finds blocks that differ,\n" +
+			"--resync copies --node's data over them on the other replicas.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), wait+3*time.Minute)
+			defer cancel()
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			resp, err := sdsClient.VerifyResource(ctx, &sdspb.VerifyResourceRequest{
+				Name: args[0], Node: node, WaitSeconds: uint32(wait.Seconds()), Resync: resync,
+			})
+			if err != nil {
+				return err
+			}
+			for _, s := range resp.Steps {
+				fmt.Printf("  %s\n", s)
+			}
+			for _, p := range resp.Peers {
+				line := fmt.Sprintf("  %s ↔ %s: %s", resp.Source, p.Node, p.State)
+				if p.State == "verifying" {
+					line += fmt.Sprintf(" %.1f%%", p.PercentDone)
+				}
+				if p.OutOfSyncKib > 0 {
+					line += fmt.Sprintf(", %d KiB differ", p.OutOfSyncKib)
+				}
+				fmt.Println(line)
+			}
+			fmt.Println(resp.Message)
+			if !resp.Success {
+				return fmt.Errorf("verify failed")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&node, "node", "", "Node to verify from, and whose data --resync keeps (default: the Primary)")
+	cmd.Flags().DurationVar(&wait, "wait", 0, "How long to wait for the verify to finish (e.g. 10m)")
+	cmd.Flags().BoolVar(&resync, "resync", false, "Copy --node's data over the blocks a finished verify found different")
 	return cmd
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/robfig/cron/v3"
 	"github.com/spf13/viper"
 )
 
@@ -310,6 +311,10 @@ type LogConfig struct {
 type StorageConfig struct {
 	DefaultPoolType       string `mapstructure:"default_pool_type"`
 	DefaultSnapshotSuffix string `mapstructure:"default_snapshot_suffix"`
+	// VerifySchedule is a cron spec on which every resource's replicas are
+	// compared block by block (DRBD online verify), one resource at a time.
+	// Differences raise resource.out_of_sync. Empty turns it off.
+	VerifySchedule string `mapstructure:"verify_schedule"`
 }
 
 // MetricsConfig represents metrics configuration
@@ -413,6 +418,12 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if spec := strings.TrimSpace(c.Storage.VerifySchedule); spec != "" {
+		if _, err := cron.ParseStandard(spec); err != nil {
+			return fmt.Errorf("storage.verify_schedule %q is not a cron spec: %w", spec, err)
+		}
+	}
+
 	if c.Auth.Enabled {
 		if len(c.Auth.Token) < 16 {
 			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
@@ -462,6 +473,9 @@ func setDefaults() {
 	// diverge. Set "vg" here for the thick behaviour on every client at once.
 	viper.SetDefault("storage.default_pool_type", "thin_pool")
 	viper.SetDefault("storage.default_snapshot_suffix", "_snap")
+	// Monthly, 03:00 on the 1st. Two replicas that disagree both report
+	// UpToDate; nothing but reading both finds it.
+	viper.SetDefault("storage.verify_schedule", "0 3 1 * *")
 	viper.SetDefault("metrics.enabled", true)
 	viper.SetDefault("metrics.listen_address", "0.0.0.0")
 	viper.SetDefault("metrics.port", 9433)

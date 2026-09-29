@@ -530,6 +530,9 @@ service SDSController {
   rpc SetWanEndpoint(SetWanEndpointRequest) returns (SetWanEndpointResponse) {
     option (google.api.http) = { post: "/v1/resources/{name}/wan/endpoint"; body: "*"; };
   }
+  rpc VerifyResource(VerifyResourceRequest) returns (VerifyResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/verify"; body: "*"; };
+  }
 
   // WatchEvents streams notifications as they happen, so an operator (or the
   // web UI, or a script) can react without polling. Over REST this is a
@@ -2719,6 +2722,39 @@ message DRFailbackRequest {
   // wait_seconds bounds how long this call waits for the resync before it
   // reports progress and returns; 0 does not wait.
   uint32 wait_seconds = 3;
+}
+
+// VerifyResourceRequest compares a resource's replicas block by block (DRBD
+// online verify) from one node against each of its connected peers. Run it
+// again while phase is "running" to follow it; with resync it instead copies
+// the source's data over the blocks a finished verify found different.
+message VerifyResourceRequest {
+  string name = 1;
+  // node is the node to verify from and, with resync, whose data wins. Empty
+  // takes the Primary, else the first diskful node.
+  string node = 2;
+  // wait_seconds bounds how long this call waits for the verify to finish;
+  // 0 does not wait.
+  uint32 wait_seconds = 3;
+  bool resync = 4;
+}
+
+message VerifyPeer {
+  string node = 1;
+  // state is "verifying", "done", or why the peer was skipped.
+  string state = 2;
+  uint64 out_of_sync_kib = 3;
+  double percent_done = 4;
+}
+
+message VerifyResourceResponse {
+  bool success = 1;
+  string message = 2;
+  // phase is "running", "done" or "resynced".
+  string phase = 3;
+  string source = 4;
+  repeated VerifyPeer peers = 5;
+  repeated string steps = 6;
 }
 
 message DRFailbackResponse {

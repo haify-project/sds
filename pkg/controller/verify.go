@@ -1,0 +1,382 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	pb "github.com/liliang-cn/sds/api/proto/v1"
+	"go.uber.org/zap"
+)
+
+// Two replicas can both say UpToDate and still hold different data: a disk
+// that returned the wrong block, a write that reached one copy's cache and not
+// its platter, the leftovers of a split brain resolved by hand. DRBD cannot
+// know until something reads both copies and compares them, and which copy a
+// read lands on decides what the application sees. Online verify is that
+// comparison; the controller always wrote a verify-alg for it and never ran it.
+//
+// VerifyResource starts it, follows it, and repairs what it found. Like
+// dr-failback it can be run again at any point and carries on from where the
+// resource stands.
+
+const (
+	verifyRunning  = "running"
+	verifyDone     = "done"
+	verifyResynced = "resynced"
+)
+
+// defaultVerifyAlg is written into a resource that predates the default, so
+// verify can run on it.
+const defaultVerifyAlg = "crc32c"
+
+var verifyPollInterval = 5 * time.Second
+
+func (s *Server) VerifyResource(ctx context.Context, req *pb.VerifyResourceRequest) (*pb.VerifyResourceResponse, error) {
+	return s.resources.Verify(ctx, req), nil
+}
+
+// Verify is VerifyResource for callers inside the controller: the verify
+// schedule, and the RPC. A failure is reported in the response.
+func (rm *ResourceManager) Verify(ctx context.Context, req *pb.VerifyResourceRequest) *pb.VerifyResourceResponse {
+	resp := &pb.VerifyResourceResponse{}
+	fail := func(format string, args ...any) *pb.VerifyResourceResponse {
+		resp.Success, resp.Message = false, fmt.Sprintf(format, args...)
+		return resp
+	}
+	name := strings.TrimSpace(req.GetName())
+	if name == "" {
+		return fail("resource name is required")
+	}
+	source, err := rm.verifySource(ctx, name, strings.TrimSpace(req.GetNode()))
+	if err != nil {
+		return fail("%v", err)
+	}
+	resp.Source = source
+	step := func(format string, args ...any) { resp.Steps = append(resp.Steps, fmt.Sprintf(format, args...)) }
+	addr := rm.controller.ResolveHost(source)
+
+	st, err := rm.readDrbdStatus(ctx, addr, name)
+	if err != nil {
+		return fail("read %s on %s: %v", name, source, err)
+	}
+
+	switch {
+	case verifying(st):
+		// Already under way: follow it.
+	case req.GetResync():
+		if err := rm.resyncOutOfSync(ctx, name, source, st, step); err != nil {
+			return fail("%v", err)
+		}
+		if st, err = rm.readDrbdStatus(ctx, addr, name); err != nil {
+			return fail("read %s on %s: %v", name, source, err)
+		}
+		resp.Success, resp.Phase = true, verifyResynced
+		resp.Peers = verifyPeers(st)
+		resp.Message = fmt.Sprintf("%s: the blocks that differed were copied from %s", name, source)
+		return resp
+	default:
+		added, err := rm.ensureVerifyAlg(ctx, name, addr)
+		if err != nil {
+			return fail("%v", err)
+		}
+		if added {
+			step("verify-alg %s added to %s", defaultVerifyAlg, name)
+		}
+		started, err := rm.startVerify(ctx, name, addr, st, step)
+		if err != nil {
+			return fail("%v", err)
+		}
+		if started == 0 {
+			return fail("%s on %s has no connected, UpToDate peer to verify against (%s)", name, source, strings.Join(resp.Steps, "; "))
+		}
+	}
+
+	deadline := time.Now().Add(time.Duration(req.GetWaitSeconds()) * time.Second)
+	for {
+		if st, err = rm.readDrbdStatus(ctx, addr, name); err != nil {
+			return fail("read %s on %s: %v", name, source, err)
+		}
+		if !verifying(st) || !time.Now().Before(deadline) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return fail("%v", ctx.Err())
+		case <-time.After(verifyPollInterval):
+		}
+	}
+	resp.Peers = verifyPeers(st)
+	resp.Success = true
+	if verifying(st) {
+		resp.Phase = verifyRunning
+		resp.Message = fmt.Sprintf("verifying %s from %s; run it again to follow it", name, source)
+		return resp
+	}
+	resp.Phase = verifyDone
+	var differ []string
+	for _, p := range resp.Peers {
+		if p.OutOfSyncKib > 0 {
+			differ = append(differ, fmt.Sprintf("%s (%d KiB)", p.Node, p.OutOfSyncKib))
+		}
+	}
+	if len(differ) == 0 {
+		resp.Message = fmt.Sprintf("%s: every verified replica holds the same data as %s", name, source)
+	} else {
+		resp.Message = fmt.Sprintf("%s: %s differ from %s; resource verify %s --node %s --resync copies %s's data over them",
+			name, strings.Join(differ, ", "), source, name, source, source)
+	}
+	rm.controller.logger.Info("Online verify", zap.String("resource", name), zap.String("source", source),
+		zap.String("phase", resp.Phase), zap.Strings("differ", differ))
+	return resp
+}
+
+// verifySource picks the node to verify from: the one asked for, else the
+// Primary — whose data is by definition what the application sees — else the
+// first diskful node.
+func (rm *ResourceManager) verifySource(ctx context.Context, name, node string) (string, error) {
+	if rm.controller.db == nil {
+		return "", fmt.Errorf("database not available")
+	}
+	dbRes, err := rm.controller.db.GetResource(ctx, name)
+	if err != nil || dbRes == nil {
+		return "", fmt.Errorf("resource %q not found", name)
+	}
+	diskful := splitCSV(dbRes.Nodes)
+	if len(diskful) == 0 {
+		return "", fmt.Errorf("%q has no diskful replica", name)
+	}
+	if node != "" {
+		if !containsString(diskful, node) {
+			return "", fmt.Errorf("%s holds no replica of %s (those are %s)", node, name, strings.Join(diskful, ", "))
+		}
+		return node, nil
+	}
+	for _, n := range diskful {
+		if st, err := rm.readDrbdStatus(ctx, rm.controller.ResolveHost(n), name); err == nil && st.Role == "Primary" {
+			return n, nil
+		}
+	}
+	return diskful[0], nil
+}
+
+// ensureVerifyAlg gives a resource created before verify-alg was a default
+// one, in its config and on every node, so verify can start.
+func (rm *ResourceManager) ensureVerifyAlg(ctx context.Context, name, addr string) (bool, error) {
+	res, err := rm.deployment.Exec(ctx, []string{addr}, "sudo drbdsetup show "+name)
+	if err != nil {
+		return false, fmt.Errorf("read %s's settings: %w", name, err)
+	}
+	for _, hr := range res.Hosts {
+		if !hr.Success {
+			return false, fmt.Errorf("read %s's settings: %s", name, hostFailure(hr))
+		}
+		if strings.Contains(hr.Output, "verify-alg") {
+			return false, nil
+		}
+	}
+	if err := rm.SetOptions(ctx, name, map[string]string{"net/verify-alg": defaultVerifyAlg}); err != nil {
+		return false, fmt.Errorf("add verify-alg to %s: %w", name, err)
+	}
+	return true, nil
+}
+
+// startVerify starts a verify against every peer it can: connected, fully
+// replicating and holding a disk. Verifying the whole resource at once would
+// fail outright on one disconnected peer, and a diskless tiebreaker has
+// nothing to compare. It returns how many peers it started on.
+func (rm *ResourceManager) startVerify(ctx context.Context, name, addr string, st *drbdsetupStatus, step func(string, ...any)) (int, error) {
+	started := 0
+	for _, c := range st.Connections {
+		if reason := verifiable(c.ConnectionState, c.PeerDevices); reason != "" {
+			step("%s: skipped, %s", c.Name, reason)
+			continue
+		}
+		cmd := fmt.Sprintf("sudo drbdadm verify %s:%s", name, c.Name)
+		if err := rm.execAllSuccess(ctx, []string{addr}, cmd, "start verify against "+c.Name); err != nil {
+			return started, err
+		}
+		started++
+		step("%s: verify started", c.Name)
+	}
+	return started, nil
+}
+
+func verifiable(connection string, pds []drbdPeerDevice) string {
+	if connection != "Connected" {
+		return "not connected (" + connection + ")"
+	}
+	if len(pds) == 0 {
+		return "no volumes"
+	}
+	for _, pd := range pds {
+		if pd.PeerDiskState == "Diskless" {
+			return "diskless"
+		}
+		if pd.ReplicationState != "Established" || pd.PeerDiskState != "UpToDate" {
+			return fmt.Sprintf("%s/%s", pd.ReplicationState, pd.PeerDiskState)
+		}
+	}
+	return ""
+}
+
+// resyncOutOfSync copies the source's data over the blocks a verify found
+// different, one peer at a time, with invalidate-remote --reset-bitmap=no:
+// the peer becomes SyncTarget for exactly the blocks marked out of sync. The
+// usual advice — disconnect and connect again — does nothing on DRBD 9.3,
+// which reconnects peers at equal current UUIDs without a resync and leaves
+// the marked blocks as they are.
+//
+// Which copy is right is not something verify can tell, so the source has to
+// be one that can be trusted: the Primary, or a node that agrees with at
+// least one other diskful replica. A peer that is Primary is never
+// overwritten — that is the data the running service reads.
+func (rm *ResourceManager) resyncOutOfSync(ctx context.Context, name, source string, st *drbdsetupStatus, step func(string, ...any)) error {
+	var differ []string
+	agrees := 0
+	for _, c := range st.Connections {
+		if verifiable(c.ConnectionState, c.PeerDevices) != "" {
+			continue
+		}
+		var oos uint64
+		for _, pd := range c.PeerDevices {
+			oos += pd.OutOfSyncKiB
+		}
+		if oos == 0 {
+			agrees++
+			continue
+		}
+		if c.PeerRole == "Primary" {
+			return fmt.Errorf("%s differs from %s but is Primary; run resync from %s, whose data the service is using", c.Name, source, c.Name)
+		}
+		differ = append(differ, c.Name)
+	}
+	if len(differ) == 0 {
+		return fmt.Errorf("nothing to resync: no connected replica of %s differs from %s (run verify first)", name, source)
+	}
+	if st.Role != "Primary" && agrees == 0 {
+		return fmt.Errorf("%s is not Primary and no other replica agrees with it, so there is no telling which copy is right; "+
+			"run the resync from the Primary, or promote the copy you trust first", source)
+	}
+	addr := rm.controller.ResolveHost(source)
+	for _, peer := range differ {
+		cmd := fmt.Sprintf("sudo drbdadm invalidate-remote --reset-bitmap=no %s:%s", name, peer)
+		if err := rm.execAllSuccess(ctx, []string{addr}, cmd, "resync "+peer); err != nil {
+			return err
+		}
+		step("%s: resyncing the blocks that differed from %s", peer, source)
+	}
+	return rm.waitOutOfSyncCleared(ctx, name, addr, differ)
+}
+
+// waitOutOfSyncCleared waits for the peers' resync to finish, so the caller
+// reports the result rather than the start of it.
+func (rm *ResourceManager) waitOutOfSyncCleared(ctx context.Context, name, addr string, peers []string) error {
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		st, err := rm.readDrbdStatus(ctx, addr, name)
+		if err != nil {
+			return err
+		}
+		var pending []string
+		for _, c := range st.Connections {
+			if !containsString(peers, c.Name) {
+				continue
+			}
+			if verifiable(c.ConnectionState, c.PeerDevices) != "" {
+				pending = append(pending, c.Name)
+				continue
+			}
+			for _, pd := range c.PeerDevices {
+				if pd.OutOfSyncKiB > 0 {
+					pending = append(pending, c.Name)
+					break
+				}
+			}
+		}
+		if len(pending) == 0 {
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("resync to %s still running; check resource status", strings.Join(pending, ", "))
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(verifyPollInterval):
+		}
+	}
+}
+
+func verifying(st *drbdsetupStatus) bool {
+	for _, c := range st.Connections {
+		for _, pd := range c.PeerDevices {
+			if pd.ReplicationState == "VerifyS" || pd.ReplicationState == "VerifyT" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// verifyPeers reports each diskful peer's out-of-sync amount and, while a
+// verify runs against it, its progress.
+func verifyPeers(st *drbdsetupStatus) []*pb.VerifyPeer {
+	var out []*pb.VerifyPeer
+	for _, c := range st.Connections {
+		p := &pb.VerifyPeer{Node: c.Name, State: verifyDone}
+		diskless := false
+		for _, pd := range c.PeerDevices {
+			p.OutOfSyncKib += pd.OutOfSyncKiB
+			if pd.PeerDiskState == "Diskless" {
+				diskless = true
+			}
+			if pd.ReplicationState == "VerifyS" || pd.ReplicationState == "VerifyT" {
+				p.State = "verifying"
+				if pd.PercentResyncDone != nil {
+					p.PercentDone = *pd.PercentResyncDone
+				}
+			}
+		}
+		if diskless {
+			continue
+		}
+		if reason := verifiable(c.ConnectionState, c.PeerDevices); reason != "" && p.State != "verifying" {
+			p.State = reason
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// verifySweepWait bounds how long the sweep waits on one resource before it
+// moves on; the verify itself keeps running.
+const verifySweepWait = 6 * time.Hour
+
+// runVerifySweep verifies every resource in turn. Differences are not
+// repaired here: the alert monitor raises resource.out_of_sync for them, and
+// which copy is right is for an operator to decide.
+func (sm *ScheduleManager) runVerifySweep() {
+	if !sm.verifying.CompareAndSwap(false, true) {
+		sm.controller.logger.Info("Verify sweep still running from last time; skipping this one")
+		return
+	}
+	defer sm.verifying.Store(false)
+	ctx := context.Background()
+	log := sm.controller.logger
+	resources, err := sm.controller.db.ListResources(ctx)
+	if err != nil {
+		log.Warn("Verify sweep: list resources", zap.Error(err))
+		return
+	}
+	for _, r := range resources {
+		rctx, cancel := context.WithTimeout(ctx, verifySweepWait+time.Minute)
+		resp := sm.controller.resources.Verify(rctx, &pb.VerifyResourceRequest{
+			Name: r.Name, WaitSeconds: uint32(verifySweepWait.Seconds()),
+		})
+		cancel()
+		log.Info("Verify sweep", zap.String("resource", r.Name), zap.Bool("ok", resp.Success),
+			zap.String("phase", resp.Phase), zap.String("message", resp.Message))
+	}
+}

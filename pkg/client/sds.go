@@ -2212,6 +2212,12 @@ func (c *SDSClient) SetWanEndpoint(ctx context.Context, req *sdspb.SetWanEndpoin
 // DRFailback moves a WAN resource back from its DR node to the primary site,
 // or advances a failback in progress; see DRFailbackRequest. The response's
 // phase says whether to run it again.
+// VerifyResource starts, follows or — with resync — repairs an online verify
+// of a resource's replicas; see VerifyResourceRequest.
+func (c *SDSClient) VerifyResource(ctx context.Context, req *sdspb.VerifyResourceRequest) (*sdspb.VerifyResourceResponse, error) {
+	return c.client.VerifyResource(ctx, req)
+}
+
 func (c *SDSClient) DRFailback(ctx context.Context, name, node string, waitSeconds uint32) (*sdspb.DRFailbackResponse, error) {
 	return c.client.DRFailback(ctx, &sdspb.DRFailbackRequest{Name: name, Node: node, WaitSeconds: waitSeconds})
 }

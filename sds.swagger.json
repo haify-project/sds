@@ -2835,6 +2835,44 @@
         ]
       }
     },
+    "/v1/resources/{name}/verify": {
+      "post": {
+        "operationId": "SDSController_VerifyResource",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VerifyResourceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerVerifyResourceBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{name}/wan/endpoint": {
       "post": {
         "operationId": "SDSController_SetWanEndpoint",
@@ -5432,6 +5470,24 @@
           "description": "DRBD options as \"section/key\" -\u003e value (e.g. \"net/max-buffers\" -\u003e \"8000\",\n\"on-no-quorum\" -\u003e \"suspend-io\"). Keys without a section default to the\nresource-level \"options\" section."
         }
       }
+    },
+    "SDSControllerVerifyResourceBody": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "node is the node to verify from and, with resync, whose data wins. Empty\ntakes the Primary, else the first diskful node."
+        },
+        "waitSeconds": {
+          "type": "integer",
+          "format": "int64",
+          "description": "wait_seconds bounds how long this call waits for the verify to finish;\n0 does not wait."
+        },
+        "resync": {
+          "type": "boolean"
+        }
+      },
+      "description": "VerifyResourceRequest compares a resource's replicas block by block (DRBD\nonline verify) from one node against each of its connected peers. Run it\nagain while phase is \"running\" to follow it; with resync it instead copies\nthe source's data over the blocks a finished verify found different."
     },
     "protobufAny": {
       "type": "object",
@@ -9072,6 +9128,57 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1VerifyPeer": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "description": "state is \"verifying\", \"done\", or why the peer was skipped."
+        },
+        "outOfSyncKib": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "percentDone": {
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "v1VerifyResourceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "description": "phase is \"running\", \"done\" or \"resynced\"."
+        },
+        "source": {
+          "type": "string"
+        },
+        "peers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VerifyPeer"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

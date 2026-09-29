@@ -608,3 +608,41 @@ func TestDisconnectedReplicaIsDegraded(t *testing.T) {
 	degraded, _ = isDegraded(local)
 	assert.False(t, degraded, "the answering node carries no Connection and must not be called degraded for it")
 }
+
+// Two replicas that both say UpToDate but hold different data are only ever
+// visible as out-of-sync on an Established connection. The same counter on a
+// disconnected or resyncing peer is catch-up, which degrade already reports.
+func TestOutOfSyncFiresOnlyOnEstablishedPeers(t *testing.T) {
+	diff := healthy("Secondary")
+	diff.Connection = "Connected"
+	diff.OutOfSyncKiB = 12
+	catchingUp := NodeStateInfo{DiskState: "Outdated", ReplicationState: "Off", Role: "", Connection: "Connecting", OutOfSyncKiB: 4096}
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:       "res1",
+		NodeStates: map[string]NodeStateInfo{"n1": healthy("Primary"), "n2": diff, "n3": catchingUp},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	var oos []event.Event
+	for _, e := range drain() {
+		if e.Type == event.TypeResourceOutOfSync {
+			oos = append(oos, e)
+		}
+	}
+	require.Len(t, oos, 1)
+	assert.Equal(t, "n2", oos[0].Node)
+	assert.Equal(t, "12", oos[0].Details["out_of_sync_kib"])
+
+	diff.OutOfSyncKiB = 0
+	lister.list[0].NodeStates["n2"] = diff
+	mon.Poll(ctx)
+	var resolved bool
+	for _, e := range drain() {
+		if e.Type == event.TypeResourceOutOfSync && e.Status == event.StatusResolved {
+			resolved = true
+		}
+	}
+	assert.True(t, resolved)
+}

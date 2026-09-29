@@ -159,6 +159,7 @@ func (nm *NodeManager) SetNodeAddresses(ctx context.Context, moves []AddressMove
 	}
 
 	nm.rekey(ctx, resolved, byName)
+	nm.updateKnownHosts(ctx, resolved)
 	for _, mv := range resolved {
 		nm.updateHostsFiles(ctx, mv.Hostname, mv.OldAddress, mv.Address)
 		nm.controller.logger.Info("Node renumbered",
@@ -284,6 +285,72 @@ func (nm *NodeManager) updateHostsFiles(ctx context.Context, hostname, old, addr
 		"echo "+base64Std(hostsFileScript(hostname, address))+" | base64 -d | sudo /bin/sh"); err != nil {
 		nm.controller.logger.Warn("Failed to update /etc/hosts for a renumbered node", zap.Error(err))
 	}
+}
+
+// updateKnownHosts puts each renumbered node's host keys into every node's
+// root known_hosts under its new address, and forgets what was recorded under
+// its old one.
+//
+// Without it the renumbering works from the node running the controller and
+// breaks the day another node takes over: when addresses are reshuffled — a
+// DHCP lease swap, two nodes trading places — each node still holds the key
+// of the machine that used to be at an address, and accept-new refuses a key
+// that changed. On the Lima cluster that surfaced weeks later as "mkdir
+// failed" on the first resource created after a controller failover.
+//
+// The keys are read over the connection that just proved the node answers at
+// its new address with its own hostname. Every stale entry is removed before
+// any key is added, so a node moving onto another's old address does not have
+// its fresh entry removed along with the other's stale one.
+func (nm *NodeManager) updateKnownHosts(ctx context.Context, moves []NodeMove) {
+	var forget []string
+	var entries strings.Builder
+	for _, mv := range moves {
+		forget = append(forget, mv.OldAddress, mv.Address)
+		res, err := nm.controller.deployment.Exec(ctx, []string{mv.Address}, "cat /etc/ssh/ssh_host_*_key.pub")
+		if err != nil {
+			nm.controller.logger.Warn("Read host keys of a renumbered node", zap.String("node", mv.Node), zap.Error(err))
+			continue
+		}
+		for _, hr := range res.Hosts {
+			if !hr.Success {
+				continue
+			}
+			for _, line := range strings.Split(hr.Output, "\n") {
+				f := strings.Fields(line)
+				if len(f) >= 2 && (strings.HasPrefix(f[0], "ssh-") || strings.HasPrefix(f[0], "ecdsa-")) {
+					fmt.Fprintf(&entries, "%s %s %s\n", mv.Address, f[0], f[1])
+				}
+			}
+		}
+	}
+	nm.controller.hostsLock.RLock()
+	hosts := append([]string(nil), nm.controller.hosts...)
+	nm.controller.hostsLock.RUnlock()
+	if _, err := nm.controller.deployment.Exec(ctx, hosts,
+		"echo "+base64Std(knownHostsScript(forget, entries.String()))+" | base64 -d | sudo /bin/sh"); err != nil {
+		nm.controller.logger.Warn("Failed to update known_hosts for renumbered nodes", zap.Error(err))
+	}
+}
+
+// knownHostsScript removes every address in forget from root's known_hosts,
+// then appends entries.
+func knownHostsScript(forget []string, entries string) string {
+	var b strings.Builder
+	b.WriteString("f=/root/.ssh/known_hosts\nmkdir -p /root/.ssh && touch \"$f\"\n")
+	seen := map[string]bool{}
+	for _, a := range forget {
+		if a == "" || seen[a] {
+			continue
+		}
+		seen[a] = true
+		fmt.Fprintf(&b, "ssh-keygen -R %q -f \"$f\" >/dev/null 2>&1\n", a)
+	}
+	if entries != "" {
+		fmt.Fprintf(&b, "cat >> \"$f\" <<'SDS_KNOWN_HOSTS'\n%sSDS_KNOWN_HOSTS\n", entries)
+	}
+	b.WriteString("rm -f \"$f.old\"\n")
+	return b.String()
 }
 
 // hostsFileScript rewrites /etc/hosts in place; see updateHostsFiles.
