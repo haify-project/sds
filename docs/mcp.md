@@ -95,6 +95,13 @@ connection — a tool that is not there cannot be called by name:
 `--max-role` caps every token on a given server, whatever the token says: a
 server reachable from the internet can be held to `operate`, or `read`.
 
+`--admin-listen ADDR` opens a second listener that `--max-role` does not cap,
+for operators on the local network: an admin token there gets every tool, while
+the main listener (the one a reverse proxy points at) stays capped. It takes
+bearer tokens only, with no OAuth, and must never be proxied or published. Bind
+it to a port the proxy is not configured for, e.g.
+`--listen 0.0.0.0:43871 --max-role operate --admin-listen 0.0.0.0:43872`.
+
 Tokens are shown once and stored only as a hash, in
 `/var/lib/sds/mcp/tokens.json` (`--tokens` or `SDS_MCP_TOKENS` to change it),
 on the Self-HA mount so they follow the server. `sds-mcp token list` and

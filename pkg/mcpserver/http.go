@@ -35,6 +35,13 @@ type HTTPOptions struct {
 	// TrustProxy takes the client address from X-Forwarded-For, for the
 	// failure limiter. Only correct behind a proxy that sets it.
 	TrustProxy bool
+	// AdminListen, when set, opens a second listener for the local network
+	// that is not capped by MaxRole: a token there gets the tools its own
+	// role allows, admin included. It serves bearer tokens only — no OAuth,
+	// no proxy headers — so the internet-facing listener can stay capped
+	// while an operator on the LAN keeps delete and evict. Never point a
+	// reverse proxy at it.
+	AdminListen string
 }
 
 // ServeHTTP serves MCP over streamable HTTP until ctx ends.
@@ -62,17 +69,87 @@ func ServeHTTP(ctx context.Context, c ControllerClient, logger *zap.Logger, base
 	}
 
 	limiter := mcpauth.NewLimiter(10, 5*time.Minute)
+	primary := listener{addr: h.Listen, maxRole: h.MaxRole, publicURL: strings.TrimRight(h.PublicURL, "/"), trustProxy: h.TrustProxy}
+	handler := newHandler(primary, h.Tokens, servers, limiter)
+
+	primarySrv := newHTTPServer(h.Listen, handler)
+	errc := make(chan error, 2)
+	httpServers := []*http.Server{primarySrv}
+	go func() {
+		if h.TLSCert != "" {
+			errc <- primarySrv.ListenAndServeTLS(h.TLSCert, h.TLSKey)
+		} else {
+			errc <- primarySrv.ListenAndServe()
+		}
+	}()
+	logger.Info("SDS MCP server listening",
+		zap.String("addr", h.Listen), zap.Bool("tls", h.TLSCert != ""),
+		zap.Bool("oauth", primary.publicURL != ""), zap.String("max_role", string(h.MaxRole)),
+		zap.String("version", base.Version))
+
+	if h.AdminListen != "" {
+		admin := listener{addr: h.AdminListen, maxRole: mcpauth.RoleAdmin}
+		adminSrv := newHTTPServer(h.AdminListen, newHandler(admin, h.Tokens, servers, limiter))
+		httpServers = append(httpServers, adminSrv)
+		go func() {
+			if h.TLSCert != "" {
+				errc <- adminSrv.ListenAndServeTLS(h.TLSCert, h.TLSKey)
+			} else {
+				errc <- adminSrv.ListenAndServe()
+			}
+		}()
+		logger.Info("SDS MCP admin listener (local network, not capped, no OAuth)",
+			zap.String("addr", h.AdminListen), zap.Bool("tls", h.TLSCert != ""))
+	}
+
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		var first error
+		for _, srv := range httpServers {
+			if err := srv.Shutdown(sctx); err != nil && first == nil {
+				first = err
+			}
+		}
+		return first
+	}
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
+}
+
+// listener is one bound address and the ceiling of what it may do.
+type listener struct {
+	addr       string
+	maxRole    mcpauth.Role
+	publicURL  string
+	trustProxy bool
+}
+
+// newHandler builds the routes for one listener: the token check, the tool
+// set picked by the token's role (never above the listener's cap), and, when
+// the listener has a public URL, the OAuth endpoints.
+func newHandler(l listener, tokens *mcpauth.Store, servers map[mcpauth.Role]*mcp.Server, limiter *mcpauth.Limiter) http.Handler {
 	verify := func(_ context.Context, secret string, r *http.Request) (*auth.TokenInfo, error) {
-		ip := mcpauth.ClientIP(r, h.TrustProxy)
+		ip := mcpauth.ClientIP(r, l.trustProxy)
 		if limiter.Blocked("bearer:" + ip) {
 			return nil, auth.ErrInvalidToken
 		}
-		t, err := h.Tokens.Verify(secret)
+		t, err := tokens.Verify(secret)
 		if err != nil {
 			limiter.Fail("bearer:" + ip)
 			return nil, auth.ErrInvalidToken
 		}
-		role := mcpauth.Min(t.Role, h.MaxRole)
+		role := mcpauth.Min(t.Role, l.maxRole)
 		return &auth.TokenInfo{
 			Scopes:     role.Scopes(),
 			Expiration: t.Expires,
@@ -81,7 +158,7 @@ func ServeHTTP(ctx context.Context, c ControllerClient, logger *zap.Logger, base
 		}, nil
 	}
 
-	public := strings.TrimRight(h.PublicURL, "/")
+	public := l.publicURL
 	bearer := auth.RequireBearerToken(verify, &auth.RequireBearerTokenOptions{
 		ResourceMetadataURL:    publicOr(public, "/.well-known/oauth-protected-resource"),
 		AllowMissingExpiration: true,
@@ -91,7 +168,7 @@ func ServeHTTP(ctx context.Context, c ControllerClient, logger *zap.Logger, base
 		if info == nil {
 			return nil
 		}
-		return servers[mcpauth.Min(mcpauth.RoleFromScopes(info.Scopes), h.MaxRole)]
+		return servers[mcpauth.Min(mcpauth.RoleFromScopes(info.Scopes), l.maxRole)]
 	}, nil)
 
 	mux := http.NewServeMux()
@@ -104,42 +181,16 @@ func ServeHTTP(ctx context.Context, c ControllerClient, logger *zap.Logger, base
 		meta := auth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
 			Resource:               public + "/mcp",
 			AuthorizationServers:   []string{public},
-			ScopesSupported:        h.MaxRole.Scopes(),
+			ScopesSupported:        l.maxRole.Scopes(),
 			BearerMethodsSupported: []string{"header"},
 		})
 		mux.Handle("/.well-known/oauth-protected-resource", meta)
 		mux.Handle("/.well-known/oauth-protected-resource/mcp", meta)
 		mcpauth.NewOAuth(mcpauth.OAuthConfig{
-			Store: h.Tokens, PublicURL: public, Limiter: limiter, TrustProxy: h.TrustProxy, MaxRole: h.MaxRole,
+			Store: tokens, PublicURL: public, Limiter: limiter, TrustProxy: l.trustProxy, MaxRole: l.maxRole,
 		}).Mount(mux)
 	}
-
-	srv := &http.Server{
-		Addr:              h.Listen,
-		Handler:           mux,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       2 * time.Minute,
-	}
-	errc := make(chan error, 1)
-	go func() {
-		if h.TLSCert != "" {
-			errc <- srv.ListenAndServeTLS(h.TLSCert, h.TLSKey)
-		} else {
-			errc <- srv.ListenAndServe()
-		}
-	}()
-	logger.Info("SDS MCP server listening",
-		zap.String("addr", h.Listen), zap.Bool("tls", h.TLSCert != ""),
-		zap.Bool("oauth", public != ""), zap.String("max_role", string(h.MaxRole)),
-		zap.String("version", base.Version))
-	select {
-	case err := <-errc:
-		return err
-	case <-ctx.Done():
-		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		return srv.Shutdown(sctx)
-	}
+	return mux
 }
 
 func publicOr(public, path string) string {

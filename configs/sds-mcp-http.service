@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 # Tokens live on the Self-HA mount, so they follow the server when it moves.
 # SDS_MCP_ARGS carries the per-site flags, e.g.
-#   SDS_MCP_ARGS="--public-url https://mcp.example.com --max-role operate --trust-proxy"
+#   SDS_MCP_ARGS="--public-url https://mcp.example.com --max-role operate --trust-proxy --admin-listen 0.0.0.0:43872"
 EnvironmentFile=-/var/lib/sds/mcp/sds-mcp.env
 Environment=HOME=/var/lib/sds/mcp
 WorkingDirectory=/var/lib/sds/mcp

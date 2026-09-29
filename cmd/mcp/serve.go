@@ -34,6 +34,7 @@ func serveCmd() *cobra.Command {
 		controllerAddr string
 		controllerTok  string
 		listen         string
+		adminListen    string
 		publicURL      string
 		tokens         string
 		maxRole        string
@@ -85,7 +86,7 @@ func serveCmd() *cobra.Command {
 			defer func() { _ = sdsClient.Close() }()
 
 			return mcpserver.ServeHTTP(cmd.Context(), sdsClient, logger, mcpserver.Options{Version: version}, mcpserver.HTTPOptions{
-				Listen: listen, PublicURL: publicURL, Tokens: store, MaxRole: role,
+				Listen: listen, AdminListen: adminListen, PublicURL: publicURL, Tokens: store, MaxRole: role,
 				TLSCert: tlsCert, TLSKey: tlsKey, TrustProxy: trustProxy,
 			})
 		},
@@ -94,6 +95,7 @@ func serveCmd() *cobra.Command {
 	f.StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "SDS controller address")
 	f.StringVar(&controllerTok, "controller-token", "", "API token for the controller when [auth] is enabled (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
 	f.StringVar(&listen, "listen", "127.0.0.1:43871", "address to listen on")
+	f.StringVar(&adminListen, "admin-listen", "", "second address for the local network that is not capped by --max-role (bearer tokens only, no OAuth); never proxy it")
 	f.StringVar(&publicURL, "public-url", "", "URL clients reach this server at, e.g. https://mcp.example.com; enables OAuth for ChatGPT and claude.ai")
 	f.StringVar(&tokens, "tokens", "", "token store (default: SDS_MCP_TOKENS env, else "+defaultTokenStore+")")
 	f.StringVar(&maxRole, "max-role", "admin", "highest role any token may use here: read, operate or admin")
