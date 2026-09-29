@@ -435,6 +435,15 @@ backend and an LLM/embedder (e.g. DashScope).
   the old index cannot be searched with the new vectors, and the symptom is
   not an error but every search returning nothing. `GET /ai/kb/list` reports
   the width read back from the index, which is how you check.
+- **Shared knowledge base.** What is the same on every cluster — SDS's docs,
+  its code graph, the `sds-cli` reference and the DRBD 9 manuals — is built once
+  with `make kb` (see `ai/kb/build.sh` for the environment) into
+  `dist/kb/sds-kb.db` plus a manifest `sds-kb.json`. Install both on every node
+  at `/opt/sds/share/` and set
+  `SDS_AI_SHARED_KNOWLEDGE_DB=/opt/sds/share/sds-kb.db`; sds-ai searches it
+  read-only alongside `SDS_AI_KNOWLEDGE_DB`, which then only needs what that
+  cluster learned about itself. The manifest names the embedder it was built
+  with: the cluster must use the same model and dimension, or startup fails.
 - Unit `sds-ai.service` (`EnvironmentFile`/`WorkingDirectory`/`HOME` =
   `/var/lib/sds/ai`), left **disabled** so only the reactor promoter starts it.
 - HTTP: `GET /ai/health`, `POST /ai/chat/stream` (chat), `GET /ai/kb/list`

@@ -11,7 +11,7 @@ import (
 
 // registerKBRoutes wires the knowledge-base update endpoints onto mux. They MUTATE
 // the vector/graph index, so the embedder in effect (STEWARD_EMB_MODEL) MUST be the one
-// the index was built with — 1024-dim text-embedding-v4. A mismatched embedder
+// the index was built with — 768-dim embeddinggemma. A mismatched embedder
 // writes vectors of a different dimension and corrupts retrieval (steward spec
 // O1). sds-ai already fails fast if EmbDim disagrees, but the model itself must
 // also match.

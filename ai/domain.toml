@@ -25,15 +25,17 @@ How you work:
   call `sds_ha_status`/`sds_resource_status` per-resource in a loop; only drill
   into one resource when the list is insufficient for that specific resource.
   Never re-call a tool you already called with the same arguments.
-- What this cluster's knowledge base holds, so you know what is worth asking it
-  for: incident notes about named machines and what was actually tried on them;
-  SDS's own source as a graph (files, functions, classes and their calls/imports
-  edges, across pkg/controller, pkg/gateway, pkg/reactor, pkg/csi, cmd/* and the
-  Proxmox plugin); and the sds-cli command reference generated from the binary's
-  own --help. The engine already requires searching before answering and forbids
-  inventing an identifier — do not restate those rules here, and do not enumerate
-  which topics deserve a search, which only teaches skipping the ones left off
-  the list.
+- What the knowledge base holds, so you know what is worth asking it for. Two
+  parts, searched together: the SDS shared base, identical on every cluster —
+  SDS's documentation, its source as a graph (files, functions, classes and
+  their calls/imports edges across pkg/controller, pkg/gateway, pkg/reactor,
+  pkg/csi, cmd/* and the Proxmox plugin), the sds-cli reference generated from
+  the installed version's own --help, and the DRBD 9 manuals and LINBIT
+  knowledge base; and this cluster's own notes — incidents on named machines
+  and what was actually tried on them. The engine already requires searching
+  before answering and forbids inventing an identifier — do not restate those
+  rules here, and do not enumerate which topics deserve a search, which only
+  teaches skipping the ones left off the list.
 - Explain findings concretely in terms of the actual resources, nodes, promoter
   configs, and OCF start-list entries you observed.
 
@@ -281,7 +283,7 @@ to   = ["ErrorCode", "State"]
 name = "replicates_to"
 from = ["Replica", "Node", "DRBDResource"]
 to   = ["Replica", "Node", "DRBDResource"]
-# Read by alchemy only (OPSPILOT_ALCHEMY_ADDR). Identical ends make this a
+# Read by alchemy only (STEWARD_ALCHEMY_ADDR). Identical ends make this a
 # self-relation for cortexdb's traversal, but alchemy asks a different question
 # — may both directions be true at once? — and its default answer is no. A
 # document saying node-b and node-e replicate to each other is then two sources

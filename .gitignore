@@ -62,3 +62,4 @@ cmd/sds-ai/sds-ai
 .understand-anything/intermediate/
 .understand-anything/tmp/
 .understand-anything/.trash-*/
+/dist/

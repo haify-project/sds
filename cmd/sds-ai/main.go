@@ -1,5 +1,5 @@
 // Command sds-ai hosts the SDS AI Copilot backend. It imports the steward
-// library, wires it to the read-only sds-mcp cluster tools and the drbd-reactor
+// library, wires it to the read-only sds-mcp cluster tools and the SDS
 // knowledge base, and serves a single NDJSON streaming endpoint the sds web-ui
 // Copilot sidebar talks to.
 //
@@ -10,11 +10,13 @@
 // Config via environment (all optional except a knowledge DB + LLM key):
 //
 //	SDS_AI_ADDR           listen address (default ":7634")
-//	SDS_AI_KNOWLEDGE_DB   path to drbd-reactor.db cortexdb store (required)
+//	SDS_AI_KNOWLEDGE_DB   path to the cortexdb knowledge store (required)
+//	SDS_AI_SHARED_KNOWLEDGE_DB  the SDS shared knowledge base (`make kb`), searched
+//	                      alongside it read-only; built with the same embedder
 //	SDS_AI_DOMAIN         path to ai/domain.toml (default "ai/domain.toml")
 //	SDS_AI_CONTROLLER     sds controller addr for sds-mcp (default "192.168.123.250:3374")
 //	SDS_AI_MCP_CMD        sds-mcp executable (default "sds-mcp")
-//	SDS_AI_EMB_DIM        embedding dim of the knowledge index (default 1024)
+//	SDS_AI_EMB_DIM        embedding dim of the knowledge index (default 768)
 //	SDS_AI_KUBECONFIG     kubeconfig for the sds-k8s tools (`sds-mcp k8s`); unset = bare-metal tools only
 //	SDS_AI_ALLOW_ORIGIN   CORS allow-origin (default "*")
 //	STEWARD_LLM_API_KEY / _BASE_URL / _MODEL    LLM (steward also reads the old OPSPILOT_*, OPSDOCTOR_* and OSS_* names)
@@ -56,7 +58,7 @@ func main() {
 	addr := envOr("SDS_AI_ADDR", "127.0.0.1:7634")
 	knowledgeDB := os.Getenv("SDS_AI_KNOWLEDGE_DB")
 	if knowledgeDB == "" {
-		log.Fatal("SDS_AI_KNOWLEDGE_DB is required (path to drbd-reactor.db)")
+		log.Fatal("SDS_AI_KNOWLEDGE_DB is required (path to the knowledge DB)")
 	}
 
 	// Settings saved from the UI, layered over the environment. The file lives
@@ -73,19 +75,28 @@ func main() {
 			setPath, saved.LLMModel, saved.LLMBaseURL)
 	}
 
-	embDim := atoiOr("SDS_AI_EMB_DIM", 1024)
+	embDim := atoiOr("SDS_AI_EMB_DIM", 768)
 	embModel := envOr("STEWARD_EMB_MODEL", envOr("OPSPILOT_EMB_MODEL", envOr("OPSDOCTOR_EMB_MODEL", os.Getenv("OSS_EMB_MODEL"))))
+
+	shared, err := sharedKnowledge(os.Getenv("SDS_AI_SHARED_KNOWLEDGE_DB"), embModel, embDim)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	ag, err := steward.New(steward.Config{
 		KnowledgeDBPath: knowledgeDB,
-		DomainFile:      envOr("SDS_AI_DOMAIN", "ai/domain.toml"),
+		// Product knowledge is one file, built with the code and installed
+		// on every node, so every cluster answers from the same docs, code
+		// graph and CLI reference instead of whatever it happened to ingest.
+		SharedKnowledgeDBPaths: shared,
+		DomainFile:             envOr("SDS_AI_DOMAIN", "ai/domain.toml"),
 		// Empty fields fall through to the environment, which is what makes the
 		// settings file an override rather than a replacement.
 		LLMBaseURL: saved.LLMBaseURL,
 		LLMModel:   saved.LLMModel,
 		LLMAPIKey:  saved.LLMAPIKey,
-		// The drbd-reactor.db index is 1024-dim; the embedder model comes from
-		// STEWARD_EMB_MODEL (must match how the index was built — see spec O1).
+		// The knowledge index is 768-dim (embeddinggemma); the embedder model comes
+		// from STEWARD_EMB_MODEL (must match how the index was built — see spec O1).
 		EmbDim: embDim,
 		// Mount the sds cluster tools read-only plus the day-to-day writes
 		// (dailyOps). Every write is held until the operator approves it in

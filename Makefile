@@ -1,4 +1,4 @@
-.PHONY: build test clean install-controller install-cli install-mcp run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure hooks ci
+.PHONY: kb build test clean install-controller install-cli install-mcp run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure hooks ci
 
 # Sync the freshly built web UI into ui/dist for go:embed. The directory is
 # gitignored and intentionally kept around after builds so plain `go build`
@@ -154,3 +154,9 @@ web-ui-install: web-ui-build
 	sudo mkdir -p /opt/sds/www
 	sudo cp -r web-ui/dist/* /opt/sds/www/
 	@echo "Web UI installed to /opt/sds/www/"
+
+# The shared knowledge base sds-ai attaches read-only on every cluster:
+# docs, code graph, CLI reference and DRBD manuals. See ai/kb/build.sh for
+# the environment it needs.
+kb:
+	ai/kb/build.sh dist/kb
