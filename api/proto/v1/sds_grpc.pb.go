@@ -145,6 +145,7 @@ const (
 	SDSController_DeleteNotifyChannel_FullMethodName       = "/v1.SDSController/DeleteNotifyChannel"
 	SDSController_TestNotifyChannel_FullMethodName         = "/v1.SDSController/TestNotifyChannel"
 	SDSController_RepairWanProxy_FullMethodName            = "/v1.SDSController/RepairWanProxy"
+	SDSController_DRFailback_FullMethodName                = "/v1.SDSController/DRFailback"
 	SDSController_SetWanEndpoint_FullMethodName            = "/v1.SDSController/SetWanEndpoint"
 	SDSController_WatchEvents_FullMethodName               = "/v1.SDSController/WatchEvents"
 )
@@ -366,6 +367,7 @@ type SDSControllerClient interface {
 	// that should exist and removes instances left behind by a node that was
 	// renumbered or removed. Safe to run on a healthy resource — it converges.
 	RepairWanProxy(ctx context.Context, in *RepairWanProxyRequest, opts ...grpc.CallOption) (*RepairWanProxyResponse, error)
+	DRFailback(ctx context.Context, in *DRFailbackRequest, opts ...grpc.CallOption) (*DRFailbackResponse, error)
 	SetWanEndpoint(ctx context.Context, in *SetWanEndpointRequest, opts ...grpc.CallOption) (*SetWanEndpointResponse, error)
 	// WatchEvents streams notifications as they happen, so an operator (or the
 	// web UI, or a script) can react without polling. Over REST this is a
@@ -1645,6 +1647,16 @@ func (c *sDSControllerClient) RepairWanProxy(ctx context.Context, in *RepairWanP
 	return out, nil
 }
 
+func (c *sDSControllerClient) DRFailback(ctx context.Context, in *DRFailbackRequest, opts ...grpc.CallOption) (*DRFailbackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DRFailbackResponse)
+	err := c.cc.Invoke(ctx, SDSController_DRFailback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) SetWanEndpoint(ctx context.Context, in *SetWanEndpointRequest, opts ...grpc.CallOption) (*SetWanEndpointResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetWanEndpointResponse)
@@ -1891,6 +1903,7 @@ type SDSControllerServer interface {
 	// that should exist and removes instances left behind by a node that was
 	// renumbered or removed. Safe to run on a healthy resource — it converges.
 	RepairWanProxy(context.Context, *RepairWanProxyRequest) (*RepairWanProxyResponse, error)
+	DRFailback(context.Context, *DRFailbackRequest) (*DRFailbackResponse, error)
 	SetWanEndpoint(context.Context, *SetWanEndpointRequest) (*SetWanEndpointResponse, error)
 	// WatchEvents streams notifications as they happen, so an operator (or the
 	// web UI, or a script) can react without polling. Over REST this is a
@@ -2287,6 +2300,9 @@ func (UnimplementedSDSControllerServer) TestNotifyChannel(context.Context, *Test
 }
 func (UnimplementedSDSControllerServer) RepairWanProxy(context.Context, *RepairWanProxyRequest) (*RepairWanProxyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RepairWanProxy not implemented")
+}
+func (UnimplementedSDSControllerServer) DRFailback(context.Context, *DRFailbackRequest) (*DRFailbackResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DRFailback not implemented")
 }
 func (UnimplementedSDSControllerServer) SetWanEndpoint(context.Context, *SetWanEndpointRequest) (*SetWanEndpointResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetWanEndpoint not implemented")
@@ -4583,6 +4599,24 @@ func _SDSController_RepairWanProxy_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_DRFailback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DRFailbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DRFailback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DRFailback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DRFailback(ctx, req.(*DRFailbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_SetWanEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetWanEndpointRequest)
 	if err := dec(in); err != nil {
@@ -5122,6 +5156,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RepairWanProxy",
 			Handler:    _SDSController_RepairWanProxy_Handler,
+		},
+		{
+			MethodName: "DRFailback",
+			Handler:    _SDSController_DRFailback_Handler,
 		},
 		{
 			MethodName: "SetWanEndpoint",

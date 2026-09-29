@@ -2873,6 +2873,44 @@
         ]
       }
     },
+    "/v1/resources/{name}/wan/failback": {
+      "post": {
+        "operationId": "SDSController_DRFailback",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DRFailbackResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerDRFailbackBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{name}/wan/repair": {
       "post": {
         "summary": "RepairWanProxy reconciles a WAN resource's replication tunnels with what\nthe controller currently believes its nodes are: it re-provisions the legs\nthat should exist and removes instances left behind by a node that was\nrenumbered or removed. Safe to run on a healthy resource — it converges.",
@@ -5080,6 +5118,21 @@
         }
       }
     },
+    "SDSControllerDRFailbackBody": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "node is the primary-site node to promote; empty takes the first."
+        },
+        "waitSeconds": {
+          "type": "integer",
+          "format": "int64",
+          "description": "wait_seconds bounds how long this call waits for the resync before it\nreports progress and returns; 0 does not wait."
+        }
+      },
+      "description": "DRFailbackRequest returns a WAN resource from its DR node to the primary site\nafter a DR failover. Run it again until phase is \"done\": it rejoins the\nprimary site (discarding what those nodes wrote after they were cut off),\nwaits for them to resync from the DR, then moves the Primary role back."
+    },
     "SDSControllerEvictHaBody": {
       "type": "object"
     },
@@ -5241,6 +5294,14 @@
         "replicationAddress": {
           "type": "string",
           "description": "replication_address moves DRBD traffic to a separate network; empty keeps\nthe node's current choice (none = the management address)."
+        },
+        "moves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NodeAddressMove"
+          },
+          "description": "moves renumbers several nodes together, instead of node/address — what a\nDHCP server handing every node a new lease needs. One at a time cannot\nwork then: each node's resources are rewritten through peers still known\nonly by their dead addresses."
         }
       },
       "description": "SetNodeAddressRequest renumbers a registered node: the controller reaches it\nat the new address, checks it is the same machine, and rewrites every place\nthe old address was recorded — the node registry, /etc/hosts on the nodes,\nand the DRBD config of each resource the node takes part in."
@@ -6478,6 +6539,27 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1DRFailbackResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "description": "phase is where the failback stands: \"resyncing\" (run again to finish) or\n\"done\"."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -7720,6 +7802,20 @@
           "type": "string"
         },
         "nqn": {
+          "type": "string"
+        }
+      }
+    },
+    "v1NodeAddressMove": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "replicationAddress": {
           "type": "string"
         }
       }

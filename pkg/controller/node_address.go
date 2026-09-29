@@ -19,100 +19,155 @@ import (
 // new one beside the stale first, and DRBD kept connecting to an address the
 // node no longer had.
 
-// NodeAddressChange is what SetNodeAddress did.
-type NodeAddressChange struct {
+// AddressMove asks for one node to be renumbered.
+type AddressMove struct {
 	Node               string
+	Address            string
+	ReplicationAddress string // empty keeps the node's current arrangement
+}
+
+// NodeMove is one node's renumbering as carried out.
+type NodeMove struct {
+	Node               string
+	Hostname           string
 	OldAddress         string
 	Address            string
 	OldReplication     string // the address DRBD used before
 	ReplicationAddress string // the address DRBD uses now
-	Resources          []string
-	Failed             []string // "<resource>: <reason>"
-	WANResources       []string // resources whose WAN proxy must be rebuilt
 }
 
-// SetNodeAddress renumbers a registered node. The node must already answer on
-// the new address and be the same machine (same hostname); the address must
-// not belong to another node. replicationAddress, when set, moves DRBD traffic
-// to it; empty keeps the node's current arrangement — a node whose replication
-// ran on its management address follows it to the new one.
+// NodeAddressChange is what SetNodeAddresses did.
+type NodeAddressChange struct {
+	Moves        []NodeMove
+	Resources    []string
+	Failed       []string // "<resource>: <reason>"
+	WANResources []string // resources whose WAN proxy must be rebuilt
+}
+
+// SetNodeAddress renumbers one registered node; see SetNodeAddresses.
 func (nm *NodeManager) SetNodeAddress(ctx context.Context, nodeRef, address, replicationAddress string) (*NodeAddressChange, error) {
-	address = strings.TrimSpace(address)
-	replicationAddress = strings.TrimSpace(replicationAddress)
-	if net.ParseIP(address) == nil {
-		return nil, fmt.Errorf("%q is not an IP address", address)
-	}
-	if replicationAddress != "" && net.ParseIP(replicationAddress) == nil {
-		return nil, fmt.Errorf("replication address %q is not an IP address", replicationAddress)
+	return nm.SetNodeAddresses(ctx, []AddressMove{{Node: nodeRef, Address: address, ReplicationAddress: replicationAddress}})
+}
+
+// SetNodeAddresses renumbers registered nodes together. Each must already
+// answer on its new address and be the same machine (same hostname), and no
+// two nodes may end up on one address. A replication address, when given,
+// moves DRBD traffic there; otherwise a node whose replication ran on its
+// management address follows it, and one with its own replication network
+// keeps it.
+//
+// Several at once is not a convenience. When a DHCP server hands every node a
+// new lease, renumbering them one by one cannot work: the first node's
+// resources are rewritten through peers the controller still knows only by
+// their dead addresses, and when two nodes trade addresses the configs end up
+// with both peers on one address in between. Here every check runs before
+// anything changes, and the registry takes all the new addresses before any
+// config is rewritten.
+func (nm *NodeManager) SetNodeAddresses(ctx context.Context, moves []AddressMove) (*NodeAddressChange, error) {
+	if len(moves) == 0 {
+		return nil, fmt.Errorf("no node to renumber")
 	}
 
 	nm.mu.RLock()
-	var node *NodeInfo
+	byName := make(map[string]*NodeInfo, len(nm.nodes))
 	for _, n := range nm.nodes {
-		if n.Name == nodeRef || n.Address == nodeRef {
-			c := *n
-			node = &c
-		}
+		c := *n
+		byName[n.Name] = &c
+		byName[n.Address] = &c
 	}
-	var clash string
-	for addr, n := range nm.nodes {
-		if node != nil && n.Name != node.Name && (addr == address || n.ReplicationAddress == address) {
-			clash = n.Name
-		}
+	var all []NodeInfo
+	for _, n := range nm.nodes {
+		all = append(all, *n)
 	}
 	nm.mu.RUnlock()
-	if node == nil {
-		return nil, fmt.Errorf("node %q is not registered", nodeRef)
+
+	// Resolve and validate every move before touching anything.
+	var resolved []NodeMove
+	seen := map[string]bool{}
+	for _, m := range moves {
+		address := strings.TrimSpace(m.Address)
+		repl := strings.TrimSpace(m.ReplicationAddress)
+		if net.ParseIP(address) == nil {
+			return nil, fmt.Errorf("%q is not an IP address", address)
+		}
+		if repl != "" && net.ParseIP(repl) == nil {
+			return nil, fmt.Errorf("replication address %q is not an IP address", repl)
+		}
+		node := byName[strings.TrimSpace(m.Node)]
+		if node == nil {
+			return nil, fmt.Errorf("node %q is not registered", m.Node)
+		}
+		if seen[node.Name] {
+			return nil, fmt.Errorf("node %s is named twice", node.Name)
+		}
+		seen[node.Name] = true
+		mv := NodeMove{Node: node.Name, Hostname: node.Hostname, OldAddress: node.Address, Address: address,
+			OldReplication: replicationOf(node)}
+		switch {
+		case repl != "":
+			mv.ReplicationAddress = repl
+		case node.ReplicationAddress != "" && node.ReplicationAddress != node.Address:
+			mv.ReplicationAddress = node.ReplicationAddress
+		default:
+			mv.ReplicationAddress = address
+		}
+		if mv.OldAddress == mv.Address && mv.OldReplication == mv.ReplicationAddress {
+			continue // already there
+		}
+		resolved = append(resolved, mv)
 	}
-	if clash != "" {
-		return nil, fmt.Errorf("%s already belongs to node %s", address, clash)
+	if len(resolved) == 0 {
+		return nil, fmt.Errorf("nothing to change: every node already uses the address given")
 	}
 
-	change := &NodeAddressChange{
-		Node:           node.Name,
-		OldAddress:     node.Address,
-		Address:        address,
-		OldReplication: replicationOf(node),
-	}
-	switch {
-	case replicationAddress != "":
-		change.ReplicationAddress = replicationAddress
-	case node.ReplicationAddress != "" && node.ReplicationAddress != node.Address:
-		change.ReplicationAddress = node.ReplicationAddress
-	default:
-		change.ReplicationAddress = address
-	}
-	if change.OldAddress == address && change.OldReplication == change.ReplicationAddress {
-		return nil, fmt.Errorf("node %s already uses %s", node.Name, address)
+	// No two nodes on one address once everything has moved.
+	final := map[string]string{} // address -> node
+	for _, n := range all {
+		addr, repl := n.Address, replicationOf(&n)
+		for _, mv := range resolved {
+			if mv.Node == n.Name {
+				addr, repl = mv.Address, mv.ReplicationAddress
+			}
+		}
+		for _, a := range []string{addr, repl} {
+			if other, taken := final[a]; taken && other != n.Name {
+				return nil, fmt.Errorf("%s would belong to both %s and %s", a, other, n.Name)
+			}
+			final[a] = n.Name
+		}
 	}
 
 	// Same machine, or nothing moves: a new address that answers with some
 	// other host's name is a typo or a reused lease, and renumbering onto it
 	// would point every replica of every resource at the wrong machine.
-	res, err := nm.controller.deployment.Exec(ctx, []string{address}, "hostname")
-	if err != nil {
-		return nil, fmt.Errorf("reach %s at %s: %w", node.Name, address, err)
-	}
-	var got string
-	for _, hr := range res.Hosts {
-		if !hr.Success {
-			return nil, fmt.Errorf("reach %s at %s: %s", node.Name, address, hostFailure(hr))
+	for _, mv := range resolved {
+		res, err := nm.controller.deployment.Exec(ctx, []string{mv.Address}, "hostname")
+		if err != nil {
+			return nil, fmt.Errorf("reach %s at %s: %w", mv.Node, mv.Address, err)
 		}
-		got = strings.TrimSpace(hr.Output)
-	}
-	if node.Hostname != "" && got != node.Hostname {
-		return nil, fmt.Errorf("%s answers as %q, but node %s is %q; not renumbering onto another machine",
-			address, got, node.Name, node.Hostname)
+		var got string
+		for _, hr := range res.Hosts {
+			if !hr.Success {
+				return nil, fmt.Errorf("reach %s at %s: %s", mv.Node, mv.Address, hostFailure(hr))
+			}
+			got = strings.TrimSpace(hr.Output)
+		}
+		if mv.Hostname != "" && got != mv.Hostname {
+			return nil, fmt.Errorf("%s answers as %q, but node %s is %q; not renumbering onto another machine",
+				mv.Address, got, mv.Node, mv.Hostname)
+		}
 	}
 
-	nm.rekey(ctx, node, change)
-	nm.updateHostsFiles(ctx, node.Hostname, change.OldAddress, address)
-	nm.controller.logger.Info("Node renumbered",
-		zap.String("node", node.Name),
-		zap.String("from", change.OldAddress), zap.String("to", address),
-		zap.String("replication_from", change.OldReplication),
-		zap.String("replication_to", change.ReplicationAddress))
-	return change, nil
+	nm.rekey(ctx, resolved, byName)
+	for _, mv := range resolved {
+		nm.updateHostsFiles(ctx, mv.Hostname, mv.OldAddress, mv.Address)
+		nm.controller.logger.Info("Node renumbered",
+			zap.String("node", mv.Node),
+			zap.String("from", mv.OldAddress), zap.String("to", mv.Address),
+			zap.String("replication_from", mv.OldReplication),
+			zap.String("replication_to", mv.ReplicationAddress))
+	}
+	return &NodeAddressChange{Moves: resolved}, nil
 }
 
 func replicationOf(n *NodeInfo) string {
@@ -122,38 +177,63 @@ func replicationOf(n *NodeInfo) string {
 	return n.Address
 }
 
-// rekey moves the node to its new address everywhere the controller keeps it:
-// the registry, the host list and name map every lookup goes through, and the
-// database, where the address is the key.
-func (nm *NodeManager) rekey(ctx context.Context, node *NodeInfo, change *NodeAddressChange) {
-	old := change.OldAddress
-	updated := *node
-	updated.Address = change.Address
-	updated.ReplicationAddress = ""
-	if change.ReplicationAddress != change.Address {
-		updated.ReplicationAddress = change.ReplicationAddress
+// rekey moves the nodes to their new addresses everywhere the controller keeps
+// them: the registry, the host list and name map every lookup goes through,
+// and the database, where the address is the key. Every old key goes before
+// any new one arrives, and every mapping is applied once to the original
+// values: two nodes trading addresses must not clobber each other halfway.
+func (nm *NodeManager) rekey(ctx context.Context, moves []NodeMove, byName map[string]*NodeInfo) {
+	oldToNew := make(map[string]string, len(moves))
+	updated := make([]NodeInfo, 0, len(moves))
+	for _, mv := range moves {
+		oldToNew[mv.OldAddress] = mv.Address
+		u := *byName[mv.Node]
+		u.Address = mv.Address
+		u.ReplicationAddress = ""
+		if mv.ReplicationAddress != mv.Address {
+			u.ReplicationAddress = mv.ReplicationAddress
+		}
+		u.State = NodeStateOnline
+		updated = append(updated, u)
 	}
-	updated.State = NodeStateOnline
 
 	nm.mu.Lock()
-	delete(nm.nodes, old)
-	nm.nodes[updated.Address] = &updated
+	for _, mv := range moves {
+		delete(nm.nodes, mv.OldAddress)
+	}
+	for i := range updated {
+		n := updated[i]
+		nm.nodes[n.Address] = &n
+	}
 	nm.mu.Unlock()
 
 	c := nm.controller
 	c.hostsLock.Lock()
 	for i, h := range c.hosts {
-		if h == old {
-			c.hosts[i] = updated.Address
+		if nw, ok := oldToNew[h]; ok {
+			c.hosts[i] = nw
 		}
 	}
 	for k, v := range c.hostsMap {
-		if v == old {
-			c.hostsMap[k] = updated.Address
+		if nw, ok := oldToNew[v]; ok {
+			c.hostsMap[k] = nw
 		}
 	}
-	delete(c.hostsMap, old)
-	c.hostsMap[updated.Name] = updated.Address
+	newAddr := make(map[string]bool, len(updated))
+	for _, n := range updated {
+		newAddr[n.Address] = true
+	}
+	for old := range oldToNew {
+		if !newAddr[old] { // on a swap, one node's old address is another's new one
+			delete(c.hostsMap, old)
+		}
+	}
+	for _, n := range updated {
+		c.hostsMap[n.Name] = n.Address
+		if n.Hostname != "" {
+			c.hostsMap[n.Hostname] = n.Address
+		}
+	}
 	if c.gateway != nil {
 		c.gateway.SetHosts(c.hosts)
 	}
@@ -164,17 +244,21 @@ func (nm *NodeManager) rekey(ctx context.Context, node *NodeInfo, change *NodeAd
 	}
 
 	if c.db != nil {
-		if err := c.db.DeleteNode(ctx, old); err != nil {
-			c.logger.Warn("Failed to remove the old node record", zap.String("address", old), zap.Error(err))
+		for _, mv := range moves {
+			if err := c.db.DeleteNode(ctx, mv.OldAddress); err != nil {
+				c.logger.Warn("Failed to remove the old node record", zap.String("address", mv.OldAddress), zap.Error(err))
+			}
 		}
-		if err := c.db.SaveNode(ctx, nodeRecord(&updated)); err != nil {
-			c.logger.Error("Failed to save the renumbered node", zap.String("node", updated.Name), zap.Error(err))
+		for i := range updated {
+			if err := c.db.SaveNode(ctx, nodeRecord(&updated[i])); err != nil {
+				c.logger.Error("Failed to save the renumbered node", zap.String("node", updated[i].Name), zap.Error(err))
+			}
 		}
 		// A pool created by address records it as its node.
 		if pools, err := c.db.ListPools(ctx); err == nil {
 			for _, p := range pools {
-				if p.Node == old {
-					p.Node = updated.Address
+				if nw, ok := oldToNew[p.Node]; ok {
+					p.Node = nw
 					_ = c.db.SavePool(ctx, p)
 				}
 			}
@@ -211,10 +295,10 @@ $1 !~ /^127\./ && $1 !~ /:/ { for (i = 2; i <= NF; i++) if ($i == name) { $1 = n
 `, address, hostname)
 }
 
-// RenumberInResources points every resource the node takes part in at its new
-// replication address: the address line of its host section is rewritten on
-// every participant and adjusted. Resources are done one at a time and a
-// failure does not stop the rest; each one's outcome is in the change.
+// RenumberInResources brings every resource a renumbered node takes part in
+// onto the registry's addresses: each participant's config gets them and is
+// adjusted. Resources are done one at a time and a failure does not stop the
+// rest; each one's outcome is in the change.
 func (rm *ResourceManager) RenumberInResources(ctx context.Context, change *NodeAddressChange) {
 	if rm.controller.db == nil {
 		return
@@ -224,20 +308,33 @@ func (rm *ResourceManager) RenumberInResources(ctx context.Context, change *Node
 		change.Failed = append(change.Failed, "list resources: "+err.Error())
 		return
 	}
+	byHost := rm.controller.nodes.drbdAddressesByHost()
 	for _, r := range all {
-		if !nodeTakesPart(change.Node, r.Nodes, r.DisklessNodes, r.DisklessClients, r.DRNode) {
+		var involved []NodeMove
+		for _, mv := range change.Moves {
+			if nodeTakesPart(mv.Node, r.Nodes, r.DisklessNodes, r.DisklessClients, r.DRNode) {
+				involved = append(involved, mv)
+			}
+		}
+		if len(involved) == 0 {
 			continue
+		}
+		replicationMoved := false
+		for _, mv := range involved {
+			replicationMoved = replicationMoved || mv.OldReplication != mv.ReplicationAddress
 		}
 		if r.WANMode {
 			change.WANResources = append(change.WANResources, r.Name)
 			// The endpoint the primary dials and the source it dials from are
-			// operator-given addresses, often this node's own.
+			// operator-given addresses, often a node's own.
 			moved := false
-			if r.DRNode == change.Node && (r.DREndpoint == change.OldAddress || r.DREndpoint == change.OldReplication) {
-				r.DREndpoint, moved = change.ReplicationAddress, true
-			}
-			if r.WANEgressAddress != "" && (r.WANEgressAddress == change.OldAddress || r.WANEgressAddress == change.OldReplication) {
-				r.WANEgressAddress, moved = change.ReplicationAddress, true
+			for _, mv := range involved {
+				if r.DRNode == mv.Node && (r.DREndpoint == mv.OldAddress || r.DREndpoint == mv.OldReplication) {
+					r.DREndpoint, moved = mv.ReplicationAddress, true
+				}
+				if r.WANEgressAddress != "" && (r.WANEgressAddress == mv.OldAddress || r.WANEgressAddress == mv.OldReplication) {
+					r.WANEgressAddress, moved = mv.ReplicationAddress, true
+				}
 			}
 			if moved {
 				if err := rm.controller.db.SaveResource(ctx, r); err != nil {
@@ -245,11 +342,11 @@ func (rm *ResourceManager) RenumberInResources(ctx context.Context, change *Node
 				}
 			}
 		}
-		if change.OldReplication == change.ReplicationAddress {
-			continue // DRBD's address did not move; only the management one did
+		if !replicationMoved {
+			continue // DRBD's addresses did not move; only management ones did
 		}
 		if err := rm.rewriteResourceConfig(ctx, r.Name, func(current string) (string, error) {
-			return renumberDrbdAddress(current, change.OldReplication, change.ReplicationAddress), nil
+			return reconcileDrbdAddresses(current, byHost), nil
 		}); err != nil {
 			change.Failed = append(change.Failed, fmt.Sprintf("%s: %v", r.Name, err))
 			continue
@@ -270,11 +367,55 @@ func nodeTakesPart(node string, lists ...string) bool {
 	return false
 }
 
-// renumberDrbdAddress replaces old with new in the config's address
-// statements — `address 10.0.0.1:7000;` and `address ipv4 10.0.0.1:7000;` —
-// and nowhere else. An address is written with its port, so the match cannot
-// catch 10.0.0.1 inside 10.0.0.10.
-func renumberDrbdAddress(config, old, new string) string {
-	re := regexp.MustCompile(`(\baddress\s+(?:ipv4\s+)?)` + regexp.QuoteMeta(old) + `(:\d+)`)
-	return re.ReplaceAllString(config, "${1}"+new+"${2}")
+// drbdAddressStmt is an IPv4 `address` statement, wherever it sits on a line.
+var drbdAddressStmt = regexp.MustCompile(`(\baddress\s+(?:ipv4\s+)?)(\d+\.\d+\.\d+\.\d+):(\d+)`)
+
+// reconcileDrbdAddresses sets the address of every `on <host>` stanza whose
+// host is in addrByHost to that address, keeping its port. It does not look
+// at what the address was, so a config left half-rewritten — some stanzas
+// renumbered, some not, two peers briefly on one address — comes out right
+// either way. Loopback addresses belong to WAN proxy legs and are left alone,
+// as is every host the map does not know.
+func reconcileDrbdAddresses(config string, addrByHost map[string]string) string {
+	lines := strings.Split(config, "\n")
+	depth := 0
+	host := ""
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if host == "" && depth == 1 && strings.HasPrefix(trimmed, "on ") && strings.Contains(trimmed, "{") {
+			if f := strings.Fields(trimmed); len(f) >= 2 {
+				host = f[1]
+			}
+		}
+		if want, ok := addrByHost[host]; host != "" && ok && want != "" {
+			lines[i] = drbdAddressStmt.ReplaceAllStringFunc(line, func(stmt string) string {
+				m := drbdAddressStmt.FindStringSubmatch(stmt)
+				if strings.HasPrefix(m[2], "127.") {
+					return stmt
+				}
+				return m[1] + want + ":" + m[3]
+			})
+		}
+		depth += strings.Count(line, "{") - strings.Count(line, "}")
+		if host != "" && depth <= 1 {
+			host = ""
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// drbdAddressesByHost maps every registered node's DRBD host name to the
+// address DRBD should use for it.
+func (nm *NodeManager) drbdAddressesByHost() map[string]string {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	out := make(map[string]string, len(nm.nodes))
+	for _, n := range nm.nodes {
+		name := n.Hostname
+		if name == "" {
+			name = n.Name
+		}
+		out[name] = replicationOf(n)
+	}
+	return out
 }

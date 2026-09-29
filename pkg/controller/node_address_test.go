@@ -13,20 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRenumberDrbdAddressTouchesOnlyThatAddress(t *testing.T) {
-	cfg := `resource r {
-  on sdt1 { address 10.0.0.1:7000; }
-  on sdt2 { address ipv4 10.0.0.1:7001; }
-  on sdt3 { address 10.0.0.10:7000; }
-  # 10.0.0.1 was the old router
-}`
-	got := renumberDrbdAddress(cfg, "10.0.0.1", "10.0.0.9")
-	assert.Contains(t, got, "address 10.0.0.9:7000;")
-	assert.Contains(t, got, "address ipv4 10.0.0.9:7001;")
-	assert.Contains(t, got, "address 10.0.0.10:7000;", "10.0.0.10 is another node")
-	assert.Contains(t, got, "# 10.0.0.1 was the old router")
-}
-
 // renumberFixture registers sdt1..sdt3 on 10.0.0.1..3 against a fake that
 // answers hostname as whatever the address map says, and hands back a config
 // for any `cat` of a .res file.
@@ -68,8 +54,9 @@ func TestSetNodeAddressMovesTheNodeEverywhere(t *testing.T) {
 
 	change, err := ctrl.nodes.SetNodeAddress(ctx, "sdt1", "10.0.0.9", "")
 	require.NoError(t, err)
-	assert.Equal(t, "10.0.0.1", change.OldAddress)
-	assert.Equal(t, "10.0.0.9", change.ReplicationAddress, "replication followed the management address")
+	require.Len(t, change.Moves, 1)
+	assert.Equal(t, "10.0.0.1", change.Moves[0].OldAddress)
+	assert.Equal(t, "10.0.0.9", change.Moves[0].ReplicationAddress, "replication followed the management address")
 
 	assert.Equal(t, "10.0.0.9", ctrl.ResolveHost("sdt1"))
 	nodes, err := ctrl.nodes.ListNodes(ctx)
@@ -112,7 +99,7 @@ func TestSetNodeAddressRefusesAnotherMachineOrATakenAddress(t *testing.T) {
 
 	_, err = ctrl.nodes.SetNodeAddress(ctx, "sdt1", "10.0.0.2", "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "belongs to node sdt2")
+	assert.Contains(t, err.Error(), "would belong to both")
 
 	_, err = ctrl.nodes.SetNodeAddress(ctx, "sdt1", "not-an-ip", "")
 	assert.Error(t, err)
@@ -130,7 +117,7 @@ func TestSetNodeAddressKeepsASeparateReplicationNetwork(t *testing.T) {
 
 	change, err := ctrl.nodes.SetNodeAddress(ctx, "sdt1", "10.0.0.9", "")
 	require.NoError(t, err)
-	assert.Equal(t, "172.16.0.1", change.ReplicationAddress)
+	assert.Equal(t, "172.16.0.1", change.Moves[0].ReplicationAddress)
 	before := len(dep.distributedConfigs)
 	ctrl.resources.RenumberInResources(ctx, change)
 	assert.Empty(t, change.Resources)
@@ -162,4 +149,103 @@ func TestHostsFileScriptRewritesEveryEntryForTheHost(t *testing.T) {
 192.168.123.235	sdt1
 ::1 ip6-localhost
 `, string(got))
+}
+
+// The Lima state after a swap was renumbered one node at a time: sdt1 and
+// sdt2 both on .205. Reconciling from the registry fixes it without knowing
+// what anything used to be, and leaves a WAN leg's loopback alone.
+func TestReconcileDrbdAddressesFromTheRegistry(t *testing.T) {
+	cfg := `resource r3 {
+    volume 0 {
+        device    minor 2;
+    }
+
+    on sdt1 {
+        address   192.168.123.205:7102;
+        node-id   0;
+    }
+
+    on sdt3 {
+        address   ipv4 192.168.123.225:7102;
+        node-id   1;
+    }
+
+    on sdt2 {
+        address   192.168.123.205:7102;
+        node-id   2;
+        volume 0 {
+            disk      none;
+        }
+    }
+
+    on dr1 {
+        address   127.0.0.1:7150;
+    }
+
+    on stranger {
+        address   10.9.9.9:7102;
+    }
+
+    connection-mesh {
+        hosts sdt1 sdt3 sdt2;
+    }
+}`
+	got := reconcileDrbdAddresses(cfg, map[string]string{
+		"sdt1": "192.168.123.205", "sdt2": "192.168.123.206", "sdt3": "192.168.123.217", "dr1": "10.0.0.50",
+	})
+	assert.Contains(t, got, "on sdt1 {\n        address   192.168.123.205:7102;")
+	assert.Contains(t, got, "on sdt2 {\n        address   192.168.123.206:7102;")
+	assert.Contains(t, got, "on sdt3 {\n        address   ipv4 192.168.123.217:7102;")
+	assert.Contains(t, got, "address   127.0.0.1:7150;", "a WAN leg's loopback stays")
+	assert.Contains(t, got, "address   10.9.9.9:7102;", "an unregistered host stays")
+	assert.Equal(t, strings.Count(cfg, "\n"), strings.Count(got, "\n"))
+}
+
+// Two nodes trading addresses, as a DHCP server does when it hands out new
+// leases, in one call: nothing is lost halfway and the configs end right.
+func TestSetNodeAddressesSwapsTwoNodes(t *testing.T) {
+	ctx := context.Background()
+	// While sdt2 still answers on 10.0.0.2, sdt1 cannot be moved onto it.
+	ctrl, _ := renumberFixture(t, map[string]string{"10.0.0.9": "sdt2"})
+	_, err := ctrl.nodes.SetNodeAddresses(ctx, []AddressMove{
+		{Node: "sdt1", Address: "10.0.0.2"}, {Node: "sdt2", Address: "10.0.0.9"},
+	})
+	require.Error(t, err, "10.0.0.2 answers as sdt2, not sdt1")
+	assert.Contains(t, err.Error(), "another machine")
+
+	// Order the moves so the naive sequential approach would clobber sdt2.
+	ctrl, dep := renumberFixture(t, map[string]string{"10.0.0.9": "sdt2"})
+	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "r1", Nodes: "sdt1,sdt2", Port: 7000}))
+	// Make 10.0.0.2 answer as sdt1 now: the node that had it moved away.
+	ans := map[string]string{"10.0.0.2": "sdt1", "10.0.0.9": "sdt2"}
+	inner := dep.execFunc
+	dep.execFunc = func(c context.Context, hosts []string, cmd string, o ...deployment.ExecOption) (*deployment.ExecResult, error) {
+		if cmd == "hostname" {
+			return successExecResult(hosts, ans[hosts[0]]), nil
+		}
+		return inner(c, hosts, cmd, o...)
+	}
+	change, err := ctrl.nodes.SetNodeAddresses(ctx, []AddressMove{
+		{Node: "sdt1", Address: "10.0.0.2"}, {Node: "sdt2", Address: "10.0.0.9"},
+	})
+	require.NoError(t, err)
+	assert.Len(t, change.Moves, 2)
+	assert.Equal(t, "10.0.0.2", ctrl.ResolveHost("sdt1"))
+	assert.Equal(t, "10.0.0.9", ctrl.ResolveHost("sdt2"))
+	nodes, err := ctrl.nodes.ListNodes(ctx)
+	require.NoError(t, err)
+	got := map[string]string{}
+	for _, n := range nodes {
+		got[n.Name] = n.Address
+	}
+	assert.Equal(t, map[string]string{"sdt1": "10.0.0.2", "sdt2": "10.0.0.9", "sdt3": "10.0.0.3"}, got)
+
+	ctrl.resources.RenumberInResources(ctx, change)
+	assert.Equal(t, []string{"r1"}, change.Resources)
+	for _, d := range dep.distributedConfigs {
+		if d.remotePath == "/etc/drbd.d/r1.res" {
+			assert.Contains(t, d.content, "on sdt1 { address 10.0.0.2:7000; }")
+			assert.Contains(t, d.content, "on sdt2 { address 10.0.0.9:7000; }")
+		}
+	}
 }

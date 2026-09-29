@@ -237,7 +237,17 @@ func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb
 }
 
 func (s *Server) SetNodeAddress(ctx context.Context, req *sdspb.SetNodeAddressRequest) (*sdspb.SetNodeAddressResponse, error) {
-	change, err := s.nodes.SetNodeAddress(ctx, req.Node, req.Address, req.ReplicationAddress)
+	moves := []AddressMove{{Node: req.Node, Address: req.Address, ReplicationAddress: req.ReplicationAddress}}
+	if len(req.Moves) > 0 {
+		if req.Node != "" || req.Address != "" {
+			return &sdspb.SetNodeAddressResponse{Success: false, Message: "give node and address, or moves, not both"}, nil
+		}
+		moves = moves[:0]
+		for _, m := range req.Moves {
+			moves = append(moves, AddressMove{Node: m.Node, Address: m.Address, ReplicationAddress: m.ReplicationAddress})
+		}
+	}
+	change, err := s.nodes.SetNodeAddresses(ctx, moves)
 	if err != nil {
 		return &sdspb.SetNodeAddressResponse{Success: false, Message: err.Error()}, nil
 	}
@@ -251,10 +261,15 @@ func (s *Server) SetNodeAddress(ctx context.Context, req *sdspb.SetNodeAddressRe
 			change.Failed = append(change.Failed, fmt.Sprintf("%s: rebuild WAN proxy: %s", name, resp.Message))
 		}
 	}
-	msg := fmt.Sprintf("%s moved from %s to %s", change.Node, change.OldAddress, change.Address)
-	if change.ReplicationAddress != change.Address {
-		msg += fmt.Sprintf(" (DRBD on %s)", change.ReplicationAddress)
+	parts := make([]string, 0, len(change.Moves))
+	for _, mv := range change.Moves {
+		p := fmt.Sprintf("%s moved from %s to %s", mv.Node, mv.OldAddress, mv.Address)
+		if mv.ReplicationAddress != mv.Address {
+			p += fmt.Sprintf(" (DRBD on %s)", mv.ReplicationAddress)
+		}
+		parts = append(parts, p)
 	}
+	msg := strings.Join(parts, "; ")
 	return &sdspb.SetNodeAddressResponse{
 		Success:   len(change.Failed) == 0,
 		Message:   msg,

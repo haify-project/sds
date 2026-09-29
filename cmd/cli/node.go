@@ -9,6 +9,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -368,23 +369,47 @@ func formatLastSeen(unix int64) string {
 func nodeSetAddress() *cobra.Command {
 	var replication string
 	cmd := &cobra.Command{
-		Use:   "set-address <node> <new-address>",
-		Short: "Renumber a node: move it to a new IP everywhere SDS records one",
-		Long: "The node must already answer on the new address. The registry, /etc/hosts on\n" +
-			"the nodes and the DRBD config of every resource the node takes part in are\n" +
-			"rewritten; each resource reconnects on the new address.",
-		Args: cobra.ExactArgs(2),
+		Use:   "set-address <node> <new-address> | <node>=<address> [<node>=<address> ...]",
+		Short: "Renumber nodes: move them to new IPs everywhere SDS records one",
+		Long: "Each node must already answer on its new address. The registry, /etc/hosts on\n" +
+			"the nodes and the DRBD config of every resource they take part in are rewritten;\n" +
+			"each resource reconnects on the new addresses.\n\n" +
+			"When several nodes changed address — every node got a new DHCP lease — give\n" +
+			"them all in one command (sdt1=10.0.0.5 sdt2=10.0.0.6 ...): one at a time cannot\n" +
+			"work then, since each node's resources would be rewritten through peers still\n" +
+			"known only by their old addresses.",
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var moves []*sdspb.NodeAddressMove
+			if strings.Contains(args[0], "=") {
+				if replication != "" {
+					return fmt.Errorf("--replication-address goes with the single-node form")
+				}
+				for _, a := range args {
+					node, addr, ok := strings.Cut(a, "=")
+					if !ok || node == "" || addr == "" {
+						return fmt.Errorf("%q is not node=address", a)
+					}
+					moves = append(moves, &sdspb.NodeAddressMove{Node: node, Address: addr})
+				}
+			} else if len(args) != 2 {
+				return fmt.Errorf("give <node> <new-address>, or node=address pairs")
+			}
 			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(sdsClient)
-			resp, err := sdsClient.SetNodeAddress(cmd.Context(), args[0], args[1], replication)
+			var resp *sdspb.SetNodeAddressResponse
+			if moves != nil {
+				resp, err = sdsClient.SetNodeAddresses(cmd.Context(), moves)
+			} else {
+				resp, err = sdsClient.SetNodeAddress(cmd.Context(), args[0], args[1], replication)
+			}
 			if err != nil {
 				return err
 			}
-			if resp.Message != "" && (resp.Success || len(resp.Resources) > 0 || len(resp.Failed) > 0) {
+			if resp.Success || len(resp.Resources) > 0 || len(resp.Failed) > 0 {
 				fmt.Println(resp.Message)
 			}
 			for _, r := range resp.Resources {

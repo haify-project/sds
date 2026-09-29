@@ -139,22 +139,36 @@ sds-cli node set-address orange1 192.168.1.21 --replication-address 10.10.0.21
 It checks the new address reaches the same machine, then moves the node in the
 registry, rewrites its entry in every node's `/etc/hosts`, and rewrites the
 DRBD config of each resource it takes part in; each reconnects on the new
-address. Renumber one node at a time: the controller needs the others to keep
-quorum while it works.
+address.
 
-If every node changed address at once — a DHCP server that handed out new
-leases to all of them — the controller cannot start, because its own database
-lives on a DRBD resource whose peers can no longer find each other. Bring that
-one resource back by hand, then let `set-address` do the rest:
+When several nodes changed address — a DHCP server handed every node a new
+lease — renumber them in **one** command. One at a time cannot work then: each
+node's resources would be rewritten through peers the controller still knows
+only by their old addresses, and when two nodes trade addresses the configs
+pass through a state with both on one.
 
 ```bash
-# on every node: point sds-meta at the new addresses (old → new, per node)
-sed -i 's/192.168.1.11:/192.168.1.21:/; s/192.168.1.12:/192.168.1.22:/; s/192.168.1.13:/192.168.1.23:/' \
-    /etc/drbd.d/sds-meta.res
+sds-cli node set-address orange1=192.168.1.21 orange2=192.168.1.22 orange3=192.168.1.23
+```
+
+If every node moved, the controller cannot start at all: its database lives on
+a DRBD resource whose peers can no longer find each other. Bring that one
+resource back by hand first — map old to new in a single pass, since a plain
+chain of `sed` substitutions breaks when two nodes trade addresses:
+
+```bash
+# on every node, with each node's old → new address
+perl -pi -e 'my %m = ("192.168.1.11" => "192.168.1.21", "192.168.1.12" => "192.168.1.22",
+                      "192.168.1.13" => "192.168.1.23");
+             s/\b(\d+\.\d+\.\d+\.\d+)(?=:)/exists $m{$1} ? $m{$1} : $1/ge' /etc/drbd.d/sds-meta.res
 drbdadm adjust sds-meta
 # once the controller is up on its VIP:
-sds-cli node set-address orange1 192.168.1.21     # and so on for each node
+sds-cli node set-address orange1=192.168.1.21 orange2=192.168.1.22 orange3=192.168.1.23
 ```
+
+`resource repair <resource>` also writes the registry's addresses into a
+resource's config, so a resource a renumbering could not reach (a node was
+down) is fixed by repairing it afterwards.
 
 **Draining** a node moves every Primary off it and refuses to place new ones
 there — do this before maintenance, not after:

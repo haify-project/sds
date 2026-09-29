@@ -2951,9 +2951,14 @@ func (rm *ResourceManager) SetOptions(ctx context.Context, resource string, opti
 // that gained a volume before AddVolume learned to update diskless nodes — every
 // gateway on a cluster with a tiebreaker — are in exactly that state, their
 // tiebreaker retrying a connection DRBD keeps refusing.
+//
+// It also puts every registered node's address from the registry into its
+// `on` stanza, so a config left behind by a renumbering that did not finish —
+// a node's old address, or two peers on one — comes back right.
 func (rm *ResourceManager) RepairResourceConfig(ctx context.Context, resource string) error {
+	byHost := rm.controller.nodes.drbdAddressesByHost()
 	return rm.rewriteResourceConfig(ctx, resource, func(current string) (string, error) {
-		return current, nil
+		return reconcileDrbdAddresses(current, byHost), nil
 	})
 }
 

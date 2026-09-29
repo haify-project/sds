@@ -524,6 +524,9 @@ service SDSController {
   rpc RepairWanProxy(RepairWanProxyRequest) returns (RepairWanProxyResponse) {
     option (google.api.http) = { post: "/v1/resources/{name}/wan/repair"; body: "*"; };
   }
+  rpc DRFailback(DRFailbackRequest) returns (DRFailbackResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/wan/failback"; body: "*"; };
+  }
   rpc SetWanEndpoint(SetWanEndpointRequest) returns (SetWanEndpointResponse) {
     option (google.api.http) = { post: "/v1/resources/{name}/wan/endpoint"; body: "*"; };
   }
@@ -2598,6 +2601,17 @@ message SetNodeAddressRequest {
   // replication_address moves DRBD traffic to a separate network; empty keeps
   // the node's current choice (none = the management address).
   string replication_address = 3;
+  // moves renumbers several nodes together, instead of node/address — what a
+  // DHCP server handing every node a new lease needs. One at a time cannot
+  // work then: each node's resources are rewritten through peers still known
+  // only by their dead addresses.
+  repeated NodeAddressMove moves = 4;
+}
+
+message NodeAddressMove {
+  string node = 1;
+  string address = 2;
+  string replication_address = 3;
 }
 
 message SetNodeAddressResponse {
@@ -2692,4 +2706,26 @@ message SetWanEndpointResponse {
   string message = 2;
   string dr_endpoint = 3;
   string egress_address = 4;
+}
+
+// DRFailbackRequest returns a WAN resource from its DR node to the primary site
+// after a DR failover. Run it again until phase is "done": it rejoins the
+// primary site (discarding what those nodes wrote after they were cut off),
+// waits for them to resync from the DR, then moves the Primary role back.
+message DRFailbackRequest {
+  string name = 1;
+  // node is the primary-site node to promote; empty takes the first.
+  string node = 2;
+  // wait_seconds bounds how long this call waits for the resync before it
+  // reports progress and returns; 0 does not wait.
+  uint32 wait_seconds = 3;
+}
+
+message DRFailbackResponse {
+  bool success = 1;
+  string message = 2;
+  // phase is where the failback stands: "resyncing" (run again to finish) or
+  // "done".
+  string phase = 3;
+  repeated string steps = 4;
 }

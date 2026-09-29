@@ -48,6 +48,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceRemoveReplica())
 	cmd.AddCommand(resourceAddDR())
 	cmd.AddCommand(resourceDRFailover())
+	cmd.AddCommand(resourceDRFailback())
 	cmd.AddCommand(resourceSecondary())
 	cmd.AddCommand(resourceDualPrimary())
 	cmd.AddCommand(resourceFs())
@@ -2264,5 +2265,43 @@ func resourceSetProfile() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&none, "none", false, "Take the resource out of its profile")
+	return cmd
+}
+
+func resourceDRFailback() *cobra.Command {
+	var node string
+	var wait time.Duration
+	cmd := &cobra.Command{
+		Use:   "dr-failback <resource>",
+		Short: "Move a WAN resource back from its DR node to the primary site after dr-failover",
+		Long: "Run it again until it says done. It rejoins the primary-site nodes — what they\n" +
+			"wrote after the failover is DISCARDED in favour of the DR's copy — waits for them\n" +
+			"to resync from the DR, then makes the primary site Primary again. The DR must be\n" +
+			"unmounted for the last step, and each primary-site node for the first.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), wait+2*time.Minute)
+			defer cancel()
+			sdsClient, err := newSDSClient()
+			if err != nil {
+				return fmt.Errorf("failed to connect to controller: %w", err)
+			}
+			defer closeClient(sdsClient)
+			resp, err := sdsClient.DRFailback(ctx, args[0], node, uint32(wait.Seconds()))
+			if err != nil {
+				return err
+			}
+			for _, s := range resp.Steps {
+				fmt.Printf("  %s\n", s)
+			}
+			fmt.Println(resp.Message)
+			if !resp.Success {
+				return fmt.Errorf("failback did not finish")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&node, "node", "", "Primary-site node to make Primary (default: the first)")
+	cmd.Flags().DurationVar(&wait, "wait", 0, "How long to wait for the resync before returning (e.g. 10m)")
 	return cmd
 }

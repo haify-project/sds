@@ -2141,6 +2141,12 @@ func (c *SDSClient) SetNodeAddress(ctx context.Context, node, address, replicati
 	})
 }
 
+// SetNodeAddresses renumbers several nodes together — what every node getting
+// a new DHCP lease at once needs.
+func (c *SDSClient) SetNodeAddresses(ctx context.Context, moves []*sdspb.NodeAddressMove) (*sdspb.SetNodeAddressResponse, error) {
+	return c.client.SetNodeAddress(ctx, &sdspb.SetNodeAddressRequest{Moves: moves})
+}
+
 // ListProfileMembers lists the resources that belong to a profile.
 func (c *SDSClient) ListProfileMembers(ctx context.Context, profile string) ([]*sdspb.ResourceInfo, error) {
 	resp, err := c.client.ListResources(ctx, &sdspb.ListResourcesRequest{Profile: profile})
@@ -2201,4 +2207,11 @@ func (c *SDSClient) SetWanEndpoint(ctx context.Context, req *sdspb.SetWanEndpoin
 		return nil, fmt.Errorf("%s", resp.Message)
 	}
 	return resp, nil
+}
+
+// DRFailback moves a WAN resource back from its DR node to the primary site,
+// or advances a failback in progress; see DRFailbackRequest. The response's
+// phase says whether to run it again.
+func (c *SDSClient) DRFailback(ctx context.Context, name, node string, waitSeconds uint32) (*sdspb.DRFailbackResponse, error) {
+	return c.client.DRFailback(ctx, &sdspb.DRFailbackRequest{Name: name, Node: node, WaitSeconds: waitSeconds})
 }

@@ -221,6 +221,22 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 		})
 
 	if c, supported := s.client.(interface {
+		DRFailback(context.Context, string, string, uint32) (*sdspb.DRFailbackResponse, error)
+	}); supported {
+		addWrite(s, srv, destructiveTool("sds_resource_dr_failback", "Fail a WAN resource back to the primary site",
+			"After a DR failover, move a WAN resource back to its primary site. Run it again until phase is done: it "+
+				"rejoins the primary-site nodes, DISCARDING what they wrote after the failover, waits for them to resync "+
+				"from the DR, then makes the primary site Primary. Needs each primary-site node, then the DR, unmounted."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in drFailbackIn) (*mcp.CallToolResult, drFailbackOut, error) {
+				resp, err := c.DRFailback(ctx, in.Resource, in.Node, in.WaitSeconds)
+				if err != nil {
+					return nil, drFailbackOut{}, err
+				}
+				return nil, drFailbackOut{OK: resp.Success, Phase: resp.Phase, Message: resp.Message, Steps: resp.Steps}, nil
+			})
+	}
+
+	if c, supported := s.client.(interface {
 		SetWanEndpoint(context.Context, *sdspb.SetWanEndpointRequest) (*sdspb.SetWanEndpointResponse, error)
 	}); supported {
 		addWrite(s, srv, writeTool("sds_wan_set_endpoint", "Change a WAN resource's DR endpoint",
@@ -273,13 +289,25 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 
 	if c, supported := s.client.(interface {
 		SetNodeAddress(context.Context, string, string, string) (*sdspb.SetNodeAddressResponse, error)
+		SetNodeAddresses(context.Context, []*sdspb.NodeAddressMove) (*sdspb.SetNodeAddressResponse, error)
 	}); supported {
 		addWrite(s, srv, destructiveTool("sds_node_set_address", "Renumber a node",
 			"Move a registered node to a new IP address everywhere SDS records it: the node registry, /etc/hosts on the nodes, "+
 				"and the DRBD config of every resource it takes part in, each of which reconnects on the new address. "+
-				"The node must already answer on the new address as the same machine."),
+				"The node must already answer on the new address as the same machine. When several nodes changed "+
+				"address at once, pass them all in moves: one at a time cannot work then."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in nodeAddressIn) (*mcp.CallToolResult, nodeAddressOut, error) {
-				resp, err := c.SetNodeAddress(ctx, in.Node, in.Address, in.ReplicationAddress)
+				var resp *sdspb.SetNodeAddressResponse
+				var err error
+				if len(in.Moves) > 0 {
+					moves := make([]*sdspb.NodeAddressMove, 0, len(in.Moves))
+					for _, m := range in.Moves {
+						moves = append(moves, &sdspb.NodeAddressMove{Node: m.Node, Address: m.Address, ReplicationAddress: m.ReplicationAddress})
+					}
+					resp, err = c.SetNodeAddresses(ctx, moves)
+				} else {
+					resp, err = c.SetNodeAddress(ctx, in.Node, in.Address, in.ReplicationAddress)
+				}
 				if err != nil {
 					return nil, nodeAddressOut{}, err
 				}
@@ -388,10 +416,17 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 		})
 }
 
-type nodeAddressIn struct {
+type nodeAddressMoveIn struct {
 	Node               string `json:"node" jsonschema:"registered node name"`
 	Address            string `json:"address" jsonschema:"the node's new IP address"`
-	ReplicationAddress string `json:"replication_address,omitempty" jsonschema:"move DRBD traffic to this address too; empty keeps the node's current arrangement"`
+	ReplicationAddress string `json:"replication_address,omitempty" jsonschema:"move DRBD traffic to this address too"`
+}
+
+type nodeAddressIn struct {
+	Moves              []nodeAddressMoveIn `json:"moves,omitempty" jsonschema:"several nodes to renumber together; instead of node/address"`
+	Node               string              `json:"node,omitempty" jsonschema:"registered node name"`
+	Address            string              `json:"address,omitempty" jsonschema:"the node's new IP address"`
+	ReplicationAddress string              `json:"replication_address,omitempty" jsonschema:"move DRBD traffic to this address too; empty keeps the node's current arrangement"`
 }
 
 type nodeAddressOut struct {
@@ -407,4 +442,17 @@ type wanEndpointIn struct {
 	EgressAddress string `json:"egress_address,omitempty" jsonschema:"source address the primary dials from; empty keeps it"`
 	ClearEgress   bool   `json:"clear_egress,omitempty" jsonschema:"let the routing table choose the source address again"`
 	SkipCheck     bool   `json:"skip_check,omitempty" jsonschema:"save and provision even if the DR endpoint does not answer yet"`
+}
+
+type drFailbackIn struct {
+	Resource    string `json:"resource" jsonschema:"WAN resource name"`
+	Node        string `json:"node,omitempty" jsonschema:"primary-site node to make Primary; empty takes the first"`
+	WaitSeconds uint32 `json:"wait_seconds,omitempty" jsonschema:"how long to wait for the resync before returning"`
+}
+
+type drFailbackOut struct {
+	OK      bool     `json:"ok"`
+	Phase   string   `json:"phase"`
+	Message string   `json:"message"`
+	Steps   []string `json:"steps,omitempty"`
 }
