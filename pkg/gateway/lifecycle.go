@@ -65,7 +65,7 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 		}
 
 		// Reload drbd-reactor to pick up changes
-		if err := m.deployment.Exec(ctx, []string{host}, "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor"); err != nil {
+		if err := m.deployment.Exec(ctx, []string{host}, reloadReactorCmd); err != nil {
 			m.logger.Warn("Failed to reload drbd-reactor", zap.String("host", host), zap.Error(err))
 		}
 	}
@@ -99,7 +99,7 @@ func (m *Manager) writeReactorConfig(ctx context.Context, resource, pluginID, co
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
-	reloadCmd := "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor"
+	reloadCmd := reloadReactorCmd
 	if err := m.deployment.Exec(ctx, run, reloadCmd); err != nil {
 		m.logger.Warn("Failed to reload drbd-reactor", zap.Error(err))
 	}
@@ -191,7 +191,7 @@ true`, id, id, id)
 	if err := m.runScript(ctx, run, enableScript); err != nil {
 		return fmt.Errorf("failed to re-enable gateway config: %w", err)
 	}
-	return m.deployment.Exec(ctx, run, "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor")
+	return m.deployment.Exec(ctx, run, reloadReactorCmd)
 }
 
 // moveClusterPrivatePath moves a stopped gateway's state mount out from under
@@ -299,8 +299,14 @@ true`, id, id, id)
 	}
 }
 
+// reloadReactorCmd reloads drbd-reactor where it is installed. A registered
+// node need not run it — a hypervisor host kept for its disks, say — and
+// "unit not found" there used to fail stopping a gateway that never ran on it.
+const reloadReactorCmd = "if systemctl cat drbd-reactor.service >/dev/null 2>&1; then " +
+	"sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor; fi"
+
 // reloadDrbdReactor reloads drbd-reactor configuration
 func (m *Manager) reloadDrbdReactor(ctx context.Context) error {
-	reloadCmd := "sudo systemctl reload drbd-reactor || sudo systemctl restart drbd-reactor"
+	reloadCmd := reloadReactorCmd
 	return m.deployment.Exec(ctx, m.hosts, reloadCmd)
 }
