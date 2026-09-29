@@ -41,6 +41,7 @@ func TestControllerStartAndStopServers(t *testing.T) {
 	ctrl.db = newTestDB(t)
 	ctrl.config = &config.Config{
 		Server: config.ServerConfig{ListenAddress: "127.0.0.1", Port: freePort(t)},
+		UI:     config.UIConfig{ListenAddress: "127.0.0.1", Port: freePort(t)},
 	}
 	origREST := defaultRESTPort
 	defaultRESTPort = freePort(t)

@@ -646,3 +646,57 @@ func TestOutOfSyncFiresOnlyOnEstablishedPeers(t *testing.T) {
 	}
 	assert.True(t, resolved)
 }
+
+// Event-driven polling may only relax while the cluster is quiet: a resync or
+// a degraded replica changes without any event, and must keep being polled.
+func TestIdleIntervalOnlyWhenEventDrivenAndSteady(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name: "res1", NodeStates: map[string]NodeStateInfo{"n1": healthy("Primary"), "n2": healthy("Secondary")},
+	}}}
+	mon, _ := newHarness(t, Options{Resources: lister, Interval: 30 * time.Second})
+	ctx := context.Background()
+
+	mon.Poll(ctx)
+	assert.Equal(t, 30*time.Second, mon.nextInterval(), "not event-driven yet")
+	mon.SetEventDriven(true)
+	assert.Equal(t, DefaultIdleInterval, mon.nextInterval())
+
+	half := 40.0
+	syncing := healthy("Secondary")
+	syncing.SyncPercent = &half
+	lister.list[0].NodeStates["n2"] = syncing
+	mon.Poll(ctx)
+	assert.Equal(t, 30*time.Second, mon.nextInterval(), "a resync in progress is polled at the normal rate")
+
+	stuck := NodeStateInfo{DiskState: "Outdated", ReplicationState: "Established", Role: "Secondary"}
+	lister.list[0].NodeStates["n2"] = stuck
+	mon.Poll(ctx)
+	assert.Equal(t, DefaultIdleInterval, mon.nextInterval(),
+		"a replica stuck degraded changes only by an event; it must not pin the short interval for good")
+
+	lister.list[0].NodeStates["n2"] = healthy("Secondary")
+	mon.Poll(ctx)
+	mon.SetEventDriven(false)
+	assert.Equal(t, 30*time.Second, mon.nextInterval(), "a node whose events stopped arriving is polled at the normal rate")
+}
+
+func TestKickPollsSoon(t *testing.T) {
+	old := kickSettle
+	kickSettle = 10 * time.Millisecond
+	defer func() { kickSettle = old }()
+
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name: "res1", NodeStates: map[string]NodeStateInfo{"n1": healthy("Primary")},
+	}}}
+	mon, _ := newHarness(t, Options{Resources: lister, Interval: time.Hour})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mon.Start(ctx)
+	require.Eventually(t, func() bool { return mon.Polls() == 1 }, time.Second, 5*time.Millisecond)
+	for range 5 {
+		mon.Kick()
+	}
+	require.Eventually(t, func() bool { return mon.Polls() >= 2 }, time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.LessOrEqual(t, mon.Polls(), 3, "a burst of kicks is one or two polls, not five")
+}

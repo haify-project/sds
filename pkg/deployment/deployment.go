@@ -64,6 +64,9 @@ type Client struct {
 	dispatch *dispatch.Dispatch
 	logger   *zap.Logger
 	parallel int
+	// configPath is the dispatch config the client was built from, which
+	// StreamLines reads again for the SSH settings dispatch keeps to itself.
+	configPath string
 }
 
 // Options tunes how the deployment client reaches storage nodes.
@@ -122,9 +125,10 @@ func NewWithOptions(logger *zap.Logger, opts Options) (*Client, error) {
 	}
 
 	return &Client{
-		dispatch: client,
-		logger:   logger,
-		parallel: parallel,
+		dispatch:   client,
+		logger:     logger,
+		parallel:   parallel,
+		configPath: opts.ConfigPath,
 	}, nil
 }
 

@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -297,6 +298,20 @@ type Monitor struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
+	// kick asks for a poll now, when something reports a DRBD state change;
+	// see Kick. Buffered by one so a burst of changes collapses into a poll.
+	kick chan struct{}
+	// eventDriven is set while every node's DRBD state changes are being
+	// received as they happen. Then a quiet, healthy cluster needs no
+	// thirty-second polling to be noticed breaking, and it is polled on
+	// idleInterval instead; see nextInterval.
+	eventDriven  atomic.Bool
+	idleInterval time.Duration
+	// steady is whether the last poll found every resource healthy. A resync
+	// or a degraded replica emits no event as it progresses, so the interval
+	// stays short until it is over.
+	steady atomic.Bool
+
 	pollsMu sync.Mutex
 	polls   int
 }
@@ -305,6 +320,9 @@ type Monitor struct {
 type Options struct {
 	// Interval between polls. Zero uses 30s.
 	Interval time.Duration
+	// IdleInterval is the interval while the monitor is event-driven and the
+	// last poll found nothing wrong. Below Interval uses DefaultIdleInterval.
+	IdleInterval time.Duration
 	// Resources is required.
 	Resources ResourceLister
 	// Nodes is optional; nil disables node reachability alerts.
@@ -330,30 +348,44 @@ const (
 	DefaultFullPercent     = 95.0
 )
 
+// DefaultIdleInterval is how often a healthy cluster is polled while its DRBD
+// state changes arrive as events. It still bounds how late a condition no
+// event reports — a thin pool filling up — is noticed.
+const DefaultIdleInterval = 5 * time.Minute
+
+// kickSettle is how long a kick waits for the rest of a burst: one failover
+// is a dozen state changes across several nodes within a second or two.
+var kickSettle = 2 * time.Second
+
 // NewMonitor creates a monitor publishing to bus.
 func NewMonitor(bus *event.Bus, opts Options) *Monitor {
 	if opts.Interval <= 0 {
 		opts.Interval = 30 * time.Second
+	}
+	if opts.IdleInterval < opts.Interval {
+		opts.IdleInterval = max(opts.Interval, DefaultIdleInterval)
 	}
 	if opts.Logger == nil {
 		opts.Logger = zap.NewNop()
 	}
 	near, full := normalizeThresholds(opts.NearFullPercent, opts.FullPercent)
 	return &Monitor{
-		interval:    opts.Interval,
-		resources:   opts.Resources,
-		nodes:       opts.Nodes,
-		pools:       opts.Pools,
-		nearFull:    near,
-		full:        full,
-		bus:         bus,
-		observer:    opts.Observer,
-		log:         opts.Logger,
-		firing:      make(map[string]bool),
-		owners:      make(map[string]source),
-		primaries:   make(map[string]string),
-		lastPrimary: make(map[string]string),
-		stop:        make(chan struct{}),
+		interval:     opts.Interval,
+		resources:    opts.Resources,
+		nodes:        opts.Nodes,
+		pools:        opts.Pools,
+		nearFull:     near,
+		full:         full,
+		bus:          bus,
+		observer:     opts.Observer,
+		log:          opts.Logger,
+		firing:       make(map[string]bool),
+		owners:       make(map[string]source),
+		primaries:    make(map[string]string),
+		lastPrimary:  make(map[string]string),
+		stop:         make(chan struct{}),
+		kick:         make(chan struct{}, 1),
+		idleInterval: opts.IdleInterval,
 	}
 }
 
@@ -384,20 +416,62 @@ func normalizeThresholds(near, full float64) (float64, float64) {
 // seconds.
 func (m *Monitor) Start(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(m.interval)
-		defer ticker.Stop()
 		m.Poll(ctx)
+		timer := time.NewTimer(m.nextInterval())
+		defer timer.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-m.stop:
 				return
-			case <-ticker.C:
-				m.Poll(ctx)
+			case <-timer.C:
+			case <-m.kick:
+				select {
+				case <-ctx.Done():
+					return
+				case <-m.stop:
+					return
+				case <-time.After(kickSettle):
+				}
+				select { // the kicks that came in while settling are this poll's
+				case <-m.kick:
+				default:
+				}
 			}
+			m.Poll(ctx)
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(m.nextInterval())
 		}
 	}()
+}
+
+// Kick asks for a poll soon, because something changed. Never blocks.
+func (m *Monitor) Kick() {
+	select {
+	case m.kick <- struct{}{}:
+	default:
+	}
+}
+
+// SetEventDriven says whether state changes are reaching Kick from every
+// node. While they are, a healthy cluster is polled on the idle interval.
+func (m *Monitor) SetEventDriven(on bool) {
+	if m.eventDriven.Swap(on) != on && !on {
+		m.Kick() // a node's changes are no longer arriving: look now
+	}
+}
+
+func (m *Monitor) nextInterval() time.Duration {
+	if m.eventDriven.Load() && m.steady.Load() {
+		return m.idleInterval
+	}
+	return m.interval
 }
 
 // Stop halts background polling. Safe to call more than once, and safe on a
@@ -424,6 +498,7 @@ func (m *Monitor) Poll(ctx context.Context) {
 	m.checkNodes(ctx, sc, &obs)
 	m.checkPools(ctx, sc, &obs)
 	m.resolveVanished(sc)
+	m.steady.Store(steadyState(obs))
 
 	// After the events, not before: an observer that panics or blocks must not
 	// be able to stop a degradation from being reported.
@@ -1000,4 +1075,31 @@ func isDegraded(st NodeStateInfo) (bool, string) {
 		return true, fmt.Sprintf("replication state is %s", st.ReplicationState)
 	}
 	return false, ""
+}
+
+// steadyState is whether a poll found nothing that changes without DRBD saying
+// so. A resync or a verify advances silently — events2 reports the start and
+// the end, not the progress — so while one runs the monitor keeps polling.
+// A replica stuck degraded is not in that set: an Outdated disk or a peer
+// that stays away changes only by a state change, which is an event, and
+// counting it would keep a cluster with one long-standing fault on the
+// short interval for good.
+func steadyState(obs Observation) bool {
+	if !obs.Resources.OK {
+		return false
+	}
+	for _, r := range obs.Resources.Items {
+		for _, st := range r.NodeStates {
+			if st.SyncPercent != nil && *st.SyncPercent < 100 {
+				return false
+			}
+			switch {
+			case strings.HasPrefix(st.ReplicationState, "Sync"),
+				strings.HasPrefix(st.ReplicationState, "PausedSync"),
+				strings.HasPrefix(st.ReplicationState, "Verify"):
+				return false
+			}
+		}
+	}
+	return true
 }

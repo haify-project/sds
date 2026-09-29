@@ -99,6 +99,15 @@ type AlertConfig struct {
 	// package defaults (85 and 95).
 	PoolNearFullPercent float64 `mapstructure:"pool_near_full_percent"`
 	PoolFullPercent     float64 `mapstructure:"pool_full_percent"`
+	// WatchDRBDEvents keeps a `drbdsetup events2` stream open to every node,
+	// so a DRBD state change is checked within seconds instead of at the next
+	// poll, and a healthy cluster is polled every IdleIntervalSec instead of
+	// every CheckIntervalSec. Each poll is several SSH sessions per node.
+	WatchDRBDEvents bool `mapstructure:"watch_drbd_events"`
+	// IdleIntervalSec is the poll interval while every node's events arrive
+	// and nothing is degraded or resyncing. It bounds how late what DRBD does
+	// not report — a thin pool filling — is noticed.
+	IdleIntervalSec int `mapstructure:"idle_interval_sec"`
 }
 
 // WebhookReceiver is one HTTP notification target.
@@ -489,6 +498,8 @@ func setDefaults() {
 	viper.SetDefault("alert.enabled", false)
 	viper.SetDefault("alert.check_interval_sec", 30)
 	viper.SetDefault("alert.check_nodes", true)
+	viper.SetDefault("alert.watch_drbd_events", true)
+	viper.SetDefault("alert.idle_interval_sec", 300)
 	viper.SetDefault("alert.history_size", 500)
 	// On by default: a thin pool filling up is silent until it is fatal, and it
 	// costs nothing extra to watch.

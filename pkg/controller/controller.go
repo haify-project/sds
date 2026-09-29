@@ -322,9 +322,10 @@ func (c *Controller) Events() *event.Bus { return c.events }
 // keeps answering, and only the numbers on it are quietly empty.
 func (c *Controller) alertOptions() alert.Options {
 	opts := alert.Options{
-		Interval:  time.Duration(c.config.Alert.CheckIntervalSec) * time.Second,
-		Resources: c.resources,
-		Logger:    c.logger,
+		Interval:     time.Duration(c.config.Alert.CheckIntervalSec) * time.Second,
+		IdleInterval: time.Duration(c.config.Alert.IdleIntervalSec) * time.Second,
+		Resources:    c.resources,
+		Logger:       c.logger,
 	}
 	// Node reachability costs an SSH round trip per node per poll, so it is a
 	// separate switch from the resource checks, which are served from state the
@@ -373,6 +374,9 @@ func (c *Controller) startNotifications() {
 	opts := c.alertOptions()
 	c.alertMonitor = alert.NewMonitor(c.events, opts)
 	c.alertMonitor.Start(c.ctx)
+	if c.config.Alert.WatchDRBDEvents {
+		c.watchDRBDEvents(c.ctx, c.alertMonitor)
+	}
 
 	// Database-backed channels come up before the file-based ones so a UI-added
 	// channel is delivering by the time the first poll finishes.

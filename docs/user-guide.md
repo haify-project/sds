@@ -661,7 +661,16 @@ enabled = true
 check_interval_sec = 60
 check_nodes = true      # SSH-probe each node; produces node.unreachable
 history_size = 500
+watch_drbd_events = true  # default; see below
+idle_interval_sec = 300   # default
 ```
+
+With `watch_drbd_events` the controller keeps one `drbdsetup events2` stream
+open to each node. A DRBD state change is checked within a few seconds instead
+of at the next poll, and while every node's stream is up and nothing is
+resyncing or verifying, the cluster is polled every `idle_interval_sec` rather
+than every `check_interval_sec`. That interval still bounds what DRBD does not
+report, such as a thin pool filling up.
 
 Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `resource.promoted`, `node.unreachable`, `wan.degraded`, `resource.out_of_sync`. Each carries a severity
