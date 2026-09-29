@@ -20,3 +20,5 @@ AGENTS.md
 cmd/sds-ai/sds-ai
 go.sum
 cmd/sds-ai/go.sum
+data/oss-agent.db*
+.understand-anything/
