@@ -5027,6 +5027,10 @@
       "properties": {
         "node": {
           "type": "string"
+        },
+        "ignoreFreeSpace": {
+          "type": "boolean",
+          "description": "ignore_free_space adds the replica although the node's pool has less free\nspace than the volume, which the sync writes in full. Without it that is\nrefused: a full thin pool fails the sync's writes and drops the new disk."
         }
       },
       "description": "AddReplicaRequest adds a diskful local replica to a running resource. On a\ntwo-site resource the new node also gets its own WAN leg to the DR: DRBD 9 is\na full mesh, and a replica the DR cannot reach ends replication the moment it\nis promoted."
@@ -5263,6 +5267,10 @@
         "sizeGb": {
           "type": "integer",
           "format": "int64"
+        },
+        "ignoreFreeSpace": {
+          "type": "boolean",
+          "description": "ignore_free_space grows the volume although a replica's pool has less free\nspace than the growth. The added area is resynced onto every replica;\nwithout this a pool that cannot hold it refuses the resize, because a full\nthin pool fails the writes and drops the disk."
         }
       }
     },

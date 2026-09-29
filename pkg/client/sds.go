@@ -771,10 +771,21 @@ func (c *SDSClient) RemoveVolume(ctx context.Context, resource string, volumeID 
 
 // ResizeVolume resizes a volume
 func (c *SDSClient) ResizeVolume(ctx context.Context, resource string, volumeID uint32, sizeGB uint32) error {
+	return c.resizeVolume(ctx, resource, volumeID, sizeGB, false)
+}
+
+// ResizeVolumeIgnoringFreeSpace is ResizeVolume without the check that every
+// replica's pool has room for the growth.
+func (c *SDSClient) ResizeVolumeIgnoringFreeSpace(ctx context.Context, resource string, volumeID uint32, sizeGB uint32) error {
+	return c.resizeVolume(ctx, resource, volumeID, sizeGB, true)
+}
+
+func (c *SDSClient) resizeVolume(ctx context.Context, resource string, volumeID uint32, sizeGB uint32, ignoreFreeSpace bool) error {
 	req := &sdspb.ResizeVolumeRequest{
-		Resource: resource,
-		VolumeId: volumeID,
-		SizeGb:   sizeGB,
+		Resource:        resource,
+		VolumeId:        volumeID,
+		SizeGb:          sizeGB,
+		IgnoreFreeSpace: ignoreFreeSpace,
 	}
 
 	resp, err := c.client.ResizeVolume(ctx, req)
@@ -1069,6 +1080,19 @@ func (c *SDSClient) AddDR(ctx context.Context, resource, drNode, drEndpoint stri
 // AddReplica adds a diskful local replica to a running resource.
 func (c *SDSClient) AddReplica(ctx context.Context, resource, node string) error {
 	resp, err := c.client.AddReplica(ctx, &sdspb.AddReplicaRequest{Resource: resource, Node: node})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
+// AddReplicaIgnoringFreeSpace adds a replica although the node's pool has less
+// free space than the volume; see AddReplicaRequest.ignore_free_space.
+func (c *SDSClient) AddReplicaIgnoringFreeSpace(ctx context.Context, resource, node string) error {
+	resp, err := c.client.AddReplica(ctx, &sdspb.AddReplicaRequest{Resource: resource, Node: node, IgnoreFreeSpace: true})
 	if err != nil {
 		return err
 	}

@@ -877,7 +877,7 @@ node that was added to carry a resource through some maintenance and is not
 wanted permanently.
 
 The surviving replicas keep their node-ids, so none of them resyncs; only the
-leaving node is torn down. It is refused when that node is Primary, when it is
+leaving node is torn down, and its volumes for the resource are deleted. It is refused when that node is Primary, when it is
 the quorum tiebreaker or the off-site DR, or when fewer than two diskful copies
 would remain — unlike a conversion, whose single-copy window closes when the
 resync finishes, this is permanent.
@@ -918,6 +918,7 @@ resync finishes, this is permanent.
 
 func resourceAddReplica() *cobra.Command {
 	var node string
+	var ignoreFreeSpace bool
 
 	cmd := &cobra.Command{
 		Use:   "add-replica <resource> --node <node>",
@@ -949,7 +950,11 @@ replication the moment it was promoted.
 			}
 			defer closeClient(sdsClient)
 
-			if err := sdsClient.AddReplica(ctx, resource, node); err != nil {
+			add := sdsClient.AddReplica
+			if ignoreFreeSpace {
+				add = sdsClient.AddReplicaIgnoringFreeSpace
+			}
+			if err := add(ctx, resource, node); err != nil {
 				return fmt.Errorf("failed to add replica: %w", err)
 			}
 			fmt.Printf("Replica added on %q. Initial sync runs in the background:\n", node)
@@ -958,6 +963,8 @@ replication the moment it was promoted.
 		},
 	}
 	cmd.Flags().StringVar(&node, "node", "", "Node that will hold the new replica")
+	cmd.Flags().BoolVar(&ignoreFreeSpace, "ignore-free-space", false,
+		"Add it although the node's pool has less free space than the volume (the sync writes all of it; a full pool drops the new disk)")
 	return cmd
 }
 
@@ -1130,6 +1137,7 @@ func resourceRemoveVolume() *cobra.Command {
 
 func resourceResizeVolume() *cobra.Command {
 	var size string
+	var ignoreFreeSpace bool
 
 	cmd := &cobra.Command{
 		Use:   "resize-volume <resource> <volume-id> <size>",
@@ -1162,7 +1170,11 @@ func resourceResizeVolume() *cobra.Command {
 			}
 			defer closeClient(sdsClient)
 
-			err = sdsClient.ResizeVolume(ctx, resource, volumeID, uint32(sizeGiB))
+			resize := sdsClient.ResizeVolume
+			if ignoreFreeSpace {
+				resize = sdsClient.ResizeVolumeIgnoringFreeSpace
+			}
+			err = resize(ctx, resource, volumeID, uint32(sizeGiB))
 			if err != nil {
 				return fmt.Errorf("failed to resize volume: %w", err)
 			}
@@ -1171,6 +1183,8 @@ func resourceResizeVolume() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&ignoreFreeSpace, "ignore-free-space", false,
+		"Grow it although a replica's pool has less free space than the growth (the new area is written to every replica; a full pool drops the disk)")
 
 	return cmd
 }

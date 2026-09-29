@@ -1156,6 +1156,11 @@ message ResizeVolumeRequest {
   string resource = 1;
   uint32 volume_id = 2;
   uint32 size_gb = 3;
+  // ignore_free_space grows the volume although a replica's pool has less free
+  // space than the growth. The added area is resynced onto every replica;
+  // without this a pool that cannot hold it refuses the resize, because a full
+  // thin pool fails the writes and drops the disk.
+  bool ignore_free_space = 4;
 }
 
 message ResizeVolumeResponse {
@@ -1427,6 +1432,10 @@ message AddDRResponse {
 message AddReplicaRequest {
   string resource = 1;
   string node = 2;
+  // ignore_free_space adds the replica although the node's pool has less free
+  // space than the volume, which the sync writes in full. Without it that is
+  // refused: a full thin pool fails the sync's writes and drops the new disk.
+  bool ignore_free_space = 3;
 }
 
 // RemoveReplicaRequest takes a diskful replica out of a running resource. The

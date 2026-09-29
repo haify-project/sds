@@ -25,6 +25,13 @@ import (
 // leg, because DRBD 9 is a full mesh: a replica the DR cannot reach is a replica
 // that silently ends replication the moment it is promoted.
 func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string) error {
+	return rm.AddReplicaOptions(ctx, resource, node, false)
+}
+
+// AddReplicaOptions is AddReplica; ignoreFreeSpace adds the replica although
+// the node's pool has less free space than the volume, for a pool known to
+// hold a sparse volume or about to be grown.
+func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node string, ignoreFreeSpace bool) error {
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
@@ -78,6 +85,12 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 	}
 	if len(primaries) == 0 {
 		return fmt.Errorf("resource %q has no primary-site replica to copy from", resource)
+	}
+
+	if !ignoreFreeSpace {
+		if err := rm.assertPoolRoom(ctx, resource, node); err != nil {
+			return err
+		}
 	}
 
 	newAddr := rm.controller.ResolveHost(node)

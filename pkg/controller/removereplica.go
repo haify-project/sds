@@ -137,8 +137,30 @@ func (rm *ResourceManager) RemoveReplica(ctx context.Context, resource, node str
 		return fmt.Errorf("forget the removed replica: %w", err)
 	}
 
+	// The command says it destroys the copy, so the storage goes with it. Left
+	// behind, the volume held pool space nothing accounted for — on a pool that
+	// was already tight, that is how the next add-replica ran it out — and its
+	// name blocked adding a replica back onto the same node.
+	if err := rm.deleteReplicaStorage(ctx, resource, leaving); err != nil {
+		return fmt.Errorf("replica removed from %s, but its storage there could not be deleted: %w; remove the volume by hand", node, err)
+	}
+
 	rm.controller.logger.Info("Replica removed",
 		zap.String("resource", resource), zap.String("node", node))
+	return nil
+}
+
+// deleteReplicaStorage removes the resource's backing volumes on one node.
+func (rm *ResourceManager) deleteReplicaStorage(ctx context.Context, resource, host string) error {
+	vols, err := rm.controller.db.ListVolumes(ctx, resource)
+	if err != nil {
+		return fmt.Errorf("list volumes of %s: %w", resource, err)
+	}
+	for _, v := range vols {
+		if err := rm.deleteBackingVolume(ctx, []string{host}, v); err != nil {
+			return fmt.Errorf("volume %s: %w", v.VolumeName, err)
+		}
+	}
 	return nil
 }
 

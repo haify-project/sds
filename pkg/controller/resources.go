@@ -299,11 +299,12 @@ func parseResourceConfigVolumes(content string) []resourceConfigVolume {
 			}
 		}
 
-		if strings.HasPrefix(trimmed, "disk") {
-			parts := strings.Fields(trimmed)
-			if len(parts) >= 2 {
-				current.DiskPath = strings.TrimSuffix(parts[1], ";")
-			}
+		// `disk /dev/vg/lv;` names the backing device. `disk { ... }` opens the
+		// volume's disk options — written whenever a disk option is set, and by
+		// default for a resource on thin storage — and is not a path: taking its
+		// "{" for one made a resize run `lvresize ... {`.
+		if parts := strings.Fields(trimmed); len(parts) >= 2 && parts[0] == "disk" && !strings.HasPrefix(parts[1], "{") {
+			current.DiskPath = strings.TrimSuffix(parts[1], ";")
 		}
 
 		depth += opens - closes
@@ -3774,7 +3775,10 @@ func (rm *ResourceManager) SetSecondary(ctx context.Context, resource, node stri
 	}
 
 	if !result.Success {
-		return fmt.Errorf("failed to set secondary on %s", node)
+		// DRBD says why — "Device is held open by someone" when the volume is
+		// mounted or a service has it — and a caller cannot act on a bare
+		// "failed"; a drain that stops here is asking for exactly that.
+		return fmt.Errorf("failed to set secondary on %s: %s", node, hostFailure(result))
 	}
 
 	return nil
@@ -4078,6 +4082,12 @@ func firstFailureOutput(res *deployment.ExecResult) string {
 }
 
 func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, volumeID uint32, newSizeGB uint64) error {
+	return rm.ResizeVolumeOptions(ctx, resource, volumeID, newSizeGB, false)
+}
+
+// ResizeVolumeOptions is ResizeVolume; ignoreFreeSpace grows the volume
+// although a replica's pool has less free space than the growth.
+func (rm *ResourceManager) ResizeVolumeOptions(ctx context.Context, resource string, volumeID uint32, newSizeGB uint64, ignoreFreeSpace bool) error {
 	rm.controller.logger.Info("Resizing volume",
 		zap.String("resource", resource),
 		zap.Uint32("volume_id", volumeID),
@@ -4116,6 +4126,12 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 	}
 	if target == nil {
 		return fmt.Errorf("volume %d not found", volumeID)
+	}
+
+	if !ignoreFreeSpace {
+		if err := rm.assertPoolRoomForGrowth(ctx, resource, volumeID, newSizeGB); err != nil {
+			return err
+		}
 	}
 
 	sizeArg := fmt.Sprintf("%dG", newSizeGB)

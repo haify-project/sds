@@ -329,14 +329,18 @@ still bound by the one-Primary-at-a-time rule.
 All of these run on a live resource.
 
 ```bash
-# more capacity: <resource> <volume-id> <size>
+# more capacity: <resource> <volume-id> <size>. Refused when a replica's pool
+# cannot hold the growth: the new area is written to every replica, and a full
+# thin pool drops the disk (--ignore-free-space overrides).
 sds-cli resource resize-volume db 0 200G
 
-# another local replica
+# another local replica (refused if the node's pool has less free space than
+# the volume: the sync writes all of it; --ignore-free-space overrides)
 sds-cli resource add-replica db --node orange3
 
-# take one out (the resource must keep at least two diskful copies)
-sds-cli resource remove-replica db --node orange3
+# take one out (the resource must keep at least two diskful copies); the
+# node's volume for it is deleted
+sds-cli resource remove-replica db --node orange3 --yes
 
 # more volumes in the same resource
 sds-cli resource add-volume db --size 50G

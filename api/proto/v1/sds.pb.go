@@ -5208,12 +5208,17 @@ func (x *RemoveVolumeResponse) GetMessage() string {
 }
 
 type ResizeVolumeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Resource      string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
-	VolumeId      uint32                 `protobuf:"varint,2,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
-	SizeGb        uint32                 `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	VolumeId uint32                 `protobuf:"varint,2,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
+	SizeGb   uint32                 `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	// ignore_free_space grows the volume although a replica's pool has less free
+	// space than the growth. The added area is resynced onto every replica;
+	// without this a pool that cannot hold it refuses the resize, because a full
+	// thin pool fails the writes and drops the disk.
+	IgnoreFreeSpace bool `protobuf:"varint,4,opt,name=ignore_free_space,json=ignoreFreeSpace,proto3" json:"ignore_free_space,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ResizeVolumeRequest) Reset() {
@@ -5265,6 +5270,13 @@ func (x *ResizeVolumeRequest) GetSizeGb() uint32 {
 		return x.SizeGb
 	}
 	return 0
+}
+
+func (x *ResizeVolumeRequest) GetIgnoreFreeSpace() bool {
+	if x != nil {
+		return x.IgnoreFreeSpace
+	}
+	return false
 }
 
 type ResizeVolumeResponse struct {
@@ -7545,11 +7557,15 @@ func (x *AddDRResponse) GetWanPort() uint32 {
 // a full mesh, and a replica the DR cannot reach ends replication the moment it
 // is promoted.
 type AddReplicaRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Resource      string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
-	Node          string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	Node     string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	// ignore_free_space adds the replica although the node's pool has less free
+	// space than the volume, which the sync writes in full. Without it that is
+	// refused: a full thin pool fails the sync's writes and drops the new disk.
+	IgnoreFreeSpace bool `protobuf:"varint,3,opt,name=ignore_free_space,json=ignoreFreeSpace,proto3" json:"ignore_free_space,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *AddReplicaRequest) Reset() {
@@ -7594,6 +7610,13 @@ func (x *AddReplicaRequest) GetNode() string {
 		return x.Node
 	}
 	return ""
+}
+
+func (x *AddReplicaRequest) GetIgnoreFreeSpace() bool {
+	if x != nil {
+		return x.IgnoreFreeSpace
+	}
+	return false
 }
 
 // RemoveReplicaRequest takes a diskful replica out of a running resource. The
@@ -19043,11 +19066,12 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\tvolume_id\x18\x02 \x01(\rR\bvolumeId\"J\n" +
 	"\x14RemoveVolumeResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"g\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x93\x01\n" +
 	"\x13ResizeVolumeRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x1b\n" +
 	"\tvolume_id\x18\x02 \x01(\rR\bvolumeId\x12\x17\n" +
-	"\asize_gb\x18\x03 \x01(\rR\x06sizeGb\"J\n" +
+	"\asize_gb\x18\x03 \x01(\rR\x06sizeGb\x12*\n" +
+	"\x11ignore_free_space\x18\x04 \x01(\bR\x0fignoreFreeSpace\"J\n" +
 	"\x14ResizeVolumeResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"+\n" +
@@ -19200,10 +19224,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\rAddDRResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
-	"\bwan_port\x18\x03 \x01(\rR\awanPort\"C\n" +
+	"\bwan_port\x18\x03 \x01(\rR\awanPort\"o\n" +
 	"\x11AddReplicaRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
-	"\x04node\x18\x02 \x01(\tR\x04node\"F\n" +
+	"\x04node\x18\x02 \x01(\tR\x04node\x12*\n" +
+	"\x11ignore_free_space\x18\x03 \x01(\bR\x0fignoreFreeSpace\"F\n" +
 	"\x14RemoveReplicaRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\"K\n" +

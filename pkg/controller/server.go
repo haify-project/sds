@@ -838,7 +838,7 @@ func (s *Server) RemoveVolume(ctx context.Context, req *sdspb.RemoveVolumeReques
 }
 
 func (s *Server) ResizeVolume(ctx context.Context, req *sdspb.ResizeVolumeRequest) (*sdspb.ResizeVolumeResponse, error) {
-	err := s.resources.ResizeVolume(ctx, req.Resource, req.VolumeId, uint64(req.SizeGb))
+	err := s.resources.ResizeVolumeOptions(ctx, req.Resource, req.VolumeId, uint64(req.SizeGb), req.IgnoreFreeSpace)
 	if err != nil {
 		return &sdspb.ResizeVolumeResponse{
 			Success: false,
@@ -1353,7 +1353,7 @@ func (s *Server) AddDR(ctx context.Context, req *sdspb.AddDRRequest) (*sdspb.Add
 
 // AddReplica adds a diskful local replica to a running resource.
 func (s *Server) AddReplica(ctx context.Context, req *sdspb.AddReplicaRequest) (*sdspb.AddReplicaResponse, error) {
-	if err := s.resources.AddReplica(ctx, req.Resource, req.Node); err != nil {
+	if err := s.resources.AddReplicaOptions(ctx, req.Resource, req.Node, req.IgnoreFreeSpace); err != nil {
 		return &sdspb.AddReplicaResponse{Success: false, Message: err.Error()}, nil
 	}
 	return &sdspb.AddReplicaResponse{

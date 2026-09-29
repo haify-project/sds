@@ -247,6 +247,16 @@ func TestRemoveReplicaTearsDownAndForgetsTheNode(t *testing.T) {
 	res, err := ctrl.db.GetResource(context.Background(), "sds-meta")
 	require.NoError(t, err)
 	assert.Equal(t, "node-b,node-e", res.Nodes, "the leaving node must be forgotten")
+
+	// The command says it destroys the copy, so its storage goes too — only on
+	// the node that left. A volume left behind held pool space nothing counted.
+	assert.Contains(t, joined, "192.168.123.228: for s in $(sudo lvs", "the leaving node's volume must be deleted")
+	assert.Contains(t, joined, "sudo lvremove -f sds_sdspool/sds-meta_data")
+	for _, line := range ran {
+		if strings.Contains(line, "lvremove") && !strings.HasPrefix(line, "192.168.123.228:") {
+			t.Errorf("a surviving node's volume was touched: %s", line)
+		}
+	}
 }
 
 // A status that says nothing is not a Secondary. Reading it as one would
