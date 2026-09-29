@@ -19,6 +19,12 @@
 #
 # Usage: ai/kb/build.sh [out-dir]          (default: dist/kb)
 #
+# Every document and step is retried, and recorded in <out-dir>/progress when
+# it succeeds: a build takes hours, and the embedder behind it — a node that
+# may be busy or asleep — answers 503 now and then. SDS_KB_RESUME=1 keeps the
+# database and the record and carries on where the last run stopped; without
+# it the build starts from nothing.
+#
 # Environment:
 #   STEWARD_EMB_BASE_URL / _API_KEY / _MODEL, SDS_KB_EMB_DIM   embedder
 #   STEWARD_LLM_BASE_URL / _API_KEY / _MODEL                   entity extraction
@@ -46,7 +52,11 @@ db=$out/sds-kb.db
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$out"
-rm -f "$db" "$db"-wal "$db"-shm
+progress=$out/progress
+if [ "${SDS_KB_RESUME:-0}" != 1 ]; then
+	rm -f "$db" "$db"-wal "$db"-shm "$progress"
+fi
+touch "$progress"
 export STEWARD_KNOWLEDGE_DB_PATH=$db
 export STEWARD_DOMAIN_FILE=$root/ai/domain.toml
 
@@ -67,32 +77,63 @@ flatten() {
 
 step() { printf '\n==> %s\n' "$*"; }
 
+# once <key> <cmd...>: runs cmd unless key is recorded as done, retrying a
+# failure with backoff, and records key when it succeeds.
+once() {
+	local key=$1 try
+	shift
+	grep -qxF "$key" "$progress" && return 0
+	for try in 1 2 3 4 5; do
+		if "$@"; then
+			echo "$key" >>"$progress"
+			return 0
+		fi
+		echo "   $key failed (attempt $try); retrying in $((try * 20))s" >&2
+		sleep $((try * 20))
+	done
+	echo "giving up on $key; rerun with SDS_KB_RESUME=1" >&2
+	return 1
+}
+
+# ingest_each <dir>: ingests a flattened dir one document at a time, so a
+# failure costs one document rather than the directory.
+ingest_each() {
+	local f one
+	for f in "$1"/*; do
+		one=$stage/one/$(basename "$f" .md)
+		mkdir -p "$one"
+		cp "$f" "$one/"
+		once "doc:$(basename "$f")" "$od" ingest "$one"
+		rm -rf "$one"
+	done
+}
+
 step "SDS documentation"
 docs=$(flatten "$root/docs" sds-docs -name '*.md')
 cp "$root/README.md" "$docs/sds-docs__README.md"
-"$od" ingest "$docs"
+ingest_each "$docs"
 
 step "SDS code graph"
-"$od" import-graph "$root/.understand-anything/knowledge-graph.json"
+once step:sds-code-graph "$od" import-graph "$root/.understand-anything/knowledge-graph.json"
 
 step "SDS source"
-"$od" ingest-repo "$root"
+once step:sds-source "$od" ingest-repo "$root"
 
 step "sds-cli reference (built from this commit)"
 cli=$stage/sds-cli
 (cd "$root" && go build -o "$cli" ./cmd/cli)
-"$od" ingest-cli "$cli"
+once step:sds-cli "$od" ingest-cli "$cli"
 
 if [ -n "${SERVICE_IP_REPO:-}" ] && [ -f "$SERVICE_IP_REPO/.understand-anything/knowledge-graph.json" ]; then
 	step "service-ip code graph"
-	"$od" import-graph "$SERVICE_IP_REPO/.understand-anything/knowledge-graph.json"
+	once step:service-ip-graph "$od" import-graph "$SERVICE_IP_REPO/.understand-anything/knowledge-graph.json"
 fi
 
 step "DRBD 9 documentation"
-"$od" ingest "$(flatten "$corpus/linbit-blog-kb" linbit-kb -name '*.md')"
+ingest_each "$(flatten "$corpus/linbit-blog-kb" linbit-kb -name '*.md')"
 # DRBD 9 only: the 8.4 guide describes behaviour SDS does not have.
-"$od" ingest "$(flatten "$corpus/linbit-documentation/UG9/en" drbd9-guide -name '*.adoc')"
-"$od" ingest "$(flatten "$corpus/ai-assistants" drbd-ai-notes -name '*.md')"
+ingest_each "$(flatten "$corpus/linbit-documentation/UG9/en" drbd9-guide -name '*.adoc')"
+ingest_each "$(flatten "$corpus/ai-assistants" drbd-ai-notes -name '*.md')"
 
 step "manifest"
 sqlite3 "$db" 'PRAGMA wal_checkpoint(TRUNCATE); VACUUM;'
