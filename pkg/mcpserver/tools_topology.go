@@ -24,7 +24,7 @@ type replicaIn struct {
 
 type tiebreakerIn struct {
 	Resource string `json:"resource"`
-	Node     string `json:"node" jsonschema:"node to hold the diskless quorum tiebreaker"`
+	Node     string `json:"node" jsonschema:"node to hold the diskless quorum tiebreaker; empty removes the tiebreaker"`
 }
 
 type addDRIn struct {
@@ -138,7 +138,10 @@ type haStatusOut struct {
 func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	addWrite(s, srv, writeTool("sds_resource_add_replica", "Add a replica",
 		"Add a full (diskful) copy of a running resource on another node. The new copy syncs in the background; "+
-			"the resource stays usable throughout."),
+			"the resource stays usable throughout, and it is not a redundant copy until sds_resource_status shows "+
+			"it UpToDate. The node's pool needs room for the whole volume. Refused if the node already holds a "+
+			"replica, is the resource's quorum tiebreaker (remove it with sds_resource_set_tiebreaker first) or "+
+			"is a diskless client (detach it first)."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in replicaIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.AddReplica(ctx, in.Resource, in.Node); err != nil {
 				return nil, opResult{}, err
@@ -179,14 +182,22 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	addWrite(s, srv, writeTool("sds_resource_set_tiebreaker", "Set a quorum tiebreaker",
 		"Add a diskless node that only votes in quorum and stores no data. A two-replica resource cannot keep "+
 			"serving I/O when either node fails, because the survivor has no majority; a tiebreaker fixes that. "+
-			"Note that a node attached as a diskless CLIENT does not vote — only a tiebreaker does."),
+			"Note that a node attached as a diskless CLIENT does not vote — only a tiebreaker does. Naming a node "+
+			"moves the tiebreaker there; an empty node removes it, which a two-replica resource has no majority "+
+			"without — do that only to turn the node into a replica."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in tiebreakerIn) (*mcp.CallToolResult, opResult, error) {
-			msg, _, err := s.client.SetTiebreaker(ctx, in.Resource, in.Node)
+			// The client returns the previous tiebreaker first and the
+			// controller's message second.
+			_, msg, err := s.client.SetTiebreaker(ctx, in.Resource, in.Node)
 			if err != nil {
 				return nil, opResult{}, err
 			}
 			if msg == "" {
-				msg = in.Node + " is now the tiebreaker for " + in.Resource
+				if in.Node == "" {
+					msg = "tiebreaker removed from " + in.Resource
+				} else {
+					msg = in.Node + " is now the tiebreaker for " + in.Resource
+				}
 			}
 			return nil, ok(msg), nil
 		})
@@ -295,7 +306,13 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	}
 
 	addWrite(s, srv, destructiveTool("sds_node_drain", "Drain a node",
-		"Move every resource off a node so it can be taken out of service. Interrupts whatever was running there."),
+		"Move the DRBD Primary role of every resource that is Primary on the node to another replica, and mark the "+
+			"node in maintenance. It changes roles only: it does not stop services or unmount anything, so a volume "+
+			"that is mounted or held open on the node cannot be demoted, and the drain stops there with an error — "+
+			"resources it already moved stay moved, and the one it was working on may have no Primary until you "+
+			"promote it. Resources run by an HA promoter (sds-meta, gateways) should be moved with sds_ha_evict "+
+			"first. A resource with no other replica cannot be moved. Returns the resources it moved; undrain does "+
+			"not move them back."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeNameIn) (*mcp.CallToolResult, drainOut, error) {
 			moved, err := s.client.DrainNode(ctx, in.Node)
 			if err != nil {

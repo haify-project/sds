@@ -369,7 +369,9 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 
 	addWrite(s, srv, writeTool("sds_resource_set_role", "Set resource role",
 		"Promote a resource to Primary or demote it to Secondary on a node. "+
-			"Only the Primary node can mount and write the volume. Set quorum_guarded=true "+
+			"Only the Primary node can mount and write the volume. Demoting fails while the volume is "+
+			"mounted or in use. Do not use it on a resource an HA promoter runs: the promoter puts the "+
+			"role back within seconds — use sds_ha_evict. Set quorum_guarded=true "+
 			"for a safe hard-failover promote: the controller force-promotes only if the node "+
 			"holds DRBD quorum and refuses otherwise, avoiding split-brain."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceSetRoleIn) (*mcp.CallToolResult, opResult, error) {
@@ -471,8 +473,9 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, writeTool("sds_resource_resize_volume", "Resize volume",
-		"Grow a DRBD volume on all nodes. Shrinking is not supported. "+
-			"The filesystem must be grown separately afterwards (resize2fs/xfs_growfs)."),
+		"Grow a DRBD volume on all nodes. Shrinking is not supported. The space is not usable "+
+			"until the filesystem on the Primary is grown too (resize2fs/xfs_growfs) — this tool "+
+			"does not do that."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in volumeResizeIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.ResizeVolume(ctx, in.Resource, in.VolumeID, in.SizeGB); err != nil {
 				return nil, opResult{}, err

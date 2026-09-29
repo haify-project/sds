@@ -115,8 +115,14 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, destructiveTool("sds_ha_evict", "Evict HA resource",
-		"Force a failover: evict the resource from its active node so another node takes over. "+
-			"Causes a brief service interruption."),
+		"Planned switchover of one HA resource: its active node stops the services and another node takes over. "+
+			"It moves exactly the resource named and nothing else on the node — sds-meta is the controller with its "+
+			"VIP and the AI Copilot, any other name is that resource's own service. For sds-meta the call returns as "+
+			"soon as the switchover is launched, and when this server runs in the same chain (as SDS sets it up) it "+
+			"moves too: expect this connection to drop for several seconds, which is not a failure; check "+
+			"sds_ha_promoter_status for where it landed. For any other resource the call returns once another node "+
+			"has taken over, and fails if none did. Never stop or restart a drbd-reactor-managed service by hand "+
+			"instead: the promoter treats that as a fault and fails the resource over."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haResourceIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.EvictHa(ctx, in.Resource); err != nil {
 				return nil, opResult{}, err
