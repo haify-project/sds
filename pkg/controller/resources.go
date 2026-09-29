@@ -2124,6 +2124,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		setOption("net", "congestion-fill", "2M")
 		setOption("net", "congestion-extents", "500")
 		setOption("net", "ping-timeout", "20")
+		setOption("net", "csums-alg", wanCsumsAlg)
 	}
 
 	// Process user options
@@ -2382,6 +2383,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 			config.WriteString("            protocol A;\n")
 			config.WriteString("            on-congestion pull-ahead;\n")
 			config.WriteString("            congestion-fill 400M;\n")
+			fmt.Fprintf(&config, "            csums-alg %s;\n", wanCsumsAlg)
 			config.WriteString("        }\n")
 			config.WriteString("    }\n")
 		}

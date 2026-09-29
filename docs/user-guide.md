@@ -557,6 +557,14 @@ WAN replication keeps an asynchronous replica at another site, over the public
 internet, through a TCP proxy with mTLS. It is opt-in per resource because it
 uses protocol A (asynchronous): the primary does not wait for the DR site.
 
+A resync across the WAN compares SHA-256 checksums before sending a block
+(`csums-alg sha256`), so blocks both sites already hold cross the link as a
+checksum, not as data. Resync speed follows DRBD's dynamic controller; to cap
+it for a group of resources, set it on their profile:
+`sds-cli resource profile set-options <profile> --drbd-options disk/c-max-rate=20M`.
+WAN resources created before this default can get it with
+`sds-cli resource set-options <name> --drbd-options net/csums-alg=sha256`.
+
 ```bash
 sds-cli resource create --name db --size 100G --port 7000 \
     --nodes orange1,orange2 \

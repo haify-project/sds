@@ -149,6 +149,7 @@ func TestAddDRToConfigNarrowsMeshAndAddsLegs(t *testing.T) {
 	// WAN link cannot stall writes in the primary site.
 	assert.Equal(t, 2, strings.Count(out, "protocol A;"))
 	assert.Equal(t, 2, strings.Count(out, "on-congestion pull-ahead;"))
+	assert.Equal(t, 2, strings.Count(out, "csums-alg sha256;"), "every WAN leg resyncs by checksum")
 
 	// No tiebreaker leg: a diskless voter reachable only over the WAN would make
 	// quorum depend on the link.

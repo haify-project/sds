@@ -71,6 +71,7 @@ func TestGenerateDrbdConfigMultiReplicaWAN(t *testing.T) {
 	// Each WAN leg is async regardless of the LAN protocol.
 	assert.Equal(t, 2, strings.Count(cfg, "protocol A;"))
 	assert.Contains(t, cfg, "on-congestion pull-ahead;")
+	assert.Contains(t, cfg, "csums-alg sha256;")
 	// The resource-level protocol stays synchronous for the primary site.
 	assert.Contains(t, cfg, "protocol C;")
 }

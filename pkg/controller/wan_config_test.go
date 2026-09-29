@@ -53,6 +53,7 @@ func TestGenerateDrbdConfigWAN(t *testing.T) {
 
 	// DRBD-level pull-ahead so the primary goes Ahead instead of blocking.
 	assert.Contains(t, cfg, "on-congestion pull-ahead;")
+	assert.Contains(t, cfg, "csums-alg sha256;")
 	assert.Contains(t, cfg, "ping-timeout 20;")
 
 	// Loopback routing: primary (node1) binds port+9, DR (node2) binds port.

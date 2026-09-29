@@ -340,6 +340,7 @@ func (rm *ResourceManager) addReplicaToConfig(content, resource, node, addr stri
 		fmt.Fprintf(&leg, "            protocol A;\n")
 		fmt.Fprintf(&leg, "            on-congestion pull-ahead;\n")
 		fmt.Fprintf(&leg, "            congestion-fill 400M;\n")
+		fmt.Fprintf(&leg, "            csums-alg %s;\n", wanCsumsAlg)
 		fmt.Fprintf(&leg, "        }\n")
 		fmt.Fprintf(&leg, "    }\n")
 		out, err = insertBeforeResourceClose(out, leg.String())

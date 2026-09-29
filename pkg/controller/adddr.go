@@ -365,6 +365,7 @@ func (rm *ResourceManager) addDRToConfig(content, resource, drNode string, prima
 		fmt.Fprintf(&tail, "            protocol A;\n")
 		fmt.Fprintf(&tail, "            on-congestion pull-ahead;\n")
 		fmt.Fprintf(&tail, "            congestion-fill 400M;\n")
+		fmt.Fprintf(&tail, "            csums-alg %s;\n", wanCsumsAlg)
 		fmt.Fprintf(&tail, "        }\n")
 		fmt.Fprintf(&tail, "    }\n")
 	}

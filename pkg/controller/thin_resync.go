@@ -42,3 +42,12 @@ func (rm *ResourceManager) withThinResyncDefaults(ctx context.Context, options m
 	out["disk/rs-discard-granularity"] = rsDiscardGranularity
 	return out
 }
+
+// wanCsumsAlg is the checksum a resync across the WAN compares blocks by
+// before sending them. A resync over the WAN is bounded by the link, and most
+// of what one covers — a failback whose history no longer matches, a DR copy
+// invalidated by hand — is already the same on both sides: a full resync of a
+// 1G volume on the Lima cluster found every block equal and sent nothing.
+// sha256 rather than crc32c: a block that differs but hashes the same is
+// skipped, and the copies disagree without anything saying so.
+const wanCsumsAlg = "sha256"
