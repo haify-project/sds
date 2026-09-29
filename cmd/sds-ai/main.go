@@ -1,4 +1,4 @@
-// Command sds-ai hosts the SDS AI Copilot backend. It imports the opspilot
+// Command sds-ai hosts the SDS AI Copilot backend. It imports the steward
 // library, wires it to the read-only sds-mcp cluster tools and the drbd-reactor
 // knowledge base, and serves a single NDJSON streaming endpoint the sds web-ui
 // Copilot sidebar talks to.
@@ -17,8 +17,8 @@
 //	SDS_AI_EMB_DIM        embedding dim of the knowledge index (default 1024)
 //	SDS_AI_KUBECONFIG     kubeconfig for the sds-k8s tools (`sds-mcp k8s`); unset = bare-metal tools only
 //	SDS_AI_ALLOW_ORIGIN   CORS allow-origin (default "*")
-//	OPSPILOT_LLM_API_KEY / _BASE_URL / _MODEL   LLM (opspilot also reads the old OPSDOCTOR_* and OSS_* names)
-//	OPSPILOT_EMB_MODEL / _BASE_URL / _API_KEY   embedder (must match the index)
+//	STEWARD_LLM_API_KEY / _BASE_URL / _MODEL    LLM (steward also reads the old OPSPILOT_*, OPSDOCTOR_* and OSS_* names)
+//	STEWARD_EMB_MODEL / _BASE_URL / _API_KEY    embedder (must match the index)
 package main
 
 import (
@@ -30,7 +30,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liliang-cn/opspilot"
+	"github.com/liliang-cn/steward"
 )
 
 func envOr(key, def string) string {
@@ -74,9 +74,9 @@ func main() {
 	}
 
 	embDim := atoiOr("SDS_AI_EMB_DIM", 1024)
-	embModel := envOr("OPSPILOT_EMB_MODEL", envOr("OPSDOCTOR_EMB_MODEL", os.Getenv("OSS_EMB_MODEL")))
+	embModel := envOr("STEWARD_EMB_MODEL", envOr("OPSPILOT_EMB_MODEL", envOr("OPSDOCTOR_EMB_MODEL", os.Getenv("OSS_EMB_MODEL"))))
 
-	ag, err := opspilot.New(opspilot.Config{
+	ag, err := steward.New(steward.Config{
 		KnowledgeDBPath: knowledgeDB,
 		DomainFile:      envOr("SDS_AI_DOMAIN", "ai/domain.toml"),
 		// Empty fields fall through to the environment, which is what makes the
@@ -85,7 +85,7 @@ func main() {
 		LLMModel:   saved.LLMModel,
 		LLMAPIKey:  saved.LLMAPIKey,
 		// The drbd-reactor.db index is 1024-dim; the embedder model comes from
-		// OPSPILOT_EMB_MODEL (must match how the index was built — see spec O1).
+		// STEWARD_EMB_MODEL (must match how the index was built — see spec O1).
 		EmbDim: embDim,
 		// Mount the sds cluster tools read-only plus the day-to-day writes
 		// (dailyOps). Every write is held until the operator approves it in
@@ -184,10 +184,10 @@ var k8sDailyOps = []string{"sds_k8s_app_create"}
 // to the controller, and — when a kubeconfig is set — the Kubernetes (CSI)
 // tools, which talk to the API server. Both are read-only except for their
 // day-to-day operations, enforced on both sides: sds-mcp registers nothing
-// else that writes, and opspilot mounts nothing else that does.
-func mcpServers() []opspilot.MCPServerSpec {
+// else that writes, and steward mounts nothing else that does.
+func mcpServers() []steward.MCPServerSpec {
 	cmd := envOr("SDS_AI_MCP_CMD", "sds-mcp")
-	specs := []opspilot.MCPServerSpec{{
+	specs := []steward.MCPServerSpec{{
 		Name:      "sds",
 		Transport: "stdio",
 		Command:   cmd,
@@ -197,7 +197,7 @@ func mcpServers() []opspilot.MCPServerSpec {
 		WriteToolAllow: dailyOps,
 	}}
 	if kc := os.Getenv("SDS_AI_KUBECONFIG"); kc != "" {
-		specs = append(specs, opspilot.MCPServerSpec{
+		specs = append(specs, steward.MCPServerSpec{
 			Name:           "sds-k8s",
 			Transport:      "stdio",
 			Command:        cmd,
@@ -234,7 +234,7 @@ type chatBody struct {
 //	{"t":"tool","name":..,"args":{..}}   {"t":"tool_result","name":..}
 //	{"t":"text","d":".."}   {"t":"reset"}   {"t":"suggestion", <Suggestion>}
 //	{"t":"error","d":".."}   {"t":"done"}
-func streamHandler(ag *opspilot.Agent) http.HandlerFunc {
+func streamHandler(ag *steward.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "use POST", http.StatusMethodNotAllowed)
@@ -269,19 +269,19 @@ func streamHandler(ag *opspilot.Agent) http.HandlerFunc {
 		// dropped — so every turn of the sidebar started from nothing and
 		// "so how do I fix it" had no idea what "it" was. An empty id still
 		// runs stateless, which is what a scripted one-shot caller wants.
-		_, _, err := ag.Stream(r.Context(), body.SessionID, body.Message, func(ev opspilot.Event) {
+		_, _, err := ag.Stream(r.Context(), body.SessionID, body.Message, func(ev steward.Event) {
 			switch ev.Kind {
-			case opspilot.EventText:
+			case steward.EventText:
 				if ev.Text != "" {
 					frame(map[string]any{"t": "text", "d": ev.Text})
 				}
-			case opspilot.EventReset:
+			case steward.EventReset:
 				frame(map[string]any{"t": "reset"})
-			case opspilot.EventToolCall:
+			case steward.EventToolCall:
 				frame(map[string]any{"t": "tool", "name": ev.Tool, "args": ev.Args})
-			case opspilot.EventToolResult:
+			case steward.EventToolResult:
 				frame(map[string]any{"t": "tool_result", "name": ev.Tool})
-			case opspilot.EventSuggestion:
+			case steward.EventSuggestion:
 				if s := ev.Suggestion; s != nil {
 					frame(map[string]any{
 						"t":        "suggestion",
@@ -297,15 +297,15 @@ func streamHandler(ag *opspilot.Agent) http.HandlerFunc {
 						},
 					})
 				}
-			case opspilot.EventApproval:
+			case steward.EventApproval:
 				if a := ev.Approval; a != nil {
 					frame(map[string]any{"t": "approval", "id": a.ID, "server": a.Server, "name": a.Tool, "args": a.Args})
 				}
-			case opspilot.EventOutcome:
+			case steward.EventOutcome:
 				if o := ev.Outcome; o != nil {
 					frame(map[string]any{"t": "outcome", "status": o.Status, "d": o.Text})
 				}
-			case opspilot.EventError:
+			case steward.EventError:
 				frame(map[string]any{"t": "error", "d": ev.Text})
 			}
 		})
@@ -320,7 +320,7 @@ func streamHandler(ag *opspilot.Agent) http.HandlerFunc {
 // holding (an "approval" frame on its stream): {"id", "approve", "reason"}.
 // It answers 404 when nothing is waiting under the id — decided already, or
 // its conversation ended — so a second click cannot run a call twice.
-func approveHandler(ag *opspilot.Agent) http.HandlerFunc {
+func approveHandler(ag *steward.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "use POST", http.StatusMethodNotAllowed)
@@ -337,7 +337,7 @@ func approveHandler(ag *opspilot.Agent) http.HandlerFunc {
 		}
 		if err := ag.Decide(body.ID, body.Approve, body.Reason); err != nil {
 			status := http.StatusInternalServerError
-			if errors.Is(err, opspilot.ErrNoSuchApproval) {
+			if errors.Is(err, steward.ErrNoSuchApproval) {
 				status = http.StatusNotFound
 			}
 			http.Error(w, err.Error(), status)

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	opspilot "github.com/liliang-cn/opspilot"
+	"github.com/liliang-cn/steward"
 )
 
 // The Copilot's model, changeable while it runs.
@@ -18,7 +18,7 @@ import (
 // and restarting sds-ai. That restart is not a restart: sds-ai.service is in the
 // drbd-reactor promoter's start list for sds-meta, so stopping it demotes the
 // resource and fails the whole control plane — VIP, controller and all — onto
-// another node. A model name should not cost an outage, so opspilot v0.42.0
+// another node. A model name should not cost an outage, so steward (then opsdoctor) v0.42.0
 // swaps the generator in place and this is the surface for it.
 //
 // Two halves, and they are not the same risk:
@@ -114,7 +114,7 @@ type configView struct {
 }
 
 // configStore holds what the running process knows about its own settings.
-// The mutex guards the persisted copy; opspilot guards the live provider.
+// The mutex guards the persisted copy; steward guards the live provider.
 type configStore struct {
 	mu   sync.Mutex
 	path string
@@ -122,7 +122,7 @@ type configStore struct {
 }
 
 // registerConfigRoutes wires GET/PUT /ai/config.
-func registerConfigRoutes(mux *http.ServeMux, ag *opspilot.Agent, st *configStore,
+func registerConfigRoutes(mux *http.ServeMux, ag *steward.Agent, st *configStore,
 	embModel string, embDim int, tokenConfigured bool) {
 
 	mux.HandleFunc("/ai/config", func(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +168,7 @@ func registerConfigRoutes(mux *http.ServeMux, ag *opspilot.Agent, st *configStor
 	})
 }
 
-func (st *configStore) view(ag *opspilot.Agent, embModel string, embDim int, editable bool) configView {
+func (st *configStore) view(ag *steward.Agent, embModel string, embDim int, editable bool) configView {
 	st.mu.Lock()
 	hasKey := st.cur.LLMAPIKey != ""
 	st.mu.Unlock()
@@ -180,7 +180,7 @@ func (st *configStore) view(ag *opspilot.Agent, embModel string, embDim int, edi
 		// A key from the environment counts: the question the form is asking is
 		// "will a blank field leave a working key in place", not "did this file
 		// supply it".
-		HasAPIKey: hasKey || os.Getenv("OPSPILOT_LLM_API_KEY") != "" || os.Getenv("OPSDOCTOR_LLM_API_KEY") != "" || os.Getenv("OSS_LLM_API_KEY") != "",
+		HasAPIKey: hasKey || os.Getenv("STEWARD_LLM_API_KEY") != "" || os.Getenv("OPSPILOT_LLM_API_KEY") != "" || os.Getenv("OPSDOCTOR_LLM_API_KEY") != "" || os.Getenv("OSS_LLM_API_KEY") != "",
 		EmbModel:  embModel,
 		EmbDim:    embDim,
 		Editable:  editable,
@@ -196,8 +196,8 @@ func (st *configStore) view(ag *opspilot.Agent, embModel string, embDim int, edi
 // In that order, deliberately. A settings file that names a model the running
 // agent rejected is a lie that survives a reboot; one that lags a successful
 // swap by a few milliseconds is not.
-func (st *configStore) apply(ag *opspilot.Agent, in settings) error {
-	if _, err := ag.SetLLM(opspilot.LLMSettings{
+func (st *configStore) apply(ag *steward.Agent, in settings) error {
+	if _, err := ag.SetLLM(steward.LLMSettings{
 		BaseURL: in.LLMBaseURL,
 		Model:   in.LLMModel,
 	}, in.LLMAPIKey); err != nil {

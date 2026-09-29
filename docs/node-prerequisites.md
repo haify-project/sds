@@ -283,7 +283,7 @@ for the embed) → rebuild `sds-controller`.
 ## 8a. sds-ai — AI Copilot (optional; rides controller Self-HA)
 
 `sds-ai` is a separate Go **submodule** (`cmd/sds-ai`, its own `go.mod`, depends
-on `opspilot` — the library formerly published as `opsdoctor` and `oss-agent`) that serves the
+on `steward` — the library formerly published as `opspilot`, `opsdoctor` and `oss-agent`) that serves the
 Copilot the Web UI talks to. It also needs
 `sds-mcp` (built from `cmd/mcp`) as its MCP tool backend.
 
@@ -296,7 +296,8 @@ Copilot the Web UI talks to. It also needs
   ```
 - Config + knowledge live on the **Self-HA DRBD mount** so they follow failover:
   `/var/lib/sds/ai/` with `sds-ai.env` and `domain.toml`. Key env:
-  `OPSPILOT_LLM_API_KEY` / `_BASE_URL` / `_MODEL` (e.g. DashScope
+  `STEWARD_LLM_API_KEY` / `_BASE_URL` / `_MODEL` (the older `OPSPILOT_*`,
+  `OPSDOCTOR_*` and `OSS_*` names are still read; e.g. DashScope
   `https://dashscope.aliyuncs.com/compatible-mode/v1` + `deepseek-v4-flash`),
   `SDS_AI_CONTROLLER=127.0.0.1:3374`, `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`,
   `SDS_AI_ADDR=:7634`. Routes: `GET /ai/health`, `POST /ai/chat/stream` (NDJSON).

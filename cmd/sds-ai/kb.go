@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/liliang-cn/opspilot"
+	"github.com/liliang-cn/steward"
 )
 
 // registerKBRoutes wires the knowledge-base update endpoints onto mux. They MUTATE
-// the vector/graph index, so the embedder in effect (OPSPILOT_EMB_MODEL) MUST be the one
+// the vector/graph index, so the embedder in effect (STEWARD_EMB_MODEL) MUST be the one
 // the index was built with — 1024-dim text-embedding-v4. A mismatched embedder
-// writes vectors of a different dimension and corrupts retrieval (opspilot spec
+// writes vectors of a different dimension and corrupts retrieval (steward spec
 // O1). sds-ai already fails fast if EmbDim disagrees, but the model itself must
 // also match.
 //
@@ -25,7 +25,7 @@ import (
 //
 // Plus two GETs that read: /ai/kb/list (what is in the index) and
 // /ai/kb/doctor (whether retrieval over it still works).
-func registerKBRoutes(mux *http.ServeMux, ag *opspilot.Agent) {
+func registerKBRoutes(mux *http.ServeMux, ag *steward.Agent) {
 	mux.HandleFunc("/ai/kb/doc", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "use POST", http.StatusMethodNotAllowed)
@@ -221,7 +221,7 @@ func registerKBRoutes(mux *http.ServeMux, ag *opspilot.Agent) {
 
 // dirHandler adapts a directory-taking ingest/refresh method into an HTTP handler
 // that reads {"dir": "..."} and returns the resulting stats.
-func dirHandler(fn func(context.Context, string) (opspilot.IngestStats, error)) http.HandlerFunc {
+func dirHandler(fn func(context.Context, string) (steward.IngestStats, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "use POST", http.StatusMethodNotAllowed)

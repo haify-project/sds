@@ -2,7 +2,7 @@ module github.com/liliang-cn/sds/cmd/sds-ai
 
 go 1.26.0
 
-require github.com/liliang-cn/opspilot v0.50.0
+require github.com/liliang-cn/steward v0.51.0
 
 require (
 	github.com/0x51-dev/rdf v0.1.0 // indirect
@@ -35,6 +35,7 @@ require (
 	github.com/blevesearch/zapx/v15 v15.4.3 // indirect
 	github.com/blevesearch/zapx/v16 v16.3.4 // indirect
 	github.com/blevesearch/zapx/v17 v17.2.3 // indirect
+	github.com/cayleygraph/quad v1.3.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 // indirect
 	github.com/chromedp/chromedp v0.14.1 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
@@ -73,7 +74,7 @@ require (
 	github.com/liliang-cn/agent-go/v3 v3.33.0 // indirect
 	github.com/liliang-cn/agentexec v0.5.0 // indirect
 	github.com/liliang-cn/alchemy v0.7.7 // indirect
-	github.com/liliang-cn/cortexdb/v2 v2.111.1 // indirect
+	github.com/liliang-cn/cortexdb/v2 v2.113.0 // indirect
 	github.com/liliang-cn/mcp-swagger-server v1.3.0 // indirect
 	github.com/liliang-cn/pipeit v0.1.0 // indirect
 	github.com/liliang-cn/skills-go v1.9.0 // indirect
@@ -87,8 +88,10 @@ require (
 	github.com/oasdiff/yaml v0.1.0 // indirect
 	github.com/oasdiff/yaml3 v0.0.13 // indirect
 	github.com/openai/openai-go/v3 v3.56.0 // indirect
+	github.com/piprate/json-gold v0.8.0 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.8 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/pquerna/cachecontrol v0.2.0 // indirect
 	github.com/qdrant/go-client v1.19.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
