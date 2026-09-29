@@ -95,17 +95,38 @@ once() {
 	return 1
 }
 
-# ingest_each <dir>: ingests a flattened dir one document at a time, so a
-# failure costs one document rather than the directory.
+# ingest_one <file>: ingests one document on its own, so a failure costs that
+# document rather than the directory it came from.
+ingest_one() {
+	local f=$1 one
+	one=$stage/one/$(basename "$f" .md)
+	mkdir -p "$one"
+	cp "$f" "$one/"
+	once "doc:$(basename "$f")" "$od" ingest "$one"
+	rm -rf "$one"
+}
+
+# ingest_each <dir>: ingests a flattened dir, SDS_KB_JOBS documents at a time
+# (default 4). Almost all of a document's time is spent waiting on the
+# extraction model, so documents in parallel is what makes the build take
+# minutes per hundred documents rather than hours; SQLite serialises the
+# brief writes between them. Waits on the oldest job when all slots are busy,
+# which bash 3.2 (the macOS /bin/bash) can do and `wait -n` cannot.
 ingest_each() {
-	local f one
+	local f jobs=${SDS_KB_JOBS:-4} failed=0
+	local pids=()
 	for f in "$1"/*; do
-		one=$stage/one/$(basename "$f" .md)
-		mkdir -p "$one"
-		cp "$f" "$one/"
-		once "doc:$(basename "$f")" "$od" ingest "$one"
-		rm -rf "$one"
+		ingest_one "$f" &
+		pids+=($!)
+		if [ ${#pids[@]} -ge "$jobs" ]; then
+			wait "${pids[0]}" || failed=1
+			pids=(${pids[@]+"${pids[@]:1}"})
+		fi
 	done
+	for f in ${pids[@]+"${pids[@]}"}; do
+		wait "$f" || failed=1
+	done
+	return $failed
 }
 
 step "SDS documentation"
