@@ -36,6 +36,7 @@ type fakeDeploymentClient struct {
 	lvExtendThinPoolAllFreeFunc         func(ctx context.Context, hosts []string, vgName, poolName string) (*deployment.ExecResult, error)
 	lvsCacheReportFunc                  func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
 	lvsThinReportFunc                   func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
+	lvRemoveSnapshotFunc                func(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error)
 	probeBlockDeviceFunc                func(ctx context.Context, host, device string) (*deployment.ExecResult, error)
 	vgExtendFunc                        func(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error)
 	vgReduceAndRemovePVFunc             func(ctx context.Context, hosts []string, vgName, device string) (*deployment.ExecResult, error)
@@ -387,6 +388,9 @@ func (f *fakeDeploymentClient) DRBDAttach(ctx context.Context, host, resource st
 }
 
 func (f *fakeDeploymentClient) LVRemoveSnapshot(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error) {
+	if f.lvRemoveSnapshotFunc != nil {
+		return f.lvRemoveSnapshotFunc(ctx, hosts, vgName, snapshotName)
+	}
 	return successExecResult(hosts, ""), nil
 }
 

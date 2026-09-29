@@ -397,6 +397,14 @@ The cron field is standard 5-field syntax. Retention is applied after each run:
 `--keep-hourly 24` keeps the most recent 24 hourly snapshots, and so on for each
 tier. Deleting a schedule keeps the snapshots it already made.
 
+Retention counts snapshots; it does not look at the pool. On a thin pool each
+snapshot holds the blocks written since it was taken, so a busy volume's
+history can fill the pool while staying inside its policy — and a full pool
+fails the replica's own writes. So after retention, if the pool is still past
+85% (data or metadata), the scheduler removes that volume's oldest scheduled
+snapshots on that node one at a time until it is below, always keeping the
+newest two. It logs each one it removes.
+
 Schedules live in the controller database and survive a restart or a failover —
 the node that becomes active picks them up.
 

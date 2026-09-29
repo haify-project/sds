@@ -317,6 +317,7 @@ func (sm *ScheduleManager) runSchedule(name string) {
 		for _, vol := range res.Volumes {
 			sm.snapshotVolume(ctx, host, node, vol, ts)
 			sm.pruneVolume(ctx, host, node, vol, s.Keep)
+			sm.relieveThinPool(ctx, host, node, vol)
 		}
 	}
 
