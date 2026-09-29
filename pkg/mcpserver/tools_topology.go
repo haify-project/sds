@@ -237,6 +237,21 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	}
 
 	if c, supported := s.client.(interface {
+		RepairResource(context.Context, string) error
+	}); supported {
+		addWrite(s, srv, writeTool("sds_resource_repair", "Repair a resource's DRBD config",
+			"Bring every participant's copy of a resource's DRBD config back into agreement and apply it: a diskless "+
+				"tiebreaker missing a volume, a node's address left over from a renumbering. It converges, so running it on a "+
+				"healthy resource changes nothing. It rewrites /etc/drbd.d/<resource>.res on the nodes and runs drbdadm adjust."),
+			func(ctx context.Context, _ *mcp.CallToolRequest, in resourceNameIn) (*mcp.CallToolResult, opResult, error) {
+				if err := c.RepairResource(ctx, in.Name); err != nil {
+					return nil, opResult{}, err
+				}
+				return nil, ok("config of " + in.Name + " reconciled"), nil
+			})
+	}
+
+	if c, supported := s.client.(interface {
 		VerifyResource(context.Context, *sdspb.VerifyResourceRequest) (*sdspb.VerifyResourceResponse, error)
 	}); supported {
 		addWrite(s, srv, writeTool("sds_resource_verify", "Verify a resource's replicas hold the same data",

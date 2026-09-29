@@ -215,3 +215,31 @@ func TestRemoteWithoutPublicURLHasNoOAuth(t *testing.T) {
 		t.Fatalf("OAuth endpoints exist without a public URL: %d", r.StatusCode)
 	}
 }
+
+type repairingClient struct {
+	*mockClient
+	repaired []string
+}
+
+func (r *repairingClient) RepairResource(_ context.Context, name string) error {
+	r.repaired = append(r.repaired, name)
+	return nil
+}
+
+func TestRepairToolIsWriteAndRegisteredWhenTheClientCanRepair(t *testing.T) {
+	rc := &repairingClient{mockClient: &mockClient{}}
+	read := listTools(t, connect(t, rc, true))
+	if _, ok := read["sds_resource_repair"]; ok {
+		t.Fatal("a read-only server offers a repair")
+	}
+	all := connect(t, rc, false)
+	tools := listTools(t, all)
+	tool, ok := tools["sds_resource_repair"]
+	if !ok || tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
+		t.Fatalf("repair must exist and be marked non-destructive: %+v", tool)
+	}
+	res, err := all.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_resource_repair", Arguments: map[string]any{"name": "db"}})
+	if err != nil || res.IsError || len(rc.repaired) != 1 || rc.repaired[0] != "db" {
+		t.Fatalf("call: %v %+v repaired=%v", err, res, rc.repaired)
+	}
+}

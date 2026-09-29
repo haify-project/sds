@@ -14,6 +14,15 @@ make install-mcp        # builds + installs to /usr/local/bin/sds-mcp
 go build -o ~/.local/bin/sds-mcp ./cmd/mcp
 ```
 
+## What is deliberately not a tool
+
+Anything that takes a secret has no tool, because a tool argument is recorded
+by whatever called it: `backup target add`, `channel add` (webhook URLs and
+keys), `gateway iscsi chap set`, `rbac`. `resource dr-failover` is not offered
+either: it force-promotes the DR node and loses the writes still in the WAN
+buffer, which is a decision to take at the CLI, knowingly, with `--yes`.
+Everything else the CLI does has a tool.
+
 ## Register with a client
 
 The project ships a `.mcp.json` that Claude Code auto-loads:
