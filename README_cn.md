@@ -4,10 +4,7 @@
 
 [English](README.md) | 简体中文
 
-```
-sds-cli / Web UI / REST / MCP / CSI ──gRPC──▶ sds-controller ──SSH──▶ 存储节点
-                                                                       (LVM / ZFS + DRBD + drbd-reactor)
-```
+![SDS 架构](docs/img/architecture-cn.png)
 
 存储节点上不跑 agent:一个控制器通过 SSH 驱动所有节点,状态存在内嵌的 BoltDB 里。控制器自己也可以跑在浮动 VIP 后面(Self-HA)。
 

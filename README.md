@@ -4,10 +4,7 @@ A lightweight DRBD 9 storage controller written in Go. It manages storage pools,
 
 English | [简体中文](README_cn.md)
 
-```
-sds-cli / Web UI / REST / MCP / CSI ──gRPC──▶ sds-controller ──SSH──▶ storage nodes
-                                                                       (LVM / ZFS + DRBD + drbd-reactor)
-```
+![SDS architecture](docs/img/architecture-en.png)
 
 No agent runs on the storage nodes: one controller drives them over SSH and keeps its state in an embedded BoltDB. The controller itself can run behind a floating VIP (Self-HA).
 
