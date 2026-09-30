@@ -100,6 +100,11 @@ type ResourceStatusInfo struct {
 	WANEnabled bool
 	WANHealthy bool
 	WANMessage string
+	// IdleWithoutPrimary marks a resource whose normal resting state has no
+	// Primary: a Kubernetes volume is promoted while a pod uses it and demoted
+	// when the pod goes, which is not a fault. Losing its Primary is not
+	// raised as a critical; degrade, quorum and sync alerts still apply.
+	IdleWithoutPrimary bool
 }
 
 // Degraded reports whether any replica of the resource is in a faulty state.
@@ -658,7 +663,7 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 	// late true one: it is the alert people stop believing.
 	partialView := !fullyConnected(res)
 
-	m.level(noPrimary, sc, sourceResources, expectPrimary && cur == "" && !partialView,
+	m.level(noPrimary, sc, sourceResources, expectPrimary && cur == "" && !partialView && !res.IdleWithoutPrimary,
 		fmt.Sprintf("resource %s has no Primary: %s was demoted and nothing took over", res.Name, demoted),
 		fmt.Sprintf("resource %s has a Primary again on %s", res.Name, cur))
 

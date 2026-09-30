@@ -166,6 +166,27 @@ func TestNoPrimaryIsCritical(t *testing.T) {
 	assert.Equal(t, evts[0].Key(), firingKey, "the resolve must carry the firing event's key")
 }
 
+// A Kubernetes volume is demoted whenever its pod goes away. That is its
+// normal idle state, so it must not raise the critical a control-plane
+// resource would.
+func TestIdleVolumeLosingItsPrimaryIsNotCritical(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:               "pvc_x",
+		IdleWithoutPrimary: true,
+		NodeStates:         map[string]NodeStateInfo{"n1": healthy("Primary")},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+	mon.Poll(ctx)
+	drain()
+
+	lister.list[0].NodeStates["n1"] = healthy("Secondary")
+	mon.Poll(ctx)
+	for _, e := range drain() {
+		assert.NotEqual(t, event.TypeResourceNoPrimary, e.Type, "an unmounted CSI volume is not a failure")
+	}
+}
+
 // A resource that has never had a Primary is Secondary by design, not in
 // trouble. Raising a critical for each of those would bury the real ones.
 func TestSecondaryEverywhereIsNotAnAlert(t *testing.T) {
