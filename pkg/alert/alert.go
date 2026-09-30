@@ -578,11 +578,23 @@ func (m *Monitor) checkResources(ctx context.Context, sc *pollScope, obs *Observ
 // checkReplicas raises one condition per replica whose disk or replication
 // state has left the healthy set.
 func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
+	stranded := strandedOutdated(res)
 	for node, state := range res.NodeStates {
 		degraded, reason := isDegraded(state)
+		severity := event.SeverityWarning
+		if stranded && state.DiskState == "Outdated" {
+			// Outdated is only "older than its peers" while a peer holds
+			// current data. When every replica is Outdated none can be
+			// promoted, so nothing serves the resource: say so, and say what
+			// decides the way out.
+			severity = event.SeverityCritical
+			reason = "disk is Outdated and no replica holds current data, so nothing can be promoted and the resource is not served; " +
+				"compare the replicas with `drbdadm get-gi " + res.Name + "` (equal current UUIDs mean equal data) and promote one with " +
+				"`sds-cli resource primary " + res.Name + " <node> --force`"
+		}
 		m.level(event.Event{
 			Type:     event.TypeResourceDegraded,
-			Severity: event.SeverityWarning,
+			Severity: severity,
 			Resource: res.Name,
 			Node:     node,
 			Details: map[string]string{
@@ -593,6 +605,21 @@ func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
 			fmt.Sprintf("resource %s on %s degraded: %s", res.Name, node, reason),
 			fmt.Sprintf("resource %s on %s recovered to normal state", res.Name, node))
 	}
+}
+
+// strandedOutdated reports whether the resource has replicas that are all
+// Outdated: none reports UpToDate, so no promotion can succeed.
+func strandedOutdated(res ResourceStatusInfo) bool {
+	outdated := false
+	for _, st := range res.NodeStates {
+		switch st.DiskState {
+		case "Outdated":
+			outdated = true
+		case "UpToDate", "Consistent", "Inconsistent":
+			return false
+		}
+	}
+	return outdated
 }
 
 // checkOutOfSync raises one condition per replica that is connected and

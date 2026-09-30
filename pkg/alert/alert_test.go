@@ -166,6 +166,34 @@ func TestNoPrimaryIsCritical(t *testing.T) {
 	assert.Equal(t, evts[0].Key(), firingKey, "the resolve must carry the firing event's key")
 }
 
+// Every replica Outdated means nothing can be promoted: that is an outage, not
+// a replica that fell behind, and the alert has to say so at critical.
+func TestAllReplicasOutdatedIsCriticalAndNamesTheWayOut(t *testing.T) {
+	out := func() NodeStateInfo { s := healthy("Secondary"); s.DiskState = "Outdated"; return s }
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:       "gw",
+		NodeStates: map[string]NodeStateInfo{"n1": out(), "n2": out()},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	mon.Poll(context.Background())
+	evts := drain()
+	require.NotEmpty(t, evts)
+	for _, e := range evts {
+		assert.Equal(t, event.SeverityCritical, e.Severity)
+		assert.Contains(t, e.Message, "resource primary gw")
+	}
+
+	// One replica behind while another is current stays a warning.
+	lister.list[0].NodeStates["n2"] = healthy("Primary")
+	mon2, drain2 := newHarness(t, Options{Resources: lister})
+	mon2.Poll(context.Background())
+	for _, e := range drain2() {
+		if e.Node == "n1" {
+			assert.Equal(t, event.SeverityWarning, e.Severity)
+		}
+	}
+}
+
 // A Kubernetes volume is demoted whenever its pod goes away. That is its
 // normal idle state, so it must not raise the critical a control-plane
 // resource would.

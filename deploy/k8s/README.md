@@ -129,6 +129,27 @@ crash-consistent snapshot in practice.
   replica disconnects, loses its disk or falls out of date. A new volume's
   initial sync is not reported.
 
+## When a node dies
+
+Measured on a three-node k3s (2026-09-30): the VM was powered off, Kubernetes
+took about 75 seconds to declare the node lost, and the replacement pod was
+running on a surviving replica node about 9 seconds after that — 80 seconds of
+outage for a Deployment, data intact, nothing to clean up on the SDS side. The
+old node's replica resynchronised on its own when it came back, with no
+split-brain.
+
+Almost all of that time is Kubernetes deciding the node is gone. To shorten it
+for a workload, lower the `not-ready` and `unreachable` tolerations on the pod:
+
+```yaml
+tolerations:
+- {key: node.kubernetes.io/not-ready,   operator: Exists, effect: NoExecute, tolerationSeconds: 15}
+- {key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 15}
+```
+
+Only controller-managed pods (Deployment, StatefulSet) are recreated. A bare
+`Pod` on a dead node is deleted and stays gone; its volume is kept.
+
 ## Image pulls behind the GFW
 
 `registry.k8s.io` redirects to regional Google Artifact Registry hosts that are
