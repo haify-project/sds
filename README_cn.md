@@ -1,503 +1,77 @@
 # SDS - 软件定义存储
 
-基于 DRBD 和 LINSTOR 概念，使用 Go 编写的轻量级软件定义存储控制器。它管理存储池、DRBD 复制卷、存储网关（iSCSI/NFS/NVMe-oF）与高可用，并通过原生 CSI 驱动接入 Kubernetes。
+用 Go 编写的轻量级 DRBD 9 存储控制器。管理存储池、复制卷、iSCSI / NFS / NVMe-oF 网关和高可用,并接入 Kubernetes(CSI)、Proxmox VE 和 AI 助手(MCP)。
 
 [English](README.md) | 简体中文
 
-## 架构
-
-SDS 采用无代理架构管理存储节点。单个控制器通过 SSH（使用 `dispatch` 库）驱动每个节点执行 `drbdadm`、`lvm`、`zfs`、`drbd-reactor` 命令并分发配置，状态持久化在内嵌的 BoltDB 中。客户端通过 gRPC（`sds-cli`）、REST 网关、内嵌 Web UI、MCP 服务（供 AI 助手使用）以及 Kubernetes CSI 驱动与控制器交互。
-
-```mermaid
-graph TD
-    CLI[sds-cli] -->|gRPC :3374| CTRL[sds-controller]
-    UI[Web UI :3376] --> REST[REST 网关 :3375]
-    REST -->|gRPC| CTRL
-    MCP[sds-mcp / AI 助手] -->|gRPC| CTRL
-    K8S[Kubernetes CSI 驱动] -->|gRPC| CTRL
-
-    subgraph Controller Host
-    CTRL
-    DB[(BoltDB)]
-    end
-
-    CTRL -->|SSH / Dispatch| Node1[存储节点 1]
-    CTRL -->|SSH / Dispatch| Node2[存储节点 2]
-    CTRL -->|SSH / Dispatch| Node3[存储节点 3]
-
-    subgraph Storage Node
-    Node1
-    LVM[LVM / ZFS]
-    DRBD[DRBD 9 内核模块]
-    Reactor[drbd-reactor]
-    end
+```
+sds-cli / Web UI / REST / MCP / CSI ──gRPC──▶ sds-controller ──SSH──▶ 存储节点
+                                                                       (LVM / ZFS + DRBD + drbd-reactor)
 ```
 
-## 特性
+存储节点上不跑 agent:一个控制器通过 SSH 驱动所有节点,状态存在内嵌的 BoltDB 里。控制器自己也可以跑在浮动 VIP 后面(Self-HA)。
 
-- **存储池**：LVM（VG）、LVM-thin、ZFS（zpool / thin）池管理。
-- **DRBD 资源**：
-  - 自动化资源创建、配置分发与调整。
-  - 支持高级 DRBD 选项（`on-no-quorum`、`c-plan-ahead`、quorum 等）。
-  - 在线扩容；增加 / 删除 / 调整卷。
-- **放置策略**：容量优先的自动副本放置，支持 LINSTOR 风格约束——机架/区域感知
-  （`replicas-on-different`）、`replicas-on-same`、`do-not-place-with`。指定 `--nodes`
-  手动放置，或省略以自动放置。
-- **无盘客户端（diskless）**：无本地副本的节点也可挂载资源，I/O 走 DRBD 网络
-  （`resource diskless attach`），并支持自动 quorum 仲裁票（tiebreaker）。
-- **高可用**：
-  - 集成 `drbd-reactor` promoter 实现服务自动故障转移。
-  - 浮动虚拟 IP（VIP）+ systemd 服务顺序编排。
-  - **Self-HA**：控制器自身也可运行在浮动 VIP 之后。
-- **网关**（DRBD 资源 + drbd-reactor promoter 配置）：
-  - **iSCSI**（LIO）：目标、LUN、发起端 ACL、CHAP。
-  - **NFS**（NFSv4）：导出管理。
-  - **NVMe-oF**：子系统、命名空间、主机 ACL。
-- **Kubernetes（CSI）**：动态供给 DRBD 卷、pool 感知的副本放置、
-  `WaitForFirstConsumer` 拓扑，以及可选的无盘远程访问（`allowRemoteVolumeAccess`），
-  让 Pod 可以调度到非副本节点。
-- **静态加密**：`resource create --encrypt` 在每个副本的 DRBD 与后端卷之间放入一层
-  LUKS2 容器（`DRBD → LUKS → LVM`）。**仅是静态加密——DRBD 位于加密层之上，
-  节点之间的复制流量仍是明文。** 见 [静态加密](#静态加密)。
-- **快照**：LVM 和 ZFS 快照，以及 GFS（祖父-父-子）保留策略计划任务。
-- **异地备份（集群外）**：把崩溃一致的时间点副本推送到 S3 兼容对象存储、SMB 共享
-  或 WebDAV，并可恢复。**只有全量，没有增量**；在据此制定备份计划之前，请先看
-  [异地备份](#7-异地备份集群外) 里的限制。
-- **跨数据中心（WAN）**：当入站 UDP 被封禁时，通过 TCP 代理在 NAT/WAN 上运行 DRBD 复制。
-- **安全与运维**：令牌认证、RBAC、审计日志、可选 TLS、Prometheus 指标。
-- **通知**：健康检测器会为副本降级、主备切换（failover）、失去 Primary、节点失联
-  和 WAN 链路中断产生事件，可通过 Webhook 回调、gRPC/REST 监听流、推送到 Web UI
-  通知铃铛的 SSE，或 `sds-cli event watch` 送达；也可以按飞书 / Slack / 企业微信 /
-  钉钉各自的消息格式直接推到群机器人，在 Web UI 里配置、无需重启。
-- **Web UI**：控制器内嵌的单页 Web 界面。
-- **AI 集成（MCP）**：`sds-mcp` 通过 Model Context Protocol 暴露 91 个管理工具，
-  供 AI 助手（Claude Code、Claude Desktop 等）使用。
+## 功能
 
-## 接口与默认端口
+- **存储池**:LVM、LVM-thin、ZFS,thin 池支持 SSD 缓存。
+- **资源**:DRBD 复制卷,自动放置、在线扩容、无盘客户端、仲裁 tiebreaker、LUKS2 静态加密。
+- **网关**:iSCSI、NFS、NVMe-oF,由 drbd-reactor 加浮动 IP 做故障转移。
+- **快照与备份**:LVM / ZFS 快照和保留策略;全量备份到 S3、SMB 或 WebDAV。
+- **跨站点**:通过可穿透 NAT 的 TCP 隧道做异步容灾副本。
+- **数据完整性**:定时 DRBD verify 并可重同步,对副本降级、Primary 丢失、数据不同步、存储池写满发出告警。
+- **Kubernetes**:CSI 驱动,支持快照、克隆、扩容、原始块设备和远程(无盘)访问。
+- **AI**:面向 Claude Code、ChatGPT 等的 MCP 服务(本地,或带角色令牌和 OAuth 的远程),以及 Web UI 里的 Copilot。
+- **运维**:令牌认证、RBAC、审计日志、TLS、Prometheus 指标,通知可发到飞书 / Slack / 企业微信 / 钉钉 / Webhook。
 
-| 接口          | 默认端口 | 说明                          |
-| ------------- | -------- | ----------------------------- |
-| gRPC API      | 3374     | `sds-cli`、CSI、MCP           |
-| REST 网关     | 3375     | grpc-gateway JSON API         |
-| Web UI        | 3376     | 内嵌 SPA                      |
-| Prometheus    | 9433     | `metrics.enabled`             |
+## 安装
 
-## 项目结构
+存储节点需要 DRBD 9(内核模块和 `drbd-utils`)、`drbd-reactor`、`resource-agents`,以及 LVM 和/或 ZFS。控制器所在机器需要 Go 1.25+。
 
-```text
-sds/
-├── cmd/
-│   ├── cli/              # 命令行界面 (sds-cli)
-│   ├── controller/       # 控制器服务 (sds-controller)
-│   ├── csi-controller/   # Kubernetes CSI 控制器插件
-│   ├── csi-node/         # Kubernetes CSI 节点插件
-│   ├── mcp/              # 供 AI 助手使用的 MCP 服务 (sds-mcp)
-│   └── sds-ai/           # AI Copilot 服务
-├── pkg/
-│   ├── client/           # gRPC 客户端库
-│   ├── controller/       # 核心控制器逻辑 + gRPC/REST/UI 服务
-│   ├── csi/              # CSI 驱动（controller + node 服务）
-│   ├── database/         # BoltDB 持久化层
-│   ├── deployment/       # SSH 执行引擎（封装 dispatch）
-│   ├── gateway/          # 网关（iSCSI/NFS/NVMe-oF）管理器
-│   ├── reactor/          # drbd-reactor promoter 配置生成
-│   ├── mcpserver/        # MCP 工具定义与处理器
-│   ├── wanproxy/         # 跨数据中心 DRBD-over-TCP 代理
-│   ├── alert/            # 健康检测器（降级、切换、节点失联）
-│   ├── event/            # 通知总线、历史缓冲与 Webhook 投递
-│   ├── rbac/             # 基于角色的访问控制
-│   ├── metrics/          # Prometheus 指标
-│   ├── config/           # 配置解析
-│   └── util/             # 工具函数
-├── api/proto/v1/         # gRPC Protocol Buffers 定义
-├── ui/                   # 内嵌 Web UI（go:embed 构建产物）
-├── web-ui/               # Web UI 源码（React/TypeScript）
-├── deploy/k8s/           # Kubernetes CSI 部署清单
-├── configs/              # 配置示例和 systemd 单元文件
-└── scripts/              # 部署脚本
+```bash
+make build
+./scripts/deploy-all.sh --hosts "node1,node2,node3"
 ```
+
+详细步骤见 [docs/deployment-guide.md](docs/deployment-guide.md),节点要求见 [docs/node-prerequisites.md](docs/node-prerequisites.md)。
+
+## 使用
+
+```bash
+sds-cli node register --name node1 --address 192.168.1.11
+sds-cli pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/sdb
+sds-cli resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
+sds-cli gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
+```
+
+Kubernetes:`kubectl apply -f deploy/k8s/`,然后使用 `sds-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。
+
+AI 助手:
+
+```bash
+claude mcp add sds -- sds-mcp --controller node1:3374            # 本地
+claude mcp add --transport http sds https://<host>/mcp \
+    --header "Authorization: Bearer <token>"                     # 远程
+```
+
+## 端口
+
+| 端口 | 服务 |
+| ---- | ---- |
+| 3374 | gRPC(`sds-cli`、CSI、MCP) |
+| 3375 | REST |
+| 3376 | Web UI |
+| 9433 | Prometheus |
+
+控制器配置:`/etc/sds/controller.toml`。
 
 ## 文档
 
-| 文档 | 适用场景 |
-| --- | --- |
-| [docs/user-guide.md](docs/user-guide.md) | **日常使用** —— 概念模型、各项操作流程、出问题时怎么查。集群已就绪时从这里开始。 |
-| [docs/deployment-guide.md](docs/deployment-guide.md) | 从零搭建集群的分步指南。 |
-| [docs/node-prerequisites.md](docs/node-prerequisites.md) | 每个存储节点需要装什么、为什么。 |
-| [docs/mcp.md](docs/mcp.md) | 通过 MCP 让 AI 助手操作 SDS。 |
-
-## 快速开始
-
-### 前置要求
-
-- **控制器节点**：Go 1.25+、`make`、`protoc`（仅在重新生成 protobuf 时需要）。
-- **存储节点**：
-  - Linux（Ubuntu/Debian/RHEL），可从控制器通过 SSH 访问（推荐 root）。
-  - **LVM2**（用于 LVM 池）和/或 **ZFS**（`zfsutils-linux`，用于 ZFS 池）。
-  - **DRBD 9** 内核模块和 **drbd-utils**。
-  - **drbd-reactor**（用于 HA / 网关）。
-  - **resource-agents** / `resource-agents-extra`（用于 VIP 和服务 OCF agent）。
-
-### 安装
-
-1. **构建**：
-
-   ```bash
-   make build
-   ```
-
-2. **部署**到控制器并分发 CLI：
-
-   ```bash
-   ./scripts/deploy-all.sh --hosts "orange1,orange2,orange3"
-   ```
-
-## 配置
-
-控制器配置文件位于 `/etc/sds/controller.toml`：
-
-```toml
-[server]
-listen_address = "0.0.0.0"
-port = 3374              # gRPC（REST 3375、UI 3376 在此基础上派生）
-
-[database]
-path = "/var/lib/sds/sds.db"
-
-[auth]
-enabled = true
-token = "change-me"     # bearer 令牌；也会从 /etc/sds/token 读取
-
-[storage]
-default_pool_type = "vg"
-
-[metrics]
-enabled = true
-listen_address = "0.0.0.0"
-port = 9433
-
-[resource]
-auto_tiebreaker = true  # 为 2 副本资源自动添加无盘 quorum 仲裁票
-
-# 可选：让控制器运行在浮动 VIP 之后
-[self_ha]
-enabled = false
-
-# 可选：健康检测与通知。
-#
-# `enabled` 本身只启动检测器和事件总线；投递方式是独立的：即使不配置 Webhook，
-# 事件同样可以通过 GET /v1/events 读取、GET /v1/events/watch 流式订阅、
-# GET /v1/events/stream 推送给 Web UI 的通知铃铛，或用 `sds-cli event watch` 跟踪。
-[alert]
-enabled = false
-check_interval_sec = 60
-check_nodes = true      # 每轮通过 SSH 探测各节点，用于产生 node.unreachable
-history_size = 500      # 为迟到的客户端保留的历史事件条数
-
-# 单接收端的简写形式。
-webhook_url = ""
-webhook_min_severity = "warning"   # info | warning | critical
-
-# 也可以配置多个接收端，各自设定阈值——例如 pager 只收 critical，
-# 聊天群收全部。
-# [[alert.webhooks]]
-# url = "https://chat.example.com/hooks/sds"
-# min_severity = "info"
-# headers = { X-Token = "..." }
-```
-
-### 跨站点（WAN）维护
-
-WAN 资源为每个主站节点建一条复制隧道（leg），每条是一个以该节点命名的 systemd
-实例。节点换了地址或被移除时，旧的 leg 可能被留下——仍在运行，但已不是控制器
-所期待的那条。`wan repair` 把两者对齐：
-
-```bash
-sds-cli wan repair <资源> --dry-run   # 只打印计划，不做任何改动
-sds-cli wan repair <资源>
-```
-
-它是收敛的，对健康资源执行会报告"无需改动"。修复会重启隧道，建议先跑 `--dry-run`。
-
-### 通知
-
-事件类型：`resource.degraded`、`resource.failover`、`resource.no_primary`、
-`resource.promoted`、`node.unreachable`、`wan.degraded`。每条事件都带有
-`severity`（`info`/`warning`/`critical`）和 `status`（条件出现时为 `firing`，
-恢复时为 `resolved`），接收端因此可以把告警和它的恢复配成一对，而不会把恢复
-当成一次新的故障。
-
-```bash
-# 实时跟踪，或回放控制器仍保留的历史
-sds-cli event watch
-sds-cli event watch --min-severity critical --type resource.failover
-sds-cli event list --replay --json
-
-# 同样的事件走 REST（换行分隔的 JSON）
-curl -N http://controller:3375/v1/events/watch
-
-# 面向浏览器的 SSE，也就是 Web UI 铃铛所订阅的
-curl -N http://controller:3375/v1/events/stream
-```
-
-事件 id 单调递增，客户端看到跳号就知道自己落后了、而不是"什么都没发生"；
-重连时带上 `since_id` 即可续传，不会重复收到已经看过的事件。订阅者若停止读取，
-丢的只是它自己的事件，不会阻塞检测器。
-
-#### 发送到 IM 机器人
-
-IM 服务不接受任意 JSON，所以通知渠道有 **kind（消息格式）**。飞书、Slack、企业微信、
-钉钉各自定义了自己的消息信封，把原始事件 JSON 发过去等于什么都没送到。更麻烦的是，
-飞书、企业微信、钉钉会**在 HTTP 200 里返回拒绝**——配错的渠道看起来一直在正常工作，
-直到某次故障没人收到通知才暴露。
-
-渠道存在控制器数据库里、不在 `controller.toml` 里，所以增删和静音立即生效：改配置文件
-再重启意味着主动制造一段没有告警的窗口，而这通常发生在集群已经出问题的时候。下面
-`[alert]` 里的接收端仍然有效，两者互不影响。
-
-```bash
-sds-cli channel add --name oncall --kind feishu \
-    --url https://open.feishu.cn/open-apis/bot/v2/hook/xxxx --min-severity warning
-
-sds-cli channel add --name pager --kind slack \
-    --url https://hooks.slack.com/services/T00/B00/xxxx --min-severity critical
-
-# 钉钉加签：密钥不做成命令行参数——那会留在 shell 历史里。
-export SDS_NOTIFY_SECRET=SECxxxx
-sds-cli channel add --name ops --kind dingtalk \
-    --url 'https://oapi.dingtalk.com/robot/send?access_token=xxxx'
-
-# 判断渠道是否真的能用的唯一办法，会把服务端自己的回复报出来。
-sds-cli channel test oncall
-
-sds-cli channel list
-sds-cli channel delete oncall
-```
-
-可选 kind：`generic`（原样发送事件 JSON，给自建接收端用）、`feishu`、`slack`、
-`wecom`、`dingtalk`。如果把已知的机器人地址配成了错误的 kind，保存时就会被拒绝，
-而不是等到投递时才失败。Web UI 的 **Notifications** 页面管理的是同一批渠道，也带
-测试按钮。
-
-重复执行 `channel add` 时不提供密钥，会保留已存的那个——所以改一下阈值不会悄悄把
-签名去掉；要删除用 `--clear-secret`。任何 API 都不会把密钥读回来。
-
-存储节点的 SSH 访问**不在**此处配置——`dispatch` 库读取它自己的
-`~/.dispatch/config.toml`（SSH 用户、密钥、主机→地址映射）。主机也可在运行时通过
-`sds-cli node register` 管理。
-
-## 使用示例
-
-### 1. 节点管理
-
-```bash
-sds-cli node register --name orange1 --address 192.168.123.214
-sds-cli node register --name orange2 --address 192.168.123.215
-sds-cli node list
-sds-cli health-check
-```
-
-### 2. 存储池管理
-
-```bash
-# LVM VG / thin / ZFS
-sds-cli pool create --name data-pool --type lvm      --nodes orange1 --devices /dev/sdb
-sds-cli pool create --name thin-pool --type lvm-thin --nodes orange1 --devices /dev/sdc
-sds-cli pool create --name tank      --type zfs      --nodes orange1 --devices /dev/sdd
-sds-cli pool list
-
-# 存储分层：用 lvmcache 把 SSD 挂到某个节点的 thin pool 前面。
-# 整块设备会被占用，缓存服务该池中的所有卷。
-sds-cli pool add-cache --node orange1 --pool thin-pool --device /dev/nvme0n1
-
-# 刷盘、摘除缓存并归还设备。摘除后会复核，未刷完的缓存一律按失败报告。
-sds-cli pool remove-cache --node orange1 --pool thin-pool
-```
-
-缓存默认是 **writethrough**：写入只有落到慢盘后才返回成功，所以丢掉 SSD 只
-损失性能。`--mode writeback` 则在数据只写进 SSD 时就返回成功，之后再回刷 —
-一旦这块设备损坏，尚未回刷的写入就全部丢失，只能指望某个副本恰好有这些数据，
-而正在重同步的对端或相关联的故障并不能保证这一点。`sds-cli pool get` 会显示
-writeback 缓存中脏数据的比例，也就是此刻这个风险窗口有多大。
-
-### 3. 资源管理
-
-```bash
-# 创建复制的 DRBD 资源（省略 --nodes 则按剩余空间自动放置）
-sds-cli resource create --name res01 --port 7001 --size 10G --nodes orange1,orange2 --pool data-pool
-
-# 基于 ZFS 的资源
-sds-cli resource create --name res-zfs --port 7002 --size 10G --nodes orange1,orange2 --pool tank --storage-type zfs
-
-# 提升为主、创建文件系统、挂载
-sds-cli resource primary res01 orange1 --force
-sds-cli resource fs res01 0 ext4 --node orange1
-sds-cli resource mount res01 0 /mnt/res01 --node orange1
-
-# 在线扩容
-sds-cli resource resize-volume res01 0 20G
-
-# 静态加密（使用前请先读下面这一节）
-sds-cli resource create --name res-enc --port 7003 --size 10G --nodes orange1,orange2 --pool data-pool --encrypt
-```
-
-#### 静态加密
-
-`--encrypt` 会把每个副本的后端卷包进一个 LUKS2 容器，栈变成
-`DRBD → LUKS → LVM`，落到池磁盘上的是密文。
-
-**DRBD 复制的是明文。** 加密层在 DRBD *下面*，所以节点之间复制链路上传输的数据
-与开启加密之前完全一样，没有任何保护。如果需要保护链路，那是另一个问题
-（VPN，或者跨 WAN 场景下 `sds-proxy` 的 mTLS 隧道）——`--encrypt` 不解决它。
-
-它保护的是：离开机房的池磁盘（返修、报废、被偷走的盘）。由于每个节点把密钥放在
-自己的根文件系统上，它**不**保护被整台搬走的服务器。
-
-密钥处理：
-
-- 每个节点在**本节点**用 `/dev/urandom` 生成自己的 512 位密钥。密钥不经过 SSH
-  传输、不到达控制器，也不会出现在任何日志、审计记录或数据库里。
-- 密钥存放在 `/etc/sds/luks/`（目录 `0700`，密钥文件 `0400`，属主 root），并且
-  只会以 `--key-file` 的形式交给 `cryptsetup`，绝不作为命令行参数。
-- **没有集中托管（escrow）**。丢失某节点的根文件系统就等于丢失该节点的密钥，
-  以及该节点那份密文。其他副本用各自的密钥持有同样的数据，DRBD 会重建该副本——
-  但你无法从一块孤零零幸存的磁盘里恢复数据。
-- `resource delete` 会在释放后端卷之前，在每个节点上覆写并删除密钥。
-
-容器由 `sds-drbd-up.service` 在开机时重新打开，时机在 LVM 激活之后、
-`drbdadm adjust` 之前，因此加密资源无需人工介入即可扛过重启与故障切换。
-每个副本（无论 Primary 还是 Secondary）都打开自己的容器——Secondary 同样需要
-它的后端设备。
-
-有意为之的限制：
-
-- 仅支持 LVM 池。ZFS 有自己的数据集级加密；在 zvol 上再垫一层加密会被直接拒绝，
-  而不是做一半。
-- 创建之后无法开启或关闭。原地转换意味着逐个副本销毁并重新同步，中途失败会留下
-  一部分副本加密、一部分不加密，而配置里看不出是哪一部分。对已存在的资源提出这
-  个要求会被明确拒绝并给出说明。
-- 每个持有副本的节点都需要 `cryptsetup` 以及带 `dm-crypt` 的内核；这会在开始供给
-  任何存储之前检查。
-
-### 4. 无盘客户端
-
-```bash
-# 让无本地副本的节点通过网络挂载资源
-sds-cli resource diskless attach res01 orange3
-sds-cli resource diskless detach res01 orange3
-```
-
-### 5. 网关与高可用
-
-```bash
-# 带 HA 的 iSCSI 网关
-sds-cli gateway iscsi create \
-    --resource iscsi-gw \
-    --service-ip 192.168.123.200/24 \
-    --iqn iqn.2024-01.com.example:storage.target01
-
-# 带 HA 的 NFS 网关
-sds-cli gateway nfs create \
-    --resource nfs-gw \
-    --service-ip 192.168.123.201/24 \
-    --export-path /data/share
-
-# NVMe-oF 网关
-sds-cli gateway nvme create \
-    --resource nvme-gw \
-    --service-ip 192.168.123.202/24 \
-    --nqn nqn.2024-01.com.example:storage.subsys01
-```
-
-### 6. 快照
-
-```bash
-sds-cli resource snapshot create --resource res01 --name res01_snap --node orange1
-sds-cli resource snapshot list   --resource res01 --node orange1
-# GFS 保留策略计划任务
-sds-cli resource snapshot schedule create --resource res01 --cron "0 * * * *" --keep-hourly 6 --keep-daily 7
-```
-
-### 7. 异地备份（集群外）
-
-快照和它的源卷在同一个池里，机器没了两个一起没。WAN 容灾是*副本*：删除同样会被复制
-过去。备份是第三层 —— 一份集群里任何东西都够不着的副本。
-
-备份读的是存储层快照，绝不读活动卷，因此镜像是崩溃一致的。传输在**存储节点上**通过
-[rclone](https://rclone.org) 完成，数据直接从节点走到对象存储，不经过控制器。做备份的
-节点上必须装有 `rclone`；SDS 会在打快照之前先检查。
-
-**限制 —— 制定备份计划之前请务必读完：**
-
-- **每次备份都是全量镜像，没有增量模式。** 2 TiB 的卷每天备份一次，就是每天传 2 TiB。
-- **数据流不压缩。** 正是因此每次上传后才能做逐字节的大小校验：只有对端确认收到的字节
-  数与发出的完全一致，备份才会被记为 `completed`。
-- **仅支持 LVM 后端的卷。** ZFS zvol 的快照不先克隆就没有块设备可读，所以 ZFS 后端的
-  资源会被直接拒绝，而不是做一半。
-- 备份**没有**接入快照调度器；目前请用 cron / systemd timer 调用 `backup create`。
-
-```bash
-# 定义仓库。这里刻意没有 --secret-key 参数：密钥来自 SDS_BACKUP_SECRET 或
-# --secret-file（"-" 表示从 stdin 读），因此不会落进 shell 历史或 argv。
-export SDS_BACKUP_SECRET='...'
-sds-cli backup target add --name offsite --kind s3 \
-    --bucket sds-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
-
-# SMB 上的 NAS（密码会自动转换成 rclone 的 obscure 形式）
-sds-cli backup target add --name nas --kind smb \
-    --host nas.lan --share backups --user backupuser --secret-file -
-
-sds-cli backup target list          # 永远不会显示密钥
-sds-cli backup create --resource res01 --target offsite
-sds-cli backup list --resource res01
-
-# 恢复。只要资源在任一节点是 Primary，或者被网关导出，就会被拒绝 —— 先停业务。
-sds-cli backup restore res01_20260101T020000Z --resource res01
-
-sds-cli backup delete res01_20260101T020000Z
-```
-
-### 8. Kubernetes（CSI）
-
-CSI 驱动将 DRBD 卷作为 PersistentVolume 供给。应用 `deploy/k8s/` 下的清单（把 endpoint
-改成你的控制器地址），然后使用 `sds-drbd` StorageClass：
-
-```yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata: { name: sds-drbd }
-provisioner: sds.csi.liliang-cn.com
-parameters:
-  pool: "vg0"
-  replicas: "2"
-  storageType: "lvm"
-  # allowRemoteVolumeAccess: "true"   # 可选：让 Pod 调度到非副本节点（无盘）
-volumeBindingMode: WaitForFirstConsumer
-reclaimPolicy: Delete
-```
-
-副本放置是 pool 感知的：卷只会落在拥有目标 pool 的节点上。
-
-### 9. AI 助手（MCP）
-
-`sds-mcp` 通过 Model Context Protocol 在 stdio 上提供完整的管理面（91 个工具：池、资源、
-快照、网关、HA、ZFS、拓扑、可观测性、分层与备份）。破坏性操作已标注，MCP 客户端会请求确认；
-`--read-only` 会将服务限制为 list/status/health 类工具。
-
-其中三个回答的是集群"做过什么"而不是"现在是什么" —— 出事之后大家问的多半是前者：
-`sds_event_list`（降级 / 主备切换 / 节点失联的通知）、`sds_audit_list`（谁调用了什么）、
-`sds_log_list`（当前活动控制器自己的日志）。
-
-```bash
-# 在 Claude Code 中注册
-claude mcp add sds -- sds-mcp --controller orange1:3374
-
-# 仅监控访问
-claude mcp add sds-ro -- sds-mcp --controller orange1:3374 --read-only
-```
-
-API 令牌的解析方式与 sds-cli 一致：`--token` 参数、`SDS_TOKEN` 环境变量、
-`~/.sds/token`，然后 `/etc/sds/token`。
+| 文档 | 内容 |
+| ---- | ---- |
+| [docs/user-guide.md](docs/user-guide.md) | 日常使用和排障,从这里开始。 |
+| [docs/deployment-guide.md](docs/deployment-guide.md) | 从零搭建集群。 |
+| [docs/node-prerequisites.md](docs/node-prerequisites.md) | 每个节点需要装什么。 |
+| [docs/mcp.md](docs/mcp.md) | 本地和远程 MCP、令牌、运维手册。 |
 
 ## 许可证
 
