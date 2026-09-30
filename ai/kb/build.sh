@@ -6,7 +6,7 @@
 # — goes into that cluster's own knowledge base, never into this one.
 #
 # Contents:
-#   - SDS documentation (docs/, README)
+#   - SDS documentation (docs/, README) and the operations runbooks
 #   - the SDS code graph (.understand-anything/knowledge-graph.json) and source
 #   - the sds-cli reference, generated from the binary this commit builds, so
 #     it can never describe flags the installed CLI does not have
@@ -133,6 +133,11 @@ step "SDS documentation"
 docs=$(flatten "$root/docs" sds-docs -name '*.md')
 cp "$root/README.md" "$docs/sds-docs__README.md"
 ingest_each "$docs"
+
+# The operations runbooks the MCP server serves to agents: the same text, so
+# the Copilot answers a procedure question with the procedure it would be given.
+step "SDS runbooks"
+ingest_each "$(flatten "$root/pkg/mcpserver/runbooks" sds-runbooks -name '*.md')"
 
 step "SDS code graph"
 once step:sds-code-graph "$od" import-graph "$root/.understand-anything/knowledge-graph.json"
