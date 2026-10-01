@@ -178,6 +178,9 @@ func resourceCreate() *cobra.Command {
 			} else {
 				fmt.Printf("  Nodes:       %v\n", nodeList)
 			}
+			if _, warning, ok := strings.Cut(resp.Message, "; warning: "); ok {
+				fmt.Printf("  Warning:     %s\n", warning)
+			}
 			if wan {
 				fmt.Printf("  Protocol:    A (WAN)\n")
 				fmt.Printf("  DR node:     %s\n", drNode)

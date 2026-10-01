@@ -26,8 +26,11 @@ type ResourceInfo struct {
 	// QuorumRisk is true when the resource has exactly two diskful nodes and
 	// no tiebreaker, so losing either node suspends I/O (no quorum majority).
 	QuorumRisk bool
-	Labels     map[string]string
-	Profile    string
+	// FaultDomainRisk names the labelled fault domain(s) whose loss would take
+	// every copy of the data or the quorum majority; see placement_domain.go.
+	FaultDomainRisk string
+	Labels          map[string]string
+	Profile         string
 	// WANMode marks a resource with an off-site asynchronous copy, and DRNode
 	// names which of Nodes holds it. Listing the DR as just another replica is
 	// misleading: it is a different site, replicates under protocol A, and never

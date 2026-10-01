@@ -290,7 +290,7 @@ func TestSelectPlacementNodes_EmptyThinClusterHasCandidates(t *testing.T) {
 	ctrl := newPlacementTestCluster(t, vgsLineNoFreeExtents,
 		"  sds_vg0|sds_vg0_thin|thin-pool|107374182400|0.00|0.50|twi-aotz--")
 
-	got, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 500, 2, nil, nil, nil)
+	got, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 500, 2, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("empty thin cluster must place: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestSelectPlacementNodes_ThinRanksByUtilisation(t *testing.T) {
 		}
 	}
 
-	got, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 10, 1, nil, nil, nil)
+	got, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 10, 1, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestSelectPlacementNodes_ExhaustedThinPoolIsRejected(t *testing.T) {
 	ctrl := newPlacementTestCluster(t, vgsLineNoFreeExtents,
 		"  sds_vg0|sds_vg0_thin|thin-pool|107374182400|97.00|3.00|twi-aotz--")
 
-	_, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 1, 1, nil, nil, nil)
+	_, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 1, 1, nil, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "insufficient capacity") {
 		t.Fatalf("a thin pool past the full threshold must be refused, got %v", err)
 	}
@@ -354,7 +354,7 @@ func TestSelectPlacementNodes_ThickVolumeGroupUnchanged(t *testing.T) {
 	const thickVGS = "  sds_vg0|214748364800|214748364800|/dev/vdb"
 	ctrl := newPlacementTestCluster(t, thickVGS, "")
 
-	got, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 200, 2, nil, nil, nil)
+	got, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 200, 2, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("a volume that fits must place: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestSelectPlacementNodes_ThickVolumeGroupUnchanged(t *testing.T) {
 		t.Errorf("got %v, want both nodes", got)
 	}
 
-	if _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 500, 1, nil, nil, nil); err == nil {
+	if _, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 500, 1, nil, nil, nil); err == nil {
 		t.Error("a thick group must still refuse a volume larger than its free space")
 	}
 }
@@ -373,7 +373,7 @@ func TestSelectPlacementNodes_UnreadableThinPoolStillPlaces(t *testing.T) {
 	// without the recorded pool type this looks exactly like a full group.
 	ctrl := newPlacementTestCluster(t, vgsLineNoFreeExtents, "")
 
-	if _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 10, 1, nil, nil, nil); err == nil {
+	if _, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 10, 1, nil, nil, nil); err == nil {
 		t.Fatal("with nothing on file the group is indistinguishable from a full one and is refused")
 	}
 
@@ -383,7 +383,7 @@ func TestSelectPlacementNodes_UnreadableThinPoolStillPlaces(t *testing.T) {
 		t.Fatalf("save pool: %v", err)
 	}
 
-	got, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 10, 2, nil, nil, nil)
+	got, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 10, 2, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("a thin pool of unknown fullness must not be treated as full: %v", err)
 	}

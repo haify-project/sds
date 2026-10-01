@@ -113,7 +113,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 	// Only consider nodes that actually host the requested pool: replicas
 	// placed on a node without the backing pool fail at LV-creation time.
-	candidates := nodesWithPool(nodes, pools, params.Pool)
+	candidates := nodesWithPool(nodes, pools, params.Pool, params.FaultDomainLabel)
 	pinned := requisiteNodes(req.GetAccessibilityRequirements())
 	if source != nil {
 		// Put the source's node first so a replica lands there and the copy is

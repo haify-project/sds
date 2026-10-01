@@ -131,10 +131,10 @@ func TestNodesWithPoolCarriesFreeSpace(t *testing.T) {
 		{Name: "sds_vg0", Node: "10.0.0.2", FreeGb: 90}, // DB-served pool: no byte counts
 		{Name: "sds_other", Node: "10.0.0.3", FreeBytes: 900 * giB},
 	}
-	got := nodesWithPool(nodes, pools, "vg0")
+	got := nodesWithPool(nodes, pools, "vg0", "host")
 	require.Len(t, got, 2, "n3 hosts a different pool")
-	assert.Equal(t, replicaCandidate{node: "n1", freeBytes: 20 * giB}, got[0])
-	assert.Equal(t, replicaCandidate{node: "n2", freeBytes: 90 * giB}, got[1])
+	assert.Equal(t, replicaCandidate{node: "n1", freeBytes: 20 * giB, domain: "node:n1"}, got[0])
+	assert.Equal(t, replicaCandidate{node: "n2", freeBytes: 90 * giB, domain: "node:n2"}, got[1])
 }
 
 // A thin pool's volume group reports zero free for life, so ranking has to read
@@ -169,4 +169,26 @@ func TestAccessibleTopology(t *testing.T) {
 	got := accessibleTopology([]string{"n1", "n2"})
 	require.Len(t, got, 2)
 	assert.Equal(t, "n1", got[0].Segments[TopologyKeyNode])
+}
+
+func TestSelectReplicaNodesSpreadsAcrossFaultDomains(t *testing.T) {
+	cands := []replicaCandidate{
+		{node: "a", freeBytes: 100 * giB, domain: "host=h1"},
+		{node: "b", freeBytes: 90 * giB, domain: "host=h1"},
+		{node: "c", freeBytes: 10 * giB, domain: "host=h2"},
+	}
+	got, err := selectReplicaNodes(cands, nil, 2, giB)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "c"}, got)
+
+	// A pinned node's machine counts as taken too.
+	got, err = selectReplicaNodes(cands, []string{"b"}, 2, giB)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"b", "c"}, got)
+
+	// All on one machine: still placed.
+	one := []replicaCandidate{cands[0], cands[1]}
+	got, err = selectReplicaNodes(one, nil, 2, giB)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, got)
 }

@@ -323,30 +323,36 @@ func thinPoolExhausted(u *PoolThinInfo) bool {
 // node holding a replica of a do-not-place-with resource. The constraints then
 // shape the selection. Used by CreateResource when the caller supplies no
 // explicit nodes.
-func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string, sizeGB uint32, replicas int, onDifferent, onSame, doNotPlaceWith []string) ([]string, error) {
+//
+// warning is set when the replicas could not be spread across fault domains
+// (see placement_domain.go).
+func (rm *ResourceManager) selectPlacementNodes(ctx context.Context, pool string, sizeGB uint32, replicas int, onDifferent, onSame, doNotPlaceWith []string) ([]string, string, error) {
 	if replicas < 1 {
-		return nil, fmt.Errorf("replicas must be >= 1, got %d", replicas)
+		return nil, "", fmt.Errorf("replicas must be >= 1, got %d", replicas)
 	}
 	pool = normalizeManagedName(pool)
 	cands, err := rm.placementCandidates(ctx, pool, uint64(sizeGB), doNotPlaceWith)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	constraints := placementConstraints{onDifferent: onDifferent, onSame: onSame}
-	picked, err := selectConstrained(cands, replicas, constraints)
+	picked, warning, err := spreadAcrossDomains(cands, replicas, constraints, rm.faultDomainKey())
 	if err != nil {
 		// "%dGB per replica" rather than "%dGB free per replica": on a thin pool
 		// the volume is not required to fit in what is free, so naming free
 		// space as the requirement would misdescribe why the placement failed.
-		return nil, fmt.Errorf("%w (pool %q, %dGB per replica)", err, pool, sizeGB)
+		return nil, "", fmt.Errorf("%w (pool %q, %dGB per replica)", err, pool, sizeGB)
+	}
+	if warning != "" {
+		rm.controller.logger.Warn("auto-placed replicas share a fault domain", zap.String("warning", warning))
 	}
 	rm.controller.logger.Info("auto-placed resource replicas",
 		zap.Strings("nodes", picked), zap.String("pool", pool),
 		zap.Uint32("size_gb", sizeGB), zap.Int("replicas", replicas),
 		zap.Strings("on_different", onDifferent), zap.Strings("on_same", onSame),
 		zap.Strings("do_not_place_with", doNotPlaceWith))
-	return picked, nil
+	return picked, warning, nil
 }
 
 // placementCandidates lists the online nodes whose copy of pool admits a
@@ -431,14 +437,28 @@ func (rm *ResourceManager) selectAdditionalReplicas(ctx context.Context, pool st
 		have[n] = true
 	}
 
-	var filtered []placementNode
+	var filtered, apart []placementNode
+	key := rm.faultDomainKey()
+	usedDomains := map[string]bool{}
+	for _, e := range existing {
+		usedDomains[faultDomain(e, labelsByName[e], key)] = true
+	}
 	for _, c := range cands {
 		if have[c.node] || !fitsExistingReplicas(c.labels, existing, labelsByName, onDifferent, onSame) {
 			continue
 		}
 		filtered = append(filtered, c)
+		if !usedDomains[faultDomain(c.node, c.labels, key)] {
+			apart = append(apart, c)
+		}
 	}
-	picked, err := selectConstrained(filtered, count, placementConstraints{onDifferent: onDifferent, onSame: onSame})
+	constraints := placementConstraints{onDifferent: onDifferent, onSame: onSame}
+	// A new replica in a fault domain the resource does not use yet is worth
+	// more than one with more free space beside an existing copy.
+	if picked, warning, err := spreadAcrossDomains(apart, count, constraints, key); err == nil && warning == "" {
+		return picked, nil
+	}
+	picked, err := selectConstrained(filtered, count, constraints)
 	if err != nil {
 		return nil, fmt.Errorf("%w (pool %q, %d more replica(s) beside %s)", err, pool, count, strings.Join(existing, ", "))
 	}

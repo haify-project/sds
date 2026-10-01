@@ -23,11 +23,17 @@ type VolumeParams struct {
 	AllowRemoteVolumeAccess bool
 	ResourceProfile         string
 	ResourceLabels          map[string]string
+	// FaultDomainLabel is the node label naming what fails together (default
+	// "host"); replicas are spread across its values when they can be.
+	FaultDomainLabel string
 }
 
 // ParseVolumeParams validates and defaults the StorageClass parameters.
 func ParseVolumeParams(p map[string]string) (VolumeParams, error) {
-	out := VolumeParams{Pool: p["pool"], Replicas: 2, StorageType: "lvm"}
+	out := VolumeParams{Pool: p["pool"], Replicas: 2, StorageType: "lvm", FaultDomainLabel: "host"}
+	if v := strings.TrimSpace(p["faultDomainLabel"]); v != "" {
+		out.FaultDomainLabel = v
+	}
 	out.ResourceProfile = strings.TrimSpace(p["resourceProfile"])
 	if out.Pool == "" && out.ResourceProfile == "" {
 		return out, fmt.Errorf("storageclass parameter \"pool\" is required")

@@ -1721,6 +1721,9 @@ message ResourceInfo {
   // (DRBD → LUKS → LVM/ZFS). Encryption at rest only — DRBD replicates the
   // plaintext, so the wire is not protected by this.
   bool encrypted = 15;
+  // fault_domain_risk names the labelled fault domain(s), e.g. "host=dell",
+  // whose loss would take every copy of the data or the quorum majority.
+  string fault_domain_risk = 16;
 }
 
 message ResourceStatus {

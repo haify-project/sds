@@ -262,6 +262,9 @@ func resourceList() *cobra.Command {
 				if r.QuorumRisk {
 					line += " ⚠quorum-risk"
 				}
+				if r.FaultDomainRisk != "" {
+					line += " ⚠one-failure-domain(" + r.FaultDomainRisk + ")"
+				}
 				fmt.Println(line)
 			}
 

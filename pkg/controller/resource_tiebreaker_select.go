@@ -8,16 +8,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// selectTiebreaker picks a registered node, not already part of the resource,
 // TiebreakerLabel opts a node out of automatic diskless-tiebreaker selection
 // when set to "false" (`sds node label <node> sds.tiebreaker=false`). Use it on
 // WAN/DR nodes, which cannot join a LAN resource's DRBD connection mesh.
 const TiebreakerLabel = "sds.tiebreaker"
 
-// to serve as a diskless quorum tiebreaker. Selection prefers, in order:
-// online storage nodes, online compute-only nodes, then offline nodes; within
-// each tier it is deterministic (lowest node name) so repeated creations are
-// stable. Returns "" when no spare node is available — the caller then keeps
+// selectTiebreaker picks a registered node, not already part of the resource,
+// to serve as a diskless quorum tiebreaker. A node outside every replica's
+// fault domain is preferred over any node inside one: a tiebreaker beside a
+// replica falls with it and takes the survivor's quorum along. Then selection
+// prefers, in order: online storage nodes, online compute-only nodes, then
+// offline nodes; within each tier it is deterministic (lowest node name) so
+// repeated creations are stable. Returns "" when no spare node is available — the caller then keeps
 // the resource as a bare 2-node configuration.
 //
 // The storage-node preference matters in a mixed cluster: a hypervisor
@@ -70,10 +72,26 @@ func (rm *ResourceManager) selectTiebreaker(ctx context.Context, nodes []string)
 		}
 	}
 
-	for _, tier := range [][]string{onlineStorage, onlineCompute, offlineStorage, offlineCompute} {
-		if len(tier) > 0 {
+	labels := make(map[string]map[string]string, len(all))
+	for _, n := range all {
+		if n != nil {
+			labels[n.Name] = n.Labels
+		}
+	}
+	key := rm.faultDomainKey()
+	used := map[string]bool{}
+	for _, r := range nodes {
+		used[faultDomain(r, labels[r], key)] = true
+	}
+	tiers := [][]string{onlineStorage, onlineCompute, offlineStorage, offlineCompute}
+	for _, apart := range []bool{true, false} {
+		for _, tier := range tiers {
 			sort.Strings(tier)
-			return tier[0]
+			for _, n := range tier {
+				if !apart || !used[faultDomain(n, labels[n], key)] {
+					return n
+				}
+			}
 		}
 	}
 	return ""

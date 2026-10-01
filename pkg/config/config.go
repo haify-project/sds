@@ -164,6 +164,10 @@ type ScheduleConfig struct {
 // single-node failure, matching LINSTOR's auto-quorum-tiebreaker behavior.
 type ResourceConfig struct {
 	AutoTiebreaker bool `mapstructure:"auto_tiebreaker"`
+	// FaultDomainLabel is the node label naming what fails together, e.g. the
+	// physical host a VM runs on. Automatic placement spreads replicas and the
+	// tiebreaker across its values. A node without the label is its own domain.
+	FaultDomainLabel string `mapstructure:"fault_domain_label"`
 }
 
 // GatewayConfig controls gateway provisioning behavior. Every gateway needs a
@@ -494,6 +498,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)
 	viper.SetDefault("resource.auto_tiebreaker", true)
+	viper.SetDefault("resource.fault_domain_label", "host")
 	viper.SetDefault("schedule.enabled", true)
 	viper.SetDefault("alert.enabled", false)
 	viper.SetDefault("alert.check_interval_sec", 30)

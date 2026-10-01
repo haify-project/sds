@@ -245,6 +245,29 @@ sds-cli resource create --name db --size 100G --port 7000 --replicas 3 \
 (anti-affinity). Placement is pool-aware: a volume only lands on a node that
 actually hosts the requested pool.
 
+**Fault domains.** Nodes that fail together — VMs on one physical host, servers
+in one rack — should not hold two copies of the same data. Tell SDS which
+nodes share a machine with a `host` label:
+
+```bash
+sds-cli node label orange1 host=dell
+sds-cli node label orange2 host=dell
+sds-cli node label node-e  host=hp
+```
+
+Automatic placement, `add-replica` and the CSI driver then put replicas on
+different hosts before they look at free space, and the quorum tiebreaker goes
+to a host none of the replicas is on — a tiebreaker beside a replica falls with
+it and takes the survivor's quorum along. When the cluster cannot spread (all
+VMs on one machine), the resource is still created and the CLI prints a
+warning. `resource list` flags every resource where losing one host would lose
+all copies or the quorum majority: `⚠one-failure-domain(host=dell)`.
+
+The label key is `[resource] fault_domain_label` in `controller.toml` (default
+`host`; a StorageClass sets its own with `faultDomainLabel`). A node without
+the label counts as its own domain, so an unlabelled cluster places exactly as
+before. `--replicas-on-different host` makes the spread a hard requirement.
+
 **Profiles** group resources that should be alike. A resource created with
 `--profile` — or attached later — is a member, and what is set on the profile
 reaches every member:

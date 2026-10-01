@@ -177,6 +177,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 		DRNode:     dbRes.DRNode,
 		Encrypted:  dbRes.Encrypted,
 	}
+	info.FaultDomainRisk = faultDomainRisk(nodeAddresses, disklessNodes, rm.labelsByNode(ctx), rm.faultDomainKey())
 
 	if len(info.Volumes) == 0 && len(dbVolumes) > 0 {
 		for _, volume := range dbVolumes {
@@ -206,6 +207,7 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 		return nil, fmt.Errorf("failed to list resources from database: %w", err)
 	}
 
+	labels := rm.labelsByNode(ctx)
 	var resources []*ResourceInfo
 	for _, dbRes := range dbResources {
 		// Parse nodeAddresses from comma-separated string
@@ -254,6 +256,8 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 			WANMode:    dbRes.WANMode,
 			DRNode:     dbRes.DRNode,
 			Encrypted:  dbRes.Encrypted,
+			FaultDomainRisk: faultDomainRisk(nodeAddresses, splitCSV(dbRes.DisklessNodes), labels,
+				rm.faultDomainKey()),
 		})
 	}
 

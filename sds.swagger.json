@@ -8628,6 +8628,10 @@
         "encrypted": {
           "type": "boolean",
           "description": "encrypted is true when every replica's backing volume is a LUKS2 container\n(DRBD → LUKS → LVM/ZFS). Encryption at rest only — DRBD replicates the\nplaintext, so the wire is not protected by this."
+        },
+        "faultDomainRisk": {
+          "type": "string",
+          "description": "fault_domain_risk names the labelled fault domain(s), e.g. \"host=dell\",\nwhose loss would take every copy of the data or the quorum majority."
         }
       }
     },

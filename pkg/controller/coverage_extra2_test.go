@@ -26,11 +26,11 @@ func TestSelectPlacementNodesValidation(t *testing.T) {
 	ctrl.db = newTestDB(t)
 
 	// replicas < 1 is rejected before any node lookup.
-	_, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 1, 0, nil, nil, nil)
+	_, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 1, 0, nil, nil, nil)
 	assert.Error(t, err)
 
 	// No nodes/pools available -> cannot satisfy the request.
-	_, err = ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 1, 2, nil, nil, nil)
+	_, _, err = ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 1, 2, nil, nil, nil)
 	assert.Error(t, err)
 }
 

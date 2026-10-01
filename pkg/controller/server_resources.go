@@ -54,6 +54,7 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	// (which needs an explicit primary + DR endpoint), and all volumes must
 	// share one pool so there is a single capacity target to place against.
 	nodes := req.Nodes
+	var placementWarning string
 	if len(nodes) == 0 {
 		if wan != nil {
 			return &sdspb.CreateResourceResponse{
@@ -69,11 +70,11 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		if replicas == 0 {
 			replicas = 2
 		}
-		placed, perr := s.resources.selectPlacementNodes(ctx, pool, total, replicas, req.ReplicasOnDifferent, req.ReplicasOnSame, req.DoNotPlaceWith)
+		placed, warn, perr := s.resources.selectPlacementNodes(ctx, pool, total, replicas, req.ReplicasOnDifferent, req.ReplicasOnSame, req.DoNotPlaceWith)
 		if perr != nil {
 			return &sdspb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
 		}
-		nodes = placed
+		nodes, placementWarning = placed, warn
 	}
 
 	err := s.resources.CreateResourceWithVolumesMetadata(ctx, req.Name, req.Port, nodes, req.Protocol, req.StorageType, req.DrbdOptions, volumes, wan, ResourceMetadata{
@@ -87,9 +88,13 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 			Message: err.Error(),
 		}, nil
 	}
+	msg := "Resource created successfully"
+	if placementWarning != "" {
+		msg += "; warning: " + placementWarning
+	}
 	return &sdspb.CreateResourceResponse{
 		Success: true,
-		Message: "Resource created successfully",
+		Message: msg,
 	}, nil
 }
 
@@ -234,6 +239,7 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 			DisklessNodes:   resource.DisklessNodes,
 			DisklessClients: resource.DisklessClients,
 			QuorumRisk:      resource.QuorumRisk,
+			FaultDomainRisk: resource.FaultDomainRisk,
 			WanMode:         resource.WANMode,
 			DrNode:          resource.DRNode,
 			Encrypted:       resource.Encrypted,
@@ -278,6 +284,7 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 			DisklessNodes:   r.DisklessNodes,
 			DisklessClients: r.DisklessClients,
 			QuorumRisk:      r.QuorumRisk,
+			FaultDomainRisk: r.FaultDomainRisk,
 			WanMode:         r.WANMode,
 			DrNode:          r.DRNode,
 			Encrypted:       r.Encrypted,

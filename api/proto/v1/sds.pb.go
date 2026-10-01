@@ -9532,9 +9532,12 @@ type ResourceInfo struct {
 	// encrypted is true when every replica's backing volume is a LUKS2 container
 	// (DRBD → LUKS → LVM/ZFS). Encryption at rest only — DRBD replicates the
 	// plaintext, so the wire is not protected by this.
-	Encrypted     bool `protobuf:"varint,15,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Encrypted bool `protobuf:"varint,15,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
+	// fault_domain_risk names the labelled fault domain(s), e.g. "host=dell",
+	// whose loss would take every copy of the data or the quorum majority.
+	FaultDomainRisk string `protobuf:"bytes,16,opt,name=fault_domain_risk,json=faultDomainRisk,proto3" json:"fault_domain_risk,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ResourceInfo) Reset() {
@@ -9670,6 +9673,13 @@ func (x *ResourceInfo) GetEncrypted() bool {
 		return x.Encrypted
 	}
 	return false
+}
+
+func (x *ResourceInfo) GetFaultDomainRisk() string {
+	if x != nil {
+		return x.FaultDomainRisk
+	}
+	return ""
 }
 
 type ResourceStatus struct {
@@ -19427,7 +19437,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\fmin_severity\x18\x01 \x01(\tR\vminSeverity\x12\x14\n" +
 	"\x05types\x18\x02 \x03(\tR\x05types\x12\x1a\n" +
 	"\bresource\x18\x03 \x01(\tR\bresource\x12\x19\n" +
-	"\bsince_id\x18\x04 \x01(\x04R\asinceId\"\x8f\x05\n" +
+	"\bsince_id\x18\x04 \x01(\x04R\asinceId\"\xbb\x05\n" +
 	"\fResourceInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x1a\n" +
@@ -19446,7 +19456,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\aprofile\x18\f \x01(\tR\aprofile\x12\x19\n" +
 	"\bwan_mode\x18\r \x01(\bR\awanMode\x12\x17\n" +
 	"\adr_node\x18\x0e \x01(\tR\x06drNode\x12\x1c\n" +
-	"\tencrypted\x18\x0f \x01(\bR\tencrypted\x1aT\n" +
+	"\tencrypted\x18\x0f \x01(\bR\tencrypted\x12*\n" +
+	"\x11fault_domain_risk\x18\x10 \x01(\tR\x0ffaultDomainRisk\x1aT\n" +
 	"\x0fNodeStatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
 	"\x05value\x18\x02 \x01(\v2\x15.v1.NodeResourceStateR\x05value:\x028\x01\x1a9\n" +

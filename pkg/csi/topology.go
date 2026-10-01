@@ -33,6 +33,9 @@ type replicaCandidate struct {
 	// freeBytes is 0 when the controller reported no capacity figure this code
 	// can stand behind. Zero means "unknown", never "full"; see poolFreeBytes.
 	freeBytes uint64
+	// domain is the node's fault domain: its value of the fault-domain label,
+	// or the node itself when it has none.
+	domain string
 }
 
 // poolFreeBytes is how much room a pool has left on its node, or 0 when the
@@ -68,7 +71,7 @@ func poolFreeBytes(p *sdspb.PoolInfo) uint64 {
 // node — matched by address or name, since the controller reports pools keyed
 // by node address. This keeps replica placement pool-aware so volumes never
 // land on a node lacking the backing pool.
-func nodesWithPool(nodes []*sdspb.NodeInfo, pools []*sdspb.PoolInfo, pool string) []replicaCandidate {
+func nodesWithPool(nodes []*sdspb.NodeInfo, pools []*sdspb.PoolInfo, pool, domainLabel string) []replicaCandidate {
 	want := managedPoolName(pool)
 	freeByKey := map[string]uint64{}
 	for _, p := range pools {
@@ -84,7 +87,11 @@ func nodesWithPool(nodes []*sdspb.NodeInfo, pools []*sdspb.PoolInfo, pool string
 	for _, n := range nodes {
 		for _, key := range []string{n.GetAddress(), n.GetName()} {
 			if free, ok := freeByKey[key]; ok {
-				out = append(out, replicaCandidate{node: n.GetName(), freeBytes: free})
+				domain := "node:" + n.GetName()
+				if v := n.GetLabels()[domainLabel]; v != "" && domainLabel != "" {
+					domain = domainLabel + "=" + v
+				}
+				out = append(out, replicaCandidate{node: n.GetName(), freeBytes: free, domain: domain})
 				break
 			}
 		}
@@ -137,7 +144,9 @@ func (c replicaCandidate) fits(needBytes uint64) bool {
 // emptiest nodes instead of on whatever ListNodes happened to return first —
 // the behaviour `sds-cli resource create` has always had. Equal free space
 // breaks on node name so two provisioners racing over identical cluster state
-// reach the same answer.
+// reach the same answer. Nodes in a fault domain no replica uses yet are taken
+// before any that would share one: two copies on one physical host are one
+// failure away from none.
 //
 // Pass needBytes 0 to place without a capacity requirement.
 func selectReplicaNodes(candidates []replicaCandidate, pinned []string, replicas int, needBytes uint64) ([]string, error) {
@@ -153,6 +162,7 @@ func selectReplicaNodes(candidates []replicaCandidate, pinned []string, replicas
 
 	var picked []string
 	used := map[string]bool{}
+	domains := map[string]bool{}
 	for _, n := range pinned {
 		if len(picked) >= replicas {
 			break
@@ -172,6 +182,7 @@ func selectReplicaNodes(candidates []replicaCandidate, pinned []string, replicas
 		}
 		picked = append(picked, n)
 		used[n] = true
+		domains[c.domain] = true
 	}
 
 	roomy := make([]replicaCandidate, 0, len(unique))
@@ -186,12 +197,18 @@ func selectReplicaNodes(candidates []replicaCandidate, pinned []string, replicas
 		}
 		return roomy[i].node < roomy[j].node
 	})
-	for _, c := range roomy {
-		if len(picked) >= replicas {
-			break
+	for _, apart := range []bool{true, false} {
+		for _, c := range roomy {
+			if len(picked) >= replicas {
+				break
+			}
+			if used[c.node] || (apart && c.domain != "" && domains[c.domain]) {
+				continue
+			}
+			picked = append(picked, c.node)
+			used[c.node] = true
+			domains[c.domain] = true
 		}
-		picked = append(picked, c.node)
-		used[c.node] = true
 	}
 
 	if len(picked) < replicas {
