@@ -45,6 +45,11 @@ func (rm *ResourceManager) SetTiebreaker(ctx context.Context, resource, newNode 
 	}
 
 	newNode = strings.TrimSpace(newNode)
+	if newNode != "" {
+		if err := rm.assertNewMemberTLS(ctx, resource, newNode); err != nil {
+			return err
+		}
+	}
 	current := splitCSV(dbRes.DisklessNodes)
 	diskful := splitCSV(dbRes.Nodes)
 

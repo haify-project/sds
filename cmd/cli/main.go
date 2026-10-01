@@ -54,6 +54,7 @@ func main() {
 	rootCmd.AddCommand(notifyCommand())
 	rootCmd.AddCommand(wanCommand())
 	rootCmd.AddCommand(backupCommand())
+	rootCmd.AddCommand(replicationTLSCommand())
 
 	if cmd, err := rootCmd.ExecuteC(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

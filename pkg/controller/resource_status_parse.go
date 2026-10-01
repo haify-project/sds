@@ -295,6 +295,7 @@ type drbdConnection struct {
 	// leaves peer-role and every peer_device empty for such a peer, and
 	// reading those empties as facts is the whole reason this is parsed.
 	ConnectionState string           `json:"connection-state"`
+	TLS             bool             `json:"tls"`
 	PeerRole        string           `json:"peer-role"`
 	PeerDevices     []drbdPeerDevice `json:"peer_devices"`
 }
@@ -358,6 +359,7 @@ func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNode
 		peer := &ResourceNodeState{
 			Role:             conn.PeerRole,
 			Connection:       conn.ConnectionState,
+			TLS:              conn.TLS,
 			SyncPercent:      100,
 			SyncPercentKnown: true,
 		}

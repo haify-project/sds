@@ -83,6 +83,8 @@ type ResourceNodeState struct {
 	// rejoining the cluster — whose peers are all Connecting for a few seconds
 	// — made the whole resource look like it had no Primary.
 	Connection string
+	// TLS is whether the connection to this peer is encrypted.
+	TLS bool
 }
 
 // ResourceVolumeInfo represents DRBD volume information

@@ -65,6 +65,9 @@ func (rm *ResourceManager) AttachDisklessClient(ctx context.Context, resource, n
 			return rm.tiebreakerToClient(ctx, dbRes, node)
 		}
 	}
+	if err := rm.assertNewMemberTLS(ctx, resource, node); err != nil {
+		return err
+	}
 	clients := splitCSV(dbRes.DisklessClients)
 	alreadyClient := false
 	for _, n := range clients {

@@ -113,8 +113,12 @@ func resourceStatus() *cobra.Command {
 			if ns := status.GetNodeStates(); len(ns) > 0 {
 				fmt.Printf("\n  Node states:\n")
 				for node, st := range ns {
-					fmt.Printf("    %s: role=%s disk=%s repl=%s\n",
-						node, st.GetRole(), st.GetDiskState(), st.GetReplicationState())
+					tls := ""
+					if st.GetTls() {
+						tls = " tls"
+					}
+					fmt.Printf("    %s: role=%s disk=%s repl=%s%s\n",
+						node, st.GetRole(), st.GetDiskState(), st.GetReplicationState(), tls)
 				}
 			}
 

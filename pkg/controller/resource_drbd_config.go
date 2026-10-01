@@ -396,46 +396,10 @@ func (rm *ResourceManager) RepairResourceConfig(ctx context.Context, resource st
 // hold the same file. Rewriting it on the diskful nodes alone is how their
 // copies drifted in the first place.
 func (rm *ResourceManager) rewriteResourceConfig(ctx context.Context, resource string, change func(string) (string, error)) error {
-	if rm.deployment == nil {
-		return fmt.Errorf("deployment client not set")
-	}
-	hosts, err := rm.resourceHosts(ctx, resource)
+	hosts, diskless, err := rm.stageResourceConfig(ctx, resource, change)
 	if err != nil {
 		return err
 	}
-	if len(hosts) == 0 {
-		return fmt.Errorf("resource %q has no nodes", resource)
-	}
-	diskless := rm.disklessParticipantHosts(ctx, resource)
-	allHosts := append(append([]string(nil), hosts...), diskless...)
-	resPath := fmt.Sprintf("/etc/drbd.d/%s.res", resource)
-
-	// Read the current config from a diskful node: it is the one that
-	// describes the resource's volumes.
-	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, "cat "+resPath)
-	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-	var current string
-	var found bool
-	for _, hr := range result.Hosts {
-		current, found = hr.Output, hr.Success
-		break
-	}
-	if !found || strings.TrimSpace(current) == "" {
-		return fmt.Errorf("resource %q config not found on %s", resource, hosts[0])
-	}
-
-	updated, err := change(current)
-	if err != nil {
-		return err
-	}
-	updated = reconcileDisklessVolumeOverrides(updated)
-
-	if _, err := rm.deployment.DistributeConfig(ctx, allHosts, updated, resPath); err != nil {
-		return fmt.Errorf("failed to distribute updated config: %w", err)
-	}
-
 	// Diskless nodes first. When a diskful node learns that a peer's volume
 	// is diskless it drops the bitmap it keeps for that peer, and the kernel
 	// refuses that ("Can not drop the bitmap when both sides have a disk")
@@ -462,4 +426,52 @@ func (rm *ResourceManager) rewriteResourceConfig(ctx context.Context, resource s
 		}
 	}
 	return err2
+}
+
+// stageResourceConfig reads a resource's config from a diskful node, applies
+// change, reconciles the diskless nodes' volume overrides and installs the
+// result on every participant, without applying it. It returns the diskful and
+// diskless hosts.
+func (rm *ResourceManager) stageResourceConfig(ctx context.Context, resource string, change func(string) (string, error)) ([]string, []string, error) {
+	if rm.deployment == nil {
+		return nil, nil, fmt.Errorf("deployment client not set")
+	}
+	hosts, err := rm.resourceHosts(ctx, resource)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(hosts) == 0 {
+		return nil, nil, fmt.Errorf("resource %q has no nodes", resource)
+	}
+	diskless := rm.disklessParticipantHosts(ctx, resource)
+	allHosts := append(append([]string(nil), hosts...), diskless...)
+	resPath := fmt.Sprintf("/etc/drbd.d/%s.res", resource)
+
+	// Read the current config from a diskful node: it is the one that
+	// describes the resource's volumes.
+	result, err := rm.deployment.Exec(ctx, []string{hosts[0]}, "cat "+resPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read config: %w", err)
+	}
+	var current string
+	var found bool
+	for _, hr := range result.Hosts {
+		current, found = hr.Output, hr.Success
+		break
+	}
+	if !found || strings.TrimSpace(current) == "" {
+		return nil, nil, fmt.Errorf("resource %q config not found on %s", resource, hosts[0])
+	}
+
+	updated, err := change(current)
+	if err != nil {
+		return nil, nil, err
+	}
+	updated = reconcileDisklessVolumeOverrides(updated)
+
+	if _, err := rm.deployment.DistributeConfig(ctx, allHosts, updated, resPath); err != nil {
+		return nil, nil, fmt.Errorf("failed to distribute updated config: %w", err)
+	}
+
+	return hosts, diskless, nil
 }

@@ -2354,6 +2354,73 @@
         ]
       }
     },
+    "/v1/replication-tls": {
+      "get": {
+        "operationId": "SDSController_GetReplicationTLSStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ReplicationTLSResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "nodes",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/replication-tls/setup": {
+      "post": {
+        "summary": "Encrypted DRBD replication: prepare nodes (key, certificate from the\ncontroller's replication CA, tlshd), report their readiness, and switch a\nresource's connections over one link at a time.",
+        "operationId": "SDSController_SetupReplicationTLS",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ReplicationTLSResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SetupReplicationTLSRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resource-profiles": {
       "get": {
         "operationId": "SDSController_ListResourceProfiles",
@@ -3529,6 +3596,44 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/SDSControllerSetSecondaryBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/tls": {
+      "post": {
+        "operationId": "SDSController_SetResourceTLS",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetResourceTLSResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetResourceTLSBody"
             }
           }
         ],
@@ -5402,6 +5507,14 @@
         }
       },
       "description": "SetResourceProfileOptionsRequest records DRBD options on a profile and\napplies them to every member."
+    },
+    "SDSControllerSetResourceTLSBody": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     },
     "SDSControllerSetSecondaryBody": {
       "type": "object",
@@ -8047,6 +8160,28 @@
         "connection": {
           "type": "string",
           "description": "Peer DRBD connection state as the answering node sees it (\"Connected\",\n\"Connecting\", \"StandAlone\", ...). Empty for the answering node itself. A\npeer that is not Connected reports no role, disk or replication state, so\nthis is the only field that tells an unreachable replica from a healthy one."
+        },
+        "tls": {
+          "type": "boolean",
+          "description": "tls is whether the connection to this peer runs over TLS."
+        }
+      }
+    },
+    "v1NodeTLSInfo": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "problem": {
+          "type": "string",
+          "description": "problem says what stops the node from carrying an encrypted connection."
+        },
+        "expires": {
+          "type": "string"
         }
       }
     },
@@ -8491,6 +8626,24 @@
         "alreadyConsistent": {
           "type": "boolean",
           "description": "True when nothing needed changing."
+        }
+      }
+    },
+    "v1ReplicationTLSResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NodeTLSInfo"
+          }
         }
       }
     },
@@ -8982,6 +9135,21 @@
         }
       }
     },
+    "v1SetResourceTLSResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "linksChanged": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "v1SetSecondaryResponse": {
       "type": "object",
       "properties": {
@@ -9024,6 +9192,18 @@
         },
         "egressAddress": {
           "type": "string"
+        }
+      }
+    },
+    "v1SetupReplicationTLSRequest": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "nodes to prepare; empty prepares every registered node."
         }
       }
     },

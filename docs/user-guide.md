@@ -709,12 +709,48 @@ sds-cli resource create --name secrets --size 50G --port 7010 \
 Understand exactly what this does and does not do:
 
 - **At rest only.** DRBD sits above the crypt layer, so replication traffic
-  between nodes is plaintext. Encrypt the network separately if you need that.
+  between nodes is plaintext. Encrypt it with replication TLS, below.
 - **Each node generates and keeps its own key** under `/etc/sds/luks`, root-only.
   Nothing is sent anywhere and there is no central escrow. Lose a node's key and
   that replica is gone — the others are unaffected.
 - **It cannot be enabled later.** Decide at creation.
 - LVM pools only.
+
+**Encrypted replication.** DRBD 9.2 and later can run a connection over kernel
+TLS: the kernel asks `tlshd` (package `ktls-utils`) to do the handshake, then
+encrypts in place. Install `ktls-utils` on every node, then:
+
+```bash
+sds-cli replication-tls setup            # every node: key, certificate, tlshd
+sds-cli replication-tls status           # READY per node, or what is missing
+sds-cli resource tls db on               # encrypt every connection of db
+sds-cli resource status db               # each peer shows "tls"
+sds-cli resource tls db off
+```
+
+`setup` has each node make its own key, signs a certificate for it with the
+controller's replication CA (kept next to the database), installs that CA in
+the node's system trust store, points `tlshd` at the certificate and loads the
+`tls` module at boot. A peer whose certificate this CA did not sign is refused
+at the handshake. Run `setup` again to renew certificates; `status` warns 30
+days before one expires.
+
+- **Live switch.** DRBD cannot change a connection's transport while it is up,
+  so `resource tls` takes one link down at a time and brings it back while the
+  others keep quorum. The Primary keeps serving; the reconnected peer catches up
+  with a short resync. On the test cluster each switch of three links took about
+  15 s under a continuous write load, with no failed write.
+- **A failed handshake is not retried.** DRBD leaves that link StandAlone and
+  the switch stops, naming it. Fix the node (`journalctl -u tlshd`), then
+  `sds-cli resource repair <resource>`.
+- **New members must be ready.** Adding a replica, a diskless client or a
+  tiebreaker to an encrypted resource is refused on a node that is not.
+- **The CA joins the system trust store**, because `tlshd` before ktls-utils
+  0.10 has no setting for a private one. Anything on a node that validates
+  against that store will accept a certificate it issued; it only ever issues
+  replication certificates.
+- **Not for WAN resources.** Their off-site leg already runs mutual TLS through
+  `sds-proxy`.
 
 ---
 

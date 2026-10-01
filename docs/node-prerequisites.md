@@ -326,6 +326,15 @@ Copilot the Web UI talks to. It also needs
 
 ---
 
+## 8b. Encrypted replication (optional; all nodes of an encrypted resource)
+
+- DRBD 9.2 or later built with TLS (`drbdsetup net-options --help` lists `--tls`)
+- a kernel with `CONFIG_TLS` and `CONFIG_NET_HANDSHAKE` (Ubuntu 24.04's 6.8 has both)
+- `ktls-utils` for `tlshd`: `apt install ktls-utils` / `dnf install ktls-utils`
+- `openssl` and `update-ca-certificates` or `update-ca-trust`
+
+`sds-cli replication-tls setup` does the rest and says per node what is missing.
+
 ## 9. Storage pool (diskful nodes only)
 
 Diskful nodes need a pool (VG/zpool) on a data disk, e.g. `sds_vg0` on

@@ -11,7 +11,7 @@
 ## 功能
 
 - **存储池**:LVM、LVM-thin、ZFS,thin 池支持 SSD 缓存。
-- **资源**:DRBD 复制卷,自动放置、在线扩容、无盘客户端、仲裁 tiebreaker、LUKS2 静态加密。
+- **资源**:DRBD 复制卷,自动放置、在线扩容、无盘客户端、仲裁 tiebreaker、LUKS2 静态加密、复制链路 TLS 加密。
 - **网关**:iSCSI、NFS、NVMe-oF,由 drbd-reactor 加浮动 IP 做故障转移。
 - **快照与备份**:LVM / ZFS 快照和保留策略;增量备份到 S3、SMB 或 WebDAV。
 - **跨站点**:通过可穿透 NAT 的 TCP 隧道做异步容灾副本。

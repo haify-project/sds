@@ -92,6 +92,9 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 			return err
 		}
 	}
+	if err := rm.assertNewMemberTLS(ctx, resource, node); err != nil {
+		return err
+	}
 
 	newAddr := rm.controller.ResolveHost(node)
 	primaryAddrs := make([]string, 0, len(primaries))

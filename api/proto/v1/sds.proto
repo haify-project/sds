@@ -141,6 +141,18 @@ service SDSController {
   rpc SetTiebreaker(SetTiebreakerRequest) returns (SetTiebreakerResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/ha/tiebreaker"; body: "*"; };
   }
+  // Encrypted DRBD replication: prepare nodes (key, certificate from the
+  // controller's replication CA, tlshd), report their readiness, and switch a
+  // resource's connections over one link at a time.
+  rpc SetupReplicationTLS(SetupReplicationTLSRequest) returns (ReplicationTLSResponse) {
+    option (google.api.http) = { post: "/v1/replication-tls/setup"; body: "*"; };
+  }
+  rpc GetReplicationTLSStatus(GetReplicationTLSStatusRequest) returns (ReplicationTLSResponse) {
+    option (google.api.http) = { get: "/v1/replication-tls" };
+  }
+  rpc SetResourceTLS(SetResourceTLSRequest) returns (SetResourceTLSResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/tls"; body: "*"; };
+  }
   rpc AddDR(AddDRRequest) returns (AddDRResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/dr"; body: "*"; };
   }
@@ -1823,6 +1835,8 @@ message NodeResourceState {
   // peer that is not Connected reports no role, disk or replication state, so
   // this is the only field that tells an unreachable replica from a healthy one.
   string connection = 6;
+  // tls is whether the connection to this peer runs over TLS.
+  bool tls = 7;
 }
 
 message VolumeInfo {
@@ -2798,4 +2812,38 @@ message DRFailbackResponse {
   // "done".
   string phase = 3;
   repeated string steps = 4;
+}
+
+message SetupReplicationTLSRequest {
+  // nodes to prepare; empty prepares every registered node.
+  repeated string nodes = 1;
+}
+
+message GetReplicationTLSStatusRequest {
+  repeated string nodes = 1;
+}
+
+message NodeTLSInfo {
+  string node = 1;
+  bool ready = 2;
+  // problem says what stops the node from carrying an encrypted connection.
+  string problem = 3;
+  string expires = 4;
+}
+
+message ReplicationTLSResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NodeTLSInfo nodes = 3;
+}
+
+message SetResourceTLSRequest {
+  string resource = 1;
+  bool enabled = 2;
+}
+
+message SetResourceTLSResponse {
+  bool success = 1;
+  string message = 2;
+  uint32 links_changed = 3;
 }

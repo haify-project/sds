@@ -61,6 +61,9 @@ const (
 	SDSController_MakeHa_FullMethodName                    = "/v1.SDSController/MakeHa"
 	SDSController_EvictHa_FullMethodName                   = "/v1.SDSController/EvictHa"
 	SDSController_SetTiebreaker_FullMethodName             = "/v1.SDSController/SetTiebreaker"
+	SDSController_SetupReplicationTLS_FullMethodName       = "/v1.SDSController/SetupReplicationTLS"
+	SDSController_GetReplicationTLSStatus_FullMethodName   = "/v1.SDSController/GetReplicationTLSStatus"
+	SDSController_SetResourceTLS_FullMethodName            = "/v1.SDSController/SetResourceTLS"
 	SDSController_AddDR_FullMethodName                     = "/v1.SDSController/AddDR"
 	SDSController_AddReplica_FullMethodName                = "/v1.SDSController/AddReplica"
 	SDSController_RemoveReplica_FullMethodName             = "/v1.SDSController/RemoveReplica"
@@ -204,6 +207,12 @@ type SDSControllerClient interface {
 	MakeHa(ctx context.Context, in *MakeHaRequest, opts ...grpc.CallOption) (*MakeHaResponse, error)
 	EvictHa(ctx context.Context, in *EvictHaRequest, opts ...grpc.CallOption) (*EvictHaResponse, error)
 	SetTiebreaker(ctx context.Context, in *SetTiebreakerRequest, opts ...grpc.CallOption) (*SetTiebreakerResponse, error)
+	// Encrypted DRBD replication: prepare nodes (key, certificate from the
+	// controller's replication CA, tlshd), report their readiness, and switch a
+	// resource's connections over one link at a time.
+	SetupReplicationTLS(ctx context.Context, in *SetupReplicationTLSRequest, opts ...grpc.CallOption) (*ReplicationTLSResponse, error)
+	GetReplicationTLSStatus(ctx context.Context, in *GetReplicationTLSStatusRequest, opts ...grpc.CallOption) (*ReplicationTLSResponse, error)
+	SetResourceTLS(ctx context.Context, in *SetResourceTLSRequest, opts ...grpc.CallOption) (*SetResourceTLSResponse, error)
 	AddDR(ctx context.Context, in *AddDRRequest, opts ...grpc.CallOption) (*AddDRResponse, error)
 	AddReplica(ctx context.Context, in *AddReplicaRequest, opts ...grpc.CallOption) (*AddReplicaResponse, error)
 	RemoveReplica(ctx context.Context, in *RemoveReplicaRequest, opts ...grpc.CallOption) (*RemoveReplicaResponse, error)
@@ -803,6 +812,36 @@ func (c *sDSControllerClient) SetTiebreaker(ctx context.Context, in *SetTiebreak
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetTiebreakerResponse)
 	err := c.cc.Invoke(ctx, SDSController_SetTiebreaker_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetupReplicationTLS(ctx context.Context, in *SetupReplicationTLSRequest, opts ...grpc.CallOption) (*ReplicationTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplicationTLSResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetupReplicationTLS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetReplicationTLSStatus(ctx context.Context, in *GetReplicationTLSStatusRequest, opts ...grpc.CallOption) (*ReplicationTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplicationTLSResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetReplicationTLSStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetResourceTLS(ctx context.Context, in *SetResourceTLSRequest, opts ...grpc.CallOption) (*SetResourceTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetResourceTLSResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetResourceTLS_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1751,6 +1790,12 @@ type SDSControllerServer interface {
 	MakeHa(context.Context, *MakeHaRequest) (*MakeHaResponse, error)
 	EvictHa(context.Context, *EvictHaRequest) (*EvictHaResponse, error)
 	SetTiebreaker(context.Context, *SetTiebreakerRequest) (*SetTiebreakerResponse, error)
+	// Encrypted DRBD replication: prepare nodes (key, certificate from the
+	// controller's replication CA, tlshd), report their readiness, and switch a
+	// resource's connections over one link at a time.
+	SetupReplicationTLS(context.Context, *SetupReplicationTLSRequest) (*ReplicationTLSResponse, error)
+	GetReplicationTLSStatus(context.Context, *GetReplicationTLSStatusRequest) (*ReplicationTLSResponse, error)
+	SetResourceTLS(context.Context, *SetResourceTLSRequest) (*SetResourceTLSResponse, error)
 	AddDR(context.Context, *AddDRRequest) (*AddDRResponse, error)
 	AddReplica(context.Context, *AddReplicaRequest) (*AddReplicaResponse, error)
 	RemoveReplica(context.Context, *RemoveReplicaRequest) (*RemoveReplicaResponse, error)
@@ -2061,6 +2106,15 @@ func (UnimplementedSDSControllerServer) EvictHa(context.Context, *EvictHaRequest
 }
 func (UnimplementedSDSControllerServer) SetTiebreaker(context.Context, *SetTiebreakerRequest) (*SetTiebreakerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetTiebreaker not implemented")
+}
+func (UnimplementedSDSControllerServer) SetupReplicationTLS(context.Context, *SetupReplicationTLSRequest) (*ReplicationTLSResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetupReplicationTLS not implemented")
+}
+func (UnimplementedSDSControllerServer) GetReplicationTLSStatus(context.Context, *GetReplicationTLSStatusRequest) (*ReplicationTLSResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetReplicationTLSStatus not implemented")
+}
+func (UnimplementedSDSControllerServer) SetResourceTLS(context.Context, *SetResourceTLSRequest) (*SetResourceTLSResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetResourceTLS not implemented")
 }
 func (UnimplementedSDSControllerServer) AddDR(context.Context, *AddDRRequest) (*AddDRResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddDR not implemented")
@@ -3099,6 +3153,60 @@ func _SDSController_SetTiebreaker_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).SetTiebreaker(ctx, req.(*SetTiebreakerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetupReplicationTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetupReplicationTLSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetupReplicationTLS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetupReplicationTLS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetupReplicationTLS(ctx, req.(*SetupReplicationTLSRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetReplicationTLSStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetReplicationTLSStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetReplicationTLSStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetReplicationTLSStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetReplicationTLSStatus(ctx, req.(*GetReplicationTLSStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetResourceTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetResourceTLSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetResourceTLS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetResourceTLS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetResourceTLS(ctx, req.(*SetResourceTLSRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4854,6 +4962,18 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetTiebreaker",
 			Handler:    _SDSController_SetTiebreaker_Handler,
+		},
+		{
+			MethodName: "SetupReplicationTLS",
+			Handler:    _SDSController_SetupReplicationTLS_Handler,
+		},
+		{
+			MethodName: "GetReplicationTLSStatus",
+			Handler:    _SDSController_GetReplicationTLSStatus_Handler,
+		},
+		{
+			MethodName: "SetResourceTLS",
+			Handler:    _SDSController_SetResourceTLS_Handler,
 		},
 		{
 			MethodName: "AddDR",
