@@ -10,7 +10,7 @@ use warnings;
 no warnings 'once';    # the plugin's test seams are set, not read, from here
 
 use FindBin;
-use lib "$FindBin::Bin/lib";
+use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
 use MockClient;
