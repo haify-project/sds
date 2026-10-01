@@ -6,7 +6,7 @@ use strict;
 use warnings;
 
 use FindBin;
-use lib "$FindBin::Bin/lib";
+use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
 use Test::More tests => 22;

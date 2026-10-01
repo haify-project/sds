@@ -9,8 +9,9 @@ This is the Proxmox-side counterpart of the Kubernetes CSI driver in
 
 ## What it is
 
-A single Perl module (`SDSPlugin.pm`) that translates Proxmox storage API calls
-into sds-controller REST calls. It holds no storage logic of its own. It uses
+A Perl module (`SDSPlugin.pm`, with its REST client and naming helpers under
+`PVE/Storage/Custom/SDS/`) that translates Proxmox storage API calls into
+sds-controller REST calls. It holds no storage logic of its own. It uses
 `HTTP::Tiny` + `JSON::PP`, both of which ship with Proxmox VE, so a PVE node
 gains no new packages and needs no sds binaries.
 
@@ -37,7 +38,7 @@ On every PVE node:
 
 ```bash
 ./preflight.sh 192.168.1.10     # verify prerequisites first
-sudo ./install.sh               # copies the .pm, restarts pvedaemon + pveproxy
+sudo ./install.sh               # copies the modules, restarts pvedaemon + pveproxy
 ```
 
 Then add a storage entry once (storage.cfg is cluster-wide):

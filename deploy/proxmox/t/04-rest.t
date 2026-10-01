@@ -11,7 +11,7 @@ use warnings;
 no warnings 'once';
 
 use FindBin;
-use lib "$FindBin::Bin/lib";
+use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
 use MockClient;
@@ -20,7 +20,7 @@ use Test::More tests => 21;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P  = 'PVE::Storage::Custom::SDSPlugin';
-my $RC = 'PVE::Storage::Custom::SDSPlugin::RestClient';
+my $RC = 'PVE::Storage::Custom::SDS::Client';
 
 # --- a fake HTTP::Tiny ------------------------------------------------------
 
