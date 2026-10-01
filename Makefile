@@ -111,6 +111,8 @@ hooks:
 # is found here rather than after a push. Note CI checks plain `gofmt -l`, NOT
 # the stricter `gofmt -s` that `make fmt` applies.
 ci: ui-ensure
+	@echo "==> file size"
+	@./scripts/check-file-size.sh
 	@echo "==> gofmt"
 	@unformatted=$$(gofmt -l . | grep -vE '^(vendor|\.claude)/' || true); \
 		if [ -n "$$unformatted" ]; then \

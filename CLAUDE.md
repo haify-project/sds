@@ -194,10 +194,7 @@ written without `lifecycle.go`'s invariants looks correct and isn't.
 | `iscsi.go` + `iscsi_target.go` + `iscsi_acl.go` | iSCSI gateway — iSCSITarget/iSCSILogicalUnit agents; target and LUNs; initiator allow-list and CHAP |
 | `nvmeof.go` + `nvmeof_subsystem.go` + `nvmeof_hosts.go` | NVMe-oF gateway — nvmet-subsystem/nvmet-namespace agents; namespaces, subsystem and port; host allow-list |
 
-**Limitation**: Each file must be under 600 lines of code. This was silently
-broken for three files until 2026-09-02; check with `wc -l pkg/gateway/*.go`
-rather than assuming, and split by responsibility — an `iscsi_part2.go` obeys
-the number and defeats the point.
+**Limitation**: Each file must be under 600 lines — see "File size" below.
 
 ### Gateway Configuration
 
@@ -296,6 +293,18 @@ pvs
 - Always use structured logging with `zap.Logger`
 - Return errors with context using `fmt.Errorf("operation: %w", err)`
 - For multi-node operations, check `result.AllSuccess()` and `result.FailedHosts()`
+
+## File size
+
+**Every hand-written source file in the repo — Go, tests included, TypeScript,
+Perl, shell — must stay under 600 lines.** `make ci` enforces it
+(`scripts/check-file-size.sh`); generated code is exempt. When a file you are
+editing approaches the limit, split it by responsibility before adding to it —
+a name like `resource_part2.go` obeys the number and defeats the point.
+
+This used to be a gateway-only rule. Outside that package nothing stopped
+growth, and by 2026-10-01 `pkg/controller/resources.go` was 6032 lines and 33
+files were over the limit.
 
 ## Notes
 

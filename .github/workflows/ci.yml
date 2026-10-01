@@ -23,6 +23,9 @@ jobs:
       - name: Ensure embedded UI placeholder
         run: make ui-ensure
 
+      - name: file size
+        run: ./scripts/check-file-size.sh
+
       - name: gofmt
         run: |
           unformatted=$(gofmt -l .)
