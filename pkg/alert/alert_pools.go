@@ -1,0 +1,122 @@
+package alert
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/liliang-cn/sds/pkg/event"
+)
+
+// checkPools raises capacity conditions for every thin pool in the cluster.
+//
+// This is the one health signal that no other check can stand in for. A thin
+// pool that runs out of data space stops accepting writes; the kernel then
+// detaches the backing device, and DRBD reports Diskless on a node configured
+// diskful — which surfaces as a resource.degraded alert naming a *replica*
+// problem for what is really a *capacity* problem, and only once the damage is
+// done. Watching the pool is what makes it preventable.
+func (m *Monitor) checkPools(ctx context.Context, sc *pollScope, obs *Observation) {
+	if m.pools == nil {
+		return
+	}
+	obs.Pools.Enabled = true
+
+	start := time.Now()
+	pools, err := m.pools.GetPoolStatusList(ctx)
+	obs.Pools.Duration = time.Since(start)
+	if err != nil {
+		obs.Pools.Err = err
+		m.log.Warn("alert monitor: list pools failed", zap.Error(err))
+		return
+	}
+	obs.Pools.OK = true
+	obs.Pools.Items = pools
+	sc.poolsOK = true
+
+	for _, p := range pools {
+		// Recorded before the thin check, not after: a pool converted back to
+		// thick still exists, and saying it "no longer exists" when clearing its
+		// old capacity alert would send an operator looking for a deletion that
+		// never happened.
+		sc.livePools[poolKey(p.Name, p.Node)] = true
+
+		// A group with no thin pool has no utilisation to judge. Its vg_free is
+		// a real number, but it is also the number SDS drives to zero on
+		// purpose, so there is nothing here to alert on.
+		if p.ThinPool == "" {
+			continue
+		}
+		m.checkPoolDimension(p, sc, "data", p.DataPercent,
+			event.TypePoolDataNearFull, event.TypePoolDataFull)
+		m.checkPoolDimension(p, sc, "metadata", p.MetaPercent,
+			event.TypePoolMetadataNearFull, event.TypePoolMetadataFull)
+
+		m.level(event.Event{
+			Type:     event.TypePoolOutOfSpace,
+			Severity: event.SeverityCritical,
+			Resource: p.Name,
+			Node:     p.Node,
+			Details: map[string]string{
+				"thin_pool":        p.ThinPool,
+				"data_percent":     formatPercent(p.DataPercent),
+				"metadata_percent": formatPercent(p.MetaPercent),
+			},
+		}, sc, sourcePools, p.OutOfSpace,
+			fmt.Sprintf("pool %s on %s is out of data space: writes are failing and any DRBD replica on it will drop to Diskless", p.Name, p.Node),
+			fmt.Sprintf("pool %s on %s is no longer out of data space", p.Name, p.Node))
+	}
+}
+
+// checkPoolDimension raises the near-full and full conditions for one
+// utilisation dimension of one pool.
+//
+// The two are mutually exclusive by construction: near-full is only active
+// below the critical threshold, so crossing it resolves the warning in the same
+// poll that raises the critical. Reporting both at once would double every
+// notification at the moment it matters most.
+func (m *Monitor) checkPoolDimension(p PoolStatusInfo, sc *pollScope, dimension string, percent float64, nearType, fullType event.Type) {
+	details := func() map[string]string {
+		return map[string]string{
+			"thin_pool": p.ThinPool,
+			"dimension": dimension,
+			"percent":   formatPercent(percent),
+			"threshold": formatPercent(m.nearFull) + "/" + formatPercent(m.full),
+		}
+	}
+
+	m.level(event.Event{
+		Type:     fullType,
+		Severity: event.SeverityCritical,
+		Resource: p.Name,
+		Node:     p.Node,
+		Details:  details(),
+	}, sc, sourcePools, percent >= m.full,
+		fmt.Sprintf("pool %s on %s is %s%% %s used: extend it or free space now — a full DRBD resync of the volumes it holds reallocates every block and may not fit",
+			p.Name, p.Node, formatPercent(percent), dimension),
+		fmt.Sprintf("pool %s on %s %s usage is back under %s%%", p.Name, p.Node, dimension, formatPercent(m.full)))
+
+	m.level(event.Event{
+		Type:     nearType,
+		Severity: event.SeverityWarning,
+		Resource: p.Name,
+		Node:     p.Node,
+		Details:  details(),
+	}, sc, sourcePools, percent >= m.nearFull && percent < m.full,
+		fmt.Sprintf("pool %s on %s is %s%% %s used: plan an extension", p.Name, p.Node, formatPercent(percent), dimension),
+		fmt.Sprintf("pool %s on %s %s usage is back under %s%%", p.Name, p.Node, dimension, formatPercent(m.nearFull)))
+}
+
+// formatPercent renders a utilisation figure the way LVM reports it, to two
+// decimal places, so an event repeats what an operator will see in `lvs`.
+func formatPercent(v float64) string {
+	return strconv.FormatFloat(v, 'f', 2, 64)
+}
+
+// poolKey identifies a pool by name and node. A pool name is only unique within
+// a node — every node in this cluster has an "sds_sdspool" — so the node is
+// part of the identity, not a label on it.
+func poolKey(name, node string) string { return name + "@" + node }
