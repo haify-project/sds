@@ -1,0 +1,262 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"go.uber.org/zap"
+)
+
+// nextGlobalMinor returns the lowest unused DRBD device minor on host,
+// derived from every resource config present: minors are a node-global
+// namespace and drbdadm rejects configs that reuse one.
+// findPortConflict returns the name of an existing DRBD resource on host that
+// already binds the given TCP port, or "" if the port is free. The resource
+// being created (selfName) is ignored so re-runs don't flag themselves.
+func (rm *ResourceManager) findPortConflict(ctx context.Context, host string, port uint32, selfName string) (string, error) {
+	cmd := fmt.Sprintf("grep -lE 'address[^;]*:%d;' /etc/drbd.d/*.res 2>/dev/null || true", port)
+	result, err := rm.deployment.Exec(ctx, []string{host}, cmd)
+	if err != nil {
+		return "", err
+	}
+	for _, hr := range result.Hosts {
+		for _, line := range strings.Split(hr.Output, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			base := strings.TrimSuffix(filepath.Base(line), ".res")
+			if base != selfName {
+				return base, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// nextGlobalMinor returns a device minor free on EVERY given host.
+//
+// Minors are a node-global namespace, and a resource's minor has to be free on
+// all of its nodes — not just the first one. Probing a single host picks a
+// minor that some *other* participating node already uses for an unrelated
+// resource, and drbdadm rejects the whole config at create-md time with
+// "conflicting use of device-minor". That is easy to miss while every resource
+// spans the same node set, and shows up as soon as one node carries a resource
+// the others do not (a WAN/DR pair, a node added later).
+//
+// Scanning only .res files also misses minors still held by the kernel from a
+// previously-removed resource: its config is gone but the /dev/drbdN node
+// lingers and the minor stays "configured", so reusing it makes create-md fail
+// with "Device 'N' is configured". Take the max over both the configs and the
+// live /dev/drbd* device nodes, across all hosts.
+// assertMinorsFreeOn checks that every device minor `resource` uses is free on
+// `host`, and returns a diagnosable error naming the squatter if not.
+//
+// Minors are allocated once, at create time, over the hosts the resource had
+// *then*. Every later operation that pulls an additional node in — a quorum
+// tiebreaker being moved, a diskless client attaching — inherits those minors
+// without checking whether the incoming node already uses them for something
+// else. When it does, DRBD refuses with "Minor or volume exists already
+// (delete it first)" from deep inside a drbdsetup invocation, long after the
+// config has been distributed. Failing here instead says which resource is in
+// the way, before anything is changed.
+func (rm *ResourceManager) assertMinorsFreeOn(ctx context.Context, host, resource string, minors []int) error {
+	if len(minors) == 0 {
+		return nil
+	}
+	// List every minor the node already has, with the resource that owns it.
+	// drbdsetup covers minors held by the kernel even when no .res mentions
+	// them (a removed resource whose device node lingers).
+	cmd := "grep -H -E '^[[:space:]]*device[[:space:]]+minor' /etc/drbd.d/*.res 2>/dev/null; " +
+		"sudo drbdsetup show --show-defaults 2>/dev/null | grep -E 'volume|device' || true"
+	res, err := rm.deployment.Exec(ctx, []string{host}, cmd)
+	if err != nil {
+		// A node we cannot inspect is a node we cannot vouch for, but refusing
+		// the whole operation on a transient SSH hiccup is worse than letting
+		// DRBD be the backstop.
+		rm.controller.logger.Warn("Could not verify device minors on node; proceeding",
+			zap.String("host", host), zap.String("resource", resource), zap.Error(err))
+		return nil
+	}
+
+	want := make(map[int]bool, len(minors))
+	for _, m := range minors {
+		want[m] = true
+	}
+
+	for _, hr := range res.Hosts {
+		for _, line := range strings.Split(hr.Output, "\n") {
+			minor, ok := parseAnyDeviceMinor(line)
+			if !ok || !want[minor] {
+				continue
+			}
+			// A line from `grep -H` is "<path>:<the device line>"; the path
+			// names the owning resource. Our own resource re-appearing is fine
+			// (a re-run of the same operation).
+			owner := ""
+			if idx := strings.Index(line, ".res:"); idx > 0 {
+				owner = filepath.Base(line[:idx+4])
+				owner = strings.TrimSuffix(owner, ".res")
+			}
+			if owner == resource {
+				continue
+			}
+			if owner == "" {
+				owner = "another resource or a stale device node"
+			}
+			return fmt.Errorf("device minor %d needed by %q is already used on %s by %s; "+
+				"free it there (drbdadm down + remove its .res) or recreate %q on a free minor",
+				minor, resource, host, owner, resource)
+		}
+	}
+	return nil
+}
+
+// deviceMinorRe finds a `device ... minor N` anywhere in a line.
+//
+// parseDeviceMinor only matches a line that *starts* with `device`, which is
+// true of a generated .res but not of the two forms this code has to read:
+// `grep -H` output ("<path>:        device minor 2;") and an inline volume
+// stanza ("volume 0 { device minor 3; }").
+var deviceMinorRe = regexp.MustCompile(`\bdevice\b[^;{}]*\bminor\s+(\d+)`)
+
+// parseAnyDeviceMinor extracts a device minor from anywhere in a line.
+func parseAnyDeviceMinor(line string) (int, bool) {
+	m := deviceMinorRe.FindStringSubmatch(line)
+	if m == nil {
+		return 0, false
+	}
+	minor, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return minor, true
+}
+
+// resourceMinors reports the device minors a resource's live config uses, in
+// file order, deduplicated (every node's `on` stanza repeats the same minors).
+func resourceMinors(config string) []int {
+	var minors []int
+	seen := make(map[int]bool)
+	for _, line := range strings.Split(config, "\n") {
+		if m, ok := parseAnyDeviceMinor(line); ok && !seen[m] {
+			seen[m] = true
+			minors = append(minors, m)
+		}
+	}
+	return minors
+}
+
+func (rm *ResourceManager) nextGlobalMinor(ctx context.Context, hosts []string) (int, error) {
+	if len(hosts) == 0 {
+		return 0, fmt.Errorf("no hosts to allocate a device minor on")
+	}
+	result, err := rm.deployment.Exec(ctx, hosts,
+		"cat /etc/drbd.d/*.res 2>/dev/null; ls -1d /dev/drbd[0-9]* 2>/dev/null || true")
+	if err != nil {
+		return 0, err
+	}
+	maxMinor := -1
+	for _, hr := range result.Hosts {
+		for _, line := range strings.Split(hr.Output, "\n") {
+			if minor, ok := parseDeviceMinor(line); ok && minor > maxMinor {
+				maxMinor = minor
+			}
+			if minor, ok := parseDevNodeMinor(line); ok && minor > maxMinor {
+				maxMinor = minor
+			}
+		}
+	}
+	return maxMinor + 1, nil
+}
+
+var portLineRe = regexp.MustCompile(`:(\d+);`)
+
+// parsePortsFromResConfigs extracts DRBD ports from the `address ...:<port>;`
+// lines of concatenated .res file contents.
+func parsePortsFromResConfigs(text string) []uint32 {
+	var ports []uint32
+	for _, m := range portLineRe.FindAllStringSubmatch(text, -1) {
+		if p, err := strconv.Atoi(m[1]); err == nil {
+			ports = append(ports, uint32(p))
+		}
+	}
+	return ports
+}
+
+// lowestFreePort returns the lowest port >= base not present in used.
+func lowestFreePort(used []uint32, base uint32) uint32 {
+	set := map[uint32]bool{}
+	for _, p := range used {
+		set[p] = true
+	}
+	for p := base; ; p++ {
+		if !set[p] {
+			return p
+		}
+	}
+}
+
+// nextGlobalPort scans existing .res files on host and returns the lowest free
+// DRBD port at or above 7000.
+func (rm *ResourceManager) nextGlobalPort(ctx context.Context, host string) (uint32, error) {
+	result, err := rm.deployment.Exec(ctx, []string{host}, "cat /etc/drbd.d/*.res 2>/dev/null || true")
+	if err != nil {
+		return 0, err
+	}
+	text := ""
+	for _, hr := range result.Hosts {
+		text += hr.Output
+	}
+	return lowestFreePort(parsePortsFromResConfigs(text), 7000), nil
+}
+
+// parseDevNodeMinor extracts N from a DRBD device node path like
+// "/dev/drbd1005", ignoring the symlink tree under /dev/drbd/.
+func parseDevNodeMinor(line string) (int, bool) {
+	trimmed := strings.TrimSpace(line)
+	const prefix = "/dev/drbd"
+	if !strings.HasPrefix(trimmed, prefix) {
+		return 0, false
+	}
+	rest := strings.TrimPrefix(trimmed, prefix)
+	if rest == "" || !isAllDigits(rest) {
+		return 0, false
+	}
+	n, err := strconv.Atoi(rest)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func isAllDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// parseDeviceMinor extracts N from DRBD config lines like
+// "device minor 7;" or "device /dev/drbd7 minor 7;" regardless of spacing.
+func parseDeviceMinor(line string) (int, bool) {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "device") || !strings.Contains(trimmed, "minor") {
+		return 0, false
+	}
+	fields := strings.Fields(trimmed)
+	for i, f := range fields {
+		if f == "minor" && i+1 < len(fields) {
+			if minor, err := strconv.Atoi(strings.TrimSuffix(fields[i+1], ";")); err == nil {
+				return minor, true
+			}
+		}
+	}
+	return 0, false
+}

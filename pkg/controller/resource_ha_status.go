@@ -1,0 +1,301 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/liliang-cn/sds/pkg/deployment"
+	"go.uber.org/zap"
+)
+
+// findActiveNode finds the node where the DRBD resource is currently Primary
+func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, hosts []string) (string, error) {
+	rm.controller.logger.Info("findActiveNode called",
+		zap.String("resource", resource),
+		zap.Int("hosts_count", len(hosts)))
+
+	// Prefer drbd-reactor's structured JSON status for HA resources when available.
+	for _, host := range hosts {
+		promoter, err := rm.deployment.ReactorPromoterStatusByResource(ctx, host, resource)
+		if err != nil || promoter == nil {
+			continue
+		}
+		if promoter.PrimaryOn != "" {
+			if primaryHost := rm.getNodeHost(promoter.PrimaryOn); primaryHost != "" {
+				rm.controller.logger.Info("Found active node from reactor status",
+					zap.String("resource", resource),
+					zap.String("primary_on", promoter.PrimaryOn),
+					zap.String("resolved_host", primaryHost))
+				return primaryHost, nil
+			}
+			rm.controller.logger.Info("Using reactor primary_on directly",
+				zap.String("resource", resource),
+				zap.String("primary_on", promoter.PrimaryOn))
+			return promoter.PrimaryOn, nil
+		}
+	}
+
+	var localHostname string
+
+	// First, check local node using os/exec (not dispatch)
+	// Get local hostname
+	hostnameBytes, err := exec.Command("hostname").Output()
+	if err != nil {
+		rm.controller.logger.Warn("Failed to get local hostname", zap.Error(err))
+		localHostname = ""
+	} else {
+		localHostname = strings.TrimSpace(string(hostnameBytes))
+		rm.controller.logger.Info("Local hostname", zap.String("hostname", localHostname))
+
+		// Check if local node is Primary
+		// No need for sudo since sds-controller runs as root
+		checkCmd := exec.Command("drbdsetup", "status", resource)
+		output, err := checkCmd.Output()
+		if err != nil {
+			// Only an ExitError carries Stderr; a missing binary yields an
+			// *exec.Error, so guard the type assertion (it used to panic when
+			// drbdsetup was absent, e.g. in unit tests).
+			var stderr string
+			if ee, ok := err.(*exec.ExitError); ok {
+				stderr = string(ee.Stderr)
+			}
+			rm.controller.logger.Warn("Failed to check local DRBD status",
+				zap.Error(err),
+				zap.String("stderr", stderr))
+		} else {
+			lines := strings.Split(string(output), "\n")
+			rm.controller.logger.Info("Local DRBD status",
+				zap.String("first_line", lines[0]),
+				zap.Int("line_count", len(lines)))
+			if len(lines) > 0 && strings.Contains(lines[0], "role:Primary") {
+				rm.controller.logger.Info("Local node is Primary",
+					zap.String("hostname", localHostname))
+				return localHostname, nil
+			}
+			rm.controller.logger.Info("Local node is not Primary, checking remote hosts")
+		}
+	}
+
+	rm.controller.logger.Info("Checking remote hosts",
+		zap.Strings("hosts", hosts),
+		zap.String("local_hostname", localHostname))
+
+	for _, host := range hosts {
+		// Skip if this is the local host
+		if host == localHostname {
+			rm.controller.logger.Info("Skipping local host",
+				zap.String("host", host))
+			continue
+		}
+
+		rm.controller.logger.Info("Checking remote host via dispatch",
+			zap.String("host", host),
+			zap.String("resource", resource))
+
+		// Get DRBD role - check if this host is Primary
+		cmd := fmt.Sprintf("drbdadm status %s", resource)
+		result, err := rm.deployment.Exec(ctx, []string{host}, cmd)
+		if err != nil {
+			rm.controller.logger.Debug("Failed to check DRBD status",
+				zap.String("host", host),
+				zap.Error(err))
+			continue
+		}
+
+		// Parse DRBD status output to find the Primary node
+		if result != nil && len(result.Hosts) > 0 {
+			for _, hr := range result.Hosts {
+				if !hr.Success {
+					continue
+				}
+				output := string(hr.Output)
+				rm.controller.logger.Debug("Host result",
+					zap.String("host", host),
+					zap.Bool("success", hr.Success),
+					zap.String("output", output))
+
+				// Parse DRBD status to find which node is Primary
+				// Output format:
+				//   resource_name role:Secondary
+				//     nodename1 role:Primary
+				//     nodename2 role:Secondary
+				lines := strings.Split(output, "\n")
+				rm.controller.logger.Debug("Parsing DRBD status",
+					zap.String("host", host),
+					zap.Int("line_count", len(lines)))
+				for i, line := range lines {
+					trimmed := strings.TrimSpace(line)
+					rm.controller.logger.Debug("Checking DRBD line",
+						zap.String("host", host),
+						zap.Int("line_index", i),
+						zap.String("line", trimmed))
+					// Check if this line defines a node's role
+					// Format: "nodename role:Role" or "resource role:Role"
+					if strings.Contains(trimmed, " role:Primary") {
+						parts := strings.SplitN(trimmed, " ", 2)
+						rm.controller.logger.Debug("Split result",
+							zap.Int("parts_count", len(parts)),
+							zap.String("part0", parts[0]),
+							zap.String("part1", parts[1]))
+						if len(parts) >= 2 && strings.HasPrefix(parts[1], "role:Primary") {
+							primaryNode := strings.TrimSpace(parts[0])
+							rm.controller.logger.Info("Found Primary node",
+								zap.String("primary_node", primaryNode),
+								zap.String("original_line", trimmed))
+
+							// Get IP/hostname for the primary node
+							primaryHost := rm.getNodeHost(primaryNode)
+							if primaryHost != "" {
+								rm.controller.logger.Info("Resolved primary node to host",
+									zap.String("node", primaryNode),
+									zap.String("host", primaryHost))
+								return primaryHost, nil
+							}
+							// If not found in hosts map, return the node name directly
+							rm.controller.logger.Info("Using node name directly",
+								zap.String("node", primaryNode))
+							return primaryNode, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no active (Primary) node found for resource %s", resource)
+}
+
+// HaPromoterStatus is the controller-side mirror of deployment.ReactorPromoterStatus,
+// used to pass structured reactor status over gRPC without importing deployment into proto.
+type HaPromoterStatus struct {
+	DRBDResource string
+	PrimaryOn    string
+	Status       string
+	Target       HaServiceStatus
+	Deps         []HaServiceStatus
+}
+
+// HaServiceStatus holds the name and systemd state of one HA dependency.
+type HaServiceStatus struct {
+	Name   string
+	Status string
+}
+
+// GetHaStatus queries the reactor promoter status for one or all HA resources.
+// It resolves the primary node for each resource from the DRBD layer, then
+// SSH-dispatches `drbd-reactorctl status --json` to that node so the status
+// reflects the node that is actually running the services.
+func (rm *ResourceManager) GetHaStatus(ctx context.Context, resource string) ([]*HaPromoterStatus, error) {
+	if rm.controller.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+
+	var configs []*database.HaConfig
+	if resource == "" {
+		var err error
+		configs, err = rm.controller.db.ListHaConfigs(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list HA configs: %w", err)
+		}
+	} else {
+		cfg, err := rm.controller.db.GetHaConfig(ctx, resource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get HA config: %w", err)
+		}
+		if cfg != nil {
+			configs = append(configs, cfg)
+		}
+	}
+
+	// Build a map from resource name → host list (resolved addresses).
+	type resourceHosts struct {
+		name  string
+		hosts []string
+	}
+	var targets []resourceHosts
+	for _, cfg := range configs {
+		dbRes, err := rm.controller.db.GetResource(ctx, cfg.Resource)
+		if err != nil || dbRes == nil {
+			continue
+		}
+		nodes := strings.Split(dbRes.Nodes, ",")
+		hosts := make([]string, 0, len(nodes))
+		for _, n := range nodes {
+			if h := rm.controller.ResolveHost(strings.TrimSpace(n)); h != "" {
+				hosts = append(hosts, h)
+			}
+		}
+		if len(hosts) > 0 {
+			targets = append(targets, resourceHosts{name: cfg.Resource, hosts: hosts})
+		}
+	}
+
+	// For each resource, find its primary node and fetch reactor status from there.
+	// We cache reactor status per host to avoid redundant SSH calls.
+	type reactorKey = string
+	reactorCache := make(map[reactorKey]*deployment.ReactorStatus)
+
+	getReactorStatus := func(host string) (*deployment.ReactorStatus, error) {
+		if s, ok := reactorCache[host]; ok {
+			return s, nil
+		}
+		s, err := rm.deployment.ReactorStatusJSON(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		reactorCache[host] = s
+		return s, nil
+	}
+
+	var result []*HaPromoterStatus
+	for _, t := range targets {
+		// Try each host until we find a reactor that knows the primary.
+		// On the primary host, target.status == "active"; on standbys it's "inactive".
+		// We want the primary host's perspective.
+		var best *deployment.ReactorPromoterStatus
+		for _, host := range t.hosts {
+			rs, err := getReactorStatus(host)
+			if err != nil {
+				continue
+			}
+			for i := range rs.Promoter {
+				p := &rs.Promoter[i]
+				if p.DRBDResource != t.name {
+					continue
+				}
+				// Prefer the promoter entry that is itself active (i.e. we are on the primary).
+				if best == nil || p.Status == "active" {
+					best = p
+				}
+				if p.Status == "active" {
+					break
+				}
+			}
+			if best != nil && best.Status == "active" {
+				break
+			}
+		}
+		if best == nil {
+			continue
+		}
+
+		ps := &HaPromoterStatus{
+			DRBDResource: best.DRBDResource,
+			PrimaryOn:    best.PrimaryOn,
+			Status:       best.Status,
+			Target: HaServiceStatus{
+				Name:   best.Target.Name,
+				Status: best.Target.Status,
+			},
+		}
+		for _, d := range best.Dependencies {
+			ps.Deps = append(ps.Deps, HaServiceStatus{Name: d.Name, Status: d.Status})
+		}
+		result = append(result, ps)
+	}
+
+	return result, nil
+}

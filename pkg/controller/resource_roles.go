@@ -1,0 +1,361 @@
+package controller
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"go.uber.org/zap"
+)
+
+// SetPrimary sets a resource to Primary on the specified node
+func (rm *ResourceManager) SetPrimary(ctx context.Context, resource, node string, force bool) error {
+	// Resolve node name to address
+	address := rm.controller.ResolveHost(node)
+
+	rm.controller.logger.Info("Setting resource primary",
+		zap.String("resource", resource),
+		zap.String("node", node),
+		zap.String("address", address),
+		zap.Bool("force", force))
+
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+
+	result, err := rm.deployment.DRBDPrimary(ctx, address, resource, force)
+	if err == nil && result.Success {
+		return nil
+	}
+	if force && err == nil && rm.isDRNodeOf(ctx, resource, node) &&
+		strings.Contains(result.Output, "Multiple primaries not allowed") {
+		// A forced promote of a WAN resource's DR node is a DR failover: the
+		// operator has declared the primary site lost. The DR's DRBD talks to
+		// a proxy on its own loopback, which stays up when the far side dies,
+		// so it keeps believing the old primary is Primary until its ping
+		// timeout runs out — tens of seconds on a WAN profile — and refuses to
+		// promote in the meantime. Cut it loose from the primary site first,
+		// with --force: a clean disconnect negotiates with the peer, which is
+		// the one thing that cannot answer.
+		rm.controller.logger.Warn("DR failover: disconnecting the DR node from the primary site before promoting",
+			zap.String("resource", resource), zap.String("node", node))
+		if derr := rm.execAllSuccess(ctx, []string{address}, "sudo drbdadm disconnect --force "+resource,
+			"disconnect the DR node from the primary site"); derr != nil {
+			return derr
+		}
+		result, err = rm.deployment.DRBDPrimary(ctx, address, resource, true)
+		if err == nil && result.Success {
+			return nil
+		}
+	}
+
+	// A brand-new resource comes up Inconsistent on every node with NO UpToDate
+	// replica anywhere, so a normal `drbdsetup primary` fails with "Need access
+	// to UpToDate data" (exit 17). This is the initial-sync case: there is no
+	// good data to lose, so force-promote ONCE to establish the first UpToDate
+	// copy and kick off the initial sync — after which the resource can be
+	// demoted/managed normally. A resource created for a gateway never gets a
+	// filesystem step (which is where the CSI path already force-primaries), so
+	// without this its promote would always fail. The force is strictly scoped
+	// to the no-UpToDate-anywhere case: a normal failover (some replica still
+	// UpToDate) is never force-promoted here, preserving the split-brain guards
+	// in PromoteForNode.
+	if !force {
+		needsForce, ferr := rm.resourceNeedsInitialForce(ctx, resource, address)
+		if ferr != nil {
+			rm.controller.logger.Warn("Could not determine initial-sync state after a failed promote; not forcing",
+				zap.String("resource", resource), zap.String("node", node), zap.Error(ferr))
+		} else if needsForce {
+			rm.controller.logger.Warn("Resource has a volume with no UpToDate copy anywhere (fresh initial sync); force-promoting to establish UpToDate",
+				zap.String("resource", resource), zap.String("node", node))
+			forced, fErr := rm.deployment.DRBDPrimary(ctx, address, resource, true)
+			if fErr != nil {
+				return fmt.Errorf("failed to force-promote initial-sync resource on %s: %w", node, fErr)
+			}
+			if !forced.Success {
+				return fmt.Errorf("failed to force-promote initial-sync resource on %s: %s", node, forced.Output)
+			}
+			return nil
+		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to set primary: %w", err)
+	}
+	return fmt.Errorf("failed to set primary on %s: %s", node, result.Output)
+}
+
+// isDRNodeOf reports whether node is the DR node of a WAN resource.
+func (rm *ResourceManager) isDRNodeOf(ctx context.Context, resource, node string) bool {
+	if rm.controller.db == nil {
+		return false
+	}
+	r, err := rm.controller.db.GetResource(ctx, resource)
+	if err != nil || r == nil {
+		return false
+	}
+	return r.WANMode && r.DRNode != "" &&
+		(r.DRNode == node || rm.controller.ResolveHost(r.DRNode) == rm.controller.ResolveHost(node))
+}
+
+// resourceNeedsInitialForce reports whether a failed non-forced promote should
+// be escalated to `drbdadm primary --force`, decided PER VOLUME from
+// `drbdsetup status <res> --json` on the given node address. It returns true
+// only when the resource is in the fresh initial-sync state — at least one local
+// volume is not UpToDate AND has no UpToDate copy on any peer — AND forcing is
+// safe for every volume (no volume is locally non-UpToDate while a peer holds a
+// real UpToDate copy, which a blanket force would overwrite). Any failure to
+// read or parse returns an error so the caller fails closed (never forces on
+// uncertainty).
+func (rm *ResourceManager) resourceNeedsInitialForce(ctx context.Context, resource, address string) (bool, error) {
+	if rm.deployment == nil {
+		return false, fmt.Errorf("deployment client not set")
+	}
+	res, err := rm.deployment.DRBDStatusJSON(ctx, []string{address}, resource)
+	if err != nil {
+		return false, fmt.Errorf("read drbd status on %s: %w", address, err)
+	}
+	for _, r := range res.Hosts {
+		if !r.Success {
+			return false, fmt.Errorf("drbd status on %s failed: %s", address, r.Output)
+		}
+		return safeToForceInitialSync(r.Output)
+	}
+	return false, fmt.Errorf("no drbd status result returned for %s", address)
+}
+
+// safeToForceInitialSync parses `drbdsetup status <res> --json` (an array of
+// resources, each with per-volume devices[] and per-connection peer_devices[])
+// and decides, per volume, whether a resource-level force-promote is BOTH
+// needed and safe.
+//
+// The check is per volume — crucially, a single UpToDate volume must NOT mask a
+// sibling volume that has no UpToDate data. A gateway auto-adds a state volume
+// (volume 1) that becomes UpToDate during its add, while the data volume
+// (volume 0) is still Inconsistent everywhere; a resource-level "is any replica
+// UpToDate" test is fooled by volume 1 and wrongly refuses the force that
+// volume 0 needs. For each LOCAL device:
+//   - already UpToDate    -> a force cannot harm it; ignore.
+//   - not UpToDate, a peer holds an UpToDate copy of THIS volume -> forcing
+//     would overwrite that peer's real data from our stale copy: UNSAFE, so
+//     refuse the force entirely (normal failover / resync, not initial sync).
+//   - not UpToDate, no peer holds an UpToDate copy of THIS volume -> a fresh
+//     unsynced volume with no data to lose: force is needed and safe for it.
+//
+// Returns true only if at least one volume needs the force and NO volume made it
+// unsafe. Empty/unparseable input returns an error so callers fail closed.
+func safeToForceInitialSync(output string) (bool, error) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return false, fmt.Errorf("empty drbdsetup status json")
+	}
+	var resources []drbdsetupStatus
+	if err := json.Unmarshal([]byte(trimmed), &resources); err != nil {
+		return false, fmt.Errorf("decode drbdsetup status json: %w", err)
+	}
+	if len(resources) == 0 {
+		return false, fmt.Errorf("drbdsetup status json contained no resources")
+	}
+	res := resources[0]
+	if len(res.Devices) == 0 {
+		return false, fmt.Errorf("drbdsetup status json reported no local devices")
+	}
+
+	// Per volume: does any peer hold an UpToDate copy?
+	peerUpToDate := make(map[int]bool)
+	for _, conn := range res.Connections {
+		for _, pd := range conn.PeerDevices {
+			if pd.PeerDiskState == "UpToDate" {
+				peerUpToDate[pd.Volume] = true
+			}
+		}
+	}
+
+	needForce := false
+	for _, dev := range res.Devices {
+		if dev.DiskState == "UpToDate" {
+			continue
+		}
+		if peerUpToDate[dev.Volume] {
+			// A peer has real UpToDate data for this volume that a blanket
+			// force-primary would destroy: refuse to force the whole resource.
+			return false, nil
+		}
+		// This volume has no UpToDate copy anywhere: fresh, nothing to lose.
+		needForce = true
+	}
+	return needForce, nil
+}
+
+// establishInitialSync force-promotes a brand-new resource on the given diskful
+// node address and immediately demotes it, so all of its volumes reach UpToDate
+// and its peers get a sync source. It is only ever called right after a fresh
+// create-md + up, where every replica is Inconsistent and forcing loses no data.
+// After it returns, the resource is Secondary+UpToDate and can be promoted with
+// a plain, non-forced promote.
+func (rm *ResourceManager) establishInitialSync(ctx context.Context, resource, address string) error {
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+	rm.controller.logger.Info("Establishing initial UpToDate generation (force-primary then demote)",
+		zap.String("resource", resource), zap.String("address", address))
+
+	forced, err := rm.deployment.DRBDPrimary(ctx, address, resource, true)
+	if err != nil {
+		return fmt.Errorf("force-promote for initial sync: %w", err)
+	}
+	if !forced.Success {
+		return fmt.Errorf("force-promote for initial sync on %s: %s", address, forced.Output)
+	}
+
+	demoted, err := rm.deployment.DRBDSecondary(ctx, address, resource)
+	if err != nil {
+		return fmt.Errorf("demote after initial sync: %w", err)
+	}
+	if !demoted.Success {
+		return fmt.Errorf("demote after initial sync on %s: %s", address, demoted.Output)
+	}
+	return nil
+}
+
+// SetSecondary sets a resource to Secondary on the specified node
+func (rm *ResourceManager) SetSecondary(ctx context.Context, resource, node string) error {
+	address := rm.controller.ResolveHost(node)
+
+	rm.controller.logger.Info("Setting resource secondary",
+		zap.String("resource", resource),
+		zap.String("node", node),
+		zap.String("address", address))
+
+	if rm.deployment == nil {
+		return fmt.Errorf("deployment client not set")
+	}
+
+	result, err := rm.deployment.DRBDSecondary(ctx, address, resource)
+	if err != nil {
+		return fmt.Errorf("failed to set secondary: %w", err)
+	}
+
+	if !result.Success {
+		// DRBD says why — "Device is held open by someone" when the volume is
+		// mounted or a service has it — and a caller cannot act on a bare
+		// "failed"; a drain that stops here is asking for exactly that.
+		return fmt.Errorf("failed to set secondary on %s: %s", node, hostFailure(result))
+	}
+
+	return nil
+}
+
+// PromoteForNode performs a SAFE hard-failover promote of a resource on a node.
+//
+// Why this exists: on a GRACEFUL move the old Primary demotes first, so a plain
+// (non-forced) promote on the new node succeeds. On a HARD failure the old
+// Primary is gone/uncontactable and was never demoted, so a non-forced promote
+// FAILS and the volume never comes up — no automatic failover. Blindly forcing
+// would risk a dual-Primary split-brain if the "failed" node is actually alive
+// behind a network partition.
+//
+// The safe rule is DRBD-native: rely on quorum. sds configures resources with
+// `quorum majority` + `on-no-quorum io-error` and auto-adds a diskless
+// tiebreaker to 2-node resources, giving a 3-way majority. A hard-failed or
+// partitioned old Primary that cannot reach the majority LOSES quorum and its
+// DRBD blocks all I/O, so it cannot serve stale writes. Therefore it is safe to
+// force-promote a surviving Secondary IFF that survivor currently holds quorum.
+//
+// Algorithm:
+//
+//	(a) try a normal, non-forced promote — the safe graceful path;
+//	(b) if it fails (a peer still holds Primary / is unreachable), read this
+//	    node's DRBD quorum flag via `drbdsetup status --json`;
+//	(c) only if quorum == true, retry with `drbdadm primary --force`;
+//	(d) if quorum == false (or unknown), REFUSE with an error — promoting
+//	    without quorum could split-brain.
+func (rm *ResourceManager) PromoteForNode(ctx context.Context, resource, node string) error {
+	// (a) Safe path: a plain promote succeeds on a graceful move (old Primary
+	// already Secondary) and on any node that can already take Primary. This
+	// path is unchanged from the previous non-forced behavior.
+	if err := rm.SetPrimary(ctx, resource, node, false); err == nil {
+		return nil
+	} else {
+		rm.controller.logger.Warn("Normal promote failed; evaluating quorum before any force-promote",
+			zap.String("resource", resource), zap.String("node", node), zap.Error(err))
+
+		// (b) The promote failed — most likely a hard failover where the old
+		// Primary was never demoted. Decide whether forcing is safe by checking
+		// whether THIS node currently holds DRBD quorum.
+		hasQuorum, qErr := rm.nodeHasQuorum(ctx, resource, node)
+		if qErr != nil {
+			// We cannot prove quorum, so we must not force.
+			return fmt.Errorf("refusing to force-promote %s on %s: normal promote failed (%v) and DRBD quorum could not be determined: %w",
+				resource, node, err, qErr)
+		}
+		if !hasQuorum {
+			// (d) No quorum -> refuse. Forcing here could create a dual-Primary
+			// split-brain if the peer that holds Primary is alive behind a
+			// partition. A quorate peer, if any, is the one that should promote.
+			return fmt.Errorf("refusing to force-promote %s on %s: node does NOT hold DRBD quorum (majority); forcing could cause split-brain / dual-Primary data corruption (original promote error: %v)",
+				resource, node, err)
+		}
+
+		// (c) Quorum held -> safe to force. Any old/partitioned Primary that lost
+		// quorum is blocked from I/O by on-no-quorum=io-error and cannot serve
+		// stale writes, so this node can safely become the sole Primary.
+		rm.controller.logger.Warn("Node holds DRBD quorum; force-promoting for hard failover",
+			zap.String("resource", resource), zap.String("node", node))
+		if fErr := rm.SetPrimary(ctx, resource, node, true); fErr != nil {
+			return fmt.Errorf("force-promote %s on %s (quorum held): %w", resource, node, fErr)
+		}
+		return nil
+	}
+}
+
+// nodeHasQuorum reports whether the given node currently holds DRBD quorum for
+// the resource, read live from `drbdsetup status <res> --json` on that node.
+// Any failure to read or parse the status returns an error (never a false
+// "has quorum"), so callers guarding a force-promote fail closed.
+func (rm *ResourceManager) nodeHasQuorum(ctx context.Context, resource, node string) (bool, error) {
+	if rm.deployment == nil {
+		return false, fmt.Errorf("deployment client not set")
+	}
+	address := rm.controller.ResolveHost(node)
+	res, err := rm.deployment.DRBDStatusJSON(ctx, []string{address}, resource)
+	if err != nil {
+		return false, fmt.Errorf("read drbd status on %s: %w", node, err)
+	}
+	for _, r := range res.Hosts {
+		if !r.Success {
+			return false, fmt.Errorf("drbd status on %s failed: %s", node, r.Output)
+		}
+		return localNodeHasQuorum(r.Output)
+	}
+	return false, fmt.Errorf("no drbd status result returned for %s", node)
+}
+
+// localNodeHasQuorum parses `drbdsetup status <res> --json` and reports whether
+// the local (queried) node holds quorum. It requires every local device to
+// explicitly report quorum:true; if any device is missing the field or reports
+// false, it returns false so a guarded force-promote fails closed.
+func localNodeHasQuorum(output string) (bool, error) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return false, fmt.Errorf("empty drbdsetup status json")
+	}
+	var resources []drbdsetupStatus
+	if err := json.Unmarshal([]byte(trimmed), &resources); err != nil {
+		return false, fmt.Errorf("decode drbdsetup status json: %w", err)
+	}
+	if len(resources) == 0 {
+		return false, fmt.Errorf("drbdsetup status json contained no resources")
+	}
+	res := resources[0]
+	if len(res.Devices) == 0 {
+		return false, fmt.Errorf("drbdsetup status json reported no local devices")
+	}
+	for _, dev := range res.Devices {
+		if dev.Quorum == nil || !*dev.Quorum {
+			return false, nil
+		}
+	}
+	return true, nil
+}
