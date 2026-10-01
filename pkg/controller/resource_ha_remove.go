@@ -47,7 +47,13 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 	if resource == SelfHaResource {
 		evictCmd := fmt.Sprintf(
 			"sudo systemd-run --unit=sds-selfha-evict --collect drbd-reactorctl evict %s", configName)
-		if err := rm.execAllSuccess(ctx, []string{rm.controller.ResolveHost(activeNode)}, evictCmd,
+		if activeNode == localHostname() {
+			// Usually the case: the controller runs where sds-meta is Primary.
+			// Its hostname need not be a name dispatch can reach.
+			if o, err := exec.Command("/bin/bash", "-c", evictCmd).CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to launch detached self-eviction: %s", strings.TrimSpace(string(o)))
+			}
+		} else if err := rm.execAllSuccess(ctx, []string{rm.controller.ResolveHost(activeNode)}, evictCmd,
 			"failed to launch detached self-eviction"); err != nil {
 			return err
 		}

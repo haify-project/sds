@@ -23,7 +23,9 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 		if err != nil || promoter == nil {
 			continue
 		}
-		if promoter.PrimaryOn != "" {
+		// A standby's drbd-reactor names a Primary it cannot place as
+		// "unknown"; that is no node, so keep looking.
+		if promoter.PrimaryOn != "" && !strings.EqualFold(promoter.PrimaryOn, "unknown") {
 			if primaryHost := rm.getNodeHost(promoter.PrimaryOn); primaryHost != "" {
 				rm.controller.logger.Info("Found active node from reactor status",
 					zap.String("resource", resource),
