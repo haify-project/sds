@@ -47,10 +47,12 @@ func (c *SDSClient) DeleteBackupTarget(ctx context.Context, name string, force b
 	return nil
 }
 
-// CreateBackup ships a full, crash-consistent copy of a resource to a target.
-func (c *SDSClient) CreateBackup(ctx context.Context, resource, target, node string) (*sdspb.BackupInfo, error) {
+// CreateBackup ships a crash-consistent copy of a resource to a target:
+// incremental on the last backup when it can be, full when full is set or it
+// cannot.
+func (c *SDSClient) CreateBackup(ctx context.Context, resource, target, node string, full bool) (*sdspb.BackupInfo, error) {
 	resp, err := c.client.CreateBackup(ctx, &sdspb.CreateBackupRequest{
-		Resource: resource, Target: target, Node: node,
+		Resource: resource, Target: target, Node: node, Full: full,
 	})
 	if err != nil {
 		return nil, err

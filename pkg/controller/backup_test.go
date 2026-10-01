@@ -115,7 +115,7 @@ func TestBackupCreateRecordsACompletedBackup(t *testing.T) {
 	stub := &backupExecStub{storedBytes: backupVolumeBytes}
 	ctrl := newBackupFixture(t, stub, "Secondary")
 
-	rec, err := ctrl.backups.CreateBackup(context.Background(), "data", "offsite", "")
+	rec, err := ctrl.backups.CreateBackup(context.Background(), "data", "offsite", "", false)
 	require.NoError(t, err)
 
 	assert.Equal(t, database.BackupStateCompleted, rec.State)
@@ -147,7 +147,7 @@ func TestBackupShortUploadIsNeverRecordedAsSuccess(t *testing.T) {
 	ctrl := newBackupFixture(t, stub, "Secondary")
 	ctx := context.Background()
 
-	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "")
+	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "uploaded short")
 
@@ -166,7 +166,7 @@ func TestBackupFailedUploadCommandIsRecordedAsFailed(t *testing.T) {
 	ctrl := newBackupFixture(t, stub, "Secondary")
 	ctx := context.Background()
 
-	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "")
+	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "", false)
 	require.Error(t, err)
 
 	backups, err := ctrl.backups.ListBackups(ctx, "data", "")
@@ -182,7 +182,7 @@ func TestBackupUnverifiableUploadIsRecordedAsFailed(t *testing.T) {
 	ctrl := newBackupFixture(t, stub, "Secondary")
 	ctx := context.Background()
 
-	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "")
+	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "", false)
 	require.Error(t, err)
 
 	backups, err := ctrl.backups.ListBackups(ctx, "data", "")
@@ -204,7 +204,7 @@ func TestBackupPreflightFailsBeforeAnySnapshot(t *testing.T) {
 		return stub.exec(hosts, cmd)
 	}
 
-	_, err := ctrl.backups.CreateBackup(context.Background(), "data", "offsite", "")
+	_, err := ctrl.backups.CreateBackup(context.Background(), "data", "offsite", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rclone is required")
 
@@ -230,7 +230,7 @@ func TestBackupRefusesZFSBackedVolumes(t *testing.T) {
 		SizeGB: 4, Device: "/dev/zvol/tank/data_data",
 	}))
 
-	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "")
+	_, err := ctrl.backups.CreateBackup(ctx, "data", "offsite", "", false)
 	require.Error(t, err, "a ZFS-backed resource must be refused, not half-supported")
 	assert.Contains(t, err.Error(), "ZFS-backed")
 }

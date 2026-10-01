@@ -2106,6 +2106,11 @@ message BackupVolumeInfo {
   uint64 bytes = 3;
   string pool = 4;
   string backing_volume = 5;
+  // ranges is the object listing the byte ranges an incremental image holds;
+  // empty for a full image.
+  string ranges = 6;
+  // changed_bytes is how much of the volume an incremental image carries.
+  uint64 changed_bytes = 7;
 }
 
 message BackupInfo {
@@ -2122,6 +2127,11 @@ message BackupInfo {
   string started_at = 10;
   string finished_at = 11;
   repeated BackupVolumeInfo volumes = 12;
+  // kind is full or incremental. An incremental restores only together with
+  // every backup down to the full one it is built on.
+  string kind = 13;
+  // parent is the backup an incremental is built on.
+  string parent = 14;
 }
 
 message CreateBackupRequest {
@@ -2130,6 +2140,8 @@ message CreateBackupRequest {
   // node optionally pins which replica is snapshotted and read. Empty prefers
   // an UpToDate Secondary.
   string node = 3;
+  // full skips the incremental path even when a base is available.
+  bool full = 4;
 }
 
 message CreateBackupResponse {

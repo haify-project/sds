@@ -5914,6 +5914,14 @@
             "type": "object",
             "$ref": "#/definitions/v1BackupVolumeInfo"
           }
+        },
+        "kind": {
+          "type": "string",
+          "description": "kind is full or incremental. An incremental restores only together with\nevery backup down to the full one it is built on."
+        },
+        "parent": {
+          "type": "string",
+          "description": "parent is the backup an incremental is built on."
         }
       }
     },
@@ -5974,6 +5982,15 @@
         },
         "backingVolume": {
           "type": "string"
+        },
+        "ranges": {
+          "type": "string",
+          "description": "ranges is the object listing the byte ranges an incremental image holds;\nempty for a full image."
+        },
+        "changedBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "changed_bytes is how much of the volume an incremental image carries."
         }
       }
     },
@@ -6108,6 +6125,10 @@
         "node": {
           "type": "string",
           "description": "node optionally pins which replica is snapshotted and read. Empty prefers\nan UpToDate Secondary."
+        },
+        "full": {
+          "type": "boolean",
+          "description": "full skips the incremental path even when a base is available."
         }
       }
     },

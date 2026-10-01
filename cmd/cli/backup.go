@@ -5,17 +5,22 @@ import (
 	"fmt"
 	"time"
 
+	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+
 	"github.com/spf13/cobra"
 )
 
 // backupLimits is repeated in every long help below, because the single most
 // expensive way to learn it is from a saturated uplink at 03:00.
 const backupLimits = `LIMITATIONS (read before relying on this):
-  * Every backup is a FULL image of the volume. There is NO incremental mode:
-    a nightly backup of a 2 TiB volume transfers 2 TiB every night. Size the
-    schedule and the link accordingly.
-  * The stream is not compressed. That is what allows the byte-for-byte size
-    check against the target after each upload.
+  * The first backup of a resource to a target is a full image. Later ones are
+    incremental on thin pools: only blocks changed since the last backup are
+    sent. A thick (non-thin) volume is backed up in full every time.
+  * An incremental restores only together with every backup down to its full
+    one, so none of those can be deleted while a later one exists. After 30
+    incrementals the next backup is full again.
+  * One snapshot per resource and target stays on the node as the base for the
+    next incremental; it holds whatever the volume overwrote since.
   * LVM-backed volumes only. A ZFS zvol has no snapshot block device to read,
     so those resources are refused rather than half-supported.`
 
@@ -44,11 +49,12 @@ so the image is crash-consistent.
 
 func backupCreateCommand() *cobra.Command {
 	var resource, target, node string
+	var full bool
 	var timeout time.Duration
 
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Take a full, crash-consistent backup of a resource",
+		Short: "Take a crash-consistent backup of a resource (incremental after the first)",
 		Long: `Snapshot every volume of a resource and ship the images to a target.
 
 The backup is only recorded as completed once every image has been uploaded and
@@ -73,7 +79,7 @@ offered for restore.
 			}
 			defer closeClient(c)
 
-			info, err := c.CreateBackup(ctx, resource, target, node)
+			info, err := c.CreateBackup(ctx, resource, target, node, full)
 			if err != nil {
 				return fmt.Errorf("backup failed: %w", err)
 			}
@@ -86,12 +92,18 @@ offered for restore.
 			_, _ = fmt.Fprintf(out, "  resource: %s (from node %s)\n", info.Resource, info.Node)
 			_, _ = fmt.Fprintf(out, "  target:   %s/%s\n", info.Target, info.Prefix)
 			_, _ = fmt.Fprintf(out, "  size:     %s across %d volume(s)\n", humanBytes(info.TotalBytes), len(info.Volumes))
+			if info.Kind == "incremental" {
+				_, _ = fmt.Fprintf(out, "  kind:     incremental on %s, %s changed\n", info.Parent, humanBytes(changedBytes(info)))
+			} else {
+				_, _ = fmt.Fprintf(out, "  kind:     full\n")
+			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&resource, "resource", "", "Resource to back up (required)")
 	cmd.Flags().StringVar(&target, "target", "", "Backup target name (required)")
-	cmd.Flags().StringVar(&node, "node", "", "Read from this replica (default: an UpToDate Secondary)")
+	cmd.Flags().StringVar(&node, "node", "", "Read from this replica (default: the one holding the last backup's base, else an UpToDate Secondary)")
+	cmd.Flags().BoolVar(&full, "full", false, "Take a full backup even when an incremental is possible")
 	// A full image of a real volume takes hours, not seconds; the default RPC
 	// timeout used elsewhere in this CLI would abort the transfer.
 	cmd.Flags().DurationVar(&timeout, "timeout", 24*time.Hour, "Give up if the backup takes longer than this")
@@ -126,6 +138,9 @@ func backupListCommand() *cobra.Command {
 				_, _ = fmt.Fprintf(out, "%s  [%s]\n", b.Id, b.State)
 				_, _ = fmt.Fprintf(out, "  resource=%s target=%s node=%s size=%s\n",
 					b.Resource, b.Target, b.Node, humanBytes(b.TotalBytes))
+				if b.Kind == "incremental" {
+					_, _ = fmt.Fprintf(out, "  incremental on %s, %s changed\n", b.Parent, humanBytes(changedBytes(b)))
+				}
 				if b.StartedAt != "" {
 					_, _ = fmt.Fprintf(out, "  started=%s finished=%s\n", b.StartedAt, orDash(b.FinishedAt))
 				}
@@ -226,4 +241,13 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// changedBytes is how much an incremental backup carries across its volumes.
+func changedBytes(b *sdspb.BackupInfo) uint64 {
+	var n uint64
+	for _, v := range b.Volumes {
+		n += v.ChangedBytes
+	}
+	return n
 }

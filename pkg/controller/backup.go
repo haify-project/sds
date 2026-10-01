@@ -51,7 +51,7 @@ const (
 	manifestObject = "manifest.json"
 
 	// manifestVersion is bumped when the on-target layout changes.
-	manifestVersion = 1
+	manifestVersion = 2
 )
 
 // BackupManifest is the JSON index stored next to a backup's volume images.
@@ -61,6 +61,8 @@ type BackupManifest struct {
 	Resource   string                   `json:"resource"`
 	Node       string                   `json:"node"`
 	Backend    string                   `json:"backend"`
+	Kind       string                   `json:"kind"`
+	Parent     string                   `json:"parent,omitempty"`
 	CreatedAt  string                   `json:"created_at"`
 	TotalBytes uint64                   `json:"total_bytes"`
 	Volumes    []BackupManifestVolume   `json:"volumes"`
@@ -75,6 +77,9 @@ type BackupManifestVolume struct {
 	Bytes    uint64 `json:"bytes"`
 	Pool     string `json:"pool"`
 	Backing  string `json:"backing_volume"`
+	// Ranges lists, one "offset length" pair per line, where each run of
+	// bytes in an incremental Object belongs. Empty for a full image.
+	Ranges string `json:"ranges,omitempty"`
 }
 
 // BackupManifestSnapshot records the snapshot each image was read from.
@@ -143,8 +148,10 @@ func (bm *BackupManager) ReconcileInterrupted(ctx context.Context) error {
 	return nil
 }
 
-// CreateBackup ships a crash-consistent full copy of every volume of resource
-// to target, and returns the recorded backup.
+// CreateBackup ships a crash-consistent copy of every volume of resource to
+// target, and returns the recorded backup. It is incremental when the last
+// backup to the same target left a base snapshot on the node it reads (see
+// backup_incremental.go), and full otherwise or when full is set.
 //
 // The record only reaches "completed" once every image has been uploaded AND
 // the target has confirmed it holds exactly as many bytes as were sent. A run
@@ -153,7 +160,7 @@ func (bm *BackupManager) ReconcileInterrupted(ctx context.Context) error {
 //
 // node selects which replica to read. Empty picks one automatically, preferring
 // a Secondary so the workload's node is left alone.
-func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName, node string) (*database.Backup, error) {
+func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName, node string, full bool) (*database.Backup, error) {
 	if bm.controller.db == nil {
 		return nil, fmt.Errorf("database not available")
 	}
@@ -193,6 +200,13 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 		}
 	}
 
+	// The node holding the last backup's base snapshot is the only one an
+	// incremental can be read on, so it wins when it is healthy.
+	if node == "" && !full {
+		if last := bm.latestCompleted(ctx, resource, targetName); last != nil && bm.readable(info, last.Node) {
+			node = last.Node
+		}
+	}
 	node, err = bm.pickBackupNode(info, node)
 	if err != nil {
 		return nil, err
@@ -235,10 +249,28 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 		}
 	}()
 
+	var parent *database.Backup
+	if !full {
+		var why string
+		if parent, why = bm.incrementalBase(ctx, info, targetName, node, host, sizes); parent == nil {
+			bm.controller.logger.Info("Taking a full backup", zap.String("resource", resource), zap.String("reason", why))
+		}
+	}
+
 	// Snapshot every volume before uploading any of them, so the images are as
-	// close to a single instant as the storage layer allows.
+	// close to a single instant as the storage layer allows. Snapshots kept as
+	// the next incremental's base are left out of the cleanup.
+	keep := map[uint32]bool{}
 	snaps, err := bm.snapshotVolumes(ctx, host, info, started)
-	defer bm.removeSnapshots(context.WithoutCancel(ctx), host, info, snaps)
+	defer func() {
+		drop := make(map[uint32]string, len(snaps))
+		for id, name := range snaps {
+			if !keep[id] {
+				drop[id] = name
+			}
+		}
+		bm.removeSnapshots(context.WithoutCancel(ctx), host, info, drop)
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -247,6 +279,10 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 		ID: id, Resource: resource, Target: targetName, Node: node,
 		Backend: bm.backend.Name(), State: database.BackupStateRunning,
 		Prefix: backup.ObjectPath(resource, id), StartedAt: started,
+		Kind: database.BackupKindFull,
+	}
+	if parent != nil {
+		rec.Kind, rec.Parent = database.BackupKindIncremental, parent.ID
 	}
 	if err := bm.controller.db.SaveBackup(ctx, rec); err != nil {
 		return nil, fmt.Errorf("record backup: %w", err)
@@ -257,7 +293,14 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 	// the volume that failed verification is precisely the one whose remains
 	// are on the target, and it is the one rec.Volumes does not list.
 	var uploaded []string
-	if err := bm.uploadVolumes(ctx, sess, host, info, snaps, sizes, rec, &uploaded); err != nil {
+	upload := bm.uploadVolumes
+	if parent != nil {
+		upload = func(ctx context.Context, sess backup.Session, host string, info *ResourceInfo,
+			snaps map[uint32]string, sizes map[uint32]uint64, rec *database.Backup, uploaded *[]string) error {
+			return bm.uploadDeltas(ctx, sess, host, info, parent, snaps, sizes, rec, uploaded)
+		}
+	}
+	if err := upload(ctx, sess, host, info, snaps, sizes, rec, &uploaded); err != nil {
 		bm.failBackup(ctx, sess, rec, uploaded, err)
 		return nil, err
 	}
@@ -273,14 +316,17 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 		return nil, err
 	}
 
+	keep = bm.keepBases(ctx, host, rec, snaps)
 	rec.State = database.BackupStateCompleted
 	rec.FinishedAt = time.Now()
 	if err := bm.controller.db.SaveBackup(ctx, rec); err != nil {
 		return nil, fmt.Errorf("record completed backup: %w", err)
 	}
+	// The new snapshots are the base now; the old ones would only hold space.
+	bm.releaseOlderBases(context.WithoutCancel(ctx), rec)
 	bm.controller.logger.Info("Backup completed",
 		zap.String("backup", rec.ID), zap.String("resource", resource),
-		zap.String("target", targetName), zap.Uint64("bytes", rec.TotalBytes))
+		zap.String("target", targetName), zap.String("kind", rec.Kind), zap.Uint64("bytes", rec.TotalBytes))
 	return rec, nil
 }
 
@@ -370,16 +416,19 @@ func (bm *BackupManager) removeSnapshots(ctx context.Context, host string, info 
 func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo, snaps map[uint32]string) (string, error) {
 	m := BackupManifest{
 		Version: manifestVersion, ID: rec.ID, Resource: rec.Resource, Node: rec.Node,
-		Backend: rec.Backend, CreatedAt: rec.StartedAt.UTC().Format(time.RFC3339),
+		Backend: rec.Backend, Kind: rec.Kind, Parent: rec.Parent,
+		CreatedAt:  rec.StartedAt.UTC().Format(time.RFC3339),
 		TotalBytes: rec.TotalBytes,
 		Note: "Raw full images of each DRBD volume, bounded by the DRBD device size " +
 			"(smaller than the backing LV, whose tail holds DRBD metadata). Restore with " +
-			"`sds-cli backup restore`, or by writing each image to a device of at least that size.",
+			"`sds-cli backup restore`, or by writing each image to a device of at least that size. " +
+			"An incremental holds only changed ranges: restore its parent chain down to the full " +
+			"backup first, then write each run of its gunzipped image at the offset its ranges list gives.",
 	}
 	for _, v := range rec.Volumes {
 		m.Volumes = append(m.Volumes, BackupManifestVolume{
 			VolumeID: v.VolumeID, Object: v.Object, Bytes: v.Bytes,
-			Pool: v.Pool, Backing: v.BackingVolume,
+			Pool: v.Pool, Backing: v.BackingVolume, Ranges: v.Ranges,
 		})
 	}
 	for _, v := range info.Volumes {

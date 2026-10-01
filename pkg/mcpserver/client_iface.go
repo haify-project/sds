@@ -155,7 +155,7 @@ type ControllerClient interface {
 	// credential, and MCP tool arguments are recorded by the caller.
 	ListBackupTargets(ctx context.Context) ([]*sdspb.BackupTargetInfo, error)
 	DeleteBackupTarget(ctx context.Context, name string, force bool) error
-	CreateBackup(ctx context.Context, resource, target, node string) (*sdspb.BackupInfo, error)
+	CreateBackup(ctx context.Context, resource, target, node string, full bool) (*sdspb.BackupInfo, error)
 	ListBackups(ctx context.Context, resource, target string) ([]*sdspb.BackupInfo, error)
 	RestoreBackup(ctx context.Context, id, resource, node string) (*sdspb.BackupInfo, error)
 	DeleteBackup(ctx context.Context, id, node string, force bool) error

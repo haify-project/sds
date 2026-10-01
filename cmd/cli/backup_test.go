@@ -55,9 +55,13 @@ func TestReadBackupSecretSources(t *testing.T) {
 
 // The full-only limitation has to be visible where someone plans a schedule,
 // not only in a design doc they will never read.
-func TestBackupHelpStatesTheFullOnlyLimitation(t *testing.T) {
+// The costs of an incremental chain must be in front of whoever plans a
+// retention policy: the retained base snapshot and that a chain restores and
+// deletes as a whole.
+func TestBackupHelpStatesTheIncrementalCosts(t *testing.T) {
 	for _, cmd := range []string{backupCommand().Long, backupCreateCommand().Long} {
-		assert.Contains(t, cmd, "FULL image")
-		assert.Contains(t, cmd, "NO incremental")
+		assert.Contains(t, cmd, "incremental")
+		assert.Contains(t, cmd, "while a later one exists")
+		assert.Contains(t, cmd, "stays on the node as the base")
 	}
 }

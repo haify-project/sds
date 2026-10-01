@@ -12495,6 +12495,11 @@ type BackupVolumeInfo struct {
 	Bytes         uint64                 `protobuf:"varint,3,opt,name=bytes,proto3" json:"bytes,omitempty"`
 	Pool          string                 `protobuf:"bytes,4,opt,name=pool,proto3" json:"pool,omitempty"`
 	BackingVolume string                 `protobuf:"bytes,5,opt,name=backing_volume,json=backingVolume,proto3" json:"backing_volume,omitempty"`
+	// ranges is the object listing the byte ranges an incremental image holds;
+	// empty for a full image.
+	Ranges string `protobuf:"bytes,6,opt,name=ranges,proto3" json:"ranges,omitempty"`
+	// changed_bytes is how much of the volume an incremental image carries.
+	ChangedBytes  uint64 `protobuf:"varint,7,opt,name=changed_bytes,json=changedBytes,proto3" json:"changed_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12564,6 +12569,20 @@ func (x *BackupVolumeInfo) GetBackingVolume() string {
 	return ""
 }
 
+func (x *BackupVolumeInfo) GetRanges() string {
+	if x != nil {
+		return x.Ranges
+	}
+	return ""
+}
+
+func (x *BackupVolumeInfo) GetChangedBytes() uint64 {
+	if x != nil {
+		return x.ChangedBytes
+	}
+	return 0
+}
+
 type BackupInfo struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -12572,13 +12591,18 @@ type BackupInfo struct {
 	Node     string                 `protobuf:"bytes,4,opt,name=node,proto3" json:"node,omitempty"`
 	Backend  string                 `protobuf:"bytes,5,opt,name=backend,proto3" json:"backend,omitempty"`
 	// state is running | completed | failed. Only completed is restorable.
-	State         string              `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"`
-	Error         string              `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
-	Prefix        string              `protobuf:"bytes,8,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	TotalBytes    uint64              `protobuf:"varint,9,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`
-	StartedAt     string              `protobuf:"bytes,10,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt    string              `protobuf:"bytes,11,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
-	Volumes       []*BackupVolumeInfo `protobuf:"bytes,12,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	State      string              `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"`
+	Error      string              `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
+	Prefix     string              `protobuf:"bytes,8,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	TotalBytes uint64              `protobuf:"varint,9,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`
+	StartedAt  string              `protobuf:"bytes,10,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt string              `protobuf:"bytes,11,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Volumes    []*BackupVolumeInfo `protobuf:"bytes,12,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	// kind is full or incremental. An incremental restores only together with
+	// every backup down to the full one it is built on.
+	Kind string `protobuf:"bytes,13,opt,name=kind,proto3" json:"kind,omitempty"`
+	// parent is the backup an incremental is built on.
+	Parent        string `protobuf:"bytes,14,opt,name=parent,proto3" json:"parent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12697,13 +12721,29 @@ func (x *BackupInfo) GetVolumes() []*BackupVolumeInfo {
 	return nil
 }
 
+func (x *BackupInfo) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *BackupInfo) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
 type CreateBackupRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
 	Target   string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
 	// node optionally pins which replica is snapshotted and read. Empty prefers
 	// an UpToDate Secondary.
-	Node          string `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	Node string `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	// full skips the incremental path even when a base is available.
+	Full          bool `protobuf:"varint,4,opt,name=full,proto3" json:"full,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12757,6 +12797,13 @@ func (x *CreateBackupRequest) GetNode() string {
 		return x.Node
 	}
 	return ""
+}
+
+func (x *CreateBackupRequest) GetFull() bool {
+	if x != nil {
+		return x.Full
+	}
+	return false
 }
 
 type CreateBackupResponse struct {
@@ -19639,13 +19686,15 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"O\n" +
 	"\x19TestNotifyChannelResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x98\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xd5\x01\n" +
 	"\x10BackupVolumeInfo\x12\x1b\n" +
 	"\tvolume_id\x18\x01 \x01(\rR\bvolumeId\x12\x16\n" +
 	"\x06object\x18\x02 \x01(\tR\x06object\x12\x14\n" +
 	"\x05bytes\x18\x03 \x01(\x04R\x05bytes\x12\x12\n" +
 	"\x04pool\x18\x04 \x01(\tR\x04pool\x12%\n" +
-	"\x0ebacking_volume\x18\x05 \x01(\tR\rbackingVolume\"\xd3\x02\n" +
+	"\x0ebacking_volume\x18\x05 \x01(\tR\rbackingVolume\x12\x16\n" +
+	"\x06ranges\x18\x06 \x01(\tR\x06ranges\x12#\n" +
+	"\rchanged_bytes\x18\a \x01(\x04R\fchangedBytes\"\xff\x02\n" +
 	"\n" +
 	"BackupInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
@@ -19663,11 +19712,14 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	" \x01(\tR\tstartedAt\x12\x1f\n" +
 	"\vfinished_at\x18\v \x01(\tR\n" +
 	"finishedAt\x12.\n" +
-	"\avolumes\x18\f \x03(\v2\x14.v1.BackupVolumeInfoR\avolumes\"]\n" +
+	"\avolumes\x18\f \x03(\v2\x14.v1.BackupVolumeInfoR\avolumes\x12\x12\n" +
+	"\x04kind\x18\r \x01(\tR\x04kind\x12\x16\n" +
+	"\x06parent\x18\x0e \x01(\tR\x06parent\"q\n" +
 	"\x13CreateBackupRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +
-	"\x04node\x18\x03 \x01(\tR\x04node\"r\n" +
+	"\x04node\x18\x03 \x01(\tR\x04node\x12\x12\n" +
+	"\x04full\x18\x04 \x01(\bR\x04full\"r\n" +
 	"\x14CreateBackupResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12&\n" +

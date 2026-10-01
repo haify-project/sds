@@ -95,7 +95,7 @@ func TestBackupClientHappyPath(t *testing.T) {
 	require.Len(t, targets, 1)
 	assert.Equal(t, "offsite", targets[0].GetName())
 
-	info, err := c.CreateBackup(ctx, "data", "offsite", "")
+	info, err := c.CreateBackup(ctx, "data", "offsite", "", false)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", info.GetState())
 
@@ -122,7 +122,7 @@ func TestBackupClientSurfacesServerRefusals(t *testing.T) {
 	err := c.AddBackupTarget(ctx, &sdspb.AddBackupTargetRequest{Name: "x", Kind: "s3"})
 	require.EqualError(t, err, "target rejected")
 
-	_, err = c.CreateBackup(ctx, "data", "offsite", "")
+	_, err = c.CreateBackup(ctx, "data", "offsite", "", false)
 	require.EqualError(t, err, "uploaded short")
 
 	_, err = c.RestoreBackup(ctx, "data_1", "data", "")

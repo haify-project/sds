@@ -25,6 +25,13 @@ const (
 	BackupStateFailed = "failed"
 )
 
+// Backup kinds. An incremental backup holds only the blocks that changed since
+// its Parent, so restoring it needs every backup down the chain to the full one.
+const (
+	BackupKindFull        = "full"
+	BackupKindIncremental = "incremental"
+)
+
 // BackupTarget is a repository backups are shipped to.
 //
 // Secret is stored here in the clear and is deliberately never returned by the
@@ -68,6 +75,14 @@ type BackupVolume struct {
 	// Bytes is the exact size of the image: the DRBD device's size at backup
 	// time, NOT the backing volume's — see BackupManager for why those differ.
 	Bytes uint64
+	// Ranges is the object listing the "offset length" byte ranges an
+	// incremental Object holds, in order. Empty for a full image.
+	Ranges string
+	// ChangedBytes is how much of the volume an incremental image carries.
+	ChangedBytes uint64
+	// Snapshot is the thin snapshot this image was read from, kept on Node as
+	// the base the next incremental is computed against. Empty once released.
+	Snapshot string
 }
 
 // Backup is one point-in-time copy of a resource on a target.
@@ -83,7 +98,12 @@ type Backup struct {
 	// Error carries the failure reason for BackupStateFailed.
 	Error string
 	// Prefix is the target-relative directory holding this backup's objects.
-	Prefix     string
+	Prefix string
+	// Kind is BackupKindFull or BackupKindIncremental; empty is a full backup
+	// taken before incrementals existed.
+	Kind string
+	// Parent is the backup an incremental was computed against.
+	Parent     string
 	Volumes    []BackupVolume
 	TotalBytes uint64
 	StartedAt  time.Time

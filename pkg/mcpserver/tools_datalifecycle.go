@@ -57,6 +57,7 @@ type backupCreateIn struct {
 	Resource string `json:"resource"`
 	Target   string `json:"target" jsonschema:"name of a configured backup target"`
 	Node     string `json:"node,omitempty" jsonschema:"node to read the snapshot from; empty lets the controller choose"`
+	Full     bool   `json:"full,omitempty" jsonschema:"take a full backup even when an incremental is possible"`
 }
 
 type backupOut struct {
@@ -67,7 +68,10 @@ type backupOut struct {
 	Backend    string `json:"backend,omitempty"`
 	State      string `json:"state" jsonschema:"running, completed, or failed. Only completed is restorable."`
 	Error      string `json:"error,omitempty"`
+	Kind       string `json:"kind,omitempty" jsonschema:"full, or incremental: restorable only with every backup down to its full one"`
+	Parent     string `json:"parent,omitempty"`
 	TotalBytes uint64 `json:"total_bytes"`
+	Changed    uint64 `json:"changed_bytes,omitempty" jsonschema:"for an incremental, how much it carries"`
 	StartedAt  string `json:"started_at,omitempty"`
 	FinishedAt string `json:"finished_at,omitempty"`
 }
@@ -97,11 +101,15 @@ func backupToOut(b *sdspb.BackupInfo) backupOut {
 	if b == nil {
 		return backupOut{}
 	}
-	return backupOut{
+	out := backupOut{
 		ID: b.Id, Resource: b.Resource, Target: b.Target, Node: b.Node,
-		Backend: b.Backend, State: b.State, Error: b.Error,
+		Backend: b.Backend, State: b.State, Error: b.Error, Kind: b.Kind, Parent: b.Parent,
 		TotalBytes: b.TotalBytes, StartedAt: b.StartedAt, FinishedAt: b.FinishedAt,
 	}
+	for _, v := range b.Volumes {
+		out.Changed += v.ChangedBytes
+	}
+	return out
 }
 
 // registerDataLifecycleTools adds pool-cache and backup tools.
@@ -181,9 +189,11 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 	addWrite(s, srv, writeTool("sds_backup_create", "Back a resource up off-cluster",
 		"Snapshot a resource and ship the image to a configured target. This is the only copy that survives losing "+
 			"the cluster: snapshots live in the same pool, and WAN DR is a replica, so a deletion replicates to it. "+
-			"Full images only — no incremental and no compression — so the transfer is the size of the volume."),
+			"After the first, a backup to the same target is incremental: only the blocks changed since the last one "+
+			"are sent, read from thin-pool metadata. Set full to start a new chain. An incremental cannot be deleted "+
+			"while a later one is built on it."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in backupCreateIn) (*mcp.CallToolResult, backupOut, error) {
-			b, err := s.client.CreateBackup(ctx, in.Resource, in.Target, in.Node)
+			b, err := s.client.CreateBackup(ctx, in.Resource, in.Target, in.Node, in.Full)
 			if err != nil {
 				return nil, backupOut{}, err
 			}

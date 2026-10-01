@@ -66,13 +66,13 @@ func (s *Server) DeleteBackupTarget(ctx context.Context, req *sdspb.DeleteBackup
 }
 
 func (s *Server) CreateBackup(ctx context.Context, req *sdspb.CreateBackupRequest) (*sdspb.CreateBackupResponse, error) {
-	rec, err := s.ctrl.backups.CreateBackup(ctx, req.Resource, req.Target, req.Node)
+	rec, err := s.ctrl.backups.CreateBackup(ctx, req.Resource, req.Target, req.Node, req.Full)
 	if err != nil {
 		return &sdspb.CreateBackupResponse{Success: false, Message: err.Error()}, nil
 	}
 	return &sdspb.CreateBackupResponse{
 		Success: true,
-		Message: fmt.Sprintf("Backup %s of %q completed (%s)", rec.ID, rec.Resource, formatBytes(rec.TotalBytes)),
+		Message: backupSummary(rec),
 		Backup:  backupToProto(rec),
 	}, nil
 }
@@ -124,7 +124,10 @@ func backupToProto(b *database.Backup) *sdspb.BackupInfo {
 	info := &sdspb.BackupInfo{
 		Id: b.ID, Resource: b.Resource, Target: b.Target, Node: b.Node,
 		Backend: b.Backend, State: b.State, Error: b.Error, Prefix: b.Prefix,
-		TotalBytes: b.TotalBytes,
+		TotalBytes: b.TotalBytes, Kind: b.Kind, Parent: b.Parent,
+	}
+	if info.Kind == "" {
+		info.Kind = database.BackupKindFull
 	}
 	if !b.StartedAt.IsZero() {
 		info.StartedAt = b.StartedAt.UTC().Format(time.RFC3339)
@@ -136,7 +139,21 @@ func backupToProto(b *database.Backup) *sdspb.BackupInfo {
 		info.Volumes = append(info.Volumes, &sdspb.BackupVolumeInfo{
 			VolumeId: v.VolumeID, Object: v.Object, Bytes: v.Bytes,
 			Pool: v.Pool, BackingVolume: v.BackingVolume,
+			Ranges: v.Ranges, ChangedBytes: v.ChangedBytes,
 		})
 	}
 	return info
+}
+
+// backupSummary says what a finished backup holds.
+func backupSummary(rec *database.Backup) string {
+	if rec.Kind != database.BackupKindIncremental {
+		return fmt.Sprintf("Backup %s of %q completed: full, %s", rec.ID, rec.Resource, formatBytes(rec.TotalBytes))
+	}
+	var changed uint64
+	for _, v := range rec.Volumes {
+		changed += v.ChangedBytes
+	}
+	return fmt.Sprintf("Backup %s of %q completed: incremental on %s, %s changed of %s",
+		rec.ID, rec.Resource, rec.Parent, formatBytes(changed), formatBytes(rec.TotalBytes))
 }

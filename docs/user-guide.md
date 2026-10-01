@@ -416,8 +416,8 @@ the node that becomes active picks them up.
 
 ## 9. Backups — the only copy that survives losing the cluster
 
-A backup is a full image of a resource shipped somewhere SDS cannot reach from
-the cluster. Targets are S3-compatible object stores, SMB shares, or WebDAV.
+A backup is a compressed image of a resource shipped somewhere SDS cannot reach
+from the cluster. Targets are S3-compatible object stores, SMB shares, or WebDAV.
 
 **Define a target.** The secret is never a command-line flag — it would land in
 your shell history:
@@ -444,10 +444,34 @@ sds-cli backup restore <backup-id> --node orange1
 sds-cli backup delete <backup-id>
 ```
 
-Know the limits before you build a policy on this:
+**Incremental after the first.** The first backup of a resource to a target is
+a full image. On thin pools every later one carries only the blocks that changed
+since the previous one: the thin pool's own metadata says which (`thin_delta`),
+so nothing is read or hashed to find out. On the test cluster a 1 GiB volume
+took 20 s and 161 MB in full and 4.5 s and 26 MB for the next backup after
+26 MB of changes.
 
-- **Full images only.** No incremental, no compression — every backup transfers
-  the whole volume. A 1 GiB volume takes roughly a minute and a half on a LAN.
+```bash
+sds-cli backup create --resource db --target offsite          # incremental when it can be
+sds-cli backup create --resource db --target offsite --full   # start a new chain
+```
+
+A backup falls back to full, and says why in the controller log, when there is
+no earlier backup on that target, the volume was resized, the backup is read on
+a different node than the last one, the base snapshot is gone, the volume is
+thick, or 30 incrementals already follow the last full one.
+
+What an incremental costs:
+
+- **A base snapshot stays on the node.** The snapshot of the last backup is kept
+  (named `<volume>_bk_<time>`) and holds whatever the volume has overwritten
+  since — the space a scheduled snapshot of that age would hold. It moves
+  forward with each backup and goes when its backup is deleted.
+- **A chain restores as a whole.** Restoring an incremental writes its full
+  backup and then every incremental after it, oldest first. None of them can be
+  deleted while a later one exists; delete newest first.
+
+Know the limits before you build a policy on this:
 - **No schedule.** Backups run when you run them, and accumulate until you
   delete them. Wrap `backup create` in cron if you need one.
 - Only a backup listed as `completed` is restorable. `running` means it is still

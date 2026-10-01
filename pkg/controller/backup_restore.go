@@ -48,6 +48,10 @@ func (bm *BackupManager) RestoreBackup(ctx context.Context, backupID, resource, 
 	if resource == "" {
 		resource = rec.Resource
 	}
+	chain, err := bm.restoreChain(ctx, rec)
+	if err != nil {
+		return nil, err
+	}
 
 	dbTarget, err := bm.controller.db.GetBackupTarget(ctx, rec.Target)
 	if err != nil {
@@ -114,9 +118,18 @@ func (bm *BackupManager) RestoreBackup(ctx context.Context, backupID, resource, 
 	bm.controller.logger.Info("Restoring backup",
 		zap.String("backup", backupID), zap.String("resource", resource), zap.String("node", node))
 
-	for _, v := range rec.Volumes {
-		if err := bm.restoreVolume(ctx, sess, host, resource, v); err != nil {
-			return nil, err
+	// An incremental is the full backup it is built on plus every change
+	// since, applied oldest first.
+	for _, b := range chain {
+		for _, v := range b.Volumes {
+			if v.Ranges == "" {
+				err = bm.restoreVolume(ctx, sess, host, resource, v)
+			} else {
+				err = bm.applyDelta(ctx, sess, host, resource, b.ID, v)
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -152,6 +165,20 @@ func (bm *BackupManager) restoreVolume(ctx context.Context, sess backup.Session,
 	}
 	if !res.AllSuccess() {
 		return fmt.Errorf("restore volume %d of %q failed: %s", v.VolumeID, resource, res.FailureDetails())
+	}
+	return nil
+}
+
+// applyDelta writes one incremental image's changed ranges onto its volume.
+func (bm *BackupManager) applyDelta(ctx context.Context, sess backup.Session, host, resource, id string, v database.BackupVolume) error {
+	target := fmt.Sprintf("/dev/drbd/by-res/%s/%d", resource, v.VolumeID)
+	cmd := applyDeltaCmd(sess.PullCmd(v.Ranges), sess.PullCmd(v.Object), target)
+	res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
+	if err != nil {
+		return fmt.Errorf("apply %s to volume %d of %q: %w", id, v.VolumeID, resource, err)
+	}
+	if !res.AllSuccess() {
+		return fmt.Errorf("apply %s to volume %d of %q failed: %s", id, v.VolumeID, resource, res.FailureDetails())
 	}
 	return nil
 }
@@ -225,6 +252,16 @@ func (bm *BackupManager) DeleteBackup(ctx context.Context, backupID, node string
 	if err != nil {
 		return err
 	}
+	// Deleting a link would leave every later incremental unrestorable, and
+	// --force is no way out of that: the data really would be gone.
+	deps, err := bm.dependents(ctx, rec)
+	if err != nil {
+		return err
+	}
+	if len(deps) > 0 {
+		return fmt.Errorf("backup %q is the base of %s; delete those first, newest first",
+			backupID, strings.Join(deps, ", "))
+	}
 
 	if err := bm.removeBackupObjects(ctx, rec, node); err != nil {
 		if !force {
@@ -234,6 +271,7 @@ func (bm *BackupManager) DeleteBackup(ctx context.Context, backupID, node string
 			zap.String("backup", backupID), zap.Error(err))
 	}
 
+	bm.releaseBases(ctx, rec)
 	if err := bm.controller.db.DeleteBackup(ctx, backupID); err != nil {
 		return fmt.Errorf("delete backup record: %w", err)
 	}
@@ -269,9 +307,12 @@ func (bm *BackupManager) removeBackupObjects(ctx context.Context, rec *database.
 		}
 	}()
 
-	objects := make([]string, 0, len(rec.Volumes)+1)
+	objects := make([]string, 0, 2*len(rec.Volumes)+1)
 	for _, v := range rec.Volumes {
 		objects = append(objects, v.Object)
+		if v.Ranges != "" {
+			objects = append(objects, v.Ranges)
+		}
 	}
 	objects = append(objects, backup.ObjectPath(rec.Prefix, manifestObject))
 	for _, obj := range objects {
