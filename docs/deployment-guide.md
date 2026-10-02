@@ -372,9 +372,13 @@ Puts the controller database on a DRBD resource `sds-meta` mounted at
 Primary.
 
 Before enabling:
-- the controller runs on a registered node, from `/opt/sds/bin/sds-controller`,
-  with `/etc/sds/controller.toml` and `/etc/systemd/system/sds-controller.service`
-  in place;
+- the controller runs on a registered node, with `/etc/sds/controller.toml` and
+  `/etc/systemd/system/sds-controller.service` in place; the unit's `ExecStart`
+  names the binary by absolute path;
+- every other node has the controller's architecture, or a build for its
+  architecture sits beside the running binary as `sds-controller-<goarch>`
+  (e.g. `/opt/sds/bin/sds-controller-arm64`); otherwise `enable` refuses that
+  node before changing anything;
 - passwordless root SSH works between every pair of target nodes, and the
   dispatch key named in the dispatch config exists on each of them;
 - drbd-reactor is active on all of them, and `sds-controller` is not running on
@@ -386,13 +390,13 @@ sds -c 192.168.1.250:3374 ha self status
 sds ha evict sds-meta          # move the controller to another node
 ```
 
-`enable` copies the running controller binary to `/opt/sds/bin/sds-controller`
-on the other nodes, along with `controller.toml`, the dispatch config and the
-unit, disables `sds-controller` autostart on the standbys, and hands over to
+`enable` copies the running controller binary (or the node's `-<goarch>` build)
+to the path the unit's `ExecStart` names on the other nodes, along with
+`controller.toml`, the dispatch config and the unit itself, disables `sds-controller` autostart on the standbys, and hands over to
 drbd-reactor; the command's own connection drops during the handoff. Use the VIP
 for everything afterwards (`<vip>:3374`, `http://<vip>:3376/`).
 
-To ship a new controller build: install it at `/opt/sds/bin/sds-controller` on
+To ship a new controller build: install it at the unit's `ExecStart` path on
 **every** node (`mv` the running file aside first; overwriting it in place fails
 with `Text file busy`), then `sds ha evict sds-meta` to restart it on another
 node. Restarting `sds-controller` on the active node also restarts the promoter
