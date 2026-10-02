@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/liliang-cn/sds/pkg/mcpauth"
 	"github.com/liliang-cn/sds/pkg/mcpserver"
 )
@@ -31,17 +30,16 @@ func tokenStorePath(flag string) string {
 // serveCmd runs the remote server: MCP over HTTP, behind token authentication.
 func serveCmd() *cobra.Command {
 	var (
-		controllerAddr string
-		controllerTok  string
-		listen         string
-		adminListen    string
-		publicURL      string
-		tokens         string
-		maxRole        string
-		tlsCert        string
-		tlsKey         string
-		trustProxy     bool
-		debug          bool
+		conn        controllerConn
+		listen      string
+		adminListen string
+		publicURL   string
+		tokens      string
+		maxRole     string
+		tlsCert     string
+		tlsKey      string
+		trustProxy  bool
+		debug       bool
 	)
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -52,7 +50,8 @@ func serveCmd() *cobra.Command {
 			"With --public-url the server also runs the OAuth flow that ChatGPT and claude.ai use to add a\n" +
 			"server by URL: the operator approves the client by pasting a token on the authorization page.\n\n" +
 			"Put it behind HTTPS. Either give --tls-cert/--tls-key, or terminate TLS in a reverse proxy and\n" +
-			"bind this to a private address.",
+			"bind this to a private address. Those two flags are this server's certificate; the connection to\n" +
+			"a controller with [tls] enabled is configured with the --controller-tls* flags.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			role, err := mcpauth.ParseRole(maxRole)
 			if err != nil {
@@ -75,13 +74,9 @@ func serveCmd() *cobra.Command {
 				logger.Warn("no tokens exist yet; every request will be refused until one is made with `sds-mcp token create`",
 					zap.String("store", tokenStorePath(tokens)))
 			}
-			opts := []client.Option{}
-			if token := client.ResolveToken(controllerTok); token != "" {
-				opts = append(opts, client.WithToken(token))
-			}
-			sdsClient, err := client.NewSDSClient(controllerAddr, opts...)
+			sdsClient, err := conn.dial()
 			if err != nil {
-				return fmt.Errorf("connect to controller %s: %w", controllerAddr, err)
+				return err
 			}
 			defer func() { _ = sdsClient.Close() }()
 
@@ -92,8 +87,7 @@ func serveCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "SDS controller address")
-	f.StringVar(&controllerTok, "controller-token", "", "API token for the controller when [auth] is enabled (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
+	conn.register(cmd, "controller-")
 	f.StringVar(&listen, "listen", "127.0.0.1:43871", "address to listen on")
 	f.StringVar(&adminListen, "admin-listen", "", "second address for the local network that is not capped by --max-role (bearer tokens only, no OAuth); never proxy it")
 	f.StringVar(&publicURL, "public-url", "", "URL clients reach this server at, e.g. https://mcp.example.com; enables OAuth for ChatGPT and claude.ai")

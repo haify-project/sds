@@ -48,6 +48,7 @@ func (c *Controller) startGRPCServer() error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize RBAC: %w", err)
 		}
+		c.rbac = rbacEngine
 		auditUser = func(ctx context.Context) string {
 			name, _ := rbacEngine.ResolveUser(bearerToken(ctx))
 			return name

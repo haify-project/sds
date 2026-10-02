@@ -6713,6 +6713,24 @@
         }
       }
     },
+    "v1CreateRbacUserResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "token": {
+          "type": "string",
+          "description": "The user's token. Returned once and never stored in clear."
+        }
+      }
+    },
     "v1CreateResourceProfileRequest": {
       "type": "object",
       "properties": {
@@ -7090,6 +7108,20 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1DeleteRbacUserResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     },
@@ -7501,6 +7533,23 @@
         },
         "pool": {
           "$ref": "#/definitions/v1PoolInfo"
+        }
+      }
+    },
+    "v1GetRbacWhoamiResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "user": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "canAdmin": {
+          "type": "boolean"
         }
       }
     },
@@ -8117,6 +8166,28 @@
         }
       }
     },
+    "v1ListRbacPoliciesResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "policies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RbacPolicy"
+          }
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RbacUser"
+          }
+        }
+      }
+    },
     "v1ListResourceAgentsResponse": {
       "type": "object",
       "properties": {
@@ -8710,6 +8781,33 @@
         }
       },
       "description": "QuorumInfo is the vote arithmetic behind \"will this resource survive?\"."
+    },
+    "v1RbacPolicy": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "object": {
+          "type": "string",
+          "title": "\"*\" matches every object"
+        },
+        "action": {
+          "type": "string",
+          "title": "read, write or \"*\""
+        }
+      }
+    },
+    "v1RbacUser": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
     },
     "v1RegisterNodeRequest": {
       "type": "object",
@@ -9411,6 +9509,20 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1SetRbacUserRoleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     },

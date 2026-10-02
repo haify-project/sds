@@ -277,8 +277,19 @@ func resourceList() *cobra.Command {
 	return cmd
 }
 
+// newResourceGRPCClient dials the raw generated client for the commands that
+// need request fields pkg/client does not expose. It must honour the same
+// token and TLS settings as newSDSClient.
 func newResourceGRPCClient() (sdspb.SDSControllerClient, *grpc.ClientConn, error) {
-	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	transport := insecure.NewCredentials()
+	if tlsOpts := client.ResolveTLS(tlsFlags); tlsOpts.Active() {
+		creds, err := tlsOpts.Credentials()
+		if err != nil {
+			return nil, nil, err
+		}
+		transport = creds
+	}
+	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(transport)}
 	if token := client.ResolveToken(tokenFlag); token != "" {
 		dialOpts = append(dialOpts, grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)

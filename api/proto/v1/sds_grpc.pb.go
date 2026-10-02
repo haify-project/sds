@@ -157,6 +157,11 @@ const (
 	SDSController_SetWanEndpoint_FullMethodName            = "/v1.SDSController/SetWanEndpoint"
 	SDSController_VerifyResource_FullMethodName            = "/v1.SDSController/VerifyResource"
 	SDSController_WatchEvents_FullMethodName               = "/v1.SDSController/WatchEvents"
+	SDSController_GetRbacWhoami_FullMethodName             = "/v1.SDSController/GetRbacWhoami"
+	SDSController_ListRbacPolicies_FullMethodName          = "/v1.SDSController/ListRbacPolicies"
+	SDSController_CreateRbacUser_FullMethodName            = "/v1.SDSController/CreateRbacUser"
+	SDSController_DeleteRbacUser_FullMethodName            = "/v1.SDSController/DeleteRbacUser"
+	SDSController_SetRbacUserRole_FullMethodName           = "/v1.SDSController/SetRbacUserRole"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -401,6 +406,16 @@ type SDSControllerClient interface {
 	// controller. Event.id is monotonic across the whole stream, so a gap in it
 	// is how a client detects that it fell behind.
 	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Event], error)
+	// Role-based access control: the caller's identity, the effective policy,
+	// and user management. gRPC only, so they share the API's transport
+	// security; the web UI reaches the same operations through hand-written
+	// REST routes under /v1/rbac. Policy listing and user changes require the
+	// administrator role. Each returns enabled=false when [rbac] is off.
+	GetRbacWhoami(ctx context.Context, in *GetRbacWhoamiRequest, opts ...grpc.CallOption) (*GetRbacWhoamiResponse, error)
+	ListRbacPolicies(ctx context.Context, in *ListRbacPoliciesRequest, opts ...grpc.CallOption) (*ListRbacPoliciesResponse, error)
+	CreateRbacUser(ctx context.Context, in *CreateRbacUserRequest, opts ...grpc.CallOption) (*CreateRbacUserResponse, error)
+	DeleteRbacUser(ctx context.Context, in *DeleteRbacUserRequest, opts ...grpc.CallOption) (*DeleteRbacUserResponse, error)
+	SetRbacUserRole(ctx context.Context, in *SetRbacUserRoleRequest, opts ...grpc.CallOption) (*SetRbacUserRoleResponse, error)
 }
 
 type sDSControllerClient struct {
@@ -1800,6 +1815,56 @@ func (c *sDSControllerClient) WatchEvents(ctx context.Context, in *WatchEventsRe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type SDSController_WatchEventsClient = grpc.ServerStreamingClient[Event]
 
+func (c *sDSControllerClient) GetRbacWhoami(ctx context.Context, in *GetRbacWhoamiRequest, opts ...grpc.CallOption) (*GetRbacWhoamiResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRbacWhoamiResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetRbacWhoami_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListRbacPolicies(ctx context.Context, in *ListRbacPoliciesRequest, opts ...grpc.CallOption) (*ListRbacPoliciesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRbacPoliciesResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListRbacPolicies_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateRbacUser(ctx context.Context, in *CreateRbacUserRequest, opts ...grpc.CallOption) (*CreateRbacUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateRbacUserResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateRbacUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteRbacUser(ctx context.Context, in *DeleteRbacUserRequest, opts ...grpc.CallOption) (*DeleteRbacUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteRbacUserResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteRbacUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetRbacUserRole(ctx context.Context, in *SetRbacUserRoleRequest, opts ...grpc.CallOption) (*SetRbacUserRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetRbacUserRoleResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetRbacUserRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SDSControllerServer is the server API for SDSController service.
 // All implementations must embed UnimplementedSDSControllerServer
 // for forward compatibility.
@@ -2042,6 +2107,16 @@ type SDSControllerServer interface {
 	// controller. Event.id is monotonic across the whole stream, so a gap in it
 	// is how a client detects that it fell behind.
 	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[Event]) error
+	// Role-based access control: the caller's identity, the effective policy,
+	// and user management. gRPC only, so they share the API's transport
+	// security; the web UI reaches the same operations through hand-written
+	// REST routes under /v1/rbac. Policy listing and user changes require the
+	// administrator role. Each returns enabled=false when [rbac] is off.
+	GetRbacWhoami(context.Context, *GetRbacWhoamiRequest) (*GetRbacWhoamiResponse, error)
+	ListRbacPolicies(context.Context, *ListRbacPoliciesRequest) (*ListRbacPoliciesResponse, error)
+	CreateRbacUser(context.Context, *CreateRbacUserRequest) (*CreateRbacUserResponse, error)
+	DeleteRbacUser(context.Context, *DeleteRbacUserRequest) (*DeleteRbacUserResponse, error)
+	SetRbacUserRole(context.Context, *SetRbacUserRoleRequest) (*SetRbacUserRoleResponse, error)
 	mustEmbedUnimplementedSDSControllerServer()
 }
 
@@ -2465,6 +2540,21 @@ func (UnimplementedSDSControllerServer) VerifyResource(context.Context, *VerifyR
 }
 func (UnimplementedSDSControllerServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[Event]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchEvents not implemented")
+}
+func (UnimplementedSDSControllerServer) GetRbacWhoami(context.Context, *GetRbacWhoamiRequest) (*GetRbacWhoamiResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRbacWhoami not implemented")
+}
+func (UnimplementedSDSControllerServer) ListRbacPolicies(context.Context, *ListRbacPoliciesRequest) (*ListRbacPoliciesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRbacPolicies not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateRbacUser(context.Context, *CreateRbacUserRequest) (*CreateRbacUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateRbacUser not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteRbacUser(context.Context, *DeleteRbacUserRequest) (*DeleteRbacUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteRbacUser not implemented")
+}
+func (UnimplementedSDSControllerServer) SetRbacUserRole(context.Context, *SetRbacUserRoleRequest) (*SetRbacUserRoleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetRbacUserRole not implemented")
 }
 func (UnimplementedSDSControllerServer) mustEmbedUnimplementedSDSControllerServer() {}
 func (UnimplementedSDSControllerServer) testEmbeddedByValue()                       {}
@@ -4964,6 +5054,96 @@ func _SDSController_WatchEvents_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type SDSController_WatchEventsServer = grpc.ServerStreamingServer[Event]
 
+func _SDSController_GetRbacWhoami_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRbacWhoamiRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetRbacWhoami(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetRbacWhoami_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetRbacWhoami(ctx, req.(*GetRbacWhoamiRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListRbacPolicies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRbacPoliciesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListRbacPolicies(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListRbacPolicies_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListRbacPolicies(ctx, req.(*ListRbacPoliciesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateRbacUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRbacUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateRbacUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateRbacUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateRbacUser(ctx, req.(*CreateRbacUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteRbacUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRbacUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteRbacUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteRbacUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteRbacUser(ctx, req.(*DeleteRbacUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetRbacUserRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetRbacUserRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetRbacUserRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetRbacUserRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetRbacUserRole(ctx, req.(*SetRbacUserRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SDSController_ServiceDesc is the grpc.ServiceDesc for SDSController service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5518,6 +5698,26 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyResource",
 			Handler:    _SDSController_VerifyResource_Handler,
+		},
+		{
+			MethodName: "GetRbacWhoami",
+			Handler:    _SDSController_GetRbacWhoami_Handler,
+		},
+		{
+			MethodName: "ListRbacPolicies",
+			Handler:    _SDSController_ListRbacPolicies_Handler,
+		},
+		{
+			MethodName: "CreateRbacUser",
+			Handler:    _SDSController_CreateRbacUser_Handler,
+		},
+		{
+			MethodName: "DeleteRbacUser",
+			Handler:    _SDSController_DeleteRbacUser_Handler,
+		},
+		{
+			MethodName: "SetRbacUserRole",
+			Handler:    _SDSController_SetRbacUserRole_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

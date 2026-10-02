@@ -20,6 +20,7 @@ import (
 	"github.com/liliang-cn/sds/pkg/gateway"
 	"github.com/liliang-cn/sds/pkg/logbuf"
 	"github.com/liliang-cn/sds/pkg/metrics"
+	"github.com/liliang-cn/sds/pkg/rbac"
 	"github.com/liliang-cn/sds/pkg/wanproxy"
 )
 
@@ -50,6 +51,9 @@ type Controller struct {
 	// Nil when the process was started without one, in which case the log view
 	// reports that rather than showing an empty buffer.
 	logRing *logbuf.Ring
+	// rbac is the authorization engine, nil when [rbac] is off. Built when the
+	// gRPC server starts; the RBAC RPCs and REST routes both read it.
+	rbac *rbac.Engine
 	// Managers
 	storage   *StorageManager
 	resources *ResourceManager
