@@ -72,7 +72,7 @@ func (rm *ResourceManager) assertMinorsFreeOn(ctx context.Context, host, resourc
 	// drbdsetup covers minors held by the kernel even when no .res mentions
 	// them (a removed resource whose device node lingers).
 	cmd := "grep -H -E '^[[:space:]]*device[[:space:]]+minor' /etc/drbd.d/*.res 2>/dev/null; " +
-		"sudo drbdsetup show --show-defaults 2>/dev/null | grep -E 'volume|device' || true"
+		"sudo drbdsetup show --show-defaults 2>/dev/null | grep -E '^resource|volume|device' || true"
 	res, err := rm.deployment.Exec(ctx, []string{host}, cmd)
 	if err != nil {
 		// A node we cannot inspect is a node we cannot vouch for, but refusing
@@ -89,31 +89,61 @@ func (rm *ResourceManager) assertMinorsFreeOn(ctx context.Context, host, resourc
 	}
 
 	for _, hr := range res.Hosts {
-		for _, line := range strings.Split(hr.Output, "\n") {
-			minor, ok := parseAnyDeviceMinor(line)
-			if !ok || !want[minor] {
-				continue
-			}
-			// A line from `grep -H` is "<path>:<the device line>"; the path
-			// names the owning resource. Our own resource re-appearing is fine
-			// (a re-run of the same operation).
-			owner := ""
-			if idx := strings.Index(line, ".res:"); idx > 0 {
-				owner = filepath.Base(line[:idx+4])
-				owner = strings.TrimSuffix(owner, ".res")
-			}
-			if owner == resource {
-				continue
-			}
-			if owner == "" {
-				owner = "another resource or a stale device node"
-			}
+		if minor, owner, ok := minorTaken(hr.Output, resource, want); ok {
 			return fmt.Errorf("device minor %d needed by %q is already used on %s by %s; "+
 				"free it there (drbdadm down + remove its .res) or recreate %q on a free minor",
 				minor, resource, host, owner, resource)
 		}
 	}
 	return nil
+}
+
+// minorTaken reads the minors a node reports — `grep -H` lines from its .res
+// files, then `drbdsetup show` — and says whether one `resource` wants is held
+// by something else, and by what.
+//
+// Both sources name the owner. A grep line carries the file's path; a
+// drbdsetup line does not, but follows the `resource "<name>" {` it belongs
+// to. Reading only the first, every drbdsetup line looked ownerless, so the
+// resource's own minor — still up from an attach whose teardown did not run —
+// read as a squatter, and the re-attach was refused for good: a queen pod
+// stayed in ContainerCreating for ten hours on exactly that.
+func minorTaken(output, resource string, want map[int]bool) (minor int, owner string, taken bool) {
+	current := ""
+	for _, line := range strings.Split(output, "\n") {
+		if name, ok := drbdsetupResource(line); ok {
+			current = name
+			continue
+		}
+		m, ok := parseAnyDeviceMinor(line)
+		if !ok || !want[m] {
+			continue
+		}
+		owner := current
+		if idx := strings.Index(line, ".res:"); idx > 0 {
+			owner = strings.TrimSuffix(filepath.Base(line[:idx+4]), ".res")
+		}
+		if owner == resource {
+			continue // our own, from a re-run of the same operation
+		}
+		if owner == "" {
+			owner = "another resource or a stale device node"
+		}
+		return m, owner, true
+	}
+	return 0, "", false
+}
+
+// drbdsetupResourceRe matches the line that opens a resource in `drbdsetup
+// show`: `resource "pvc_x" {` (quoted in DRBD 9) or `resource pvc_x {`.
+var drbdsetupResourceRe = regexp.MustCompile(`^resource\s+"?([^"\s{]+)"?\s*\{`)
+
+func drbdsetupResource(line string) (string, bool) {
+	m := drbdsetupResourceRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }
 
 // deviceMinorRe finds a `device ... minor N` anywhere in a line.
