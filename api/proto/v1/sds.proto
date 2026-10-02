@@ -258,8 +258,9 @@ service SDSController {
   // S3-compatible object store, an SMB share or a WebDAV endpoint.
   //
   // Distinct from snapshots (same pool, lost with the machine) and from WAN DR
-  // (a replica, where a delete replicates). Every backup is a FULL image; there
-  // is no incremental mode.
+  // (a replica, where a delete replicates). After the first full image, a
+  // backup of a thin volume is incremental: only blocks changed since the last
+  // backup to the same target are shipped.
   rpc AddBackupTarget(AddBackupTargetRequest) returns (AddBackupTargetResponse) {
     option (google.api.http) = { post: "/v1/backup-targets"; body: "*"; };
   }
@@ -280,6 +281,23 @@ service SDSController {
   }
   rpc DeleteBackup(DeleteBackupRequest) returns (DeleteBackupResponse) {
     option (google.api.http) = { delete: "/v1/backups/{id}"; };
+  }
+  // ImportBackups rebuilds backup records from the manifests on a target, for
+  // a controller that lost its database or a cluster restoring another's.
+  rpc ImportBackups(ImportBackupsRequest) returns (ImportBackupsResponse) {
+    option (google.api.http) = { post: "/v1/backup-targets/{target}/import"; body: "*"; };
+  }
+  rpc CreateBackupSchedule(CreateBackupScheduleRequest) returns (CreateBackupScheduleResponse) {
+    option (google.api.http) = { post: "/v1/backup-schedules"; body: "*"; };
+  }
+  rpc ListBackupSchedules(ListBackupSchedulesRequest) returns (ListBackupSchedulesResponse) {
+    option (google.api.http) = { get: "/v1/backup-schedules"; };
+  }
+  rpc DeleteBackupSchedule(DeleteBackupScheduleRequest) returns (DeleteBackupScheduleResponse) {
+    option (google.api.http) = { delete: "/v1/backup-schedules/{name}"; };
+  }
+  rpc RunBackupSchedule(RunBackupScheduleRequest) returns (RunBackupScheduleResponse) {
+    option (google.api.http) = { post: "/v1/backup-schedules/{name}/run"; body: "*"; };
   }
 
   // Gateway operations
@@ -2205,6 +2223,82 @@ message DeleteBackupRequest {
 message DeleteBackupResponse {
   bool success = 1;
   string message = 2;
+}
+
+message ImportBackupsRequest {
+  string target = 1;
+  // node reads the target; empty tries the registered nodes in turn.
+  string node = 2;
+}
+
+message ImportBackupsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string imported = 3;
+  // skipped maps a backup id, or a manifest path when it could not be read,
+  // to why it was not imported.
+  map<string, string> skipped = 4;
+}
+
+// BackupScheduleInfo is a cron-driven backup of one resource to one target.
+// Retention is GFS over the completed backups it made, and never breaks an
+// incremental chain: a kept backup keeps everything down to its full one.
+message BackupScheduleInfo {
+  // name is resource@target.
+  string name = 1;
+  string resource = 2;
+  string target = 3;
+  string cron = 4;
+  bool enabled = 5;
+  GFSRetention keep = 6;
+  string last_run = 7;
+  string next_run = 8;
+  // last_backup is the id the last run produced; last_error why it did not.
+  string last_backup = 9;
+  string last_error = 10;
+}
+
+message CreateBackupScheduleRequest {
+  string resource = 1;
+  string target = 2;
+  string cron = 3;
+  GFSRetention keep = 4;
+  bool enabled = 5;
+}
+
+message CreateBackupScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  BackupScheduleInfo schedule = 3;
+}
+
+message ListBackupSchedulesRequest {}
+
+message ListBackupSchedulesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BackupScheduleInfo schedules = 3;
+}
+
+message DeleteBackupScheduleRequest {
+  string name = 1;
+}
+
+message DeleteBackupScheduleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// RunBackupScheduleRequest runs a schedule now, retention included, and waits
+// for it.
+message RunBackupScheduleRequest {
+  string name = 1;
+}
+
+message RunBackupScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  BackupScheduleInfo schedule = 3;
 }
 
 // Gateway messages

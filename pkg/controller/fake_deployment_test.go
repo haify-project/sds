@@ -15,6 +15,7 @@ type execCall struct {
 
 type fakeDeploymentClient struct {
 	lvIsThinFunc                        func(ctx context.Context, host, vgName, lvName string) (bool, error)
+	vgFreeBytesFunc                     func(host, vgName string) (uint64, error)
 	execFunc                            func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error)
 	pvCreateFunc                        func(ctx context.Context, hosts []string, device string, opts ...deployment.LVMOption) (*deployment.ExecResult, error)
 	vgCreateFunc                        func(ctx context.Context, hosts []string, vgName string, devices []string) (*deployment.ExecResult, error)
@@ -357,6 +358,9 @@ func (f *fakeDeploymentClient) LVSizeBytes(ctx context.Context, host, vgName, lv
 }
 
 func (f *fakeDeploymentClient) VGFreeBytes(ctx context.Context, host, vgName string) (uint64, error) {
+	if f.vgFreeBytesFunc != nil {
+		return f.vgFreeBytesFunc(host, vgName)
+	}
 	return 3 << 30, nil
 }
 

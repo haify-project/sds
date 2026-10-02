@@ -143,6 +143,7 @@ func (s *Server) MCPServer() *mcp.Server {
 	s.registerZFSTools(srv)
 	s.registerTopologyTools(srv)
 	s.registerDataLifecycleTools(srv)
+	s.registerBackupScheduleTools(srv)
 	s.registerReplicationTLSTools(srv)
 	s.registerRunbooks(srv)
 	return srv

@@ -1,0 +1,245 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/robfig/cron/v3"
+	"go.uber.org/zap"
+
+	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/liliang-cn/sds/pkg/event"
+)
+
+// Scheduled backups. They ride the snapshot scheduler's cron, so they run only
+// on the active controller and move with it on a Self-HA failover; a backup
+// cut off by that failover is marked failed on startup (ReconcileInterrupted)
+// and the next tick takes a fresh one.
+//
+// Retention is the snapshot GFS policy applied to the schedule's completed
+// backups, with one rule on top: an incremental is useless without every
+// backup down to its full one, so whatever the policy keeps, its whole chain
+// is kept too. That is why a daily schedule keeping 7 can hold up to a month
+// of backups — the full one at the start of the chain stays until no kept
+// incremental is built on it.
+
+// scheduledBackupTimeout bounds one scheduled run, upload included.
+const scheduledBackupTimeout = 24 * time.Hour
+
+// backupRuns guards against a slow run being joined by the next tick: a
+// backup of a large volume can outlast an hourly cron.
+var backupRuns sync.Map
+
+// CreateBackupSchedule validates and stores a schedule, replacing any earlier
+// one for the same resource and target, and reloads the cron.
+func (sm *ScheduleManager) CreateBackupSchedule(ctx context.Context, resource, target, cronExpr string,
+	policy database.GFSPolicy, enabled bool) (*database.BackupSchedule, error) {
+	if err := validateCron(cronExpr); err != nil {
+		return nil, err
+	}
+	if !gfsHasRetention(policy) {
+		return nil, fmt.Errorf("retention policy keeps nothing: set at least one of hourly/daily/weekly/monthly/yearly")
+	}
+	db := sm.controller.db
+	if db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	if _, err := db.GetResource(ctx, resource); err != nil {
+		return nil, fmt.Errorf("resource %q not found", resource)
+	}
+	if _, err := db.GetBackupTarget(ctx, target); err != nil {
+		return nil, err
+	}
+	s := &database.BackupSchedule{
+		Name:     database.BackupScheduleName(resource, target),
+		Resource: resource, Target: target, Cron: cronExpr, Enabled: enabled, Keep: policy,
+	}
+	if old, err := db.GetBackupSchedule(ctx, s.Name); err == nil {
+		s.CreatedAt, s.LastRun, s.LastBackup, s.LastError = old.CreatedAt, old.LastRun, old.LastBackup, old.LastError
+	}
+	if err := db.SaveBackupSchedule(ctx, s); err != nil {
+		return nil, fmt.Errorf("save backup schedule: %w", err)
+	}
+	sm.controller.logger.Info("Saved backup schedule",
+		zap.String("schedule", s.Name), zap.String("cron", cronExpr), zap.Bool("enabled", enabled))
+	return s, sm.reload(ctx)
+}
+
+// DeleteBackupSchedule stops a schedule. The backups it made stay.
+func (sm *ScheduleManager) DeleteBackupSchedule(ctx context.Context, name string) error {
+	if sm.controller.db == nil {
+		return fmt.Errorf("database not available")
+	}
+	if err := sm.controller.db.DeleteBackupSchedule(ctx, name); err != nil {
+		return err
+	}
+	sm.controller.logger.Info("Deleted backup schedule", zap.String("schedule", name))
+	return sm.reload(ctx)
+}
+
+// ListBackupSchedules returns every backup schedule.
+func (sm *ScheduleManager) ListBackupSchedules(ctx context.Context) ([]*database.BackupSchedule, error) {
+	if sm.controller.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	return sm.controller.db.ListBackupSchedules(ctx)
+}
+
+// addBackupSchedules registers every enabled backup schedule on c.
+func (sm *ScheduleManager) addBackupSchedules(ctx context.Context, c *cron.Cron) error {
+	schedules, err := sm.controller.db.ListBackupSchedules(ctx)
+	if err != nil {
+		return fmt.Errorf("load backup schedules: %w", err)
+	}
+	for _, s := range schedules {
+		if !s.Enabled {
+			continue
+		}
+		name := s.Name
+		if _, err := c.AddFunc(s.Cron, func() { sm.runBackupTick(name) }); err != nil {
+			sm.controller.logger.Warn("Skipping backup schedule with invalid cron",
+				zap.String("schedule", name), zap.String("cron", s.Cron), zap.Error(err))
+		}
+	}
+	return nil
+}
+
+// RunBackupSchedule takes one backup for a schedule, then prunes. It returns
+// the schedule as it stands after the run, carrying the run's outcome. A run
+// still going when the next tick fires makes that tick a no-op.
+func (sm *ScheduleManager) RunBackupSchedule(ctx context.Context, name string) (*database.BackupSchedule, error) {
+	if _, busy := backupRuns.LoadOrStore(name, true); busy {
+		return nil, fmt.Errorf("backup schedule %q is already running", name)
+	}
+	defer backupRuns.Delete(name)
+
+	db, log := sm.controller.db, sm.controller.logger
+	if db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	s, err := db.GetBackupSchedule(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info("Running backup schedule", zap.String("schedule", name))
+	rec, runErr := sm.controller.backups.CreateBackup(ctx, s.Resource, s.Target, "", false)
+	failedBefore := s.LastError != ""
+	s.LastRun = time.Now()
+	if runErr != nil {
+		s.LastBackup, s.LastError = "", runErr.Error()
+		sm.publishBackupEvent(s, event.StatusFiring, event.SeverityWarning,
+			fmt.Sprintf("scheduled backup of %s to %s failed: %v", s.Resource, s.Target, runErr))
+	} else {
+		s.LastBackup, s.LastError = rec.ID, ""
+		if failedBefore {
+			sm.publishBackupEvent(s, event.StatusResolved, event.SeverityInfo,
+				fmt.Sprintf("scheduled backup of %s to %s completed again (%s)", s.Resource, s.Target, rec.ID))
+		}
+	}
+	if err := db.SaveBackupSchedule(context.WithoutCancel(ctx), s); err != nil {
+		log.Warn("Backup schedule: failed to record the run", zap.String("schedule", name), zap.Error(err))
+	}
+	if runErr == nil {
+		sm.pruneBackups(ctx, s)
+	}
+	return s, nil
+}
+
+// runBackupTick is the cron entry for a schedule.
+func (sm *ScheduleManager) runBackupTick(name string) {
+	ctx, cancel := context.WithTimeout(context.Background(), scheduledBackupTimeout)
+	defer cancel()
+	if s, err := sm.controller.db.GetBackupSchedule(ctx, name); err != nil || !s.Enabled {
+		return
+	}
+	if _, err := sm.RunBackupSchedule(ctx, name); err != nil {
+		sm.controller.logger.Warn("Backup schedule: tick skipped", zap.String("schedule", name), zap.Error(err))
+	}
+}
+
+func (sm *ScheduleManager) publishBackupEvent(s *database.BackupSchedule, status event.Status, sev event.Severity, msg string) {
+	if sm.controller.events == nil {
+		return
+	}
+	sm.controller.events.Publish(event.Event{
+		Type: event.TypeBackupFailed, Severity: sev, Status: status,
+		Resource: s.Resource, Message: msg,
+		Details: map[string]string{"target": s.Target, "schedule": s.Name},
+	})
+}
+
+// pruneBackups deletes the schedule's backups its policy no longer keeps,
+// newest first so no backup is deleted while a later one depends on it, and
+// drops failed records older than the newest completed backup: their objects
+// were removed when they failed, and the success after them supersedes them.
+func (sm *ScheduleManager) pruneBackups(ctx context.Context, s *database.BackupSchedule) {
+	log := sm.controller.logger
+	backups, err := sm.controller.db.ListBackups(ctx, s.Resource, s.Target)
+	if err != nil {
+		log.Warn("Backup schedule: list backups failed", zap.String("schedule", s.Name), zap.Error(err))
+		return
+	}
+	var newest time.Time
+	for _, b := range backups {
+		if b.State == database.BackupStateCompleted && b.StartedAt.After(newest) {
+			newest = b.StartedAt
+		}
+	}
+	doomed := selectExpiredBackups(backups, s.Keep)
+	for _, b := range backups {
+		if b.State == database.BackupStateFailed && b.StartedAt.Before(newest) {
+			doomed = append(doomed, b)
+		}
+	}
+	for _, b := range doomed {
+		if err := sm.controller.backups.DeleteBackup(ctx, b.ID, "", false); err != nil {
+			log.Warn("Backup schedule: prune failed", zap.String("backup", b.ID), zap.Error(err))
+			continue
+		}
+		log.Info("Backup schedule: pruned backup", zap.String("schedule", s.Name), zap.String("backup", b.ID))
+	}
+}
+
+// selectExpiredBackups returns the completed backups policy does not keep,
+// newest first. A backup is kept when GFS selects it or when a kept backup is
+// built on it, directly or further down its chain. Running and failed records
+// are never selected: one is in flight and the other holds no data.
+func selectExpiredBackups(backups []*database.Backup, policy database.GFSPolicy) []*database.Backup {
+	byID := make(map[string]*database.Backup, len(backups))
+	var snaps []scheduledSnap
+	for _, b := range backups {
+		if b.State != database.BackupStateCompleted {
+			continue
+		}
+		byID[b.ID] = b
+		snaps = append(snaps, scheduledSnap{Name: b.ID, TS: b.StartedAt})
+	}
+	candidates := selectExpiredSnapshots(snaps, policy)
+	expired := make(map[string]bool, len(candidates))
+	for _, e := range candidates {
+		expired[e.Name] = true
+	}
+	for id, b := range byID {
+		if expired[id] {
+			continue
+		}
+		for cur := b; cur.Kind == database.BackupKindIncremental; {
+			parent := byID[cur.Parent]
+			if parent == nil {
+				break
+			}
+			delete(expired, parent.ID)
+			cur = parent
+		}
+	}
+	var out []*database.Backup
+	for _, c := range candidates {
+		if expired[c.Name] {
+			out = append(out, byID[c.Name])
+		}
+	}
+	return out
+}

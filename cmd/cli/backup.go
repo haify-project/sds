@@ -44,6 +44,8 @@ so the image is crash-consistent.
 	cmd.AddCommand(backupListCommand())
 	cmd.AddCommand(backupRestoreCommand())
 	cmd.AddCommand(backupDeleteCommand())
+	cmd.AddCommand(backupScheduleCommand())
+	cmd.AddCommand(backupImportCommand())
 	return cmd
 }
 

@@ -207,6 +207,58 @@ func (s *rcloneSession) Remove(ctx context.Context, objectPath string) error {
 	return nil
 }
 
+// List implements Session. One recursive listing of the target root rather
+// than a walk, so a bucket of a thousand backups costs one round trip.
+func (s *rcloneSession) List(ctx context.Context) ([]Object, error) {
+	cmd := s.rcloneEnv() + " lsjson -R --files-only " + shellQuote(s.remotePath(""))
+	res, err := s.dep.Exec(ctx, []string{s.host}, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("backup: list target: %w", err)
+	}
+	if !res.AllSuccess() {
+		return nil, fmt.Errorf("backup: list target failed: %s", res.FailureDetails())
+	}
+	return parseRcloneList(res.Output(s.host))
+}
+
+// GetText implements Session.
+func (s *rcloneSession) GetText(ctx context.Context, objectPath string) (string, error) {
+	res, err := s.dep.Exec(ctx, []string{s.host}, s.PullCmd(objectPath))
+	if err != nil {
+		return "", fmt.Errorf("backup: read %s: %w", objectPath, err)
+	}
+	if !res.AllSuccess() {
+		return "", fmt.Errorf("backup: read %s failed: %s", objectPath, res.FailureDetails())
+	}
+	return res.Output(s.host), nil
+}
+
+// parseRcloneList reads `rclone lsjson` output. rclone may print notices on
+// the lines before the JSON array, so the array is found rather than assumed
+// to be the whole output.
+func parseRcloneList(out string) ([]Object, error) {
+	start := strings.Index(out, "[")
+	if start < 0 {
+		return nil, fmt.Errorf("backup: could not read the target listing: %q", strings.TrimSpace(out))
+	}
+	var entries []struct {
+		Path  string `json:"Path"`
+		Size  int64  `json:"Size"`
+		IsDir bool   `json:"IsDir"`
+	}
+	if err := json.Unmarshal([]byte(out[start:]), &entries); err != nil {
+		return nil, fmt.Errorf("backup: could not read the target listing: %w", err)
+	}
+	objects := make([]Object, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir || e.Size < 0 {
+			continue
+		}
+		objects = append(objects, Object{Path: e.Path, Bytes: uint64(e.Size)})
+	}
+	return objects, nil
+}
+
 // Close implements Session by removing the staged credentials. A leftover file
 // would be 0600 in a 0700 directory and therefore not a disclosure, but it
 // would be a credential outliving its use, which is its own problem.

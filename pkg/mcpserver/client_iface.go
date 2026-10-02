@@ -159,6 +159,10 @@ type ControllerClient interface {
 	ListBackups(ctx context.Context, resource, target string) ([]*sdspb.BackupInfo, error)
 	RestoreBackup(ctx context.Context, id, resource, node string) (*sdspb.BackupInfo, error)
 	DeleteBackup(ctx context.Context, id, node string, force bool) error
+	ImportBackups(ctx context.Context, target, node string) (*sdspb.ImportBackupsResponse, error)
+	CreateBackupSchedule(ctx context.Context, req *sdspb.CreateBackupScheduleRequest) (*sdspb.BackupScheduleInfo, error)
+	ListBackupSchedules(ctx context.Context) ([]*sdspb.BackupScheduleInfo, error)
+	DeleteBackupSchedule(ctx context.Context, name string) error
 }
 
 // compile-time check: the real gRPC client satisfies the interface.

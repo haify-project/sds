@@ -333,3 +333,19 @@ func TestRemoveIsIdempotent(t *testing.T) {
 	assert.Contains(t, last, "lsf", "removal must check first so a missing object is not an error")
 	assert.Contains(t, last, "deletefile")
 }
+
+func TestParseRcloneListSkipsNoticesAndDirectories(t *testing.T) {
+	out := "2026/10/02 NOTICE: something\n" +
+		`[{"Path":"data/data_1/manifest.json","Size":512,"IsDir":false},` +
+		`{"Path":"data","Size":-1,"IsDir":true},` +
+		`{"Path":"data/data_1/volume-0.img.gz","Size":1048576,"IsDir":false}]`
+	objs, err := parseRcloneList(out)
+	require.NoError(t, err)
+	assert.Equal(t, []Object{
+		{Path: "data/data_1/manifest.json", Bytes: 512},
+		{Path: "data/data_1/volume-0.img.gz", Bytes: 1048576},
+	}, objs)
+
+	_, err = parseRcloneList("Failed to lsjson: directory not found")
+	assert.Error(t, err)
+}

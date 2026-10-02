@@ -83,6 +83,126 @@
         ]
       }
     },
+    "/v1/backup-schedules": {
+      "get": {
+        "operationId": "SDSController_ListBackupSchedules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListBackupSchedulesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "operationId": "SDSController_CreateBackupSchedule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateBackupScheduleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateBackupScheduleRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/backup-schedules/{name}": {
+      "delete": {
+        "operationId": "SDSController_DeleteBackupSchedule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteBackupScheduleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/backup-schedules/{name}/run": {
+      "post": {
+        "operationId": "SDSController_RunBackupSchedule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunBackupScheduleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRunBackupScheduleBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/backup-targets": {
       "get": {
         "operationId": "SDSController_ListBackupTargets",
@@ -106,7 +226,7 @@
       },
       "post": {
         "summary": "Backup operations: shipping point-in-time copies OFF the cluster to an\nS3-compatible object store, an SMB share or a WebDAV endpoint.",
-        "description": "Distinct from snapshots (same pool, lost with the machine) and from WAN DR\n(a replica, where a delete replicates). Every backup is a FULL image; there\nis no incremental mode.",
+        "description": "Distinct from snapshots (same pool, lost with the machine) and from WAN DR\n(a replica, where a delete replicates). After the first full image, a\nbackup of a thin volume is incremental: only blocks changed since the last\nbackup to the same target are shipped.",
         "operationId": "SDSController_AddBackupTarget",
         "responses": {
           "200": {
@@ -166,6 +286,45 @@
             "in": "query",
             "required": false,
             "type": "boolean"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/backup-targets/{target}/import": {
+      "post": {
+        "summary": "ImportBackups rebuilds backup records from the manifests on a target, for\na controller that lost its database or a cluster restoring another's.",
+        "operationId": "SDSController_ImportBackups",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ImportBackupsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerImportBackupsBody"
+            }
           }
         ],
         "tags": [
@@ -5283,6 +5442,15 @@
     "SDSControllerEvictHaBody": {
       "type": "object"
     },
+    "SDSControllerImportBackupsBody": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "node reads the target; empty tries the registered nodes in turn."
+        }
+      }
+    },
     "SDSControllerMakeHaBody": {
       "type": "object",
       "properties": {
@@ -5425,6 +5593,10 @@
           "type": "string"
         }
       }
+    },
+    "SDSControllerRunBackupScheduleBody": {
+      "type": "object",
+      "description": "RunBackupScheduleRequest runs a schedule now, retention included, and waits\nfor it."
     },
     "SDSControllerSetDualPrimaryBody": {
       "type": "object",
@@ -6038,6 +6210,44 @@
         }
       }
     },
+    "v1BackupScheduleInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "name is resource@target."
+        },
+        "resource": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "keep": {
+          "$ref": "#/definitions/v1GFSRetention"
+        },
+        "lastRun": {
+          "type": "string"
+        },
+        "nextRun": {
+          "type": "string"
+        },
+        "lastBackup": {
+          "type": "string",
+          "description": "last_backup is the id the last run produced; last_error why it did not."
+        },
+        "lastError": {
+          "type": "string"
+        }
+      },
+      "description": "BackupScheduleInfo is a cron-driven backup of one resource to one target.\nRetention is GFS over the completed backups it made, and never breaks an\nincremental chain: a kept backup keeps everything down to its full one."
+    },
     "v1BackupTargetInfo": {
       "type": "object",
       "properties": {
@@ -6256,6 +6466,40 @@
         },
         "backup": {
           "$ref": "#/definitions/v1BackupInfo"
+        }
+      }
+    },
+    "v1CreateBackupScheduleRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "keep": {
+          "$ref": "#/definitions/v1GFSRetention"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1CreateBackupScheduleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/definitions/v1BackupScheduleInfo"
         }
       }
     },
@@ -6762,6 +7006,17 @@
       }
     },
     "v1DeleteBackupResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DeleteBackupScheduleResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -7463,6 +7718,30 @@
         }
       }
     },
+    "v1ImportBackupsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "imported": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skipped": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "skipped maps a backup id, or a manifest path when it could not be read,\nto why it was not imported."
+        }
+      }
+    },
     "v1ListAuditEventsResponse": {
       "type": "object",
       "properties": {
@@ -7483,6 +7762,24 @@
           "type": "string",
           "format": "int64",
           "description": "Entries held in total, so the UI can say whether it is showing everything."
+        }
+      }
+    },
+    "v1ListBackupSchedulesResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "schedules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BackupScheduleInfo"
+          }
         }
       }
     },
@@ -8957,6 +9254,20 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1RunBackupScheduleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/definitions/v1BackupScheduleInfo"
         }
       }
     },

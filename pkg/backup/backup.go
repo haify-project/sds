@@ -39,19 +39,13 @@
 // from the controller in a single-node deployment — means implementing two
 // interfaces, not editing the controller.
 //
-// # What this package deliberately does NOT do
+// # Incremental and compressed
 //
-// Incremental. Every backup is a full image of the volume. Changed-block
-// tracking would need either DRBD support that does not exist or a chunked,
-// content-addressed archive format (restic-style), and half of one of those is
-// worse than none. The limitation is stated in `sds-cli backup create --help`
-// and in the README rather than left for an operator to discover when their
-// uplink saturates.
-//
-// Compression. The end-to-end integrity check is "the object at the far end is
-// exactly as many bytes as we sent". Compressing the stream would make that
-// check impossible to state exactly, and a weaker check on a backup is a bad
-// trade for saved bandwidth.
+// Images are gzip-compressed on the way out, and after the first backup of a
+// thin volume only the blocks thin_delta reports as changed are shipped. Both
+// live in pkg/controller (backup_transfer.go, backup_incremental.go), which
+// composes the dd/gzip pipelines around PushCmd and PullCmd; this package only
+// moves bytes to and from the target.
 package backup
 
 import (
@@ -309,8 +303,22 @@ type Session interface {
 	// is not secret: it travels in the command line.
 	PutText(ctx context.Context, objectPath, content string) error
 
+	// List returns every object under the target's root, with its size, as
+	// paths relative to that root. It is how a controller that has lost its
+	// database finds out what a target holds.
+	List(ctx context.Context) ([]Object, error)
+
+	// GetText reads a small text object (a manifest) back.
+	GetText(ctx context.Context, objectPath string) (string, error)
+
 	// Close removes the node-local credential material.
 	Close(ctx context.Context) error
+}
+
+// Object is one entry of a target listing.
+type Object struct {
+	Path  string
+	Bytes uint64
 }
 
 // Backend opens sessions against a target from a given node.

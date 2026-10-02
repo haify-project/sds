@@ -13,7 +13,7 @@ No agent runs on the storage nodes: one controller drives them over SSH and keep
 - **Pools**: LVM, LVM-thin, ZFS. SSD caching for thin pools.
 - **Resources**: replicated DRBD volumes with automatic placement, online resize, diskless clients, quorum tiebreakers, LUKS2 encryption at rest, TLS-encrypted replication.
 - **Gateways**: iSCSI, NFS, NVMe-oF, each failing over with drbd-reactor and a floating IP.
-- **Snapshots and backups**: LVM / ZFS snapshots with retention schedules; incremental backups to S3, SMB or WebDAV.
+- **Snapshots and backups**: LVM / ZFS snapshots with retention schedules; scheduled, incremental backups to S3, SMB or WebDAV, restorable on a rebuilt or different cluster.
 - **Cross-site**: asynchronous DR replicas over a TCP tunnel that works through NAT.
 - **Integrity**: scheduled DRBD verify with resync, alerts on degraded replicas, lost Primaries, out-of-sync data and full pools.
 - **Kubernetes**: CSI driver with snapshots, clones, expansion, raw block and remote (diskless) access.

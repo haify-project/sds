@@ -28,6 +28,8 @@ const (
 	// of each copy pushed to them. See pkg/backup.
 	backupTargetsBucket = "backup_targets"
 	backupsBucket       = "backups"
+	// backupSchedulesBucket holds cron-driven backups, keyed resource@target.
+	backupSchedulesBucket = "backup_schedules"
 
 	// notifyChannelsBucket holds where alerts are delivered. Kept in the
 	// database so a channel can be changed from the UI without restarting the
@@ -122,7 +124,7 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 
 	// Initialize buckets
 	if err := db.Update(func(tx *bolt.Tx) error {
-		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, profilesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket, backupTargetsBucket, backupsBucket, notifyChannelsBucket}
+		buckets := []string{nodesBucket, poolsBucket, resourcesBucket, profilesBucket, volumesBucket, gatewaysBucket, haConfigsBucket, rbacBucket, schedulesBucket, backupTargetsBucket, backupsBucket, backupSchedulesBucket, notifyChannelsBucket}
 		for _, bucket := range buckets {
 			_, err := tx.CreateBucketIfNotExists([]byte(bucket))
 			if err != nil {

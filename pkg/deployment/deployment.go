@@ -106,7 +106,19 @@ func New(logger *zap.Logger) (*Client, error) {
 // parsed by nobody and silently ignored, so the controller kept using
 // ~/.dispatch/config.toml and failed with opaque SSH auth errors.
 func NewWithOptions(logger *zap.Logger, opts Options) (*Client, error) {
-	var dispatchCfg *dispatch.Config
+	parallel := opts.Parallel
+	if parallel <= 0 {
+		parallel = defaultParallel
+	}
+
+	// The parallelism is handed to dispatch as its default as well as passed
+	// per Exec. dispatch's Copy takes no parallelism of its own and sizes its
+	// worker semaphore from the config file's [exec] parallel; a file without
+	// that line makes it 0, the semaphore unbuffered, and every Copy blocks
+	// forever on its first host. On openclaw that stalled each backup's
+	// credential upload, and with it InstallFile, which Self-HA uses to ship
+	// the controller binary.
+	dispatchCfg := &dispatch.Config{Exec: &dispatch.ExecConfig{Parallel: parallel}}
 	if opts.ConfigPath != "" {
 		// dispatch silently falls back to its own default config
 		// (~/.dispatch/config.toml, then ~/.ssh/config) when the path it is
@@ -117,17 +129,12 @@ func NewWithOptions(logger *zap.Logger, opts Options) (*Client, error) {
 		if _, err := os.Stat(opts.ConfigPath); err != nil {
 			return nil, fmt.Errorf("dispatch config %q: %w", opts.ConfigPath, err)
 		}
-		dispatchCfg = &dispatch.Config{ConfigPath: opts.ConfigPath}
+		dispatchCfg.ConfigPath = opts.ConfigPath
 	}
 
 	client, err := dispatch.New(dispatchCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dispatch client: %w", err)
-	}
-
-	parallel := opts.Parallel
-	if parallel <= 0 {
-		parallel = defaultParallel
 	}
 
 	if logger != nil && opts.ConfigPath != "" {

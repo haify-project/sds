@@ -441,6 +441,9 @@ the node that becomes active picks them up.
 
 A backup is a compressed image of a resource shipped somewhere SDS cannot reach
 from the cluster. Targets are S3-compatible object stores, SMB shares, or WebDAV.
+The node that reads a backup runs `rclone` to talk to the target, so install it
+on every storage node (`apt install rclone`); a node without it is refused
+before anything is snapshotted.
 
 **Define a target.** The secret is never a command-line flag — it would land in
 your shell history:
@@ -494,9 +497,54 @@ What an incremental costs:
   backup and then every incremental after it, oldest first. None of them can be
   deleted while a later one exists; delete newest first.
 
+**Which replica is read.** An UpToDate Secondary, so the snapshot's cost lands
+away from the workload; the node holding the last backup's base snapshot when
+there is one. A thick volume's snapshot reserves 20% of the volume (at least
+256 MiB) of free space in its volume group up front, so a replica whose group
+lacks that room is passed over for one that has it.
+
+**Scheduled backups.** One schedule per resource and target, run by the active
+controller (it carries on after a controller failover). Retention counts the
+schedule's completed backups the way snapshot schedules count snapshots, with
+one addition: a kept incremental keeps every backup down to its full one. A
+daily schedule keeping 7 can therefore hold up to a month of backups until the
+chain restarts with a full one.
+
+```bash
+sds-cli backup schedule create --resource db --target offsite \
+    --cron "30 18 * * *" --keep-daily 7 --keep-weekly 4 --keep-monthly 3
+sds-cli backup schedule list          # last run, the backup it made or why it failed, next run
+sds-cli backup schedule run db@offsite   # run now, retention included, and wait
+sds-cli backup schedule delete db@offsite   # its backups stay
+```
+
+The cron is in the controller's time zone — usually UTC on a server. A run
+still going when the next one is due skips that tick. A failed run raises a
+`backup.failed` event, delivered like any alert, and resolves with the next
+completed run. Failed records older than the newest completed backup are
+removed by the schedule.
+
+**When the controller's database is gone, or the backups belong to another
+cluster.** Each backup leaves a `manifest.json` next to its images on the
+target. `backup import` reads them and rebuilds the records, incremental chains
+included:
+
+```bash
+sds-cli node register ...                       # a rebuilt cluster: nodes first
+sds-cli backup target add --name offsite ...    # same bucket and --prefix as before
+sds-cli backup import --target offsite
+sds-cli resource create --name db --size 20G ...   # at least as large as the backup
+sds-cli backup restore <backup-id> --resource db
+```
+
+Importing twice records nothing twice. A backup whose images are not all on the
+target is skipped and named. The next backup after an import is full unless the
+newest backup's base snapshot is still on that node of this cluster. Tested on
+the Lima cluster: a five-link chain was imported into an emptied controller and
+restored block-identical, and the same chain was restored on orange (x86, thick
+LVM) from a backup taken on Lima (arm64, thin).
+
 Know the limits before you build a policy on this:
-- **No schedule.** Backups run when you run them, and accumulate until you
-  delete them. Wrap `backup create` in cron if you need one.
 - Only a backup listed as `completed` is restorable. `running` means it is still
   uploading; `failed` means it is not a usable copy. Completion is verified
   against the target's own reported size, not just the exit code.

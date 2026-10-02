@@ -46,8 +46,8 @@ const (
 
 	// manifestObject is the self-describing index written alongside the images.
 	// It exists for the disaster the backups are for: when the SDS database is
-	// gone too, this is what tells whoever is holding the bucket what these
-	// files are and how big each one should be.
+	// gone too, `sds-cli backup import` rebuilds the backup records, chains
+	// included, from these files alone (backup_import.go).
 	manifestObject = "manifest.json"
 
 	// manifestVersion is bumped when the on-target layout changes.
@@ -64,6 +64,7 @@ type BackupManifest struct {
 	Kind       string                   `json:"kind"`
 	Parent     string                   `json:"parent,omitempty"`
 	CreatedAt  string                   `json:"created_at"`
+	FinishedAt string                   `json:"finished_at,omitempty"`
 	TotalBytes uint64                   `json:"total_bytes"`
 	Volumes    []BackupManifestVolume   `json:"volumes"`
 	Note       string                   `json:"note"`
@@ -80,6 +81,8 @@ type BackupManifestVolume struct {
 	// Ranges lists, one "offset length" pair per line, where each run of
 	// bytes in an incremental Object belongs. Empty for a full image.
 	Ranges string `json:"ranges,omitempty"`
+	// ChangedBytes is how much of the volume an incremental image carries.
+	ChangedBytes uint64 `json:"changed_bytes,omitempty"`
 }
 
 // BackupManifestSnapshot records the snapshot each image was read from.
@@ -206,6 +209,9 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 		if last := bm.latestCompleted(ctx, resource, targetName); last != nil && bm.readable(info, last.Node) {
 			node = last.Node
 		}
+	}
+	if node == "" {
+		node = bm.nodeWithSnapshotRoom(ctx, info)
 	}
 	node, err = bm.pickBackupNode(info, node)
 	if err != nil {
@@ -418,6 +424,7 @@ func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo
 		Version: manifestVersion, ID: rec.ID, Resource: rec.Resource, Node: rec.Node,
 		Backend: rec.Backend, Kind: rec.Kind, Parent: rec.Parent,
 		CreatedAt:  rec.StartedAt.UTC().Format(time.RFC3339),
+		FinishedAt: time.Now().UTC().Format(time.RFC3339),
 		TotalBytes: rec.TotalBytes,
 		Note: "Raw full images of each DRBD volume, bounded by the DRBD device size " +
 			"(smaller than the backing LV, whose tail holds DRBD metadata). Restore with " +
@@ -428,7 +435,7 @@ func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo
 	for _, v := range rec.Volumes {
 		m.Volumes = append(m.Volumes, BackupManifestVolume{
 			VolumeID: v.VolumeID, Object: v.Object, Bytes: v.Bytes,
-			Pool: v.Pool, Backing: v.BackingVolume, Ranges: v.Ranges,
+			Pool: v.Pool, Backing: v.BackingVolume, Ranges: v.Ranges, ChangedBytes: v.ChangedBytes,
 		})
 	}
 	for _, v := range info.Volumes {
@@ -457,42 +464,4 @@ func (bm *BackupManager) backingDevices(ctx context.Context, resource string) (m
 		out[uint32(v.VolumeID)] = v.Device
 	}
 	return out, nil
-}
-
-// pickBackupNode chooses which replica to read.
-//
-// An explicitly named node is honoured as given — an operator asking for the DR
-// node knows what they are asking for. Otherwise a Secondary is preferred so
-// the snapshot's copy-on-write cost lands away from the node serving the
-// workload, and the DR node is skipped: under protocol A it may be behind, and
-// a backup whose point in time is "somewhere near then" is not one.
-func (bm *BackupManager) pickBackupNode(info *ResourceInfo, requested string) (string, error) {
-	if requested != "" {
-		for _, n := range info.Nodes {
-			if n == requested {
-				return requested, nil
-			}
-		}
-		return "", fmt.Errorf("node %q holds no replica of %q", requested, info.Name)
-	}
-
-	var fallback string
-	for _, n := range info.Nodes {
-		if info.WANMode && n == info.DRNode {
-			continue
-		}
-		st := info.NodeStates[n]
-		if st == nil || st.DiskState != "UpToDate" {
-			continue
-		}
-		if st.Role != "Primary" {
-			return n, nil
-		}
-		fallback = n
-	}
-	if fallback != "" {
-		return fallback, nil
-	}
-	return "", fmt.Errorf(
-		"no node holds an UpToDate replica of %q; back up from a healthy node or name one explicitly", info.Name)
 }

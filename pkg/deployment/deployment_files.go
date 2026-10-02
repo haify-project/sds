@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/liliang-cn/dispatch/pkg/dispatch"
 	"go.uber.org/zap"
@@ -282,7 +283,9 @@ func (c *Client) DistributeSecret(ctx context.Context, hosts []string, content, 
 	}
 
 	if len(remoteHosts) > 0 {
-		copyResult, err := c.dispatch.Copy(ctx, remoteHosts, local, relPath, dispatch.WithCopyMode(0600))
+		copyResult, err := copyWithin(ctx, secretCopyTimeout, func() (*dispatch.CopyResult, error) {
+			return c.dispatch.Copy(ctx, remoteHosts, local, relPath, dispatch.WithCopyMode(0600))
+		})
 		if err != nil {
 			return nil, fmt.Errorf("DistributeSecret: copy to %v: %w", remoteHosts, err)
 		}
@@ -301,6 +304,40 @@ func (c *Client) DistributeSecret(ctx context.Context, hosts []string, content, 
 	c.logger.Debug("Secret distributed",
 		zap.Strings("hosts", hosts), zap.String("path", relPath), zap.Bool("success", result.Success))
 	return result, nil
+}
+
+// secretCopyTimeout bounds copying a secret file: a few hundred bytes, so
+// anything longer is a transfer that is not coming back.
+const secretCopyTimeout = 2 * time.Minute
+
+// copyWithin runs a dispatch copy but gives up after d or when ctx ends.
+//
+// dispatch's Copy stops watching its context once the per-host transfers have
+// started and then waits for all of them, so one SFTP session on a stalled
+// connection blocks its caller forever. Seen on a scheduled backup to a node
+// whose network had paused: the run never returned, and the schedule's
+// one-run-at-a-time guard then skipped every later tick. The abandoned copy
+// finishes or dies with its connection; its result is discarded.
+func copyWithin(ctx context.Context, d time.Duration, copyFn func() (*dispatch.CopyResult, error)) (*dispatch.CopyResult, error) {
+	type outcome struct {
+		res *dispatch.CopyResult
+		err error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		res, err := copyFn()
+		done <- outcome{res, err}
+	}()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case o := <-done:
+		return o.res, o.err
+	case <-timer.C:
+		return nil, fmt.Errorf("copy did not finish within %s", d)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // InstallFile installs a local file — typically a binary — at an absolute

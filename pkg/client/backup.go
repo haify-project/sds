@@ -100,3 +100,63 @@ func (c *SDSClient) DeleteBackup(ctx context.Context, id, node string, force boo
 	}
 	return nil
 }
+
+// ImportBackups rebuilds backup records from the manifests on a target.
+func (c *SDSClient) ImportBackups(ctx context.Context, target, node string) (*sdspb.ImportBackupsResponse, error) {
+	resp, err := c.client.ImportBackups(ctx, &sdspb.ImportBackupsRequest{Target: target, Node: node})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp, nil
+}
+
+// CreateBackupSchedule creates or replaces the schedule backing resource up to target.
+func (c *SDSClient) CreateBackupSchedule(ctx context.Context, req *sdspb.CreateBackupScheduleRequest) (*sdspb.BackupScheduleInfo, error) {
+	resp, err := c.client.CreateBackupSchedule(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Schedule, nil
+}
+
+// ListBackupSchedules returns every backup schedule.
+func (c *SDSClient) ListBackupSchedules(ctx context.Context) ([]*sdspb.BackupScheduleInfo, error) {
+	resp, err := c.client.ListBackupSchedules(ctx, &sdspb.ListBackupSchedulesRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Schedules, nil
+}
+
+// DeleteBackupSchedule stops a schedule; its backups stay.
+func (c *SDSClient) DeleteBackupSchedule(ctx context.Context, name string) error {
+	resp, err := c.client.DeleteBackupSchedule(ctx, &sdspb.DeleteBackupScheduleRequest{Name: name})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
+// RunBackupSchedule runs a schedule now and waits for the backup.
+func (c *SDSClient) RunBackupSchedule(ctx context.Context, name string) (*sdspb.BackupScheduleInfo, error) {
+	resp, err := c.client.RunBackupSchedule(ctx, &sdspb.RunBackupScheduleRequest{Name: name})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return resp.Schedule, fmt.Errorf("%s", resp.Message)
+	}
+	return resp.Schedule, nil
+}

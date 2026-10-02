@@ -92,6 +92,12 @@ const (
 	// kernel has dropped the backing device, and any DRBD replica on it is
 	// about to report Diskless.
 	TypePoolOutOfSpace Type = "pool.out_of_space"
+
+	// TypeBackupFailed fires when a scheduled backup did not complete, and
+	// resolves on the schedule's next completed run. A schedule that keeps
+	// failing leaves the cluster with an ever older last good copy and no
+	// other sign of it.
+	TypeBackupFailed Type = "backup.failed"
 )
 
 // Severity ranks how much an event should interrupt someone.

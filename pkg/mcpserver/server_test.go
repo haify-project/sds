@@ -168,6 +168,8 @@ func TestToolRegistration(t *testing.T) {
 		"sds_pool_add_cache", "sds_pool_remove_cache",
 		"sds_backup_list", "sds_backup_create", "sds_backup_restore", "sds_backup_delete",
 		"sds_backup_target_list", "sds_backup_target_delete",
+		"sds_backup_schedule_list", "sds_backup_schedule_create", "sds_backup_schedule_delete",
+		"sds_backup_import",
 	} {
 		if _, found := tools[want]; !found {
 			t.Errorf("expected tool %q not registered", want)

@@ -108,8 +108,9 @@ func selectExpiredSnapshots(snaps []scheduledSnap, policy database.GFSPolicy) []
 	return expired
 }
 
-// ScheduleManager runs cron-driven snapshot schedules on the active controller
-// and prunes old snapshots per each schedule's GFS retention policy.
+// ScheduleManager runs cron-driven snapshot and backup schedules on the active
+// controller and prunes old snapshots and backups per each schedule's GFS
+// retention policy.
 type ScheduleManager struct {
 	controller *Controller
 	mu         sync.Mutex
@@ -265,6 +266,9 @@ func (sm *ScheduleManager) rebuildLocked(ctx context.Context) error {
 				zap.Error(err))
 		}
 	}
+	if err := sm.addBackupSchedules(ctx, c); err != nil {
+		return err
+	}
 	if spec := sm.verifySchedule(); spec != "" {
 		if _, err := c.AddFunc(spec, sm.runVerifySweep); err != nil {
 			sm.controller.logger.Warn("Skipping the verify schedule: invalid cron",
@@ -361,11 +365,7 @@ func (sm *ScheduleManager) snapshotVolume(ctx context.Context, host, node string
 // cowSize returns a copy-on-write reservation (~20% of an originGB-sized
 // volume) as an lvcreate -L argument, never below 256 MiB.
 func cowSize(originGB uint64) string {
-	mb := originGB * 1024 / 5
-	if mb < 256 {
-		mb = 256
-	}
-	return fmt.Sprintf("%dM", mb)
+	return fmt.Sprintf("%dM", cowBytes(originGB)>>20)
 }
 
 // pruneVolume lists scheduled snapshots of vol on host and deletes those the
