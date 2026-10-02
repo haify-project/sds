@@ -89,7 +89,7 @@ func ParseKind(s string) (Kind, error) {
 // reaches the node inside a 0600 file written over the SSH stream (see
 // DeploymentClient.PutSecret), and it is never returned by the API.
 type TargetSpec struct {
-	// Name is the target's identifier in `sds-cli backup target`.
+	// Name is the target's identifier in `sds backup target`.
 	Name string
 	Kind Kind
 

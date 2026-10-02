@@ -1,173 +1,92 @@
 # Realtime DRBD Sync Progress — Design
 
 Date: 2026-07-01
-Status: Approved (design), pending implementation plan
+Status: Implemented
 
 ## Context
 
-The SDS web UI shows each resource's node roles and disk states, but not the
-live resync progress. When a resource is doing an initial or recovery sync,
-operators want to see, in real time, **which node is syncing to which and how
-far along** (e.g. `orange1 → orange2  86%`).
+The web UI showed each resource's node roles and disk states but not resync
+progress. During an initial or recovery sync, operators need to see which peer
+is syncing and how far along it is.
 
-Two facts shape this work:
-
-1. The controller's current live-status path parses **text** `drbdadm status`
-   (`parseNodeStatesFromStatus`) and only extracts each node's role and disk
-   state. It does not surface replication state or sync percentage. That text
-   parser also recently produced a node/disk misattribution bug with diskless
-   tiebreakers.
-2. `drbdsetup status <res> --json` is available on all cluster nodes (drbd
-   9.3.0) and returns structured, node-keyed data including
-   `replication-state`, `peer-disk-state`, and `percent-in-sync` per peer.
+The original live-status path parsed **text** `drbdadm status`
+(`parseNodeStatesFromStatus`), which yields only role and disk state and had
+already misattributed a diskless tiebreaker's disk state to another node.
+`drbdsetup status <res> --json` is structured, keyed by node name, and carries
+per-peer `replication-state`, `peer-disk-state`, `percent-in-sync` and, during
+a resync or verify, `percent-resync-done`.
 
 ## Decisions
 
-- **Data source:** parse `drbdsetup status <res> --json` for live status
-  (Approach A). Structured, keyed by node name / node-id — no index-based
-  misattribution. Includes the diskless tiebreaker as a normal peer. The text
-  parser is kept as a graceful fallback.
-- **Scope:** full — always show each peer's replication state
-  (Established / SyncSource / SyncTarget) plus the sync percentage during a
-  resync, in both the Resources list page and the Status dialog. The diskless
-  tiebreaker is shown as a peer row (closing the prior gap where it was omitted).
-- **Polling:** idle = **zero polling**. A single seed fetch on page/dialog open
-  (and after mutating actions); adaptive `refetchInterval` polls a resource
-  every 2s **only while it has an active resync**, and stops the moment it
-  reaches Established/100%.
+- **Data source:** `drbdsetup status <res> --json`, with the text parser kept
+  as a fallback.
+- **Scope:** every peer's replication state plus the sync percentage, in the
+  resources table and the resource detail view. A diskless tiebreaker or
+  data client appears as an ordinary peer.
+- **Polling:** no polling while idle. A resource's status is fetched once; it
+  is re-polled every 2 s only while one of its peers is resyncing, and polling
+  stops when the resync ends. Backend push (SSE/WebSocket) was not chosen.
 
-## Architecture
+## Backend
 
 ```
- UI (TanStack Query, adaptive refetchInterval)
-   seed fetch once → if syncing: poll 2s → stop at 100%
-        │ GET /v1/resources/<name>/status
+ UI (TanStack Query, refetchInterval = syncPollInterval)
+        │ GET /v1/resources/{name}/status
         ▼
- controller ResourceStatus / GetResource
-        │ DRBDStatusJSON(hosts[0], res)  →  drbdsetup status <res> --json
-        │ parseNodeStatesFromJSON()  (fallback: parseNodeStatesFromStatus)
+ controller ResourceStatus / GetResource  (pkg/controller/resource_query.go)
+        │ text `drbdadm status` → parseNodeStatesFromStatus
+        │ DRBDStatusJSON(<host that answered>, res) → drbdsetup status <res> --json
+        │ parseNodeStatesFromJSON (pkg/controller/resource_status_parse.go)
         ▼
- per-node state: {role, disk, replication, sync_percent}, keyed by node name
+ per-node ResourceNodeState, keyed by node name
 ```
 
-The live-status path (`GetResource` and `ResourceStatus`) queries one node
-(`hosts[0]`) with `drbdsetup status <res> --json`, parses it into per-node
-states keyed by node name, and returns them. The queried node is the "local"
-node; its peers (including the tiebreaker) come from the JSON `connections[]`.
+The JSON query goes to the same host whose text status answered: the JSON
+"local" node is whichever node was asked, so querying a different one would
+mislabel every row. If the JSON call fails, exits non-zero or does not parse
+(e.g. a DRBD without `--json`), the text-parsed states are kept and the UI
+simply shows no percentage.
 
-## Data Model
+`parseNodeStatesFromJSON`:
 
-`ResourceNodeState` (pkg/controller/resources.go) gains one field:
+- **Local node:** `Role` from the top-level `role`, `DiskState` and `Quorum`
+  from `devices[0]`. No replication relationship to itself;
+  `SyncPercent = 100`.
+- **Each peer** (`connections[].name`): `Role` from `peer-role`, `Connection`
+  from `connection-state`, `TLS`, `DiskState` from
+  `peer_devices[0].peer-disk-state`, `Replication` from
+  `peer_devices[0].replication-state`, `OutOfSyncKiB` summed over all peer
+  devices. `SyncPercent` is `percent-resync-done` when present, otherwise
+  `percent-in-sync`, otherwise 100.
 
-```go
-type ResourceNodeState struct {
-    Role        string
-    DiskState   string
-    Replication string  // existing; now populated: Established|SyncSource|SyncTarget|...
-    SyncPercent float64 // NEW: percent-in-sync for a peer being synced (0..100)
-}
-```
+`ResourceNodeState.SyncPercentKnown` records whether the percentage came from
+DRBD; only then is it exported to metrics and alerts.
 
-- **Local node** (the queried node, `nodeAddresses[0]`): `Role` from JSON
-  top-level `role`, `DiskState` from `devices[0].disk-state`. No `Replication`
-  (a node has no replication relationship to itself); `SyncPercent` unset.
-- **Each peer** (`connections[].name` → node name): `Role` from `peer-role`,
-  `DiskState` from `peer_devices[0].peer-disk-state`, `Replication` from
-  `peer_devices[0].replication-state`, `SyncPercent` from
-  `peer_devices[0].percent-in-sync`.
+Proto `NodeResourceState`: `role = 1`, `disk_state = 2`,
+`replication_state = 3`, `sync_percent = 4`, `node = 5` (the SDS node name;
+the map key is the DRBD host name).
 
-**Direction (derived in the UI):** the local node = `resource.nodes[0]`. For a
-peer whose `Replication == "SyncSource"`, the local node is the source →
-render `local → peer  <percent>%`. For `"SyncTarget"`, render
-`peer → local  <percent>%`.
+## Web UI
 
-Proto: `NodeResourceState` gains `double sync_percent = 4;` (it already has
-`replication_state = 3`).
+`web-ui/src/pages/resources/replication.ts`:
 
-## Components / Files
+- `isPeerSyncing(state)` — true for `SyncSource`, `SyncTarget`,
+  `PausedSyncS/T`, `StartingSyncS/T`, `WFBitMapS/T`, or any other
+  non-`Established`, non-`Off` state below 100%.
+- `syncPollInterval(query)` — `2000` while any peer is syncing, otherwise
+  `false`. Used as `refetchInterval` by `ResourcesPage.tsx` and
+  `resources/ResourceDetail.tsx`, so only resources that are syncing keep
+  polling.
+- `replicationSummary(status)` — the table's one-line Replication column:
+  `syncing NN%` (tooltip: replication state and peer), `no quorum`, the first
+  non-UpToDate replica's disk state (Diskless is not treated as degraded), or
+  `UpToDate`. The table's "Syncing" filter counts resources in the first state.
 
-| File | Change |
-| --- | --- |
-| `pkg/deployment/deployment.go` | Add `DRBDStatusJSON(ctx, hosts, resource)` running `sudo drbdsetup status <res> --json` |
-| `pkg/controller/resources.go` | Add pure `parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNodeState, error)`; add `SyncPercent` to `ResourceNodeState`; `GetResource`/`ResourceStatus` try JSON first, fall back to `parseNodeStatesFromStatus` on error |
-| `api/proto/v1/sds.proto` | `NodeResourceState.sync_percent` (regenerate) |
-| `pkg/controller/server.go` | Map `SyncPercent` into proto for `GetResource` + `ResourceStatus` |
-| `web-ui/src/services/api.ts` | Node-state type gains `replicationState`, `syncPercent` |
-| `web-ui/src/pages/ResourcesPage.tsx` | Status dialog: Replication column + progress bar when syncing + tiebreaker row. List page: per-resource sync badge (`orange1 → orange2 86%`) only when syncing. Adaptive `refetchInterval`. |
+`ResourceDetail.tsx` shows a progress bar (`SyncBar`) on each syncing peer's
+row; `components/ResourceTopology.tsx` appends the percentage to a syncing
+peer's label.
 
-## Data Flow + Polling
+## Not built
 
-- **Seed fetch:** Resources list mount, Status dialog open, and after mutating
-  actions (create, set-primary, etc.) → one `ResourceStatus` per resource.
-- **Adaptive `refetchInterval`** (a function passed to TanStack Query):
-  - Returns `2000` if any peer has `replicationState ∈ {SyncSource, SyncTarget}`
-    or `syncPercent < 100`.
-  - Returns `false` otherwise (**stop; zero polling when idle**).
-  - On reaching Established/100%, the next evaluation returns `false` → polling
-    stops automatically.
-- List page: each resource has its own adaptive query, so only actively syncing
-  resources keep polling.
-
-## Rendering
-
-- **Status dialog** Node States table: add a Replication badge column and, for a
-  syncing peer, a progress bar with `syncPercent`. Show the tiebreaker as a row
-  (`Diskless` / `Established`).
-- **List page:** per resource, a small badge shown **only while syncing**:
-  `同步中 orange1 → orange2  86%` with a thin progress bar. Nothing extra when idle.
-
-## Error Handling / Fallback
-
-- `DRBDStatusJSON` fails (older drbd without `--json`, non-zero exit, or JSON
-  parse error) → fall back to `parseNodeStatesFromStatus` (role/disk only, no
-  percent). The feature degrades gracefully; the UI simply shows no progress bar.
-- `percent-in-sync` absent (steady state / not syncing) → treat as `100`.
-- `hosts[0]` unreachable → existing `ResourceStatus` error path is unchanged.
-
-## Testing
-
-### Unit (Go) — real captured fixtures
-
-**Steady state** (no resync): local orange1 Primary/UpToDate; peer orange2
-`replication-state: Established`, `peer-disk-state: UpToDate`,
-`percent-in-sync: 100`; peer orange3 `replication-state: Established`,
-`peer-disk-state: Diskless`, `peer-client: true`. Assert 3 node states, orange2
-UpToDate with no active sync, orange3 present as Diskless tiebreaker.
-
-**Mid-sync** (captured live at 3.55%):
-```json
-"connections": [
-  { "name": "orange2", "peer-role": "Secondary",
-    "peer_devices": [ { "replication-state": "SyncSource",
-      "peer-disk-state": "Inconsistent", "percent-in-sync": 3.55 } ] },
-  { "name": "orange3", "peer-role": "Secondary",
-    "peer_devices": [ { "replication-state": "Established",
-      "peer-disk-state": "Diskless", "peer-client": true,
-      "percent-in-sync": 100.00 } ] }
-]
-```
-Assert: orange2 `Replication == "SyncSource"`, `DiskState == "Inconsistent"`,
-`SyncPercent == 3.55`; orange3 `DiskState == "Diskless"`,
-`Replication == "Established"`; local orange1 Primary/UpToDate.
-
-**Fallback:** invalid/empty JSON → `parseNodeStatesFromJSON` returns an error and
-the caller falls back to the text parser (a `parseNodeStatesFromStatus` result).
-
-### UI (Playwright, real 3-node cluster — required)
-
-1. Force a resync: `ssh orange2 sudo drbdadm invalidate data` (orange2 discards
-   its copy and re-syncs from Primary orange1).
-2. Open the Resources page / Status dialog via Playwright.
-3. Observe the live badge/progress `orange1 → orange2  NN%` climb across
-   successive snapshots and **stop at 100%** (verifying adaptive polling starts
-   and then stops). Capture screenshots as evidence.
-4. Confirm that when idle, no polling occurs (network panel shows the status
-   request is not repeated once sync completes).
-
-## Out of Scope
-
-- Backend push (SSE/WebSocket) — polling was chosen.
-- ETA / throughput display (`estimated-seconds-to-finish`, `db/dt [MiB/s]` are
-  present in the JSON and could be added later; not in this iteration).
-- Rewriting the text parser or other callers of `parseNodeStatesFromStatus`;
-  it stays as the fallback.
+- ETA / throughput (`estimated-seconds-to-finish`, `db/dt`) are in the JSON but
+  not shown.

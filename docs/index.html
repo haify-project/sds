@@ -148,7 +148,7 @@
             <div class="w-full md:w-1/2 z-10 text-center md:text-left hero-text opacity-0">
                 <div
                     class="inline-block px-3 py-1 mb-4 rounded-full bg-sds-blue/10 border border-sds-blue/30 text-sds-blue text-xs font-mono font-bold tracking-wider">
-                    v1.0.0 RELEASED
+                    v1.11.0
                 </div>
                 <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
                     <span class="block text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400"
@@ -377,7 +377,7 @@
                             <rect x="0" y="0" width="100" height="60" rx="8" fill="#1e293b" stroke="#3b82f6"
                                 stroke-width="2" />
                             <text x="50" y="35" text-anchor="middle" fill="white" font-size="14"
-                                font-family="monospace">sds-ctl</text>
+                                font-family="monospace" font-size="11">sds-controller</text>
                         </g>
                         <!-- Lines -->
                         <path d="M200 80 L100 150" stroke="rgba(255,255,255,0.2)" stroke-width="2"
@@ -399,7 +399,7 @@
                             <text x="50" y="30" text-anchor="middle" fill="white" font-size="12"
                                 font-family="monospace">Node 2</text>
                             <rect x="10" y="45" width="80" height="25" rx="4" fill="#f97316" fill-opacity="0.2" />
-                            <text x="50" y="62" text-anchor="middle" fill="#f97316" font-size="10">DRBD / ZFS</text>
+                            <text x="50" y="62" text-anchor="middle" fill="#f97316" font-size="10">DRBD / LVM</text>
                         </g>
                         <!-- Sync -->
                         <path d="M150 190 L250 190" stroke="#f97316" stroke-width="2" marker-end="url(#arrow)"
@@ -427,25 +427,25 @@
                     en: {
                         nav: { features: 'Features', cli: 'CLI Demo', arch: 'Architecture' },
                         hero: {
-                            title1: 'Storage, Simplified.',
-                            title2: 'Availability, Guaranteed.',
-                            subtitle: 'An agentless, cloud-native storage controller for modern infrastructure. Support for LVM, ZFS, and Thin Provisioning out of the box.',
+                            title1: 'Replicated Storage,',
+                            title2: 'Automatic Failover.',
+                            subtitle: 'A DRBD storage controller that manages nodes over SSH, with no SDS management agent on them. LVM, LVM thin and ZFS pools; failover through drbd-reactor.',
                             cta: 'Get Started',
                             github: 'View on GitHub'
                         },
                         cli: {
                             title: 'Powerful CLI',
-                            subtitle: 'Manage your entire storage cluster from a single terminal. No complex configs, just simple commands.'
+                            subtitle: 'Nodes, pools, DRBD resources, HA, gateways, snapshots and backups from one CLI. The same operations are exposed over gRPC, REST, the web UI and MCP.'
                         },
                         features: {
                             title: 'Why SDS?',
                             cards: [
-                                { title: 'Universal Storage', desc: 'Unified API for LVM, LVM Thin, ZFS, and ZFS Thin pools.' },
+                                { title: 'Storage Pools', desc: 'One API for LVM, LVM thin and ZFS pools. ZFS volumes are created sparse.' },
                                 { title: 'High Availability', desc: 'Built-in HA orchestration using DRBD® and drbd-reactor.' },
-                                { title: 'Agentless', desc: 'Zero-touch node management via high-performance SSH dispatch.' },
-                                { title: 'Thin Provisioning', desc: 'Efficient space usage with over-provisioning support.' },
-                                { title: 'Service IP', desc: 'Integrated virtual IP management for seamless failover.' },
-                                { title: 'Gateways', desc: 'Export storage via iSCSI, NFS, or NVMe-oF easily.' }
+                                { title: 'Agentless', desc: 'The controller runs every node operation over SSH through dispatch.' },
+                                { title: 'Thin Provisioning', desc: 'LVM thin pools may be over-provisioned; placement and alerts report real data usage.' },
+                                { title: 'Service IP', desc: 'A floating virtual IP that follows the primary node on failover (ha create --vip, gateway --service-ip).' },
+                                { title: 'Gateways', desc: 'Export a resource over NFS, iSCSI or NVMe-oF.' }
                             ]
                         },
                         arch: {
@@ -460,25 +460,25 @@
                     zh: {
                         nav: { features: '特性', cli: '命令行演示', arch: '架构' },
                         hero: {
-                            title1: '存储，化繁为简。',
-                            title2: '高可用，坚如磐石。',
-                            subtitle: '面向现代基础设施的无代理云原生存储控制器。开箱即支持 LVM、ZFS 和精简配置。',
+                            title1: '复制存储，',
+                            title2: '自动故障转移。',
+                            subtitle: '基于 DRBD 的存储控制器，通过 SSH 管理节点，节点上不运行 SDS 管理代理。支持 LVM、LVM thin 和 ZFS 存储池，由 drbd-reactor 完成故障转移。',
                             cta: '开始使用',
                             github: 'GitHub 源码'
                         },
                         cli: {
                             title: '强大的命令行',
-                            subtitle: '通过一个终端管理整个存储集群。告别复杂配置，回归简单指令。'
+                            subtitle: '节点、存储池、DRBD 资源、高可用、网关、快照和备份都在一个 CLI 里完成。同样的操作也可以通过 gRPC、REST、Web UI 和 MCP 调用。'
                         },
                         features: {
                             title: '核心特性',
                             cards: [
-                                { title: '统一存储', desc: '统一 API 支持 LVM, LVM Thin, ZFS, 和 ZFS Thin 存储池。' },
+                                { title: '存储池', desc: '同一套 API 管理 LVM、LVM thin 和 ZFS 存储池。ZFS 卷以稀疏方式创建。' },
                                 { title: '高可用 (HA)', desc: '基于 DRBD® 和 drbd-reactor 的内置高可用编排。' },
-                                { title: '无代理模式', desc: '通过高性能 SSH 分发实现零接触节点管理。' },
-                                { title: '精简配置', desc: '支持 Thin Provisioning，高效利用存储空间。' },
-                                { title: '服务 IP', desc: '集成虚拟 IP 管理，实现业务无缝故障转移。' },
-                                { title: '多协议网关', desc: '轻松通过 iSCSI, NFS 或 NVMe-oF 导出存储资源。' }
+                                { title: '无代理模式', desc: '控制器通过 dispatch 以 SSH 执行所有节点操作。' },
+                                { title: '精简配置', desc: 'LVM thin 池允许超额分配；放置和告警按实际数据占用计算。' },
+                                { title: '服务 IP', desc: '浮动虚拟 IP 在故障转移时跟随主节点（ha create --vip、gateway --service-ip）。' },
+                                { title: '多协议网关', desc: '通过 NFS、iSCSI 或 NVMe-oF 导出资源。' }
                             ]
                         },
                         arch: {
@@ -523,9 +523,9 @@
                     }
                     term.innerHTML = '';
                     const commands = [
-                        { cmd: 'sds-cli node list', out: '\nNAME      ADDRESS          STATE\norange1   192.168.123.214  Online\norange2   192.168.123.215  Online\norange3   192.168.123.216  Online' },
-                        { cmd: 'sds-cli pool create --name data --type zfs-thin', out: '\nZFS Pool \'data\' created successfully on orange1\nZFS Pool \'data\' created successfully on orange2\nZFS Pool \'data\' created successfully on orange3' },
-                        { cmd: 'sds-cli resource create --name db1 --size 10G', out: '\nResource created successfully\n  Name:     db1\n  Size:     10 GiB\n  Nodes:    [orange1 orange2]\n  Protocol: C' }
+                        { cmd: 'sds node list', out: '\nNAME      ADDRESS           STATE    VERSION\norange1   192.168.123.214   online   Ubuntu 24.04.1 LTS\norange2   192.168.123.215   online   Ubuntu 24.04.1 LTS\norange3   192.168.123.216   online   Ubuntu 24.04.1 LTS' },
+                        { cmd: 'sds pool create --name data --type lvm-thin --nodes orange1,orange2,orange3 --devices /dev/vdb', out: '\nPool \'data\' created successfully on node \'orange1\' (type: lvm-thin)\nPool \'data\' created successfully on node \'orange2\' (type: lvm-thin)\nPool \'data\' created successfully on node \'orange3\' (type: lvm-thin)' },
+                        { cmd: 'sds resource create --name db1 --port 7001 --size 10G --pool data --storage-type lvm-thin', out: '\nResource created successfully\n  Name:        db1\n  Port:        7001\n  Storage:     lvm-thin\n  Pool:        data\n  Nodes:       auto-placed (2 replicas by free space; see \'resource get db1\')\n  Protocol:    C\n  Size:        10 GiB (10.00 GiB)' }
                     ];
                     let index = 0;
                     const runStep = () => {

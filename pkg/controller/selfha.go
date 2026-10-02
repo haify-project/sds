@@ -114,10 +114,10 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 		// left them no way forward.
 		if cfg, _ := rm.controller.db.GetHaConfig(ctx, SelfHaResource); cfg == nil {
 			return "", fmt.Errorf("self-HA is disabled, but its metadata resource %s from the previous time is still there; "+
-				"the controller now runs on its local database, so remove it and enable again: sds-cli resource delete %s",
+				"the controller now runs on its local database, so remove it and enable again: sds resource delete %s",
 				SelfHaResource, SelfHaResource)
 		}
-		return "", fmt.Errorf("self-HA is already enabled (resource %s); see sds-cli ha self status", SelfHaResource)
+		return "", fmt.Errorf("self-HA is already enabled (resource %s); see sds ha self status", SelfHaResource)
 	}
 
 	if err := rm.selfHaPreflight(ctx, selfAddr, standbyAddrs); err != nil {

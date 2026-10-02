@@ -10,7 +10,7 @@ use warnings;
 use Exporter qw(import);
 our @EXPORT_OK = qw(
     resource_prefix sds_resource_name volname_from_resource
-    kib_to_gb bytes_to_gb gb_to_bytes
+    kib_to_gb bytes_to_gb gb_to_bytes same_pool
     _node_participates _other_primary_node
 );
 
@@ -51,6 +51,16 @@ sub volname_from_resource {
 # PVE speaks KiB in alloc_image and bytes in volume_resize; sds allocates whole
 # gigabytes. Always round UP: a guest must never get less space than it asked
 # for, and handing back a smaller disk than the config records corrupts guests.
+# The controller names every pool it manages "sds_<name>", and accepts either
+# form when a resource is created, so `sdspool vg0` and `sdspool sds_vg0` name
+# the same pool. A literal comparison made a storage configured the short way
+# report zero capacity.
+sub same_pool {
+    my ($x, $y) = @_;
+    s/^sds_// for ($x, $y);
+    return $x eq $y;
+}
+
 sub kib_to_gb {
     my ($kib) = @_;
     my $gb = int(($kib + 1048575) / 1048576);

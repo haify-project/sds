@@ -22,11 +22,10 @@
 
 ## 安装
 
-存储节点需要 DRBD 9(内核模块和 `drbd-utils`)、`drbd-reactor`、`resource-agents`,以及 LVM 和/或 ZFS。控制器所在机器需要 Go 1.25+。
+存储节点需要 DRBD 9(内核模块和 `drbd-utils`)、`drbd-reactor`、`resource-agents`,以及 LVM 和/或 ZFS。构建需要 Go 1.26+ 和 Node.js(Web UI 嵌在控制器二进制里)。
 
 ```bash
-make build
-./scripts/deploy-all.sh --hosts "node1,node2,node3"
+./scripts/deploy-all.sh node1,node2,node3     # 交叉编译为 linux/amd64
 ```
 
 详细步骤见 [docs/deployment-guide.md](docs/deployment-guide.md),节点要求见 [docs/node-prerequisites.md](docs/node-prerequisites.md)。
@@ -34,13 +33,13 @@ make build
 ## 使用
 
 ```bash
-sds-cli node register --name node1 --address 192.168.1.11
-sds-cli pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/sdb
-sds-cli resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
-sds-cli gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
+sds node register --name node1 --address 192.168.1.11
+sds pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/sdb
+sds resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
+sds gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
 ```
 
-Kubernetes:`kubectl apply -f deploy/k8s/`,然后使用 `sds-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。
+Kubernetes:`kubectl apply -f deploy/k8s/`,然后使用 `sds-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。Proxmox VE 见 [deploy/proxmox/README.md](deploy/proxmox/README.md),Prometheus 和 Grafana 见 [deploy/monitoring/README.md](deploy/monitoring/README.md)。
 
 AI 助手:
 
@@ -54,7 +53,7 @@ claude mcp add --transport http sds https://<host>/mcp \
 
 | 端口 | 服务 |
 | ---- | ---- |
-| 3374 | gRPC(`sds-cli`、CSI、MCP) |
+| 3374 | gRPC(`sds`、CSI、MCP) |
 | 3375 | REST |
 | 3376 | Web UI |
 | 9433 | Prometheus |

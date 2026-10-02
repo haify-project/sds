@@ -63,7 +63,7 @@ func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
 			severity = event.SeverityCritical
 			reason = "disk is Outdated and no replica holds current data, so nothing can be promoted and the resource is not served; " +
 				"compare the replicas with `drbdadm get-gi " + res.Name + "` (equal current UUIDs mean equal data) and promote one with " +
-				"`sds-cli resource primary " + res.Name + " <node> --force`"
+				"`sds resource primary " + res.Name + " <node> --force`"
 		}
 		m.level(event.Event{
 			Type:     event.TypeResourceDegraded,

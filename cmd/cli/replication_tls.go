@@ -21,7 +21,7 @@ func replicationTLSCommand() *cobra.Command {
 Each node needs DRBD 9.2 or later, the kernel tls module and tlshd (package
 ktls-utils). "setup" gives every node a key made on the node, a certificate
 from this controller's replication CA, that CA in the system trust store, and a
-tlshd configured to use them. Then "sds-cli resource tls <resource> on" moves a
+tlshd configured to use them. Then "sds resource tls <resource> on" moves a
 resource's connections over, one link at a time so the Primary keeps quorum.
 
 The replication CA joins each node's system trust store, so anything on the
@@ -105,7 +105,7 @@ func resourceTLSCommand() *cobra.Command {
 
 DRBD cannot change a live connection's transport, so each link is taken down
 and brought back on its own while the others keep quorum. Every node of the
-resource must be ready first (see "sds-cli replication-tls status"). A link
+resource must be ready first (see "sds replication-tls status"). A link
 whose handshake fails is left StandAlone by DRBD and the switch stops there.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {

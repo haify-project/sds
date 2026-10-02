@@ -111,7 +111,7 @@ func (p *testPKI) issue(t *testing.T, cn string, dnsNames []string, eku x509.Ext
 // tls.Certificate ready to present.
 func (p *testPKI) clientCert(t *testing.T) tls.Certificate {
 	t.Helper()
-	certPEM, keyPEM := p.issue(t, "sds-cli-test", nil, x509.ExtKeyUsageClientAuth)
+	certPEM, keyPEM := p.issue(t, "sds-test", nil, x509.ExtKeyUsageClientAuth)
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	require.NoError(t, err)
 	return cert

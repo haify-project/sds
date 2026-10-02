@@ -288,7 +288,7 @@ func (t TLSConfig) Validate() error {
 		return fmt.Errorf("tls: ca_cert/client_cert/client_key name a *client's* material and are no longer read; " +
 			"the controller needs its own certificate — set tls.cert_file and tls.key_file, " +
 			"and tls.client_ca_file to require client certificates. " +
-			"(sds-cli keeps --tls-ca/--tls-cert/--tls-key for the client side.)")
+			"(sds keeps --tls-ca/--tls-cert/--tls-key for the client side.)")
 	}
 	if !t.Enabled {
 		return nil
@@ -411,7 +411,7 @@ func Load(configPath string) (*Config, error) {
 // Validate validates the configuration
 // validPoolTypeDefaults are the values storage.default_pool_type may take.
 //
-// ZFS is deliberately absent even though `sds-cli pool create --type zfs` works:
+// ZFS is deliberately absent even though `sds pool create --type zfs` works:
 // a zpool is built from vdevs by a separate RPC, so an unspecified type never
 // resolves to one. Accepting "zfs" here would produce a controller that starts
 // cleanly and then fails every pool creation that omits a type, with an error

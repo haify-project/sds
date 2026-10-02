@@ -259,7 +259,7 @@ This removes the node from the database but does not affect the node itself.`,
 				ref = args[0]
 			}
 			if ref == "" {
-				return fmt.Errorf("name the node to unregister: sds-cli node unregister <name|address>")
+				return fmt.Errorf("name the node to unregister: sds node unregister <name|address>")
 			}
 
 			ctx := cmd.Context()

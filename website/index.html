@@ -434,10 +434,10 @@
     </div>
     <div class="schematic rv" style="margin-top:0">
       <div class="cap"><b>architecture</b> / control plane ⟶ dispatch/SSH ⟶ storage nodes · data plane = DRBD + drbd-reactor</div>
-      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SDS 架构分层图:控制面(sds-cli/Web/CSI → sds-controller gRPC → dispatch/SSH)下发到数据面存储节点(DRBD 内核模块、drbd-reactor promoter、网关 OCF 代理)。">
+      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SDS 架构分层图:控制面(sds/Web/CSI → sds-controller gRPC → dispatch/SSH)下发到数据面存储节点(DRBD 内核模块、drbd-reactor promoter、网关 OCF 代理)。">
         <text x="40" y="40" class="s-mute" font-size="11">CONTROL PLANE</text>
         <rect x="40" y="52" width="200" height="46" rx="3" class="s-box"/>
-        <text x="140" y="80" class="s-ink" font-size="13" text-anchor="middle">sds-cli · Web · CSI</text>
+        <text x="140" y="80" class="s-ink" font-size="13" text-anchor="middle">sds · Web · CSI</text>
         <path d="M240 75 L300 75" class="s-line" marker-end="url(#arw2)"/>
         <rect x="300" y="52" width="220" height="46" rx="3" class="s-box"/>
         <text x="410" y="80" class="s-ink" font-size="13" text-anchor="middle">sds-controller (gRPC)</text>
@@ -500,16 +500,16 @@
       <p>从裸盘到跨机架三副本 + NFS 高可用导出。</p>
     </div>
     <div class="code rv">
-      <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>root@node-1 — sds-cli</span></div>
+      <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>root@node-1 — sds</span></div>
 <pre><span class="c"># 1 · 用裸盘建存储池</span>
-sds-cli <span class="p">pool create</span> <span class="f">--name</span> vg0 <span class="f">--node</span> node1 <span class="f">--disks</span> /dev/vdb
+sds <span class="p">pool create</span> <span class="f">--name</span> vg0 <span class="f">--node</span> node1 <span class="f">--disks</span> /dev/vdb
 
 <span class="c"># 2 · 建 DRBD 资源:自动放置,三副本强制跨机架</span>
-sds-cli <span class="p">resource create</span> <span class="f">--name</span> data <span class="f">--size</span> 100G \
+sds <span class="p">resource create</span> <span class="f">--name</span> data <span class="f">--size</span> 100G \
   <span class="f">--replicas</span> <span class="s">3</span> <span class="f">--replicas-on-different</span> <span class="s">rack</span>
 
 <span class="c"># 3 · 导出为高可用 NFS(浮动 VIP 自动跟随主节点)</span>
-sds-cli <span class="p">gateway nfs create</span> <span class="f">--resource</span> data \
+sds <span class="p">gateway nfs create</span> <span class="f">--resource</span> data \
   <span class="f">--service-ip</span> 192.168.1.200/24 <span class="f">--export-path</span> /data
 
 <span class="c"># 就绪 —— 客户端始终访问 VIP,故障时约 70s 自动接管</span>

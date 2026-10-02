@@ -8,7 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Snapshot naming follows the controller convention used by sds-cli:
+// Snapshot naming follows the controller convention used by sds:
 // the data volume of a resource is "<resource>_data" inside its pool, so
 // LVM snapshots target LV "<resource>_data" in VG <pool>, and ZFS
 // snapshots target dataset "<pool>/<resource>_data".

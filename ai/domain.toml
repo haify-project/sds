@@ -29,7 +29,7 @@ How you work:
   parts, searched together: the SDS shared base, identical on every cluster —
   SDS's documentation, its source as a graph (files, functions, classes and
   their calls/imports edges across pkg/controller, pkg/gateway, pkg/reactor,
-  pkg/csi, cmd/* and the Proxmox plugin), the sds-cli reference generated from
+  pkg/csi, cmd/* and the Proxmox plugin), the sds reference generated from
   the installed version's own --help, and the DRBD 9 manuals and LINBIT
   knowledge base; and this cluster's own notes — incidents on named machines
   and what was actually tried on them. The engine already requires searching
@@ -223,7 +223,7 @@ repos = []
 # the chain and calling the rest drift would report real data as broken.
 
 # A drbd-reactor promoter config promotes a DRBD resource to Primary, and so
-# does an operator running `sds-cli ha evict` — 16 such edges are in the graph.
+# does an operator running `sds ha evict` — 16 such edges are in the graph.
 # The OCFAgent runs underneath and does not promote anything itself.
 [[relation]]
 name = "promotes"

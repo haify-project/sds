@@ -47,7 +47,7 @@ func poolCreate() *cobra.Command {
 			}
 			// An omitted type is left empty on purpose: the controller fills it
 			// from storage.default_pool_type. Substituting a default here is
-			// what made sds-cli and every other client disagree about what an
+			// what made sds and every other client disagree about what an
 			// unspecified pool is — see StorageManager.defaultedPoolType.
 			if nodes == "" {
 				return fmt.Errorf("nodes is required")

@@ -20,7 +20,7 @@ use PVE::INotify;
 use PVE::Storage::Plugin;
 use PVE::Storage::Custom::SDS::Client qw(_uri_escape);
 use PVE::Storage::Custom::SDS::Naming qw(sds_resource_name volname_from_resource
-    kib_to_gb bytes_to_gb gb_to_bytes _node_participates _other_primary_node);
+    kib_to_gb bytes_to_gb gb_to_bytes _node_participates _other_primary_node same_pool);
 
 use base qw(PVE::Storage::Plugin);
 
@@ -372,7 +372,7 @@ sub status {
     my ($total, $free);
 
     for my $pool (@{ $res->{pools} // [] }) {
-        next if defined($want) && length($want) && ($pool->{name} // '') ne $want;
+        next if defined($want) && length($want) && !same_pool($pool->{name} // '', $want);
 
         my $ptotal = gb_to_bytes($pool->{totalGb} // $pool->{total_gb} // 0);
         my $pfree  = gb_to_bytes($pool->{freeGb}  // $pool->{free_gb}  // 0);

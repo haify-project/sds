@@ -141,7 +141,7 @@ func normalizeDeviceList(devices []string) []string {
 // defaultedPoolType resolves an omitted pool type from the controller's
 // configuration.
 //
-// The policy belongs here rather than in a client. It used to live in sds-cli,
+// The policy belongs here rather than in a client. It used to live in sds,
 // which substituted "lvm-thin" before the request ever left the process — so the
 // CLI created thin pools while every other caller that omitted the type (the
 // REST gateway, MCP, the web UI) reached normalizeLVMPoolType with an empty

@@ -1,89 +1,105 @@
 # Repository Guidelines
 
-SDS is a lightweight Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`sds-controller`), a CLI (`sds-cli`), a Kubernetes CSI driver, and an MCP server for AI assistant integration.
+SDS is a Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`sds-controller`), a CLI (`sds`, installed with an `sds` link), a Kubernetes CSI driver, an MCP server (`sds-mcp`) and an AI Copilot backend (`sds-ai`). `CLAUDE.md` has the architecture and the gateway package's layout.
 
 ## Project Structure
 
 ```
 sds/
-├── cmd/              # Binary entry points (cli, controller, mcp, csi-controller, csi-node)
-├── pkg/              # Core packages
-│   ├── controller/   # Business logic: resources, gateways, HA, RBAC, scheduling
-│   ├── deployment/   # SSH execution engine (wraps dispatch)
-│   ├── gateway/      # iSCSI / NFS / NVMe-oF config generators
-│   ├── mcpserver/    # MCP tool definitions
+├── cmd/              # Entry points: controller, cli, mcp, csi-controller, csi-node,
+│                     #   service-ip (Linux only), sds-ai (its own Go module)
+├── pkg/
+│   ├── controller/   # Controller and gRPC server: pools, resources, snapshots, nodes, HA, Self-HA, WAN, backups
+│   ├── deployment/   # Command execution on storage nodes over SSH (wraps dispatch)
+│   ├── gateway/      # NFS / iSCSI / NVMe-oF gateways (drbd-reactor promoter configs)
+│   ├── reactor/      # drbd-reactor promoter TOML generation
+│   ├── database/     # BoltDB persistence
+│   ├── config/       # controller.toml loading (viper)
+│   ├── client/       # gRPC client used by the CLI, sds-mcp and CSI
+│   ├── mcpserver/    # MCP tools and runbooks (runbooks/*.md, embedded)
+│   ├── mcpauth/      # Tokens and OAuth for `sds-mcp serve`
 │   ├── csi/          # Kubernetes CSI driver
-│   ├── database/     # BoltDB persistence layer
-│   ├── config/       # TOML config parsing
-│   └── util/         # Shared utilities
+│   ├── k8sapp/       # Databases on Kubernetes backed by SDS volumes (sds-mcp k8s)
+│   ├── alert/        # Health detector: cluster state to events
+│   ├── event/        # Notification bus, history, webhook delivery
+│   ├── triage/       # Turns recorded events into a short problem list
+│   ├── backup/       # Off-cluster backups (S3, SMB, WebDAV)
+│   ├── drbdtls/      # CA for encrypted DRBD replication
+│   ├── wanproxy/     # sds-proxy pair for WAN replication
+│   ├── serviceip/    # Floating IP and gratuitous ARP for service-ip
+│   ├── rbac/         # Casbin-backed authorization
+│   ├── metrics/      # Prometheus metrics
+│   ├── logbuf/       # In-memory buffer of recent controller log lines
+│   └── util/         # Size parsing helpers
 ├── api/proto/v1/     # gRPC protobuf definitions
 ├── web-ui/           # React + TypeScript dashboard (Rsbuild, shadcn/ui, Tailwind)
-├── ui/               # Go embed wrapper for web-ui/dist
-├── configs/          # Example configs and systemd unit files
-├── deploy/k8s/       # Kubernetes manifests for CSI deployment
-├── scripts/          # Build and deployment helpers
-└── docs/             # Architecture docs and design specs
+├── ui/               # go:embed wrapper for the built web UI (ui/dist)
+├── configs/          # controller.toml.example and systemd units
+├── deploy/           # k8s (CSI manifests), monitoring (Prometheus/Grafana), proxmox (storage plugin)
+├── ai/               # Knowledge base build for sds-ai
+├── scripts/          # Proto generation, deployment, file-size check, CSI smoke test
+└── docs/             # User guide, deployment guide, node prerequisites, MCP, design notes
 ```
 
-Tests live alongside source files as `*_test.go` within each package.
+Tests live next to the code as `*_test.go`.
 
 ## Build, Test, and Development Commands
 
 ```bash
-make build          # Compile all binaries to bin/ (also builds web-ui)
-make test           # Run full Go test suite (go test -v ./...)
-make fmt            # Format Go source (gofmt -s)
-make lint           # Run golangci-lint
-make proto          # Regenerate gRPC code from api/proto/v1/
-make clean          # Remove bin/ and ui/dist
+make build          # web UI build + sync, then bin/sds-controller, bin/sds, bin/sds-mcp,
+                    #   bin/service-ip (GOOS=linux), bin/csi-controller, bin/csi-node
+make test           # go test -v ./...
+make ci             # what CI runs: file size, gofmt -l, vet, golangci-lint (also as GOOS=linux),
+                    #   build, go test -race, govulncheck, web-ui build
+make hooks          # install the pre-commit hook that rejects staged Go files that are not gofmt-clean
+make fmt            # go fmt ./... and gofmt -s -w .
+make lint           # golangci-lint with output truncation turned off
+make proto          # regenerate gRPC code from api/proto/v1/
+make clean          # remove bin/ and ui/dist
 
-# Run locally
+# sds-ai is a separate module and not part of make build
+cd cmd/sds-ai && go build -o ../../bin/sds-ai .
+
+# Run locally (copy configs/controller.toml.example to configs/controller.toml first)
 make run-controller # go run ./cmd/controller --config configs/controller.toml
+make run-cli ARGS="pool list"
 
 # Web UI
-cd web-ui && npm run dev    # Dev server (hot reload)
-cd web-ui && npm run build  # Production build → web-ui/dist
-make ui-sync                # Copy web-ui/dist into ui/dist for go:embed
+cd web-ui && npm run dev    # dev server
+make ui-sync                # npm run build, then copy web-ui/dist into ui/dist for go:embed
 ```
 
-> `make test` calls `make ui-ensure` first, which creates a placeholder `ui/dist` if the web UI has not been built — Go tests run correctly without Node.js.
+`make test` and `make ci` run `make ui-ensure` first, which writes a placeholder `ui/dist` when the web UI has not been built, so Go tests run without Node.js. `make ci` still builds the web UI at the end.
 
-## Coding Style & Naming Conventions
+Run `make ci` before pushing. CI checks plain `gofmt -l`, not the stricter `gofmt -s` that `make fmt` applies. `//go:build linux` code (`cmd/service-ip`, `pkg/serviceip`) is only vetted and linted by the GOOS=linux pass.
 
-- **Go**: standard `gofmt`/`goimports` formatting; run `make fmt` before committing.
-- **Linting**: `golangci-lint`; run `make lint` and fix all reported issues.
-- **Packages**: lower-case, single-word names matching the directory (e.g., `package controller`).
-- **Exported symbols**: follow Go convention — `PascalCase` for types/functions, `camelCase` for unexported.
-- **Proto files**: snake_case field names; service method names are `PascalCase` verb+noun (e.g., `CreateResource`).
-- **Web UI**: TypeScript strict mode; components in `web-ui/src/components/`, pages in `web-ui/src/pages/`, API calls in `web-ui/src/services/`.
+## Coding Style
+
+- Go: gofmt formatting; `make lint` must be clean.
+- File size: every hand-written source file (`.go`, `.ts`, `.tsx`, `.pm`, `.sh`, `.py`), tests included, stays under 600 lines; `scripts/check-file-size.sh` enforces it in `make ci`. Generated protobuf code is exempt. Split by responsibility, not into `_part2` files.
+- No TODO comments in production code.
+- Errors carry context: `fmt.Errorf("operation: %w", err)`. Logging is structured `zap`.
+- Proto: snake_case fields; RPCs are `PascalCase` verb+noun (e.g. `CreateResource`).
+- Web UI: TypeScript strict mode; components in `web-ui/src/components/`, pages in `web-ui/src/pages/`, API calls in `web-ui/src/services/`.
 
 ## Testing Guidelines
 
-- Framework: standard `testing` package with `testify/assert` and `testify/require`.
+- Standard `testing`; most packages also use `testify/assert` and `testify/require`.
 - Test files sit next to the file under test: `gateway.go` → `gateway_test.go`.
-- Test function names follow `TestFunctionName_Scenario` (e.g., `TestPlacement_RackAwareSpread`).
-- Run a single package: `go test -v ./pkg/controller/`.
-- CSI conformance tests: `scripts/csi-e2e.sh` (requires a live cluster).
-- No minimum coverage threshold is enforced, but new business logic in `pkg/controller/` and `pkg/gateway/` is expected to have unit tests.
+- Test names say the behaviour checked, e.g. `TestRunbooksOnlyNameToolsThatExist`.
+- Single package: `go test -v ./pkg/controller/`. Single test: `go test -v ./pkg/gateway -run TestNFSGateway`.
+- `scripts/csi-e2e.sh` is a CSI smoke test against a live Kubernetes cluster with the driver installed.
+- MCP runbooks are parsed and checked by `pkg/mcpserver/runbooks_test.go`: each file needs a `# Title` line, a summary line and `Needs: operate|admin`, and may only name tools that exist.
 
-## Commit & Pull Request Guidelines
+## Commits and Pull Requests
 
-Commit messages follow **Conventional Commits**:
+- Conventional Commits: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`, with the affected package or subsystem as scope, e.g. `fix(csi): ...`.
+- The commit message is the subject line only, no body.
+- No `Co-Authored-By` lines and no "Generated with" or similar attribution in commits, PRs, issues, comments or docs.
+- PR description: only `Closes #N` (several: `Closes #N. Closes #M.`). Never empty.
 
-```
-feat(gateway): add NVMe-oF namespace resize support
-fix(csi): correct topology key for single-node clusters
-docs(wan): update Phase 1 implementation status
-```
+## Configuration and Secrets
 
-- Use `feat`, `fix`, `docs`, `refactor`, `test`, or `chore` as the type.
-- Scope matches the affected package or subsystem (e.g., `controller`, `csi`, `ha`, `wan`).
-- Keep the subject line under 72 characters; add a body for non-obvious changes.
-- PRs should reference a related issue or design doc when one exists.
-- Run `make fmt`, `make lint`, and `make test` locally before opening a PR.
-
-## Configuration & Secrets
-
-- The controller config lives at `/etc/sds/controller.toml`; use `configs/controller.toml.example` as the starting point.
-- API tokens are resolved in order: `--token` flag → `SDS_TOKEN` env → `~/.sds/token` → `/etc/sds/token`.
-- Never commit real tokens, SSH keys, or host addresses; use the example configs in `configs/`.
+- The controller config is `/etc/sds/controller.toml`; start from `configs/controller.toml.example`. Default gRPC port: 3374.
+- API tokens resolve in order: `--token` flag → `SDS_TOKEN` env → `~/.sds/token` → `/etc/sds/token`.
+- Never commit real tokens, SSH keys or credentials.

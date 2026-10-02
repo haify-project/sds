@@ -33,8 +33,8 @@ ui-ensure:
 build: ui-sync
 	@echo "Building sds-controller..."
 	go build -o bin/sds-controller ./cmd/controller
-	@echo "Building sds-cli..."
-	go build -o bin/sds-cli ./cmd/cli
+	@echo "Building sds..."
+	go build -o bin/sds ./cmd/cli
 	@echo "Building sds-mcp..."
 	go build -o bin/sds-mcp ./cmd/mcp
 	GOOS=linux go build -o bin/service-ip ./cmd/service-ip
@@ -52,7 +52,7 @@ clean:
 # Install controller systemd service
 install-controller: build
 	@echo "Installing sds-controller..."
-	sudo mkdir -p /opt/sds/bin
+	sudo mkdir -p /opt/sds/bin /etc/sds
 	sudo cp bin/sds-controller bin/service-ip /opt/sds/bin/
 	sudo install -m 755 bin/service-ip /usr/local/bin/service-ip
 	sudo cp configs/sds-controller.service configs/service-ip@.service /etc/systemd/system/
@@ -64,9 +64,10 @@ install-controller: build
 
 # Install CLI
 install-cli: build
-	@echo "Installing sds-cli..."
-	sudo cp bin/sds-cli /usr/local/bin/
-	@echo "CLI installed to /usr/local/bin/sds-cli"
+	@echo "Installing sds..."
+	sudo install -m 755 bin/sds /usr/local/bin/sds
+	sudo ln -sf sds /usr/local/bin/sds-cli
+	@echo "CLI installed to /usr/local/bin/sds (sds-cli links to it)"
 
 # Install MCP server
 install-mcp: build

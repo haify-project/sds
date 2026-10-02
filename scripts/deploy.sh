@@ -14,12 +14,12 @@ set -e
 HOSTS="orange1"
 CONTROLLER_PORT=3374
 CONTROLLER_BINARY="./bin/sds-controller"
-CLI_BINARY="./bin/sds-cli"
+CLI_BINARY="./bin/sds"
 SERVICE_FILE="./configs/sds-controller.service"
 CONFIG_FILE="./configs/controller.toml.example"
 REMOTE_BASE="/opt/sds"
 REMOTE_CONTROLLER="${REMOTE_BASE}/bin/sds-controller"
-REMOTE_CLI="/usr/local/bin/sds-cli"
+REMOTE_CLI="/usr/local/bin/sds"
 REMOTE_SERVICE="/etc/systemd/system/sds-controller.service"
 REMOTE_CONFIG="/etc/sds/controller.toml"
 
@@ -82,8 +82,8 @@ for host in ${HOSTS//,/ }; do
         ssh "$host" "sudo install -m755 /tmp/sds-controller $REMOTE_CONTROLLER && rm -f /tmp/sds-controller"
     fi
 
-    scp -q "$CLI_BINARY" "$host:/tmp/sds-cli"
-    ssh "$host" "sudo install -m755 /tmp/sds-cli $REMOTE_CLI && rm -f /tmp/sds-cli"
+    scp -q "$CLI_BINARY" "$host:/tmp/sds"
+    ssh "$host" "sudo install -m755 /tmp/sds $REMOTE_CLI && sudo ln -sf sds /usr/local/bin/sds-cli && rm -f /tmp/sds"
 
     if [ "$CLI_ONLY" = false ]; then
         if [ -f "$SERVICE_FILE" ]; then
@@ -157,4 +157,4 @@ fi
 log_info "✓ Deployment completed!"
 log_info "Database: /var/lib/sds/sds.db (BoltDB)"
 log_info "Logs: journalctl -u sds-controller.service -f"
-log_info "Test: sds-cli -c <HOST>:$CONTROLLER_PORT pool list"
+log_info "Test: sds -c <HOST>:$CONTROLLER_PORT pool list"

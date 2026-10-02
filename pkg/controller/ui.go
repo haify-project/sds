@@ -27,7 +27,7 @@ const uiNotBuiltPage = `<!DOCTYPE html>
 <body style="font-family:sans-serif;max-width:40em;margin:4em auto">
 <h1>Web UI not built</h1>
 <p>This <code>sds-controller</code> was compiled without the web UI assets.
-The API and <code>sds-cli</code> are unaffected.</p>
+The API and <code>sds</code> are unaffected.</p>
 <p>To include the UI, build with <code>make build</code> (which compiles
 <code>web-ui/</code> and embeds it), then restart the controller.</p>
 </body></html>

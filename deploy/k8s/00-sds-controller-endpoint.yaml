@@ -32,7 +32,7 @@ metadata:
   namespace: kube-system
 subsets:
   - addresses:
-      # CHANGE ME: your sds-controller VIP (from `sds-cli ha self status`)
+      # CHANGE ME: your sds-controller VIP (from `sds ha self status`)
       - ip: 192.168.123.250
     ports:
       - name: grpc       # MUST match the Service port name above.

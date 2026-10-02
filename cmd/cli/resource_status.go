@@ -139,7 +139,7 @@ func resourceStatus() *cobra.Command {
 				}
 				printWANMetrics(status.GetWanMetrics())
 				fmt.Printf("    NOTE: the DR peer can lag (async). Failover is a manual DR action:\n")
-				fmt.Printf("          sds-cli resource dr-failover %s\n", status.GetName())
+				fmt.Printf("          sds resource dr-failover %s\n", status.GetName())
 			}
 
 			return nil

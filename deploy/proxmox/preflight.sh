@@ -85,7 +85,7 @@ if [ -n "$NODES_JSON" ]; then
     if echo "$NODES_JSON" | grep -q "\"name\":\"${NODENAME}\""; then
         ok "node '${NODENAME}' is registered with sds"
     else
-        bad "node '${NODENAME}' is NOT registered with sds — run: sds-cli node register --name ${NODENAME} --address <ip>"
+        bad "node '${NODENAME}' is NOT registered with sds — run: sds node register --name ${NODENAME} --address <ip>"
     fi
 else
     warn "could not list sds nodes (auth?); verify '${NODENAME}' is registered manually"

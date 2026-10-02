@@ -42,7 +42,7 @@ func backupScheduleCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create or replace the schedule backing a resource up to a target",
-		Example: `  sds-cli backup schedule create --resource db --target offsite \
+		Example: `  sds backup schedule create --resource db --target offsite \
       --cron "30 2 * * *" --keep-daily 7 --keep-weekly 4 --keep-monthly 6`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if resource == "" || target == "" || cronExpr == "" {

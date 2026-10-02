@@ -1,6 +1,6 @@
 // Package mcpserver exposes the SDS controller as a Model Context Protocol
 // (MCP) server so AI assistants can inspect and manage storage through the
-// same gRPC API used by sds-cli.
+// same gRPC API used by sds.
 //
 // Tools are grouped by domain (cluster, resource, snapshot, gateway, HA) and
 // carry MCP annotations: read-only tools are always registered, mutating

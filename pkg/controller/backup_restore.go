@@ -205,6 +205,11 @@ func (bm *BackupManager) assertRestorable(ctx context.Context, info *ResourceInf
 			"resource %q is Primary on %s and is therefore in use; stop the workload and demote it before restoring over it",
 			info.Name, strings.Join(primaries, ", "))
 	}
+	if hosts := bm.promoterHosts(ctx, info); len(hosts) > 0 {
+		return fmt.Errorf(
+			"resource %q has a drbd-reactor promoter config on %s, which can promote it at any moment; remove it (ha delete, gateway delete) or disable it before restoring over it",
+			info.Name, strings.Join(hosts, ", "))
+	}
 	if bm.controller.db != nil {
 		if gw, err := bm.controller.db.GetGatewayByResource(ctx, info.Name); err == nil && gw != nil {
 			return fmt.Errorf(
@@ -410,4 +415,34 @@ func decompressFor(object string) string {
 		return " | gzip -dc"
 	}
 	return ""
+}
+
+// promoterHosts names the nodes of info holding an enabled drbd-reactor
+// promoter config for it: an `ha create` config or a gateway's. The database
+// knows about gateways, but `ha create` configs live only on the nodes.
+func (bm *BackupManager) promoterHosts(ctx context.Context, info *ResourceInfo) []string {
+	var found []string
+	cmd := fmt.Sprintf("ls /etc/drbd-reactor.d/ 2>/dev/null | grep -Eq '^sds-[a-z]+-%s\\.toml$' && echo SDS_PROMOTER=yes; true",
+		regexpQuoteForGrep(info.Name))
+	for _, n := range info.Nodes {
+		host := bm.controller.ResolveHost(n)
+		res, err := bm.controller.deployment.Exec(ctx, []string{host}, cmd)
+		if err == nil && res != nil && strings.Contains(hostOutput(res, host), "SDS_PROMOTER=yes") {
+			found = append(found, n)
+		}
+	}
+	return found
+}
+
+// regexpQuoteForGrep escapes the characters of a resource name that mean
+// something in an extended regular expression.
+func regexpQuoteForGrep(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if strings.ContainsRune(`.+*?()[]{}|^$\`, r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

@@ -477,7 +477,7 @@ func (rm *ResourceManager) assertNodesOnline(nodes []string) error {
 		}
 	}
 	if len(offline) > 0 {
-		return fmt.Errorf("node(s) %s offline: the controller cannot reach them (see sds-cli node list and the node.unreachable alert for why)",
+		return fmt.Errorf("node(s) %s offline: the controller cannot reach them (see sds node list and the node.unreachable alert for why)",
 			strings.Join(offline, ", "))
 	}
 	return nil

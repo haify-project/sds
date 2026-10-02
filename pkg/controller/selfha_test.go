@@ -115,7 +115,7 @@ func TestEnableSelfHaRejectsExistingResource(t *testing.T) {
 
 	// Left behind by a disable: the error must say how to go on.
 	_, err := ctrl.resources.EnableSelfHa(context.Background(), "10.0.0.50/24", "p0", 0, 0, nil)
-	assert.ErrorContains(t, err, "sds-cli resource delete "+SelfHaResource)
+	assert.ErrorContains(t, err, "sds resource delete "+SelfHaResource)
 
 	// With the HA record present it is simply already enabled.
 	require.NoError(t, ctrl.db.SaveHaConfig(context.Background(), &database.HaConfig{Resource: SelfHaResource}))

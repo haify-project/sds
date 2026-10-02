@@ -8,7 +8,7 @@
 # Contents:
 #   - SDS documentation (docs/, README) and the operations runbooks
 #   - the SDS code graph (.understand-anything/knowledge-graph.json) and source
-#   - the sds-cli reference, generated from the binary this commit builds, so
+#   - the sds reference, generated from the binary this commit builds, so
 #     it can never describe flags the installed CLI does not have
 #   - the service-ip OCF agent's code graph, when its checkout is present
 #   - DRBD 9 documentation: the LINBIT knowledge base, the DRBD 9 user's guide
@@ -145,10 +145,10 @@ once step:sds-code-graph "$od" import-graph "$root/.understand-anything/knowledg
 step "SDS source"
 once step:sds-source "$od" ingest-repo "$root"
 
-step "sds-cli reference (built from this commit)"
-cli=$stage/sds-cli
+step "sds reference (built from this commit)"
+cli=$stage/sds
 (cd "$root" && go build -o "$cli" ./cmd/cli)
-once step:sds-cli "$od" ingest-cli "$cli"
+once step:sds "$od" ingest-cli "$cli"
 
 if [ -n "${SERVICE_IP_REPO:-}" ] && [ -f "$SERVICE_IP_REPO/.understand-anything/knowledge-graph.json" ]; then
 	step "service-ip code graph"

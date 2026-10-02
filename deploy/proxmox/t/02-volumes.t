@@ -10,7 +10,7 @@ use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
 use MockClient;
-use Test::More tests => 23;
+use Test::More tests => 24;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -108,8 +108,8 @@ is($stringy->[0]{size}, 20 * 1073741824, 'string-typed sizes from protojson are 
 with_mock(routes => {
     'GET /v1/pools' => {
         pools => [
-            { name => 'vg0', node => 'n1', totalGb => 100, freeGb => 60 },
-            { name => 'vg0', node => 'n2', totalGb => 100, freeGb => 10 },
+            { name => 'sds_vg0', node => 'n1', totalGb => 100, freeGb => 60 },
+            { name => 'sds_vg0', node => 'n2', totalGb => 100, freeGb => 10 },
             { name => 'other', node => 'n1', totalGb => 999, freeGb => 999 },
         ],
     },
@@ -118,6 +118,11 @@ my ($total, $avail, $used, $active) = $P->status('sds0', $base_scfg);
 is($avail, 10 * 1073741824, 'free space is the tightest node, not the sum');
 is($total, 100 * 1073741824, 'total is a single node worth of capacity');
 is($active, 1, 'storage reports active');
+
+# The controller lists pools under their managed name; `sdspool sds_vg0` and
+# `sdspool vg0` both mean that pool.
+($total) = $P->status('sds0', { %$base_scfg, sdspool => 'sds_vg0' });
+is($total, 100 * 1073741824, 'the prefixed pool name matches too');
 
 # --- resize -----------------------------------------------------------------
 

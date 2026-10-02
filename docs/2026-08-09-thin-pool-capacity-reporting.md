@@ -1,52 +1,28 @@
-# Pool capacity reporting is blind to thin pool exhaustion (design)
+# Thin pool capacity reporting (design)
 
 Date: 2026-08-09
-Status: **Implemented**, not yet deployed to the home cluster. Found while
-recovering a real outage there.
+Status: **Implemented.** Found while recovering a real outage on the home
+cluster.
 
-Implemented:
-- `pkg/deployment/lvmthin.go` — `LVSThinReport`, one cluster-wide `lvs` on the
-  listing path, mirroring `LVSCacheReport`.
-- `pkg/controller/poolthin.go` — `parseThinReport` / `thinUsageByPool` /
-  `readThinUsage`, plus `thinOutOfSpace` reading LVM's volume health field.
-- `PoolInfo.ThinUsage` folded into all three listing paths; `TotalBytes` /
-  `FreeBytes` added and the GB conversion switched from truncation to rounding.
-- Proto fields 17–23; `pbPoolInfo` carries them.
-- `pkg/alert` — `PoolLister`, `checkPools`, five event types, configurable
-  thresholds, and an `owners` map replacing the key-shape ownership guess.
-- `alert.check_pools` / `pool_near_full_percent` / `pool_full_percent`, on by
-  default.
-- `PoolsPage.tsx` drives the bar from `data_percent` when there is a thin pool;
-  `sds pool list` / `pool get` report utilisation.
+Pool capacity used to be reported as **VG allocation** only. For an LVM thin
+pool that number says nothing about whether the next write will succeed: the
+thin pool LV holds almost every extent in the group, so `vg_free` is close to
+zero for the whole life of the pool. `sds pool convert-thin` creates the
+pool with `lvcreate -l 100%FREE` and grows it with `lvextend -l +100%FREE`,
+leaving `vg_free` at exactly 0; `sds pool create --type lvm-thin` without
+`--size` uses `-l 95%FREE`, leaving 5%. Either way the Pools page showed a
+nearly or completely full bar regardless of whether the pool was empty or about
+to fail writes.
 
-`make ci` green. `parseThinReport` verified against real 30-line `lvs` output
-from node-e: it picks `sdsthin` out and reports 44.96% data / 8.19% metadata,
-matching `lvs` directly.
-
-The snapshot listing defect at the end of this document is also fixed:
-`LVListSnapshots` lost its stray `VG/LV` placeholder, failures are no longer
-swallowed, size and creation time are parsed, and `--resource` filters. Verified
-on node-e: the corrected command returns `exit=0` and 27 rows, all of which
-parse.
-
-Not deployed to the home cluster. `sds-controller` is
-`PartOf=drbd-services@sds-meta.target`, so restarting it on the active node
-relocates the management plane; standby binaries go first.
-
-The Pools page reports **VG allocation**. In every deployment where the thin
-pool is created with `lvextend -l +100%FREE` — which is what SDS itself does —
-`vg_free` is permanently `0`, so the page shows `0 GB free` and a 100%-full bar
-forever, regardless of whether the pool is empty or about to fail writes.
-
-It therefore cannot warn about the one failure mode that actually takes a node
-down: the thin pool running out of **data** space.
+It therefore could not warn about the failure mode that actually takes a node
+down: the thin pool running out of **data** (or **metadata**) space.
 
 ## The outage that exposed it
 
 `openclaw` is a 6G volume replicated across four nodes, each on a 9.75G thin
 pool that also holds ~28 hourly scheduled snapshots. Steady-state occupancy was
-91–93%. The snapshot scheduler was working correctly — it prunes on schedule
-(`pkg/controller/schedule.go`); the pool was simply sized with no headroom.
+91–93%. The snapshot scheduler was working correctly; the pool was simply sized
+with no headroom.
 
 `node-a` was network-isolated for about a day. On reconnect DRBD started a full
 resync, which has to write the entire 6G volume as fresh allocations. The pool
@@ -61,170 +37,138 @@ drbd openclaw/0 drbd2: disk( Failed -> Diskless )
 The node then reported `disk:Diskless` on a resource where it is configured
 diskful — a symptom that reads like a configuration error and is not one.
 
-**Throughout all of this the Pools page looked exactly the same** as it does
-now, at 30–47% occupancy: `0 GB free`, solid bar. Before and after the failure
-were visually identical.
+Throughout, the Pools page looked the same as it did at 30–47% occupancy:
+`0 GB free`, solid bar.
 
-## Where it comes from
+A secondary defect: GB values were computed by integer division, so a 20 GiB
+disk (`21470642176` bytes after PV metadata, 19.9961 GiB) showed as 19 GB.
 
-`pkg/controller/storage.go:212` (and the multi-host variant at `:293`):
+## What the code does
 
-```go
-"sudo vgs --noheadings --units b --separator '|' -o vg_name,vg_size,vg_free"
-```
+### Collection
 
-`vg_free` is *unallocated extents in the volume group*. Once the thin pool LV
-claims every extent, that is structurally zero and stays zero. It says nothing
-about how full the thin pool is.
+- `pkg/deployment/lvmthin.go` — `LVSThinReport` runs one `lvs` per host
+  covering every volume group:
 
-Four sites then do the same conversion (`storage.go:244`, `:322`, `:535`,
-`:606`):
+  ```
+  sudo lvs --noheadings --nosuffix --units b --separator '|' \
+    -o vg_name,lv_name,segtype,lv_size,data_percent,metadata_percent,lv_attr
+  ```
 
-```go
-TotalGB: totalSize / 1024 / 1024 / 1024,
-FreeGB:  freeSize / 1024 / 1024 / 1024,
-```
+  Thin pools are picked out by `segtype`, not by name. `lv_size` is the pool's
+  data capacity, which `data_percent` is a percentage of.
+- `pkg/controller/poolthin.go` — `parseThinReport` turns the output into a
+  `PoolThinInfo` (`PoolLV`, `SizeBytes`, `DataPercent`, `MetaPercent`,
+  `OutOfSpace`) per VG; `thinUsageByPool` / `readThinUsage` feed it into
+  `PoolInfo.ThinUsage` on the pool listing paths. `OutOfSpace` is read from the
+  volume health field of `lv_attr` (`thinOutOfSpace`), i.e. LVM's own verdict,
+  not inferred from a percentage.
 
-`web-ui/src/pages/PoolsPage.tsx:176`:
+Data and metadata are carried separately: metadata exhaustion stops writes as
+completely as data exhaustion, and the two fill at unrelated rates.
 
-```ts
-const total = Number(pool.totalGb);
-const free  = Number(pool.freeGb);
-const usedPercent = total > 0 ? ((total - free) / total) * 100 : 0;
-```
+`PoolInfo` also carries `TotalBytes` / `FreeBytes`, and `bytesToGB` rounds to
+the nearest GiB instead of truncating.
 
-With `free == 0`, `usedPercent` is always exactly 100.
+### API
 
-### Measured on the four-node cluster, 2026-08-09
+`PoolInfo` in `api/proto/v1/sds.proto`, fields 17–23: `thin_pool_lv`,
+`thin_size_bytes`, `thin_data_percent`, `thin_metadata_percent`,
+`thin_out_of_space`, `total_bytes`, `free_bytes`. `total_gb` / `free_gb` still
+describe the volume group. An empty `thin_pool_lv` — not a zero percentage — is
+how "no thin pool" is told apart from "a thin pool at 0%".
 
-All four had just been expanded from 10G to 20G; occupancy is genuinely low.
+### Display
 
-| Node | UI shows | Actual thin pool `data_percent` |
+- `sds pool list` prints, for a thin pool, the thin pool's own free/total
+  and `N% used` (plus `OUT OF SPACE` when LVM says so).
+- `sds pool get` prints the thin pool's total/free, the VG size and
+  unallocated space on a separate line, the thin LV and its size, and data and
+  metadata percentages. An out-of-space pool prints a warning on stderr.
+- `web-ui/src/pages/PoolsPage.tsx` drives the bar from `thinDataPercent` when
+  `thinPoolLv` is set, colours it at 85% / 95%, and falls back to VG figures for
+  a pool with no thin LV.
+
+### Alerts
+
+`pkg/alert/alert_pools.go` — `checkPools` reads pools through the `PoolLister`
+interface every poll and, for each pool with a thin LV, raises:
+
+| Event | Severity | Condition |
 |---|---|---|
-| node-a | 0 GB free / 19 GB total | 30.78% |
-| node-b | 0 GB free / 19 GB total | 46.55% |
-| node-e | 0 GB free / 19 GB total | 45.50% |
-| node-c | 0 GB free / 19 GB total | 38.55% |
+| `pool.data_near_full` | warning | data ≥ near-full and < full threshold |
+| `pool.data_full` | critical | data ≥ full threshold |
+| `pool.metadata_near_full` | warning | metadata ≥ near-full and < full threshold |
+| `pool.metadata_full` | critical | metadata ≥ full threshold |
+| `pool.out_of_space` | critical | LVM reports the pool out of data space |
 
-## Secondary defect: integer truncation loses up to 1 GB
+Near-full and full are mutually exclusive, so crossing the critical threshold
+resolves the warning in the same poll. Pools are keyed by name and node. The
+monitor records which lister raised each condition (`owners`); a condition is
+cleared as vanished only when its own source answered that poll, so a failed
+pool listing does not resolve outstanding pool alerts.
 
-`vgs` reports `21470642176` bytes for a 20 GiB disk — 19.9961 GiB after PV
-metadata. Integer division truncates to **19**, so a freshly created 20 GB pool
-presents as 19 GB and looks like it lost a gigabyte. Round, or carry one decimal
-place, rather than truncating.
+Configuration (`/etc/sds/controller.toml`):
 
-## Proposed fix
-
-The plumbing already exists: `pkg/controller/poolcache.go:176` calls
-`deployment.LVThinPoolIn(ctx, address, poolName)` to resolve the thin pool LV
-name on a host. Getting its utilisation is one more `lvs` away.
-
-1. **Collect it.** Alongside the existing `vgs`, run:
-
-   ```
-   sudo lvs --noheadings --units b --separator '|' \
-     -o lv_name,lv_size,data_percent,metadata_percent <vg>/<thinpool>
-   ```
-
-   Note `data_percent` and `metadata_percent` are *both* needed —
-   metadata exhaustion fails a pool just as hard as data exhaustion, and the
-   two fill at unrelated rates.
-
-2. **Carry it.** Add `ThinDataPercent` / `ThinMetaPercent` to `PoolInfo` and to
-   the proto/DB pool record. `PoolInfo.Thin` already exists
-   (`storage.go:61`), so the UI can tell which pools have meaningful values.
-
-3. **Render the right number.** In `PoolsPage.tsx`, when `thin` is set, drive
-   the bar from `data_percent` and label it "pool used". Keep VG
-   total/free as a secondary line — it is still worth seeing that the VG is
-   fully committed, it just is not a health signal. Surface
-   `metadata_percent` too, at least once it crosses a threshold.
-
-4. **Fix the truncation** in all four conversion sites.
-
-5. **Alert on it.** A pool above ~85% data or metadata deserves an event on the
-   existing notification path. That is the difference between noticing this
-   before a resync and noticing it after a node goes `Diskless`.
-
-### Backward compatibility
-
-`ThinDataPercent` is absent for plain VGs and for pools whose agent has not
-been upgraded. Treat the zero value as "unknown" and fall back to the current
-VG rendering — do not draw a 0%-used bar for a pool that simply did not report.
-
-## Related: `sds resource snapshot list` saw no snapshots at all — fixed
-
-Turned up while clearing space during the same recovery. Worth fixing in the
-same pass because it blocks operators from acting on a full pool.
-
-**Correction.** An earlier revision of this document blamed a naming mismatch —
-that the scheduler's `<volume>_sched_<timestamp>` names did not match what the
-manual snapshot path looked for. That was wrong, and it was a guess from the
-symptom rather than from the code. The names were never the problem.
-
-The command in `pkg/deployment/deployment.go` carried a literal `VG/LV`:
-
-```
-sudo lvs -S lv_role=snapshot VG/LV -o lv_name,lv_size,lv_time --noheadings --separator=' ' <vg>
+```toml
+[alert]
+check_pools = true            # default
+pool_near_full_percent = 85.0 # default
+pool_full_percent = 95.0      # default
 ```
 
-`VG/LV` is a placeholder from the lvs man page that was never substituted. lvs
-still printed every snapshot it found on stdout, but **exited 5** because no
-such volume existed. Verified on node-e: that exact command prints all 27
-snapshots and returns `exit=5`.
+The defaults match `ThinPoolNearFullPercent` / `ThinPoolFullPercent` in
+`poolthin.go`. The gap between them is deliberate: past 95% a pool may not have
+room for a full DRBD resync of the volumes it holds, because a resync
+reallocates every block.
 
-The two consumers of the command then diverged on how forgiving they were:
+### Metrics and placement
 
-- The scheduler reads output with `execLines` regardless of exit status, so
-  retention kept working — which is precisely why nobody noticed.
-- `StorageManager.ListLvmSnapshots` looped over `if r.Success`, dispatch marks
-  a host failed on a non-zero exit, and 27 good rows were discarded in silence.
+- `pkg/controller/metricsobserver.go` — `poolCapacityBytes` exports a thin
+  pool's own size and used bytes (`thin_size_bytes × data_percent`) to
+  Prometheus; a pool without a thin LV exports its VG figures.
+- `pkg/controller/placement.go` — `poolPlacementCapacity` treats a thin pool's
+  free space as a ranking signal, not a ceiling: a thin volume allocates as it
+  is written, so its nominal size is not required up front. A thin pool whose
+  data or metadata is at or above `ThinPoolFullPercent`, or that LVM flags out
+  of space, is excluded (`thinPoolExhausted`).
 
-So it was not that scheduled snapshots were invisible: **no** snapshot was ever
-visible through this path, manual or scheduled, on any node.
+## Snapshot listing: `sds resource snapshot list` saw no LVM snapshots
 
-Fixed by dropping the placeholder, switching to a `|` separator (lv_time
-contains spaces, so whitespace splitting read the date as three extra columns),
-and adding `origin`. Verified on node-e: `exit=0`, 27 rows, all parsed.
+Turned up while clearing space during the same recovery.
 
-Three further defects on the same path, fixed with it:
+`LVListSnapshots` in `pkg/deployment` used to carry a literal `VG/LV` — the
+placeholder from the `lvs` man page — so `lvs` printed every snapshot and then
+exited 5 because no such volume existed. The scheduler reads output regardless
+of exit status, so retention kept working; `StorageManager.ListLvmSnapshots`
+skipped any host that dispatch marked failed, so no snapshot was ever visible
+through the listing path, manual or scheduled.
 
-1. **A failed command returned an empty list, not an error.** That silence is
-   what let this survive; `ListLvmSnapshots` now fails loudly.
-2. **`SizeGB` was hardcoded to `0`** with the comment "LVM list output needs
-   parsing for size", and `lv_time` was fetched and discarded. Both are parsed
-   now.
-3. **`--resource` was accepted, printed in the heading, and then ignored.** The
-   LVM branch listed the whole volume group, so `--resource a` and
-   `--resource b` returned identical lists of everything in the pool, each
-   under a heading naming a different resource. The request now carries
-   `resource`, and the controller filters by that resource's backing volumes
-   read from the database — not rebuilt from the `<name>_data` /
-   `<name>_vol<K>` convention, which lives in resource creation and would drift.
-   The same fix applies to the `sds_snapshot_list` MCP tool, whose description
-   likewise claimed to list "a DRBD resource's data volume".
-
-`lvremove` by hand remains safe — the controller enumerates snapshots live via
-`lvs -S lv_role=snapshot` and keeps no snapshot table in `sds.db` — but it is no
-longer the only thing that works.
-
-## Note on sizing, for whoever tunes the defaults
-
-The pools were grown 10G → 20G on 2026-08-09, which drops steady state to
-~45%. That is a workaround, not a fix: a thin pool holding a volume plus N
-hourly snapshots needs enough free space to absorb a **full resync of the
-volume**, not just the snapshot deltas. Sizing to the delta is what made 91%
-the normal state.
-
-Also worth reconsidering: `lvextend -l +100%FREE` leaves the VG with no spare
-extents, which is exactly why LVM's own guard rail is unavailable —
+Current command:
 
 ```
-WARNING: You have not turned on protection against thin pools running out of space.
-WARNING: Set activation/thin_pool_autoextend_threshold below 100 to trigger
-         automatic extension of thin pools before they get full.
+sudo lvs -S lv_role=snapshot -o lv_name,lv_size,lv_time,origin \
+  --noheadings --nosuffix --units b --separator='|' <vg>
 ```
 
-`thin_pool_autoextend` cannot help when there is nothing left to extend into.
-Leaving deliberate VG headroom and enabling autoextend would have contained
-this incident without any UI change at all.
+The `|` separator matters because `lv_time` contains spaces. Alongside that:
+
+1. A failed command now returns an error instead of an empty list.
+2. Size and creation time are parsed (size was hardcoded to 0).
+3. `--resource` filters: the request carries the resource, and the controller
+   filters by that resource's backing volumes as recorded in the database.
+   The `sds_snapshot_list` MCP tool uses the same path.
+
+The controller enumerates snapshots live and keeps no snapshot table, so
+removing one by hand with `lvremove` remains safe.
+
+## Sizing
+
+A thin pool holding a volume plus N scheduled snapshots needs enough free space
+to absorb a **full resync of the volume**, not just the snapshot deltas. Sizing
+to the delta is what made 91% the normal state on `openclaw`.
+
+When the thin pool takes every free extent of the VG, LVM's
+`thin_pool_autoextend_threshold` cannot help, because there is nothing left to
+extend into. Leaving VG headroom and enabling autoextend is the LVM-side
+safeguard; the alerts above are the SDS-side one.

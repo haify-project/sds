@@ -84,7 +84,7 @@ func (o TLSOptions) Credentials() (credentials.TransportCredentials, error) {
 	return credentials.NewTLS(conf), nil
 }
 
-// TLS environment variables, mirroring the flags on sds-cli.
+// TLS environment variables, mirroring the flags on sds.
 const (
 	envTLS           = "SDS_TLS"
 	envTLSCACert     = "SDS_TLS_CA"

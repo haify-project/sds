@@ -1,178 +1,190 @@
 # SDS × sds-proxy — optional WAN replication (design)
 
-Date: 2026-07-04
-Status: **Phase 1 (MVP) implemented.** **Opt-in only; the LAN default path is
-untouched.**
-
-Implemented (Phase 1a–1d):
-- Data model + proto: `database.Resource` and `CreateResourceRequest` carry
-  `WANMode/DRNode/DREndpoint/WANPort` (all zero ⇒ LAN).
-- DRBD config WAN branch in `generateDrbdConfig`: protocol A + pull-ahead +
-  loopback routing (pinned LAN output with `TestGenerateDrbdConfigLANUnchanged`).
-- `pkg/wanproxy`: shared-CA PKI, dialer/acceptor TOML matching sds-proxy's schema,
-  and `Provision`/`Deprovision` (systemd `sds-proxy@<resource>`), Provision before
-  `drbdadm up`.
-- Wiring: `CreateResourceWithVolumes(... *WANSpec)`, gRPC master-switch validation,
-  CLI `--wan/--dr-node/--dr-endpoint/--wan-port`.
-- Operations: `resource status` surfaces WAN mode, DR endpoint, per-node
-  `sds-proxy@<res>` health and DRBD replication state; `resource dr-failover
-  <res> [--yes]` does a guarded MANUAL DR promotion (async-data-loss warning +
-  confirmation). Auto cross-WAN failover is intentionally NOT built (auto-promoting
-  a lagging async secondary risks data loss).
-
-Validated: LAN create/delete unchanged (real IPs, protocol C) on the arm64 cluster;
-all WAN validation rejections; `go test ./...` green. **Cross-WAN loop exercised
-end-to-end** on a 2-node arm64 setup (one node as the DR site, its IP as
-`--dr-endpoint`, arm64 `sds-proxy` staged at `/usr/local/bin/sds-proxy`): `resource
-create --wan` provisioned the dialer/acceptor pair, the mTLS WAN link and both DRBD
-legs came up, DRBD reached Connected/UpToDate through the proxy, and data written on
-the primary read back identically on the DR node. Two fixes came out of it:
-`DistributeConfig` now chunks large files (the ~7 MB proxy binary overflowed a
-single `echo` arg), and sds-proxy backs off on instant reconnects (a zero-latency
-reconnect flood had delayed the initial connection). A real WAN (e.g. aliyun↔orange)
-adds the network latency that naturally paces establishment.
+Date: 2026-07-04 (updated to match the current implementation)
+Status: **Implemented. Opt-in only; the LAN path is untouched.**
 
 ## Guiding principle
 
-WAN replication is a **pure opt-in add-on**. A resource created without any WAN
-flag behaves EXACTLY as today: direct LAN DRBD, protocol C, real peer IPs, no
-proxy, no new dependencies. Every WAN code path is gated behind an explicit flag,
-so the default cannot regress. `WANMode == false` is the zero value everywhere.
+WAN replication is a pure opt-in add-on. A resource created without any WAN
+flag behaves exactly as a LAN resource always has: direct DRBD between real
+peer addresses, the requested protocol (default C), no proxy. Every WAN code
+path is gated behind `WANMode`, whose zero value is `false`.
 
-## What "WAN mode" gives a resource
+## What WAN mode gives a resource
 
-A resource replicated across the internet (primary site ↔ DR site, DR possibly
-behind NAT) via a per-resource **sds-proxy** pair: protocol A async + buffering +
-zstd + mTLS + pull-ahead + ping-ack synthesis (survives a dead WAN in Ahead,
-recovers with a partial resync — all already validated in sds-proxy).
+Replication across the internet from a primary site to one DR node (the DR
+possibly behind NAT) through a **sds-proxy** tunnel per WAN leg: protocol A,
+DRBD pull-ahead, zstd compression, mTLS, a 4 GiB buffer, and ping-ack synthesis
+on the acceptor so DRBD survives a dead WAN in `Ahead` and recovers with a
+partial resync.
+
+Two shapes:
+
+- **Two endpoints** — one primary-site node and the DR node. The whole resource
+  is protocol A.
+- **Primary site + DR** (两地三中心) — several primary-site replicas in a
+  synchronous LAN mesh plus one asynchronous DR copy. Only the WAN legs are
+  protocol A; the LAN mesh keeps the requested protocol.
 
 ## Opt-in surface
 
-CLI (absent flags ⇒ LAN, unchanged):
+At create time (absent flags ⇒ LAN):
+
 ```
-sds-cli resource create --name data --nodes site1 --pool vg0 --size 10 \
-    --wan --dr-node site2 --dr-endpoint 47.109.108.170 [--wan-port 37901]
+sds resource create --name data --port 7000 --size 10G \
+    --nodes site1-a,site1-b --wan --dr-node dr1 --dr-endpoint 203.0.113.7 \
+    [--wan-port 37901] [--wan-egress-address 10.0.0.5]
 ```
-- `--wan` is the master switch. Without it, `--dr-*` are rejected and nothing
-  below runs.
-- `--dr-node` — the remote (DR) node; must be a registered node.
-- `--dr-endpoint` — the DR site's public WAN address the primary dials (the DR is
-  typically the acceptor / public side; the primary may be behind NAT and dials
-  out, mirroring the aliyun↔orange topology).
-- `--wan-port` — WAN mTLS port (default a random >3000 per resource).
 
-API: add optional `bool wan`, `string dr_node`, `string dr_endpoint`,
-`uint32 wan_port` to `CreateResource` (proto3 → default false/empty ⇒ LAN).
+- `--wan` is the master switch. Without it the DR flags are rejected.
+- `--nodes` is required in WAN mode (no auto-placement) and lists the
+  primary-site replicas.
+- `--dr-node` — the DR node; must be registered.
+- `--dr-endpoint` — the DR site's public address the primary site dials. The
+  DR is the acceptor (public side); the primary site may be behind NAT and
+  dials out.
+- `--wan-port` — base mTLS port. 0 picks a random port in 3001–65535. Leg *i*
+  uses base + *i*.
+- `--wan-egress-address` — source address the primary's proxy binds before
+  dialing (see "Dedicated networks").
 
-## Data model (backward-compatible)
+On a running resource:
 
-Extend `database.Resource` (pkg/database) with optional fields — existing records
-deserialize with these zero-valued, i.e. LAN:
-```go
-type Resource struct {
-    // ... existing ...
-    WANMode    bool   // false = LAN (default)
-    DRNode     string // remote node name (WAN only)
-    DREndpoint string // DR public WAN address (WAN only)
-    WANPort    int    // WAN mTLS port (WAN only)
+- `sds resource add-dr <res> --dr-node --dr-endpoint [--wan-port]
+  [--egress-address]` attaches a DR copy in place; existing replicas keep their
+  synchronous mesh and a promoted resource keeps serving while the DR syncs.
+- `sds wan set-endpoint <res>` changes the DR endpoint and/or egress
+  address and rebuilds the tunnels. An endpoint that does not answer is refused
+  unless `--skip-check`.
+- `sds wan repair <res> [--dry-run]` re-provisions the legs a resource
+  should have and removes instances orphaned by a renumbered or removed node.
+
+gRPC: `CreateResourceRequest` fields `wan`, `dr_node`, `dr_endpoint`,
+`wan_port`, `wan_egress_address`; RPCs `AddDR`, `SetWanEndpoint`,
+`RepairWanProxy`, `DRFailback`.
+
+## Data model
+
+`database.Resource` carries `WANMode`, `DRNode`, `DREndpoint`, `WANPort` and
+`WANEgressAddress`. Records written before these fields existed deserialize
+with them zero-valued, i.e. LAN.
+
+## DRBD config generation
+
+`generateDrbdConfig` (`pkg/controller/resource_drbd_config.go`) takes a
+`*wanConfig`; nil renders the LAN config unchanged.
+
+**Two endpoints.** Protocol A, plus these `net` defaults (user options still
+override them):
+
+```
+on-congestion pull-ahead; congestion-fill 2M; congestion-extents 500;
+ping-timeout 20; csums-alg sha256;
+```
+
+Addresses are loopback so each node talks to its local proxy:
+
+```
+on <primary> { address 127.0.0.1:<P+9>; }   # binds here, connects to 127.0.0.1:<P> = local dialer
+on <dr-node> { address 127.0.0.1:<P>;   }   # local acceptor dials it here
+```
+
+**Primary site + DR.** Each node's `address` is its LAN replication address
+(the DR's is loopback and unused). The primary-site nodes get a
+`connection-mesh`. Each primary *i* gets an explicit `connection` to the DR:
+
+```
+connection {
+    host <primary-i> address 127.0.0.1:<bind port>;
+    host <dr>        address 127.0.0.1:<P+i>;
+    net { protocol A; on-congestion pull-ahead; congestion-fill 400M; csums-alg sha256; }
 }
 ```
 
-## Config generation — one branch, LAN untouched
+The bind port starts at `P + 100 + i` and is probed on the host for a free
+loopback port (`pickWANBindPorts`), because a fixed offset collides with
+another resource whose DRBD port sits one offset away.
 
-`ResourceManager.generateDrbdConfig` already parameterizes `protocol` and takes a
-`drbdOptions map` with `section/key` entries. WAN mode is a **new branch that only
-runs when `WANMode`**:
+**Quorum.** The generated config uses `quorum majority` so the initial
+force-promote is not blocked. Once the peers are up the controller rewrites
+quorum to a majority of the primary site (`applyLocalSiteQuorum`), so the DR
+does not vote on whether the primary site may write. `add-dr` applies the same
+rule, so attaching a DR does not raise the bar for the local nodes.
 
-- **LAN (default):** current output verbatim. No change.
-- **WAN:** force protocol A and inject the pull-ahead options (unless the user
-  overrode them), then emit **loopback-routed** addresses instead of peer IPs:
-  ```
-  net { protocol A; on-congestion pull-ahead; congestion-fill 2M;
-        congestion-extents 500; ping-timeout 20; }
-  on <primary> { ... address 127.0.0.1:<P+9>; }   # binds locally; connects to the local dialer
-  on <dr-node> { ... address 127.0.0.1:<P>;   }   # dialer(primary):drbd_listen = acceptor(dr):drbd_listen = 127.0.0.1:<P>
-  ```
-  The primary's DRBD connects to `127.0.0.1:<P>` = the local **dialer**; the DR's
-  DRBD listens on `127.0.0.1:<P>` where the local **acceptor** dials it. This is
-  the asymmetric-but-both-loopback routing proven with `wantest`. (Ports: DRBD-vs-
-  proxy on the same host must differ; use `P` for the proxy's drbd_listen and
-  `P+9` for the node's own bind.)
+## sds-proxy orchestration — `pkg/wanproxy`
 
-The per-host asymmetry (each host's own address must be loopback so its connect to
-the local proxy works) means WAN mode writes a **per-host** `.res` — SDS already
-deploys per host over dispatch, so this is a rendering detail, not new plumbing.
+Called only for WAN resources. Uses the dispatch/SSH deploy layer through a
+small `DeploymentClient` interface.
 
-## sds-proxy orchestration — new `pkg/wanproxy`
+1. **PKI.** One shared CA and one leaf (SAN `sds-proxy`, server and client
+   EKU), generated once and cached on the controller under
+   `/var/lib/sds/wanproxy-pki`, valid ten years. Distributed to every WAN node.
+   Each proxy pins its peer to the SAN.
+2. **Legs.** `MultiSpec.Legs()` expands a resource into one `ProxySpec` per
+   primary-site node. Leg *i* uses WAN port base + *i* and loopback DRBD port
+   P + *i* on both ends. A single-leg resource keeps the per-resource name
+   (`sds-proxy@<resource>`); multi-leg resources use
+   `sds-proxy@<resource>_<node>`, named after the node's registered name, not
+   its address, so renumbering a node does not orphan its tunnel.
+3. **Config.** Dialer (primary): `drbd_listen = 127.0.0.1:<P+i>`,
+   `peer = <dr-endpoint>:<wan-port>`, optional `bind_addr = <egress>:0`.
+   Acceptor (DR): `wan_listen = 0.0.0.0:<wan-port>`,
+   `drbd_listen = 127.0.0.1:<P+i>`, `acceptor_park_secs = 30`,
+   `synthesize_ping_acks = true`. Both: `on_congestion = "pull-ahead"`,
+   `zstd_level = 3`, `bulk_cap_bytes = 4 GiB`, metrics every 5 s.
+4. **Deploy.** Push the `sds-proxy` binary to `/usr/local/bin/sds-proxy`,
+   certs and config to `/etc/sds-proxy/`, and the `sds-proxy@.service`
+   template; enable and start each instance. The controller picks a binary per
+   node architecture (`/usr/local/bin/sds-proxy-<goarch>` beside the default),
+   and assumes the binary is pre-staged when it has none for that architecture.
+5. **Reachability.** After the acceptor starts, the primary probes the DR's WAN
+   port over TCP (with retries). The package cannot open cloud security groups;
+   the operator must allow the TCP port. UDP is not used.
+6. **Lifecycle.** Proxies are provisioned **before** `drbdadm up` and removed
+   **after** `drbdadm down` on delete. A failed create deprovisions what it
+   provisioned.
 
-Only invoked on WAN resource create/delete. Reuses the dispatch/SSH deploy layer.
+## HA / DR semantics
 
-1. **PKI:** one shared CA + leaf (SAN `sds-proxy`, server+client EKU) for the
-   controller, generated once and cached; distributed to both sites. (Per-resource
-   PKI is possible later; shared CA is the MVP.)
-2. **Config gen:** render dialer config on the primary
-   (`drbd_listen=127.0.0.1:P`, `peer=<dr-endpoint>:<wan-port>`) and acceptor config
-   on the DR node (`wan_listen=0.0.0.0:<wan-port>`, `drbd_listen=127.0.0.1:P`),
-   with `on_congestion=pull-ahead`, `synthesize_ping_acks=true`.
-3. **Deploy:** push the `sds-proxy` binary (once per node) + certs + config; install
-   a per-resource systemd unit `sds-proxy@<resource>` and enable+start it.
-4. **Lifecycle:** resource delete → stop+remove the unit + config; resource status
-   → surface proxy `active`/WAN health. Order: proxy up **before** `drbdadm up`.
+- WAN legs are protocol A. The DR can lag by whatever is buffered, so
+  **failover to the DR is manual**, never automatic: auto-promoting a
+  possibly-behind async secondary risks data loss. drbd-reactor still provides
+  HA within the primary site.
+- `sds resource dr-failover <res> --yes` force-promotes the DR node after
+  printing the data-loss warning. Without `--yes` it only prints the warning.
+- `sds resource dr-failback <res> [--node] [--wait]` returns to the primary
+  site in phases and can be re-run until it reports done: it rejoins the
+  primary-site nodes (discarding what they wrote after the failover in favour
+  of the DR's copy), waits for the resync from the DR, then makes the primary
+  site Primary again.
+- One DR node per resource.
+- `sds resource status` shows WAN mode, the DR endpoint, each leg's
+  `sds-proxy` unit state on both ends, whether the DR's WAN port is reachable,
+  and the primary's proxy counters. sds-proxy writes those counters to
+  `/run/sds-proxy/<leg>.json` (a file read over SSH, so no extra listening port
+  on a WAN-facing host). `buffer_used_bytes` is the amount a DR failover would
+  lose; throughput, achieved compression ratio, reconnect count and ring-full
+  events are shown alongside. An unreadable snapshot renders as unknown, never
+  as zero.
+- `sds resource tls` (DRBD kernel TLS) is refused for WAN resources: the
+  WAN legs already run mutual TLS in sds-proxy.
 
-## HA / DR semantics (important, document loudly)
+## Dedicated networks
 
-- WAN = protocol A (async). The DR node can lag by the buffer, so **failover to the
-  DR site is a manual DR-recovery action, NOT automatic drbd-reactor failover** —
-  auto-promoting a possibly-behind async secondary risks data loss. The
-  drbd-reactor promoter still runs **within the primary site** for local HA.
-- Two endpoints only (primary site ↔ DR site). No 3-way WAN.
-- Surface the async lag / potential data-loss window in `resource status`.
-  **Done (2026-07-29).** sds-proxy publishes a JSON snapshot per resource to
-  `/run/sds-proxy/<resource>.json` (a file, not a socket: the controller already
-  reaches these nodes over SSH, so this adds no listening port to a WAN-facing
-  host). The controller reads the PRIMARY's copy — that is the side holding the
-  backlog — and `resource status` reports `buffer_used_bytes` as exactly the
-  amount a DR failover would lose, plus throughput, the compression ratio the
-  link really achieves, reconnect count and ring-full events. An unreadable
-  snapshot renders as "unknown", never as zero.
+- **LAN replication network.** `sds node register --address <mgmt>
+  [--replication-address <repl>]`. SSH uses `--address`; generated `.res`
+  files point DRBD at `--replication-address`. Omitted, replication shares the
+  management address. Existing resources keep their `.res` until re-rendered.
+- **WAN egress.** `--wan-egress-address` (create) / `--egress-address`
+  (`add-dr`, `wan set-endpoint`) renders as `bind_addr = "<ip>:0"` in the dialer
+  config, so replication leaves over a chosen uplink and reaches the DR firewall
+  from a predictable source IP. Port 0 lets the kernel pick an ephemeral port; a
+  fixed one would fail with EADDRINUSE on reconnect during TIME_WAIT. The
+  address is persisted on the resource record because the proxy config is
+  re-rendered from it.
 
-## Dedicated networks (2026-07-29)
+## Not built
 
-Replication and management no longer have to share a link:
-
-- **LAN replication network.** `sds-cli node register --address <mgmt> [--replication-address <repl>]`.
-  The controller keeps reaching the node over `--address` for SSH; generated
-  `.res` files point DRBD at `--replication-address`. Omit it and replication
-  shares the management address, exactly as before. Adding it to an existing
-  node is safe: the management address is untouched, and only newly generated
-  configs move — existing resources keep their current `.res` until re-rendered.
-- **WAN egress.** `resource create --wan ... --wan-egress-address <ip>` pins the
-  source address the primary's proxy binds before dialing the DR site, so
-  replication leaves over a chosen uplink (a leased line rather than plain
-  internet) and reaches the DR firewall from a predictable source IP. It renders
-  as `bind_addr = "<ip>:0"`; port 0 lets the kernel pick an ephemeral port, since
-  a fixed one would fail with EADDRINUSE on reconnect during TIME_WAIT. It is
-  persisted on the resource record, because the proxy config is re-rendered from
-  there and a restart would otherwise silently drop the pinned egress.
-
-## Firewall / reachability
-
-The DR endpoint's `wan-port` must be reachable from the primary's egress (one TCP
-port; UDP not needed). `pkg/wanproxy` documents/validates this; it cannot open
-cloud security groups itself.
-
-## Phasing
-
-1. **MVP:** flags + data model + WAN-mode config gen + `pkg/wanproxy` (shared PKI,
-   deploy, per-resource systemd) + docs. Manual DR failover.
-2. ~~`resource status` WAN metrics (buffer/throughput)~~ — **done 2026-07-29**;
-   see the HA/DR section above.
-3. Later: per-resource PKI, seamless DR-failover tooling (notably **failback**:
-   after `dr-failover` there is still no supported path back to the primary
-   site), multi-DR.
-
-## Non-goals
-
-- Not changing the LAN path in any way.
-- Not automatic cross-WAN HA failover (async safety).
-- Not replicating DRBD Proxy's large buffer / throttling (separate sds-proxy work).
+- Per-resource PKI or certificate rotation (the shared CA is the only mode).
+- Automatic cross-WAN failover.
+- More than one DR node per resource.

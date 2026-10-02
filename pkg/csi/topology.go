@@ -142,7 +142,7 @@ func (c replicaCandidate) fits(needBytes uint64) bool {
 // a clone or restore) are seated first, in the order given. The remaining slots
 // go to the candidates with the most free space, so a fresh volume lands on the
 // emptiest nodes instead of on whatever ListNodes happened to return first —
-// the behaviour `sds-cli resource create` has always had. Equal free space
+// the behaviour `sds resource create` has always had. Equal free space
 // breaks on node name so two provisioners racing over identical cluster state
 // reach the same answer. Nodes in a fault domain no replica uses yet are taken
 // before any that would share one: two copies on one physical host are one

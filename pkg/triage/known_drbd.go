@@ -284,7 +284,7 @@ func matchDRBDModuleMissing(in Input) []Finding {
 			"Confirm what is actually there: drbdadm --version   (DRBD_KERNEL_VERSION=0 means no module)",
 			"Install the module for the running kernel — the package name follows the distribution: drbd-dkms, kmod-drbd9x, or a LINBIT build matching uname -r.",
 			"Load it and make that persist: modprobe drbd && echo drbd > /etc/modules-load.d/drbd.conf",
-			"Re-check the node: sds-cli node health-check <node>",
+			"Re-check the node: sds node health-check <node>",
 		},
 		Evidence: ev,
 	}}

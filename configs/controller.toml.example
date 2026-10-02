@@ -33,7 +33,7 @@ parallel = 10
 # NOTE: ca_cert / client_cert / client_key described a *client* and were never
 # read by anything. A config still carrying them is now rejected at startup —
 # replace them with cert_file/key_file below. The client-side spellings live on
-# as sds-cli's --tls-ca / --tls-cert / --tls-key.
+# as sds's --tls-ca / --tls-cert / --tls-key.
 [tls]
 enabled = false
 # The certificate this controller presents, and its private key.
@@ -49,7 +49,7 @@ level = "info"  # debug, info, warn, error
 format = "json"  # json or text
 
 [storage]
-# What `pool create` builds when no --type is given, for every client: sds-cli,
+# What `pool create` builds when no --type is given, for every client: sds,
 # the REST gateway, MCP and the web UI alike. Thin is the default because a
 # thick pool cannot hold a snapshot history — LVM reserves a fixed COW area per
 # snapshot (SDS takes 20% of the origin), so a 10 GiB pool holding a 6 GiB
@@ -64,19 +64,19 @@ default_snapshot_suffix = "_snap"
 [metrics]
 enabled = true
 listen_address = "0.0.0.0"
-port = 9090
+port = 9433
 
 [ui]
 enabled = true
 listen_address = "0.0.0.0"
-port = 8080
+port = 3376
 # Health detection and notifications.
 #
 # `enabled` starts the detector and the event bus by itself. Delivery is a
 # separate, optional concern: with no webhook configured the events are still
 # readable at GET /v1/events, streamed at GET /v1/events/watch, pushed to the
 # web UI's notification bell over GET /v1/events/stream, and followed with
-# `sds-cli event watch`.
+# `sds event watch`.
 [alert]
 enabled = false
 check_interval_sec = 30
@@ -95,3 +95,17 @@ webhook_min_severity = "warning"   # info | warning | critical
 # url = "https://chat.example.com/hooks/sds"
 # min_severity = "info"
 # headers = { X-Token = "..." }
+
+# API authentication. With [auth], one shared bearer token guards every call.
+# [rbac] replaces it with per-user tokens and roles (admin, operator, viewer);
+# users added later with `sds rbac` are kept in the database.
+# [auth]
+# enabled = true
+# token = "<long random string>"
+#
+# [rbac]
+# enabled = true
+# [[rbac.users]]
+# name = "ops"
+# token = "<long random string>"
+# role = "operator"

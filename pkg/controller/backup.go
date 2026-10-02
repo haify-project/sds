@@ -46,7 +46,7 @@ const (
 
 	// manifestObject is the self-describing index written alongside the images.
 	// It exists for the disaster the backups are for: when the SDS database is
-	// gone too, `sds-cli backup import` rebuilds the backup records, chains
+	// gone too, `sds backup import` rebuilds the backup records, chains
 	// included, from these files alone (backup_import.go).
 	manifestObject = "manifest.json"
 
@@ -428,7 +428,7 @@ func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo
 		TotalBytes: rec.TotalBytes,
 		Note: "Raw full images of each DRBD volume, bounded by the DRBD device size " +
 			"(smaller than the backing LV, whose tail holds DRBD metadata). Restore with " +
-			"`sds-cli backup restore`, or by writing each image to a device of at least that size. " +
+			"`sds backup restore`, or by writing each image to a device of at least that size. " +
 			"An incremental holds only changed ranges: restore its parent chain down to the full " +
 			"backup first, then write each run of its gunzipped image at the offset its ranges list gives.",
 	}

@@ -277,7 +277,7 @@ func (f *fakeBackend) setPoolFree(freeGBByNode map[string]uint64) {
 	}
 }
 
-// A PVC must land where `sds-cli resource create` would: on the nodes with the
+// A PVC must land where `sds resource create` would: on the nodes with the
 // most room. Before capacity-aware placement this took n1 and n2 purely because
 // ListNodes returned them first, filling up an already-tight node.
 func TestCreateVolumePrefersNodesWithMostFreeSpace(t *testing.T) {

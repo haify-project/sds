@@ -43,7 +43,7 @@ over automatically.
 
 The current controller restarts under reactor management during the handoff,
 so this command's connection drops by design. Track progress with
-'sds-cli ha self status' (against the VIP) or the handoff log on the node.`,
+'sds ha self status' (against the VIP) or the handoff log on the node.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if vip == "" {
 				return fmt.Errorf("--vip is required (CIDR, e.g. 192.168.1.50/24)")
@@ -78,7 +78,7 @@ so this command's connection drops by design. Track progress with
 			fmt.Printf("  Handoff log: %s (on the controller node)\n", handoffLog)
 			fmt.Printf("\nThe controller is restarting under drbd-reactor management.\n")
 			vipAddr := strings.Split(vip, "/")[0]
-			fmt.Printf("Verify with:  sds-cli -c %s:3374 ha self status\n", vipAddr)
+			fmt.Printf("Verify with:  sds -c %s:3374 ha self status\n", vipAddr)
 
 			return nil
 		},
@@ -126,7 +126,7 @@ func haSelfStatus() *cobra.Command {
 			} else {
 				fmt.Printf("  Active node: unknown\n")
 			}
-			fmt.Printf("\nDetails: sds-cli ha status %s\n", status.Resource)
+			fmt.Printf("\nDetails: sds ha status %s\n", status.Resource)
 
 			return nil
 		},
@@ -142,7 +142,7 @@ func haSelfDisable() *cobra.Command {
 		Long: `Removes drbd-reactor management of the controller, copies the database
 back to the node-local path on the given node, and re-enables the controller
 as a normal systemd service there. The sds-meta resource is kept and can be
-removed afterwards with 'sds-cli resource delete sds-meta'.
+removed afterwards with 'sds resource delete sds-meta'.
 
 The managed controller stops during this operation, so this command's
 connection drops by design.`,
@@ -166,7 +166,7 @@ connection drops by design.`,
 
 			fmt.Printf("Self-HA disable started\n")
 			fmt.Printf("  Controller will restart standalone on: %s\n", node)
-			fmt.Printf("\nVerify with:  sds-cli -c %s:3374 ha self status\n", node)
+			fmt.Printf("\nVerify with:  sds -c %s:3374 ha self status\n", node)
 
 			return nil
 		},

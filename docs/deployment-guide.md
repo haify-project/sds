@@ -1,130 +1,155 @@
 # SDS — Installation & Deployment Guide
 
-An end-to-end walkthrough for installing and running SDS: from raw storage nodes
-to a working DRBD-backed cluster with gateways, HA, Kubernetes CSI, the AI
-Copilot, and optional WAN replication.
+From raw storage nodes to a working DRBD-backed cluster with gateways, HA,
+Kubernetes CSI, the AI Copilot, and optional WAN replication.
 
-This guide is the "how to stand it up" companion to
-[`node-prerequisites.md`](./node-prerequisites.md) (the exhaustive per-node
-package/OCF-agent list). Read this top-to-bottom for a first install; jump to a
-section for a specific capability.
+The per-node package list, with the symptom each missing piece produces, is
+[`node-prerequisites.md`](./node-prerequisites.md). Day-to-day operation is
+covered in [`user-guide.md`](./user-guide.md).
 
-Target OS in the reference clusters: **Ubuntu 24.04** (amd64 and arm64 both
-validated). Adjust package names for other distros.
+Reference clusters run **Ubuntu 24.04** (amd64 and arm64). Package names below
+are Ubuntu's; adjust for other distros.
 
 ---
 
-## 0. Architecture in one screen
+## 0. Architecture
 
 ```
-sds-cli / web-ui / sds-ai ─┐
-                           ▼ gRPC 3374 / REST 3375 / UI 3376
-                    sds-controller  ──(dispatch / SSH as root)──►  storage nodes
-                           │                                        ├─ DRBD 9 (kernel)
-                           ├─ BBolt DB (resources, gateways, HA)    ├─ drbd-reactor (HA)
-                           └─ drbd-reactor promoter configs          ├─ LVM / ZFS pools
-                                                                     └─ OCF agents (gateways)
+sds / web UI / sds-mcp / sds-ai
+        │  gRPC 3374 · REST 3375 · UI 3376 · metrics 9433
+        ▼
+  sds-controller ──(dispatch over SSH)──►  storage nodes
+        │                                   ├─ DRBD 9 (kernel) + drbd-utils
+        └─ BBolt DB /var/lib/sds/sds.db     ├─ drbd-reactor (promoters, HA)
+                                            ├─ LVM / ZFS pools
+                                            └─ OCF agents (gateways)
 ```
 
-- **Control plane:** one `sds-controller` process. It owns a small BBolt database
-  and drives every node **over SSH** using the `dispatch` library — there is no
-  per-node SDS agent for storage ops. It exposes gRPC (`3374`), a REST/grpc-gateway
-  (`3375`), an embedded web UI (`3376`), and Prometheus metrics.
-- **Data plane:** DRBD 9 replicates block volumes between nodes; `drbd-reactor`
-  promoters provide automatic failover; gateways (NFS / iSCSI / NVMe-oF) export a
-  DRBD resource behind a floating VIP.
-- **Optional:** a Kubernetes CSI driver (DRBD-backed PVs), the `sds-ai` Copilot,
-  controller **Self-HA** (the controller itself floats on a DRBD-backed VIP), and
-  opt-in **WAN replication** (DRBD over a per-resource `sds-proxy` pair).
+- **Control plane:** one `sds-controller` process with a BBolt database
+  (`[database] path`, default `/var/lib/sds/sds.db`). It drives every node over
+  SSH through the `dispatch` library; there is no per-node SDS agent. Commands
+  aimed at the controller's own address run locally without SSH.
+- **Listeners:** gRPC on `[server] port` (default `3374`); the REST gateway on
+  `3375` (fixed, bound to `[server] listen_address`); the web UI on `[ui] port`
+  (default `3376`); Prometheus metrics on `[metrics] port` (default `9433`). The
+  UI proxies `/v1/` to the REST gateway and `/ai/` to the AI Copilot on
+  `127.0.0.1:7634`, so a browser needs only the UI port.
+- **Data plane:** DRBD 9 replicates block volumes; `drbd-reactor` promoters fail
+  over mounts, VIPs and services; gateways (NFS / iSCSI / NVMe-oF) export a
+  resource behind a floating service IP.
+- **Optional:** Kubernetes CSI driver, `sds-ai` Copilot, controller **Self-HA**
+  (the controller floats on a DRBD-backed VIP), WAN replication (DRBD over a
+  per-resource `sds-proxy` pair), encrypted replication (kernel TLS), off-cluster
+  backups (rclone).
 
-The controller can run **on** one of the storage nodes or on a separate host; it
-just needs root SSH to every node.
+Without Self-HA the controller can run on a storage node or on a separate host.
+Self-HA requires it to run on a registered node.
 
 ---
 
 ## 1. Build the binaries
 
-On a build host with Go ≥ 1.25 and Node ≥ 20 (for the web UI):
+Requires Go 1.26 (`go.mod` pins toolchain `go1.26.8`) and Node.js for the web UI
+(CI uses Node 22).
 
 ```bash
 git clone <sds-repo> && cd sds
-make build            # builds bin/sds-controller and bin/sds-cli (UI embedded)
+(cd web-ui && npm ci)
+make build
 ```
 
-Cross-compile for the node arch when the build host differs (the binaries are
-`CGO_ENABLED=0`, fully static):
+`make build` builds the web UI, copies it into `ui/dist` (embedded into the
+controller via `go:embed`), and produces `bin/sds-controller`, `bin/sds`,
+`bin/sds-mcp`, `bin/service-ip` (always for Linux), `bin/csi-controller` and
+`bin/csi-node` — all except `service-ip` for the build host's OS.
+
+For Linux nodes built on another OS or architecture, build the UI once and
+cross-compile:
 
 ```bash
-# amd64 nodes
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sds-controller ./cmd/controller
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sds-cli        ./cmd/cli
-# arm64 (信创/Kunpeng/…): swap GOARCH=arm64
+make ui-sync
+for c in controller:sds-controller cli:sds mcp:sds-mcp service-ip:service-ip; do
+  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/${c#*:} ./cmd/${c%%:*}
+done
+# arm64 nodes: GOARCH=arm64
 ```
 
-The web UI is embedded into `sds-controller` via `go:embed ui/dist`. After a UI
-change: `cd web-ui && npm run build` → `make ui-sync` → rebuild the controller.
+A controller built without `make ui-sync` serves a placeholder page instead of
+the UI; the API and `sds` are unaffected.
 
-Other binaries you may need later:
-- `sds-mcp` (`./cmd/mcp`) — MCP tool backend for `sds-ai`.
-- `csi-controller` / `csi-node` (`./cmd/csi-*`) — the Kubernetes CSI driver.
-- `sds-ai` (`./cmd/sds-ai` — **its own Go module**: `cd cmd/sds-ai && go build .`).
-- `sds-proxy` — the WAN transport, built from the separate `sds-proxy` repo.
+Other binaries:
+- `sds-ai` (`cmd/sds-ai`, its own Go module): `cd cmd/sds-ai && go build .`
+- `sds-proxy` (WAN transport): built from the separate `sds-proxy` repository.
+- CSI image: `Dockerfile.csi` (section 9).
 
 ---
 
-## 2. Prepare the storage nodes (DRBD stack)
+## 2. Prepare the storage nodes
 
-Do this on **every** storage node. Full detail (which OCF package provides what,
-the version-match gotcha) is in `node-prerequisites.md`; the essentials:
+On **every** node. Details and failure symptoms: `node-prerequisites.md`.
 
-1. **DRBD 9 kernel module + utils + reactor.**
+1. **DRBD 9 kernel module, `drbd-utils`, `drbd-reactor`** (LINBIT packages or
+   source builds):
    ```bash
-   cat /proc/drbd            # want: version: 9.3.0 (or your 9.x)
-   drbdadm --version         # DRBDADM_VERSION
+   cat /proc/drbd            # version: 9.x
+   drbdadm --version
    drbd-reactor --version
    ```
-   Install DRBD 9 + `drbd-utils` + `drbd-reactor` from LINBIT's repo or a source
-   build. **★ drbd-reactor and drbd-utils versions must match** — reactor parses
-   `drbdsetup status --json`, and a too-old utils emits JSON reactor can't parse,
-   so it silently stops managing the resource (`IGNORING resource … expected ','`)
-   and never fails over. Match versions across all nodes (e.g. reactor 1.11 ↔
-   drbd-utils 9.34).
+   Keep drbd-utils and drbd-reactor versions matched on all nodes. Reactor parses
+   `drbdsetup status --json`; a drbd-utils too old for it produces JSON reactor
+   cannot parse, it logs `IGNORING resource … expected ','` and never fails over
+   (seen with drbd-utils 9.31 + reactor 1.11; drbd-utils 9.34 fixed it).
+   drbd-reactor must be running (`systemctl enable --now drbd-reactor`);
+   `ha self enable` refuses otherwise.
 
-2. **LVM (or ZFS)** for the backing pools: `apt-get install -y lvm2`.
+2. **LVM** (`lvm2`) for LVM pools; `thin-provisioning-tools` for incremental
+   backups (`thin_delta`); `zfsutils-linux` only for ZFS pools.
 
-3. **OCF resource agents** (for gateways AND HA):
+3. **OCF resource agents** for gateways:
    ```bash
-   apt-get install -y resource-agents-extra    # Filesystem, nfsserver, exportfs, IPaddr2, nvmet-*, …
+   apt-get install -y resource-agents-extra   # Filesystem, nfsserver, exportfs, nvmet-*
    ```
-   `resource-agents-base` alone is NOT enough (it lacks `Filesystem`).
+   `resource-agents-base` alone lacks `Filesystem`, which every gateway promoter
+   starts with. `ha create` and Self-HA use systemd mount units and
+   `service-ip@.service` instead of OCF agents.
 
-4. **Load DRBD at boot:** `echo drbd > /etc/modules-load.d/drbd.conf` (SDS also
-   installs an `sds-drbd-up.service` on first resource create to `drbdadm up all`
-   at boot).
-
-5. Gateway-specific (only on nodes that will serve that gateway):
+4. Per gateway type, on the nodes of the exported resource:
    - iSCSI: `apt-get install -y targetcli-fb python3-rtslib-fb`
    - NFS: `apt-get install -y nfs-kernel-server`
-   - NVMe-oF: `apt-get install -y nvme-cli linux-modules-extra-$(uname -r)` then
-     `modprobe nvmet nvmet-tcp` (the stock cloud kernel lacks the nvme-tcp modules).
+   - NVMe-oF: `apt-get install -y nvme-cli linux-modules-extra-$(uname -r)`
+     (Ubuntu cloud kernels ship `nvmet-tcp` only in `linux-modules-extra`).
+     Gateway creation loads `nvmet`/`nvmet-tcp` and persists them in
+     `/etc/modules-load.d/nvmet.conf`.
 
-6. **Real data disk(s)** for pools — a raw block device (`/dev/sdb`, `/dev/vdb`),
-   not a loop file.
+5. Optional features:
+   - backups: `rclone` on every diskful node of a backed-up resource
+   - encrypted replication: `ktls-utils` (tlshd), `openssl`, DRBD ≥ 9.2 with TLS
+   - encryption at rest (`resource create --encrypt`): `cryptsetup`, `dm-crypt`
+
+6. **A data disk** per diskful node: a raw block device (`/dev/sdb`, `/dev/vdb`)
+   with no filesystem or mount on it.
+
+`sds health-check` (after section 5) reports per node whether DRBD,
+drbd-reactor (installed and running) and the resource agents are present.
 
 ---
 
-## 3. Root SSH trust + dispatch config
+## 3. SSH trust and dispatch config
 
-The controller runs as **root** and drives nodes over SSH. On the controller node:
+The controller reaches nodes over SSH. Node commands use `sudo`, so the SSH user
+must be root or have passwordless sudo; Self-HA additionally requires
+passwordless **root** SSH between every pair of nodes.
+
+On the controller node:
 
 ```bash
 sudo test -f /root/.ssh/id_ed25519 || \
   sudo ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519 -C root@controller
 sudo cat /root/.ssh/id_ed25519.pub
-# append that pubkey to /root/.ssh/authorized_keys on EVERY node (incl. itself)
+# append that key to /root/.ssh/authorized_keys on EVERY node, including this one
 ```
 
-Write `/root/.dispatch/config.toml` on the controller node:
+`/root/.dispatch/config.toml`:
 
 ```toml
 [ssh]
@@ -132,63 +157,57 @@ user = "root"
 port = 22
 key_path = "/root/.ssh/id_ed25519"
 strict_host_key = false
-known_hosts = ""          # ★ REQUIRED — see gotcha below
 timeout = "30s"
 
-# ★ Key these sections by IP ADDRESS, not by a friendly node name.
+# One section per node, keyed by the node's IP address.
 [hosts."<node1-ip>"]
 addresses = ["<node1-ip>"]
 user = "root"
 key_path = "/root/.ssh/id_ed25519"
+
 [hosts."<node2-ip>"]
 addresses = ["<node2-ip>"]
 user = "root"
 key_path = "/root/.ssh/id_ed25519"
+
 [hosts."<node3-ip>"]
 addresses = ["<node3-ip>"]
 user = "root"
 key_path = "/root/.ssh/id_ed25519"
 ```
 
-> **★ Key `[hosts.*]` by the node's IP address.** The controller asks dispatch
-> for hosts by *address*, so a section named after a node (`[hosts.node1]`) never
-> matches and dispatch falls through to `~/.ssh/config`. Any `Host` entry there
-> whose `HostName` is that IP then supplies the user/port/key — and one address
-> commonly has several aliases (frp tunnels: `Host x-frp … Port 10022`,
-> `User someone-else`). The result is a connection with the wrong user or port
-> and an `unable to authenticate, attempted methods [none]` that looks nothing
-> like a config problem. Setting `user`/`key_path` inside the IP-keyed section
-> makes it win: dispatch resolves TOML host > TOML group > `~/.ssh/config` >
-> defaults.
-
-> **★ The controller only reads this file if `[dispatch] config_path` points at
-> it** (`controller.toml`). An unset path means dispatch's own default,
-> `~/.dispatch/config.toml` of whatever user the controller runs as — which is
-> not root's file when the controller does not run as root. A path that does not
-> exist is now rejected at startup rather than silently ignored.
-
-> **★ Set BOTH `strict_host_key = false` AND `known_hosts = ""`.** A node's SSH
-> host key changes when it reboots (especially a hard power-off). With a stale
-> known_hosts, dispatch silently rejects the new key and surfaces an *empty* error
-> like `... creation failed on <ip>:` (nothing after the colon) while a shell
-> `ssh` still works. Recovery: `rm /root/.ssh/known_hosts` + restart the
-> controller. For a controller that runs behind Self-HA, keep this in the config
-> so it survives node reboots.
-
-For **Self-HA** the SSH trust must be **full-mesh** (any node may host the
-controller): every node's root key in every node's `authorized_keys`.
+- **Key `[hosts.*]` by IP address.** The controller asks dispatch for hosts by
+  address. A section named after a node (`[hosts.node1]`) never matches, and
+  settings then fall through to `~/.ssh/config`: any `Host` entry whose
+  `HostName` is that IP supplies its user, port and key, which commonly yields
+  `unable to authenticate, attempted methods [none]`. dispatch resolves host
+  section > group section > `~/.ssh/config` > `[ssh]` defaults, so `user` and
+  `key_path` set inside the IP-keyed section always win.
+- **Point the controller at this file** with `[dispatch] config_path`. Unset, it
+  uses `~/.dispatch/config.toml` of the user the controller runs as. A path that
+  does not exist stops the controller at startup.
+- **Host keys.** dispatch records host keys in `known_hosts` (default
+  `~/.ssh/known_hosts`, i.e. `/root/.ssh/known_hosts`); `strict_host_key = false`
+  adds unknown hosts automatically. A key that *changed* — a rebuilt node, or a
+  VM that regenerates host keys — is rejected with `host key changed: <ip>`
+  regardless of that setting. Remove the stale entry with
+  `ssh-keygen -R <ip> -f /root/.ssh/known_hosts`; dispatch rereads the file when
+  it changes, so no restart is needed.
 
 ---
 
-## 4. Install & start the controller
+## 4. Install and start the controller
 
 ```bash
-sudo install -m755 bin/sds-controller /opt/sds/bin/sds-controller
-sudo install -m755 bin/sds-cli        /usr/local/bin/sds-cli
-sudo mkdir -p /etc/sds
+sudo install -d /opt/sds/bin /etc/sds
+sudo install -m 755 bin/sds-controller bin/service-ip /opt/sds/bin/
+sudo install -m 755 bin/service-ip /usr/local/bin/service-ip
+sudo install -m 755 bin/sds /usr/local/bin/sds
+sudo ln -sf sds /usr/local/bin/sds-cli      # older scripts call it sds-cli
+sudo cp configs/sds-controller.service configs/service-ip@.service /etc/systemd/system/
 ```
 
-`/etc/sds/controller.toml`:
+Minimal `/etc/sds/controller.toml`:
 
 ```toml
 [server]
@@ -198,7 +217,6 @@ port = 3374
 [dispatch]
 config_path = "/root/.dispatch/config.toml"
 parallel = 10
-hosts = ["node1", "node2", "node3"]
 
 [log]
 level = "info"
@@ -209,334 +227,329 @@ default_pool_type = "thin_pool"
 default_snapshot_suffix = "_snap"
 ```
 
-systemd unit `/etc/systemd/system/sds-controller.service`:
+`configs/controller.toml.example` describes `[database]`, `[wan]`, `[tls]`
+(gRPC/REST/UI transport), `[metrics]`, `[ui]` and `[alert]`. It sets
+`[metrics] port = 9090` and `[ui] port = 8080`, not the defaults (9433, 3376);
+change or drop those lines if you start from it. API authentication is
+`[auth] enabled` + `token` (at least 16 characters) or `[rbac]` with per-user
+tokens. Other sections with their defaults:
+`[resource] auto_tiebreaker = true`, `fault_domain_label = "host"`;
+`[gateway] auto_state_volume = true`, `state_volume_size_gb = 1`;
+`[schedule] enabled = true`; `[audit] enabled = true`;
+`[storage] verify_schedule = "0 3 1 * *"`; `[self_ha] extra_services = []`.
 
-```ini
-[Unit]
-Description=SDS Controller
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-Environment=HOME=/root
-ExecStart=/opt/sds/bin/sds-controller --config /etc/sds/controller.toml
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-> **★ `Environment=HOME=/root` is mandatory.** Under systemd there is no `$HOME`,
-> so the dispatch SSH layer can't find `/root/.ssh/…` and every remote op fails
-> with `unable to authenticate, attempted methods [none]`. (The local node works
-> because it runs commands without SSH — only remote nodes expose this.)
+`configs/sds-controller.service` runs
+`/opt/sds/bin/sds-controller --config /etc/sds/controller.toml` as root with
+`Environment="HOME=/root"`. Keep the `HOME` line: systemd sets no `$HOME` for a
+system unit without it, and dispatch's default lookups (`~/.dispatch`,
+`~/.ssh/known_hosts`, default keys) then miss root's files; remote operations
+fail with `unable to authenticate, attempted methods [none]` while operations
+on the controller's own node still work.
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now sds-controller
-systemctl is-active sds-controller            # active
-ss -tlnp | grep -E ':(3374|3375|3376)'        # listening
+ss -tlnp | grep -E ':(3374|3375|3376|9433)\b'
 ```
 
-The controller listens on gRPC `3374`, REST `3375`, UI `3376`. The `sds-cli`
-defaults to `127.0.0.1:3374`; pass `--controller <host>:3374` from elsewhere.
+`sds` talks to `127.0.0.1:3374` by default; use `--controller <host>:3374`
+(or `-c`) from elsewhere, plus `--token` / `--tls*` when `[auth]` / `[tls]` are
+enabled.
 
 ---
 
-## 5. Register nodes & create pools
+## 5. Register nodes and create pools
 
 ```bash
-sds-cli node register --name node1 --address <node1-ip>
-sds-cli node register --name node2 --address <node2-ip>
-sds-cli node register --name node3 --address <node3-ip>
-sds-cli node list                              # all "online"
+sds node register --name node1 --address <node1-ip>
+sds node register --name node2 --address <node2-ip>
+sds node register --name node3 --address <node3-ip>
+sds node list
 ```
 
-`--name` is a label of your choosing and does **not** have to equal the node's
-hostname: registration records the real `uname -n`, and generated `.res` files
-use that for the `on <name>` sections and the connection mesh (a DRBD resource
-only applies to a host that finds itself there). Registering a host called
-`lima-sds-a` as `node-a` is therefore fine.
+`--name` is a label of your choosing. Registration also records the node's real
+hostname, which generated `.res` files use for their `on <host>` sections.
+`--replication-address` puts DRBD traffic on a separate NIC or subnet.
 
-A node that should never be picked as an automatic diskless quorum tiebreaker —
-a WAN/DR site, whose public address is usually not even configured on its own
-interface — must say so:
+A node that must never be picked as an automatic diskless quorum tiebreaker —
+typically a WAN/DR node whose public address is not configured on its own
+interface — needs:
 
 ```bash
-sds-cli node label <dr-node> sds.tiebreaker=false
+sds node label <dr-node> sds.tiebreaker=false
 ```
 
-Without it a 2-node resource can drag the DR node into its LAN connection mesh
-and fail `drbdadm up` with `IP <addr> not found on this host`, after the backing
-volumes have already been created.
+Without it a 2-node LAN resource can pull the DR node into its mesh and fail
+`drbdadm up` with `IP <addr> not found on this host`.
 
-If a node shows offline / health-check fails right after a reboot, it's usually
-the SSH host-key gotcha (section 3): `rm /root/.ssh/known_hosts` + restart the
-controller.
-
-Create a storage pool on the data disk of each diskful node (VG name becomes
-`sds_<name>`):
+Create a pool on each diskful node's data disk. The name gets an `sds_` prefix
+(`vg0` → VG `sds_vg0`); without `--type` the controller's
+`storage.default_pool_type` applies (thin pool by default):
 
 ```bash
-sds-cli pool create --name vg0 --nodes node1,node2,node3 --devices /dev/sdb --type lvm
-sds-cli pool list                              # sds_vg0 on each node
+sds pool create --name vg0 --nodes node1,node2,node3 --devices /dev/sdb
+sds pool list
 ```
 
-A **diskless quorum tiebreaker** node needs no pool — it joins resources with
-`disk none` and stores no data.
+`--type lvm` builds a thick VG, `--type zfs` a zpool. A diskless tiebreaker node
+needs no pool.
 
 ---
 
-## 6. Create a replicated resource + filesystem
+## 6. Create a replicated resource
 
 ```bash
-# a 2-node DRBD resource; the controller auto-adds a diskless tiebreaker if a
-# spare node exists (so a single-node loss keeps quorum). --port is required.
-sds-cli resource create --name data --port 7000 --nodes node1,node2 --size 10G --pool vg0
-sds-cli resource status data                   # both peers UpToDate
+sds resource create --name data --port 7000 --nodes node1,node2 --size 10G --pool vg0
+sds resource status data
 ```
 
-Put a filesystem on it and mount it (one node at a time — DRBD is Primary-mounts).
-Both take the volume id positionally (`fs <resource> <volume-id> <fstype>`,
-`mount <resource> <volume-id> <mount-path>`):
+`--port` and `--size` are required. Omit `--nodes` to let the controller place
+`--replicas` (default 2) copies by free pool space. New resources get
+`quorum majority` + `on-no-quorum io-error`; with `[resource] auto_tiebreaker`
+(default on) a 2-node resource gains a diskless tiebreaker on a third registered
+node, so one node loss keeps quorum. The controller also force-promotes once on
+create so the fresh resource has an UpToDate copy, and installs
+`sds-drbd-up.service` on its nodes so resources come back after a reboot.
+
+Filesystem and mount (volume id is positional):
 
 ```bash
-sds-cli resource fs    data 0 ext4      --node node1
-sds-cli resource mount data 0 /mnt/data --node node1
+sds resource fs    data 0 ext4      --node node1
+sds resource mount data 0 /mnt/data --node node1
 ```
-
-`resource status` shows per-node role/disk/replication state and, for WAN
-resources, the DR endpoint and proxy health.
 
 ---
 
-## 7. Gateways — export a resource to clients
+## 7. Gateways
 
-A gateway is a DRBD resource + a `drbd-reactor` promoter that brings up a floating
-**service IP** and the export service on whichever node holds the Primary. The VIP
-is CIDR (`192.168.1.100/24`). Prerequisites per gateway type: section 2.5.
+A gateway is a DRBD resource plus a drbd-reactor promoter that mounts it, brings
+up a floating service IP (CIDR) and starts the export on whichever node holds
+Primary. Give each gateway its own resource; do not also mount it by hand or put
+it under `ha create`.
 
 ```bash
 # NFS
-sds-cli gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /mnt/data
+sds gateway nfs create --resource share --service-ip 192.168.1.200/24 --export-path /share
 
 # iSCSI (LIO)
-sds-cli gateway iscsi create --resource data \
-    --iqn iqn.2026-01.com.example:sds.data --service-ip 192.168.1.100/24
+sds gateway iscsi create --resource lun1 \
+    --iqn iqn.2026-01.com.example:sds.lun1 --service-ip 192.168.1.100/24
 
 # NVMe-oF (TCP, port 4420)
-sds-cli gateway nvme create --resource data \
-    --nqn nqn.2026-01.com.example:sds.data --service-ip 192.168.1.150/24
+sds gateway nvme create --resource ns1 \
+    --nqn nqn.2026-01.com.example:sds.ns1 --service-ip 192.168.1.150/24
 ```
 
-After creating a gateway, reload reactor on the nodes (`systemctl reload
-drbd-reactor`) if it isn't auto-reloading. Verify the VIP is up and the target is
-listening on the Primary node (`ss -tlnp | grep <port>`, `drbd-reactorctl status`).
-The **`ocf.rs@.service` template + `/usr/libexec/drbd-reactor/ocf-rs-wrapper`**
-must be installed (they ship with drbd-reactor) or the promoter fails to start.
+Creation checks the needed OCF agents (and `targetcli` for iSCSI) on the
+resource's nodes before writing anything, adds the cluster-private state volume
+when the resource has only one volume (`[gateway] auto_state_volume`), formats
+volumes that carry no filesystem, writes `/etc/drbd-reactor.d/sds-{nfs,iscsi,nvmeof}-<resource>.toml`
+and reloads drbd-reactor. It does **not** check for `nfs-kernel-server`.
+
+Check with `sds gateway status --resource <r>` and, on the Primary,
+`drbd-reactorctl status` and `ss -tlnp`.
 
 ---
 
 ## 8. High availability
 
-### Per-resource HA (mount failover)
+### Per-resource HA
 
 ```bash
-sds-cli ha create data --mount /mnt/data --fstype ext4 [--vip 192.168.1.210/24]
+sds ha create data --mount /mnt/data --fstype ext4 [--vip 192.168.1.210/24] [--services myapp.service]
 ```
 
-Reactor promotes the resource + mounts it on the surviving node when the Primary
-dies. Quorum (`quorum majority` + `on-no-quorum io-error`) prevents split-brain;
-a 2-diskful resource keeps quorum through a diskless tiebreaker (auto-added).
+drbd-reactor promotes the resource, mounts it, raises the VIP and starts the
+services on a surviving node when the Primary fails. With `--vip`, the
+`service-ip` helper and `service-ip@.service` are installed on nodes that lack
+them (from the controller's own build; a node of another architecture is
+refused).
 
-### Controller Self-HA (the controller itself becomes HA)
+### Controller Self-HA
 
-Makes `sds-controller` float on a DRBD-backed VIP so the control plane survives a
-node loss. Requires **full-mesh root SSH**; the controller binary and the
-`service-ip` helper + its systemd template are copied to the nodes by `enable`.
+Puts the controller database on a DRBD resource `sds-meta` mounted at
+`/var/lib/sds`, and makes drbd-reactor run the controller and its VIP on the
+Primary.
+
+Before enabling:
+- the controller runs on a registered node, from `/opt/sds/bin/sds-controller`,
+  with `/etc/sds/controller.toml` and `/etc/systemd/system/sds-controller.service`
+  in place;
+- passwordless root SSH works between every pair of target nodes, and the
+  dispatch key named in the dispatch config exists on each of them;
+- drbd-reactor is active on all of them, and `sds-controller` is not running on
+  any node but this one.
 
 ```bash
-sds-cli ha self enable --pool vg0 --vip 192.168.1.250/24 [--port 7999 --size 1]
-sds-cli ha self status                         # VIP, active node, members
-sds-cli ha evict sds-meta                      # graceful move to a standby (test)
+sds ha self enable --pool vg0 --vip 192.168.1.250/24 [--nodes a,b,c] [--port 7999] [--size 1]
+sds -c 192.168.1.250:3374 ha self status
+sds ha evict sds-meta          # move the controller to another node
 ```
 
-After Self-HA, the reactor-managed controller runs from **`/usr/local/bin/sds-controller`**
-(not `/opt/sds/bin`). To ship a new build, overwrite `/usr/local/bin/sds-controller`
-on **every** node and restart the active one (`mv` the old aside first — a running
-binary can't be overwritten: `Text file busy`). Access everything via the VIP
-(`http://<vip>:3376/`, `<vip>:3374`, etc.).
+`enable` copies the running controller binary to `/opt/sds/bin/sds-controller`
+on the other nodes, along with `controller.toml`, the dispatch config and the
+unit, disables `sds-controller` autostart on the standbys, and hands over to
+drbd-reactor; the command's own connection drops during the handoff. Use the VIP
+for everything afterwards (`<vip>:3374`, `http://<vip>:3376/`).
 
-Extra services can ride the same promoter — set `[self_ha] extra_services =
-["sds-ai.service"]` in `controller.toml` to make the AI Copilot follow the
-controller across failover.
+To ship a new controller build: install it at `/opt/sds/bin/sds-controller` on
+**every** node (`mv` the running file aside first; overwriting it in place fails
+with `Text file busy`), then `sds ha evict sds-meta` to restart it on another
+node. Restarting `sds-controller` on the active node also restarts the promoter
+target and fails over just the same.
+
+`[self_ha] extra_services = ["sds-ai.service"]` makes extra units follow the
+controller; it is read when `enable` writes the promoter config.
 
 ---
 
 ## 9. Kubernetes CSI driver (optional)
 
-DRBD-backed PVs for k8s. The **worker nodes must be the DRBD storage nodes** (the
-node plugin promotes/mounts DRBD on the host); the controller runs **outside** k8s,
-reachable at an IP/VIP:3374.
+The Kubernetes nodes must be the DRBD storage nodes (the node plugin promotes
+and mounts DRBD on the host). The controller runs outside Kubernetes and is
+reached at an IP or VIP on port 3374.
 
-1. Build the `sds-csi` image for the node arch (an amd64 image will NOT run on
-   arm64) and load it into each node's containerd:
+1. Build the image for the node architecture and import it on every node:
    ```bash
-   GOOS=linux GOARCH=<arch> CGO_ENABLED=0 go build -o csi-controller ./cmd/csi-controller
-   GOOS=linux GOARCH=<arch> CGO_ENABLED=0 go build -o csi-node       ./cmd/csi-node
-   docker build --platform linux/<arch> -t sds-csi:latest .   # debian-slim + the 2 binaries
+   docker build -f Dockerfile.csi --platform linux/<arch> -t sds-csi:latest .
    docker save sds-csi:latest -o sds-csi.tar
-   # on every node:  sudo k3s ctr images import sds-csi.tar   (or crictl/ctr on your runtime)
+   sudo k3s ctr images import sds-csi.tar      # or ctr -n k8s.io images import
    ```
-   The upstream sidecars (`registry.k8s.io/sig-storage/*`) may be unreachable in
-   some regions — pull from a mirror (`registry.aliyuncs.com/google_containers/…`),
-   retag to the original names, and `ctr images import` them too.
+   Where `registry.k8s.io` is unreachable, pull the sidecars from a mirror,
+   retag them to the names in `deploy/k8s/20-controller.yaml` and
+   `30-node.yaml`, and import them the same way.
 
-2. Deploy the manifests:
-   ```bash
-   kubectl apply -f deploy/k8s/
-   ```
-   Edit `deploy/k8s/00-sds-controller-endpoint.yaml` to carry the real controller
-   IP/VIP (a selectorless Service + manual Endpoints make `sds-controller:3374`
-   resolve to the external controller). Set the StorageClass `pool` to your pool
-   name. The node DaemonSet uses `hostNetwork` and therefore
-   `dnsPolicy: ClusterFirstWithHostNet` (already in the manifest) so it can resolve
-   the controller Service name.
+2. Edit `deploy/k8s/00-sds-controller-endpoint.yaml` (the controller IP/VIP in
+   the manual Endpoints) and the StorageClass `pool` in `40-storageclass.yaml`,
+   then `kubectl apply -f deploy/k8s/`. `50-volumesnapshotclass.yaml` needs the
+   snapshot CRDs (`deploy/k8s/README.md`).
 
-3. Smoke test: `scripts/csi-e2e.sh` (creates a PVC on StorageClass `sds-drbd` and a
-   pod, verifies the write landed and the pod scheduled onto a replica node).
+3. Smoke test: `scripts/csi-e2e.sh` (PVC on StorageClass `sds-drbd`, a pod that
+   writes, checks the pod landed on a replica node).
 
-A PV is a DRBD volume replicated on `replicas` nodes: when a pod moves, the node
-plugin promotes the local replica and mounts it, so the container restarts on
-another node with its data intact. Use a Deployment/StatefulSet (a bare Pod won't
-reschedule) and short `tolerationSeconds` for fast node-failure failover.
+Both plugin pods use `hostNetwork` with `dnsPolicy: ClusterFirstWithHostNet`, so
+they resolve the `sds-controller` Service through cluster DNS. Pods move between
+replica nodes with their data; use a Deployment or StatefulSet and short
+`tolerationSeconds` for `node.kubernetes.io/unreachable` / `not-ready` to fail
+over faster than the 300 s default.
 
 ---
 
 ## 10. AI Copilot (`sds-ai`, optional)
 
-A separate binary that serves the web-ui Copilot. It needs `sds-mcp` as its MCP
-backend and an LLM/embedder (e.g. DashScope).
+Serves the web UI's Copilot. It runs `sds-mcp` as its tool backend and needs an
+OpenAI-compatible LLM and embedder.
 
-- Binaries on every node (so it can ride Self-HA): `/opt/sds/bin/{sds-ai,sds-mcp}`.
-- Config on the Self-HA DRBD mount (so it follows failover): `/var/lib/sds/ai/`
-  with `sds-ai.env` + `domain.toml`. Key env:
-  `STEWARD_LLM_API_KEY/BASE_URL/MODEL`, `STEWARD_EMB_*`, `SDS_AI_EMB_DIM`
-  (the older `OPSPILOT_*`, `OPSDOCTOR_*` and `OSS_*` names are still read),
-  `SDS_AI_KNOWLEDGE_DB`,
-  `SDS_AI_CONTROLLER=127.0.0.1:3374`, `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`,
-  `SDS_AI_ADDR=:7634`.
-- **The embedder must match the index it is searching**, and the model is not
-  the constraint — the width is. Any OpenAI-compatible embedder works as long
-  as `SDS_AI_EMB_DIM` equals the dimension the index was built at. Changing
-  embedder to one of a different width means rebuilding the knowledge base:
-  the old index cannot be searched with the new vectors, and the symptom is
-  not an error but every search returning nothing. `GET /ai/kb/list` reports
-  the width read back from the index, which is how you check.
-- **Shared knowledge base.** What is the same on every cluster — SDS's docs,
-  its code graph, the `sds-cli` reference and the DRBD 9 manuals — is built once
-  with `make kb` (see `ai/kb/build.sh` for the environment) into
-  `dist/kb/sds-kb.db` plus a manifest `sds-kb.json`. Install both on every node
-  at `/opt/sds/share/` and set
-  `SDS_AI_SHARED_KNOWLEDGE_DB=/opt/sds/share/sds-kb.db`; sds-ai searches it
-  read-only alongside `SDS_AI_KNOWLEDGE_DB`, which then only needs what that
-  cluster learned about itself. The manifest names the embedder it was built
-  with: the cluster must use the same model and dimension, or startup fails.
-- Unit `sds-ai.service` (`EnvironmentFile`/`WorkingDirectory`/`HOME` =
-  `/var/lib/sds/ai`), left **disabled** so only the reactor promoter starts it.
-- HTTP: `GET /ai/health`, `POST /ai/chat/stream` (chat), `GET /ai/kb/list`
-  (what the knowledge base holds), and the knowledge-base update endpoints
-  `POST /ai/kb/{doc,ingest,refresh,purge}`.
-- The chat body's `session_id` is what makes a follow-up a follow-up. Send the
-  same one across turns and the Copilot resolves "it" against what was already
-  discussed; omit it and every turn starts from nothing.
+- Binaries on every node (it follows the controller): `/opt/sds/bin/sds-ai`,
+  `/opt/sds/bin/sds-mcp`.
+- Configuration on the Self-HA mount: `/var/lib/sds/ai/sds-ai.env` and
+  `domain.toml`. Environment:
+  - `STEWARD_LLM_API_KEY`, `STEWARD_LLM_BASE_URL`, `STEWARD_LLM_MODEL`,
+    `STEWARD_EMB_*` (the older `OPSPILOT_*`, `OPSDOCTOR_*`, `OSS_*` names are
+    still read)
+  - `SDS_AI_KNOWLEDGE_DB` (required), `SDS_AI_EMB_DIM` (default 768)
+  - `SDS_AI_CONTROLLER=127.0.0.1:3374` — set it; the built-in default is not
+    loopback
+  - `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`
+  - `SDS_AI_ADDR` — default `127.0.0.1:7634`, which is where the UI proxies
+    `/ai/`. On any non-loopback address sds-ai refuses to start without a token
+    (`SDS_AI_TOKEN`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`).
+- `SDS_AI_EMB_DIM` must equal the dimension the index was built with. Switching
+  to an embedder of a different width means rebuilding the knowledge base;
+  otherwise searches return nothing, without an error. `GET /ai/kb/list` shows
+  the width read from the index.
+- Shared knowledge base: `make kb` (see `ai/kb/build.sh`) builds
+  `dist/kb/sds-kb.db` and its manifest `sds-kb.json`. Install both at
+  `/opt/sds/share/` on every node and set
+  `SDS_AI_SHARED_KNOWLEDGE_DB=/opt/sds/share/sds-kb.db`; it is searched
+  read-only next to `SDS_AI_KNOWLEDGE_DB`. Startup fails if the cluster's
+  embedder model or dimension differs from the manifest's.
+- Unit `sds-ai.service` (`EnvironmentFile`, `WorkingDirectory` and `HOME` =
+  `/var/lib/sds/ai`), installed but **disabled**; list it in
+  `[self_ha] extra_services` so the promoter starts it with the controller.
+- HTTP: `GET /ai/health`, `POST /ai/chat/stream`, `GET /ai/kb/list`,
+  `POST /ai/kb/{doc,ingest,refresh,purge}`. Send the same `session_id` in each
+  chat request to continue a conversation.
 
-Add `sds-ai.service` to `[self_ha] extra_services` so it rides the controller.
+`sds-mcp serve` exposes the same tools to remote MCP clients over HTTP with
+token auth (default `127.0.0.1:43871`); `configs/sds-mcp-http.service` is a
+reactor-managed unit for it. See [`mcp.md`](./mcp.md).
 
 ---
 
-## 11. WAN replication (optional, opt-in)
+## 11. WAN replication (optional)
 
-Replicate a resource across the internet (primary site ↔ DR site) via a
-per-resource `sds-proxy` pair (protocol A async + mTLS). The LAN default path is
-untouched — every WAN flag is opt-in.
+Replicates a resource to a DR site over a per-resource `sds-proxy` pair
+(protocol A, mTLS). LAN resources are unaffected.
 
-Prerequisites: the arm64/amd64 `sds-proxy` binary at `/usr/local/bin/sds-proxy` on
-the participating nodes (the controller distributes it if present locally), and the
-DR site's `wan-port` reachable over TCP from the primary's egress.
+- `sds-proxy` on the controller at `/usr/local/bin/sds-proxy` is pushed to the
+  WAN nodes; for nodes of another architecture place
+  `/usr/local/bin/sds-proxy-<amd64|arm64>` beside it. Without a matching binary
+  the controller assumes it is already installed on the node.
+- The DR node's WAN port must be reachable over TCP from the primary site.
+- The controller keeps the proxy CA under `[wan] pki_dir`
+  (default `/var/lib/sds/wanproxy-pki`).
 
 ```bash
-sds-cli resource create --name data --port 7000 --nodes site1 --pool vg0 --size 10G \
+sds resource create --name data --port 7000 --nodes site1 --pool vg0 --size 10G \
     --wan --dr-node site2 --dr-endpoint <site2-public-ip> [--wan-port 37901]
-
-sds-cli resource status data          # WAN mode, DR endpoint, sds-proxy@data health, sync state
+sds resource status data
 ```
 
-WAN is **asynchronous**, so failover to the DR site is a **manual** DR action (auto
-promotion of a lagging secondary would risk data loss):
+`--wan-port 0` (default) picks a random port above 3000. Failover to the DR site
+is manual because replication is asynchronous:
 
 ```bash
-sds-cli resource dr-failover data --yes    # force-promotes the DR node (warns about the lossy window)
+sds resource dr-failover data --yes
 ```
 
-Design detail: [`2026-07-05-wan-replication-design.md`](./2026-07-05-wan-replication-design.md).
+`sds wan set-endpoint` and `sds wan repair` change or rebuild the
+tunnels. Design: [`2026-07-05-wan-replication-design.md`](./2026-07-05-wan-replication-design.md).
 
 ---
 
-## 12. Verify & operate
+## 12. Verify
 
 ```bash
-sds-cli node list
-sds-cli pool list
-sds-cli resource list
-sds-cli resource status <name>          # roles, disk states, replication, WAN health
-sds-cli ha self status
-grpcurl -plaintext <host>:3374 list     # gRPC introspection
-curl -s http://<host>:3375/v1/nodes     # REST
-# UI:  http://<host-or-VIP>:3376/
+sds node list
+sds health-check
+sds pool list
+sds resource list
+sds resource status <name>
+sds ha self status
+grpcurl -plaintext <host>:3374 list
+curl -s http://<host>:3375/v1/nodes
+# UI: http://<host-or-VIP>:3376/
 ```
 
-On the nodes:
+On a node:
 
 ```bash
-drbdadm status                          # per-resource connection + disk states
-drbd-reactorctl status                  # promoter targets and which node holds them
-systemctl status drbd-reactor
+drbdadm status
+drbd-reactorctl status
+systemctl is-enabled sds-drbd-up.service
 journalctl -u sds-controller -f
 ```
 
-Per-node readiness check (gateway/HA prerequisites present):
-
-```bash
-for p in /usr/lib/ocf/resource.d/heartbeat/Filesystem \
-         /usr/lib/ocf/resource.d/heartbeat/IPaddr2 \
-         /usr/local/bin/service-ip /etc/systemd/system/service-ip@.service; do
-  test -e "$p" && echo "ok   $p" || echo "MISS $p"
-done
-```
-
 ---
 
-## 13. Top gotchas (learned the hard way)
+## 13. Known failure modes
 
 | Symptom | Cause / fix |
 | --- | --- |
-| Remote ops fail: `unable to authenticate, attempted methods [none]` | Controller systemd unit missing `Environment=HOME=/root`. |
-| `... creation failed on <ip>:` (empty error), but shell `ssh` works | Stale SSH host key after a node reboot. Set `known_hosts = ""` in dispatch config; recover with `rm /root/.ssh/known_hosts` + restart controller. |
-| Reactor logs `IGNORING resource … expected ','` and never fails over | `drbd-utils` too old for `drbd-reactor` — match versions across nodes. |
-| Gateway/HA promoter fails: `Unit ocf.rs@…service not found` | `ocf.rs@.service` template + `ocf-rs-wrapper` not installed (ship with drbd-reactor). |
-| Reactor won't start: `Could not read config file: /etc/drbd-reactor.toml` | Create the main config: `snippets = "/etc/drbd-reactor.d"` + `[[log]] level="info"`. |
-| Pool create fails `Device or resource busy` on the data disk | The disk is formatted/mounted — `umount`, remove from `/etc/fstab`, `wipefs -a <dev>`. |
-| A single node loss suspends I/O (no quorum) | 2-diskful resource with no tiebreaker. Register a 3rd node so the auto diskless tiebreaker can be added (or set `[resource] auto_tiebreaker`). |
-| New resource stuck `Inconsistent`, gateway promote fails "Need access to UpToDate data" | Fresh DRBD needs an initial force-primary; recent controllers do this automatically on create. |
-| CSI node plugin: every mount fails with gRPC `EOF` | hostNetwork DaemonSet needs `dnsPolicy: ClusterFirstWithHostNet`. |
-| NVMe-oF gateway starts but no `:4420` listener | Missing `nvmet-tcp` kernel module — `apt-get install linux-modules-extra-$(uname -r)` + `modprobe`. |
-| Distributing a large binary to a node silently fails | Fixed: `DistributeConfig` chunks large files (was capped by Linux `MAX_ARG_STRLEN`). Rebuild the controller if on an old version. |
-| `gateway nfs create` reports success and prints mount instructions, but the gateway never starts | `nfs-kernel-server` is not installed on the nodes (section 4 of node-prerequisites). Creation does not preflight it; the failure appears only in `ocf.rs@nfsserver_*` as "No init script or systemd unit file detected for nfs server". |
-| A gateway exports the wrong size — a 2 GiB resource serves ~1 GiB | A gateway created before the volume-role fix exported the cluster-private state volume and formatted the data volume as gateway scratch. Delete and recreate the gateway (`sds-cli gateway delete --resource <r>`, then create again); the data volume's contents are lost either way, since it was being used as scratch. |
-| A gateway will not move (`ha evict` gives up after 20 s, the old node logs `umount: /var/lib/sds/<r>: no mount point specified`), or the controller will not | A gateway created before the fix kept its state mount under `/var/lib/sds`, where the controller's own Self-HA mount covers it. Run `sds-cli gateway stop --resource <r>` then `gateway start --resource <r>`: start moves it to `/var/lib/sds-gateway/<r>`. If start names a node whose old mount is hidden, `sds-cli ha evict sds-meta` first. |
-| iSCSI or NFS clients get I/O errors on every switchover (`LUN not supported`, a filesystem remounted read-only, failed writes on a hard NFS mount) | A gateway created before the fix brings its service IP up before the target or exports, so a stop removes them while clients can still reach it. `gateway stop` then `gateway start` reorders it. |
-| `pool add-cache` refuses with "not a thin pool" | lvmcache needs one LV every volume passes through; a thick pool has none. Convert first with `sds-cli pool convert-thin`. |
-| The AI Copilot answers confidently but cites a document that has nothing to do with the question | The knowledge base is near-empty, so the single closest chunk is always the top hit. Check with `GET /ai/kb/list` and ingest real content. |
+| Remote ops fail: `unable to authenticate, attempted methods [none]` | Unit lacks `Environment="HOME=/root"`, or the dispatch host section is not keyed by IP (section 3). |
+| Remote ops fail with `host key changed: <ip>` | The node's SSH host key changed. `ssh-keygen -R <ip> -f /root/.ssh/known_hosts` on the controller. |
+| Controller exits at start: `dispatch config "<path>": stat …: no such file or directory` | `[dispatch] config_path` points at a missing file. |
+| Reactor logs `IGNORING resource … expected ','` and never fails over | drbd-utils too old for drbd-reactor; match versions on all nodes. |
+| Promoter fails: `Unit ocf.rs@….service not found` | drbd-reactor installed without its `ocf.rs@.service` template and wrapper (`node-prerequisites.md` §1). |
+| Reactor won't start: `Could not read config file: /etc/drbd-reactor.toml` | Create it: `snippets = "/etc/drbd-reactor.d"` plus a `[[log]]` table. |
+| Pool create fails with `Device or resource busy` | The disk is mounted or formatted: `umount`, remove from `/etc/fstab`, `wipefs -a <dev>`. |
+| One node loss stops I/O on a 2-node resource | No tiebreaker: register a third node (with `auto_tiebreaker` on) or add a replica. |
+| `gateway nfs create` succeeds but the gateway never starts | `nfs-kernel-server` missing; `ocf.rs@nfsserver_*` logs "No init script or systemd unit file detected for nfs server". |
+| `gateway nvme create` fails loading `nvmet`/`nvmet-tcp` | `apt-get install linux-modules-extra-$(uname -r)`. |
+| `pool add-cache` refuses with "not a thin pool" | Convert first: `sds pool convert-thin --node <n> --pool <p>`. |
+| Backup fails: `rclone is required on <node>` | Install rclone on that node. |
+| A gateway exports the wrong size (a 2 GiB resource serves ~1 GiB) | Gateway created by an older controller that exported the state volume. Delete and recreate it; the data volume was used as scratch, so its contents are lost. |
+| A gateway will not move (`umount: /var/lib/sds/<r>: no mount point specified`) | Gateway created by an older controller with its state mount under `/var/lib/sds`, which Self-HA's mount covers. `gateway stop --resource <r>`, then `gateway start --resource <r>` moves it to `/var/lib/sds-gateway/<r>`; run `ha evict sds-meta` first if start targets a node whose old mount is hidden. |
+| iSCSI/NFS clients get I/O errors on every switchover | Gateway created by an older controller raises its service IP before the target/exports. `gateway stop` then `gateway start` reorders it. |
+| Copilot cites documents unrelated to the question | The knowledge base is nearly empty; check `GET /ai/kb/list` and ingest content. |

@@ -116,7 +116,7 @@ func resourceDualPrimary() *cobra.Command {
 
 			if enable {
 				fmt.Printf("Dual-primary window OPEN on '%s'.\n", resource)
-				fmt.Printf("Close it as soon as the migration finishes: sds-cli resource dual-primary %s off\n", resource)
+				fmt.Printf("Close it as soon as the migration finishes: sds resource dual-primary %s off\n", resource)
 			} else {
 				fmt.Printf("Dual-primary window closed on '%s'.\n", resource)
 			}

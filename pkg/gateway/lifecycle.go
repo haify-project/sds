@@ -212,7 +212,7 @@ if awk -v p="$old" '$5 == p {f=1} END {exit !f}' /proc/self/mountinfo; then
   if mountpoint -q "$old"; then
     umount "$old" || { echo "$(hostname): cannot unmount the gateway's old state mount $old" >&2; exit 3; }
   else
-    echo "$(hostname): the gateway's old state mount $old is hidden under the controller database mount %[3]s; move the controller off this node (sds-cli ha evict sds-meta), then start the gateway again" >&2
+    echo "$(hostname): the gateway's old state mount $old is hidden under the controller database mount %[3]s; move the controller off this node (sds ha evict sds-meta), then start the gateway again" >&2
     exit 3
   fi
 fi

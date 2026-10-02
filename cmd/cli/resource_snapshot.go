@@ -447,7 +447,7 @@ func resourceSnapshotRestore() *cobra.Command {
 				fmt.Printf("LVM snapshot '%s' restored for resource '%s' on node '%s'\n", snapshotName, resource, node)
 				fmt.Println("Note: The snapshot has been merged back into the original volume. The resource's")
 				fmt.Println("other replicas are resyncing from this node; until that finishes it has one")
-				fmt.Printf("complete copy. Follow it with: sds-cli resource status %s\n", resource)
+				fmt.Printf("complete copy. Follow it with: sds resource status %s\n", resource)
 			}
 
 			return nil

@@ -121,7 +121,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		pinned = append([]string{source.node}, pinned...)
 	}
 	// The free space of the pool decides the rest, so a PVC lands where
-	// `sds-cli resource create` would: on the emptiest nodes. ResourceExhausted
+	// `sds resource create` would: on the emptiest nodes. ResourceExhausted
 	// is the status the CO acts on — external-provisioner drops the PVC's
 	// selected-node annotation on it and reschedules — so every placement
 	// failure, capacity or otherwise, has to surface under that code.

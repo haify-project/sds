@@ -75,7 +75,7 @@ func nvmeCreate() *cobra.Command {
 			fmt.Printf("  NQN:          %s\n", nqn)
 			fmt.Printf("  Service IP:   %s\n", serviceIP)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
-			fmt.Printf("\nCheck gateway status: sds-cli gateway list\n")
+			fmt.Printf("\nCheck gateway status: sds gateway list\n")
 
 			return nil
 		},

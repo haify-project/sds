@@ -207,8 +207,8 @@ func resourceCreate() *cobra.Command {
 				fmt.Printf("  Labels:      %s\n", formatLabels(labels))
 			}
 			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. sds-cli resource get %s\n", name)
-			fmt.Printf("  2. sds-cli resource primary %s <node>\n", name)
+			fmt.Printf("  1. sds resource get %s\n", name)
+			fmt.Printf("  2. sds resource primary %s <node>\n", name)
 
 			return nil
 		},
@@ -290,7 +290,7 @@ func resourceAdopt() *cobra.Command {
 			fmt.Printf("  Protocol: %s\n", resp.Protocol)
 			fmt.Printf("  Volumes:  %d\n", resp.Volumes)
 			fmt.Printf("\nThe DRBD resource and its data were not modified.\n")
-			fmt.Printf("Next: sds-cli ha create %s\n", name)
+			fmt.Printf("Next: sds ha create %s\n", name)
 
 			return nil
 		},

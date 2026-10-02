@@ -22,11 +22,10 @@ No agent runs on the storage nodes: one controller drives them over SSH and keep
 
 ## Install
 
-Storage nodes need DRBD 9 (kernel module and `drbd-utils`), `drbd-reactor`, `resource-agents`, and LVM and/or ZFS. The controller host needs Go 1.25+.
+Storage nodes need DRBD 9 (kernel module and `drbd-utils`), `drbd-reactor`, `resource-agents`, and LVM and/or ZFS. Building needs Go 1.26+ and Node.js (the web UI is embedded in the controller binary).
 
 ```bash
-make build
-./scripts/deploy-all.sh --hosts "node1,node2,node3"
+./scripts/deploy-all.sh node1,node2,node3     # cross-compiles for linux/amd64
 ```
 
 Step-by-step: [docs/deployment-guide.md](docs/deployment-guide.md), node requirements: [docs/node-prerequisites.md](docs/node-prerequisites.md).
@@ -34,13 +33,13 @@ Step-by-step: [docs/deployment-guide.md](docs/deployment-guide.md), node require
 ## Use
 
 ```bash
-sds-cli node register --name node1 --address 192.168.1.11
-sds-cli pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/sdb
-sds-cli resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
-sds-cli gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
+sds node register --name node1 --address 192.168.1.11
+sds pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/sdb
+sds resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
+sds gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
 ```
 
-Kubernetes: `kubectl apply -f deploy/k8s/`, then use the `sds-drbd` StorageClass ([deploy/k8s/README.md](deploy/k8s/README.md)).
+Kubernetes: `kubectl apply -f deploy/k8s/`, then use the `sds-drbd` StorageClass ([deploy/k8s/README.md](deploy/k8s/README.md)). Proxmox VE: [deploy/proxmox/README.md](deploy/proxmox/README.md). Prometheus and Grafana: [deploy/monitoring/README.md](deploy/monitoring/README.md).
 
 AI assistants:
 
@@ -54,7 +53,7 @@ claude mcp add --transport http sds https://<host>/mcp \
 
 | Port | Service |
 | ---- | ------- |
-| 3374 | gRPC (`sds-cli`, CSI, MCP) |
+| 3374 | gRPC (`sds`, CSI, MCP) |
 | 3375 | REST |
 | 3376 | Web UI |
 | 9433 | Prometheus |

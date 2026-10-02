@@ -78,7 +78,7 @@ func nfsCreate() *cobra.Command {
 			fmt.Printf("  Export Path:  %s\n", exportPath)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
 			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. Check gateway status: sds-cli gateway list\n")
+			fmt.Printf("  1. Check gateway status: sds gateway list\n")
 			fmt.Printf("  2. Mount on client: sudo mount -t nfs %s:%s /mnt\n", gatewayServiceHost(serviceIP), gatewayExportDirectory(resource, exportPath))
 
 			return nil

@@ -20,8 +20,8 @@ spec:
       # resolve the in-cluster `sds-controller` Service name. ClusterFirstWithHostNet
       # makes it use cluster DNS (CoreDNS) so `--sds-controller=sds-controller:3374`
       # resolves; without it the node plugin fails to reach the controller and every
-      # MountDevice errors with a gRPC "EOF" (the controller Deployment is unaffected
-      # because it does not use hostNetwork).
+      # MountDevice errors with a gRPC "EOF". The controller Deployment runs on
+      # hostNetwork too and sets the same dnsPolicy.
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: node-driver-registrar

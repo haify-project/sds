@@ -206,7 +206,7 @@ func haList() *cobra.Command {
 			}
 
 			// Fetch reactor status via the controller so we always query the
-			// primary node, not the machine running sds-cli.
+			// primary node, not the machine running sds.
 			type promoterInfo struct {
 				status, primaryOn        string
 				targetName, targetStatus string

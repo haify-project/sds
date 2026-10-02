@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/reflection"
 
 	sdspb "github.com/liliang-cn/sds/api/proto/v1"
 	"github.com/liliang-cn/sds/pkg/rbac"
@@ -125,6 +126,10 @@ func (c *Controller) startGRPCServer() error {
 	// Register SDS controller service
 	sdsServer := NewServer(c)
 	sdspb.RegisterSDSControllerServer(c.server, sdsServer)
+	// Reflection lets grpcurl and similar tools discover the API without a copy
+	// of the .proto files. It describes the schema only; every call still goes
+	// through the same auth interceptors.
+	reflection.Register(c.server)
 
 	c.logger.Info("Registered SDS controller service")
 

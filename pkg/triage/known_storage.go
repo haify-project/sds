@@ -72,7 +72,7 @@ func matchThinPool(in Input) []Finding {
 			advice := []string{
 				fmt.Sprintf("See what is using it: lvs -o lv_name,lv_size,data_percent %s", h.vg),
 				fmt.Sprintf("Extend the pool if there is free space in the group: lvextend -L +20G %s/%s", h.vg, h.lv),
-				fmt.Sprintf("If the group itself is full, add a disk first: sds-cli pool add-disk --name %s --disks /dev/<device>", h.vg),
+				fmt.Sprintf("If the group itself is full, add a disk first: sds pool add-disk --name %s --disks /dev/<device>", h.vg),
 				"Delete snapshots that are no longer needed — an old snapshot pins every block it was taken over.",
 			}
 			if dimension == "metadata" {
@@ -219,7 +219,7 @@ func matchMountFull(in Input) []Finding {
 				"its database.",
 			Advice: []string{
 				fmt.Sprintf("Find what grew: du -xh %s --max-depth=2 | sort -h | tail -20", h.mount),
-				"Grow the volume rather than deleting blindly — DRBD resizes online: sds-cli resource resize-volume --resource <resource> --volume 0 --size <new size>",
+				"Grow the volume rather than deleting blindly — DRBD resizes online: sds resource resize-volume --resource <resource> --volume 0 --size <new size>",
 			},
 			Evidence: h.ev,
 		})

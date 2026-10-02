@@ -112,8 +112,8 @@ func matchUnplannedFailover(in Input) []Finding {
 				"promotes it — the whole target moves and the control plane is unreachable for " +
 				"several seconds. In the events this is indistinguishable from a node dying.",
 			Advice: []string{
-				"To replace a binary without moving the role: install it on every member node first, then move the role deliberately with sds-cli ha evict " + orDefault(fo.Resource, "<resource>"),
-				"To take a node out for maintenance: sds-cli ha evict " + orDefault(fo.Resource, "<resource>") + "   (this is the supported way to move a role)",
+				"To replace a binary without moving the role: install it on every member node first, then move the role deliberately with sds ha evict " + orDefault(fo.Resource, "<resource>"),
+				"To take a node out for maintenance: sds ha evict " + orDefault(fo.Resource, "<resource>") + "   (this is the supported way to move a role)",
 				"Never systemctl restart a unit listed in the promoter's start list — check first with: drbd-reactorctl status",
 			},
 			Evidence: ev,
@@ -179,7 +179,7 @@ func matchNoPrimary(in Input) []Finding {
 		Advice: []string{
 			"Check quorum before anything else; this report's phantom-peer finding, if present, is the answer: drbdsetup status " + orDefault(resource, "<resource>"),
 			"Read why the promotion was refused: journalctl -u 'drbd-promote@*' --since '-30min' -o short-iso | tail -40",
-			"If quorum is genuinely lost and you accept the risk, promote deliberately rather than forcing: sds-cli ha evict " + orDefault(resource, "<resource>"),
+			"If quorum is genuinely lost and you accept the risk, promote deliberately rather than forcing: sds ha evict " + orDefault(resource, "<resource>"),
 		},
 		Caution: "Do not use drbdadm primary --force to get out of this without first understanding " +
 			"why quorum is missing. Forcing a Primary on the wrong side is how a quorum problem " +
@@ -226,7 +226,7 @@ func matchNodeUnreachable(in Input) []Finding {
 			"rather than clean.",
 		Advice: []string{
 			"Separate down from unreachable: ping <address> and then ssh <address> true",
-			"If SSH is the problem, check the address the controller has for it: sds-cli node list",
+			"If SSH is the problem, check the address the controller has for it: sds node list",
 			"Remember that a resource's replicas on an unreachable node still hold quorum votes; do not remove the node to 'clean up' while the cluster is degraded.",
 		},
 		Evidence: ev,

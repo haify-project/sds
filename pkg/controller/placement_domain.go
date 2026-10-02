@@ -11,7 +11,7 @@ import (
 // failure away from being zero replicas, and a tiebreaker on that host turns
 // the same failure into lost quorum for the survivor elsewhere. SDS cannot see
 // the host a VM runs on, so the operator says it with a node label — by default
-// `host` (`sds-cli node set-labels <node> host=<machine>`), configurable as
+// `host` (`sds node set-labels <node> host=<machine>`), configurable as
 // [resource] fault_domain_label.
 //
 // Automatic placement prefers distinct domains but does not insist: a

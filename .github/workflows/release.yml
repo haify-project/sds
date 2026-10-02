@@ -46,16 +46,16 @@ jobs:
           mkdir -p dist
           VERSION=${GITHUB_REF#refs/tags/}
           go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-controller ./cmd/controller
-          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-cli ./cmd/cli
+          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds ./cmd/cli
           go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-mcp ./cmd/mcp
           go build -ldflags "-s -w" -o dist/service-ip ./cmd/service-ip
           cp configs/service-ip@.service dist/
-          chmod +x dist/sds-controller dist/sds-cli dist/sds-mcp dist/service-ip
+          chmod +x dist/sds-controller dist/sds dist/sds-mcp dist/service-ip
 
       - name: Create archive
         run: |
           cd dist
-          tar -czf sds-linux-amd64.tar.gz sds-controller sds-cli sds-mcp service-ip service-ip@.service
+          tar -czf sds-linux-amd64.tar.gz sds-controller sds sds-mcp service-ip service-ip@.service
           sha256sum sds-linux-amd64.tar.gz > sds-linux-amd64.tar.gz.sha256
 
       - name: Release

@@ -123,7 +123,7 @@ func (rm *ResourceManager) cycleLink(ctx context.Context, resource, a, b string,
 			return nil
 		}
 		if state == "StandAlone" || time.Now().After(deadline) {
-			return fmt.Errorf("the %s link of %s did not come back with tls=%v (it is %s); see `journalctl -u tlshd` on both nodes, then `sds-cli resource repair %s`",
+			return fmt.Errorf("the %s link of %s did not come back with tls=%v (it is %s); see `journalctl -u tlshd` on both nodes, then `sds resource repair %s`",
 				a+"–"+b, resource, on, orUnknown(state), resource)
 		}
 		select {

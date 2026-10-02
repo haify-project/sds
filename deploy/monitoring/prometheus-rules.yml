@@ -1,6 +1,6 @@
 # Prometheus alerting rules for an SDS controller's /metrics endpoint
 # ([metrics] enabled = true in controller.toml). The controller raises its own
-# events too (sds-cli event list); these are for clusters already watched by
+# events too (sds event list); these are for clusters already watched by
 # Prometheus and Alertmanager.
 groups:
   - name: sds
@@ -52,7 +52,7 @@ groups:
         for: 30m
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.resource }}: {{ $value | humanize1024 }}B on {{ $labels.node }} marked out of sync; run sds-cli resource verify"
+          summary: "{{ $labels.resource }}: {{ $value | humanize1024 }}B on {{ $labels.node }} marked out of sync; run sds resource verify"
 
       - alert: SDSThinPoolNearFull
         expr: sds_controller_pool_thin_used_percent > 85

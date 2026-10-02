@@ -196,7 +196,7 @@ func judgeNodeTLS(ca *drbdtls.CA, node, output string, now time.Time) NodeTLSSta
 	certB64, hasCert := tlsField(output, "SDS_CERT")
 	trustB64, hasTrust := tlsField(output, "SDS_TRUST")
 	if tlshd, _ := tlsField(output, "SDS_TLSHD"); !hasCert {
-		st.Problem = "no replication certificate; run `sds-cli replication-tls setup`"
+		st.Problem = "no replication certificate; run `sds replication-tls setup`"
 		return st
 	} else if tlshd != "active" {
 		st.Problem = "tlshd is " + orUnknown(tlshd)

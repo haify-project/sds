@@ -45,7 +45,7 @@ func newClientTestPKI(t *testing.T) *clientTestPKI {
 	now := time.Now().Add(-time.Minute)
 	caTmpl := &x509.Certificate{
 		SerialNumber:          clientTestSerial(t),
-		Subject:               pkix.Name{CommonName: "sds-client-test-ca"},
+		Subject:               pkix.Name{CommonName: "sdsent-test-ca"},
 		NotBefore:             now,
 		NotAfter:              now.Add(time.Hour),
 		IsCA:                  true,
@@ -70,7 +70,7 @@ func newClientTestPKI(t *testing.T) *clientTestPKI {
 	p.server, err = tls.X509KeyPair(certPEM, keyPEM)
 	require.NoError(t, err)
 
-	clientCertPEM, clientKeyPEM := p.issue(t, "sds-cli", nil, x509.ExtKeyUsageClientAuth)
+	clientCertPEM, clientKeyPEM := p.issue(t, "sds", nil, x509.ExtKeyUsageClientAuth)
 	p.certFile = filepath.Join(dir, "client.crt")
 	p.keyFile = filepath.Join(dir, "client.key")
 	require.NoError(t, os.WriteFile(p.certFile, clientCertPEM, 0o600))
