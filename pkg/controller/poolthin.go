@@ -14,10 +14,11 @@ import (
 // — where a wrong answer becomes a missed outage — can be read and tested on
 // its own, the same way poolcachestatus.go is split from poolcache.go.
 //
-// Why this exists at all: a pool's volume group reports vg_free == 0 for the
-// entire life of an SDS pool, because the pool LV is created with every free
-// extent. Capacity reported from the VG is therefore a constant, and says
-// nothing about whether the next write will succeed.
+// Why this exists at all: almost all of a thin-backed group belongs to the
+// thin pool LV — `pool create` gives it 95% of the free extents and
+// convert-thin all of them — so vg_free stays near zero for the life of the
+// pool. Capacity reported from the VG is therefore close to a constant, and
+// says nothing about whether the next write will succeed.
 
 // Thin pool utilisation thresholds, in percent.
 //

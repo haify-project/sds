@@ -98,6 +98,12 @@ func (c *Client) LVExtendThinPoolAllFree(ctx context.Context, hosts []string, vg
 	return c.Exec(ctx, hosts, fmt.Sprintf("sudo lvextend -y -l +100%%FREE %s/%s", vgName, poolName))
 }
 
+// LVExtendThinPoolPercentFree grows a thin pool's data area by percent of the
+// volume group's free extents, leaving the rest unallocated.
+func (c *Client) LVExtendThinPoolPercentFree(ctx context.Context, hosts []string, vgName, poolName string, percent int) (*ExecResult, error) {
+	return c.Exec(ctx, hosts, fmt.Sprintf("sudo lvextend -y -l +%d%%FREE %s/%s", percent, vgName, poolName))
+}
+
 // LVThinPoolIn returns the name of the thin pool in a volume group, or an
 // empty string if the group has none.
 //

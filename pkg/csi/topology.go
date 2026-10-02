@@ -42,7 +42,7 @@ type replicaCandidate struct {
 // controller reported nothing usable.
 //
 // Which field answers that depends on the pool. SDS builds a thin pool out of
-// every free extent of its volume group, so free_bytes/free_gb read zero for
+// nearly all of its volume group, so free_bytes/free_gb read near zero for
 // the whole life of a thin pool however empty it is — rank on those and every
 // thin node looks equally full, and reject on them and every thin-provisioned
 // StorageClass stops provisioning. The thin pool's own utilisation is the

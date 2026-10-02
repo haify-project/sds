@@ -29,6 +29,8 @@ type fakeDeploymentClient struct {
 	lvThinPoolInFunc                    func(ctx context.Context, host, vgName string) (string, error)
 	lvExtendThinPoolMetadataFunc        func(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes uint64) (*deployment.ExecResult, error)
 	lvExtendThinPoolAllFreeFunc         func(ctx context.Context, hosts []string, vgName, poolName string) (*deployment.ExecResult, error)
+	lvExtendThinPoolPercentFreeFunc     func(hosts []string, vgName, poolName string, percent int) (*deployment.ExecResult, error)
+	lvSizeBytesFunc                     func(host, vgName, lvName string) (uint64, error)
 	lvsCacheReportFunc                  func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
 	lvsThinReportFunc                   func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
 	lvRemoveSnapshotFunc                func(ctx context.Context, hosts []string, vgName, snapshotName string) (*deployment.ExecResult, error)
@@ -283,6 +285,13 @@ func (f *fakeDeploymentClient) LVExtendThinPoolAllFree(ctx context.Context, host
 	return successExecResult(hosts, ""), nil
 }
 
+func (f *fakeDeploymentClient) LVExtendThinPoolPercentFree(ctx context.Context, hosts []string, vgName, poolName string, percent int) (*deployment.ExecResult, error) {
+	if f.lvExtendThinPoolPercentFreeFunc != nil {
+		return f.lvExtendThinPoolPercentFreeFunc(hosts, vgName, poolName, percent)
+	}
+	return successExecResult(hosts, ""), nil
+}
+
 func (f *fakeDeploymentClient) LVSCacheReport(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error) {
 	if f.lvsCacheReportFunc != nil {
 		return f.lvsCacheReportFunc(ctx, hosts, vgName)
@@ -354,6 +363,9 @@ func (f *fakeDeploymentClient) LVExists(ctx context.Context, host, vgName, lvNam
 }
 
 func (f *fakeDeploymentClient) LVSizeBytes(ctx context.Context, host, vgName, lvName string) (uint64, error) {
+	if f.lvSizeBytesFunc != nil {
+		return f.lvSizeBytesFunc(host, vgName, lvName)
+	}
 	return 6442450944, nil
 }
 
