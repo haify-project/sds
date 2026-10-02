@@ -76,7 +76,9 @@ install-mcp: build
 	@echo "MCP server installed to /usr/local/bin/sds-mcp"
 
 # Run controller locally
+# configs/controller.toml is local and untracked: copy it from the example.
 run-controller:
+	@test -f configs/controller.toml || { echo "configs/controller.toml not found: cp configs/controller.toml.example configs/controller.toml and edit it" >&2; exit 1; }
 	go run ./cmd/controller --config configs/controller.toml
 
 # Run CLI

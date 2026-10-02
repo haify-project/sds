@@ -452,8 +452,7 @@ OpenAI-compatible LLM and embedder.
     `STEWARD_EMB_*` (the older `OPSPILOT_*`, `OPSDOCTOR_*`, `OSS_*` names are
     still read)
   - `SDS_AI_KNOWLEDGE_DB` (required), `SDS_AI_EMB_DIM` (default 768)
-  - `SDS_AI_CONTROLLER=127.0.0.1:3374` — set it; the built-in default is not
-    loopback
+  - `SDS_AI_CONTROLLER` — default `127.0.0.1:3374`, the controller beside it
   - `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`
   - `SDS_AI_ADDR` — default `127.0.0.1:7634`, which is where the UI proxies
     `/ai/`. On any non-loopback address sds-ai refuses to start without a token

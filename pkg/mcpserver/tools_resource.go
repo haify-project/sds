@@ -367,7 +367,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("resource %s deleted", in.Name)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_set_role", "Set resource role",
+	addWrite(s, srv, destructiveTool("sds_resource_set_role", "Set resource role",
 		"Promote a resource to Primary or demote it to Secondary on a node. "+
 			"Only the Primary node can mount and write the volume. Demoting fails while the volume is "+
 			"mounted or in use. Do not use it on a resource an HA promoter runs: the promoter puts the "+
@@ -506,7 +506,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("%s volume %d mounted at %s on %s", in.Resource, in.VolumeID, in.Path, in.Node)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_unmount", "Unmount volume",
+	addWrite(s, srv, destructiveTool("sds_resource_unmount", "Unmount volume",
 		"Unmount a DRBD volume on a node."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in unmountIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.UnmountResource(ctx, in.Resource, in.VolumeID, in.Node); err != nil {

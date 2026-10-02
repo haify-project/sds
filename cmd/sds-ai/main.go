@@ -9,12 +9,12 @@
 //
 // Config via environment (all optional except a knowledge DB + LLM key):
 //
-//	SDS_AI_ADDR           listen address (default ":7634")
+//	SDS_AI_ADDR           listen address (default "127.0.0.1:7634")
 //	SDS_AI_KNOWLEDGE_DB   path to the cortexdb knowledge store (required)
 //	SDS_AI_SHARED_KNOWLEDGE_DB  the SDS shared knowledge base (`make kb`), searched
 //	                      alongside it read-only; built with the same embedder
 //	SDS_AI_DOMAIN         path to ai/domain.toml (default "ai/domain.toml")
-//	SDS_AI_CONTROLLER     sds controller addr for sds-mcp (default "192.168.123.250:3374")
+//	SDS_AI_CONTROLLER     sds controller addr for sds-mcp (default "127.0.0.1:3374")
 //	SDS_AI_MCP_CMD        sds-mcp executable (default "sds-mcp")
 //	SDS_AI_EMB_DIM        embedding dim of the knowledge index (default 768)
 //	SDS_AI_KUBECONFIG     kubeconfig for the sds-k8s tools (`sds-mcp k8s`); unset = bare-metal tools only
@@ -174,9 +174,7 @@ var dailyOps = []string{
 	"sds_resource_resize_volume",
 	"sds_resource_set_options",
 	"sds_resource_set_profile",
-	"sds_resource_set_role",
 	"sds_resource_set_tiebreaker",
-	"sds_resource_unmount",
 	"sds_snapshot_create",
 	"sds_snapshot_schedule_create",
 	"sds_wan_repair",
@@ -202,7 +200,7 @@ func mcpServers() []steward.MCPServerSpec {
 		Name:      "sds",
 		Transport: "stdio",
 		Command:   cmd,
-		Args: []string{"--controller", envOr("SDS_AI_CONTROLLER", "192.168.123.250:3374"),
+		Args: []string{"--controller", envOr("SDS_AI_CONTROLLER", "127.0.0.1:3374"),
 			"--allow", strings.Join(dailyOps, ",")},
 		ReadOnly:       true,
 		WriteToolAllow: dailyOps,
