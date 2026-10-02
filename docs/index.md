@@ -1,6 +1,6 @@
 ---
 template: home.html
-title: Replicated block storage for Linux
+title: Storage that keeps working when a server fails
 hide:
   - navigation
   - toc

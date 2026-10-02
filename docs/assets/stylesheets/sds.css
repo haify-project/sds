@@ -115,16 +115,14 @@
 .sds-cluster__head strong { color: var(--sds-ink); font-weight: 600; }
 .sds-node {
   display: grid; grid-template-columns: 4.2rem 6.1rem 1fr; gap: 0.7rem; align-items: center;
-  padding: 0.5rem 0; border-top: 1px solid var(--sds-line);
+  padding: 0.6rem 0; border-top: 1px solid var(--sds-line);
   transition: opacity .4s ease;
 }
 .sds-node__name { font-family: var(--md-code-font-family); font-size: 0.72rem; font-weight: 600; }
-.sds-node__role { font-size: 0.68rem; color: var(--sds-muted); }
-.sds-node__role b { display: block; font-weight: 600; color: var(--sds-ink); font-size: 0.72rem; }
-.sds-node[data-role="Primary"] .sds-node__role b { color: var(--sds-ok); }
+.sds-node__state { font-size: 0.72rem; font-weight: 600; color: var(--sds-muted); }
+.sds-node[data-state="serving"] .sds-node__state { color: var(--sds-ok); }
+.sds-node[data-state="turning"] .sds-node__state { color: var(--sds-turn); }
 .sds-node[data-state="gone"] { opacity: 0.45; }
-.sds-node[data-state="gone"] .sds-node__role b { color: var(--sds-muted); }
-.sds-node[data-state="promoting"] .sds-node__role b { color: var(--sds-turn); }
 .sds-blocks { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
 .sds-blocks i {
   display: block; height: 0.9rem; border-radius: 2px;
@@ -132,14 +130,7 @@
 }
 .sds-blocks i.w { background: var(--sds-ok); }
 .sds-node[data-state="gone"] .sds-blocks i.w { background: var(--sds-gone); }
-.sds-status {
-  margin: 0.8rem 0 0; padding: 0.65rem 0.75rem; border-radius: 0.3rem;
-  background: var(--md-code-bg-color); font-family: var(--md-code-font-family);
-  font-size: 0.66rem; line-height: 1.55; white-space: pre; overflow-x: auto; color: var(--sds-ink);
-}
-.sds-status .t { color: var(--sds-turn); }
-.sds-status .o { color: var(--sds-ok); }
-.sds-caption { font-size: 0.7rem; color: var(--sds-muted); margin: 0.6rem 0 0; min-height: 2.2em; }
+.sds-caption { font-size: 0.74rem; color: var(--sds-muted); margin: 0.7rem 0 0; padding-top: 0.7rem; border-top: 1px solid var(--sds-line); min-height: 3.2em; }
 .sds-replay {
   background: none; border: 0; padding: 0; color: var(--sds-ok); cursor: pointer;
   font: inherit; font-size: 0.7rem; text-decoration: underline;
@@ -149,7 +140,7 @@
 .sds-section h2 { font-size: 1.3rem; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 0.4rem; }
 .sds-section > .sds-wrap > p.sds-intro { color: var(--sds-muted); max-width: 38em; margin: 0 0 1.8rem; font-size: 0.85rem; }
 
-.sds-scope { display: grid; grid-template-columns: 9rem 1fr; gap: 0; margin: 0; }
+.sds-scope { display: grid; grid-template-columns: 13rem 1fr; gap: 0; margin: 0; }
 .sds-scope dt { font-weight: 600; font-size: 0.82rem; padding: 0.85rem 0; border-top: 1px solid var(--sds-line); }
 .sds-scope dd { margin: 0; padding: 0.85rem 0; border-top: 1px solid var(--sds-line);
   font-size: 0.82rem; color: var(--sds-muted); max-width: 44em; }
@@ -169,14 +160,16 @@
   font-size: 0.7rem; white-space: pre; overflow-x: auto;
 }
 
-.sds-arch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2rem; margin: 1.2rem 0 1.6rem; }
-.sds-arch p { font-size: 0.82rem; color: var(--sds-muted); margin: 0; padding-top: 0.8rem; border-top: 1px solid var(--sds-line); }
-.sds-arch p strong { display: block; color: var(--sds-ink); margin-bottom: 0.2rem; }
-.sds-arch__img { display: block; overflow-x: auto; border: 1px solid var(--sds-line); border-radius: 0.5rem; background: #fff; }
-.sds-arch__img img { display: block; width: 100%; min-width: 44rem; height: auto; }
-
 /* The home page is all hero and sections; Material's empty article would only add a gap. */
 body:has(.sds-home) .md-main__inner { display: none; }
+
+/* Use cases: the main section, so it gets the most room. */
+.sds-cases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2rem; margin-top: 1.4rem; }
+.sds-cases article { padding: 1rem 0 1.6rem; border-top: 2px solid var(--sds-ink); display: flex; flex-direction: column; }
+.sds-cases h3 { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 600; line-height: 1.3; letter-spacing: -0.005em; }
+.sds-cases p { margin: 0 0 0.8rem; font-size: 0.8rem; color: var(--sds-muted); flex: 1; }
+.sds-cases a { font-size: 0.78rem; font-weight: 600; color: var(--sds-ok); text-decoration: none; align-self: flex-start; }
+.sds-cases a:hover { text-decoration: underline; }
 
 .sds-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2rem; }
 .sds-links a { display: block; padding: 0.8rem 0; border-top: 1px solid var(--sds-line); text-decoration: none; color: var(--sds-ink); }
@@ -185,17 +178,33 @@ body:has(.sds-home) .md-main__inner { display: none; }
 .sds-links strong { font-weight: 600; font-size: 0.85rem; }
 
 @media (max-width: 60em) {
-  .sds-hero .sds-wrap, .sds-arch { grid-template-columns: minmax(0, 1fr); }
-  .sds-arch p { padding-bottom: 0.8rem; }
-  .sds-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sds-hero .sds-wrap { grid-template-columns: minmax(0, 1fr); }
+  .sds-cases, .sds-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 36em) {
-  .sds-hero { padding-top: 2.2rem; }
+  .sds-hero { padding: 2rem 0 2.4rem; }
   .sds-hero h1 { font-size: 1.6rem; }
-  .sds-scope { grid-template-columns: 1fr; }
+  .sds-section { padding: 2.2rem 0; }
+  .sds-actions .sds-btn { flex: 1 1 100%; text-align: center; padding: 0.75rem 1rem; }
+
+  .sds-cluster { padding: 0.9rem 0.8rem 0.8rem; }
+  .sds-node {
+    grid-template-columns: 4rem minmax(0, 1fr); grid-template-areas: "name state" "blocks blocks";
+    gap: 0.35rem 0.6rem;
+  }
+  .sds-node__name { grid-area: name; }
+  .sds-node__state { grid-area: state; }
+  .sds-blocks { grid-area: blocks; }
+  .sds-blocks i { height: 0.7rem; }
+
+  .sds-scope { grid-template-columns: minmax(0, 1fr); }
   .sds-scope dd { border-top: 0; padding-top: 0; }
-  .sds-links { grid-template-columns: 1fr; }
-  .sds-node { grid-template-columns: 3.6rem 5.4rem 1fr; gap: 0.5rem; }
+
+  .sds-steps li::before { grid-row: auto; }
+  .sds-steps code { grid-column: 1 / -1; white-space: pre-wrap; }
+  .sds-steps code span { white-space: nowrap; }
+
+  .sds-cases, .sds-links { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .sds-node, .sds-blocks i { transition: none; }

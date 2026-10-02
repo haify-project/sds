@@ -1,7 +1,6 @@
-// The home page's replication panel: writes land on the Primary and are
-// mirrored to both peers, the Primary goes away, drbd-reactor promotes a peer
-// and writes carry on there. It plays once; with reduced motion the final
-// state is drawn straight away.
+// The home page's panel: writes land on node1 and are copied to the other two,
+// node1 goes away, node2 takes over and writes carry on there. It plays once;
+// with reduced motion the final state is drawn straight away.
 (function () {
   var panel = document.querySelector(".sds-cluster");
   if (!panel) return;
@@ -14,37 +13,29 @@
     for (var i = 0; i < BLOCKS; i++) strip.appendChild(document.createElement("i"));
     nodes[el.dataset.node] = { el: el, cells: strip.children };
   });
-  var statusEl = document.getElementById("sds-status");
   var captionEl = document.getElementById("sds-cluster-caption");
   var timers = [];
 
+  // node -> [label, state]; state drives the colour.
   var STATES = {
-    start: { node1: ["Primary", "UpToDate", ""], node2: ["Secondary", "UpToDate", ""], node3: ["Secondary", "UpToDate", ""] },
-    lost: { node1: ["Unknown", "DUnknown", "gone"], node2: ["Secondary", "UpToDate", ""], node3: ["Secondary", "UpToDate", ""] },
-    promoting: { node1: ["Unknown", "DUnknown", "gone"], node2: ["Promoting", "UpToDate", "promoting"], node3: ["Secondary", "UpToDate", ""] },
-    moved: { node1: ["Unknown", "DUnknown", "gone"], node2: ["Primary", "UpToDate", ""], node3: ["Secondary", "UpToDate", ""] }
+    start: { node1: ["Serving", "serving"], node2: ["In sync", ""], node3: ["In sync", ""] },
+    lost: { node1: ["Offline", "gone"], node2: ["In sync", ""], node3: ["In sync", ""] },
+    takeover: { node1: ["Offline", "gone"], node2: ["Taking over", "turning"], node3: ["In sync", ""] },
+    moved: { node1: ["Offline", "gone"], node2: ["Serving", "serving"], node3: ["In sync", ""] }
   };
 
   function show(name, caption) {
-    var s = STATES[name], lines = ["$ sds resource status data", "  Node states:"];
+    var s = STATES[name];
     Object.keys(s).forEach(function (n) {
-      var role = s[n][0], disk = s[n][1], state = s[n][2], el = nodes[n].el;
-      el.dataset.role = role === "Promoting" ? "Secondary" : role;
-      el.dataset.state = state;
-      el.querySelector(".sds-node__role").innerHTML = "<b>" + role + "</b>" + disk;
-      var shownRole = role === "Promoting" ? "Secondary" : role;
-      var line = "    " + n + ": role=" + shownRole + " disk=" + disk;
-      if (state === "gone") line = '<span class="t">' + line + "</span>";
-      else if (shownRole === "Primary") line = '<span class="o">' + line + "</span>";
-      lines.push(line);
+      nodes[n].el.dataset.state = s[n][1];
+      nodes[n].el.querySelector(".sds-node__state").textContent = s[n][0];
     });
-    statusEl.innerHTML = lines.join("\n");
-    if (caption !== undefined) captionEl.textContent = caption;
+    captionEl.textContent = caption;
   }
 
-  function write(primary, peers, i) {
-    nodes[primary].cells[i].className = "w";
-    peers.forEach(function (p) {
+  function write(from, to, i) {
+    nodes[from].cells[i].className = "w";
+    to.forEach(function (p) {
       timers.push(setTimeout(function () { nodes[p].cells[i].className = "w"; }, 140));
     });
   }
@@ -62,20 +53,20 @@
   function finalState() {
     reset();
     for (var i = 0; i < BLOCKS; i++) {
-      if (i < 6) { ["node1", "node2", "node3"].forEach(function (n) { nodes[n].cells[i].className = "w"; }); }
-      else { ["node2", "node3"].forEach(function (n) { nodes[n].cells[i].className = "w"; }); }
+      var on = i < 6 ? ["node1", "node2", "node3"] : ["node2", "node3"];
+      on.forEach(function (n) { nodes[n].cells[i].className = "w"; });
     }
-    show("moved", "node1 failed. drbd-reactor promoted node2, which held every acknowledged write, and the volume kept serving. When node1 returns it resyncs only the blocks that changed.");
+    show("moved", "node1 went offline and node2 took over with every saved write. When node1 is back it catches up on its own.");
   }
 
   function play() {
     reset();
-    show("start", "Each write is acknowledged once node2 and node3 have it too.");
+    show("start", "Each write is saved on all three servers.");
     var t = 500;
     for (var i = 0; i < 6; i++) { (function (i) { at(t, function () { write("node1", ["node2", "node3"], i); }); })(i); t += 420; }
-    at(t + 400, function () { show("lost", "node1 stops answering. node2 and node3 still hold quorum."); });
-    at(t + 2000, function () { show("promoting", "drbd-reactor promotes node2. Its copy is UpToDate, so nothing acknowledged is lost."); });
-    at(t + 3400, function () { show("moved", "Writes continue on node2. When node1 returns it resyncs only the blocks that changed."); });
+    at(t + 400, function () { show("lost", "node1 goes offline."); });
+    at(t + 2000, function () { show("takeover", "node2 takes over. It already has every saved write."); });
+    at(t + 3400, function () { show("moved", "Writes continue on node2. When node1 is back it catches up on its own."); });
     t += 3800;
     for (var j = 6; j < BLOCKS; j++) { (function (j) { at(t, function () { write("node2", ["node3"], j); }); })(j); t += 420; }
   }

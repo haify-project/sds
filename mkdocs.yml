@@ -1,5 +1,5 @@
 site_name: SDS
-site_description: Replicated block storage for Linux clusters, built on DRBD 9 and driven by one controller.
+site_description: Shared storage on your own Linux servers that keeps working when a server fails.
 site_url: https://haify-project.github.io/sds/
 repo_url: https://github.com/haify-project/sds
 repo_name: haify-project/sds

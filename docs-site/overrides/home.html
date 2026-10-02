@@ -7,40 +7,38 @@
   <section class="sds-hero">
     <div class="sds-wrap">
       <div>
-        <h1>Replicated block storage for your own Linux servers.</h1>
+        <h1>Storage that keeps working when a server fails.</h1>
         <p class="sds-lede">
-          SDS runs DRBD&nbsp;9 across your nodes from one controller: storage pools,
-          synchronously replicated volumes, automatic failover, NFS, iSCSI and NVMe-oF
-          exports, off-site backups and Kubernetes volumes. Nothing extra runs on the
-          storage nodes; the controller reaches them over SSH.
+          SDS turns the disks in your own Linux servers into shared storage for files,
+          virtual machines, containers and databases. Lose a server and your applications
+          keep their data and carry on.
         </p>
         <div class="sds-actions">
-          <a class="sds-btn sds-btn--primary" href="{{ 'deployment-guide/' | url }}">Deploy a cluster</a>
+          <a class="sds-btn sds-btn--primary" href="{{ 'deployment-guide/' | url }}">Get started</a>
           <a class="sds-btn sds-btn--plain" href="https://github.com/haify-project/sds">Source on GitHub</a>
         </div>
       </div>
 
       <figure class="sds-cluster" aria-labelledby="sds-cluster-caption">
         <div class="sds-cluster__head">
-          <span>Resource <strong>data</strong>, three replicas</span>
+          <span>Volume <strong>data</strong> on three servers</span>
           <button type="button" class="sds-replay" id="sds-replay">Replay</button>
         </div>
-        <div class="sds-node" data-node="node1" data-role="Primary">
+        <div class="sds-node" data-node="node1">
           <span class="sds-node__name">node1</span>
-          <span class="sds-node__role"><b>Primary</b>UpToDate</span>
+          <span class="sds-node__state">Serving</span>
           <span class="sds-blocks" aria-hidden="true"></span>
         </div>
-        <div class="sds-node" data-node="node2" data-role="Secondary">
+        <div class="sds-node" data-node="node2">
           <span class="sds-node__name">node2</span>
-          <span class="sds-node__role"><b>Secondary</b>UpToDate</span>
+          <span class="sds-node__state">In sync</span>
           <span class="sds-blocks" aria-hidden="true"></span>
         </div>
-        <div class="sds-node" data-node="node3" data-role="Secondary">
+        <div class="sds-node" data-node="node3">
           <span class="sds-node__name">node3</span>
-          <span class="sds-node__role"><b>Secondary</b>UpToDate</span>
+          <span class="sds-node__state">In sync</span>
           <span class="sds-blocks" aria-hidden="true"></span>
         </div>
-        <pre class="sds-status" id="sds-status" aria-live="off"></pre>
         <figcaption class="sds-caption" id="sds-cluster-caption" aria-live="polite"></figcaption>
       </figure>
     </div>
@@ -48,64 +46,88 @@
 
   <section class="sds-section">
     <div class="sds-wrap">
-      <h2>What it manages</h2>
-      <p class="sds-intro">One CLI, a web UI and an API cover the life of the storage, from raw disks to the volume a workload mounts.</p>
+      <h2>What people use it for</h2>
+      <div class="sds-cases">
+        <article>
+          <h3>A shared folder that never goes down</h3>
+          <p>Team files, media libraries, build artifacts. Clients keep the same address, and a failed server no longer means an outage.</p>
+          <a href="{{ 'user-guide/' | url }}#10-gateways--exporting-to-clients">Set up a share</a>
+        </article>
+        <article>
+          <h3>Virtual machines on Proxmox VE</h3>
+          <p>VM disks kept on two servers, so you can move a running VM between them and restart it on the other one if its host dies.</p>
+          <a href="{{ 'proxmox/' | url }}">Use with Proxmox VE</a>
+        </article>
+        <article>
+          <h3>Databases and apps on Kubernetes</h3>
+          <p>Persistent volumes that outlive the node they started on. A pod rescheduled elsewhere comes back with its data.</p>
+          <a href="{{ 'kubernetes/' | url }}">Use with Kubernetes</a>
+        </article>
+        <article>
+          <h3>A database that fails over on its own</h3>
+          <p>PostgreSQL, MySQL or any service gets its data, its address and itself moved to a healthy server, without changing the application.</p>
+          <a href="{{ 'user-guide/' | url }}#11-high-availability">Make a service highly available</a>
+        </article>
+        <article>
+          <h3>Backups and a second site</h3>
+          <p>Scheduled backups to S3, SMB or WebDAV, and a live copy in another location. Recover even if the whole cluster is lost.</p>
+          <a href="{{ 'user-guide/' | url }}#9-backups--the-only-copy-that-survives-losing-the-cluster">Protect your data</a>
+        </article>
+        <article>
+          <h3>Leaving a storage array behind</h3>
+          <p>Get the availability you paid an array for from ordinary servers and disks, with block shares your existing hosts already understand.</p>
+          <a href="{{ 'deployment-guide/' | url }}">Plan a cluster</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sds-section">
+    <div class="sds-wrap">
+      <h2>Why SDS</h2>
       <dl class="sds-scope">
-        <dt>Storage</dt>
-        <dd><strong>Pools</strong> on LVM, LVM-thin or ZFS, with an optional SSD cache. <strong>Resources</strong> placed automatically by free space and failure domain, resized online, encrypted at rest with LUKS2.</dd>
-        <dt>Availability</dt>
-        <dd>Synchronous replication with quorum and tiebreakers. drbd-reactor moves services and a floating IP to a healthy replica. The controller itself can fail over the same way.</dd>
-        <dt>Access</dt>
-        <dd>NFS, iSCSI and NVMe-oF gateways that follow their volume across failovers. Diskless clients read and write over the network. A CSI driver for Kubernetes and a storage plugin for Proxmox VE.</dd>
-        <dt>Protection</dt>
-        <dd>Scheduled snapshots, and scheduled incremental backups to S3, SMB or WebDAV that restore onto a rebuilt or a different cluster. Asynchronous disaster-recovery replicas over a TCP tunnel that works through NAT.</dd>
-        <dt>Operations</dt>
-        <dd>Alerts on degraded replicas, lost Primaries and full pools, delivered to webhooks and chat. A daily inspection that reports problems with the command that fixes them. Prometheus metrics, RBAC, audit log, TLS, and an MCP server for AI assistants.</dd>
+        <dt>No single point of failure</dt>
+        <dd>Every write is on more than one server, and services move on their own when one fails.</dd>
+        <dt>Your hardware</dt>
+        <dd>Ordinary Linux servers and their local disks. No storage array, no special network.</dd>
+        <dt>Simple to run</dt>
+        <dd>Manage it from a web UI, the command line or an AI assistant.</dd>
+        <dt>Problems found early</dt>
+        <dd>Alerts in your chat when something degrades, and a daily check that says how to fix it.</dd>
+        <dt>Open source</dt>
+        <dd>Apache 2.0, free to use, change and run in production.</dd>
       </dl>
     </div>
   </section>
 
   <section class="sds-section">
     <div class="sds-wrap">
-      <h2>From disks to an NFS share</h2>
-      <p class="sds-intro">With the controller installed and SSH access to each node, a replicated, failover-ready export takes four commands.</p>
+      <h2>From disks to a shared folder</h2>
+      <p class="sds-intro">Four commands, once SDS is installed.</p>
       <ol class="sds-steps">
-        <li><p>Register the storage nodes.</p>
-          <code>sds node register --name node1 --address 192.0.2.11
-sds node register --name node2 --address 192.0.2.12</code></li>
-        <li><p>Turn a disk on each node into a thin pool.</p>
-          <code>sds pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/sdb</code></li>
-        <li><p>Create a 10 GiB volume replicated to both nodes.</p>
-          <code>sds resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0</code></li>
-        <li><p>Export it over NFS on an address that moves with the Primary.</p>
-          <code>sds gateway nfs create --resource data --service-ip 192.0.2.200/24 --export-path /data</code></li>
+        <li><p>Add your servers.</p>
+          <code>sds node register <span>--name node1</span> <span>--address 192.0.2.11</span>
+sds node register <span>--name node2</span> <span>--address 192.0.2.12</span></code></li>
+        <li><p>Give SDS a disk on each one.</p>
+          <code>sds pool create <span>--name pool0</span> <span>--type lvm-thin</span> <span>--nodes node1,node2</span> <span>--devices /dev/sdb</span></code></li>
+        <li><p>Create a 10 GiB volume kept on both.</p>
+          <code>sds resource create <span>--name data</span> <span>--port 7001</span> <span>--size 10G</span> <span>--nodes node1,node2</span> <span>--pool pool0</span></code></li>
+        <li><p>Share it over NFS.</p>
+          <code>sds gateway nfs create <span>--resource data</span> <span>--service-ip 192.0.2.200/24</span> <span>--export-path /data</span></code></li>
       </ol>
     </div>
   </section>
 
   <section class="sds-section">
     <div class="sds-wrap">
-      <h2>How it is built</h2>
-      <div class="sds-arch">
-        <p><strong>One controller, no node agent.</strong> sds-controller keeps its state in an embedded database and runs every change on the nodes over SSH.</p>
-        <p><strong>DRBD does the replication.</strong> Writes are acknowledged once every connected replica has them; drbd-reactor decides where each service runs.</p>
-        <p><strong>Everything goes through one API.</strong> The CLI, the web UI, the CSI driver, the Proxmox plugin and the MCP server all call the same gRPC and REST endpoints.</p>
-      </div>
-      <a class="sds-arch__img" href="{{ 'img/architecture-en.png' | url }}"><img src="{{ 'img/architecture-en.png' | url }}" alt="Clients reach SDS through the CLI, web UI, CSI, Proxmox and MCP; the controller drives DRBD and drbd-reactor on each storage node over SSH." loading="lazy"></a>
-    </div>
-  </section>
-
-  <section class="sds-section">
-    <div class="sds-wrap">
       <h2>Documentation</h2>
-      <p class="sds-intro">Start with the deployment guide, then keep the user guide at hand.</p>
       <nav class="sds-links" aria-label="Documentation">
-        <a href="{{ 'deployment-guide/' | url }}"><strong>Deployment</strong><span>Building a cluster from nothing.</span></a>
-        <a href="{{ 'node-prerequisites/' | url }}"><strong>Node prerequisites</strong><span>What each node needs installed.</span></a>
-        <a href="{{ 'user-guide/' | url }}"><strong>User guide</strong><span>Day-to-day operation and troubleshooting.</span></a>
-        <a href="{{ 'kubernetes/' | url }}"><strong>Kubernetes</strong><span>The CSI driver and StorageClass.</span></a>
-        <a href="{{ 'proxmox/' | url }}"><strong>Proxmox VE</strong><span>The storage plugin for VM disks.</span></a>
-        <a href="{{ 'mcp/' | url }}"><strong>AI assistants</strong><span>Local and remote MCP, tokens, runbooks.</span></a>
+        <a href="{{ 'deployment-guide/' | url }}"><strong>Getting started</strong><span>Install SDS and set up a cluster.</span></a>
+        <a href="{{ 'user-guide/' | url }}"><strong>User guide</strong><span>Everyday tasks, step by step.</span></a>
+        <a href="{{ 'node-prerequisites/' | url }}"><strong>Server requirements</strong><span>What each server needs.</span></a>
+        <a href="{{ 'kubernetes/' | url }}"><strong>Kubernetes</strong><span>Volumes for containers.</span></a>
+        <a href="{{ 'proxmox/' | url }}"><strong>Proxmox VE</strong><span>Volumes for virtual machines.</span></a>
+        <a href="{{ 'mcp/' | url }}"><strong>AI assistants</strong><span>Manage SDS by asking.</span></a>
       </nav>
     </div>
   </section>
