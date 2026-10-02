@@ -8,13 +8,15 @@
  "schemaVersion": 41,
  "refresh": "30s",
  "time": {
-  "from": "now-6h",
+  "from": "now-24h",
   "to": "now"
  },
+ "graphTooltip": 1,
  "templating": {
   "list": [
    {
     "name": "cluster",
+    "label": "Cluster",
     "type": "query",
     "datasource": {
      "type": "prometheus",
@@ -25,54 +27,37 @@
      "refId": "q"
     },
     "definition": "label_values(up{job=\"sds\"}, cluster)",
-    "includeAll": true,
-    "multi": true,
-    "current": {
-     "text": "All",
-     "value": "$__all"
-    },
-    "allValue": ".*",
-    "refresh": 2
+    "includeAll": false,
+    "multi": false,
+    "refresh": 2,
+    "sort": 1
    }
   ]
  },
  "panels": [
   {
    "id": 1,
-   "type": "row",
-   "title": "Cluster",
-   "collapsed": false,
-   "gridPos": {
-    "x": 0,
-    "y": 0,
-    "w": 24,
-    "h": 1
-   },
-   "panels": []
-  },
-  {
-   "id": 2,
-   "title": "Controller up",
    "type": "stat",
+   "title": "Controller",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 0,
-    "y": 1,
+    "y": 0,
     "w": 4,
     "h": 4
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "up{job=\"sds\",cluster=~\"$cluster\"}",
-     "legendFormat": "{{cluster}}",
+     "expr": "up{job=\"sds\",cluster=\"$cluster\"}",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": ""
     }
    ],
    "fieldConfig": {
@@ -89,39 +74,65 @@
         "value": 1
        }
       ]
-     }
+     },
+     "noValue": "DOWN",
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "1": {
+         "text": "UP",
+         "color": "green",
+         "index": 0
+        },
+        "0": {
+         "text": "DOWN",
+         "color": "red",
+         "index": 1
+        }
+       }
+      }
+     ]
     },
     "overrides": []
    },
    "options": {
     "colorMode": "background",
     "graphMode": "none",
-    "textMode": "value_and_name"
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
    }
   },
   {
-   "id": 3,
-   "title": "Alerts firing",
+   "id": 2,
    "type": "stat",
+   "title": "Nodes reachable",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 4,
-    "y": 1,
+    "y": 0,
     "w": 4,
     "h": 4
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (severity) (sds_controller_alerts_firing{cluster=~\"$cluster\"}) or vector(0)",
-     "legendFormat": "{{severity}}",
+     "expr": "sum(sds_controller_node_reachable{cluster=\"$cluster\"}) / count(sds_controller_node_reachable{cluster=\"$cluster\"})",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": ""
     }
    ],
    "fieldConfig": {
@@ -130,47 +141,61 @@
       "mode": "absolute",
       "steps": [
        {
-        "color": "green",
+        "color": "red",
         "value": null
        },
        {
-        "color": "red",
+        "color": "orange",
+        "value": 0.5
+       },
+       {
+        "color": "green",
         "value": 1
        }
       ]
-     }
+     },
+     "noValue": "\u2014",
+     "unit": "percentunit"
     },
     "overrides": []
    },
    "options": {
     "colorMode": "background",
     "graphMode": "none",
-    "textMode": "value_and_name"
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
    }
   },
   {
-   "id": 4,
-   "title": "Nodes unreachable",
+   "id": 3,
    "type": "stat",
+   "title": "Resources",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 8,
-    "y": 1,
+    "y": 0,
     "w": 4,
     "h": 4
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "count(sds_controller_node_reachable{cluster=~\"$cluster\"} == 0) or vector(0)",
-     "legendFormat": "",
+     "expr": "count(sds_drbd_resource_up{cluster=\"$cluster\"})",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": ""
     }
    ],
    "fieldConfig": {
@@ -179,46 +204,52 @@
       "mode": "absolute",
       "steps": [
        {
-        "color": "green",
+        "color": "blue",
         "value": null
-       },
-       {
-        "color": "red",
-        "value": 1
        }
       ]
-     }
+     },
+     "noValue": "0"
     },
     "overrides": []
    },
    "options": {
     "colorMode": "background",
-    "graphMode": "none"
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
    }
   },
   {
-   "id": 5,
-   "title": "Replicas not UpToDate",
+   "id": 4,
    "type": "stat",
+   "title": "Degraded replicas",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 12,
-    "y": 1,
-    "w": 4,
+    "y": 0,
+    "w": 3,
     "h": 4
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "count(sds_drbd_disk_state{cluster=~\"$cluster\",state!~\"UpToDate|Diskless\"} == 1) or vector(0)",
-     "legendFormat": "",
+     "expr": "count(sds_drbd_disk_state{cluster=\"$cluster\",state!~\"UpToDate|Diskless\"} == 1)",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": ""
     }
    ],
    "fieldConfig": {
@@ -235,38 +266,106 @@
         "value": 1
        }
       ]
-     }
+     },
+     "noValue": "0"
     },
     "overrides": []
    },
    "options": {
     "colorMode": "background",
-    "graphMode": "none"
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Quorum lost",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "sds-prom"
+   },
+   "gridPos": {
+    "x": 15,
+    "y": 0,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "count(sds_drbd_quorum{cluster=\"$cluster\"} == 0)",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     },
+     "noValue": "0"
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
    }
   },
   {
    "id": 6,
-   "title": "Quorum lost",
    "type": "stat",
+   "title": "Critical alerts",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
-    "x": 16,
-    "y": 1,
-    "w": 4,
+    "x": 18,
+    "y": 0,
+    "w": 3,
     "h": 4
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "count(sds_drbd_quorum{cluster=~\"$cluster\"} == 0) or vector(0)",
-     "legendFormat": "",
+     "expr": "sum(sds_controller_alerts_firing{cluster=\"$cluster\",severity=\"critical\"})",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": ""
     }
    ],
    "fieldConfig": {
@@ -283,38 +382,48 @@
         "value": 1
        }
       ]
-     }
+     },
+     "noValue": "0"
     },
     "overrides": []
    },
    "options": {
     "colorMode": "background",
-    "graphMode": "none"
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
    }
   },
   {
    "id": 7,
-   "title": "Resources unreadable",
    "type": "stat",
+   "title": "Warnings",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
-    "x": 20,
-    "y": 1,
-    "w": 4,
+    "x": 21,
+    "y": 0,
+    "w": 3,
     "h": 4
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "count(sds_drbd_resource_up{cluster=~\"$cluster\"} == 0) or vector(0)",
-     "legendFormat": "",
+     "expr": "sum(sds_controller_alerts_firing{cluster=\"$cluster\",severity=\"warning\"})",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": ""
     }
    ],
    "fieldConfig": {
@@ -327,27 +436,37 @@
         "value": null
        },
        {
-        "color": "red",
+        "color": "orange",
         "value": 1
        }
       ]
-     }
+     },
+     "noValue": "0"
     },
     "overrides": []
    },
    "options": {
     "colorMode": "background",
-    "graphMode": "none"
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
    }
   },
   {
    "id": 8,
    "type": "row",
-   "title": "Replication",
+   "title": "Resources",
    "collapsed": false,
    "gridPos": {
     "x": 0,
-    "y": 5,
+    "y": 4,
     "w": 24,
     "h": 1
    },
@@ -355,41 +474,134 @@
   },
   {
    "id": 9,
-   "title": "Disk states",
    "type": "table",
+   "title": "Resources",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 0,
-    "y": 6,
-    "w": 12,
-    "h": 9
+    "y": 5,
+    "w": 24,
+    "h": 13
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "sds_drbd_disk_state{cluster=~\"$cluster\"} == 1",
-     "legendFormat": "",
+     "expr": "max by (resource) (sds_drbd_resource_up{cluster=\"$cluster\"})",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "B",
+     "expr": "group by (resource, node) (sds_drbd_role{cluster=\"$cluster\",role=\"Primary\"} == 1)",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "C",
+     "expr": "count by (resource) (sds_drbd_disk_state{cluster=\"$cluster\",state=\"UpToDate\"} == 1)",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "D",
+     "expr": "count by (resource) (sds_drbd_disk_state{cluster=\"$cluster\",state!~\"Diskless|DUnknown\"} == 1)",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "E",
+     "expr": "min by (resource) (sds_drbd_quorum{cluster=\"$cluster\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "F",
+     "expr": "sum by (resource) (sds_drbd_out_of_sync_bytes{cluster=\"$cluster\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "G",
+     "expr": "min by (resource) (sds_drbd_connection_tls{cluster=\"$cluster\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "H",
+     "expr": "group by (resource, domain) (sds_controller_resource_fault_domain_risk{cluster=\"$cluster\"} == 1)",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "I",
+     "expr": "group by (resource, degraded) (label_join(sds_drbd_disk_state{cluster=\"$cluster\",state!~\"UpToDate|Diskless\"} == 1, \"degraded\", \" \", \"node\", \"state\"))",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
     }
    ],
-   "fieldConfig": {
-    "defaults": {},
-    "overrides": []
-   },
-   "options": {
-    "showHeader": true
-   },
    "transformations": [
     {
-     "id": "labelsToFields",
+     "id": "joinByField",
      "options": {
-      "mode": "columns"
+      "byField": "resource",
+      "mode": "outer"
      }
     },
     {
@@ -397,182 +609,722 @@
      "options": {
       "excludeByName": {
        "Time": true,
-       "Value": true,
-       "__name__": true,
-       "job": true,
-       "instance": true
+       "Time A": true,
+       "Time B": true,
+       "Time C": true,
+       "Time D": true,
+       "Time E": true,
+       "Time F": true,
+       "Time G": true,
+       "Time H": true,
+       "Time I": true
+      },
+      "renameByName": {
+       "resource": "Resource",
+       "node": "Primary",
+       "Value #A": "Readable",
+       "Value #C": "UpToDate",
+       "Value #D": "Copies",
+       "Value #E": "Quorum",
+       "Value #F": "Out of sync",
+       "Value #G": "TLS",
+       "domain": "Single point of failure",
+       "degraded": "Degraded"
+      },
+      "indexByName": {
+       "Resource": 0,
+       "Primary": 1,
+       "Readable": 2,
+       "UpToDate": 3,
+       "Copies": 4,
+       "Quorum": 5,
+       "Out of sync": 6,
+       "TLS": 7,
+       "Degraded": 8,
+       "Single point of failure": 9,
+       "Value #B": 10,
+       "Value #H": 11,
+       "Value #I": 12
       }
      }
     }
-   ]
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "noValue": "\u2014",
+     "custom": {
+      "align": "left",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Value #B"
+      },
+      "properties": [
+       {
+        "id": "custom.hidden",
+        "value": true
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Value #H"
+      },
+      "properties": [
+       {
+        "id": "custom.hidden",
+        "value": true
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Value #I"
+      },
+      "properties": [
+       {
+        "id": "custom.hidden",
+        "value": true
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Degraded"
+      },
+      "properties": [
+       {
+        "id": "noValue",
+        "value": " "
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Readable"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "yes",
+            "color": "green",
+            "index": 0
+           },
+           "0": {
+            "text": "no",
+            "color": "red",
+            "index": 1
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Quorum"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "yes",
+            "color": "green",
+            "index": 0
+           },
+           "0": {
+            "text": "lost",
+            "color": "red",
+            "index": 1
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "TLS"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "on",
+            "color": "green",
+            "index": 0
+           },
+           "0": {
+            "text": "off",
+            "color": "text",
+            "index": 1
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Out of sync"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "bytes"
+       },
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "color": "green",
+           "value": null
+          },
+          {
+           "color": "orange",
+           "value": 1
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Single point of failure"
+      },
+      "properties": [
+       {
+        "id": "noValue",
+        "value": " "
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Primary"
+      },
+      "properties": [
+       {
+        "id": "noValue",
+        "value": "none"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Resource"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 300
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Single point of failure"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 180
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Readable"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "UpToDate"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Copies"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Quorum"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "TLS"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "sortBy": [
+     {
+      "displayName": "Resource",
+      "desc": false
+     }
+    ]
+   }
   },
   {
    "id": 10,
-   "title": "Out-of-sync data",
-   "type": "timeseries",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 6,
-    "w": 12,
-    "h": 9
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sds_drbd_out_of_sync_bytes{cluster=~\"$cluster\"} > 0",
-     "legendFormat": "{{cluster}} {{resource}} {{node}}",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "bytes"
-    },
-    "overrides": []
-   },
-   "options": {}
-  },
-  {
-   "id": 11,
-   "title": "Resync progress",
-   "type": "timeseries",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 15,
-    "w": 12,
-    "h": 7
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sds_drbd_resync_completed_ratio{cluster=~\"$cluster\"} < 1",
-     "legendFormat": "{{cluster}} {{resource}} {{node}}",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "percentunit"
-    },
-    "overrides": []
-   },
-   "options": {}
-  },
-  {
-   "id": 12,
-   "title": "Connections over TLS",
-   "type": "table",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 15,
-    "w": 12,
-    "h": 7
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sds_drbd_connection_tls{cluster=~\"$cluster\"}",
-     "legendFormat": "",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {},
-    "overrides": []
-   },
-   "options": {},
-   "transformations": [
-    {
-     "id": "labelsToFields",
-     "options": {
-      "mode": "columns"
-     }
-    },
-    {
-     "id": "organize",
-     "options": {
-      "excludeByName": {
-       "Time": true,
-       "__name__": true,
-       "job": true,
-       "instance": true
-      },
-      "renameByName": {
-       "Value": "tls"
-      }
-     }
-    }
-   ]
-  },
-  {
-   "id": 13,
    "type": "row",
-   "title": "Storage",
+   "title": "Nodes",
    "collapsed": false,
    "gridPos": {
     "x": 0,
-    "y": 22,
+    "y": 18,
     "w": 24,
     "h": 1
    },
    "panels": []
   },
   {
-   "id": 14,
-   "title": "Thin pool use",
-   "type": "timeseries",
+   "id": 11,
+   "type": "table",
+   "title": "Nodes",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 0,
-    "y": 23,
+    "y": 19,
+    "w": 24,
+    "h": 6
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "max by (node) (sds_controller_node_reachable{cluster=\"$cluster\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "B",
+     "expr": "max by (node) (100 * sds_controller_storage_capacity_bytes{cluster=\"$cluster\",state=\"used\"} / on (cluster, pool, node) sds_controller_storage_capacity_bytes{cluster=\"$cluster\",state=\"total\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "C",
+     "expr": "max by (node) (sds_controller_pool_thin_used_percent{cluster=\"$cluster\",kind=\"metadata\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "D",
+     "expr": "count by (node) (sds_drbd_role{cluster=\"$cluster\",role=\"Primary\"} == 1)",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "node",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "Time A": true,
+       "Time B": true,
+       "Time C": true,
+       "Time D": true
+      },
+      "renameByName": {
+       "node": "Node",
+       "Value #A": "Reachable",
+       "Value #B": "Pool used",
+       "Value #C": "Thin metadata",
+       "Value #D": "Primary for"
+      },
+      "indexByName": {
+       "Node": 0,
+       "Reachable": 1,
+       "Pool used": 2,
+       "Thin metadata": 3,
+       "Primary for": 4
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "noValue": "\u2014",
+     "custom": {
+      "align": "left",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Reachable"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "yes",
+            "color": "green",
+            "index": 0
+           },
+           "0": {
+            "text": "no",
+            "color": "red",
+            "index": 1
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Pool used"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       },
+       {
+        "id": "min",
+        "value": 0
+       },
+       {
+        "id": "max",
+        "value": 100
+       },
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "color": "green",
+           "value": null
+          },
+          {
+           "color": "orange",
+           "value": 85
+          },
+          {
+           "color": "red",
+           "value": 95
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "gauge",
+         "mode": "basic"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Thin metadata"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       },
+       {
+        "id": "min",
+        "value": 0
+       },
+       {
+        "id": "max",
+        "value": 100
+       },
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "color": "green",
+           "value": null
+          },
+          {
+           "color": "orange",
+           "value": 85
+          },
+          {
+           "color": "red",
+           "value": 95
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "gauge",
+         "mode": "basic"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Primary for"
+      },
+      "properties": [
+       {
+        "id": "noValue",
+        "value": "0"
+       },
+       {
+        "id": "unit",
+        "value": "none"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "sortBy": [
+     {
+      "displayName": "Node",
+      "desc": false
+     }
+    ]
+   }
+  },
+  {
+   "id": 12,
+   "type": "row",
+   "title": "Trends",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 13,
+   "type": "timeseries",
+   "title": "Pool use",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "sds-prom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 26,
     "w": 12,
     "h": 8
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "sds_controller_pool_thin_used_percent{cluster=~\"$cluster\"}",
-     "legendFormat": "{{cluster}} {{node}} {{pool}} {{kind}}",
+     "expr": "100 * sds_controller_storage_capacity_bytes{cluster=\"$cluster\",state=\"used\"} / on (cluster, pool, node) sds_controller_storage_capacity_bytes{cluster=\"$cluster\",state=\"total\"}",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": "{{node}} {{pool}}"
     }
    ],
    "fieldConfig": {
     "defaults": {
-     "unit": "percent",
-     "max": 100,
-     "min": 0,
      "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": true,
       "thresholdsStyle": {
        "mode": "line"
       }
      },
+     "unit": "percent",
      "thresholds": {
       "mode": "absolute",
       "steps": [
@@ -589,131 +1341,333 @@
         "value": 95
        }
       ]
-     }
+     },
+     "max": 100,
+     "min": 0
     },
     "overrides": []
    },
-   "options": {}
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
   },
   {
-   "id": 15,
-   "title": "Capacity used",
-   "type": "bargauge",
+   "id": 14,
+   "type": "timeseries",
+   "title": "Alerts firing",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 12,
-    "y": 23,
+    "y": 26,
     "w": 12,
     "h": 8
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "sds_controller_storage_capacity_bytes{cluster=~\"$cluster\",state=\"used\"} / on (cluster,pool,node) sds_controller_storage_capacity_bytes{cluster=~\"$cluster\",state=\"total\"}",
-     "legendFormat": "{{cluster}} {{node}} {{pool}}",
+     "expr": "sum by (type, severity) (sds_controller_alerts_firing{cluster=\"$cluster\"})",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
+     },
+     "legendFormat": "{{severity}} {{type}}"
     }
    ],
    "fieldConfig": {
     "defaults": {
-     "unit": "percentunit",
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green",
-        "value": null
-       },
-       {
-        "color": "orange",
-        "value": 0.85
-       },
-       {
-        "color": "red",
-        "value": 0.95
-       }
-      ]
-     }
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 60,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "normal"
+      },
+      "spanNulls": true
+     },
+     "noValue": "Nothing firing"
     },
     "overrides": []
    },
    "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient"
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
    }
   },
   {
-   "id": 16,
-   "type": "row",
-   "title": "Backups and placement",
-   "collapsed": false,
-   "gridPos": {
-    "x": 0,
-    "y": 31,
-    "w": 24,
-    "h": 1
-   },
-   "panels": []
-  },
-  {
-   "id": 17,
-   "title": "Last backup age",
-   "type": "table",
+   "id": 15,
+   "type": "timeseries",
+   "title": "Out of sync",
    "datasource": {
     "type": "prometheus",
     "uid": "sds-prom"
    },
    "gridPos": {
     "x": 0,
-    "y": 32,
+    "y": 34,
     "w": 12,
-    "h": 7
+    "h": 8
    },
    "targets": [
     {
      "refId": "A",
-     "expr": "time() - sds_controller_backup_last_success_timestamp_seconds{cluster=~\"$cluster\"}",
-     "legendFormat": "",
+     "expr": "sum by (resource) (sds_drbd_out_of_sync_bytes{cluster=\"$cluster\"}) > 0",
      "datasource": {
       "type": "prometheus",
       "uid": "sds-prom"
-     }
-    },
-    {
-     "refId": "B",
-     "expr": "sds_controller_backup_last_shipped_bytes{cluster=~\"$cluster\"}",
-     "legendFormat": "",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
+     },
+     "legendFormat": "{{resource}}"
     }
    ],
    "fieldConfig": {
-    "defaults": {},
+    "defaults": {
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": true
+     },
+     "unit": "bytes",
+     "noValue": "Nothing out of sync"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 16,
+   "type": "timeseries",
+   "title": "Controller API",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "sds-prom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 34,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(rate(sds_controller_grpc_requests_total{cluster=\"$cluster\"}[5m]))",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "requests/s"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le) (rate(sds_controller_grpc_request_duration_seconds_bucket{cluster=\"$cluster\"}[5m])))",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "p95 latency"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": true
+     },
+     "unit": "reqps"
+    },
     "overrides": [
      {
       "matcher": {
        "id": "byName",
-       "options": "age"
+       "options": "p95 latency"
       },
       "properties": [
        {
         "id": "unit",
         "value": "s"
+       },
+       {
+        "id": "custom.axisPlacement",
+        "value": "right"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 17,
+   "type": "row",
+   "title": "Backups",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 42,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 18,
+   "type": "table",
+   "title": "Backups",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "sds-prom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 43,
+    "w": 24,
+    "h": 6
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "max by (resource, target) (sds_controller_backup_last_success_timestamp_seconds{cluster=\"$cluster\"}) * 1000",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    },
+    {
+     "refId": "B",
+     "expr": "max by (resource, target) (sds_controller_backup_last_shipped_bytes{cluster=\"$cluster\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "sds-prom"
+     },
+     "legendFormat": "",
+     "format": "table",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "resource",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "Time A": true,
+       "Time B": true
+      },
+      "renameByName": {
+       "resource": "Resource",
+       "target": "Target",
+       "Value #A": "Last backup",
+       "Value #B": "Shipped"
+      },
+      "indexByName": {
+       "Resource": 0,
+       "Target": 1,
+       "Last backup": 2,
+       "Shipped": 3
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "noValue": "No backups yet",
+     "custom": {
+      "align": "left",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Last backup"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "dateTimeFromNow"
        }
       ]
      },
      {
       "matcher": {
        "id": "byName",
-       "options": "shipped"
+       "options": "Shipped"
       },
       "properties": [
        {
@@ -724,222 +1678,16 @@
      }
     ]
    },
-   "options": {},
-   "transformations": [
-    {
-     "id": "merge",
-     "options": {}
-    },
-    {
-     "id": "organize",
-     "options": {
-      "excludeByName": {
-       "Time": true,
-       "__name__": true,
-       "job": true,
-       "instance": true
-      },
-      "renameByName": {
-       "Value #A": "age",
-       "Value #B": "shipped"
-      }
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "sortBy": [
+     {
+      "displayName": "Resource",
+      "desc": false
      }
-    }
-   ]
-  },
-  {
-   "id": 18,
-   "title": "Resources one machine's loss would take down",
-   "type": "table",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 32,
-    "w": 12,
-    "h": 7
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sds_controller_resource_fault_domain_risk{cluster=~\"$cluster\"} == 1",
-     "legendFormat": "",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {},
-    "overrides": []
-   },
-   "options": {},
-   "transformations": [
-    {
-     "id": "labelsToFields",
-     "options": {
-      "mode": "columns"
-     }
-    },
-    {
-     "id": "organize",
-     "options": {
-      "excludeByName": {
-       "Time": true,
-       "Value": true,
-       "__name__": true,
-       "job": true,
-       "instance": true
-      }
-     }
-    }
-   ]
-  },
-  {
-   "id": 19,
-   "type": "row",
-   "title": "Controller",
-   "collapsed": false,
-   "gridPos": {
-    "x": 0,
-    "y": 39,
-    "w": 24,
-    "h": 1
-   },
-   "panels": []
-  },
-  {
-   "id": 20,
-   "title": "API requests",
-   "type": "timeseries",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 40,
-    "w": 12,
-    "h": 8
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sum by (cluster, method) (rate(sds_controller_grpc_requests_total{cluster=~\"$cluster\"}[5m]))",
-     "legendFormat": "{{cluster}} {{method}}",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "reqps"
-    },
-    "overrides": []
-   },
-   "options": {}
-  },
-  {
-   "id": 21,
-   "title": "API latency p95",
-   "type": "timeseries",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 40,
-    "w": 12,
-    "h": 8
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "histogram_quantile(0.95, sum by (cluster, le) (rate(sds_controller_grpc_request_duration_seconds_bucket{cluster=~\"$cluster\"}[5m])))",
-     "legendFormat": "{{cluster}}",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "s"
-    },
-    "overrides": []
-   },
-   "options": {}
-  },
-  {
-   "id": 22,
-   "title": "Seconds since each source was read",
-   "type": "timeseries",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 48,
-    "w": 12,
-    "h": 7
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "time() - sds_controller_last_observation_timestamp_seconds{cluster=~\"$cluster\"}",
-     "legendFormat": "{{cluster}} {{source}}",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "s"
-    },
-    "overrides": []
-   },
-   "options": {}
-  },
-  {
-   "id": 23,
-   "title": "Alerts firing by type",
-   "type": "timeseries",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "sds-prom"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 48,
-    "w": 12,
-    "h": 7
-   },
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sum by (cluster, type, severity) (sds_controller_alerts_firing{cluster=~\"$cluster\"})",
-     "legendFormat": "{{cluster}} {{type}} {{severity}}",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "sds-prom"
-     }
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {},
-    "overrides": []
-   },
-   "options": {}
+    ]
+   }
   }
  ]
 }
