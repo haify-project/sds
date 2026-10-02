@@ -143,7 +143,7 @@ func (c *Controller) startGRPCServer() error {
 	}()
 
 	// Start HTTP REST API gateway
-	restPort := defaultRESTPort
+	restPort := c.restPort()
 	restAddr := fmt.Sprintf("%s:%d", c.config.Server.ListenAddress, restPort)
 	restLis, err := net.Listen("tcp", restAddr)
 	if err != nil {

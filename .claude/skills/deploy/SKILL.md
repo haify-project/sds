@@ -23,7 +23,7 @@ description: Guide for deploying and testing SDS in a local development and test
 | 3376 | Web UI（内嵌 SPA） |
 | 9433 | Prometheus 指标 |
 
-以上是默认值。gRPC 端口由 `[server] port`、UI 由 `[ui] port`、指标由 `[metrics] port` 决定，以节点上的 `/etc/sds/controller.toml` 为准；REST 固定 3375。
+以上是默认值。gRPC 端口由 `[server] port`、UI 由 `[ui] port`、指标由 `[metrics] port` 决定，以节点上的 `/etc/sds/controller.toml` 为准；REST 由 `[server] rest_port` 决定（默认 3375）。
 
 **API 认证（可选）**: 在 `/etc/sds/controller.toml` 中设置 `[auth] enabled = true` 和 `token`（至少 16 字符）后，gRPC 和 REST 均需要 Bearer Token。sds 按以下顺序解析 token：`--token` 参数 → `SDS_TOKEN` 环境变量 → `~/.sds/token` → `/etc/sds/token`。REST 请求需带 `Authorization: Bearer <token>` 头。
 

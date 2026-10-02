@@ -268,7 +268,7 @@ func (c *Controller) Start() error {
 		uiAddr, uiPort := c.config.UI.UIAddress(c.config.Server.ListenAddress)
 		// The UI proxies its own-origin /v1 and /ai to these, so that publishing
 		// the UI port alone is enough to use it from outside the LAN.
-		uiServer, err := NewUIServer(c.logger, uiAddr, uiPort, defaultRESTPort, defaultAIPort)
+		uiServer, err := NewUIServer(c.logger, uiAddr, uiPort, c.restPort(), defaultAIPort)
 		if err != nil {
 			return fmt.Errorf("failed to create UI server: %w", err)
 		}

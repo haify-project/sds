@@ -148,6 +148,7 @@ structs are in `pkg/config/config.go`. Excerpt:
 [server]
 listen_address = "0.0.0.0"
 port = 3374
+rest_port = 3375
 
 [database]
 path = "/var/lib/sds/sds.db"
@@ -176,7 +177,7 @@ port = 3376
 Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
 `[gateway]`, `[resource]`, `[schedule]`, `[self_ha]`, `[alert]`.
 
-**Default ports**: gRPC 3374, REST 3375 (fixed), web UI 3376, Prometheus 9433.
+**Default ports**: gRPC 3374, REST 3375 (`[server] rest_port`), web UI 3376, Prometheus 9433.
 
 ## Package Structure
 

@@ -30,7 +30,7 @@ sds / web UI / sds-mcp / sds-ai
   SSH through the `dispatch` library; there is no per-node SDS agent. Commands
   aimed at the controller's own address run locally without SSH.
 - **Listeners:** gRPC on `[server] port` (default `3374`); the REST gateway on
-  `3375` (fixed, bound to `[server] listen_address`); the web UI on `[ui] port`
+  `[server] rest_port` (default `3375`, bound to `[server] listen_address`); the web UI on `[ui] port`
   (default `3376`); Prometheus metrics on `[metrics] port` (default `9433`). The
   UI proxies `/v1/` to the REST gateway and `/ai/` to the AI Copilot on
   `127.0.0.1:7634`, so a browser needs only the UI port.

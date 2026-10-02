@@ -33,8 +33,9 @@ The API and <code>sds</code> are unaffected.</p>
 </body></html>
 `
 
-// defaultRESTPort is where the grpc-gateway REST API listens, and
-// defaultAIPort where the optional AI Copilot (cmd/sds-ai) does. The UI proxies
+// defaultRESTPort is where the grpc-gateway REST API listens when
+// [server] rest_port is unset, and defaultAIPort where the optional AI Copilot
+// (cmd/sds-ai) does. The UI proxies
 // to both on loopback so a single published port serves the whole app.
 // defaultGRPCPort is the fallback when the config leaves Server.Port unset.
 const defaultGRPCPort = 3374
@@ -303,4 +304,12 @@ func (s *UIServer) Start() error {
 func (s *UIServer) Shutdown(ctx context.Context) error {
 	s.logger.Info("Stopping UI server")
 	return s.server.Shutdown(ctx)
+}
+
+// restPort is the configured REST port, or the default when none is set.
+func (c *Controller) restPort() int {
+	if c.config != nil && c.config.Server.RESTPort > 0 {
+		return c.config.Server.RESTPort
+	}
+	return defaultRESTPort
 }

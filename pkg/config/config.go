@@ -232,6 +232,9 @@ type AuthConfig struct {
 type ServerConfig struct {
 	ListenAddress string `mapstructure:"listen_address"`
 	Port          int    `mapstructure:"port"`
+	// RESTPort is where the grpc-gateway REST API listens, on ListenAddress.
+	// The web UI proxies /v1/ to it on loopback.
+	RESTPort int `mapstructure:"rest_port"`
 }
 
 // DatabaseConfig represents database configuration
@@ -425,6 +428,15 @@ func (c *Config) Validate() error {
 	if c.Server.Port == 0 {
 		c.Server.Port = 3374
 	}
+	if c.Server.RESTPort == 0 {
+		c.Server.RESTPort = 3375
+	}
+	if c.Server.RESTPort < 1 || c.Server.RESTPort > 65535 {
+		return fmt.Errorf("server.rest_port %d is not a TCP port", c.Server.RESTPort)
+	}
+	if c.Server.RESTPort == c.Server.Port {
+		return fmt.Errorf("server.rest_port and server.port are both %d; the REST gateway needs a port of its own", c.Server.Port)
+	}
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
 	}
@@ -476,6 +488,7 @@ func (c *Config) Validate() error {
 func setDefaults() {
 	viper.SetDefault("server.listen_address", "0.0.0.0")
 	viper.SetDefault("server.port", 3374)
+	viper.SetDefault("server.rest_port", 3375)
 	viper.SetDefault("database.path", "/var/lib/sds/sds.db")
 	viper.SetDefault("auth.enabled", false)
 	viper.SetDefault("tls.enabled", false)

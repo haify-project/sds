@@ -1156,7 +1156,7 @@ Receivers can also be set in `controller.toml`: `webhook_url` (with
 `min_severity` and `headers` under `[alert]`. They post the generic event JSON,
 need a restart to change, and work alongside channels.
 
-The same events are also readable on the REST API (port 3375) at
+The same events are also readable on the REST API (`[server] rest_port`, default 3375) at
 `GET /v1/events`, streamable as newline-delimited JSON at `/v1/events/watch`,
 and pushed to the web UI's bell over `/v1/events/stream`.
 
@@ -1242,7 +1242,7 @@ Tokens come from `--token`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`.
 
 **TLS.** `[tls] enabled = true` with `cert_file` and `key_file` puts the gRPC
 API (port 3374) on TLS; adding `client_ca_file` requires a client certificate
-signed by that CA. The REST API on port 3375 (used by the web UI) stays plain
+signed by that CA. The REST API on `[server] rest_port` (default 3375, used by the web UI) stays plain
 HTTP. Clients:
 
 ```bash
@@ -1493,7 +1493,7 @@ sds rbac whoami                # "permission denied" that should not be
 journalctl -u sds-controller -f    # on the controller node
 ```
 
-On the REST API (port 3375, with the same token): `GET /v1/logs` returns the
+On the REST API (`[server] rest_port`, default 3375, with the same token): `GET /v1/logs` returns the
 controller's recent log lines from memory, `GET /v1/audit` who changed what,
 and `POST /v1/diagnostics/collect` runs a fixed set of named, read-only
 collectors on the nodes (`{"nodes": [...], "collectors": [...]}`, both

@@ -3,6 +3,8 @@
 [server]
 listen_address = "0.0.0.0"
 port = 3374
+# REST gateway (grpc-gateway); the web UI proxies /v1/ to it on loopback.
+rest_port = 3375
 
 [database]
 # Database file path (default: /var/lib/sds/sds.db)
