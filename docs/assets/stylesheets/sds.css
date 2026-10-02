@@ -83,14 +83,25 @@
 .sds-home { color: var(--sds-ink); }
 .sds-wrap { max-width: 61rem; margin: 0 auto; padding: 0 1.2rem; }
 
-.sds-hero { padding: 3.6rem 0 3rem; border-bottom: 1px solid var(--sds-line); }
+/* The hero is always a dark stage, in both colour schemes: it redefines the
+   page tokens locally, so the buttons and the scene's drawing classes pick up
+   the dark values without rules of their own. */
+.sds-hero {
+  --sds-bg: #0c1412; --sds-surface: #121e1b; --sds-ink: #e6eeeb; --sds-muted: #8fa29b;
+  --sds-line: #24332f; --sds-ok: #3fd0bc; --sds-ok-soft: #10332e; --sds-turn: #e7a74e;
+  color: var(--sds-ink);
+  background:
+    radial-gradient(ellipse 60% 70% at 75% 45%, rgba(63, 208, 188, 0.13), transparent 70%),
+    #0c1412;
+  padding: 3.4rem 0 3.2rem;
+}
 .sds-hero .sds-wrap {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   gap: 2.8rem; align-items: center;
 }
 .sds-hero h1 {
-  font-size: 2.05rem; line-height: 1.12; font-weight: 600; letter-spacing: -0.025em;
-  margin: 0 0 1rem; max-width: 15em;
+  font-size: 2.2rem; line-height: 1.1; font-weight: 600; letter-spacing: -0.025em;
+  margin: 0 0 1rem; color: var(--sds-ink);
 }
 .sds-lede { font-size: 0.92rem; line-height: 1.6; color: var(--sds-muted); max-width: 32em; margin: 0 0 1.6rem; }
 .sds-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
@@ -105,35 +116,25 @@
 .sds-btn--plain:hover { border-color: var(--sds-ok); color: var(--sds-ok); }
 .sds-btn:focus-visible, .sds-home a:focus-visible { outline: 2px solid var(--sds-ok); outline-offset: 2px; }
 
-/* The replication panel: the one moving thing on the page. */
-.sds-cluster {
-  margin: 0; background: var(--sds-surface); border: 1px solid var(--sds-line); border-radius: 0.5rem;
-  padding: 1.1rem 1.1rem 0.9rem;
+.sds-stage { margin: 0; }
+.sds-hero-scene {
+  margin: 0; background-color: rgba(18, 30, 27, 0.6);
+  background-image: radial-gradient(var(--sds-line) 1px, transparent 1px);
+  background-size: 16px 16px; border-color: var(--sds-line);
 }
-.sds-cluster__head { display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 0.72rem; color: var(--sds-muted); margin-bottom: 0.8rem; }
-.sds-cluster__head strong { color: var(--sds-ink); font-weight: 600; }
-.sds-node {
-  display: grid; grid-template-columns: 4.2rem 6.1rem 1fr; gap: 0.7rem; align-items: center;
-  padding: 0.6rem 0; border-top: 1px solid var(--sds-line);
-  transition: opacity .4s ease;
+.sds-hero-scene .wire--on, .sds-hero-scene .ring, .sds-hero-scene .pkt { filter: drop-shadow(0 0 3px var(--sds-ok)); }
+.sds-hero-scene .ring { fill: none; stroke: var(--sds-ok); stroke-width: 2; }
+.sds-hero-state { font-size: 11px; }
+.sds-ill text.sds-hero-state { fill: var(--sds-muted); }
+.sds-ill text.is-serving { fill: var(--sds-ok); font-weight: 600; }
+.sds-ill text.is-taking-over, .sds-ill text.is-catching-up { fill: var(--sds-turn); font-weight: 600; }
+.sds-stage figcaption {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+  margin-top: 0.7rem; font-size: 0.76rem; color: var(--sds-muted); min-height: 2.6em;
 }
-.sds-node__name { font-family: var(--md-code-font-family); font-size: 0.72rem; font-weight: 600; }
-.sds-node__state { font-size: 0.72rem; font-weight: 600; color: var(--sds-muted); }
-.sds-node[data-state="serving"] .sds-node__state { color: var(--sds-ok); }
-.sds-node[data-state="turning"] .sds-node__state { color: var(--sds-turn); }
-.sds-node[data-state="gone"] { opacity: 0.45; }
-.sds-blocks { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
-.sds-blocks i {
-  display: block; height: 0.9rem; border-radius: 2px;
-  background: var(--sds-line); transition: background-color .25s ease;
-}
-.sds-blocks i.w { background: var(--sds-ok); }
-.sds-node[data-state="gone"] .sds-blocks i.w { background: var(--sds-gone); }
-.sds-caption { font-size: 0.74rem; color: var(--sds-muted); margin: 0.7rem 0 0; padding-top: 0.7rem; border-top: 1px solid var(--sds-line); min-height: 3.2em; }
 .sds-replay {
-  background: none; border: 0; padding: 0; color: var(--sds-ok); cursor: pointer;
-  font: inherit; font-size: 0.7rem; text-decoration: underline;
+  flex: none; background: none; border: 0; padding: 0; color: var(--sds-ok); cursor: pointer;
+  font: inherit; font-size: 0.72rem; text-decoration: underline;
 }
 
 .sds-section { padding: 3rem 0; border-bottom: 1px solid var(--sds-line); }
@@ -203,16 +204,15 @@ body:has(.sds-home) .md-main__inner { display: none; }
   .sds-hero h1 { font-size: 1.6rem; }
   .sds-section { padding: 2.2rem 0; }
   .sds-actions .sds-btn { flex: 1 1 100%; text-align: center; padding: 0.75rem 1rem; }
-
-  .sds-cluster { padding: 0.9rem 0.8rem 0.8rem; }
-  .sds-node {
-    grid-template-columns: 4rem minmax(0, 1fr); grid-template-areas: "name state" "blocks blocks";
-    gap: 0.35rem 0.6rem;
-  }
-  .sds-node__name { grid-area: name; }
-  .sds-node__state { grid-area: state; }
-  .sds-blocks { grid-area: blocks; }
-  .sds-blocks i { height: 0.7rem; }
+  .sds-stage figcaption { font-size: 0.72rem; }
+  /* The scene shrinks to about 0.65 on a phone: give it the full width and
+     larger type so the labels stay readable. */
+  .sds-stage { margin: 0 -1.2rem; }
+  .sds-stage figcaption { padding: 0 1.2rem; }
+  .sds-hero-scene { border-radius: 0; border-left: 0; border-right: 0; }
+  .sds-hero-scene text.lbl { font-size: 16px; }
+  .sds-hero-scene text.app-lbl { font-size: 13px; }
+  .sds-hero-scene text.sds-hero-state { font-size: 15px; }
 
   .sds-scope { grid-template-columns: minmax(0, 1fr); }
   .sds-scope dd { border-top: 0; padding-top: 0; }
@@ -222,7 +222,4 @@ body:has(.sds-home) .md-main__inner { display: none; }
   .sds-steps code span { white-space: nowrap; }
 
   .sds-cases, .sds-links { grid-template-columns: minmax(0, 1fr); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sds-node, .sds-blocks i { transition: none; }
 }

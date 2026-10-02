@@ -1,0 +1,100 @@
+{#- The hero scene. One 12 s loop: apps write through one address to server 1
+    while every write is copied to the other two; server 1 fails at 4.5 s,
+    server 2 takes over by 6 s, server 1 returns at 10 s and catches up, and
+    the scene dips and starts over at 11.8 s. hero.js keeps the captions and
+    the state labels in step with these times. -#}
+{%- import "partials/ill.html" as ill -%}
+
+{%- set A_ON = ("1;1;0;0;1;1", "0;0.37;0.4;0.97;0.98;1") -%}
+{%- set B_ON = ("0;0;1;1;0;0", "0;0.44;0.5;0.97;0.98;1") -%}
+{%- set DOWN = ("0;0;1;1;0;0", "0;0.37;0.4;0.833;0.86;1") -%}
+{%- set S1_UP = ("1;1;0;0;1;1", "0;0.37;0.4;0.833;0.86;1") -%}
+
+{%- macro anim(attr, values, times) -%}
+<animate attributeName="{{ attr }}" values="{{ values }}" keyTimes="{{ times }}" dur="12s" repeatCount="indefinite"/>
+{%- endmacro -%}
+
+{#- A consumer at the top: an icon and a word. -#}
+{%- macro app(x, label, icon) -%}
+<g transform="translate({{ x }} 16)">
+  <rect class="box" width="112" height="46" rx="10"/>
+  <path class="icon" d="{{ icon }}"/>
+  <text class="lbl app-lbl" x="42" y="28">{{ label }}</text>
+</g>
+{%- endmacro -%}
+
+{#- A server with a fill bar for how much of the data it holds. -#}
+{%- macro server(n, x, fill) -%}
+<g transform="translate({{ x }} 250)">
+  <rect class="box" width="88" height="100" rx="9"/>
+  <rect class="bay" x="12" y="14" width="64" height="8" rx="2"/>
+  <rect class="bay" x="12" y="28" width="64" height="8" rx="2"/>
+  <rect class="bay" x="12" y="42" width="64" height="8" rx="2"/>
+  <rect class="bay" x="12" y="66" width="64" height="8" rx="4"/>
+  <rect class="led" x="12" y="66" width="10" height="8" rx="4">{{ anim("width", *fill) }}</rect>
+  <circle class="led" cx="74" cy="88" r="3.5"/>
+  <text class="lbl" x="44" y="122" text-anchor="middle">server {{ n }}</text>
+  <text class="sds-hero-state" data-node="{{ n }}" x="44" y="139" text-anchor="middle">in sync</text>
+</g>
+{%- endmacro -%}
+
+{%- macro ring(x, values, times) -%}
+<rect class="ring" x="{{ x - 7 }}" y="243" width="102" height="114" rx="14" opacity="0">
+  {{ anim("opacity", values, times) }}
+</rect>
+{%- endmacro -%}
+
+{%- macro pair(path, back, values="", times="") -%}
+<path class="wire wire--idle" d="{{ path }}"/>
+<g>
+  <path class="wire wire--on" d="{{ path }}"/>
+  {{ ill.packet(path, "1.4s", "0s") }}{{ ill.packet(back, "1.4s", "0.7s") }}
+  {%- if values %}{{ anim("opacity", values, times) }}{% endif %}
+</g>
+{%- endmacro -%}
+
+{%- macro feed(path, values, times) -%}
+<path class="wire wire--idle" d="{{ path }}"/>
+<g>
+  <path class="wire wire--on" d="{{ path }}"/>
+  {{ ill.packet(path, "1.2s", "0s", 3.5) }}{{ ill.packet(path, "1.2s", "0.6s", 3.5) }}
+  {{ anim("opacity", values, times) }}
+</g>
+{%- endmacro -%}
+
+{%- macro scene() -%}
+<svg class="sds-ill sds-hero-scene" id="sds-hero-scene" viewBox="0 0 560 400" role="img" data-still="7"
+     aria-label="Files, virtual machines, containers and databases reach their storage through one address. Server 1 fails, server 2 takes over without losing data, and server 1 catches up when it returns.">
+  <g>
+    {{ app(12, "files", "M14 15 h8 l3 3 h11 v14 h-22 z") }}
+    {{ app(148, "VMs", "M12 13 h24 v15 h-24 z M19 33 h10") }}
+    {{ app(284, "containers", "M24 11 l10 6 v12 l-10 6 l-10 -6 v-12 z") }}
+    {{ app(420, "databases", "M14 16 a10 3.5 0 0 0 20 0 a10 3.5 0 0 0 -20 0 v14 a10 3.5 0 0 0 20 0 v-14") }}
+
+    {%- for cx in [68, 204, 340, 476] %}
+    {{ ill.link("M" ~ cx ~ " 62 C " ~ cx ~ " 100, 280 92, 280 122", dots=2) }}
+    {%- endfor %}
+
+    <rect class="box box--app" x="214" y="122" width="132" height="36" rx="18"/>
+    <text class="lbl" x="280" y="145" text-anchor="middle">one address</text>
+
+    {{ feed("M280 158 C 280 206, 120 196, 120 243", *A_ON) }}
+    {{ feed("M280 158 L280 243", *B_ON) }}
+    {{ ring(76, *A_ON) }}{{ ring(236, *B_ON) }}
+
+    {{ pair("M164 300 L236 300", "M236 300 L164 300", *S1_UP) }}
+    {{ pair("M324 300 L396 300", "M396 300 L324 300") }}
+
+    {{ server(1, 76, ("10;30.7;30.7;59.6;64;10", "0;0.375;0.833;0.9;0.98;1")) }}
+    {{ server(2, 236, ("10;64;10", "0;0.98;1")) }}
+    {{ server(3, 396, ("10;64;10", "0;0.98;1")) }}
+
+    <g opacity="0">
+      <rect class="veil" x="73" y="247" width="94" height="106" rx="11"/>
+      <path class="cross" d="M104 282 l32 32 m0 -32 l-32 32"/>
+      {{ anim("opacity", *DOWN) }}
+    </g>
+    {{ anim("opacity", "1;1;0.12;1", "0;0.95;0.985;1") }}
+  </g>
+</svg>
+{%- endmacro -%}

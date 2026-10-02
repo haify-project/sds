@@ -3,6 +3,7 @@
 {% block tabs %}
 {{ super() }}
 {% import "partials/cases.html" as cases %}
+{% import "partials/hero.html" as hero %}
 <div class="sds-home">
 
   <section class="sds-hero">
@@ -20,27 +21,12 @@
         </div>
       </div>
 
-      <figure class="sds-cluster" aria-labelledby="sds-cluster-caption">
-        <div class="sds-cluster__head">
-          <span>Volume <strong>data</strong> on three servers</span>
+      <figure class="sds-stage">
+        {{ hero.scene() }}
+        <figcaption>
+          <span id="sds-hero-caption" aria-live="polite"></span>
           <button type="button" class="sds-replay" id="sds-replay">Replay</button>
-        </div>
-        <div class="sds-node" data-node="node1">
-          <span class="sds-node__name">node1</span>
-          <span class="sds-node__state">Serving</span>
-          <span class="sds-blocks" aria-hidden="true"></span>
-        </div>
-        <div class="sds-node" data-node="node2">
-          <span class="sds-node__name">node2</span>
-          <span class="sds-node__state">In sync</span>
-          <span class="sds-blocks" aria-hidden="true"></span>
-        </div>
-        <div class="sds-node" data-node="node3">
-          <span class="sds-node__name">node3</span>
-          <span class="sds-node__state">In sync</span>
-          <span class="sds-blocks" aria-hidden="true"></span>
-        </div>
-        <figcaption class="sds-caption" id="sds-cluster-caption" aria-live="polite"></figcaption>
+        </figcaption>
       </figure>
     </div>
   </section>
@@ -146,6 +132,6 @@ sds node register <span>--name node2</span> <span>--address 192.0.2.12</span></c
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ 'assets/javascripts/replication.js' | url }}"></script>
+<script src="{{ 'assets/javascripts/hero.js' | url }}"></script>
 <script src="{{ 'assets/javascripts/cases.js' | url }}"></script>
 {% endblock %}
