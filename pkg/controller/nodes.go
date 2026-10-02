@@ -256,7 +256,8 @@ func (nm *NodeManager) SetNodeLabels(ctx context.Context, nodeRef string, labels
 	return &snapshot, nil
 }
 
-// UnregisterNode unregisters a node
+// UnregisterNode unregisters a node. It refuses while any resource or gateway
+// still places something on the node (see checkNodeUnreferenced).
 func (nm *NodeManager) UnregisterNode(ctx context.Context, address string) error {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
@@ -265,6 +266,9 @@ func (nm *NodeManager) UnregisterNode(ctx context.Context, address string) error
 	node := nm.nodes[resolved]
 	if node == nil {
 		return fmt.Errorf("node not found: %s", address)
+	}
+	if err := nm.checkNodeUnreferenced(ctx, node, resolved); err != nil {
+		return err
 	}
 
 	nm.controller.logger.Info("Unregistering node",

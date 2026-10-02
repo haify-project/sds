@@ -126,8 +126,9 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		for _, volume := range volumes {
 			if err := rm.deleteBackingVolume(ctx, hosts, volume); err != nil {
 				if !force {
-					return fmt.Errorf("failed to remove backing volume %s/%s (rerun with force to skip): %w",
-						volume.Pool, volume.VolumeName, err)
+					return fmt.Errorf("failed to remove backing volume %s/%s: %w; the resource's records are kept, "+
+						"so free the volume on that node (lvremove or zfs destroy) and rerun `sds resource delete %s`",
+						volume.Pool, volume.VolumeName, err, name)
 				}
 				rm.controller.logger.Warn("Failed to remove backing volume (force: continuing)",
 					zap.String("resource", name),
