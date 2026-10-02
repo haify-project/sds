@@ -1,0 +1,13 @@
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "wrappingWidth": 400}, "themeVariables": {"primaryColor": "#ffffff", "primaryBorderColor": "#17211e", "primaryTextColor": "#17211e", "lineColor": "#56635e", "edgeLabelBackground": "#eef3f1"}}}%%
+%% Source of architecture-en.png. Regenerate with:
+%%   npx -p @mermaid-js/mermaid-cli mmdc -i architecture-en.mmd -o architecture-en.png -b white -s 2
+flowchart LR
+    clients["sds · Web UI<br>MCP · CSI · Proxmox"] -- gRPC / REST --> ctl["sds-controller<br>BoltDB · alerts · scheduler<br>Self-HA floating VIP"]
+    ctl -- SSH --> n2["Node 2<br>LVM/ZFS + DRBD 9"]
+    ctl -- SSH --> n3["Node 3<br>quorum tiebreaker"]
+    ctl -- "SSH, no agent on nodes" --> n1["Node 1<br>LVM/ZFS + DRBD 9"]
+    n1 <-- sync replication --> n2
+    n2 -. async TCP tunnel .-> dr["Off-site DR node"]
+    n1 -- drbd-reactor failover --> gw["iSCSI · NFS · NVMe-oF<br>floating IP"]
+    gw --> app["Clients"]
+    n1 -- snapshot + rclone --> bk["S3 / SMB / WebDAV"]

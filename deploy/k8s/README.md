@@ -13,7 +13,7 @@ namespace `sds-ai`).
 | `30-node.yaml` | DaemonSet `sds-csi-node`: node-driver-registrar, plugin (`csi-node`, privileged) |
 | `40-storageclass.yaml` | StorageClass `sds-drbd` |
 | `50-volumesnapshotclass.yaml` | VolumeSnapshotClass `sds-drbd-snapshot` (needs the snapshot CRDs, see below) |
-| `60-sds-ai-apps-rbac.yaml` | ServiceAccount + token Secret for the SDS Copilot's `app.create` action |
+| `60-sds-ai-apps-rbac.yaml` | ServiceAccount + token Secret for the SDS Copilot's `sds_k8s_app_create` tool |
 
 ## Prerequisites
 
@@ -21,7 +21,10 @@ namespace `sds-ai`).
   DRBD 9 kernel module and `drbd-utils`, and LVM or ZFS. **The Kubernetes node
   name must equal the SDS node name**: the node plugin reports
   `spec.nodeName` as its topology, and the controller plugin matches it against
-  `sds node list`.
+  `sds node list`. At startup the node plugin registers its node with the
+  controller under that name and `status.hostIP` (`--node-name`/`--node-ip`,
+  from `NODE_NAME`/`NODE_IP`); registration is idempotent, and the controller
+  still needs SSH to that address.
 - The SDS pool named in the StorageClass exists on at least `replicas` of
   those nodes (`sds pool create --name vg0 ...`).
 
@@ -45,7 +48,7 @@ behind a floating VIP. `00-sds-controller-endpoint.yaml` ships a selectorless
 `Endpoints` carrying the VIP, so the in-cluster name `sds-controller:3374`
 reaches the external controller.
 
-**You must set the VIP.** Replace the `192.168.123.250` placeholder (marked
+**You must set the VIP.** Replace the `192.0.2.10` placeholder (marked
 `# CHANGE ME`) with your real VIP, shown as `VIP:` in:
 
     sds ha self status
@@ -212,7 +215,7 @@ Only controller-managed pods (Deployment, StatefulSet) are recreated. A bare
 ## SDS Copilot access (optional)
 
 `60-sds-ai-apps-rbac.yaml` lets `sds-ai` create databases on SDS volumes
-(the `sds_app_create` tool). It may create namespaces, Secrets, PVCs, Services
+(the `sds_k8s_app_create` tool). It may create namespaces, Secrets, PVCs, Services
 and Deployments and read Pods, PVs and StorageClasses; it cannot update or
 delete anything. sds-ai runs outside the cluster and reads its kubeconfig from
 `SDS_AI_KUBECONFIG`. Build one from the token Secret:
@@ -227,10 +230,10 @@ KUBECONFIG=sds-ai.kubeconfig kubectl config set-context --current --user=sds-ai
 Without `storageClass` in the request, it picks an SDS StorageClass that does
 not set `allowRemoteVolumeAccess: "true"`, falling back to one that does.
 
-## Image pulls behind the GFW
+## When registry.k8s.io is unreachable
 
-`registry.k8s.io` redirects to regional Google Artifact Registry hosts that are
-unreachable from mainland networks. Point k3s at a mirror in
+`registry.k8s.io` redirects to regional Google Artifact Registry hosts, which
+some networks (mainland China among them) cannot reach. Point k3s at a mirror in
 `/etc/rancher/k3s/registries.yaml` on every node and restart k3s:
 
 ```yaml

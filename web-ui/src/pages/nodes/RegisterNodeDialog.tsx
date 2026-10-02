@@ -59,7 +59,7 @@ export function RegisterNodeDialog({ open, onOpenChange }: RegisterNodeDialogPro
                 id="node-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., orange1"
+                placeholder="e.g., node1"
                 required
               />
             </div>

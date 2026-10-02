@@ -6,7 +6,9 @@ rule_files:
 scrape_configs:
   - job_name: sds
     static_configs:
-      - targets: ["openclaw-vip:3381"]
+      # One target per cluster: the controller VIP (or address) and its
+      # [metrics] port. Keep a cluster label on every target.
+      - targets: ["controller-a.example.com:9433"]
         labels: {cluster: cluster-a}
-      - targets: ["orange-vip:3381"]
+      - targets: ["controller-b.example.com:9433"]
         labels: {cluster: cluster-b}

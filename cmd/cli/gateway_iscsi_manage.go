@@ -248,11 +248,10 @@ func iscsiCHAPCommand() *cobra.Command {
 
 func iscsiCHAPSet() *cobra.Command {
 	var resource, username, password string
-	var mutual bool
 
 	cmd := &cobra.Command{
 		Use:   "set --resource <name> --username <user> --password <pass>",
-		Short: "Set CHAP credentials on an iSCSI gateway",
+		Short: "Set one-way CHAP credentials on an iSCSI gateway (mutual CHAP is not supported)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sdsClient, err := newSDSClient()
 			if err != nil {
@@ -260,7 +259,7 @@ func iscsiCHAPSet() *cobra.Command {
 			}
 			defer closeClient(sdsClient)
 
-			err = sdsClient.SetISCSIChap(cmd.Context(), resource, username, password, mutual)
+			err = sdsClient.SetISCSIChap(cmd.Context(), resource, username, password, false)
 			if err != nil {
 				return fmt.Errorf("failed to set CHAP: %w", err)
 			}
@@ -273,7 +272,6 @@ func iscsiCHAPSet() *cobra.Command {
 	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
 	cmd.Flags().StringVar(&username, "username", "", "CHAP username")
 	cmd.Flags().StringVar(&password, "password", "", "CHAP password")
-	cmd.Flags().BoolVar(&mutual, "mutual", false, "Enable mutual CHAP")
 	_ = cmd.MarkFlagRequired("resource")
 	_ = cmd.MarkFlagRequired("username")
 	_ = cmd.MarkFlagRequired("password")
@@ -302,7 +300,6 @@ func iscsiCHAPGet() *cobra.Command {
 			fmt.Printf("Resource: %s\n", resource)
 			fmt.Printf("Username: %s\n", resp.Username)
 			fmt.Printf("Password: %s\n", resp.Password)
-			fmt.Printf("Mutual:   %t\n", resp.Mutual)
 			return nil
 		},
 	}

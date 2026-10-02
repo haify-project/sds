@@ -9,7 +9,7 @@ import (
 // LegStatus is one primary-site node's WAN leg: the dialer on that node and the
 // matching acceptor on the DR.
 type LegStatus struct {
-	// LegID is the systemd instance name, e.g. "openclaw_192-168-123-227".
+	// LegID is the systemd instance name, e.g. "data_192-0-2-10".
 	LegID string
 	// PrimaryHost is the primary-site node this leg belongs to.
 	PrimaryHost   string

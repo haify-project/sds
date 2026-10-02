@@ -438,7 +438,7 @@ Note that the rebuilt volume ends up fully allocated — DRBD's resync writes
 every block, zeroes included — so the pool is sized for the whole origin plus
 headroom, not for the live data.
 
-  sds pool convert-thin --node node-e --pool sds_sdspool`,
+  sds pool convert-thin --node node2 --pool sds_pool0`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if node == "" || pool == "" {
 				return fmt.Errorf("--node and --pool are both required")

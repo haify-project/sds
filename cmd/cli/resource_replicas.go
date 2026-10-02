@@ -75,7 +75,7 @@ that also has an off-site DR the new node additionally gets its own WAN leg,
 because DRBD 9 is a full mesh — a replica the DR cannot reach would silently end
 replication the moment it was promoted.
 
-  sds resource add-replica openclaw --node node-e`,
+  sds resource add-replica data --node node4`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
@@ -131,8 +131,8 @@ The DR node joins over one mTLS sds-proxy leg per replica, using protocol A and
 pull-ahead, so a slow or flapping WAN link cannot stall writes at the primary
 site. It does not vote: quorum stays a matter for the primary site alone.
 
-  sds resource add-dr openclaw --dr-node node-c --dr-endpoint 203.0.113.7
-  sds resource add-dr data --dr-node dr1 --dr-endpoint dr.example.com --wan-port 6612`,
+  sds resource add-dr data --dr-node dr1 --dr-endpoint 203.0.113.7
+  sds resource add-dr web --dr-node dr1 --dr-endpoint dr.example.com --wan-port 6612`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]

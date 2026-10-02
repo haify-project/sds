@@ -2,7 +2,7 @@ module github.com/haify-project/sds/cmd/sds-ai
 
 go 1.26.0
 
-require github.com/liliang-cn/steward v0.51.0
+require github.com/liliang-cn/steward v0.51.1
 
 require (
 	github.com/0x51-dev/rdf v0.1.0 // indirect
@@ -76,7 +76,7 @@ require (
 	github.com/liliang-cn/alchemy v0.7.7 // indirect
 	github.com/liliang-cn/cortexdb/v2 v2.113.0 // indirect
 	github.com/liliang-cn/mcp-swagger-server v1.3.0 // indirect
-	github.com/liliang-cn/pipeit v0.1.0 // indirect
+	github.com/liliang-cn/pipeit v0.1.1 // indirect
 	github.com/liliang-cn/skills-go v1.9.0 // indirect
 	github.com/mark3labs/mcp-go v1.0.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

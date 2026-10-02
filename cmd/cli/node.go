@@ -233,7 +233,7 @@ func nodeRegister() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., orange1)")
+	cmd.Flags().StringVar(&name, "name", "", "Node name (e.g., node1)")
 	cmd.Flags().StringVar(&address, "address", "", "Node management IP address, used for SSH (e.g., 192.168.1.10)")
 	cmd.Flags().StringVar(&replicationAddress, "replication-address", "",
 		"IP address DRBD should use for this node; empty = same as --address")
@@ -306,7 +306,7 @@ func nodeDrain() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			node := args[0]
-			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -382,7 +382,7 @@ func nodeSetAddress() *cobra.Command {
 			"the nodes and the DRBD config of every resource they take part in are rewritten;\n" +
 			"each resource reconnects on the new addresses.\n\n" +
 			"When several nodes changed address — every node got a new DHCP lease — give\n" +
-			"them all in one command (sdt1=10.0.0.5 sdt2=10.0.0.6 ...): one at a time cannot\n" +
+			"them all in one command (node1=10.0.0.5 node2=10.0.0.6 ...): one at a time cannot\n" +
 			"work then, since each node's resources would be rewritten through peers still\n" +
 			"known only by their old addresses.",
 		Args: cobra.MinimumNArgs(1),

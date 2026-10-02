@@ -120,13 +120,11 @@ type iscsiChapIn struct {
 	Resource string `json:"resource" jsonschema:"iSCSI gateway resource name"`
 	Username string `json:"username,omitempty" jsonschema:"CHAP username (required for set)"`
 	Password string `json:"password,omitempty" jsonschema:"CHAP password (required for set)"`
-	Mutual   bool   `json:"mutual,omitempty" jsonschema:"enable mutual CHAP (set only)"`
 }
 
 type iscsiChapOut struct {
 	Detail   string `json:"detail,omitempty"`
 	Username string `json:"username,omitempty"`
-	Mutual   bool   `json:"mutual,omitempty"`
 }
 
 type nvmeNamespacesIn struct {

@@ -42,14 +42,14 @@ sds: sds0
 #        shared 1
 
 # --- With sds auth/RBAC enabled --------------------------------------------
-# storage.cfg is world-readable inside the cluster filesystem, so scope the
+# storage.cfg is replicated to every node of the PVE cluster, so scope the
 # token to what the plugin needs rather than reusing an admin token.
 #
 #sds: sds0
 #        controller 192.168.1.10
 #        sdspool vg0
 #        replicas 2
-#        apitoken eyJhbGciOi...
+#        apitoken <token>
 #        content images
 #        shared 1
 

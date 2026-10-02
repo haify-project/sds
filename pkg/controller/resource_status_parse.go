@@ -77,7 +77,7 @@ func parseRoleFromStatus(output string) string {
 //
 //	ha_res role:Primary
 //	  disk:UpToDate open:no
-//	orange2 role:Secondary
+//	node2 role:Secondary
 //	  peer-disk:UpToDate
 func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string]*ResourceNodeState {
 	nodeStates := make(map[string]*ResourceNodeState)
@@ -124,14 +124,14 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 		}
 	}
 
-	// Parse peer nodeAddresses: "  orange2 role:Secondary"
+	// Parse peer nodeAddresses: "  node2 role:Secondary"
 	currentNode := ""
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		parts := strings.Fields(trimmed)
 
 		// Check if this line starts with a node name followed by "role:"
-		// This matches "orange2 role:Secondary" pattern
+		// This matches "node2 role:Secondary" pattern
 		if len(parts) >= 2 {
 			role := ""
 			for _, part := range parts[1:] {

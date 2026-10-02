@@ -240,9 +240,11 @@ GOOS=linux GOARCH=<arch> CGO_ENABLED=0 go build -o sds-mcp ./cmd/mcp   # from th
   `SDS_AI_ADDR` at its default `127.0.0.1:7634`: the controller's UI proxies
   `/ai/` to that address on its own node, and on a non-loopback address sds-ai
   refuses to start without a token.
-- Unit `/etc/systemd/system/sds-ai.service` (`EnvironmentFile`,
-  `WorkingDirectory`, `HOME` = `/var/lib/sds/ai`; `ExecStart=/opt/sds/bin/sds-ai`)
-  on every node, **disabled**: only the promoter starts it.
+- Unit `/etc/systemd/system/sds-ai.service`, written by hand (the repository
+  ships none): `EnvironmentFile=/var/lib/sds/ai/sds-ai.env`,
+  `WorkingDirectory` and `HOME` = `/var/lib/sds/ai`,
+  `ExecStart=/opt/sds/bin/sds-ai`; on every node, **disabled**: only the
+  promoter starts it.
 - To make it follow the controller, set `[self_ha] extra_services =
   ["sds-ai.service"]` before `ha self enable`. On a cluster where Self-HA is
   already enabled, add `"sds-ai.service"` after `"sds-controller.service"` in
@@ -251,8 +253,8 @@ GOOS=linux GOARCH=<arch> CGO_ENABLED=0 go build -o sds-mcp ./cmd/mcp   # from th
 - **Restarting it is a failover.** drbd-reactor makes every service in the
   promoter `PartOf` the `sds-meta` target, so `systemctl restart sds-ai` on the
   active node stops the whole target — VIP and controller included — and the
-  resource is promoted again wherever the race is won (about 4 s without a
-  controller). `systemctl stop sds-ai` tears the target down the same way.
+  resource is promoted again wherever the race is won (a few seconds without
+  a controller). `systemctl stop sds-ai` tears the target down the same way.
   Install a new binary on every node first (keep the old one as
   `/opt/sds/bin/sds-ai.prev`), then move deliberately with
   `sds ha evict sds-meta`.
@@ -342,22 +344,22 @@ The `sds-csi` image must match the node architecture. `Dockerfile.csi`
 cross-compiles both plugins in its build stage:
 
 ```bash
-docker build -f Dockerfile.csi --platform linux/arm64 -t sds-csi:latest .
+docker build -f Dockerfile.csi --platform linux/<arch> -t sds-csi:latest .
 docker save sds-csi:latest -o sds-csi.tar
 sudo k3s ctr images import sds-csi.tar        # on every node
 ```
 
 The sidecars come from `registry.k8s.io`, which can be unreachable (pulls fail
 with `EOF`). Pull them from a mirror, retag to the original names and import
-them on every node; the manifests' `IfNotPresent` policy then uses the local
-copies. The images and tags are those in `deploy/k8s/20-controller.yaml` and
+them on every node; the default `IfNotPresent` pull policy for tagged images
+then uses the local copies. The images and tags are those in `deploy/k8s/20-controller.yaml` and
 `30-node.yaml`:
 
 ```bash
-M=registry.aliyuncs.com/google_containers ; K=registry.k8s.io/sig-storage
+M=<mirror-registry>/<path> ; K=registry.k8s.io/sig-storage
 for t in csi-provisioner:v5.1.0 csi-resizer:v1.13.2 csi-snapshotter:v8.2.0 \
          csi-node-driver-registrar:v2.12.0 livenessprobe:v2.14.0; do
-  docker pull --platform linux/arm64 $M/$t && docker tag $M/$t $K/$t
+  docker pull --platform linux/<arch> $M/$t && docker tag $M/$t $K/$t
 done
 docker save $(for t in csi-provisioner:v5.1.0 csi-resizer:v1.13.2 csi-snapshotter:v8.2.0 \
   csi-node-driver-registrar:v2.12.0 livenessprobe:v2.14.0; do echo $K/$t; done) -o csi-sidecars.tar

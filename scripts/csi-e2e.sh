@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase-① CSI smoke test against a real cluster with the driver installed and
+# CSI smoke test against a real cluster with the driver installed and
 # sds-controller reachable. Requires: kubectl context set, StorageClass sds-drbd,
 # at least 2 storage nodes registered, pool "vg0" present on the nodes.
 set -euo pipefail

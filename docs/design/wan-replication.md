@@ -22,7 +22,7 @@ Two shapes:
 
 - **Two endpoints** — one primary-site node and the DR node. The whole resource
   is protocol A.
-- **Primary site + DR** (两地三中心) — several primary-site replicas in a
+- **Primary site + DR** — several primary-site replicas in a
   synchronous LAN mesh plus one asynchronous DR copy. Only the WAN legs are
   protocol A; the LAN mesh keeps the requested protocol.
 

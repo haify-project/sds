@@ -276,7 +276,7 @@ func parseServiceIP(serviceIP string) (*ServiceIP, error) {
 	}, nil
 }
 
-// extractNodeName extracts node name from endpoint (e.g., "orange1:50051" -> "orange1")
+// extractNodeName extracts node name from endpoint (e.g., "node1:50051" -> "node1")
 func extractNodeName(endpoint string) string {
 	parts := strings.Split(endpoint, ":")
 	if len(parts) > 0 {

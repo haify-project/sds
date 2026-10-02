@@ -93,32 +93,32 @@ make run-cli ARGS="pool list"
 ```bash
 # Cross-compiles (linux/amd64 by default; TARGET_OS/TARGET_ARCH override),
 # installs sds-controller to /opt/sds/bin and sds to /usr/local/bin on each
-# host, then restarts the controller. With Self-HA (sds-meta exists) only the
-# sds-meta Primary is restarted.
-./scripts/deploy-all.sh orange1,orange2,orange3
+# host. With Self-HA (sds-meta exists) only the sds-meta Primary's controller
+# is restarted; without it, every listed host gets an enabled, running
+# controller of its own, so list only the controller host.
+./scripts/deploy-all.sh node1,node2,node3
 ```
 
 `make build` alone builds for the host it runs on; binaries built on a Mac do
 not run on the nodes. The unit file (`configs/sds-controller.service`) runs
 `/opt/sds/bin/sds-controller`, but a node's installed unit may point elsewhere —
 check `systemctl cat sds-controller | grep ExecStart` before copying by hand.
-The full procedure is in `.claude/skills/deploy/SKILL.md`.
+The full procedure is in `docs/deployment-guide.md`.
 
 ### Test with grpcurl (local)
 
-The controller does not register gRPC reflection, so pass the proto files:
+The controller registers gRPC reflection, so grpcurl needs no proto files
+(with `[auth]` or `[rbac]` on, add `-H "authorization: Bearer <token>"`):
 
 ```bash
-P="-import-path api/proto/v1 -import-path third_party -proto sds.proto"
-
 # List services
-grpcurl $P -plaintext orange1:3374 list
+grpcurl -plaintext node1:3374 list
 
 # Call gRPC methods
-grpcurl $P -plaintext orange1:3374 v1.SDSController/ListPools
+grpcurl -plaintext node1:3374 v1.SDSController/ListPools
 
 # Or the REST gateway
-curl -s http://orange1:3375/v1/pools
+curl -s http://node1:3375/v1/pools
 ```
 
 ### Test with sds (on server)
@@ -126,10 +126,10 @@ curl -s http://orange1:3375/v1/pools
 ```bash
 # Pool operations
 sds pool list
-sds pool create --name pool0 --type lvm-thin --nodes orange1,orange2 --devices /dev/vdb
+sds pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/vdb
 
 # Resource operations (--port and --size are required; omit --nodes to auto-place)
-sds resource create --name data --port 7000 --size 10G --nodes orange1,orange2 --pool pool0
+sds resource create --name data --port 7000 --size 10G --nodes node1,node2 --pool pool0
 
 # Gateway operations (one gateway per resource)
 sds gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
@@ -198,10 +198,10 @@ Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
 | `pkg/metrics`    | Prometheus metrics                                                                     |
 | `pkg/logbuf`     | In-memory ring of recent controller log lines, served over the API                     |
 | `pkg/triage`     | Turns events, audit and logs into a short list of known problems (used by `sds-mcp`)   |
-| `pkg/inspect`    | Cluster inspection (`sds inspect`): the per-node probe script and pure pass/warn/fail checks over what the controller gathers (`pkg/controller/inspect*.go`) |
+| `pkg/inspect`    | Cluster inspection (`sds inspect`, `[inspect]`): the per-node probe script and pure pass/warn/fail checks over what the controller gathers (`pkg/controller/inspect*.go`), run on a schedule or on demand and stored as reports |
 | `pkg/mcpserver`  | MCP tools over the controller API (`sds-mcp`, stdio and HTTP)                          |
 | `pkg/mcpauth`    | Tokens and OAuth for the remote MCP server                                             |
-| `pkg/k8sapp`     | Databases on Kubernetes backed by SDS volumes (`sds_app_*` MCP tools)                  |
+| `pkg/k8sapp`     | Databases on Kubernetes backed by SDS volumes (`sds-mcp k8s`, `sds_k8s_*` tools)        |
 | `pkg/csi`        | CSI driver (controller and node services)                                              |
 | `pkg/serviceip`  | Floating IP add/remove and announcement, used by `service-ip`                          |
 | `pkg/util`       | Size parsing and formatting                                                            |
@@ -299,16 +299,13 @@ automatically.
 ### Testing Changes
 
 1. `make ci`
-2. Deploy: `./scripts/deploy-all.sh orange1,orange2,orange3`
+2. Deploy: `./scripts/deploy-all.sh <host1>,<host2>,...`
 3. Test with CLI, REST or grpcurl
 
 ### SSH Access
 
-Test servers (orange1, orange2, etc.) can be accessed via SSH without password:
-
-```bash
-ssh orange1  # Works directly from local machine
-```
+`deploy-all.sh` copies with `scp` and installs with `sudo` over `ssh`, so the
+build machine needs key-based SSH to each host and passwordless sudo there.
 
 ## Common Commands
 

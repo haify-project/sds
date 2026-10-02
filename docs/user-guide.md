@@ -81,7 +81,7 @@ them is a backup:
 
 ```bash
 sds node list                          # against 127.0.0.1:3374
-sds -c 192.168.1.250:3374 node list    # against a remote controller
+sds -c 192.0.2.250:3374 node list      # against a remote controller
 ```
 
 With Self-HA enabled the controller moves between nodes; point `-c` at the
@@ -89,7 +89,7 @@ floating VIP rather than at a node, so it never goes stale:
 
 ```bash
 sds ha self status                     # prints the VIP and the active node
-sds -c 192.168.1.250:3374 node list    # 192.168.1.250 = that VIP
+sds -c 192.0.2.250:3374 node list      # 192.0.2.250 = that VIP
 ```
 
 If the cluster has RBAC or token auth on, supply a token with `--token`, the
@@ -101,6 +101,11 @@ certificate is not signed by a CA in the system trust store, and
 `--tls-cert`/`--tls-key` when it requires client certificates. Each flag has an
 environment variable (`SDS_TLS`, `SDS_TLS_CA`, `SDS_TLS_CERT`, `SDS_TLS_KEY`,
 `SDS_TLS_SERVER_NAME`, `SDS_TLS_INSECURE`).
+
+Commands that change state on the nodes wait minutes for the controller (most
+up to 10, backups and pool rebuilds longer); listings and status give up after
+30 seconds. A command that gives up may still be completed by the controller,
+so check with the matching `list` or `status` before running it again.
 
 Two commands worth knowing before anything else:
 
@@ -114,26 +119,26 @@ sds resource status <name>  # everything about one resource: roles, disks, repli
 ## 3. Nodes
 
 ```bash
-sds node register --name orange1 --address 192.168.1.11
+sds node register --name node1 --address 192.0.2.11
 sds node list
-sds node get orange1
+sds node get node1
 ```
 
 `--address` is the management IP SDS uses for SSH. If replication should run
 over a different network — a dedicated 10G link, say — name it separately:
 
 ```bash
-sds node register --name orange1 --address 192.168.1.11 \
-    --replication-address 10.10.0.11
+sds node register --name node1 --address 192.0.2.11 \
+    --replication-address 10.0.0.11
 ```
 
 **Labels** describe where a node physically is. Auto-placement uses them to keep
 replicas apart, or together:
 
 ```bash
-sds node label orange1 rack=A zone=east
-sds node label orange1 rack=          # trailing = deletes the label
-sds node label orange1 zone=west --replace   # drop every other label
+sds node label node1 rack=A zone=east
+sds node label node1 rack=          # trailing = deletes the label
+sds node label node1 zone=west --replace   # drop every other label
 ```
 
 `sds.tiebreaker=false` keeps a node from ever being picked as a resource's
@@ -144,8 +149,8 @@ replication network.
 once the node answers on the new address:
 
 ```bash
-sds node set-address orange1 192.168.1.21
-sds node set-address orange1 192.168.1.21 --replication-address 10.10.0.21
+sds node set-address node1 192.0.2.21
+sds node set-address node1 192.0.2.21 --replication-address 10.0.0.21
 ```
 
 It checks the new address reaches the same machine, then moves the node in the
@@ -160,7 +165,7 @@ only by their old addresses, and when two nodes trade addresses the configs
 pass through a state with both on one.
 
 ```bash
-sds node set-address orange1=192.168.1.21 orange2=192.168.1.22 orange3=192.168.1.23
+sds node set-address node1=192.0.2.21 node2=192.0.2.22 node3=192.0.2.23
 ```
 
 If every node moved, the controller cannot start at all: its database lives on
@@ -170,12 +175,12 @@ chain of `sed` substitutions breaks when two nodes trade addresses:
 
 ```bash
 # on every node, with each node's old → new address
-perl -pi -e 'my %m = ("192.168.1.11" => "192.168.1.21", "192.168.1.12" => "192.168.1.22",
-                      "192.168.1.13" => "192.168.1.23");
+perl -pi -e 'my %m = ("192.0.2.11" => "192.0.2.21", "192.0.2.12" => "192.0.2.22",
+                      "192.0.2.13" => "192.0.2.23");
              s/\b(\d+\.\d+\.\d+\.\d+)(?=:)/exists $m{$1} ? $m{$1} : $1/ge' /etc/drbd.d/sds-meta.res
 drbdadm adjust sds-meta
 # once the controller is up on its VIP:
-sds node set-address orange1=192.168.1.21 orange2=192.168.1.22 orange3=192.168.1.23
+sds node set-address node1=192.0.2.21 node2=192.0.2.22 node3=192.0.2.23
 ```
 
 `resource repair <resource>` also writes the registry's addresses into a
@@ -186,9 +191,9 @@ down) is fixed by repairing it afterwards.
 Primary there to another replica — do this before maintenance, not after:
 
 ```bash
-sds node drain orange1
+sds node drain node1
 # ... reboot, replace a disk, upgrade ...
-sds node undrain orange1
+sds node undrain node1
 ```
 
 A `maintenance` node gets no new replicas or tiebreakers (`resource create`,
@@ -211,14 +216,14 @@ names each one it left, with the reason. The node stays drained either way.
 Unregistering is for a node that is never coming back:
 
 ```bash
-sds node unregister orange4
+sds node unregister node4
 ```
 
 It refuses while anything still uses the node, and names each resource and its
 role there:
 
 ```
-node orange4 is still in use by: data (replica, NFS gateway); logs (tiebreaker); move or remove these first
+node node4 is still in use by: data (replica, NFS gateway); logs (tiebreaker); move or remove these first
 ```
 
 Clear each role first: a replica with `resource remove-replica`, a tiebreaker
@@ -234,11 +239,11 @@ unregistering removes the node from the registry; it does not touch the node.
 A pool is the storage a node contributes. Three kinds:
 
 ```bash
-sds pool create --name data-pool --type lvm      --nodes orange1,orange2 --devices /dev/sdb
-sds pool create --name thin-pool --type lvm-thin --nodes orange1,orange2 --devices /dev/sdc
-sds pool create --name tank      --type zfs      --nodes orange1,orange2 --devices /dev/sdd
+sds pool create --name data-pool --type lvm      --nodes node1,node2 --devices /dev/sdb
+sds pool create --name thin-pool --type lvm-thin --nodes node1,node2 --devices /dev/sdc
+sds pool create --name tank      --type zfs      --nodes node1,node2 --devices /dev/sdd
 sds pool list
-sds pool get --name thin-pool --node orange1
+sds pool get --name thin-pool --node node1
 ```
 
 On the nodes the volume group (or zpool) is named with an `sds_` prefix —
@@ -255,7 +260,7 @@ the blocks that diverge.
 Converting later is possible but is a rebuild, one node at a time:
 
 ```bash
-sds pool convert-thin --node orange1 --pool sds_data-pool
+sds pool convert-thin --node node1 --pool sds_data-pool
 ```
 
 It destroys that node's copy and resyncs it in full from the peers. The resource
@@ -266,7 +271,7 @@ is already running, or if this is one of only two diskful copies.
 Growing a pool:
 
 ```bash
-sds pool add --pool data-pool --nodes orange1 --devices /dev/sde
+sds pool add --pool data-pool --nodes node1 --devices /dev/sde
 ```
 
 The disk joins the volume group. If the group holds a thin pool, that pool is
@@ -278,7 +283,7 @@ Deleting a pool is per node, and an LVM pool that still holds any volume is
 refused; the freed disks have their PV labels wiped:
 
 ```bash
-sds pool delete --name data-pool --node orange1
+sds pool delete --name data-pool --node node1
 ```
 
 An SSD or NVMe cache in front of a thin pool (`pool add-cache`,
@@ -291,7 +296,7 @@ An SSD or NVMe cache in front of a thin pool (`pool add-cache`,
 The minimum:
 
 ```bash
-sds resource create --name db --size 100G --port 7000 --nodes orange1,orange2
+sds resource create --name db --size 100G --port 7000 --nodes node1,node2
 ```
 
 That creates a 100 GiB replicated device on two nodes, adds a diskless
@@ -324,9 +329,9 @@ in one rack — should not hold two copies of the same data. Tell SDS which
 nodes share a machine with a `host` label:
 
 ```bash
-sds node label orange1 host=dell
-sds node label orange2 host=dell
-sds node label node-e  host=hp
+sds node label node1 host=hv1
+sds node label node2 host=hv1
+sds node label node3 host=hv2
 ```
 
 Automatic placement, `resource profile adjust` and the CSI driver then put
@@ -336,7 +341,7 @@ replica falls with it and takes the survivor's quorum along. `add-replica` uses
 the node you name and does not check the label. When the cluster cannot spread
 (all VMs on one machine), the resource is still created and the CLI prints a
 warning. `resource list` flags every resource where losing one host would lose
-all copies or the quorum majority: `⚠one-failure-domain(host=dell)`.
+all copies or the quorum majority: `⚠one-failure-domain(host=hv1)`.
 
 The label key is `[resource] fault_domain_label` in `controller.toml` (default
 `host`; a StorageClass sets its own with `faultDomainLabel`). A node without
@@ -402,9 +407,9 @@ A fresh resource is a raw block device, Secondary everywhere. Promote it on one
 node, put a filesystem on it there and mount it:
 
 ```bash
-sds resource primary db orange1                       # <resource> <node>
-sds resource fs db 0 ext4 --node orange1              # <resource> <volume-id> <fstype>
-sds resource mount db 0 /mnt/db --node orange1        # <resource> <volume-id> <mount-path>
+sds resource primary db node1                       # <resource> <node>
+sds resource fs db 0 ext4 --node node1              # <resource> <volume-id> <fstype>
+sds resource mount db 0 /mnt/db --node node1        # <resource> <volume-id> <mount-path>
 ```
 
 Volume ids start at 0. A single-volume resource is always volume `0`. `fs` runs
@@ -415,8 +420,8 @@ it does not add an fstab entry, so the mount does not survive a reboot.
 To give it back:
 
 ```bash
-sds resource unmount db 0 --node orange1
-sds resource secondary db orange1
+sds resource unmount db 0 --node node1
+sds resource secondary db node1
 ```
 
 `promote`/`demote` are the same as `primary`/`secondary`; `primary --force`
@@ -442,11 +447,11 @@ covered in [When something is wrong](#20-when-something-is-wrong).
 reads and writes over the DRBD network:
 
 ```bash
-sds resource diskless attach db orange3
-sds resource primary db orange3        # after unmounting and demoting elsewhere
-sds resource mount db 0 /mnt/db --node orange3
-# ... later: unmount and demote on orange3, then
-sds resource diskless detach db orange3
+sds resource diskless attach db node3
+sds resource primary db node3        # after unmounting and demoting elsewhere
+sds resource mount db 0 /mnt/db --node node3
+# ... later: unmount and demote on node3, then
+sds resource diskless detach db node3
 ```
 
 Useful for a compute node that needs the data but has no disks to spare. It is
@@ -493,10 +498,10 @@ sds resource resize-volume db 0 200G
 
 # another local replica (refused if the node's pool has less free space than
 # the volume: the sync writes all of it; --ignore-free-space overrides)
-sds resource add-replica db --node orange3
+sds resource add-replica db --node node3
 
 # take one out; the node's volume for it is deleted
-sds resource remove-replica db --node orange3 --yes
+sds resource remove-replica db --node node3 --yes
 
 # more volumes in the same resource (--volume is the backing volume's name in
 # the pool); remove-volume takes the volume id
@@ -529,7 +534,7 @@ a packet arrived "for volume N, which is not configured locally".
 **Adopting** an existing DRBD resource that SDS did not create:
 
 ```bash
-sds resource adopt legacy-vol --nodes orange1,orange2
+sds resource adopt legacy-vol --nodes node1,node2
 ```
 
 Adopting reads the live `/etc/drbd.d/<name>.res` and records what it finds; it
@@ -540,7 +545,7 @@ the config when omitted; `--protocol` defaults to C.
 is config-only: nothing resyncs and a promoted resource keeps serving.
 
 ```bash
-sds ha set-tiebreaker db --node orange4
+sds ha set-tiebreaker db --node node4
 sds ha set-tiebreaker db --remove       # drop it, accepting the quorum risk
 ```
 
@@ -626,28 +631,28 @@ sds backup target add --name offsite --kind s3 \
     --bucket sds-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
 
 sds backup target add --name nas --kind smb \
-    --host nas.lan --share backups --user backupuser --secret-file -
+    --host nas.example.com --share backups --user backupuser --secret-file -
 
 sds backup target list        # secrets are never returned
 ```
 
-An SMB host may carry a non-standard port (`--host nas.lan:4450`).
+An SMB host may carry a non-standard port (`--host nas.example.com:4450`).
 
 **Take and restore a backup:**
 
 ```bash
 sds backup create --resource db --target offsite
 sds backup list
-sds backup restore <backup-id> --node orange1
+sds backup restore <backup-id> --node node1
 sds backup delete <backup-id>
 ```
 
 **Incremental after the first.** The first backup of a resource to a target is
 a full image. On thin pools every later one carries only the blocks that changed
 since the previous one: the thin pool's own metadata says which (`thin_delta`),
-so nothing is read or hashed to find out. On the test cluster a 1 GiB volume
-took 20 s and 161 MB in full and 4.5 s and 26 MB for the next backup after
-26 MB of changes.
+so nothing is read or hashed to find out. In a test on three VMs, a 1 GiB
+volume took 20 s and 161 MB as a full backup, and 4.5 s and 26 MB for the next
+one after 26 MB of changes.
 
 ```bash
 sds backup create --resource db --target offsite          # incremental when it can be
@@ -720,10 +725,10 @@ sds backup restore <backup-id> --resource db
 
 Importing twice records nothing twice. A backup whose images are not all on the
 target is skipped and named. The next backup after an import is full unless the
-newest backup's base snapshot is still on that node of this cluster. Tested on
-the Lima cluster: a five-link chain was imported into an emptied controller and
-restored block-identical, and the same chain was restored on orange (x86, thick
-LVM) from a backup taken on Lima (arm64, thin).
+newest backup's base snapshot is still on that node of this cluster. The
+images are raw block data, so a backup restores onto another architecture or
+pool type: a chain taken from an arm64 node's thin pool restores onto a thick
+LVM volume on x86.
 
 Know the limits before you build a policy on this:
 - Only a backup listed as `completed` is restorable. `running` means it is still
@@ -750,16 +755,16 @@ the resource — clients keep talking to a floating service IP.
 
 ```bash
 # NFS
-sds gateway nfs create --resource data --service-ip 192.168.1.200/24 \
-    --export-path /data --allowed-ips 192.168.1.0/24
+sds gateway nfs create --resource data --service-ip 192.0.2.200/24 \
+    --export-path /data --allowed-ips 192.0.2.0/24
 
 # iSCSI
 sds gateway iscsi create --resource blk \
-    --iqn iqn.2026-01.com.example:sds.blk --service-ip 192.168.1.201/24
+    --iqn iqn.2026-01.com.example:sds.blk --service-ip 192.0.2.201/24
 
 # NVMe-oF
 sds gateway nvme create --resource fast \
-    --nqn nqn.2026-01.com.example:sds.fast --service-ip 192.168.1.202/24
+    --nqn nqn.2026-01.com.example:sds.fast --service-ip 192.0.2.202/24
 ```
 
 Creation checks that the OCF agents and tools the chain needs are installed on
@@ -789,7 +794,7 @@ sds gateway nfs export add|list|remove ...      # extra exports on an NFS gatewa
 sds gateway nfs mount --resource data --target /mnt/data --mkdir --sudo
                                                     # mount it on this machine
 sds gateway iscsi lun add|list|remove ...       # LUNs
-sds gateway iscsi chap get|set ...              # CHAP (--mutual for mutual CHAP)
+sds gateway iscsi chap get|set ...              # one-way CHAP only; mutual CHAP is not supported
 sds gateway iscsi initiator add|list|remove ... # initiator allow-list
 sds gateway nvme namespace add|list|remove ...  # namespaces
 sds gateway nvme host add|list|remove ...       # host allow-list
@@ -846,8 +851,9 @@ says so: the config is saved everywhere and a failover uses it, and
 `sds gateway stop` then `sds gateway start` applies it now (interrupting
 clients).
 
-Initiator IQNs and host NQNs are checked before anything is written, with the
-rules LIO and nvmet apply: an iSCSI name must be `iqn.<yyyy-mm>.<domain with at
+Target and initiator IQNs (at `iscsi create` and `initiator add`) and host
+NQNs are checked before anything is written, with the rules LIO and nvmet
+apply: an iSCSI name must be `iqn.<yyyy-mm>.<domain with at
 least two labels>[:<name>]` without spaces or `_` (`iqn.2026-10.test:probe` is
 refused, `iqn.2026-10.lab.test:probe` is accepted), `eui.` + 16 hex digits, or
 `naa.` + 16 hex digits starting with 1, 2 or 5; a host NQN must be
@@ -889,7 +895,7 @@ services — and moves all of it if that node dies.
 
 ```bash
 sds ha create db \
-    --vip 192.168.1.210/24 \
+    --vip 192.0.2.210/24 \
     --mount /var/lib/postgresql \
     --fstype ext4 \
     --services postgresql.service
@@ -918,9 +924,9 @@ everything else: its database lives on a replicated resource, and a VIP follows
 whichever node is running it.
 
 ```bash
-sds ha self enable --vip 192.168.1.250/24 --pool thin-pool
+sds ha self enable --vip 192.0.2.250/24 --pool thin-pool
 sds ha self status
-sds ha self disable --node orange1     # back to a plain service on orange1
+sds ha self disable --node node1     # back to a plain service on node1
 ```
 
 `enable` creates the `sds-meta` resource (1 GB on DRBD port 7999 by default;
@@ -957,8 +963,8 @@ WAN resources created before this default can get it with
 
 ```bash
 sds resource create --name db --size 100G --port 7000 \
-    --nodes orange1,orange2 \
-    --wan --dr-node aliyun1 --dr-endpoint dr.example.com
+    --nodes node1,node2 \
+    --wan --dr-node dr1 --dr-endpoint dr.example.com
 ```
 
 `--dr-endpoint` is an address or host name, without a port: the WAN port is
@@ -970,7 +976,7 @@ A resource that is already running gets its DR replica in place, while it keeps
 serving:
 
 ```bash
-sds resource add-dr db --dr-node aliyun1 --dr-endpoint dr.example.com
+sds resource add-dr db --dr-node dr1 --dr-endpoint dr.example.com
 ```
 
 The DR node joins over one `sds-proxy` leg per primary-site replica, with
@@ -1033,8 +1039,8 @@ Put an SSD in front of a thin pool, and every volume in the pool reads and
 writes through it (lvmcache).
 
 ```bash
-sds pool add-cache --node orange1 --pool thin-pool --device /dev/nvme0n1
-sds pool remove-cache --node orange1 --pool thin-pool
+sds pool add-cache --node node1 --pool thin-pool --device /dev/nvme0n1
+sds pool remove-cache --node node1 --pool thin-pool
 ```
 
 The device is consumed whole and must be free — no filesystem signature, no
@@ -1063,7 +1069,7 @@ the stack is DRBD → LUKS → LVM.
 
 ```bash
 sds resource create --name secrets --size 50G --port 7010 \
-    --nodes orange1,orange2 --encrypt
+    --nodes node1,node2 --encrypt
 ```
 
 Understand exactly what this does and does not do:
@@ -1098,8 +1104,8 @@ days before one expires.
 - **Live switch.** DRBD cannot change a connection's transport while it is up,
   so `resource tls` takes one link down at a time and brings it back while the
   others keep quorum. The Primary keeps serving; the reconnected peer catches up
-  with a short resync. On the test cluster each switch of three links took about
-  15 s under a continuous write load, with no failed write.
+  with a short resync. In a test on three VMs, switching a resource's three
+  links took about 15 s under a continuous write load, with no failed write.
 - **A failed handshake is not retried.** DRBD leaves that link StandAlone and
   the switch stops, naming it. Fix the node (`journalctl -u tlshd`), then
   `sds resource repair <resource>`.
@@ -1133,9 +1139,7 @@ warning_hold_sec = 30         # default; see below
 ```
 
 A **warning** is raised only once its condition has lasted `warning_hold_sec`:
-a replica link that drops and reconnects within it is not reported. On a
-cluster with a VM on a laptop, whose bridged network stalls for ten seconds now
-and then, that was dozens of warning-and-recovery pairs a day. Critical
+a replica link that drops and reconnects within it is not reported. Critical
 conditions — a full pool, a lost Primary, an unreachable node — are never held.
 
 With `watch_drbd_events` the controller keeps one `drbdsetup events2` stream
@@ -1148,11 +1152,13 @@ report, such as a thin pool filling up.
 Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `resource.promoted`, `node.unreachable`, `wan.degraded`, `resource.out_of_sync`,
 `pool.data_near_full`, `pool.data_full`, `pool.metadata_near_full`,
-`pool.metadata_full`, `pool.out_of_space` (LVM already refused writes) and
-`backup.failed` (a scheduled backup). Each carries a severity
+`pool.metadata_full`, `pool.out_of_space` (LVM already refused writes),
+`backup.failed` (a scheduled backup) and `inspection.completed` (see
+[Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,
-`resolved` when it clears — so a receiver can pair an alert with its recovery
-instead of reading the recovery as a new fault.
+`resolved` when it clears, `info` for a one-off such as an inspection — so a
+receiver can pair an alert with its recovery instead of reading the recovery as
+a new fault.
 
 ```bash
 sds event list --resource db --min-severity warning
@@ -1295,8 +1301,10 @@ only and only while `[schedule] enabled = true`; `sds inspect run` works either
 way. Each run publishes one `inspection.completed` event when its worst finding
 is at least `notify_min`: severity `critical` for a fail, `warning` for a warn
 or error, `info` otherwise, with the counts and the first failing items in the
-message. It goes to notification channels like any alert; a channel filtered to
-`warning` hears from the inspection only when it found something.
+message. It goes to notification channels like any alert, so it needs
+`[alert] enabled = true`; a channel filtered to `warning` hears from the
+inspection only when it found something. `sds-mcp` exposes the same as
+`sds_inspect_run` and `sds_inspect_report`.
 
 Channel delivery results (last success, last failure and its error, events
 given up on) are recorded per channel as alerts are delivered; that record is
@@ -1402,13 +1410,17 @@ disks with SDS resources over the controller's REST API. It is in
 
 `sds-ai` is an optional service that answers questions about the cluster in the
 web UI's Copilot sidebar. It reaches the cluster through `sds-mcp`: every
-read-only tool, plus a fixed list of day-to-day writes (create, add, attach,
-start, mount and unmount, resize, set options or role, verify, WAN repair),
-each of which waits in the chat panel until the operator approves that call
-with its arguments shown. Deleting, restoring, evicting, draining and stopping
-are not available to it at all; it proposes them and the operator runs them
-from the UI. It listens on `127.0.0.1:7634` by default
-(`SDS_AI_ADDR`); the web UI proxies `/ai/*` to it.
+read-only tool, plus a fixed list of day-to-day writes (creating pools,
+resources, profiles, gateways, HA configs, snapshots and backups; adding disks,
+caches, volumes, replicas and DR; attaching and detaching diskless clients;
+mounting, resizing, setting options, labels and profiles; starting a gateway;
+undrain; verify; WAN repair and endpoint changes), each of which waits in the
+chat panel until the operator approves that call with its arguments shown.
+Deleting, restoring, unmounting, changing roles, evicting, draining and
+stopping are not available to it at all; it proposes them and the operator runs
+them from the UI. It listens on `127.0.0.1:7634` by default (`SDS_AI_ADDR`;
+any non-loopback address requires a token in `SDS_AI_TOKEN` or
+`/etc/sds/token`); the web UI proxies `/ai/*` to port 7634 on its own node.
 
 Two things determine how useful it is:
 
@@ -1433,9 +1445,9 @@ and every question starts from nothing.
 **Before a node reboot**
 
 ```bash
-sds node drain orange1
+sds node drain node1
 # ... work ...
-sds node undrain orange1
+sds node undrain node1
 sds resource status <each affected resource>   # wait for UpToDate everywhere
 ```
 
@@ -1455,16 +1467,19 @@ replica back, and wait for the resync to finish before touching the next node.
 **Upgrading the controller**
 
 ```bash
-make build
+# build for the nodes, not for the machine you build on
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 make build
 scp bin/sds-controller <node>:/tmp/
 ssh <node> "sudo systemctl stop sds-controller && \
-  sudo cp /tmp/sds-controller /usr/local/bin/ && \
+  sudo install -m 0755 /tmp/sds-controller /opt/sds/bin/sds-controller && \
   sudo systemctl start sds-controller"
 ```
 
-Copy to whatever path the unit's `ExecStart` names (`systemctl cat
-sds-controller`). With Self-HA on, do not stop or restart the controller by
-hand: drbd-reactor manages it, and stopping it is an unplanned failover.
+`/opt/sds/bin` is where the shipped unit file runs it from; copy to whatever
+path your unit's `ExecStart` names (`systemctl cat sds-controller`). Set
+`GOARCH` to the nodes' architecture (`arm64` for aarch64).
+
+With Self-HA on, do not stop or restart the controller by hand: drbd-reactor manages it, and stopping it is an unplanned failover.
 Replace the binary on every standby node first, then
 `sds ha evict sds-meta` to move the controller onto one of them, then
 replace it on the node it left.
@@ -1482,10 +1497,9 @@ sds resource verify db --resync       # make the copies identical
 
 DRBD records what may differ in an out-of-sync bitmap. A verify **adds** to it
 and never clears it, and marks outlive whatever made them — an earlier verify,
-an interrupted resync, a reconnect at equal generation. So a peer can show KiB
-"marked out of sync" while its data is in fact identical to the source; on one
-production volume 97% was marked and a block-by-block comparison found nothing
-different. `verify` therefore reports the two apart: what it found itself, and
+an interrupted resync, a reconnect at equal generation. So a peer can show
+most of its volume "marked out of sync" while its data is in fact identical to
+the source. `verify` therefore reports the two apart: what it found itself, and
 what was already marked. `--resync` copies the source's data over every marked
 block, which is harmless when the copies are identical and is the only thing
 that clears the marks. It copies from `--node` (default the Primary), refuses a
@@ -1607,5 +1621,5 @@ drbd-reactor, promoter and SDS journals, failed units, storage, mounts —
 without anyone logging in. The web UI's Logs page shows the first two;
 `sds-mcp` has all three (`sds_log_list`, `sds_audit_list`, `sds_diagnose`).
 
-The [deployment guide's gotchas table](deployment-guide.md#13-top-gotchas-learned-the-hard-way)
-collects the failures that cost the most time to diagnose the first time.
+[Known failure modes](deployment-guide.md#13-known-failure-modes) in the
+deployment guide lists the failures that are hardest to diagnose.

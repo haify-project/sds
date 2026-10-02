@@ -1,10 +1,11 @@
-# SDS AI Copilot — oss-agent domain config.
+# SDS AI Copilot — steward domain config.
 #
-# Consumed by `oss-agent serve` (see ai/README.md). Defines the SDS/DRBD persona,
-# the ontology vocabulary, destructive-command red-lines, and read-only probes.
-# Live cluster state comes primarily from the `sds-mcp` read-only tools (wired via
-# Config.MCPServers, not from this file); knowledge grounding comes from the
-# drbd-reactor cortexdb knowledge base (Config.KnowledgeDBPath).
+# Read by sds-ai (cmd/sds-ai, path from SDS_AI_DOMAIN, default ai/domain.toml)
+# and by ai/kb/build.sh (STEWARD_DOMAIN_FILE). Defines the SDS/DRBD persona, the
+# ontology vocabulary, destructive-command red-lines, and read-only probes.
+# Live cluster state comes from the `sds-mcp` tools (wired in cmd/sds-ai, not
+# from this file); knowledge grounding comes from the cluster's knowledge base
+# (SDS_AI_KNOWLEDGE_DB) and the shared one (SDS_AI_SHARED_KNOWLEDGE_DB).
 
 name = "SDS storage/HA domain"
 title = "SDS Copilot"
@@ -28,8 +29,8 @@ How you work:
 - What the knowledge base holds, so you know what is worth asking it for. Two
   parts, searched together: the SDS shared base, identical on every cluster —
   SDS's documentation, its source as a graph (files, functions, classes and
-  their calls/imports edges across pkg/controller, pkg/gateway, pkg/reactor,
-  pkg/csi, cmd/* and the Proxmox plugin), the sds reference generated from
+  their calls/imports edges across pkg/controller, pkg/gateway, pkg/csi, cmd/*
+  and the Proxmox plugin), the sds reference generated from
   the installed version's own --help, and the DRBD 9 manuals and LINBIT
   knowledge base; and this cluster's own notes — incidents on named machines
   and what was actually tried on them. The engine already requires searching
@@ -132,13 +133,13 @@ entity_types = [
 # below is walked, not just the first.
 #
 # It was not always so. Expansion used to filter on a FIXED list built into
-# oss-agent — calls, contains, depends_on, inherits, implements, triggers,
+# the engine — calls, contains, depends_on, inherits, implements, triggers,
 # deploys, related — compared by exact string equality, and an edge outside it
 # was never followed. That is why the original SCREAMING_SNAKE set produced a
 # graph that looked populated and expanded to nothing: DEPLOYED_ON is not
 # deploys. The first row is still spelled to land inside that built-in list,
 # which costs nothing and keeps the graph walkable by a copilot pinned to an
-# older oss-agent. calls/inherits/implements are left to the C sources already
+# older steward. calls/inherits/implements are left to the C sources already
 # in the knowledge base, since nothing in a storage doc inherits.
 #
 # Adding a row here does NOT make the edges already in the graph appear: they
@@ -167,7 +168,7 @@ error_patterns = [
   '(?:zap\.\w+|logger\.\w+|fmt\.Errorf)\s*\(\s*"([^"]{8,})"',
 ]
 
-# Knowledge is already ingested into drbd-reactor.db; no repos to (re)ingest here.
+# The knowledge base is built by ai/kb/build.sh; no repos are ingested from here.
 repos = []
 
 # ---------------------------------------------------------------------------
@@ -228,7 +229,7 @@ repos = []
 [[relation]]
 name = "promotes"
 # The graph disagreed with the first version of this and was right: `drbd-promote@sds-meta`
-# promotes sds-meta, `Node: hp` promotes sds-meta, and drbd-reactor promotes resources.
+# promotes sds-meta, `Node: node1` promotes sds-meta, and drbd-reactor promotes resources.
 # That is the language DRBD itself uses. SystemdService stays on the from end only —
 # a promoter starting sds-ai.service is its start list, which `contains` already says.
 from = ["PromoterConfig", "CLICommand", "Node", "SystemdService", "Package"]
@@ -286,7 +287,7 @@ to   = ["Replica", "Node", "DRBDResource"]
 # Read by alchemy only (STEWARD_ALCHEMY_ADDR). Identical ends make this a
 # self-relation for cortexdb's traversal, but alchemy asks a different question
 # — may both directions be true at once? — and its default answer is no. A
-# document saying node-b and node-e replicate to each other is then two sources
+# document saying node1 and node2 replicate to each other is then two sources
 # contradicting each other, and alchemy withholds the WHOLE document's graph
 # while ingest still reports success. Measured, not hypothetical.
 both_ways = true
@@ -302,9 +303,9 @@ to   = ["DRBDResource", "Gateway", "HAConfig", "ConfigParameter", "Replica"]
 both_ways = true
 
 # ---------------------------------------------------------------------------
-# Code vocabulary — the admission list for `oss-agent ingest-repo`, which
-# imports an Understand-Anything knowledge-graph.json (AST + LLM analysis of a
-# real repository). Deliberately separate from the prose vocabulary above: the
+# Code vocabulary — the admission list for `steward ingest-repo` and
+# `steward import-graph`, which import an Understand-Anything
+# knowledge-graph.json (AST + LLM analysis of a real repository). Deliberately separate from the prose vocabulary above: the
 # prose lists are pasted into the LLM extractor's prompt, and telling a prose
 # extractor it may emit `function` and `calls` invites it to invent code
 # structure out of documentation. This list is consumed only by the importer,

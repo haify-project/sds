@@ -5,13 +5,17 @@
 # resource exists), the binary is pushed to every node but the service is only
 # restarted on the active (sds-meta Primary) node -- standby nodes are left for
 # reactor to manage and are NOT systemctl-enabled (that would fail on their
-# DRBD dependency). On a plain single-controller install it falls back to
-# enable+restart per host.
+# DRBD dependency). Without Self-HA it enables and restarts the controller on
+# EVERY given host, each with its own database: list only the controller host
+# there (use --cli-only for the others).
+#
+# Copies configs/controller.toml.example to /etc/sds/controller.toml on hosts
+# that have none; edit it afterwards.
 
 set -e
 
 # Configuration
-HOSTS="orange1"
+HOSTS=""
 CONTROLLER_PORT=3374
 CONTROLLER_BINARY="./bin/sds-controller"
 CLI_BINARY="./bin/sds"
@@ -50,7 +54,7 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             echo "Usage: $0 [--hosts HOST1,HOST2] [--build] [--cli-only] [--target-os OS] [--target-arch ARCH]"
             echo ""
-            echo "  --hosts HOSTS       Comma-separated hosts (default: $HOSTS)"
+            echo "  --hosts HOSTS       Comma-separated hosts (required)"
             echo "  --build             Build before deploying (cross-compiles for ${TARGET_OS}/${TARGET_ARCH})"
             echo "  --cli-only          Only deploy the CLI binary"
             echo "  --target-os OS      Build GOOS (default: $TARGET_OS, or \$TARGET_OS)"
@@ -60,6 +64,11 @@ while [[ $# -gt 0 ]]; do
         *) HOSTS="$1"; shift ;;
     esac
 done
+
+if [ -z "$HOSTS" ]; then
+    echo "error: no hosts given; pass --hosts host1,host2" >&2
+    exit 1
+fi
 
 # Build (cross-compiled for the target; `make build` force-syncs the web UI
 # into ui/dist via ui-sync, so the embedded UI is always fresh).

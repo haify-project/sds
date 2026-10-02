@@ -42,20 +42,22 @@ jobs:
         env:
           GOOS: linux
           GOARCH: amd64
+          CGO_ENABLED: "0"
         run: |
           mkdir -p dist
           VERSION=${GITHUB_REF#refs/tags/}
           go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-controller ./cmd/controller
-          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds ./cmd/cli
+          go build -ldflags "-s -w" -o dist/sds ./cmd/cli
           go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-mcp ./cmd/mcp
           go build -ldflags "-s -w" -o dist/service-ip ./cmd/service-ip
-          cp configs/service-ip@.service dist/
+          cp configs/service-ip@.service configs/sds-controller.service configs/controller.toml.example dist/
           chmod +x dist/sds-controller dist/sds dist/sds-mcp dist/service-ip
 
       - name: Create archive
         run: |
           cd dist
-          tar -czf sds-linux-amd64.tar.gz sds-controller sds sds-mcp service-ip service-ip@.service
+          tar -czf sds-linux-amd64.tar.gz sds-controller sds sds-mcp service-ip \
+            service-ip@.service sds-controller.service controller.toml.example
           sha256sum sds-linux-amd64.tar.gz > sds-linux-amd64.tar.gz.sha256
 
       - name: Release

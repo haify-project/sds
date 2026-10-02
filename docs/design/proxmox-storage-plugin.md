@@ -56,6 +56,8 @@ VM on another node.
 - `PVE/Storage/Custom/SDS/Client.pm` — REST client; bearer token when set.
 - `PVE/Storage/Custom/SDS/Naming.pm` — volume ↔ resource naming and size
   conversions.
+- `PVE/Storage/Custom/SDS/Capacity.pm` — turns `GET /v1/pools` into the
+  storage's total/free.
 - `install.sh`, `preflight.sh`, `storage.cfg.example`, Perl tests in `t/`.
 
 `storage.cfg` options:
@@ -92,7 +94,7 @@ window does not include 11, `api()` reports the nearest accepted version.
 | `path` | local | `/dev/drbdN` |
 | `volume_resize` | `PATCH /v1/resources/{name}/volumes/0` | |
 | `list_images` | `GET /v1/resources` | filtered by naming |
-| `status` | `GET /v1/pools` | the smallest node's total/free for `sdspool`, since a replica must fit on every node |
+| `status` | `GET /v1/pools` | the smallest node's total/free for `sdspool`, since a replica must fit on every node; for a thin pool, the thin pool's own size and data usage rather than the VG's |
 | `volume_snapshot` / `_rollback` / `_delete` | `POST /v1/volumes/{pool/lv}/snapshots`, `…/{snap}/restore`, `DELETE …/{snap}?node=` | run on a diskful node, preferring the Primary |
 | `activate_storage` / `check_connection` | `GET /v1/resources` | fail fast on an unreachable controller |
 
@@ -136,18 +138,18 @@ Exposed over gRPC, REST and the MCP tool `sds_resource_dual_primary`;
 
 ## Validation
 
-On `dell` (PVE 8.4.11) against the `orange1/2/3` cluster: `alloc_image` (2-node
+On a single PVE 8.4.11 host against a three-node sds cluster: `alloc_image` (2-node
 auto-placed resource), `list_images`, `volume_resize`, `volume_snapshot`,
 `volume_snapshot_delete`, `path`, `free_image`, `status`.
 
-On a two-node PVE 9.2.5 cluster (`pve-a`/`pve-b`, nested on `dell`, both
-diskless sds nodes):
+On a two-node PVE 9.2.5 cluster (`pve1`/`pve2`, nested VMs, both diskless sds
+nodes):
 
 - `activate_volume` / `deactivate_volume` on compute-only nodes; the guest boots
   from `/dev/drbdN`.
 - Live migration in both directions, 34 ms and 22 ms downtime, no disk copy.
   Afterwards `drbdsetup show` on both nodes showed no `allow-two-primaries`.
-- Hard-stopping `pve-a`: the guest started on `pve-b` from the same volume.
+- Hard-stopping `pve1`: the guest started on `pve2` from the same volume.
 
 API version window: PVE 8.4 accepts [9,11], 9.1 [9,13], 9.2.5 [9,15]; the
 declared 11 is inside all three. Signature changes since 11 append parameters,

@@ -117,6 +117,6 @@ func formatPercent(v float64) string {
 }
 
 // poolKey identifies a pool by name and node. A pool name is only unique within
-// a node — every node in this cluster has an "sds_sdspool" — so the node is
+// a node — every node usually carries a pool of the same name — so the node is
 // part of the identity, not a label on it.
 func poolKey(name, node string) string { return name + "@" + node }

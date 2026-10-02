@@ -31,7 +31,7 @@ func (s *Server) registerGatewayConfigReads(srv *mcp.Server) {
 			return nil, out, err
 		})
 	addRead(s, srv, readOnlyTool("sds_iscsi_chap_get", "Show iSCSI CHAP settings",
-		"Whether an iSCSI gateway requires CHAP: the username and whether CHAP is mutual. The password is never returned."),
+		"Whether an iSCSI gateway requires one-way CHAP, and its username. The password is never returned."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, iscsiChapOut, error) {
 			out, err := s.iscsiChapGet(ctx, in.Resource)
 			return nil, out, err
@@ -92,7 +92,7 @@ func (s *Server) iscsiChapGet(ctx context.Context, resource string) (iscsiChapOu
 	if err != nil {
 		return iscsiChapOut{}, err
 	}
-	return iscsiChapOut{Username: chap.Username, Mutual: chap.Mutual}, nil
+	return iscsiChapOut{Username: chap.Username}, nil
 }
 
 func (s *Server) nvmeNamespaceList(ctx context.Context, resource string) (nvmeNamespacesOut, error) {
@@ -208,7 +208,7 @@ func (s *Server) registerISCSIConfig(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, writeTool("sds_iscsi_chap", "Manage iSCSI CHAP",
-		"Set CHAP authentication credentials on an iSCSI gateway. Action get is still accepted; "+
+		"Set one-way CHAP credentials on an iSCSI gateway (mutual CHAP is not supported). Action get is still accepted; "+
 			"sds_iscsi_chap_get does the same as a read-only tool. Passwords are never returned."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in iscsiChapIn) (*mcp.CallToolResult, iscsiChapOut, error) {
 			switch in.Action {
@@ -219,7 +219,7 @@ func (s *Server) registerISCSIConfig(srv *mcp.Server) {
 				if in.Username == "" || in.Password == "" {
 					return nil, iscsiChapOut{}, fmt.Errorf("username and password are required for set")
 				}
-				if err := s.client.SetISCSIChap(ctx, in.Resource, in.Username, in.Password, in.Mutual); err != nil {
+				if err := s.client.SetISCSIChap(ctx, in.Resource, in.Username, in.Password, false); err != nil {
 					return nil, iscsiChapOut{}, err
 				}
 				return nil, iscsiChapOut{Detail: fmt.Sprintf("CHAP credentials set on gateway %s", in.Resource)}, nil

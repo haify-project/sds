@@ -14,7 +14,7 @@ import (
 // the add itself always succeeds — and the sync then writes until the pool has
 // no space left. The kernel answers the next write with an I/O error, DRBD
 // drops the disk, and the "new replica" is Diskless while the resource list
-// still shows it as a replica. Seen on the Lima cluster: a 2 GiB volume added
+// still shows it as a replica. Seen on a test cluster: a 2 GiB volume added
 // to a node whose pool had 850 MiB free.
 //
 // Placement already asks a pool whether it admits a volume; adding a replica
@@ -95,7 +95,7 @@ func freeText(b uint64) string {
 // assertPoolRoomForGrowth is assertPoolRoom for a resize: the added area is
 // resynced onto every replica, so on a thin pool the growth counts as used
 // space on each node — and one node short of it drops its disk, as a resync
-// onto a full pool did to the Lima cluster's sdt3 while a 3 GiB volume grew to
+// onto a full pool did to one test node while a 3 GiB volume grew to
 // 4 GiB. Volumes on ZFS are not checked here.
 func (rm *ResourceManager) assertPoolRoomForGrowth(ctx context.Context, resource string, volumeID uint32, newSizeGB uint64) error {
 	if rm.controller.db == nil {

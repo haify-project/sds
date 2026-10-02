@@ -116,10 +116,10 @@ eval { $c->request('GET', '/v1/resources/nope') };
 like($@, qr/resource not found/, 'a gateway error surfaces the controller message');
 
 # HTTP::Tiny reports transport failure as status 599.
-$c = client_with({ controller => 'orange1' },
+$c = client_with({ controller => 'node1' },
     { status => 599, success => 0, content => "Connection refused" });
 eval { $c->request('GET', '/v1/resources') };
-like($@, qr/unreachable at orange1:3375/, 'an unreachable controller says so, with the address');
+like($@, qr/unreachable at node1:3375/, 'an unreachable controller says so, with the address');
 
 # --- snapshots --------------------------------------------------------------
 #

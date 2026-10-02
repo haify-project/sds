@@ -10,7 +10,7 @@ import (
 // resync writes every block it covers, zeros included, so a full one — a new
 // replica, an invalidate, a failback whose history no longer matches — turns a
 // thin volume into a fully allocated one: 0.03% to 100% on a 1G volume on
-// the Lima cluster, and the same thing is how a thin pool on openclaw filled
+// a test cluster, and the same thing is how a production thin pool filled
 // up. With this set the sync source sends a run of zeros as a discard, and the
 // target keeps it unallocated. DRBD rounds the value up to the backing
 // device's discard granularity, and 64 KiB is the thin-pool chunk size LVM
@@ -47,7 +47,7 @@ func (rm *ResourceManager) withThinResyncDefaults(ctx context.Context, options m
 // before sending them. A resync over the WAN is bounded by the link, and most
 // of what one covers — a failback whose history no longer matches, a DR copy
 // invalidated by hand — is already the same on both sides: a full resync of a
-// 1G volume on the Lima cluster found every block equal and sent nothing.
+// 1G volume on a test cluster found every block equal and sent nothing.
 // sha256 rather than crc32c: a block that differs but hashes the same is
 // skipped, and the copies disagree without anything saying so.
 const wanCsumsAlg = "sha256"

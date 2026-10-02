@@ -118,7 +118,7 @@ type volumeSpecIn struct {
 type resourceCreateIn struct {
 	Name        string            `json:"name" jsonschema:"DRBD resource name"`
 	Port        uint32            `json:"port" jsonschema:"DRBD replication TCP port, e.g. 7001; must be unique per resource"`
-	Nodes       []string          `json:"nodes" jsonschema:"nodes to replicate across, e.g. [\"orange1\",\"orange2\"]"`
+	Nodes       []string          `json:"nodes" jsonschema:"nodes to replicate across, e.g. [\"node1\",\"node2\"]"`
 	Pool        string            `json:"pool,omitempty" jsonschema:"backing storage pool name (single-volume shorthand; ignored when volumes is set)"`
 	SizeGB      uint32            `json:"size_gb,omitempty" jsonschema:"volume size in GiB (single-volume shorthand; ignored when volumes is set)"`
 	Volumes     []volumeSpecIn    `json:"volumes,omitempty" jsonschema:"optional list of volumes for a multi-volume resource; each element is {size_gb, pool}. When set, volume 0..N are created atomically and the top-level size_gb/pool are ignored. Leave empty for a single-volume resource."`

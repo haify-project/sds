@@ -1,7 +1,7 @@
 # Thin pool capacity reporting (design)
 
 Date: 2026-08-09
-Status: **Implemented.** Found while recovering a real outage on the home
+Status: **Implemented.** Found while recovering a real outage on a test
 cluster.
 
 Pool capacity used to be reported as **VG allocation** only. For an LVM thin
@@ -19,19 +19,19 @@ down: the thin pool running out of **data** (or **metadata**) space.
 
 ## The outage that exposed it
 
-`openclaw` is a 6G volume replicated across four nodes, each on a 9.75G thin
+`app0` is a 6G volume replicated across four nodes, each on a 9.75G thin
 pool that also holds ~28 hourly scheduled snapshots. Steady-state occupancy was
 91–93%. The snapshot scheduler was working correctly; the pool was simply sized
 with no headroom.
 
-`node-a` was network-isolated for about a day. On reconnect DRBD started a full
+`node1` was network-isolated for about a day. On reconnect DRBD started a full
 resync, which has to write the entire 6G volume as fresh allocations. The pool
 hit 100% and the kernel dropped the disk:
 
 ```
 sdsthin  Data% 100.00  Attr twi-aotzD-      # D = out-of-data-space
-drbd openclaw/0 drbd2: Cannot write resync data to local disk.
-drbd openclaw/0 drbd2: disk( Failed -> Diskless )
+drbd app0/0 drbd2: Cannot write resync data to local disk.
+drbd app0/0 drbd2: disk( Failed -> Diskless )
 ```
 
 The node then reported `disk:Diskless` on a resource where it is configured
@@ -169,7 +169,7 @@ removing one by hand with `lvremove` remains safe.
 
 A thin pool holding a volume plus N scheduled snapshots needs enough free space
 to absorb a **full resync of the volume**, not just the snapshot deltas. Sizing
-to the delta is what made 91% the normal state on `openclaw`.
+to the delta is what made 91% the normal state on `app0`.
 
 When the thin pool takes every free extent of the VG, LVM's
 `thin_pool_autoextend_threshold` cannot help, because there is nothing left to

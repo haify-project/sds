@@ -7,7 +7,9 @@
 #
 # Contents:
 #   - SDS documentation (docs/, README) and the operations runbooks
-#   - the SDS code graph (.understand-anything/knowledge-graph.json) and source
+#   - the SDS code graph (.understand-anything/knowledge-graph.json, not in the
+#     repository: generate it with Understand-Anything first, or the step is
+#     skipped) and source
 #   - the sds reference, generated from the binary this commit builds, so
 #     it can never describe flags the installed CLI does not have
 #   - the service-ip OCF agent's code graph, when its checkout is present
@@ -20,8 +22,8 @@
 # Usage: ai/kb/build.sh [out-dir]          (default: dist/kb)
 #
 # Every document and step is retried, and recorded in <out-dir>/progress when
-# it succeeds: a build takes hours, and the embedder behind it — a node that
-# may be busy or asleep — answers 503 now and then. SDS_KB_RESUME=1 keeps the
+# it succeeds: a build takes hours, and the embedder behind it answers 503 now
+# and then. SDS_KB_RESUME=1 keeps the
 # database and the record and carries on where the last run stopped; without
 # it the build starts from nothing.
 #
@@ -39,7 +41,7 @@ corpus=${SDS_KB_CORPUS:?set SDS_KB_CORPUS to the dir with linbit-blog-kb/, linbi
 : "${STEWARD_EMB_API_KEY:?}" "${STEWARD_EMB_MODEL:?}" "${STEWARD_EMB_BASE_URL:?}"
 : "${STEWARD_LLM_API_KEY:?}" "${STEWARD_LLM_MODEL:?}" "${STEWARD_LLM_BASE_URL:?}"
 export STEWARD_EMB_DIM=${SDS_KB_EMB_DIM:-768}
-steward_version=v0.51.0
+steward_version=v0.51.1 # keep in step with cmd/sds-ai/go.mod
 od=${STEWARD:-}
 if [ -z "$od" ]; then
 	od=$(mktemp -d)/steward
@@ -139,8 +141,10 @@ ingest_each "$docs"
 step "SDS runbooks"
 ingest_each "$(flatten "$root/pkg/mcpserver/runbooks" sds-runbooks -name '*.md')"
 
-step "SDS code graph"
-once step:sds-code-graph "$od" import-graph "$root/.understand-anything/knowledge-graph.json"
+if [ -f "$root/.understand-anything/knowledge-graph.json" ]; then
+	step "SDS code graph"
+	once step:sds-code-graph "$od" import-graph "$root/.understand-anything/knowledge-graph.json"
+fi
 
 step "SDS source"
 once step:sds-source "$od" ingest-repo "$root"

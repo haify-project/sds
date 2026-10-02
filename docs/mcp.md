@@ -22,11 +22,11 @@ go build -o ~/.local/bin/sds-mcp ./cmd/mcp
 ## Local server (stdio)
 
 ```bash
-claude mcp add sds -- sds-mcp --controller 192.168.123.250:3374
+claude mcp add sds -- sds-mcp --controller 10.0.0.250:3374
 ```
 
-The repository's `.mcp.json`, which Claude Code loads in this directory, does
-the same for one fixed address:
+The same server as a project-scoped `.mcp.json`, which Claude Code loads from
+the directory it starts in:
 
 ```json
 {
@@ -34,17 +34,16 @@ the same for one fixed address:
     "sds": {
       "type": "stdio",
       "command": "sds-mcp",
-      "args": ["--controller", "192.168.123.250:3374"],
+      "args": ["--controller", "10.0.0.250:3374"],
       "env": {}
     }
   }
 }
 ```
 
-Change the address to your cluster's. Claude Code expands environment
-variables in `.mcp.json`, so `"${SDS_CONTROLLER_ADDR:-127.0.0.1:3374}"` also
-works there. The client reads the file once at startup: restart it after a
-change.
+Use your cluster's address. Claude Code expands environment variables in
+`.mcp.json`, so `"${SDS_CONTROLLER_ADDR:-127.0.0.1:3374}"` also works there.
+The client reads the file once at startup: restart it after a change.
 
 Which address to use:
 
@@ -96,9 +95,9 @@ connection. A tool that is not registered cannot be called by name.
 
 | Role | Tools |
 | ---- | ----- |
-| `read` | the read-only tools: lists, status, health, diagnose, events, logs, audit, gateway exports/LUNs/ACLs/CHAP settings, runbooks |
+| `read` | the read-only tools: lists, status, health, diagnose, inspection reports and runs (`sds_inspect_run` changes nothing on the cluster), events, logs, audit, gateway exports/LUNs/ACLs/CHAP settings, runbooks |
 | `operate` | plus every mutating tool not marked destructive (the middle column below) |
-| `admin` | plus the destructive ones: delete, remove, restore, stop, evict, drain, renumber, role change, unmount, schedule delete, Self-HA enable/disable, DR failback, and adding or removing gateway exports, LUNs and ACL entries |
+| `admin` | plus the destructive ones: delete, remove, restore, stop, evict, drain, renumber, role change, unmount, filesystem creation, thin-pool conversion, promoter TOML sync, schedule delete, Self-HA enable/disable, DR failback, and adding or removing gateway exports, LUNs and ACL entries |
 
 Anything that loses data, takes a volume away from the node serving it
 (role change, unmount, gateway stop, evict, drain), or stops future snapshots
@@ -119,9 +118,9 @@ it to a port the proxy does not forward, e.g.
 ### Tokens
 
 Tokens are stored as SHA-256 hashes in `/var/lib/sds/mcp/tokens.json`
-(`--tokens` or `SDS_MCP_TOKENS` to change it). `/var/lib/sds` is the Self-HA
-mount, so the store moves with the controller; run `sds-mcp token` commands on
-the node where sds-meta is mounted. `sds-mcp token list` and
+(`--tokens` or `SDS_MCP_TOKENS` to change it). With Self-HA, `/var/lib/sds` is
+the sds-meta mount, so the store moves with the controller; run `sds-mcp token`
+commands on the node where sds-meta is mounted. `sds-mcp token list` and
 `sds-mcp token revoke <name|id>` work while the server runs: the server
 re-reads the file when it changes, and a revoked token is refused on its next
 request, including inside an open session. Revoking a token also revokes every
@@ -150,8 +149,8 @@ accepted, and redirect URIs must be `https`, or `http` to a loopback address.
 Serve it over HTTPS: either `--tls-cert`/`--tls-key`, or terminate TLS in a
 reverse proxy, bind to a private address and pass `--trust-proxy` so the
 failed-login limit (an address is locked out after 10 failed attempts within
-5 minutes) sees the real client address from `X-Forwarded-For`. `GET /healthz` answers `ok` without a
-token.
+5 minutes) sees the real client address from `X-Forwarded-For`.
+`GET /healthz` answers `ok` without a token.
 
 `serve` reaches the controller with `--controller` (default `127.0.0.1:3374`),
 `--controller-token` (same fallbacks as `--token` above) and, for a controller
@@ -168,9 +167,9 @@ since some carry secrets:
 journalctl -u sds-mcp-http | grep 'tool call'
 ```
 
-To make the server follow the controller across failover, install
-`configs/sds-mcp-http.service` on every node, left disabled. It runs
-`/opt/sds/bin/sds-mcp serve --listen 0.0.0.0:43871` with the token store on the
+To make the server follow the controller across failover, copy `sds-mcp` to
+`/opt/sds/bin/` and install `configs/sds-mcp-http.service` on every node, left
+disabled. It runs `/opt/sds/bin/sds-mcp serve --listen 0.0.0.0:43871` with the token store on the
 Self-HA mount, and reads site flags from `SDS_MCP_ARGS` in
 `/var/lib/sds/mcp/sds-mcp.env`. Then put `sds-mcp-http.service` in the sds-meta
 promoter's start list: before `ha self enable`, through
@@ -216,8 +215,9 @@ halfway if the order is wrong. They are embedded from
 `sds_nfs_exports`, `sds_iscsi_luns`, `sds_iscsi_initiators`,
 `sds_nvme_namespaces` and `sds_nvme_hosts` take an action (add, remove) and
 need `admin`; they still accept `list`, which the `*_list` tools answer at
-`read`. `sds_iscsi_chap` sets CHAP at `operate` and still accepts `get`;
-`sds_iscsi_chap_get` answers it at `read`. Neither returns the password.
+`read`. `sds_iscsi_chap` sets one-way CHAP at `operate` (mutual CHAP is
+refused) and still accepts `get`; `sds_iscsi_chap_get` answers it at `read`.
+Neither returns the password.
 
 ### What has no tool
 
@@ -230,6 +230,7 @@ need `admin`; they still accept `list`, which the `*_list` tools answer at
   still in the WAN buffer, a decision to take at the CLI with `--yes`.
 - `replication-tls setup`: it installs a CA into each node's system trust
   store.
-- `backup schedule run`, `channel delete`, `event watch` (a stream;
+- `inspect list` (`sds_inspect_report` reads the newest report, or one by id),
+  `backup schedule run`, `channel delete`, `event watch` (a stream;
   `sds_event_list` reads the history), `gateway nfs mount` (mounts on the
   machine running the CLI).

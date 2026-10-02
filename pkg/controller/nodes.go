@@ -327,8 +327,8 @@ func (nm *NodeManager) GetNodeAddressByName(name string) string {
 // matches one of its `on <name>` sections — drbdadm otherwise fails the whole
 // resource with "'<res>' not defined in your config (for this host)". Writing
 // the SDS node *name* there silently works only while operators happen to
-// register nodes under their hostname (orange1, orange2, ...); register the
-// same host as "node-a" while it calls itself "lima-sds-a" and every resource
+// register nodes under their hostname (node1, node2, ...); register the
+// same host as "node-a" while it calls itself "vm-node-a" and every resource
 // create fails.
 //
 // Unknown refs fall back to the ref itself, so callers that already pass a

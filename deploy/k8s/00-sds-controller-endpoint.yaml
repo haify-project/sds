@@ -33,7 +33,7 @@ metadata:
 subsets:
   - addresses:
       # CHANGE ME: your sds-controller VIP (from `sds ha self status`)
-      - ip: 192.168.123.250
+      - ip: 192.0.2.10
     ports:
       - name: grpc       # MUST match the Service port name above.
         protocol: TCP

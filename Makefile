@@ -58,9 +58,9 @@ install-controller: build
 	sudo cp configs/sds-controller.service configs/service-ip@.service /etc/systemd/system/
 	sudo cp configs/controller.toml.example /etc/sds/controller.toml.example
 	sudo systemctl daemon-reload
-	@echo "Controller installed. Edit /etc/sds/controller.toml then run:"
-	@echo "  sudo systemctl start sds-controller"
-	@echo "  sudo systemctl enable sds-controller"
+	@echo "Controller installed. Copy /etc/sds/controller.toml.example to"
+	@echo "/etc/sds/controller.toml, edit it, then run:"
+	@echo "  sudo systemctl enable --now sds-controller"
 
 # Install CLI
 install-cli: build

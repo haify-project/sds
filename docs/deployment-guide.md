@@ -7,8 +7,8 @@ The per-node package list, with the symptom each missing piece produces, is
 [`node-prerequisites.md`](./node-prerequisites.md). Day-to-day operation is
 covered in [`user-guide.md`](./user-guide.md).
 
-Reference clusters run **Ubuntu 24.04** (amd64 and arm64). Package names below
-are Ubuntu's; adjust for other distros.
+Tested on **Ubuntu 24.04** (amd64 and arm64). Package names below are Ubuntu's;
+adjust for other distros.
 
 ---
 
@@ -53,7 +53,7 @@ Requires Go 1.26 (`go.mod` pins toolchain `go1.26.8`) and Node.js for the web UI
 (CI uses Node 22).
 
 ```bash
-git clone <sds-repo> && cd sds
+git clone https://github.com/haify-project/sds.git && cd sds
 (cd web-ui && npm ci)
 make build
 ```
@@ -75,7 +75,20 @@ done
 ```
 
 A controller built without `make ui-sync` serves a placeholder page instead of
-the UI; the API and `sds` are unaffected.
+the UI; the API and `sds` are unaffected. The same holds for `go install`, which
+builds without the UI:
+
+```bash
+go install github.com/haify-project/sds/cmd/...@latest
+```
+
+`go install` names each binary after its directory: `controller`, `cli` and
+`mcp` are `sds-controller`, `sds` and `sds-mcp`; rename them when installing.
+Cross-compiled (`GOOS`/`GOARCH` set) they land in `$(go env GOPATH)/bin/linux_<arch>/`.
+
+Tagged releases on GitHub carry a linux/amd64 archive with `sds-controller`
+(UI included), `sds`, `sds-mcp`, `service-ip`, both unit files and
+`controller.toml.example`.
 
 Other binaries:
 - `sds-ai` (`cmd/sds-ai`, its own Go module): `cd cmd/sds-ai && go build .`
@@ -227,16 +240,13 @@ default_pool_type = "thin_pool"
 default_snapshot_suffix = "_snap"
 ```
 
-`configs/controller.toml.example` describes `[database]`, `[wan]`, `[tls]`
-(gRPC/REST/UI transport), `[metrics]`, `[ui]` and `[alert]`. It sets
-`[metrics] port = 9090` and `[ui] port = 8080`, not the defaults (9433, 3376);
-change or drop those lines if you start from it. API authentication is
-`[auth] enabled` + `token` (at least 16 characters) or `[rbac]` with per-user
-tokens. Other sections with their defaults:
-`[resource] auto_tiebreaker = true`, `fault_domain_label = "host"`;
-`[gateway] auto_state_volume = true`, `state_volume_size_gb = 1`;
-`[schedule] enabled = true`; `[audit] enabled = true`;
-`[storage] verify_schedule = "0 3 1 * *"`; `[self_ha] extra_services = []`.
+Every other key is in `configs/controller.toml.example` with its default and a
+comment: `[server] rest_port`, `[database]`, `[wan]`, `[tls]` (gRPC/REST/UI
+transport), `[metrics]`, `[ui]`, `[resource]` (tiebreaker, fault domains),
+`[gateway]`, `[schedule]` (switches off snapshot, backup, verify and inspection
+schedules together), `[audit]`, `[self_ha]`, `[alert]`, `[inspect]`, and
+commented `[auth]` / `[rbac]` blocks. API authentication is `[auth] enabled` +
+`token` (at least 16 characters) or `[rbac]` with per-user tokens.
 
 `configs/sds-controller.service` runs
 `/opt/sds/bin/sds-controller --config /etc/sds/controller.toml` as root with
@@ -253,8 +263,9 @@ ss -tlnp | grep -E ':(3374|3375|3376|9433)\b'
 ```
 
 `sds` talks to `127.0.0.1:3374` by default; use `--controller <host>:3374`
-(or `-c`) from elsewhere, plus `--token` / `--tls*` when `[auth]` / `[tls]` are
-enabled.
+(or `-c`) from elsewhere. With `[auth]` or `[rbac]` on, it reads the token from
+`--token`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`; with `[tls]` on,
+pass `--tls-ca` (and `--tls-cert`/`--tls-key` for mutual TLS).
 
 ---
 
@@ -429,8 +440,8 @@ reached at an IP or VIP on port 3374.
    then `kubectl apply -f deploy/k8s/`. `50-volumesnapshotclass.yaml` needs the
    snapshot CRDs (`deploy/k8s/README.md`).
 
-3. Smoke test: `scripts/csi-e2e.sh` (PVC on StorageClass `sds-drbd`, a pod that
-   writes, checks the pod landed on a replica node).
+3. Smoke test: `scripts/csi-e2e.sh` (a PVC on StorageClass `sds-drbd` and a
+   pod that writes to it; prints the node the pod landed on).
 
 Both plugin pods use `hostNetwork` with `dnsPolicy: ClusterFirstWithHostNet`, so
 they resolve the `sds-controller` Service through cluster DNS. Pods move between
@@ -454,7 +465,12 @@ OpenAI-compatible LLM and embedder.
     still read)
   - `SDS_AI_KNOWLEDGE_DB` (required), `SDS_AI_EMB_DIM` (default 768)
   - `SDS_AI_CONTROLLER` — default `127.0.0.1:3374`, the controller beside it
-  - `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp`
+  - `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp` (default: `sds-mcp` on `PATH`)
+  - `SDS_AI_DOMAIN=/var/lib/sds/ai/domain.toml` (default `ai/domain.toml`,
+    relative to the working directory; the repository's copy is
+    `ai/domain.toml`)
+  - `SDS_AI_KUBECONFIG` (optional): adds the `sds_k8s_*` tools
+    (`deploy/k8s/README.md`)
   - `SDS_AI_ADDR` — default `127.0.0.1:7634`, which is where the UI proxies
     `/ai/`. On any non-loopback address sds-ai refuses to start without a token
     (`SDS_AI_TOKEN`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`).
@@ -468,11 +484,14 @@ OpenAI-compatible LLM and embedder.
   `SDS_AI_SHARED_KNOWLEDGE_DB=/opt/sds/share/sds-kb.db`; it is searched
   read-only next to `SDS_AI_KNOWLEDGE_DB`. Startup fails if the cluster's
   embedder model or dimension differs from the manifest's.
-- Unit `sds-ai.service` (`EnvironmentFile`, `WorkingDirectory` and `HOME` =
-  `/var/lib/sds/ai`), installed but **disabled**; list it in
-  `[self_ha] extra_services` so the promoter starts it with the controller.
-- HTTP: `GET /ai/health`, `POST /ai/chat/stream`, `GET /ai/kb/list`,
-  `POST /ai/kb/{doc,ingest,refresh,purge}`. Send the same `session_id` in each
+- A systemd unit `sds-ai.service` (not shipped in this repository) with
+  `EnvironmentFile=/var/lib/sds/ai/sds-ai.env` and `WorkingDirectory` and
+  `HOME` set to `/var/lib/sds/ai`, installed on every node but left
+  **disabled**; list it in `[self_ha] extra_services` so the promoter starts it
+  with the controller.
+- HTTP: `GET /ai/health`, `POST /ai/chat/stream`, `POST /ai/chat/approve`,
+  `/ai/config`, and under `/ai/kb/`: `list`, `doc`, `doctor`, `resolve`,
+  `upload`, `ingest`, `refresh`, `purge`. Send the same `session_id` in each
   chat request to continue a conversation.
 
 `sds-mcp serve` exposes the same tools to remote MCP clients over HTTP with
@@ -521,6 +540,7 @@ sds pool list
 sds resource list
 sds resource status <name>
 sds ha self status
+sds inspect run          # read-only cluster checks; [inspect] runs them daily
 grpcurl -plaintext <host>:3374 list
 curl -s http://<host>:3375/v1/nodes
 # UI: http://<host-or-VIP>:3376/
@@ -554,7 +574,4 @@ journalctl -u sds-controller -f
 | `gateway nvme create --transport rdma` fails with `no RDMA device` | The node has no RDMA NIC (or soft-RoCE link) under `/sys/class/infiniband`. |
 | `pool add-cache` refuses with "not a thin pool" | Convert first: `sds pool convert-thin --node <n> --pool <p>`. |
 | Backup fails: `rclone is required on <node>` | Install rclone on that node. |
-| A gateway exports the wrong size (a 2 GiB resource serves ~1 GiB) | Gateway created by an older controller that exported the state volume. Delete and recreate it; the data volume was used as scratch, so its contents are lost. |
-| A gateway will not move (`umount: /var/lib/sds/<r>: no mount point specified`) | Gateway created by an older controller with its state mount under `/var/lib/sds`, which Self-HA's mount covers. `gateway stop --resource <r>`, then `gateway start --resource <r>` moves it to `/var/lib/sds-gateway/<r>`; run `ha evict sds-meta` first if start targets a node whose old mount is hidden. |
-| iSCSI/NFS clients get I/O errors on every switchover | Gateway created by an older controller raises its service IP before the target/exports. `gateway stop` then `gateway start` reorders it. |
 | Copilot cites documents unrelated to the question | The knowledge base is nearly empty; check `GET /ai/kb/list` and ingest content. |

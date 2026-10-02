@@ -297,7 +297,7 @@ func (nm *NodeManager) updateHostsFiles(ctx context.Context, hostname, old, addr
 // breaks the day another node takes over: when addresses are reshuffled — a
 // DHCP lease swap, two nodes trading places — each node still holds the key
 // of the machine that used to be at an address, and accept-new refuses a key
-// that changed. On the Lima cluster that surfaced weeks later as "mkdir
+// that changed. On a test cluster that surfaced weeks later as "mkdir
 // failed" on the first resource created after a controller failover.
 //
 // The keys are read over the connection that just proved the node answers at

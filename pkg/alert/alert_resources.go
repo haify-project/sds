@@ -261,9 +261,8 @@ func isDegraded(st NodeStateInfo) (bool, string) {
 	// not a transient: DRBD sets it deliberately, most often after refusing to
 	// resolve a split brain, and it stays until someone intervenes.
 	//
-	// This is measured. A replica of the openclaw resource sat StandAlone from
-	// 2026-09-20 02:54 after a split-brain disconnect, and nothing fired for a
-	// day: the peer carried no entry in the view at all, and a replica that is
+	// This is measured. A replica once sat StandAlone after a split-brain
+	// disconnect, and nothing fired for a day: the peer carried no entry in the view at all, and a replica that is
 	// absent is a replica nobody checks.
 	if !st.connected() {
 		if strings.EqualFold(st.Connection, "StandAlone") {

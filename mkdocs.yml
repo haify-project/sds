@@ -1,0 +1,86 @@
+site_name: SDS
+site_description: Replicated block storage for Linux clusters, built on DRBD 9 and driven by one controller.
+site_url: https://haify-project.github.io/sds/
+repo_url: https://github.com/haify-project/sds
+repo_name: haify-project/sds
+edit_uri: edit/main/docs/
+copyright: SDS is open source under the Apache License 2.0. DRBD is a registered trademark of LINBIT.
+
+docs_dir: docs
+site_dir: public
+
+theme:
+  name: material
+  custom_dir: docs-site/overrides
+  font: false
+  favicon: assets/images/favicon.svg
+  logo: assets/images/favicon.svg
+  palette:
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.highlight
+    - content.code.copy
+
+extra_css:
+  - assets/stylesheets/sds.css
+
+hooks:
+  - docs-site/hooks.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      # GitHub's heading anchors, so links written for the repository work here.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - Get started:
+      - Deployment: deployment-guide.md
+      - Node prerequisites: node-prerequisites.md
+  - User guide: user-guide.md
+  - Integrations:
+      - Kubernetes (CSI): kubernetes.md
+      - Proxmox VE: proxmox.md
+      - Prometheus and Grafana: monitoring.md
+      - AI assistants (MCP): mcp.md
+  - Design notes:
+      - WAN replication: design/wan-replication.md
+      - Thin pool capacity: design/thin-pool-capacity-reporting.md
+      - Proxmox storage plugin: design/proxmox-storage-plugin.md
+      - Resync progress: design/realtime-sync-progress.md
+      - HA promoter editor: design/ha-ocf-agents-toml-editor.md
+  - 中文: zh.md
+
+not_in_nav: |
+  /img/*
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn

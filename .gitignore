@@ -69,3 +69,7 @@ cmd/sds-ai/sds-ai
 .mcp.json
 .understand-anything/
 data/
+web-ui/tsconfig.tsbuildinfo
+
+# MkDocs site output
+public/

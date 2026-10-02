@@ -14,8 +14,9 @@ chmod 600 .env
 docker compose up -d
 ```
 
-The shipped `prometheus.yml` scrapes two example clusters on port `3381`;
-replace the targets with your own. Keep `job_name: sds` and a `cluster` label
+The shipped `prometheus.yml` scrapes two placeholder clusters
+(`controller-a.example.com:9433`, `controller-b.example.com:9433`); replace
+the targets with your own. Keep `job_name: sds` and a `cluster` label
 on every target: the alert rules match `job="sds"`, and the dashboard's
 Cluster selector is built from `up{job="sds"}`'s `cluster` values.
 

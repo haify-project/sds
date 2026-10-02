@@ -46,7 +46,7 @@ function StartListItem({
         />
       ) : null}
       {/* These are long unbreakable mono strings —
-          `service-ip@192.168.123.251-24`. On a phone the chip wraps inside the
+          `service-ip@192.168.1.251-24`. On a phone the chip wraps inside the
           card rather than pushing its width out; the desktop card has the room
           to truncate instead and keep the list scannable down its left edge. */}
       <span className="min-w-0 rounded-[5px] border border-border bg-muted px-2 py-1 font-mono text-xs break-all md:truncate">
@@ -153,7 +153,7 @@ export function PromoterCard({
             }
           />
           {/* Members used to appear only on the control plane's own card. That
-              openclaw has four replicas is the same kind of fact and was
+              a resource has four replicas is the same kind of fact and was
               nowhere on screen. */}
           <div className="min-w-0">
             <div className="eyebrow">Members</div>

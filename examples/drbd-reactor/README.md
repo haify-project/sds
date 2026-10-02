@@ -33,8 +33,8 @@ SDS 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-react
 drbd-reactor 无法把改动过的 promoter 配置应用到正在运行的网关上（src/plugin.rs `start_from_config`）：
 reload 时配置没变的 plugin 原样保留，变了的就把旧 plugin 停掉、再按新配置起一个新的。SDS 生成的配置都带
 `stop-services-on-exit = true`，所以停旧 plugin 会 `systemctl stop drbd-services@<r>.target`——整条链
-（文件系统、target、LUN、service IP）停掉并降级，各节点再重新抢提升（sdt 上实测：一次 initiator 修改
-触发切换，最后没有任何节点是 Primary）。reactor 也不监视目录：snippet monitor 只在日志里提示
+（文件系统、target、LUN、service IP）停掉并降级，各节点再重新抢提升（实测：一次 initiator 修改触发
+切换，最后没有任何节点是 Primary）。reactor 也不监视目录：snippet monitor 只在日志里提示
 "reload required"，不会自己 reload。
 
 因此编辑运行中的网关时：
@@ -137,7 +137,7 @@ start = [
 ```
 
 - `--export-path`：绝对路径原样使用（拒绝 `/`、`/etc`、`/usr`、`/var/lib/sds` 等系统目录）；
-  相对路径放在 `/srv/gateway-exports/<resource>/` 下。
+  相对路径放在 `/srv/gateway-exports/<resource>/` 下；不给时就是 `/srv/gateway-exports/<resource>`。
 - `--allowed-ips` 每项生成一行 `exportfs`（`export_0`、`export_1`…）；不给时 `0.0.0.0/0.0.0.0`。
 - `--fs-type` 默认 `ext4`。
 - service IP 放在最后，停止时最先摘掉：客户端只看到服务器不响应并重试，而不是在

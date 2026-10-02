@@ -11,7 +11,7 @@ import (
 
 // The alert monitor learns about DRBD by asking: every poll reads every
 // resource's status from its nodes, several SSH sessions per node every thirty
-// seconds — around seventeen a minute into each node of an idle openclaw. That
+// seconds — around seventeen a minute into each node of an idle cluster. That
 // is both the load and the latency: a failover is seen up to a poll late.
 //
 // DRBD will say when something changes. `drbdsetup events2` prints the state

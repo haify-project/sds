@@ -385,7 +385,7 @@ func (sm *ScheduleManager) runVerifySweep() {
 // blocks out of sync" — is the whole bitmap, not what this run added. Marks
 // also outlive the event that made them: a resync-free reconnect at equal
 // current UUIDs, an interrupted resync or an earlier verify all leave them,
-// and they stay until a resync copies the blocks. On sds-meta of the openclaw
+// and they stay until a resync copies the blocks. On the sds-meta resource of one
 // cluster 97% of the volume was marked while a block-by-block comparison of
 // the two replicas found them identical. Reading the total as "differences"
 // made every such mark a false alarm, so a verify records what was marked

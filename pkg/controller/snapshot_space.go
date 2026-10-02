@@ -13,8 +13,8 @@ import (
 // policy. The pool fills, the next snapshot cannot be created, and retention,
 // which is measured from the newest snapshot there is, stops removing
 // anything: the pool stays full. The replica is what pays — its writes fail
-// and DRBD drops the disk. That is what happened to openclaw's replica on
-// node-a after 2026-09-28, with the three other nodes at 79–90% on the same
+// and DRBD drops the disk. That is what happened to one replica of a
+// production resource, with the three other nodes at 79–90% on the same
 // road.
 //
 // So after retention, a pool still past the near-full threshold gives up its

@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-SDS is a Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`sds-controller`), a CLI (`sds`, installed with an `sds` link), a Kubernetes CSI driver, an MCP server (`sds-mcp`) and an AI Copilot backend (`sds-ai`). `CLAUDE.md` has the architecture and the gateway package's layout.
+SDS is a Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`sds-controller`), a CLI (`sds`, installed with an `sds-cli` link), a Kubernetes CSI driver, an MCP server (`sds-mcp`) and an AI Copilot backend (`sds-ai`). `CLAUDE.md` has the architecture and the gateway package's layout.
 
 ## Project Structure
 
@@ -12,17 +12,17 @@ sds/
 │   ├── controller/   # Controller and gRPC server: pools, resources, snapshots, nodes, HA, Self-HA, WAN, backups
 │   ├── deployment/   # Command execution on storage nodes over SSH (wraps dispatch)
 │   ├── gateway/      # NFS / iSCSI / NVMe-oF gateways (drbd-reactor promoter configs)
-│   ├── reactor/      # drbd-reactor promoter TOML generation
 │   ├── database/     # BoltDB persistence
 │   ├── config/       # controller.toml loading (viper)
 │   ├── client/       # gRPC client used by the CLI, sds-mcp and CSI
 │   ├── mcpserver/    # MCP tools and runbooks (runbooks/*.md, embedded)
 │   ├── mcpauth/      # Tokens and OAuth for `sds-mcp serve`
 │   ├── csi/          # Kubernetes CSI driver
-│   ├── k8sapp/       # Databases on Kubernetes backed by SDS volumes (sds-mcp k8s)
+│   ├── k8sapp/       # Databases on Kubernetes backed by SDS volumes (`sds-mcp k8s`, sds_k8s_* tools)
 │   ├── alert/        # Health detector: cluster state to events
 │   ├── event/        # Notification bus, history, webhook delivery
 │   ├── triage/       # Turns recorded events into a short problem list
+│   ├── inspect/      # Cluster inspection checks behind `sds inspect`
 │   ├── backup/       # Off-cluster backups (S3, SMB, WebDAV)
 │   ├── drbdtls/      # CA for encrypted DRBD replication
 │   ├── wanproxy/     # sds-proxy pair for WAN replication
@@ -87,7 +87,7 @@ Run `make ci` before pushing. CI checks plain `gofmt -l`, not the stricter `gofm
 - Standard `testing`; most packages also use `testify/assert` and `testify/require`.
 - Test files sit next to the file under test: `gateway.go` → `gateway_test.go`.
 - Test names say the behaviour checked, e.g. `TestRunbooksOnlyNameToolsThatExist`.
-- Single package: `go test -v ./pkg/controller/`. Single test: `go test -v ./pkg/gateway -run TestNFSGateway`.
+- Single package: `go test -v ./pkg/controller/`. Single test: `go test -v ./pkg/gateway -run TestGenerateNFSGatewayConfig`.
 - `scripts/csi-e2e.sh` is a CSI smoke test against a live Kubernetes cluster with the driver installed.
 - MCP runbooks are parsed and checked by `pkg/mcpserver/runbooks_test.go`: each file needs a `# Title` line, a summary line and `Needs: operate|admin`, and may only name tools that exist.
 

@@ -4,7 +4,7 @@
 //
 // Register with an MCP client, e.g.:
 //
-//	claude mcp add sds -- sds-mcp --controller orange1:3374
+//	claude mcp add sds -- sds-mcp --controller node1:3374
 //
 // All logs go to stderr; stdout carries the MCP protocol.
 package main

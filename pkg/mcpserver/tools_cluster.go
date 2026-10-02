@@ -71,7 +71,7 @@ type poolListOut struct {
 // ---- input types ----
 
 type nodeRegisterIn struct {
-	Name    string `json:"name" jsonschema:"node name, e.g. orange1"`
+	Name    string `json:"name" jsonschema:"node name, e.g. node1"`
 	Address string `json:"address" jsonschema:"node address (hostname or IP) the controller reaches over SSH"`
 }
 

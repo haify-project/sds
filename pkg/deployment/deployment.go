@@ -115,7 +115,7 @@ func NewWithOptions(logger *zap.Logger, opts Options) (*Client, error) {
 	// per Exec. dispatch's Copy takes no parallelism of its own and sizes its
 	// worker semaphore from the config file's [exec] parallel; a file without
 	// that line makes it 0, the semaphore unbuffered, and every Copy blocks
-	// forever on its first host. On openclaw that stalled each backup's
+	// forever on its first host. In production that stalled each backup's
 	// credential upload, and with it InstallFile, which Self-HA uses to ship
 	// the controller binary.
 	dispatchCfg := &dispatch.Config{Exec: &dispatch.ExecConfig{Parallel: parallel}}

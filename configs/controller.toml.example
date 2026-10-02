@@ -62,6 +62,39 @@ format = "json"  # json or text
 # one, and the controller refuses to start rather than accept "zfs" here.
 default_pool_type = "thin_pool"
 default_snapshot_suffix = "_snap"
+# DRBD online verify of every resource, one at a time (cron). Replicas that
+# differ raise resource.out_of_sync. "" turns it off.
+verify_schedule = "0 3 1 * *"
+
+[resource]
+# Give a 2-node resource a diskless quorum tiebreaker on a third registered
+# node, so it keeps quorum through one node loss.
+auto_tiebreaker = true
+# Node label naming what fails together (e.g. the physical host of a VM).
+# Automatic placement spreads replicas and the tiebreaker across its values.
+fault_domain_label = "host"
+
+[gateway]
+# Add the small cluster-private state volume a gateway needs when the
+# resource has only one volume.
+auto_state_volume = true
+state_volume_size_gb = 1
+
+[schedule]
+# Master switch for the scheduler: snapshot and backup schedules,
+# [storage] verify_schedule and [inspect] schedule. Off stops them without
+# deleting the definitions.
+enabled = true
+
+[audit]
+# Log every state-changing API call (caller, target, outcome, latency).
+enabled = true
+include_reads = false
+
+[self_ha]
+# Extra systemd units the Self-HA promoter starts with the controller, e.g.
+# ["sds-ai.service"]. Read when `sds ha self enable` writes the promoter.
+extra_services = []
 
 [metrics]
 enabled = true
@@ -72,6 +105,7 @@ port = 9433
 enabled = true
 listen_address = "0.0.0.0"
 port = 3376
+
 # Health detection and notifications.
 #
 # `enabled` starts the detector and the event bus by itself. Delivery is a
@@ -85,6 +119,17 @@ check_interval_sec = 30
 # SSH-probe every registered node on each poll. This is what produces
 # node.unreachable events, and the only check that costs a round trip per node.
 check_nodes = true
+# Keep a `drbdsetup events2` stream open to every node, so a DRBD state change
+# is checked within seconds; a healthy cluster is then polled every
+# idle_interval_sec instead of every check_interval_sec.
+watch_drbd_events = true
+idle_interval_sec = 300
+# A warning must last this long before it is raised. Critical is never held.
+warning_hold_sec = 30
+# Thin pool data/metadata usage thresholds (percent).
+check_pools = true
+pool_near_full_percent = 85
+pool_full_percent = 95
 # Events retained for clients that connect after something happened.
 history_size = 500
 

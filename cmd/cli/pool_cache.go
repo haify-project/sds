@@ -44,7 +44,7 @@ The command refuses when the device is already in use or carries a signature,
 when it is smaller than 4 GiB, when the pool is not an LVM thin pool, and when
 the pool already has a cache.
 
-  sds pool add-cache --node node-a --pool sds_sdspool --device /dev/nvme0n1`,
+  sds pool add-cache --node node1 --pool pool0 --device /dev/nvme0n1`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if node == "" || pool == "" || device == "" {
 				return fmt.Errorf("--node, --pool and --device are all required")
@@ -104,7 +104,7 @@ If the cache device has already failed there is nothing to flush from, and this
 command refuses rather than discarding the writes on your behalf; it names the
 lvconvert --uncache --force needed to accept that loss deliberately.
 
-  sds pool remove-cache --node node-a --pool sds_sdspool`,
+  sds pool remove-cache --node node1 --pool pool0`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if node == "" || pool == "" {
 				return fmt.Errorf("--node and --pool are both required")
