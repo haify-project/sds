@@ -93,7 +93,7 @@ func TestDrainNodeMovesPrimary(t *testing.T) {
 		return successExecResult(hosts, "res1 role:Primary\n  volume:0 minor:100 disk:UpToDate"), nil
 	}
 	dep.drbdStatusJSONFunc = func(_ context.Context, hosts []string, _ string) (*deployment.ExecResult, error) {
-		return successExecResult(hosts, `[{"name":"res1","role":"Primary","devices":[{"volume":0,"minor":100,"disk-state":"UpToDate"}],"connections":[{"name":"n2","peer-role":"Secondary","connection-state":"Connected"}]}]`), nil
+		return successExecResult(hosts, `[{"name":"res1","role":"Primary","devices":[{"volume":0,"minor":100,"disk-state":"UpToDate"}],"connections":[{"name":"n2","peer-role":"Secondary","connection-state":"Connected","peer_devices":[{"volume":0,"peer-disk-state":"UpToDate"}]}]}]`), nil
 	}
 	ctrl := newBasicTestController(dep)
 	ctrl.db = newTestDB(t)

@@ -298,7 +298,7 @@ This removes the node from the database but does not affect the node itself.`,
 func nodeDrain() *cobra.Command {
 	return &cobra.Command{
 		Use:   "drain <node>",
-		Short: "Move all Primary resources off a node and mark it maintenance",
+		Short: "Mark a node maintenance and move every Primary resource off it",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			node := args[0]
@@ -313,7 +313,10 @@ func nodeDrain() *cobra.Command {
 
 			moved, err := sdsClient.DrainNode(ctx, node)
 			if err != nil {
-				return fmt.Errorf("drain failed: %w", err)
+				for _, r := range moved {
+					fmt.Printf("  moved: %s\n", r)
+				}
+				return fmt.Errorf("drain incomplete: %w", err)
 			}
 
 			if len(moved) == 0 {

@@ -82,33 +82,39 @@ func (nm *NodeManager) CheckNodeHealth(ctx context.Context, address string) erro
 
 	result, err := nm.controller.deployment.Exec(ctx, []string{address}, "echo ok")
 	if err != nil {
-		nm.mu.Lock()
-		if n := nm.nodes[address]; n != nil {
-			n.State = NodeStateOffline
-		}
-		nm.mu.Unlock()
+		nm.markHealth(address, NodeStateOffline)
 		return fmt.Errorf("health check failed: %w", err)
 	}
 
 	if !result.AllSuccess() {
-		nm.mu.Lock()
-		if n := nm.nodes[address]; n != nil {
-			n.State = NodeStateOffline
-		}
-		nm.mu.Unlock()
+		nm.markHealth(address, NodeStateOffline)
 		// Why it failed is what an operator needs: an SSH host key that
 		// changed, a refused connection and a timeout are fixed differently.
 		return fmt.Errorf("health check failed: %s", result.FailureDetails())
 	}
 
+	nm.markHealth(address, NodeStateOnline)
+	return nil
+}
+
+// markHealth records what a health check found. Maintenance is an operator
+// decision, not a health reading, so a drained node keeps it either way —
+// placement reads this state, and a check that flipped it back to online would
+// hand a drained node new replicas. Unreachability still reaches the alert
+// detector through CheckNodeHealth's error.
+func (nm *NodeManager) markHealth(address string, state NodeState) {
 	nm.mu.Lock()
-	if n := nm.nodes[address]; n != nil {
-		n.State = NodeStateOnline
+	defer nm.mu.Unlock()
+	n := nm.nodes[address]
+	if n == nil {
+		return
+	}
+	if state == NodeStateOnline {
 		n.LastSeen = time.Now()
 	}
-	nm.mu.Unlock()
-
-	return nil
+	if n.State != NodeStateMaintenance {
+		n.State = state
+	}
 }
 
 // NodeHealthInfo represents the health status of a node

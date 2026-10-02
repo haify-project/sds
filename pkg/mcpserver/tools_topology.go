@@ -306,13 +306,13 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	}
 
 	addWrite(s, srv, destructiveTool("sds_node_drain", "Drain a node",
-		"Move the DRBD Primary role of every resource that is Primary on the node to another replica, and mark the "+
-			"node in maintenance. It changes roles only: it does not stop services or unmount anything, so a volume "+
-			"that is mounted or held open on the node cannot be demoted, and the drain stops there with an error — "+
-			"resources it already moved stay moved, and the one it was working on may have no Primary until you "+
-			"promote it. Resources run by an HA promoter (sds-meta, gateways) should be moved with sds_ha_evict "+
-			"first. A resource with no other replica cannot be moved. Returns the resources it moved; undrain does "+
-			"not move them back."),
+		"Mark the node maintenance (no new replicas or tiebreakers land on it until undrain) and move every "+
+			"resource that is Primary on it. HA resources, gateways and sds-meta are evicted through drbd-reactor, as "+
+			"sds_ha_evict does. Others are demoted and promoted on a replica that is diskful, UpToDate, connected, "+
+			"and not drained, offline or a WAN DR node; if that promote fails the node is promoted back. A resource "+
+			"that cannot move (no such replica, held open, eviction failed) stays Primary on the node and is named "+
+			"in the error with the reason; the rest still move. Returns the resources it moved; undrain does not "+
+			"move them back."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeNameIn) (*mcp.CallToolResult, drainOut, error) {
 			moved, err := s.client.DrainNode(ctx, in.Node)
 			if err != nil {
