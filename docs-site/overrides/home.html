@@ -2,6 +2,7 @@
 
 {% block tabs %}
 {{ super() }}
+{% import "partials/cases.html" as cases %}
 <div class="sds-home">
 
   <section class="sds-hero">
@@ -49,31 +50,37 @@
       <h2>What people use it for</h2>
       <div class="sds-cases">
         <article>
+          {{ cases.share() }}
           <h3>A shared folder that never goes down</h3>
           <p>Team files, media libraries, build artifacts. Clients keep the same address, and a failed server no longer means an outage.</p>
           <a href="{{ 'user-guide/' | url }}#10-gateways--exporting-to-clients">Set up a share</a>
         </article>
         <article>
+          {{ cases.vm() }}
           <h3>Virtual machines on Proxmox VE</h3>
           <p>VM disks kept on two servers, so you can move a running VM between them and restart it on the other one if its host dies.</p>
           <a href="{{ 'proxmox/' | url }}">Use with Proxmox VE</a>
         </article>
         <article>
+          {{ cases.k8s() }}
           <h3>Databases and apps on Kubernetes</h3>
           <p>Persistent volumes that outlive the node they started on. A pod rescheduled elsewhere comes back with its data.</p>
           <a href="{{ 'kubernetes/' | url }}">Use with Kubernetes</a>
         </article>
         <article>
+          {{ cases.db() }}
           <h3>A database that fails over on its own</h3>
           <p>PostgreSQL, MySQL or any service gets its data, its address and itself moved to a healthy server, without changing the application.</p>
           <a href="{{ 'user-guide/' | url }}#11-high-availability">Make a service highly available</a>
         </article>
         <article>
+          {{ cases.backup() }}
           <h3>Backups and a second site</h3>
           <p>Scheduled backups to S3, SMB or WebDAV, and a live copy in another location. Recover even if the whole cluster is lost.</p>
           <a href="{{ 'user-guide/' | url }}#9-backups--the-only-copy-that-survives-losing-the-cluster">Protect your data</a>
         </article>
         <article>
+          {{ cases.array() }}
           <h3>Leaving a storage array behind</h3>
           <p>Get the availability you paid an array for from ordinary servers and disks, with block shares your existing hosts already understand.</p>
           <a href="{{ 'deployment-guide/' | url }}">Plan a cluster</a>
@@ -140,4 +147,5 @@ sds node register <span>--name node2</span> <span>--address 192.0.2.12</span></c
 {% block scripts %}
 {{ super() }}
 <script src="{{ 'assets/javascripts/replication.js' | url }}"></script>
+<script src="{{ 'assets/javascripts/cases.js' | url }}"></script>
 {% endblock %}

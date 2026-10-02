@@ -1,0 +1,57 @@
+{#- Drawing pieces for the use-case illustrations on the home page. Every
+    scene loops over the same 8 seconds, so the timings below line up. -#}
+
+{%- macro fade(values, times) -%}
+<animate attributeName="opacity" values="{{ values }}" keyTimes="{{ times }}" dur="8s" repeatCount="indefinite"/>
+{%- endmacro -%}
+
+{%- macro server(x, y, label="") -%}
+<g transform="translate({{ x }} {{ y }})">
+  <rect class="box" width="56" height="60" rx="6"/>
+  <rect class="bay" x="9" y="10" width="38" height="7" rx="2"/>
+  <rect class="bay" x="9" y="22" width="38" height="7" rx="2"/>
+  <rect class="bay" x="9" y="34" width="38" height="7" rx="2"/>
+  <circle class="led" cx="45" cy="50" r="3"/>
+  {%- if label %}<text x="28" y="76" text-anchor="middle">{{ label }}</text>{% endif %}
+</g>
+{%- endmacro -%}
+
+{#- A veil and a cross over a server that has gone down. -#}
+{%- macro down(x, y, values, times) -%}
+<g opacity="0">
+  <rect class="veil" x="{{ x - 3 }}" y="{{ y - 3 }}" width="62" height="66" rx="8"/>
+  <path class="cross" d="M{{ x + 18 }} {{ y + 20 }} l20 20 m0 -20 l-20 20"/>
+  {{ fade(values, times) }}
+</g>
+{%- endmacro -%}
+
+{%- macro laptop(x, y) -%}
+<g transform="translate({{ x }} {{ y }})">
+  <rect class="box" width="34" height="22" rx="3"/>
+  <rect class="bay" x="5" y="5" width="24" height="12" rx="1"/>
+  <path class="wire" d="M-4 26 h42"/>
+</g>
+{%- endmacro -%}
+
+{%- macro disk(cx, y) -%}
+<g>
+  <path class="disk" d="M{{ cx - 12 }} {{ y }} v14 a12 4 0 0 0 24 0 v-14"/>
+  <ellipse class="disk" cx="{{ cx }}" cy="{{ y }}" rx="12" ry="4"/>
+</g>
+{%- endmacro -%}
+
+{#- A dot travelling along a path, forever. -#}
+{%- macro packet(path, dur="1.6s", begin="0s", r=3) -%}
+<circle class="pkt" r="{{ r }}"><animateMotion path="{{ path }}" dur="{{ dur }}" begin="{{ begin }}" repeatCount="indefinite"/></circle>
+{%- endmacro -%}
+
+{#- A connection: a faint permanent wire, and a live one with traffic that
+    shows while `values` says so. -#}
+{%- macro link(path, values="1", times="", dots=2) -%}
+<path class="wire wire--idle" d="{{ path }}"/>
+<g>
+  <path class="wire wire--on" d="{{ path }}"/>
+  {%- for i in range(dots) %}{{ packet(path, "1.6s", (i * 1.6 / dots) ~ "s") }}{% endfor %}
+  {%- if times %}{{ fade(values, times) }}{% endif %}
+</g>
+{%- endmacro -%}

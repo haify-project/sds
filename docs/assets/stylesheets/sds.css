@@ -165,11 +165,28 @@ body:has(.sds-home) .md-main__inner { display: none; }
 
 /* Use cases: the main section, so it gets the most room. */
 .sds-cases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2rem; margin-top: 1.4rem; }
-.sds-cases article { padding: 1rem 0 1.6rem; border-top: 2px solid var(--sds-ink); display: flex; flex-direction: column; }
+.sds-cases article { padding: 0 0 2rem; display: flex; flex-direction: column; }
 .sds-cases h3 { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 600; line-height: 1.3; letter-spacing: -0.005em; }
 .sds-cases p { margin: 0 0 0.8rem; font-size: 0.8rem; color: var(--sds-muted); flex: 1; }
 .sds-cases a { font-size: 0.78rem; font-weight: 600; color: var(--sds-ok); text-decoration: none; align-self: flex-start; }
 .sds-cases a:hover { text-decoration: underline; }
+
+/* Use-case illustrations: drawn in the page's own colours, so they follow the theme. */
+.sds-ill { display: block; width: 100%; height: auto; margin: 0 0 0.9rem; background: var(--sds-surface);
+  border: 1px solid var(--sds-line); border-radius: 0.5rem; }
+.sds-ill .box { fill: var(--sds-surface); stroke: var(--sds-ink); stroke-width: 1.5; }
+.sds-ill .box--app { fill: var(--sds-ok-soft); stroke: var(--sds-ok); }
+.sds-ill .bay { fill: var(--sds-line); }
+.sds-ill .led, .sds-ill .pkt { fill: var(--sds-ok); }
+.sds-ill .disk { fill: var(--sds-ok-soft); stroke: var(--sds-ok); stroke-width: 1.5; }
+.sds-ill .icon { fill: none; stroke: var(--sds-ink); stroke-width: 1.5; stroke-linejoin: round; }
+.sds-ill .wire { fill: none; stroke: var(--sds-muted); stroke-width: 1.5; }
+.sds-ill .wire--idle { stroke: var(--sds-line); stroke-dasharray: 3 4; }
+.sds-ill .wire--on { stroke: var(--sds-ok); stroke-width: 2; }
+.sds-ill .veil { fill: var(--sds-bg); opacity: 0.78; }
+.sds-ill .cross { fill: none; stroke: var(--sds-turn); stroke-width: 3; stroke-linecap: round; }
+.sds-ill text { font-family: var(--md-text-font-family); font-size: 11px; fill: var(--sds-muted); }
+.sds-ill text.lbl { fill: var(--sds-ink); font-weight: 600; font-size: 12px; }
 
 .sds-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2rem; }
 .sds-links a { display: block; padding: 0.8rem 0; border-top: 1px solid var(--sds-line); text-decoration: none; color: var(--sds-ink); }
