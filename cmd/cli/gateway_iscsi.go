@@ -92,7 +92,7 @@ func iscsiCreate() *cobra.Command {
 	cmd.Flags().StringSliceVar(&allowedInitiators, "allowed-initiators", []string{}, "Allowed initiator IQNs")
 	cmd.Flags().StringVar(&username, "username", "", "CHAP username")
 	cmd.Flags().StringVar(&password, "password", "", "CHAP password")
-	cmd.Flags().StringVar(&implementation, "implementation", "lio", "iSCSI implementation (lio, tgt, iet)")
+	cmd.Flags().StringVar(&implementation, "implementation", "lio", "iSCSI implementation: lio (the only one supported; tgt and iet are refused)")
 
 	_ = cmd.MarkFlagRequired("resource")
 	_ = cmd.MarkFlagRequired("iqn")

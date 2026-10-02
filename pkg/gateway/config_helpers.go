@@ -175,10 +175,14 @@ func parseISCSILUNLine(line string) (map[string]string, bool) {
 	return parseOCFParams(content, 2), true
 }
 
-func buildISCSILUNLine(lunNumber int, iqn, device string) string {
+// buildISCSILUNLine builds a LUN line. implementation is the target's: the
+// iSCSILogicalUnit agent otherwise picks its own, preferring ietadm and tgtadm
+// over targetcli, so a node that also has tgt installed would add the LUN to a
+// target that does not exist.
+func buildISCSILUNLine(lunNumber int, iqn, device, implementation string) string {
 	serial := generateSerialFromIQN(iqn, lunNumber)
-	return fmt.Sprintf(
-		`        "ocf:heartbeat:iSCSILogicalUnit lu%d target_iqn=%s lun=%d path=%s product_id=%s scsi_sn=%s",`,
+	line := fmt.Sprintf(
+		`ocf:heartbeat:iSCSILogicalUnit lu%d target_iqn=%s lun=%d path=%s product_id=%s scsi_sn=%s`,
 		lunNumber,
 		iqn,
 		lunNumber,
@@ -186,6 +190,10 @@ func buildISCSILUNLine(lunNumber int, iqn, device string) string {
 		serial,
 		serial,
 	)
+	if implementation != "" {
+		line += " implementation=" + implementation
+	}
+	return `        "` + line + `",`
 }
 
 func parseNFSExportLine(line string) (map[string]string, bool) {

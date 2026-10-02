@@ -264,7 +264,7 @@ func TestParseTransportType(t *testing.T) {
 	}{
 		{"tcp", false},
 		{"rdma", false},
-		{"fc", false},
+		{"fc", true},
 		{"invalid", true},
 		{"", true},
 	}

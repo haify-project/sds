@@ -55,7 +55,7 @@ type iscsiGatewayCreateIn struct {
 	AllowedInitiators []string `json:"allowed_initiators,omitempty" jsonschema:"initiator IQNs allowed to connect; default allows all"`
 	Username          string   `json:"username,omitempty" jsonschema:"CHAP username"`
 	Password          string   `json:"password,omitempty" jsonschema:"CHAP password"`
-	Implementation    string   `json:"implementation,omitempty" jsonschema:"target implementation: lio (default), tgt, or iet"`
+	Implementation    string   `json:"implementation,omitempty" jsonschema:"target implementation: lio (the only one supported; tgt and iet are refused)"`
 }
 
 type nvmeGatewayCreateIn struct {

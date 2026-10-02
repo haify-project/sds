@@ -74,30 +74,103 @@ func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource strin
 	return nil
 }
 
+// gatewayPrereqs is what one gateway's promoter chain needs on a node: the
+// ocf:heartbeat agents it names, the userspace tools those agents call, and
+// the packages to install when any of them is missing.
+type gatewayPrereqs struct {
+	agents  []string
+	tools   []string
+	install string
+}
+
+// ocfAgentsInstall is where every gateway's agents come from. Ubuntu's
+// resource-agents-base lacks Filesystem, which every chain starts with.
+const ocfAgentsInstall = "resource-agents-extra (Debian/Ubuntu) or resource-agents (EL)"
+
+// nfsPrereqs: the nfsserver agent starts the distribution's NFS server and the
+// exportfs agent drives exportfs(8). Without the server package the agents are
+// present, the config is written, and the promoter fails on the node with "No
+// init script or systemd unit file detected for nfs server".
+func nfsPrereqs() gatewayPrereqs {
+	return gatewayPrereqs{
+		agents:  []string{"Filesystem", "IPaddr2", "nfsserver", "exportfs"},
+		tools:   []string{"rpc.nfsd", "exportfs"},
+		install: "nfs-kernel-server (Debian/Ubuntu) or nfs-utils (EL)",
+	}
+}
+
+// iscsiPrereqs: the iSCSITarget and iSCSILogicalUnit agents call the tool of
+// the implementation they are told to use. Only LIO (lio-t, i.e. targetcli) is
+// accepted — see validateISCSIImplementation — so targetcli is that tool.
+func iscsiPrereqs() gatewayPrereqs {
+	return gatewayPrereqs{
+		agents:  []string{"Filesystem", "IPaddr2", "iSCSITarget", "iSCSILogicalUnit"},
+		tools:   []string{"targetcli"},
+		install: "targetcli-fb (Debian/Ubuntu) or targetcli (EL)",
+	}
+}
+
+// nvmePrereqs: the nvmet-* agents drive the kernel target entirely through
+// configfs (/sys/kernel/config/nvmet) and call no userspace tool, so nvmetcli
+// is deliberately not required. Their real dependency is the kernel modules,
+// which ensureNVMeModules loads for the chosen transport.
+func nvmePrereqs() gatewayPrereqs {
+	return gatewayPrereqs{
+		agents: []string{"Filesystem", "IPaddr2", "nvmet-subsystem", "nvmet-namespace", "nvmet-port"},
+	}
+}
+
+// gatewayNodes returns the nodes a gateway's promoter runs on — the resource's
+// diskful replicas, or all its nodes when the controller cannot tell them
+// apart. Those are the nodes whose prerequisites matter: a tiebreaker never
+// runs the chain (see writeReactorConfig).
+func gatewayNodes(res *ResourceInfo) []string {
+	if res == nil {
+		return nil
+	}
+	if len(res.Hosts) > 0 {
+		return res.Hosts
+	}
+	return res.Nodes
+}
+
 // checkGatewayPrereqs verifies that the OCF resource agents and userspace tools
 // a gateway type needs are installed on every node, so gateway creation fails
 // with a clear, actionable message instead of writing a drbd-reactor promoter
-// config that then silently fails to start (e.g. missing resource-agents-extra
-// for the Filesystem agent, or targetcli for iSCSITarget).
-func (m *Manager) checkGatewayPrereqs(ctx context.Context, nodes []string, agents, tools []string) error {
+// config that then silently fails to start.
+//
+// The probe accumulates into a shell variable, so it must go through
+// runScript: sent as a plain command, dispatch's quoting expands $missing to
+// nothing before the script runs and the check passes whatever is installed.
+func (m *Manager) checkGatewayPrereqs(ctx context.Context, nodes []string, p gatewayPrereqs) error {
 	if len(nodes) == 0 {
 		return nil
 	}
-	parts := []string{"missing=''"}
-	for _, a := range agents {
-		parts = append(parts, fmt.Sprintf(
-			"test -x /usr/lib/ocf/resource.d/heartbeat/%s || missing=\"$missing ocf:heartbeat:%s\"", a, a))
-	}
-	for _, t := range tools {
-		parts = append(parts, fmt.Sprintf(
-			"command -v %s >/dev/null 2>&1 || missing=\"$missing %s\"", t, t))
-	}
-	parts = append(parts, "if [ -n \"$missing\" ]; then echo \"missing:$missing\"; exit 1; fi")
-	cmd := strings.Join(parts, "; ")
-	if err := m.deployment.Exec(ctx, nodes, cmd); err != nil {
-		return fmt.Errorf("gateway prerequisites missing (install resource-agents-extra and the target tooling): %w", err)
+	if err := m.runScript(ctx, nodes, prereqScript(p)); err != nil {
+		hint := ocfAgentsInstall
+		if p.install != "" {
+			hint += "; " + p.install
+		}
+		return fmt.Errorf("gateway prerequisites missing (install %s): %w", hint, err)
 	}
 	return nil
+}
+
+// prereqScript is the shell probe checkGatewayPrereqs runs on each node. It
+// prints "missing: <items>" and exits 1 when anything is absent. Tools are
+// also looked up in the sbin directories, where rpc.nfsd and exportfs live.
+func prereqScript(p gatewayPrereqs) string {
+	lines := []string{"missing="}
+	for _, a := range p.agents {
+		lines = append(lines, fmt.Sprintf(
+			`test -x /usr/lib/ocf/resource.d/heartbeat/%[1]s || missing="$missing ocf:heartbeat:%[1]s"`, a))
+	}
+	for _, t := range p.tools {
+		lines = append(lines, fmt.Sprintf(
+			`command -v %[1]s >/dev/null 2>&1 || test -x /usr/sbin/%[1]s || test -x /sbin/%[1]s || missing="$missing %[1]s"`, t))
+	}
+	lines = append(lines, `if [ -n "$missing" ]; then echo "missing:$missing"; exit 1; fi`)
+	return strings.Join(lines, "\n")
 }
 
 // GatewayServiceActive reports whether the drbd-reactor promoter target for a

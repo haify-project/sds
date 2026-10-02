@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -116,74 +113,6 @@ func TestNewManager(t *testing.T) {
 	assert.Equal(t, hosts, manager.hosts)
 }
 
-func TestManagerListGateways(t *testing.T) {
-	// Create temp config directory
-	tmpDir := t.TempDir()
-
-	// Create test config files
-	configs := []string{
-		"sds-nfs-data.toml",
-		"sds-iscsi-data.toml",
-		"sds-nvmeof-data.toml",
-		"sds-ha-resource.toml", // Should be filtered out
-		"other-config.toml",    // Should be ignored
-	}
-
-	for _, cfg := range configs {
-		err := os.WriteFile(filepath.Join(tmpDir, cfg), []byte("# test config"), 0644)
-		require.NoError(t, err)
-	}
-
-	logger := zap.NewNop()
-	_ = New(nil, nil, logger, nil)
-
-	// We'll test the file parsing logic directly instead of using ListGateways
-	// which requires the actual config directory
-	files, err := os.ReadDir(tmpDir)
-	require.NoError(t, err)
-
-	storageTypes := map[string]bool{
-		"nfs":    true,
-		"iscsi":  true,
-		"nvmeof": true,
-	}
-
-	var gateways []string
-	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "sds-") && strings.HasSuffix(file.Name(), ".toml") {
-			parts := strings.TrimPrefix(file.Name(), "sds-")
-			parts = strings.TrimSuffix(parts, ".toml")
-			typeParts := strings.SplitN(parts, "-", 2)
-
-			if len(typeParts) == 2 {
-				gwType := typeParts[0]
-				if storageTypes[gwType] {
-					gateways = append(gateways, file.Name())
-				}
-			}
-		}
-	}
-
-	// Should only include storage gateway types (nfs, iscsi, nvmeof)
-	assert.Len(t, gateways, 3)
-}
-
-func TestManagerGetGateway(t *testing.T) {
-	logger := zap.NewNop()
-	manager := New(nil, nil, logger, nil)
-
-	// GetGateway calls ListGateways which reads from actual filesystem
-	// We test the logic of finding a gateway from the list
-	ctx := context.Background()
-
-	// Test that GetGateway returns error for non-existent gateway
-	// This test verifies the method works with the actual interface
-	_, err := manager.GetGateway(ctx, "nonexistent-gateway-xyz")
-	// This may or may not error depending on filesystem state
-	// The important thing is it doesn't panic
-	_ = err
-}
-
 // ==================== Mock Implementations ====================
 
 type MockResourceManager struct {
@@ -224,6 +153,24 @@ type MockDeploymentClient struct {
 	ConfigHosts   map[string][]string
 	DistributeErr error
 	ExecErr       error
+	// HostOutputs is what ExecOutput reports per host; a host absent from it
+	// did not answer.
+	HostOutputs map[string]string
+}
+
+func (m *MockDeploymentClient) ExecOutput(ctx context.Context, hosts []string, cmd string) (map[string]string, error) {
+	if m.ExecErr != nil {
+		return nil, m.ExecErr
+	}
+	m.ExecCommands = append(m.ExecCommands, cmd)
+	m.ExecHosts = append(m.ExecHosts, append([]string(nil), hosts...))
+	out := map[string]string{}
+	for _, h := range hosts {
+		if v, ok := m.HostOutputs[h]; ok {
+			out[h] = v
+		}
+	}
+	return out, nil
 }
 
 func (m *MockDeploymentClient) GetConfig(path string) (string, bool) {

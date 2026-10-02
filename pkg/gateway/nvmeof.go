@@ -62,20 +62,14 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 
 	// Fail early with a clear message if the OCF agents an NVMe-oF gateway
 	// needs are not installed on the resource's nodes, instead of writing a
-	// promoter config that silently fails to start.
-	//
-	// The nvmet-* OCF agents drive the kernel target entirely through configfs
-	// (/sys/kernel/config/nvmet); they invoke no userspace tool such as
-	// nvmetcli, so nvmetcli is deliberately NOT required here. Their real
-	// runtime dependency is the nvmet/nvmet-tcp kernel modules, which
+	// promoter config that silently fails to start. Their real runtime
+	// dependency is the kernel modules for the transport, which
 	// ensureNVMeModules loads (and persists) below.
 	if res, rerr := n.resources.GetResource(ctx, req.Resource); rerr == nil && res != nil {
-		if err := n.checkGatewayPrereqs(ctx, res.Nodes,
-			[]string{"Filesystem", "IPaddr2", "nvmet-subsystem", "nvmet-namespace", "nvmet-port"},
-			nil); err != nil {
+		if err := n.checkGatewayPrereqs(ctx, gatewayNodes(res), nvmePrereqs()); err != nil {
 			return &v1.CreateNVMeGatewayResponse{Success: false, Message: err.Error()}, err
 		}
-		if err := n.ensureNVMeModules(ctx, res.Nodes); err != nil {
+		if err := n.ensureNVMeModules(ctx, gatewayNodes(res), req.TransportType); err != nil {
 			return &v1.CreateNVMeGatewayResponse{Success: false, Message: err.Error()}, err
 		}
 	}
@@ -337,25 +331,49 @@ func (n *NVMeManager) DeleteNVMeGateway(ctx context.Context, resource string) er
 
 // ==================== Helper Functions ====================
 
-// ensureNVMeModules loads the nvmet and nvmet-tcp kernel modules on the given
-// nodes and persists them via /etc/modules-load.d so they survive a reboot,
-// then verifies the nvmet configfs tree exists. The nvmet-* OCF agents operate
-// exclusively through /sys/kernel/config/nvmet, which only appears once these
-// modules are loaded; without them a promoted gateway silently fails to export
-// its namespace. Running this at create time makes a freshly provisioned node
-// serve NVMe-oF without a manual modprobe.
-func (n *NVMeManager) ensureNVMeModules(ctx context.Context, nodes []string) error {
+// nvmeTransportModule is the kernel module that implements an NVMe-oF
+// transport on the target side. The nvmet-port agent only writes the port's
+// trtype into configfs; the kernel rejects it unless this module is loaded.
+func nvmeTransportModule(transport string) (string, error) {
+	switch transport {
+	case "", "tcp":
+		return "nvmet-tcp", nil
+	case "rdma":
+		return "nvmet-rdma", nil
+	}
+	return "", parseTransportType(transport)
+}
+
+// ensureNVMeModules loads nvmet and the module for the gateway's transport on
+// the given nodes and persists both in /etc/modules-load.d/nvmet.conf so they
+// survive a reboot, then verifies the nvmet configfs tree exists. The nvmet-*
+// OCF agents operate exclusively through /sys/kernel/config/nvmet; without the
+// modules a promoted gateway silently fails to export its namespace. Modules
+// are added to the file, never replace it, so a node serving a TCP and an RDMA
+// gateway keeps both. RDMA additionally needs an RDMA-capable device (or
+// soft-RoCE), without which the port cannot be enabled.
+func (n *NVMeManager) ensureNVMeModules(ctx context.Context, nodes []string, transport string) error {
 	if len(nodes) == 0 {
 		return nil
 	}
-	script := `set -e
-modprobe nvmet
-modprobe nvmet-tcp
-printf 'nvmet\nnvmet-tcp\n' > /etc/modules-load.d/nvmet.conf
-test -d /sys/kernel/config/nvmet`
+	module, err := nvmeTransportModule(transport)
+	if err != nil {
+		return err
+	}
+	rdmaCheck := ""
+	if module == "nvmet-rdma" {
+		rdmaCheck = `[ -n "$(ls /sys/class/infiniband 2>/dev/null)" ] || { echo "no RDMA device under /sys/class/infiniband"; exit 1; }` + "\n"
+	}
+	script := fmt.Sprintf(`set -e
+%[2]smodprobe nvmet
+modprobe %[1]s
+conf=/etc/modules-load.d/nvmet.conf
+touch "$conf"
+for m in nvmet %[1]s; do grep -qx "$m" "$conf" || echo "$m" >> "$conf"; done
+test -d /sys/kernel/config/nvmet`, module, rdmaCheck)
 	if err := n.runScript(ctx, nodes, script); err != nil {
-		return fmt.Errorf("failed to load nvmet kernel modules (nvmet, nvmet-tcp) on gateway nodes; "+
-			"ensure the nvme-target kernel modules are available: %w", err)
+		return fmt.Errorf("failed to load nvmet kernel modules (nvmet, %s) on gateway nodes; "+
+			"ensure the nvme-target kernel modules are available: %w", module, err)
 	}
 	return nil
 }

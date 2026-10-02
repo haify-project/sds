@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -145,62 +145,102 @@ type CreateGatewayRequest interface {
 
 // ==================== Common Operations ====================
 
-// ListGateways lists all storage gateways (NFS, iSCSI, NVMe-oF) by scanning drbd-reactor config directory
-// HA/service gateways are filtered out from this list
+// HostOutputReader is implemented by deployment clients that can return what a
+// command printed on each host. It is kept out of DeploymentClient because
+// only reads of the nodes' own state need it.
+type HostOutputReader interface {
+	// ExecOutput runs cmd on hosts and returns the output of every host on
+	// which it succeeded. Hosts that failed or did not answer are left out;
+	// an error means the command could not be run at all.
+	ExecOutput(ctx context.Context, hosts []string, cmd string) (map[string]string, error)
+}
+
+// storageGatewayTypes are the promoter config types that are gateways; HA and
+// service promoters share the directory and the sds- prefix but are not.
+var storageGatewayTypes = map[string]bool{"nfs": true, "iscsi": true, "nvmeof": true}
+
+// ListGateways lists the storage gateways (NFS, iSCSI, NVMe-oF) configured on
+// the managed nodes, read from their /etc/drbd-reactor.d.
+//
+// The controller's own filesystem is not consulted: a gateway's config lives
+// only on its resource's diskful nodes, and the controller need not be one of
+// them. A gateway is reactor-managed when any node holds its live .toml, and
+// stopped when the nodes hold only the .toml.disabled copy.
 func (m *Manager) ListGateways(ctx context.Context) ([]*GatewayInfo, error) {
-	files, err := os.ReadDir(DrbdReactorConfigDir)
+	if len(m.hosts) == 0 {
+		return nil, fmt.Errorf("no managed nodes to read gateway configs from")
+	}
+	reader, ok := m.deployment.(HostOutputReader)
+	if !ok {
+		return nil, fmt.Errorf("deployment client cannot read node output")
+	}
+	outputs, err := reader.ExecOutput(ctx, m.hosts, fmt.Sprintf("ls -1 %s 2>/dev/null; true", DrbdReactorConfigDir))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config directory: %w", err)
+		return nil, fmt.Errorf("failed to list %s on nodes: %w", DrbdReactorConfigDir, err)
+	}
+	if len(outputs) == 0 {
+		return nil, fmt.Errorf("no managed node answered when listing %s", DrbdReactorConfigDir)
 	}
 
-	// Storage gateway types only (exclude HA and service types)
-	storageTypes := map[string]bool{
-		"nfs":    true,
-		"iscsi":  true,
-		"nvmeof": true,
-	}
-
-	var gateways []*GatewayInfo
-	for _, file := range files {
-		name := file.Name()
-		// A stopped gateway keeps its config as .toml.disabled so reactor
-		// no longer manages it but the definition (and the VIP/port info
-		// deletion relies on) is preserved.
-		disabled := false
-		if strings.HasSuffix(name, ".toml.disabled") {
-			disabled = true
-			name = strings.TrimSuffix(name, ".disabled")
-		}
-		if strings.HasPrefix(name, "sds-") && strings.HasSuffix(name, ".toml") {
-			// Parse gateway type and name from filename
-			// Format: sds-<type>-<resource>.toml
-			parts := strings.TrimPrefix(name, "sds-")
-			parts = strings.TrimSuffix(parts, ".toml")
-			typeParts := strings.SplitN(parts, "-", 2)
-
-			if len(typeParts) == 2 {
-				gwType := typeParts[0]
-				resource := typeParts[1]
-
-				// Only include storage gateway types
-				if storageTypes[gwType] {
-					state := ""
-					if disabled {
-						state = "stopped"
-					}
-					gateways = append(gateways, &GatewayInfo{
-						ID:       resource,
-						Name:     resource,
-						Type:     gwType,
-						Resource: resource,
-						State:    state,
-					})
-				}
+	byKey := map[string]*GatewayInfo{}
+	for _, out := range outputs {
+		for _, name := range strings.Fields(out) {
+			gw, live := parseGatewayConfigName(name)
+			if gw == nil {
+				continue
 			}
+			key := gw.Type + "/" + gw.Resource
+			if prev, seen := byKey[key]; seen {
+				if live {
+					prev.State = ""
+				}
+				continue
+			}
+			byKey[key] = gw
 		}
 	}
 
+	gateways := make([]*GatewayInfo, 0, len(byKey))
+	for _, gw := range byKey {
+		gateways = append(gateways, gw)
+	}
+	sort.Slice(gateways, func(i, j int) bool {
+		if gateways[i].Resource != gateways[j].Resource {
+			return gateways[i].Resource < gateways[j].Resource
+		}
+		return gateways[i].Type < gateways[j].Type
+	})
 	return gateways, nil
+}
+
+// parseGatewayConfigName returns the gateway a file in /etc/drbd-reactor.d
+// configures, or nil when it is not a storage gateway config. live is false
+// for a stopped gateway's .toml.disabled copy.
+// Format: sds-<type>-<resource>.toml[.disabled]
+func parseGatewayConfigName(name string) (gw *GatewayInfo, live bool) {
+	live = true
+	if strings.HasSuffix(name, ".toml.disabled") {
+		live = false
+		name = strings.TrimSuffix(name, ".disabled")
+	}
+	if !strings.HasPrefix(name, "sds-") || !strings.HasSuffix(name, ".toml") {
+		return nil, false
+	}
+	parts := strings.SplitN(strings.TrimSuffix(strings.TrimPrefix(name, "sds-"), ".toml"), "-", 2)
+	if len(parts) != 2 || parts[1] == "" || !storageGatewayTypes[parts[0]] {
+		return nil, false
+	}
+	state := ""
+	if !live {
+		state = "stopped"
+	}
+	return &GatewayInfo{
+		ID:       parts[1],
+		Name:     parts[1],
+		Type:     parts[0],
+		Resource: parts[1],
+		State:    state,
+	}, live
 }
 
 // GetGateway retrieves gateway information

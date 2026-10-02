@@ -208,7 +208,6 @@ function CreateISCSIForm({
   const [allowedInitiators, setAllowedInitiators] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [implementation, setImplementation] = useState('lio-t');
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -221,7 +220,6 @@ function CreateISCSIForm({
           : undefined,
         username: username || undefined,
         password: password || undefined,
-        implementation,
       }),
     onSuccess: () => {
       toast.success('iSCSI gateway created');
@@ -288,19 +286,6 @@ function CreateISCSIForm({
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label>Implementation</Label>
-        <Select value={implementation} onValueChange={setImplementation}>
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="lio-t">LIO (targetcli)</SelectItem>
-            <SelectItem value="scst">SCST</SelectItem>
-            <SelectItem value="tgt">TGT</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
       <DialogFooter>
         <Button type="submit" disabled={mutation.isPending || !resource}>

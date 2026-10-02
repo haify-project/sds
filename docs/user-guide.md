@@ -762,8 +762,8 @@ sds gateway nvme create --resource fast \
     --nqn nqn.2026-01.com.example:sds.fast --service-ip 192.168.1.202/24
 ```
 
-Creation checks that the OCF agents the chain needs are installed on the
-resource's nodes, formats the state volume (and, for NFS, the exported volume)
+Creation checks that the OCF agents and tools the chain needs are installed on
+the resource's diskful nodes (see below), formats the state volume (and, for NFS, the exported volume)
 when it carries no filesystem, writes the promoter config
 (`/etc/drbd-reactor.d/sds-<type>-<resource>.toml`) to the resource's diskful
 nodes only, and reloads drbd-reactor there. A gateway needs a small
@@ -774,7 +774,7 @@ auto_state_volume`, default on, `state_volume_size_gb` default 1).
 Managing a live gateway:
 
 ```bash
-sds gateway list                       # or: gateway nfs|iscsi|nvme list
+sds gateway list                       # or: gateway nfs|iscsi|nvme list; read from the nodes
 sds gateway get --resource data
 sds gateway status --resource data
 sds gateway stop  --resource data      # demote and stop, config kept
@@ -796,19 +796,28 @@ sds gateway nvme host add|list|remove ...       # host allow-list
 ```
 
 `iscsi create` also takes `--allowed-initiators`, `--username`/`--password` for
-CHAP, and `--implementation` (`lio`, the default, `tgt` or `iet`). `nvme create`
-takes `--transport tcp` (default) or `rdma`; the `nvmet` and `nvmet-tcp` kernel
-modules are loaded, and persisted, on the nodes at creation.
+CHAP, and `--implementation lio` (the default and the only one supported; `tgt`
+and `iet` are refused). `nvme create` takes `--transport tcp` (default) or
+`rdma`; `nvmet` and the transport's module (`nvmet-tcp` or `nvmet-rdma`) are
+loaded on the nodes at creation and added to
+`/etc/modules-load.d/nvmet.conf`. `rdma` also requires an RDMA device under
+`/sys/class/infiniband`.
 
 **What clients need.** Windows has a built-in iSCSI initiator and a limited
 NFSv3 client; macOS has a built-in NFS client and no iSCSI initiator. There is
 no SMB gateway. Pick the protocol by what the client can actually mount.
 
-**Before you create an NFS gateway**, make sure `nfs-kernel-server` is installed
-on the nodes. Creation checks the OCF agents but not the NFS server itself, so
-without it the gateway is created and never starts; the real error only
-appears in `journalctl -u ocf.rs@nfsserver_<resource>`. An iSCSI gateway needs
-`targetcli` (checked at creation).
+**What creation checks.** Every gateway needs the OCF agents from
+`resource-agents-extra` (Debian/Ubuntu) or `resource-agents` (EL). On top:
+
+| Gateway | Checked | Install |
+| ------- | ------- | ------- |
+| NFS | `rpc.nfsd`, `exportfs` | `nfs-kernel-server` (Debian/Ubuntu), `nfs-utils` (EL) |
+| iSCSI | `targetcli` | `targetcli-fb` (Debian/Ubuntu), `targetcli` (EL) |
+| NVMe-oF | kernel modules, loaded at creation | `linux-modules-extra` on Ubuntu cloud kernels |
+
+Anything missing fails creation with the list of what is missing and what to
+install; no config is written.
 
 ---
 

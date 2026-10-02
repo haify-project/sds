@@ -2339,7 +2339,7 @@ message CreateISCSIGatewayRequest {
   repeated string allowed_initiators = 4; // Allowed initiator IQNs
   string username = 5;           // CHAP username (optional)
   string password = 6;           // CHAP password (optional)
-  string implementation = 7;     // iSCSI implementation (lio, tgt, iet)
+  string implementation = 7;     // iSCSI implementation: lio (default; tgt and iet are refused)
   map<string, string> options = 8; // Additional options
 }
 

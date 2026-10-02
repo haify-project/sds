@@ -5,8 +5,8 @@ not surface where the command was run: a drbd-reactor promoter config is
 accepted whether or not the agents and units it names exist, so a missing piece
 shows up later as a promoter that never starts.
 
-SDS checks some of this itself — gateway creation checks OCF agents and
-`targetcli`, `ha self enable` checks drbd-reactor and SSH, backups check
+SDS checks some of this itself — gateway creation checks OCF agents,
+`targetcli` and the NFS server, `ha self enable` checks drbd-reactor and SSH, backups check
 `rclone`, `replication-tls setup` checks TLS support — but installs none of the
 packages. `sds health-check` reports DRBD, drbd-reactor (installed, running)
 and resource-agents per node.
@@ -92,13 +92,14 @@ promoter starts with `ocf:heartbeat:Filesystem` and raises its service IP with
 mount through a systemd `.mount` unit and raise the VIP through
 `service-ip@.service` (§4).
 
-Gateway creation checks, under `/usr/lib/ocf/resource.d/heartbeat/`:
+Gateway creation checks, on the resource's diskful nodes, under
+`/usr/lib/ocf/resource.d/heartbeat/`:
 
-| Gateway | Agents |
-| --- | --- |
-| NFS | `Filesystem`, `IPaddr2`, `nfsserver`, `exportfs` |
-| iSCSI | `Filesystem`, `IPaddr2`, `iSCSITarget`, `iSCSILogicalUnit` (+ `targetcli` in `PATH`) |
-| NVMe-oF | `Filesystem`, `IPaddr2`, `nvmet-subsystem`, `nvmet-namespace`, `nvmet-port` |
+| Gateway | Agents | Tools |
+| --- | --- | --- |
+| NFS | `Filesystem`, `IPaddr2`, `nfsserver`, `exportfs` | `rpc.nfsd`, `exportfs` |
+| iSCSI | `Filesystem`, `IPaddr2`, `iSCSITarget`, `iSCSILogicalUnit` | `targetcli` |
+| NVMe-oF | `Filesystem`, `IPaddr2`, `nvmet-subsystem`, `nvmet-namespace`, `nvmet-port` | |
 
 ---
 
@@ -106,18 +107,21 @@ Gateway creation checks, under `/usr/lib/ocf/resource.d/heartbeat/`:
 
 - **iSCSI**: `sudo apt-get install -y targetcli-fb python3-rtslib-fb`. The
   `iSCSITarget` agent (`implementation=lio-t`) needs the LIO userspace; without
-  it `ocf.rs@target_<res>.service` exits `5/NOTINSTALLED`.
-- **NFS**: `sudo apt-get install -y nfs-kernel-server`. Not checked at creation:
-  the gateway is created and then never starts, with `ocf.rs@nfsserver_*`
-  logging "No init script or systemd unit file detected for nfs server".
+  it `ocf.rs@target_<res>.service` exits `5/NOTINSTALLED`. LIO is the only
+  implementation SDS accepts; `--implementation tgt` and `iet` are refused.
+- **NFS**: `sudo apt-get install -y nfs-kernel-server` (EL: `nfs-utils`).
+  Creation fails with `missing: rpc.nfsd exportfs` without it; otherwise the
+  gateway would be created and never start, with `ocf.rs@nfsserver_*` logging
+  "No init script or systemd unit file detected for nfs server".
 - **NVMe-oF**: the `nvmet-*` agents work through configfs
   (`/sys/kernel/config/nvmet`); `nvmetcli` is not used. The kernel modules are:
   Ubuntu cloud kernels ship `nvmet-tcp` only in `linux-modules-extra`.
   ```bash
   sudo apt-get install -y linux-modules-extra-$(uname -r) nvme-cli
   ```
-  Gateway creation runs `modprobe nvmet nvmet-tcp`, writes
-  `/etc/modules-load.d/nvmet.conf`, and fails if the modules cannot load.
+  Gateway creation loads `nvmet` and `nvmet-tcp` (`nvmet-rdma` for
+  `--transport rdma`, which also needs a device under `/sys/class/infiniband`),
+  adds them to `/etc/modules-load.d/nvmet.conf`, and fails if they cannot load.
   Initiators need `nvme-tcp` (`modprobe nvme-tcp`) and `nvme-cli`.
 
 ---

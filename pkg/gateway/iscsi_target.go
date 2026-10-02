@@ -60,7 +60,7 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 		return fmt.Errorf("failed to parse target IQN from config")
 	}
 
-	newLine := buildISCSILUNLine(lunNumber, iqn, device)
+	newLine := buildISCSILUNLine(lunNumber, iqn, device, targetParams["implementation"])
 	// After the last LUN (or the target, when there is none): the service IP
 	// that follows must stay last in the chain — see the iSCSI template.
 	anchor := targetIdx

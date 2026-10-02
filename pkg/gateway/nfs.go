@@ -40,12 +40,11 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 		}, invalidArgument(fmt.Errorf("invalid service IP: %w", err))
 	}
 
-	// Fail early with a clear message if the OCF agents an NFS gateway needs are
-	// not installed on the resource's nodes, instead of writing a promoter
-	// config that silently fails to start.
+	// Fail early with a clear message if the OCF agents or the NFS server an
+	// NFS gateway needs are not installed on the resource's diskful nodes,
+	// instead of writing a promoter config that silently fails to start.
 	if res, rerr := n.resources.GetResource(ctx, req.Resource); rerr == nil && res != nil {
-		if err := n.checkGatewayPrereqs(ctx, res.Nodes,
-			[]string{"Filesystem", "IPaddr2", "nfsserver", "exportfs"}, nil); err != nil {
+		if err := n.checkGatewayPrereqs(ctx, gatewayNodes(res), nfsPrereqs()); err != nil {
 			return &v1.CreateNFSGatewayResponse{Success: false, Message: err.Error()}, err
 		}
 	}

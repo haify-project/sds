@@ -118,8 +118,8 @@ On **every** node. Details and failure symptoms: `node-prerequisites.md`.
    - NFS: `apt-get install -y nfs-kernel-server`
    - NVMe-oF: `apt-get install -y nvme-cli linux-modules-extra-$(uname -r)`
      (Ubuntu cloud kernels ship `nvmet-tcp` only in `linux-modules-extra`).
-     Gateway creation loads `nvmet`/`nvmet-tcp` and persists them in
-     `/etc/modules-load.d/nvmet.conf`.
+     Gateway creation loads `nvmet` and `nvmet-tcp` (or `nvmet-rdma` for
+     `--transport rdma`) and adds them to `/etc/modules-load.d/nvmet.conf`.
 
 5. Optional features:
    - backups: `rclone` on every diskful node of a backed-up resource
@@ -340,11 +340,12 @@ sds gateway nvme create --resource ns1 \
     --nqn nqn.2026-01.com.example:sds.ns1 --service-ip 192.168.1.150/24
 ```
 
-Creation checks the needed OCF agents (and `targetcli` for iSCSI) on the
-resource's nodes before writing anything, adds the cluster-private state volume
+Creation checks the needed OCF agents, plus `rpc.nfsd`/`exportfs` for NFS and
+`targetcli` for iSCSI, on the resource's diskful nodes before writing anything, adds the cluster-private state volume
 when the resource has only one volume (`[gateway] auto_state_volume`), formats
 volumes that carry no filesystem, writes `/etc/drbd-reactor.d/sds-{nfs,iscsi,nvmeof}-<resource>.toml`
-and reloads drbd-reactor. It does **not** check for `nfs-kernel-server`.
+and reloads drbd-reactor. iSCSI runs on LIO only: `--implementation tgt` or
+`iet` is refused.
 
 Check with `sds gateway status --resource <r>` and, on the Primary,
 `drbd-reactorctl status` and `ss -tlnp`.
@@ -548,8 +549,9 @@ journalctl -u sds-controller -f
 | Reactor won't start: `Could not read config file: /etc/drbd-reactor.toml` | Create it: `snippets = "/etc/drbd-reactor.d"` plus a `[[log]]` table. |
 | Pool create fails with `Device or resource busy` | The disk is mounted or formatted: `umount`, remove from `/etc/fstab`, `wipefs -a <dev>`. |
 | One node loss stops I/O on a 2-node resource | No tiebreaker: register a third node (with `auto_tiebreaker` on) or add a replica. |
-| `gateway nfs create` succeeds but the gateway never starts | `nfs-kernel-server` missing; `ocf.rs@nfsserver_*` logs "No init script or systemd unit file detected for nfs server". |
+| `gateway nfs create` fails with `missing: rpc.nfsd exportfs` | `apt-get install nfs-kernel-server` (EL: `nfs-utils`) on the resource's diskful nodes. |
 | `gateway nvme create` fails loading `nvmet`/`nvmet-tcp` | `apt-get install linux-modules-extra-$(uname -r)`. |
+| `gateway nvme create --transport rdma` fails with `no RDMA device` | The node has no RDMA NIC (or soft-RoCE link) under `/sys/class/infiniband`. |
 | `pool add-cache` refuses with "not a thin pool" | Convert first: `sds pool convert-thin --node <n> --pool <p>`. |
 | Backup fails: `rclone is required on <node>` | Install rclone on that node. |
 | A gateway exports the wrong size (a 2 GiB resource serves ~1 GiB) | Gateway created by an older controller that exported the state volume. Delete and recreate it; the data volume was used as scratch, so its contents are lost. |

@@ -2225,7 +2225,7 @@
         },
         "implementation": {
           "type": "string",
-          "title": "iSCSI implementation (lio, tgt, iet)"
+          "title": "iSCSI implementation: lio (default; tgt and iet are refused)"
         },
         "options": {
           "type": "object",
