@@ -1182,20 +1182,22 @@ read; an admin can do everything. `[[rbac.policies]]` entries (`role`,
 sds rbac whoami                          # your identity and role
 sds rbac policies                        # effective roles and assignments (admin only)
 sds rbac user add --name alice --role operator   # prints a generated token once
+sds rbac user add --name ci --role viewer --user-token <16+ chars>   # set the token yourself
 sds rbac user set-role alice viewer
 sds rbac user remove alice
 ```
 
 Users added this way are kept in the controller database. Users declared in
 `controller.toml` are re-applied at every start and cannot be removed through
-the API, so an admin always remains. The `rbac` commands use the REST API on
-port 3375 of the controller host, not gRPC.
+the API, so an admin always remains. The `rbac` commands use the gRPC API
+like every other command, so `--token` and the TLS options below apply to them.
 
 Tokens come from `--token`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`.
 
 **TLS.** `[tls] enabled = true` with `cert_file` and `key_file` puts the gRPC
 API (port 3374) on TLS; adding `client_ca_file` requires a client certificate
-signed by that CA. The REST API on port 3375 stays plain HTTP. Clients:
+signed by that CA. The REST API on port 3375 (used by the web UI) stays plain
+HTTP. Clients:
 
 ```bash
 sds --tls-ca /etc/sds/ca.crt node list                 # verify against this CA

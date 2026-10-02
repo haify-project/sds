@@ -17,7 +17,6 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/liliang-cn/sds/pkg/client"
 	"github.com/liliang-cn/sds/pkg/k8sapp"
 	"github.com/liliang-cn/sds/pkg/mcpserver"
 )
@@ -27,11 +26,10 @@ var version = "dev"
 
 func main() {
 	var (
-		controllerAddr string
-		tokenFlag      string
-		readOnly       bool
-		allowWrite     []string
-		debug          bool
+		conn       controllerConn
+		readOnly   bool
+		allowWrite []string
+		debug      bool
 	)
 
 	rootCmd := &cobra.Command{
@@ -48,13 +46,9 @@ func main() {
 			}
 			defer func() { _ = logger.Sync() }()
 
-			opts := []client.Option{}
-			if token := client.ResolveToken(tokenFlag); token != "" {
-				opts = append(opts, client.WithToken(token))
-			}
-			sdsClient, err := client.NewSDSClient(controllerAddr, opts...)
+			sdsClient, err := conn.dial()
 			if err != nil {
-				return fmt.Errorf("connect to controller %s: %w", controllerAddr, err)
+				return err
 			}
 			defer func() { _ = sdsClient.Close() }()
 
@@ -67,8 +61,7 @@ func main() {
 		},
 	}
 
-	rootCmd.Flags().StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "SDS controller address")
-	rootCmd.Flags().StringVar(&tokenFlag, "token", "", "API token (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
+	conn.register(rootCmd, "")
 	rootCmd.Flags().BoolVar(&readOnly, "read-only", false, "register only read-only tools (list/status/health)")
 	rootCmd.Flags().StringSliceVar(&allowWrite, "allow", nil,
 		"mutating tools to register by name despite --read-only, e.g. --allow sds_ha_evict. "+

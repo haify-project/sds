@@ -59,15 +59,15 @@ Flags:
 - `--controller, -c` — controller `host:port` (default `127.0.0.1:3374`).
 - `--token` — API token when the controller has `[auth]` enabled. Without the
   flag: `SDS_TOKEN`, then `~/.sds/token`, then `/etc/sds/token`.
+- `--tls`, `--tls-ca`, `--tls-cert`, `--tls-key`, `--tls-server-name`,
+  `--tls-insecure` — connect to a controller with `[tls]` enabled. Same
+  meaning and `SDS_TLS*` environment variables as the `sds` CLI
+  ([user guide §16](user-guide.md#16-access-control)).
 - `--read-only` — register only the read-only tools.
 - `--allow NAME[,NAME]` — register these mutating tools as well, e.g.
   `--allow sds_ha_evict`. Implies `--read-only`. The server refuses to start
   on a name that is not a tool.
 - `--debug` — debug logging on stderr. stdout carries the protocol.
-
-`sds-mcp` connects to the controller without TLS. It has no `--tls-*` options
-and does not read `SDS_TLS*`, so it cannot reach a controller whose gRPC port
-requires TLS.
 
 ### Kubernetes tools
 
@@ -149,8 +149,13 @@ failed-login limit (an address is locked out after 10 failed attempts within
 5 minutes) sees the real client address from `X-Forwarded-For`. `GET /healthz` answers `ok` without a
 token.
 
-`serve` reaches the controller with `--controller` (default `127.0.0.1:3374`)
-and `--controller-token` (same fallbacks as `--token` above).
+`serve` reaches the controller with `--controller` (default `127.0.0.1:3374`),
+`--controller-token` (same fallbacks as `--token` above) and, for a controller
+with `[tls]` enabled, `--controller-tls`, `--controller-tls-ca`,
+`--controller-tls-cert`, `--controller-tls-key`,
+`--controller-tls-server-name` and `--controller-tls-insecure`, which also
+fall back to `SDS_TLS*`. `--tls-cert`/`--tls-key` are this server's own HTTPS
+certificate.
 
 Every tool call is logged with the token's name and role; arguments are not,
 since some carry secrets:

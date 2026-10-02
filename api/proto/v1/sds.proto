@@ -575,6 +575,17 @@ service SDSController {
     option (google.api.http) = { get: "/v1/events/watch"; };
   }
 
+  // Role-based access control: the caller's identity, the effective policy,
+  // and user management. gRPC only, so they share the API's transport
+  // security; the web UI reaches the same operations through hand-written
+  // REST routes under /v1/rbac. Policy listing and user changes require the
+  // administrator role. Each returns enabled=false when [rbac] is off.
+  rpc GetRbacWhoami(GetRbacWhoamiRequest) returns (GetRbacWhoamiResponse);
+  rpc ListRbacPolicies(ListRbacPoliciesRequest) returns (ListRbacPoliciesResponse);
+  rpc CreateRbacUser(CreateRbacUserRequest) returns (CreateRbacUserResponse);
+  rpc DeleteRbacUser(DeleteRbacUserRequest) returns (DeleteRbacUserResponse);
+  rpc SetRbacUserRole(SetRbacUserRoleRequest) returns (SetRbacUserRoleResponse);
+
 }
 
 // Pool messages
@@ -2943,4 +2954,70 @@ message SetResourceTLSResponse {
   bool success = 1;
   string message = 2;
   uint32 links_changed = 3;
+}
+
+// ==================== RBAC ====================
+
+message GetRbacWhoamiRequest {}
+
+message GetRbacWhoamiResponse {
+  bool enabled = 1;
+  string user = 2;
+  string role = 3;
+  bool can_admin = 4;
+}
+
+message ListRbacPoliciesRequest {}
+
+message RbacPolicy {
+  string role = 1;
+  string object = 2;   // "*" matches every object
+  string action = 3;   // read, write or "*"
+}
+
+message RbacUser {
+  string name = 1;
+  string role = 2;
+}
+
+message ListRbacPoliciesResponse {
+  bool enabled = 1;
+  repeated RbacPolicy policies = 2;
+  repeated RbacUser users = 3;
+}
+
+message CreateRbacUserRequest {
+  string name = 1;
+  string role = 2;
+  // Optional, at least 16 characters; empty means the controller generates one.
+  string token = 3;
+}
+
+message CreateRbacUserResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;
+  // The user's token. Returned once and never stored in clear.
+  string token = 4;
+}
+
+message DeleteRbacUserRequest {
+  string name = 1;
+}
+
+message DeleteRbacUserResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;
+}
+
+message SetRbacUserRoleRequest {
+  string name = 1;
+  string role = 2;
+}
+
+message SetRbacUserRoleResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;
 }
