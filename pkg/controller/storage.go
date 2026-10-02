@@ -36,10 +36,10 @@ type PoolInfo struct {
 	// when the group holds none.
 	//
 	// It is the only capacity figure here that reflects whether writes will
-	// succeed. TotalGB and FreeGB describe the *volume group*, and SDS creates
-	// its pool with every free extent, so FreeGB is zero for the whole life of
-	// such a pool no matter how empty it is. Prefer this when it is present;
-	// see poolthin.go.
+	// succeed. TotalGB and FreeGB describe the *volume group*, almost all of
+	// which belongs to the thin pool (95% of it from `pool create`, all of it
+	// after convert-thin), so FreeGB stays near zero however empty the pool
+	// is. Prefer this when it is present; see poolthin.go.
 	ThinUsage *PoolThinInfo `json:"thin_usage,omitempty"`
 }
 
@@ -204,12 +204,10 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 
 	// If type is thin_pool, create a thin pool LV
 	if normalizedType == "thin_pool" {
-		// Use 95% of VG size for thin pool to leave metadata space
-		// Since we don't know exact size here easily without querying, we might use the passed sizeGB if > 0
-		// or default to 95%FREE if sizeGB is 0 (which implies full disk).
-		// For now, let's assume sizeGB is passed or use "95%FREE" syntax if deployment supports it.
-		// deployment.LVCreateThinPool takes a size string.
-
+		// An explicit size is honoured; otherwise the pool takes 95% of the
+		// group's free extents. The 5% left unallocated is room for the
+		// metadata area and its spare copy to grow, and for an operator to
+		// act when the pool fills. AddDiskToPool keeps the same ratio.
 		thinPoolName := name + "_thin"
 		thinSize := "95%FREE"
 		if sizeGB > 0 {
@@ -458,6 +456,19 @@ func (sm *StorageManager) AddDiskToPool(ctx context.Context, pool, disk, node st
 		zap.String("disk", disk),
 		zap.String("node", node))
 
+	// The disk is part of the group now whatever happens to the thin pool, so
+	// record it before trying to grow the pool.
+	sm.recordPoolDevice(ctx, pool, disk)
+
+	if err := sm.growThinPoolAfterExtend(ctx, address, pool); err != nil {
+		return fmt.Errorf("disk %s added to %s on %s, but its thin pool was not grown into it: %w",
+			disk, pool, node, err)
+	}
+	return nil
+}
+
+// recordPoolDevice appends disk to the pool's persisted device list.
+func (sm *StorageManager) recordPoolDevice(ctx context.Context, pool, disk string) {
 	if sm.controller.db != nil {
 		if dbPool, err := sm.controller.db.GetPool(ctx, pool); err == nil {
 			devices := strings.Split(strings.Trim(dbPool.Devices, ","), ",")
@@ -470,8 +481,6 @@ func (sm *StorageManager) AddDiskToPool(ctx context.Context, pool, disk, node st
 			}
 		}
 	}
-
-	return nil
 }
 
 // DeletePool deletes a storage pool

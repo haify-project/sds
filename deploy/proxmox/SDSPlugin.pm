@@ -19,8 +19,9 @@ use JSON::PP ();
 use PVE::INotify;
 use PVE::Storage::Plugin;
 use PVE::Storage::Custom::SDS::Client qw(_uri_escape);
+use PVE::Storage::Custom::SDS::Capacity qw(pool_capacity);
 use PVE::Storage::Custom::SDS::Naming qw(sds_resource_name volname_from_resource
-    kib_to_gb bytes_to_gb gb_to_bytes _node_participates _other_primary_node same_pool);
+    kib_to_gb bytes_to_gb gb_to_bytes _node_participates _other_primary_node);
 
 use base qw(PVE::Storage::Plugin);
 
@@ -368,24 +369,9 @@ sub status {
     my $client = $class->_client($scfg);
     my $res    = $client->request('GET', '/v1/pools');
 
-    my $want = $scfg->{sdspool};
-    my ($total, $free);
-
-    for my $pool (@{ $res->{pools} // [] }) {
-        next if defined($want) && length($want) && !same_pool($pool->{name} // '', $want);
-
-        my $ptotal = gb_to_bytes($pool->{totalGb} // $pool->{total_gb} // 0);
-        my $pfree  = gb_to_bytes($pool->{freeGb}  // $pool->{free_gb}  // 0);
-
-        # A pool exists once per node and a replica must fit on EVERY node that
-        # holds one, so the usable capacity is the smallest node's, not the sum.
-        # Reporting the sum would let PVE accept a disk that cannot be placed.
-        $total = $ptotal if !defined($total) || $ptotal < $total;
-        $free  = $pfree  if !defined($free)  || $pfree  < $free;
-    }
-
-    $total //= 0;
-    $free  //= 0;
+    # Thin pools report the thin pool's own size and usage, and the smallest
+    # node's copy bounds the storage: see SDS/Capacity.pm.
+    my ($total, $free) = pool_capacity($res->{pools}, $scfg->{sdspool}, $scfg->{storagetype});
 
     return ($total, $free, $total - $free, 1);
 }

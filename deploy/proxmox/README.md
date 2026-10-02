@@ -74,7 +74,7 @@ live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 | Option | Meaning |
 | ------ | ------- |
 | `controller` | Required, cannot be changed after creation. `host` or `host:port`; the REST port defaults to 3375. Plain HTTP |
-| `sdspool` | sds pool new volumes are carved from. Give the name as `sds pool list` prints it (`sds_vg0`): resource creation accepts `vg0` too, but the capacity report compares the name literally and shows 0 for `vg0` |
+| `sdspool` | sds pool new volumes are carved from, as `sds pool list` prints it (`sds_vg0`) or without the prefix (`vg0`) |
 | `sdsnodes` | Comma-separated sds nodes to place replicas on. Takes precedence over `replicas` |
 | `replicas` | Replica count for auto-placement by free space (1-16) |
 | `storagetype` | `lvm`, `lvm-thin` or `zfs`. Unset: the controller's default |
@@ -103,7 +103,11 @@ One disk per resource means each disk resizes, snapshots and deletes
 independently, the same model the CSI driver uses for a PVC.
 
 Capacity is the smallest node's because a replica must fit on every node that
-holds one; the sum would let PVE accept a disk that cannot be placed.
+holds one; the sum would let PVE accept a disk that cannot be placed. On a thin
+pool it is the thin pool's own size and unused data space (`thinSizeBytes`,
+`thinDataPercent`), not the volume group's: the group is nearly all thin pool,
+so its free space reads ~0 however empty the pool is. A storage set to
+`storagetype lvm` allocates thick LVs from the group and reports the group.
 
 Snapshots are taken on **one** diskful node, the current Primary when there is
 one, otherwise the first replica. They live on that node's backing volume only

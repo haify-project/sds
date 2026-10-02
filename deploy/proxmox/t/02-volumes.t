@@ -10,7 +10,8 @@ use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
 use MockClient;
-use Test::More tests => 24;
+use JSON::PP ();
+use Test::More tests => 28;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -123,6 +124,29 @@ is($active, 1, 'storage reports active');
 # `sdspool vg0` both mean that pool.
 ($total) = $P->status('sds0', { %$base_scfg, sdspool => 'sds_vg0' });
 is($total, 100 * 1073741824, 'the prefixed pool name matches too');
+
+# On a thin pool the volume group is all thin pool, so the group's free space
+# is ~0 however empty the pool is. Capacity must come from the thin pool itself
+# (protojson sends uint64 as strings), still bounded by the smallest node.
+my $thin_pools = {
+    pools => [
+        { name => 'sds_vg0', node => 'n1', totalGb => 100, freeGb => 0, thin => JSON::PP::true,
+          thinPoolLv => 'thinpool', thinSizeBytes => '' . (95 * 1073741824), thinDataPercent => 20 },
+        { name => 'sds_vg0', node => 'n2', totalGb => 100, freeGb => 0, thin => JSON::PP::true,
+          thinPoolLv => 'thinpool', thinSizeBytes => '' . (95 * 1073741824), thinDataPercent => 60 },
+    ],
+};
+with_mock(routes => { 'GET /v1/pools' => $thin_pools });
+($total, $avail, $used) = $P->status('sds0', $base_scfg);
+is($total, 95 * 1073741824, 'a thin pool reports the thin pool size, not the group');
+is($avail, 38 * 1073741824, "thin free space is the fullest node's unused data");
+is($used, $total - $avail, 'used is total minus free');
+
+# Thick LVs come from the group's free extents, so a storage pinned to them
+# keeps the group figures even when the group carries a thin pool.
+with_mock(routes => { 'GET /v1/pools' => $thin_pools });
+($total, $avail) = $P->status('sds0', { %$base_scfg, storagetype => 'lvm' });
+is($avail, 0, "storagetype lvm reports the group's free extents");
 
 # --- resize -----------------------------------------------------------------
 

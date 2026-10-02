@@ -7,10 +7,11 @@ import (
 
 // lvmthin — how full a thin pool actually is.
 //
-// A thin pool's capacity is not its volume group's capacity. SDS creates the
-// pool with every free extent in the VG, so vg_free is zero from the moment
-// the pool exists and stays there; the number that decides whether writes
-// succeed is the pool's own data utilisation, which lives on the pool LV.
+// A thin pool's capacity is not its volume group's capacity. SDS gives the
+// pool 95% of the VG's free extents at create (all of them on convert-thin),
+// so vg_free is near zero from the moment the pool exists and stays there; the
+// number that decides whether writes succeed is the pool's own data
+// utilisation, which lives on the pool LV.
 //
 // Both counters here matter independently. A pool whose *metadata* fills up
 // fails writes exactly as hard as one whose data fills up, and the two grow

@@ -607,9 +607,10 @@ type PoolInfo struct {
 	// cannot be flushed, so it cannot be detached without discarding data.
 	CacheDegraded bool `protobuf:"varint,16,opt,name=cache_degraded,json=cacheDegraded,proto3" json:"cache_degraded,omitempty"`
 	// Thin pool utilisation. total_gb/free_gb above describe the VOLUME GROUP,
-	// and SDS creates its thin pool with every free extent, so free_gb is zero
-	// for the whole life of such a pool however empty it is. These fields are
-	// the ones that say whether the next write will succeed.
+	// and SDS gives its thin pool 95% of the group's free extents at create (all
+	// of them on convert-thin), so free_gb stays near zero for the whole life of
+	// such a pool however empty it is. These fields are the ones that say
+	// whether the next write will succeed.
 	//
 	// thin_pool_lv is empty when the group holds no thin pool; that — not a zero
 	// percentage — is how "no thin pool" is told apart from "a thin pool at 0%".

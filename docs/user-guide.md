@@ -249,6 +249,11 @@ Growing a pool:
 sds pool add --pool data-pool --nodes orange1 --devices /dev/sde
 ```
 
+The disk joins the volume group. If the group holds a thin pool, that pool is
+then extended into 95% of the group's free space (the same share `pool create`
+uses), with its metadata area grown in proportion first, so thin volumes can
+use the new disk straight away.
+
 Deleting a pool is per node, and an LVM pool that still holds any volume is
 refused; the freed disks have their PV labels wiped:
 

@@ -88,6 +88,9 @@ how "no thin pool" is told apart from "a thin pool at 0%".
 - `web-ui/src/pages/PoolsPage.tsx` drives the bar from `thinDataPercent` when
   `thinPoolLv` is set, colours it at 85% / 95%, and falls back to VG figures for
   a pool with no thin LV.
+- The Proxmox plugin's `status()` reports `thinSizeBytes` and the space
+  `thinDataPercent` leaves unused for a thin pool (smallest node wins), and VG
+  figures only for a group without one or a storage pinned to `storagetype lvm`.
 
 ### Alerts
 
@@ -172,3 +175,8 @@ When the thin pool takes every free extent of the VG, LVM's
 `thin_pool_autoextend_threshold` cannot help, because there is nothing left to
 extend into. Leaving VG headroom and enabling autoextend is the LVM-side
 safeguard; the alerts above are the SDS-side one.
+
+`sds pool add` on a thin-backed group extends the thin pool with
+`lvextend -l +95%FREE` after `vgextend` (metadata first, sized at 1% of the
+grown pool as convert-thin does), so a new disk adds usable thin capacity
+rather than sitting unallocated in the group.

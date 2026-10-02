@@ -43,8 +43,8 @@ type poolOut struct {
 	Type string `json:"type"`
 	Node string `json:"node"`
 	// TotalGB and FreeGB describe the VOLUME GROUP. SDS builds its thin pool
-	// from every free extent, so FreeGB is zero for the whole life of such a
-	// pool however empty it is — do not read it as "the pool is full".
+	// from nearly all of it, so FreeGB is near zero for the whole life of such
+	// a pool however empty it is — do not read it as "the pool is full".
 	TotalGB uint64   `json:"total_gb" jsonschema:"volume group size; not the thin pool's"`
 	FreeGB  uint64   `json:"free_gb" jsonschema:"UNALLOCATED extents in the volume group. Structurally zero for any pool SDS created, whatever its utilisation. Judge fullness from thin_data_percent, not from this"`
 	Devices []string `json:"devices,omitempty"`

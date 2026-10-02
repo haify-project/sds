@@ -35,6 +35,7 @@ type deploymentClient interface {
 	LVThinPoolIn(ctx context.Context, host, vgName string) (string, error)
 	LVExtendThinPoolMetadata(ctx context.Context, hosts []string, vgName, poolName string, sizeBytes uint64) (*deployment.ExecResult, error)
 	LVExtendThinPoolAllFree(ctx context.Context, hosts []string, vgName, poolName string) (*deployment.ExecResult, error)
+	LVExtendThinPoolPercentFree(ctx context.Context, hosts []string, vgName, poolName string, percent int) (*deployment.ExecResult, error)
 	LVSCacheReport(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
 	LVSThinReport(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error)
 	ProbeBlockDevice(ctx context.Context, host, device string) (*deployment.ExecResult, error)

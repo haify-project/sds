@@ -211,9 +211,9 @@ func placementError(replicas int, c placementConstraints, eligible int) error {
 //
 // Three states, deliberately not two. "No room" and "could not say" are the
 // same number — zero — and reading the second as the first is what made
-// auto-placement impossible on thin storage: a thin pool is built from every
-// free extent of its volume group (see PoolInfo.ThinUsage), so the group
-// reports vg_free == 0 for the pool's whole life however empty it is. Every
+// auto-placement impossible on thin storage: a thin pool is built from nearly
+// all of its volume group (see PoolInfo.ThinUsage), so the group reports
+// vg_free near zero for the pool's whole life however empty it is. Every
 // thin node was therefore filtered out as full, and the failure was reported as
 // "insufficient capacity" — sending the operator to hunt for space that was
 // never missing. An unknown capacity now costs a node its rank, never its
