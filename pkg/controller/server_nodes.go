@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeRequest) (*sdspb.RegisterNodeResponse, error) {

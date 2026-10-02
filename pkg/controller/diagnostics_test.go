@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/deployment"
+	pb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // diagTestServer registers the nodes and then forgets that it did.

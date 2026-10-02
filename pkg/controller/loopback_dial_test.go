@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/config"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/config"
 )
 
 // The gRPC listen address and the gateway's dial target are opposites:

@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/alert"
-	"github.com/liliang-cn/sds/pkg/config"
-	"github.com/liliang-cn/sds/pkg/metrics"
+	"github.com/haify-project/sds/pkg/alert"
+	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/metrics"
 )
 
 // The observer is what makes the storage and DRBD gauges anything other than

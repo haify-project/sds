@@ -4,8 +4,8 @@ import (
 	"context"
 	"strconv"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/gateway"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/gateway"
 )
 
 func (s *Server) AddNFSExport(ctx context.Context, req *sdspb.AddNFSExportRequest) (*sdspb.AddNFSExportResponse, error) {

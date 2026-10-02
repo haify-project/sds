@@ -21,9 +21,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/config"
-	"github.com/liliang-cn/sds/pkg/event"
+	pb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/event"
 )
 
 func eventTestController(bus *event.Bus) *Controller {

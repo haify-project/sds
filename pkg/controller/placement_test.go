@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // n builds a placement node with optional labels for terse test tables.

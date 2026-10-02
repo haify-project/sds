@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // A 20 GiB volume cannot be synced onto a node whose 100 GiB thin pool has

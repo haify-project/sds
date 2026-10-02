@@ -9,9 +9,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/deployment"
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/wanproxy"
 )
 
 // AddDR attaches an asynchronous off-site replica to a resource that is already

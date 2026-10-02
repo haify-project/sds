@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // decodeWrapped returns the script inside an "echo <b64> | base64 -d | ..."

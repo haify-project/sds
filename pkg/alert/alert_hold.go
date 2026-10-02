@@ -1,7 +1,7 @@
 package alert
 
 import (
-	"github.com/liliang-cn/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/event"
 )
 
 // A warning is raised only once its condition has outlasted the hold. A

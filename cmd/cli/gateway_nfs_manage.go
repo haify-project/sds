@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/liliang-cn/sds/pkg/gateway"
+	"github.com/haify-project/sds/pkg/gateway"
 	"github.com/spf13/cobra"
 )
 

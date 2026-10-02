@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 
@@ -19,7 +19,7 @@ import (
 // generateDrbdConfig emits the opt-in WAN variant: protocol A, DRBD-level
 // pull-ahead, and loopback-routed addresses so DRBD talks to the local
 // per-resource sds-proxy instead of the peer's real IP. Nil ⇒ ordinary LAN
-// config (unchanged). See docs/2026-07-05-wan-replication-design.md.
+// config (unchanged). See docs/design/wan-replication.md.
 type wanConfig struct {
 	DRNode string // the DR-site node
 

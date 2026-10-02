@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // Storage tiering: an SSD in front of a slow LVM pool, via lvmcache. Reading

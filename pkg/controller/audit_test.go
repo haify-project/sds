@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

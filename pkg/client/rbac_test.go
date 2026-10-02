@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 // rbacStub answers the RBAC RPCs the way the controller does, recording the

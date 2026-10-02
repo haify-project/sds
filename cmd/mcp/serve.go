@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/mcpauth"
-	"github.com/liliang-cn/sds/pkg/mcpserver"
+	"github.com/haify-project/sds/pkg/mcpauth"
+	"github.com/haify-project/sds/pkg/mcpserver"
 )
 
 // defaultTokenStore lives on the Self-HA DRBD mount so the tokens follow the

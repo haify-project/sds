@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/util"
+	"github.com/haify-project/sds/pkg/util"
 	"github.com/spf13/cobra"
 )
 

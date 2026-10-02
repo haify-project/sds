@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // Converting a thick LVM pool to a thin one, in place, one node at a time.

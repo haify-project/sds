@@ -10,10 +10,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/config"
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/logbuf"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/logbuf"
 )
 
 // The log RPCs must be implemented on the type that is actually registered

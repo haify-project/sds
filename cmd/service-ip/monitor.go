@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/liliang-cn/sds/pkg/serviceip/ip"
+	"github.com/haify-project/sds/pkg/serviceip/ip"
 	"github.com/spf13/cobra"
 )
 

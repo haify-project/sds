@@ -262,7 +262,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 // CreateResourceWithVolumes. Nil ⇒ an ordinary LAN resource (behavior
 // unchanged). When set, the resource replicates between the single primary node
 // in `nodes` and DRNode across the internet via a per-resource sds-proxy pair
-// (protocol A + loopback-routed DRBD). See docs/2026-07-05-wan-replication-design.md.
+// (protocol A + loopback-routed DRBD). See docs/design/wan-replication.md.
 type WANSpec struct {
 	// DRNode is the DR-site node name. It must be a registered node and distinct
 	// from the primary; it becomes the resource's second (and only) peer.

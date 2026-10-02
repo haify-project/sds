@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // A pool past the near-full line gives up the volume's oldest scheduled

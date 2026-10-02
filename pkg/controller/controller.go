@@ -9,19 +9,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/alert"
+	"github.com/haify-project/sds/pkg/alert"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	"github.com/liliang-cn/sds/pkg/config"
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/deployment"
-	"github.com/liliang-cn/sds/pkg/event"
-	"github.com/liliang-cn/sds/pkg/gateway"
-	"github.com/liliang-cn/sds/pkg/logbuf"
-	"github.com/liliang-cn/sds/pkg/metrics"
-	"github.com/liliang-cn/sds/pkg/rbac"
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/gateway"
+	"github.com/haify-project/sds/pkg/logbuf"
+	"github.com/haify-project/sds/pkg/metrics"
+	"github.com/haify-project/sds/pkg/rbac"
+	"github.com/haify-project/sds/pkg/wanproxy"
 )
 
 // Controller represents the SDS controller

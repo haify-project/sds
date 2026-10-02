@@ -6,9 +6,9 @@ import (
 
 	"go.uber.org/zap"
 
-	pb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	pb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/wanproxy"
 )
 
 // RepairWanProxy reconciles a WAN resource's replication tunnels with the

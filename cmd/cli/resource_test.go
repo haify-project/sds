@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

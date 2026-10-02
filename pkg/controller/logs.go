@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/logbuf"
+	pb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/logbuf"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

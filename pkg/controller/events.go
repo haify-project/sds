@@ -13,10 +13,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/alert"
-	"github.com/liliang-cn/sds/pkg/event"
-	"github.com/liliang-cn/sds/pkg/rbac"
+	pb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/alert"
+	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/rbac"
 )
 
 // defaultEventLimit caps an unbounded ListEvents request. Large enough to cover

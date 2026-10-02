@@ -6901,7 +6901,7 @@
         },
         "wan": {
           "type": "boolean",
-          "description": "WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as\nbefore. `wan` is the master switch; without it the dr_* fields are rejected.\nSee docs/2026-07-05-wan-replication-design.md.\n\nroute this resource over the internet via a per-resource sds-proxy pair"
+          "description": "WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as\nbefore. `wan` is the master switch; without it the dr_* fields are rejected.\nSee docs/design/wan-replication.md.\n\nroute this resource over the internet via a per-resource sds-proxy pair"
         },
         "drNode": {
           "type": "string",

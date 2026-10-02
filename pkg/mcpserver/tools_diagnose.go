@@ -6,8 +6,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/triage"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/triage"
 )
 
 // The diagnosis tool: read everything, then say what is wrong.

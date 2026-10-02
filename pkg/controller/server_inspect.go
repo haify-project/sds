@@ -3,8 +3,8 @@ package controller
 import (
 	"context"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/inspect"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/inspect"
 )
 
 // RunInspection inspects the cluster now and returns the report.

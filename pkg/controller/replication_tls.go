@@ -11,8 +11,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/deployment"
-	"github.com/liliang-cn/sds/pkg/drbdtls"
+	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/drbdtls"
 )
 
 // Encrypted replication. DRBD 9.2+ can run a connection over kernel TLS: the

@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 // secretEnvVar is where `backup target add` reads the object-store secret from

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 // sanityBackend is a concurrency-safe in-memory SDSBackend for the CSI sanity

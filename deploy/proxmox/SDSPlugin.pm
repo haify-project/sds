@@ -10,7 +10,7 @@ package PVE::Storage::Custom::SDSPlugin;
 # to sds-controller (SDS/Client.pm), using only Perl modules PVE already ships,
 # so installing needs no extra packages and no sds binaries on the PVE nodes.
 #
-# See docs/superpowers/specs/2026-07-02-proxmox-storage-plugin-design.md.
+# See docs/design/proxmox-storage-plugin.md.
 
 use strict;
 use warnings;

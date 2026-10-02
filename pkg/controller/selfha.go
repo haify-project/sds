@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
 	"go.uber.org/zap"
 )
 

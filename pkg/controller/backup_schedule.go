@@ -9,8 +9,8 @@ import (
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/event"
 )
 
 // Scheduled backups. They ride the snapshot scheduler's cron, so they run only

@@ -7,9 +7,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/alert"
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/metrics"
+	"github.com/haify-project/sds/pkg/alert"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/metrics"
 )
 
 // metricsObserver turns one health poll into Prometheus series.

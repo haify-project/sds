@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	"github.com/haify-project/sds/pkg/wanproxy"
 )
 
 // registerWANNodes wires up a primary site plus a DR node.

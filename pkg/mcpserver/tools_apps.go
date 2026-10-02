@@ -7,7 +7,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/k8sapp"
+	"github.com/haify-project/sds/pkg/k8sapp"
 )
 
 // The Kubernetes (CSI) tools are a separate MCP server, sds-k8s, from the

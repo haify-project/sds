@@ -1,4 +1,4 @@
-module github.com/liliang-cn/sds/cmd/sds-ai
+module github.com/haify-project/sds/cmd/sds-ai
 
 go 1.26.0
 

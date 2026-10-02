@@ -63,3 +63,9 @@ cmd/sds-ai/sds-ai
 .understand-anything/tmp/
 .understand-anything/.trash-*/
 /dist/
+
+# Local agent/tool state, never published
+.claude/
+.mcp.json
+.understand-anything/
+data/

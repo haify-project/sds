@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/client"
-	"github.com/liliang-cn/sds/pkg/csi"
+	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/sds/pkg/csi"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"

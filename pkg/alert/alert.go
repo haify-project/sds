@@ -30,7 +30,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/event"
 )
 
 // Monitor polls cluster health and publishes state changes to a bus.

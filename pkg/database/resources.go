@@ -37,7 +37,7 @@ type Resource struct {
 	DisklessClients string
 	// WAN replication (opt-in). All zero-valued for an ordinary LAN resource, so
 	// existing records deserialize as LAN and every WAN code path stays gated
-	// behind WANMode. See docs/2026-07-05-wan-replication-design.md.
+	// behind WANMode. See docs/design/wan-replication.md.
 	WANMode    bool   // false = LAN (default); true routes DRBD via a per-resource sds-proxy pair
 	DRNode     string // the DR-site node name (WAN only)
 	DREndpoint string // the DR site's public WAN address the primary dials (WAN only)

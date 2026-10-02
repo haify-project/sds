@@ -9,8 +9,8 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/rbac"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/rbac"
 )
 
 // dbRBACStore persists the RBAC snapshot inside the controller's BBolt

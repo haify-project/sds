@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liliang-cn/sds/pkg/deployment"
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/wanproxy"
 )
 
 // swapBinaryPath points the resolver at a temp directory for the duration of a

@@ -1,6 +1,6 @@
 [Unit]
 Description=SDS Controller
-Documentation=https://github.com/liliang-cn/sds
+Documentation=https://github.com/haify-project/sds
 After=network-online.target
 Wants=network-online.target
 

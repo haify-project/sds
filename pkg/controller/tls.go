@@ -15,7 +15,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/liliang-cn/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/config"
 )
 
 // tlsSetup is everything transport security needs once [tls] is enabled: the

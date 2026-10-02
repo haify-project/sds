@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 
-	"github.com/liliang-cn/sds/pkg/util"
+	"github.com/haify-project/sds/pkg/util"
 	"github.com/spf13/cobra"
 )
 

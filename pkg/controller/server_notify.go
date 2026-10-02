@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/event"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/event"
 )
 
 // ==================== NOTIFICATION CHANNELS ====================

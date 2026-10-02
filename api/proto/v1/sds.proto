@@ -1016,7 +1016,7 @@ message CreateResourceRequest {
 
   // WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as
   // before. `wan` is the master switch; without it the dr_* fields are rejected.
-  // See docs/2026-07-05-wan-replication-design.md.
+  // See docs/design/wan-replication.md.
   bool wan = 10;            // route this resource over the internet via a per-resource sds-proxy pair
   string dr_node = 11;      // the DR-site node (must be a registered node); WAN only
   string dr_endpoint = 12;  // the DR site's public WAN address the primary dials; WAN only

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	sdsui "github.com/liliang-cn/sds/ui"
+	"github.com/haify-project/sds/pkg/database"
+	sdsui "github.com/haify-project/sds/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

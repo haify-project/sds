@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 // Grouped by area in report order, failures first, each with its fix; a pass

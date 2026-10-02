@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/alert"
+	"github.com/haify-project/sds/pkg/alert"
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/event"
 )
 
 // alertOptions assembles what the health detector is asked to watch.

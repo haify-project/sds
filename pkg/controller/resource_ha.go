@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/gateway"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/gateway"
 	"go.uber.org/zap"
 )
 

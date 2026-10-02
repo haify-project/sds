@@ -1,4 +1,4 @@
-module github.com/liliang-cn/sds
+module github.com/haify-project/sds
 
 go 1.26.0
 

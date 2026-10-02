@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liliang-cn/sds/pkg/config"
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // The default used to live in sds, so the CLI created thin pools while the

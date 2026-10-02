@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liliang-cn/sds/pkg/drbdtls"
+	"github.com/haify-project/sds/pkg/drbdtls"
 )
 
 func nodeCertFor(t *testing.T, ca *drbdtls.CA, node string) []byte {

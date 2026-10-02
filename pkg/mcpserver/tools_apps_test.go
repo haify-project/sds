@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/liliang-cn/sds/pkg/k8sapp"
+	"github.com/haify-project/sds/pkg/k8sapp"
 )
 
 func sdsKube() *fake.Clientset {

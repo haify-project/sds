@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/deployment"
+	pb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/deployment"
 )
 
 // Node diagnostics: the records the controller does not keep.

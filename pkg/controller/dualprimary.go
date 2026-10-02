@@ -20,7 +20,7 @@ import (
 // contains allow-two-primaries, so the cluster self-heals back to single-primary
 // even if a controller crash strands the "off" call.
 //
-// See docs/superpowers/specs/2026-07-02-proxmox-storage-plugin-design.md.
+// See docs/design/proxmox-storage-plugin.md.
 const (
 	dualPrimaryEnableCmdFmt  = "sudo drbdadm net-options --allow-two-primaries=yes %s"
 	dualPrimaryDisableCmdFmt = "sudo drbdadm net-options --allow-two-primaries=no %s"

@@ -14,7 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 func eventCommand() *cobra.Command {

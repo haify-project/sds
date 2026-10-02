@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/liliang-cn/sds/pkg/client"
-	"github.com/liliang-cn/sds/pkg/csi"
+	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/sds/pkg/csi"
 	"go.uber.org/zap"
 )
 

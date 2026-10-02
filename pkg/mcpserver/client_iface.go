@@ -3,8 +3,8 @@ package mcpserver
 import (
 	"context"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/client"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/client"
 )
 
 // ControllerClient is the subset of *client.SDSClient the MCP server uses.

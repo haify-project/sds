@@ -2,7 +2,7 @@
 // DRBD resource's replication across the internet (primary site <-> DR site).
 //
 // It is the controller-side implementation of the opt-in WAN replication
-// feature described in docs/2026-07-05-wan-replication-design.md. It is only
+// feature described in docs/design/wan-replication.md. It is only
 // invoked when a resource is created with WAN mode; the default LAN path never
 // touches this package.
 //
@@ -142,7 +142,7 @@ func NodeMetricsPath(resource string) string {
 // create time).
 const unitTemplate = `[Unit]
 Description=SDS WAN replication proxy for %i
-Documentation=https://github.com/liliang-cn/sds
+Documentation=https://github.com/haify-project/sds
 After=network-online.target
 Wants=network-online.target
 Before=drbd.service

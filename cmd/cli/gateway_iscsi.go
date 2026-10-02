@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	v1 "github.com/liliang-cn/sds/api/proto/v1"
+	v1 "github.com/haify-project/sds/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 

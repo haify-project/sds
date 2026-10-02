@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 

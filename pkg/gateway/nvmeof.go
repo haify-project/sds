@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	v1 "github.com/liliang-cn/sds/api/proto/v1"
+	v1 "github.com/haify-project/sds/api/proto/v1"
 	"go.uber.org/zap"
 )
 

@@ -17,8 +17,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/liliang-cn/sds/pkg/k8sapp"
-	"github.com/liliang-cn/sds/pkg/mcpserver"
+	"github.com/haify-project/sds/pkg/k8sapp"
+	"github.com/haify-project/sds/pkg/mcpserver"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".

@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
-	"github.com/liliang-cn/sds/pkg/client"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/client"
 )
 
 // The RBAC commands go through the gRPC API like every other command, so they

@@ -3469,7 +3469,7 @@ type CreateResourceRequest struct {
 	Volumes []*VolumeSpec `protobuf:"bytes,9,rep,name=volumes,proto3" json:"volumes,omitempty"`
 	// WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as
 	// before. `wan` is the master switch; without it the dr_* fields are rejected.
-	// See docs/2026-07-05-wan-replication-design.md.
+	// See docs/design/wan-replication.md.
 	Wan        bool   `protobuf:"varint,10,opt,name=wan,proto3" json:"wan,omitempty"`                                // route this resource over the internet via a per-resource sds-proxy pair
 	DrNode     string `protobuf:"bytes,11,opt,name=dr_node,json=drNode,proto3" json:"dr_node,omitempty"`             // the DR-site node (must be a registered node); WAN only
 	DrEndpoint string `protobuf:"bytes,12,opt,name=dr_endpoint,json=drEndpoint,proto3" json:"dr_endpoint,omitempty"` // the DR site's public WAN address the primary dials; WAN only

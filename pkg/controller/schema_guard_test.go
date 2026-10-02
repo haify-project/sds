@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liliang-cn/sds/pkg/config"
-	"github.com/liliang-cn/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"

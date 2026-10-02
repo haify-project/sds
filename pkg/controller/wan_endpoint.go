@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	pb "github.com/liliang-cn/sds/api/proto/v1"
+	pb "github.com/haify-project/sds/api/proto/v1"
 	"go.uber.org/zap"
 )
 

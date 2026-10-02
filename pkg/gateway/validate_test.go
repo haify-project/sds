@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	v1 "github.com/liliang-cn/sds/api/proto/v1"
+	v1 "github.com/haify-project/sds/api/proto/v1"
 )
 
 // gatewayFixture builds a gateway manager over a resource that is otherwise

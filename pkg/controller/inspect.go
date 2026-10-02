@@ -12,9 +12,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/config"
-	"github.com/liliang-cn/sds/pkg/event"
-	"github.com/liliang-cn/sds/pkg/inspect"
+	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/inspect"
 )
 
 // ErrInspectionRunning is returned when a run is asked for while one is in

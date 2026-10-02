@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/liliang-cn/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/deployment"
 	"go.uber.org/zap"
 )
 

@@ -508,7 +508,7 @@ sds resource dr-failover data --yes
 ```
 
 `sds wan set-endpoint` and `sds wan repair` change or rebuild the
-tunnels. Design: [`2026-07-05-wan-replication-design.md`](./2026-07-05-wan-replication-design.md).
+tunnels. Design: [`docs/design/wan-replication.md`](./design/wan-replication.md).
 
 ---
 

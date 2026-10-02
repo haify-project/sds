@@ -3,7 +3,7 @@ package main
 import (
 	"io"
 
-	"github.com/liliang-cn/sds/pkg/client"
+	"github.com/haify-project/sds/pkg/client"
 )
 
 // newSDSClient builds the controller client with the resolved API token and

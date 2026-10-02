@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liliang-cn/sds/pkg/alert"
-	"github.com/liliang-cn/sds/pkg/database"
-	"github.com/liliang-cn/sds/pkg/deployment"
-	"github.com/liliang-cn/sds/pkg/wanproxy"
+	"github.com/haify-project/sds/pkg/alert"
+	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/sds/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 

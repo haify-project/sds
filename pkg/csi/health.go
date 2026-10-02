@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	sdspb "github.com/liliang-cn/sds/api/proto/v1"
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 // volumeHealth judges a volume from the controller's view of its DRBD

@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/liliang-cn/sds/pkg/event"
+	"github.com/haify-project/sds/pkg/event"
 )
 
 func (m *Monitor) checkResources(ctx context.Context, sc *pollScope, obs *Observation) {

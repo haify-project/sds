@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/liliang-cn/sds/ui"
+	"github.com/haify-project/sds/ui"
 	"go.uber.org/zap"
 )
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/liliang-cn/sds/pkg/client"
+	"github.com/haify-project/sds/pkg/client"
 )
 
 var (

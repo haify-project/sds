@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liliang-cn/sds/pkg/rbac"
+	"github.com/haify-project/sds/pkg/rbac"
 )
 
 // doReq invokes a runtime.HandlerFunc-style handler with an optional JSON body,
