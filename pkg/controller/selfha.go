@@ -29,12 +29,11 @@ const (
 	selfHaDefaultPort   = 7999
 	selfHaControllerSvc = "sds-controller.service"
 
-	selfHaReactorConfig  = "/etc/drbd-reactor.d/sds-ha-" + SelfHaResource + ".toml"
-	selfHaHandoffScript  = "/opt/sds/bin/sds-selfha-handoff.sh"
-	selfHaDisableScript  = "/opt/sds/bin/sds-selfha-disable.sh"
-	selfHaHandoffLog     = "/var/log/sds/selfha-handoff.log"
-	selfHaDisableLog     = "/var/log/sds/selfha-disable.log"
-	controllerBinaryPath = "/opt/sds/bin/sds-controller"
+	selfHaReactorConfig = "/etc/drbd-reactor.d/sds-ha-" + SelfHaResource + ".toml"
+	selfHaHandoffScript = "/opt/sds/bin/sds-selfha-handoff.sh"
+	selfHaDisableScript = "/opt/sds/bin/sds-selfha-disable.sh"
+	selfHaHandoffLog    = "/var/log/sds/selfha-handoff.log"
+	selfHaDisableLog    = "/var/log/sds/selfha-disable.log"
 )
 
 // Local artifact paths replicated to the other nodes during self-HA
@@ -120,6 +119,13 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 		return "", fmt.Errorf("self-HA is already enabled (resource %s); see sds ha self status", SelfHaResource)
 	}
 
+	// Where the binary goes and whether each standby can run it — checked
+	// before anything is changed.
+	binPlan, err := rm.planControllerBinary(ctx, standbyAddrs)
+	if err != nil {
+		return "", fmt.Errorf("preflight failed: %w", err)
+	}
+
 	if err := rm.selfHaPreflight(ctx, selfAddr, standbyAddrs); err != nil {
 		return "", fmt.Errorf("preflight failed: %w", err)
 	}
@@ -145,7 +151,7 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 	}
 
 	// 3. Distribute controller artifacts so any node can run the controller.
-	if err := rm.distributeControllerArtifacts(ctx, selfAddr, standbyAddrs, nodeAddrs); err != nil {
+	if err := rm.distributeControllerArtifacts(ctx, binPlan, standbyAddrs, nodeAddrs); err != nil {
 		return "", err
 	}
 
@@ -401,23 +407,12 @@ func (rm *ResourceManager) selfHaPreflight(ctx context.Context, selfAddr string,
 }
 
 // distributeControllerArtifacts ships the running controller binary, its
-// config, and the systemd unit to every node, and disables autostart on the
-// standbys (drbd-reactor decides who runs the controller from now on).
-func (rm *ResourceManager) distributeControllerArtifacts(ctx context.Context, selfAddr string, standbyAddrs, allAddrs []string) error {
-	// Binary: scp the currently running executable from this node.
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to locate controller binary: %w", err)
-	}
-	for _, addr := range standbyAddrs {
-		cmd := fmt.Sprintf(
-			"scp -o BatchMode=yes %s %s:/tmp/sds-controller-selfha && "+
-				"ssh -o BatchMode=yes %s 'sudo mkdir -p /opt/sds/bin && sudo mv /tmp/sds-controller-selfha %s && sudo chmod 755 %s'",
-			exe, addr, addr, controllerBinaryPath, controllerBinaryPath)
-		if err := rm.execAllSuccess(ctx, []string{selfAddr}, cmd,
-			fmt.Sprintf("failed to distribute controller binary to %s", addr)); err != nil {
-			return err
-		}
+// config, and the systemd unit to every standby, and disables autostart there
+// (drbd-reactor decides who runs the controller from now on). The binary lands
+// at the path the unit's ExecStart names; see controllerBinaryPlan.
+func (rm *ResourceManager) distributeControllerArtifacts(ctx context.Context, binPlan *controllerBinaryPlan, standbyAddrs, allAddrs []string) error {
+	if err := rm.installControllerBinary(ctx, binPlan); err != nil {
+		return err
 	}
 
 	// Config: replicate this node's controller.toml verbatim.
@@ -444,12 +439,9 @@ func (rm *ResourceManager) distributeControllerArtifacts(ctx context.Context, se
 		return fmt.Errorf("failed to distribute the dispatch config: %w", err)
 	}
 
-	// Systemd unit: replicate and daemon-reload.
-	unitContent, err := os.ReadFile(controllerUnitPath)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", controllerUnitPath, err)
-	}
-	if err := rm.distributeToAll(ctx, standbyAddrs, string(unitContent), controllerUnitPath,
+	// Systemd unit: replicate verbatim (the content the binary's target path
+	// was read from) and daemon-reload.
+	if err := rm.distributeToAll(ctx, standbyAddrs, binPlan.unit, controllerUnitPath,
 		"sudo systemctl daemon-reload"); err != nil {
 		return fmt.Errorf("failed to distribute controller unit: %w", err)
 	}

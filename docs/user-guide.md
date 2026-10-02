@@ -825,7 +825,10 @@ sds ha self disable --node orange1     # back to a plain service on orange1
 `enable` creates the `sds-meta` resource (1 GB on DRBD port 7999 by default;
 `--size`, `--port`, `--nodes` change that), copies the running controller
 binary, its config and its systemd unit to the other nodes, and hands the
-controller to drbd-reactor. The controller restarts during the handoff, so the
+controller to drbd-reactor. The binary goes to the path the unit's `ExecStart`
+names. A node of another architecture gets `sds-controller-<goarch>` from beside
+the running binary instead; without one, `enable` refuses that node before
+changing anything. The controller restarts during the handoff, so the
 command's connection drops; follow it with `ha self status` against the VIP.
 `disable` copies the database back to the named node and leaves `sds-meta` in
 place for you to delete. `sds ha evict sds-meta` moves the controller to

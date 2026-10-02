@@ -188,8 +188,9 @@ node: `ssh-keygen -R <ip> -f /root/.ssh/known_hosts`.
 
 Build for the node architecture (`GOOS=linux GOARCH=amd64|arm64 CGO_ENABLED=0`).
 
-With Self-HA, `ha self enable` copies the running controller binary to
-`/opt/sds/bin/sds-controller` on the other nodes. A new build has to be
+With Self-HA, `ha self enable` copies the running controller binary to the path
+the unit's `ExecStart` names on the other nodes; a node of another architecture
+needs `sds-controller-<goarch>` beside the running binary. A new build has to be
 installed there on every node, then moved onto with `sds ha evict sds-meta`
 (`deployment-guide.md` §8).
 

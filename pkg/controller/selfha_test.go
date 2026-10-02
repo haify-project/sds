@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -64,6 +65,9 @@ func selfHaFakeDeployment() *fakeDeploymentClient {
 					out[h] = &deployment.HostResult{Host: h, Success: true, Output: h + ".local\n"}
 				}
 				return &deployment.ExecResult{Hosts: out}, nil
+			}
+			if cmd == "uname -m" {
+				return successExecResult(hosts, unameMachine(runtime.GOARCH)+"\n"), nil
 			}
 			return successExecResult(hosts, ""), nil
 		},
