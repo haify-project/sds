@@ -175,7 +175,7 @@ port = 3376
 ```
 
 Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
-`[gateway]`, `[resource]`, `[schedule]`, `[self_ha]`, `[alert]`.
+`[gateway]`, `[resource]`, `[schedule]`, `[self_ha]`, `[alert]`, `[inspect]`.
 
 **Default ports**: gRPC 3374, REST 3375 (`[server] rest_port`), web UI 3376, Prometheus 9433.
 
@@ -198,6 +198,7 @@ Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
 | `pkg/metrics`    | Prometheus metrics                                                                     |
 | `pkg/logbuf`     | In-memory ring of recent controller log lines, served over the API                     |
 | `pkg/triage`     | Turns events, audit and logs into a short list of known problems (used by `sds-mcp`)   |
+| `pkg/inspect`    | Cluster inspection (`sds inspect`): the per-node probe script and pure pass/warn/fail checks over what the controller gathers (`pkg/controller/inspect*.go`) |
 | `pkg/mcpserver`  | MCP tools over the controller API (`sds-mcp`, stdio and HTTP)                          |
 | `pkg/mcpauth`    | Tokens and OAuth for the remote MCP server                                             |
 | `pkg/k8sapp`     | Databases on Kubernetes backed by SDS volumes (`sds_app_*` MCP tools)                  |

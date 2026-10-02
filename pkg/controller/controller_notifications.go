@@ -85,9 +85,10 @@ func (c *Controller) startNotifications() {
 
 	for _, wh := range c.config.Alert.Receivers() {
 		event.NewWebhook(event.WebhookConfig{
-			URL:     wh.URL,
-			Headers: wh.Headers,
-			Filter:  event.Filter{MinSeverity: event.ParseSeverity(wh.MinSeverity)},
+			URL:      wh.URL,
+			Headers:  wh.Headers,
+			Filter:   event.Filter{MinSeverity: event.ParseSeverity(wh.MinSeverity)},
+			OnResult: c.recordDelivery(receiverName(wh.URL)),
 		}, c.logger).Start(c.ctx, c.events)
 		c.logger.Info("Alert webhook registered",
 			zap.String("url", wh.URL),

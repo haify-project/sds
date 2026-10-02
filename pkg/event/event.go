@@ -98,6 +98,11 @@ const (
 	// failing leaves the cluster with an ever older last good copy and no
 	// other sign of it.
 	TypeBackupFailed Type = "backup.failed"
+
+	// TypeInspectionCompleted is published once per inspection run. Its
+	// severity is the run's worst finding, so a channel filtered to warning
+	// and above hears about an inspection only when it found something.
+	TypeInspectionCompleted Type = "inspection.completed"
 )
 
 // Severity ranks how much an event should interrupt someone.

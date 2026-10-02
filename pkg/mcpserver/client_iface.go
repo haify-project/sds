@@ -115,6 +115,9 @@ type ControllerClient interface {
 	// The journals and kernel messages the controller does not hold. Read-only
 	// and collector-named: there is no path from here to running a command.
 	CollectNodeDiagnostics(ctx context.Context, req *sdspb.CollectNodeDiagnosticsRequest) (*sdspb.CollectNodeDiagnosticsResponse, error)
+	// Cluster inspection. Running one changes nothing on the cluster.
+	RunInspection(ctx context.Context, areas []string) (*sdspb.InspectionReport, error)
+	GetInspection(ctx context.Context, id string) (*sdspb.InspectionReport, error)
 
 	// Notification channels. Listing and testing are exposed; creating one is
 	// not, for the same reason a backup target cannot be created from here — a

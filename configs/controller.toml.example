@@ -98,6 +98,17 @@ webhook_min_severity = "warning"   # info | warning | critical
 # min_severity = "info"
 # headers = { X-Token = "..." }
 
+# Scheduled cluster inspection (`sds inspect`): read-only checks of what the
+# alerts do not cover, stored as reports. Runs on the snapshot scheduler, so
+# only on the active controller and only while [schedule] enabled = true.
+[inspect]
+enabled = true
+schedule = "0 1 * * *"   # cron, controller time zone
+keep = 30                # reports kept
+# Publish inspection.completed when the worst finding is at least this:
+# pass (every run) | warn | fail.
+notify_min = "warn"
+
 # API authentication. With [auth], one shared bearer token guards every call.
 # [rbac] replaces it with per-user tokens and roles (admin, operator, viewer);
 # users added later with `sds rbac` are kept in the database.

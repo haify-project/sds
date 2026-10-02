@@ -63,6 +63,8 @@ type Controller struct {
 	schedules *ScheduleManager
 	backups   *BackupManager
 	notify    *NotifyManager
+	// inspections runs the scheduled and on-demand cluster inspection.
+	inspections *InspectionManager
 }
 
 // SetLogRing attaches the buffer the log view reads from. The ring has to exist
@@ -152,6 +154,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	ctrl.nodes = NewNodeManager(ctrl)
 	ctrl.schedules = NewScheduleManager(ctrl)
 	ctrl.backups = NewBackupManager(ctrl)
+	ctrl.inspections = NewInspectionManager(ctrl)
 
 	// Initialize gateway with adapters
 	gwResourceManager := NewGatewayResourceManager(ctrl.resources,

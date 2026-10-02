@@ -152,6 +152,8 @@ func TestToolRegistration(t *testing.T) {
 		// these an assistant can describe a cluster but not explain how it got
 		// there, which is most of what gets asked after an incident.
 		"sds_event_list", "sds_audit_list", "sds_log_list",
+		// Inspection: the stored verdict on everything around the alerts.
+		"sds_inspect_report", "sds_inspect_run",
 		// ZFS: the controller has had this surface for a long time and the
 		// client interface already declared it; none of it was ever exposed.
 		"sds_zfs_pool_list", "sds_zfs_dataset_create", "sds_zfs_volume_create",

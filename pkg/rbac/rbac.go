@@ -460,7 +460,9 @@ func Classify(fullMethod string) (object, action string) {
 }
 
 func classifyAction(method string) string {
-	if strings.Contains(method, "Status") {
+	// An inspection reads the cluster and stores a report; it changes nothing
+	// on it, so whoever may read the cluster may run one.
+	if strings.Contains(method, "Status") || method == "RunInspection" {
 		return ActRead
 	}
 	for _, v := range readVerbs {

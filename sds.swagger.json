@@ -1620,6 +1620,102 @@
         ]
       }
     },
+    "/v1/inspections": {
+      "get": {
+        "summary": "ListInspections lists stored reports, newest first, without their checks.",
+        "operationId": "SDSController_ListInspections",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListInspectionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "description": "0 means every stored report",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "summary": "Cluster inspection: deterministic checks of everything around the alerts —\nreplicas stuck mid-handshake, alerts that reach no channel, node clocks,\ndisks and addresses, pool growth, late backups, Self-HA readiness,\ncertificate expiry, leftovers. RunInspection runs one now and waits for\nthe report; it changes nothing on the cluster. A run already in progress\nis not overlapped: the call fails instead.",
+        "operationId": "SDSController_RunInspection",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunInspectionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunInspectionRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/inspections/{id}": {
+      "get": {
+        "summary": "GetInspection returns one stored report; id \"latest\" (or empty) is the\nnewest.",
+        "operationId": "SDSController_GetInspection",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetInspectionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "a report id, or \"latest\"",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/logs": {
       "get": {
         "summary": "The controller's own log output, from an in-memory ring buffer. Deliberately\nnot persisted: this is for watching what a running controller is doing, and\na controller that has moved has nothing useful to say about its old node.",
@@ -7512,6 +7608,20 @@
         }
       }
     },
+    "v1GetInspectionResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "report": {
+          "$ref": "#/definitions/v1InspectionReport"
+        }
+      }
+    },
     "v1GetNodeResponse": {
       "type": "object",
       "properties": {
@@ -7795,6 +7905,105 @@
         }
       }
     },
+    "v1InspectionCheck": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable slug, e.g. \"resource.no_primary\", \"alerts.channel_failing\"."
+        },
+        "area": {
+          "type": "string",
+          "title": "resources | gateways | nodes | pools | backups | alerts | selfha | tls | hygiene"
+        },
+        "subject": {
+          "type": "string",
+          "description": "The resource, node or channel concerned; empty for an area-wide line."
+        },
+        "status": {
+          "type": "string",
+          "description": "pass | warn | fail | error (\"error\": the check itself could not run)."
+        },
+        "message": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What was seen, one fact per entry."
+        },
+        "fix": {
+          "type": "string",
+          "description": "A command to run as written: `sds ...` or a shell line."
+        },
+        "runbook": {
+          "type": "string",
+          "description": "A runbook (sds_runbook / MCP prompt) covering the repair, when one fits."
+        }
+      },
+      "description": "One finding of an inspection."
+    },
+    "v1InspectionReport": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "trigger": {
+          "type": "string",
+          "title": "schedule | manual"
+        },
+        "startedAtUnixMs": {
+          "type": "string",
+          "format": "int64"
+        },
+        "finishedAtUnixMs": {
+          "type": "string",
+          "format": "int64"
+        },
+        "areas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The areas that were inspected; empty means all."
+        },
+        "summary": {
+          "$ref": "#/definitions/v1InspectionSummary"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1InspectionCheck"
+          },
+          "description": "Sorted by area, most serious first. Empty in ListInspections."
+        }
+      }
+    },
+    "v1InspectionSummary": {
+      "type": "object",
+      "properties": {
+        "pass": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "warn": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "fail": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "error": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "v1ListAuditEventsResponse": {
       "type": "object",
       "properties": {
@@ -8011,6 +8220,25 @@
             "type": "object",
             "$ref": "#/definitions/v1ISCSILUNInfo"
           }
+        }
+      }
+    },
+    "v1ListInspectionsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "reports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1InspectionReport"
+          },
+          "title": "newest first, checks omitted"
         }
       }
     },
@@ -9370,6 +9598,32 @@
         },
         "schedule": {
           "$ref": "#/definitions/v1BackupScheduleInfo"
+        }
+      }
+    },
+    "v1RunInspectionRequest": {
+      "type": "object",
+      "properties": {
+        "areas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Restrict to these areas; empty inspects everything."
+        }
+      }
+    },
+    "v1RunInspectionResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "report": {
+          "$ref": "#/definitions/v1InspectionReport"
         }
       }
     },

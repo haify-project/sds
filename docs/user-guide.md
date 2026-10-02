@@ -1250,6 +1250,58 @@ backup older than two days, one-failure-domain risk), and `deploy/monitoring`
 a Docker Compose stack (Prometheus plus a Grafana with an "SDS" dashboard) that
 uses them.
 
+### Inspection
+
+Alerts fire when a condition starts. An inspection asks what they do not: did
+the alert reach anyone, is a replica that says Connected actually replicating,
+is the node still at the address it is registered at. It runs a fixed set of
+checks, changes nothing, and stores a report in which every finding has a
+status (`pass`, `warn`, `fail`, or `error` when the check itself could not
+run), the evidence, and the command that fixes it.
+
+```bash
+sds inspect run                         # now; waits for the report
+sds inspect run --area alerts,nodes     # only some areas
+sds inspect list
+sds inspect show                        # newest; or: sds inspect show 42
+sds inspect show latest --json
+```
+
+Each node is probed once over SSH per run; a node that does not answer is a
+`nodes.ssh` failure and `error` for its other checks, not a failed run.
+
+| Area | Checks |
+| ---- | ------ |
+| resources | a resource under `sds ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone or not Connected; a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk and single-failure-domain risk (warn); an HA promoter config missing on a diskful node or present on a diskless one |
+| gateways | every gateway not `stopped` has exactly one Primary; its promoter config on every diskful node and on no tiebreaker |
+| nodes | SSH reachable; clock skew against the controller (warn > 2 s, fail > 30 s; SSH latency is not counted), NTP synchronised; root filesystem (warn ≥ 85 %, fail ≥ 95 %); the registered address present on an interface, and the address answering as the registered host; drbd module loaded; drbd-reactor running; DRBD module, drbd-utils, drbd-reactor and `sds-controller` binary the same on every node (a differing binary fails under Self-HA); `/etc/hosts` mapping a node name to an address it is not registered at |
+| pools | thin pool data and metadata against `[alert] pool_near_full_percent` / `pool_full_percent`; growth since the previous report, warn when full within 14 days, fail within 3 |
+| backups | each enabled backup schedule: last run failed, target missing, last success older than 1.5 cron intervals (warn) or 3 (fail); snapshot schedules not run for 1.5 / 3 intervals; schedules enabled while `[schedule] enabled = false`; `_bk_` snapshots no backup record refers to |
+| alerts | `[alert]` enabled; at least one enabled channel; each channel's last deliveries succeeded; every warning or critical raised in the last 24 h was accepted by a channel that delivered it. No test message is sent |
+| selfha | at least two UpToDate copies of `sds-meta`; its promoter config active on every candidate node; exactly one `sds-controller` active, on the `sds-meta` Primary; a controller binary on every candidate |
+| tls | API server certificate, replication CA and every node's replication certificate: warn under 30 days, fail under 7 or expired |
+| hygiene | `/etc/drbd.d/*.res` and SDS-named volumes (`<res>_data`, `<res>_volN`, `<res>_state*`, `_sched_` snapshots) of resources the controller no longer has. Listed, never deleted |
+
+```toml
+[inspect]
+enabled = true            # default
+schedule = "0 1 * * *"    # default; cron, controller time zone
+keep = 30                 # default; reports stored
+notify_min = "warn"       # default; pass | warn | fail
+```
+
+The schedule rides the snapshot scheduler, so it runs on the active controller
+only and only while `[schedule] enabled = true`; `sds inspect run` works either
+way. Each run publishes one `inspection.completed` event when its worst finding
+is at least `notify_min`: severity `critical` for a fail, `warning` for a warn
+or error, `info` otherwise, with the counts and the first failing items in the
+message. It goes to notification channels like any alert; a channel filtered to
+`warning` hears from the inspection only when it found something.
+
+Channel delivery results (last success, last failure and its error, events
+given up on) are recorded per channel as alerts are delivered; that record is
+what the `alerts` area reads.
+
 ---
 
 ## 16. Access control
