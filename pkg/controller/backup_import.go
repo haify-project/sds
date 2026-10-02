@@ -158,7 +158,7 @@ func backupFromManifest(text, dir, target string, sizes map[string]uint64) (*dat
 	}
 	rec := &database.Backup{
 		ID: m.ID, Resource: m.Resource, Target: target, Node: m.Node, Backend: m.Backend,
-		State: database.BackupStateCompleted, Prefix: dir, Kind: kind, Parent: m.Parent,
+		State: database.BackupStateCompleted, Prefix: dir, Kind: kind, Parent: m.Parent, Schedule: m.Schedule,
 		TotalBytes: m.TotalBytes, StartedAt: started, FinishedAt: finished,
 	}
 	snaps := map[uint32]string{}

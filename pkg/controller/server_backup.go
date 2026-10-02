@@ -124,7 +124,7 @@ func backupToProto(b *database.Backup) *sdspb.BackupInfo {
 	info := &sdspb.BackupInfo{
 		Id: b.ID, Resource: b.Resource, Target: b.Target, Node: b.Node,
 		Backend: b.Backend, State: b.State, Error: b.Error, Prefix: b.Prefix,
-		TotalBytes: b.TotalBytes, Kind: b.Kind, Parent: b.Parent,
+		TotalBytes: b.TotalBytes, Kind: b.Kind, Parent: b.Parent, Schedule: b.Schedule,
 	}
 	if info.Kind == "" {
 		info.Kind = database.BackupKindFull

@@ -103,7 +103,10 @@ type Backup struct {
 	// taken before incrementals existed.
 	Kind string
 	// Parent is the backup an incremental was computed against.
-	Parent     string
+	Parent string
+	// Schedule names the backup schedule that took this backup; empty for one
+	// taken by hand. A schedule's retention only ever deletes its own.
+	Schedule   string
 	Volumes    []BackupVolume
 	TotalBytes uint64
 	StartedAt  time.Time

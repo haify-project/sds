@@ -143,6 +143,9 @@ func backupListCommand() *cobra.Command {
 				if b.Kind == "incremental" {
 					_, _ = fmt.Fprintf(out, "  incremental on %s, %s changed\n", b.Parent, humanBytes(changedBytes(b)))
 				}
+				if b.Schedule != "" {
+					_, _ = fmt.Fprintf(out, "  schedule=%s\n", b.Schedule)
+				}
 				if b.StartedAt != "" {
 					_, _ = fmt.Fprintf(out, "  started=%s finished=%s\n", b.StartedAt, orDash(b.FinishedAt))
 				}

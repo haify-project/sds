@@ -2167,6 +2167,9 @@ message BackupInfo {
   string kind = 13;
   // parent is the backup an incremental is built on.
   string parent = 14;
+  // schedule is the backup schedule (resource@target) that took it; empty for
+  // a backup taken by hand. A schedule's retention deletes only its own.
+  string schedule = 15;
 }
 
 message CreateBackupRequest {

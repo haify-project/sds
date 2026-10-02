@@ -6207,6 +6207,10 @@
         "parent": {
           "type": "string",
           "description": "parent is the backup an incremental is built on."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "schedule is the backup schedule (resource@target) that took it; empty for\na backup taken by hand. A schedule's retention deletes only its own."
         }
       }
     },

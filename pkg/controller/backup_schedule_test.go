@@ -13,7 +13,7 @@ import (
 
 func backupAt(id, kind, parent string, day int) *database.Backup {
 	return &database.Backup{
-		ID: id, Kind: kind, Parent: parent, State: database.BackupStateCompleted,
+		ID: id, Kind: kind, Parent: parent, State: database.BackupStateCompleted, Schedule: "s",
 		StartedAt: time.Date(2026, 9, day, 2, 30, 0, 0, time.UTC),
 	}
 }
@@ -39,15 +39,15 @@ func TestRetentionNeverBreaksAChain(t *testing.T) {
 		backupAt("inc6", inc, "inc5", 6),
 		backupAt("inc7", inc, "inc6", 7),
 	}
-	expired := selectExpiredBackups(backups, database.GFSPolicy{Daily: 2})
+	expired := selectExpiredBackups(backups, database.GFSPolicy{Daily: 2}, "s")
 	assert.Equal(t, []string{"inc3", "inc2", "full1"}, ids(expired), "newest first, so no backup goes before what builds on it")
 
 	// Keeping one more day reaches into the second chain only.
-	expired = selectExpiredBackups(backups, database.GFSPolicy{Daily: 4})
+	expired = selectExpiredBackups(backups, database.GFSPolicy{Daily: 4}, "s")
 	assert.Equal(t, []string{"inc3", "inc2", "full1"}, ids(expired))
 
 	// A kept day inside the old chain keeps that chain down to its full one.
-	expired = selectExpiredBackups(backups, database.GFSPolicy{Daily: 5})
+	expired = selectExpiredBackups(backups, database.GFSPolicy{Daily: 5}, "s")
 	assert.Empty(t, expired)
 }
 
@@ -57,8 +57,29 @@ func TestRetentionIgnoresRunningAndFailedRecords(t *testing.T) {
 	failed := backupAt("failed", database.BackupKindFull, "", 2)
 	failed.State = database.BackupStateFailed
 	expired := selectExpiredBackups([]*database.Backup{running, failed, backupAt("ok", database.BackupKindFull, "", 3)},
-		database.GFSPolicy{Daily: 1})
+		database.GFSPolicy{Daily: 1}, "s")
 	assert.Empty(t, expired)
+}
+
+// A schedule deletes only what it took. A manual full backup a scheduled
+// incremental is built on stays as long as that incremental does, and a
+// manual backup nothing depends on is never pruned at all.
+func TestRetentionLeavesBackupsTakenByHand(t *testing.T) {
+	manual := backupAt("manual1", database.BackupKindFull, "", 1)
+	manual.Schedule = ""
+	lone := backupAt("manual3", database.BackupKindFull, "", 3)
+	lone.Schedule = ""
+	backups := []*database.Backup{
+		manual,
+		backupAt("inc2", database.BackupKindIncremental, "manual1", 2),
+		lone,
+		backupAt("full4", database.BackupKindFull, "", 4),
+	}
+	expired := selectExpiredBackups(backups, database.GFSPolicy{Daily: 1}, "s")
+	assert.Equal(t, []string{"inc2"}, ids(expired))
+
+	expired = selectExpiredBackups(backups, database.GFSPolicy{Daily: 2}, "s")
+	assert.Empty(t, expired, "the kept incremental keeps the manual full it is built on")
 }
 
 func TestScheduledRunRecordsItsOutcomeAndPrunes(t *testing.T) {
@@ -72,9 +93,16 @@ func TestScheduledRunRecordsItsOutcomeAndPrunes(t *testing.T) {
 	_, err = sm.CreateBackupSchedule(ctx, "data", "nowhere", "30 2 * * *", database.GFSPolicy{Daily: 1}, true)
 	require.Error(t, err, "an unknown target is refused when the schedule is saved, not at 02:30")
 
-	// A full backup, then a fresh chain: keeping one hourly backup drops the
-	// old chain once nothing kept is built on it.
-	first := f.backup(t, false)
+	// A scheduled full backup, then a fresh chain: keeping one hourly backup
+	// drops the old chain once nothing kept is built on it. A backup taken by
+	// hand in between is not the schedule's to delete.
+	firstSc, err := sm.RunBackupSchedule(ctx, sc.Name)
+	require.NoError(t, err)
+	first, err := f.ctrl.db.GetBackup(ctx, firstSc.LastBackup)
+	require.NoError(t, err)
+	assert.Equal(t, sc.Name, first.Schedule)
+	f.cmds = append(f.cmds, "ran")
+	manual := f.backup(t, true)
 	time.Sleep(1100 * time.Millisecond)
 	f.gone[first.Volumes[0].Snapshot] = true
 	got, err := sm.RunBackupSchedule(ctx, sc.Name)
@@ -84,7 +112,7 @@ func TestScheduledRunRecordsItsOutcomeAndPrunes(t *testing.T) {
 
 	left, err := f.ctrl.db.ListBackups(ctx, "data", "offsite")
 	require.NoError(t, err)
-	assert.Equal(t, []string{got.LastBackup}, ids(left))
+	assert.ElementsMatch(t, []string{got.LastBackup, manual.ID}, ids(left))
 }
 
 func TestScheduledRunFailureIsRecorded(t *testing.T) {

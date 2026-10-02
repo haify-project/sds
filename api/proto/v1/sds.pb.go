@@ -12621,7 +12621,10 @@ type BackupInfo struct {
 	// every backup down to the full one it is built on.
 	Kind string `protobuf:"bytes,13,opt,name=kind,proto3" json:"kind,omitempty"`
 	// parent is the backup an incremental is built on.
-	Parent        string `protobuf:"bytes,14,opt,name=parent,proto3" json:"parent,omitempty"`
+	Parent string `protobuf:"bytes,14,opt,name=parent,proto3" json:"parent,omitempty"`
+	// schedule is the backup schedule (resource@target) that took it; empty for
+	// a backup taken by hand. A schedule's retention deletes only its own.
+	Schedule      string `protobuf:"bytes,15,opt,name=schedule,proto3" json:"schedule,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12750,6 +12753,13 @@ func (x *BackupInfo) GetKind() string {
 func (x *BackupInfo) GetParent() string {
 	if x != nil {
 		return x.Parent
+	}
+	return ""
+}
+
+func (x *BackupInfo) GetSchedule() string {
+	if x != nil {
+		return x.Schedule
 	}
 	return ""
 }
@@ -20723,7 +20733,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04pool\x18\x04 \x01(\tR\x04pool\x12%\n" +
 	"\x0ebacking_volume\x18\x05 \x01(\tR\rbackingVolume\x12\x16\n" +
 	"\x06ranges\x18\x06 \x01(\tR\x06ranges\x12#\n" +
-	"\rchanged_bytes\x18\a \x01(\x04R\fchangedBytes\"\xff\x02\n" +
+	"\rchanged_bytes\x18\a \x01(\x04R\fchangedBytes\"\x9b\x03\n" +
 	"\n" +
 	"BackupInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
@@ -20743,7 +20753,8 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"finishedAt\x12.\n" +
 	"\avolumes\x18\f \x03(\v2\x14.v1.BackupVolumeInfoR\avolumes\x12\x12\n" +
 	"\x04kind\x18\r \x01(\tR\x04kind\x12\x16\n" +
-	"\x06parent\x18\x0e \x01(\tR\x06parent\"q\n" +
+	"\x06parent\x18\x0e \x01(\tR\x06parent\x12\x1a\n" +
+	"\bschedule\x18\x0f \x01(\tR\bschedule\"q\n" +
 	"\x13CreateBackupRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +

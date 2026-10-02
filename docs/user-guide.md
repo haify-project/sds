@@ -649,10 +649,12 @@ least 256 MiB) of free space in its volume group up front, so a replica whose
 group lacks that room is passed over for one that has it.
 
 **Scheduled backups.** One schedule per resource and target, run by the active
-controller (it carries on after a controller failover). Retention counts every
-completed backup of the resource on that target — including ones taken by hand
-or imported — the way snapshot schedules count snapshots, with one addition: a
-kept incremental keeps every backup down to its full one. A daily schedule
+controller (it carries on after a controller failover). Each backup records the
+schedule that took it (`schedule=` in `backup list`, and in its manifest, so it
+survives an import). Retention counts only the schedule's own backups, the way
+snapshot schedules count snapshots, and never deletes a backup taken by hand,
+with one addition: a kept incremental keeps every backup down to its full one,
+whoever took it. A daily schedule
 keeping 7 can therefore hold up to a month of backups until the chain restarts
 with a full one. A schedule must keep at least one tier; `--disabled` saves it
 without running it.

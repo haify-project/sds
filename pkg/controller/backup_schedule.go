@@ -125,7 +125,7 @@ func (sm *ScheduleManager) RunBackupSchedule(ctx context.Context, name string) (
 	}
 
 	log.Info("Running backup schedule", zap.String("schedule", name))
-	rec, runErr := sm.controller.backups.CreateBackup(ctx, s.Resource, s.Target, "", false)
+	rec, runErr := sm.controller.backups.createBackup(ctx, s.Resource, s.Target, "", false, s.Name)
 	failedBefore := s.LastError != ""
 	s.LastRun = time.Now()
 	if runErr != nil {
@@ -171,10 +171,13 @@ func (sm *ScheduleManager) publishBackupEvent(s *database.BackupSchedule, status
 	})
 }
 
-// pruneBackups deletes the schedule's backups its policy no longer keeps,
+// pruneBackups deletes the schedule's own backups its policy no longer keeps,
 // newest first so no backup is deleted while a later one depends on it, and
-// drops failed records older than the newest completed backup: their objects
-// were removed when they failed, and the success after them supersedes them.
+// drops its failed records older than the newest completed backup: their
+// objects were removed when they failed, and the success after them
+// supersedes them. Backups taken by hand, or by another schedule, are never
+// touched, though a kept backup of this schedule still keeps them when it is
+// built on them.
 func (sm *ScheduleManager) pruneBackups(ctx context.Context, s *database.BackupSchedule) {
 	log := sm.controller.logger
 	backups, err := sm.controller.db.ListBackups(ctx, s.Resource, s.Target)
@@ -188,9 +191,9 @@ func (sm *ScheduleManager) pruneBackups(ctx context.Context, s *database.BackupS
 			newest = b.StartedAt
 		}
 	}
-	doomed := selectExpiredBackups(backups, s.Keep)
+	doomed := selectExpiredBackups(backups, s.Keep, s.Name)
 	for _, b := range backups {
-		if b.State == database.BackupStateFailed && b.StartedAt.Before(newest) {
+		if b.State == database.BackupStateFailed && b.Schedule == s.Name && b.StartedAt.Before(newest) {
 			doomed = append(doomed, b)
 		}
 	}
@@ -203,11 +206,12 @@ func (sm *ScheduleManager) pruneBackups(ctx context.Context, s *database.BackupS
 	}
 }
 
-// selectExpiredBackups returns the completed backups policy does not keep,
-// newest first. A backup is kept when GFS selects it or when a kept backup is
-// built on it, directly or further down its chain. Running and failed records
-// are never selected: one is in flight and the other holds no data.
-func selectExpiredBackups(backups []*database.Backup, policy database.GFSPolicy) []*database.Backup {
+// selectExpiredBackups returns the completed backups of schedule that policy
+// does not keep, newest first. GFS counts only the schedule's own backups; a
+// backup is kept when GFS selects it or when a kept backup is built on it,
+// directly or further down its chain, whoever took it. Running and failed
+// records are never selected: one is in flight and the other holds no data.
+func selectExpiredBackups(backups []*database.Backup, policy database.GFSPolicy, schedule string) []*database.Backup {
 	byID := make(map[string]*database.Backup, len(backups))
 	var snaps []scheduledSnap
 	for _, b := range backups {
@@ -215,7 +219,9 @@ func selectExpiredBackups(backups []*database.Backup, policy database.GFSPolicy)
 			continue
 		}
 		byID[b.ID] = b
-		snaps = append(snaps, scheduledSnap{Name: b.ID, TS: b.StartedAt})
+		if b.Schedule == schedule {
+			snaps = append(snaps, scheduledSnap{Name: b.ID, TS: b.StartedAt})
+		}
 	}
 	candidates := selectExpiredSnapshots(snaps, policy)
 	expired := make(map[string]bool, len(candidates))

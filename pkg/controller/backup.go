@@ -63,6 +63,7 @@ type BackupManifest struct {
 	Backend    string                   `json:"backend"`
 	Kind       string                   `json:"kind"`
 	Parent     string                   `json:"parent,omitempty"`
+	Schedule   string                   `json:"schedule,omitempty"`
 	CreatedAt  string                   `json:"created_at"`
 	FinishedAt string                   `json:"finished_at,omitempty"`
 	TotalBytes uint64                   `json:"total_bytes"`
@@ -164,6 +165,12 @@ func (bm *BackupManager) ReconcileInterrupted(ctx context.Context) error {
 // node selects which replica to read. Empty picks one automatically, preferring
 // a Secondary so the workload's node is left alone.
 func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName, node string, full bool) (*database.Backup, error) {
+	return bm.createBackup(ctx, resource, targetName, node, full, "")
+}
+
+// createBackup is CreateBackup on behalf of schedule, which is recorded on the
+// backup so that schedule's retention can tell its own backups from others.
+func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName, node string, full bool, schedule string) (*database.Backup, error) {
 	if bm.controller.db == nil {
 		return nil, fmt.Errorf("database not available")
 	}
@@ -285,7 +292,7 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, resource, targetName,
 		ID: id, Resource: resource, Target: targetName, Node: node,
 		Backend: bm.backend.Name(), State: database.BackupStateRunning,
 		Prefix: backup.ObjectPath(resource, id), StartedAt: started,
-		Kind: database.BackupKindFull,
+		Kind: database.BackupKindFull, Schedule: schedule,
 	}
 	if parent != nil {
 		rec.Kind, rec.Parent = database.BackupKindIncremental, parent.ID
@@ -422,7 +429,7 @@ func (bm *BackupManager) removeSnapshots(ctx context.Context, host string, info 
 func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo, snaps map[uint32]string) (string, error) {
 	m := BackupManifest{
 		Version: manifestVersion, ID: rec.ID, Resource: rec.Resource, Node: rec.Node,
-		Backend: rec.Backend, Kind: rec.Kind, Parent: rec.Parent,
+		Backend: rec.Backend, Kind: rec.Kind, Parent: rec.Parent, Schedule: rec.Schedule,
 		CreatedAt:  rec.StartedAt.UTC().Format(time.RFC3339),
 		FinishedAt: time.Now().UTC().Format(time.RFC3339),
 		TotalBytes: rec.TotalBytes,
