@@ -94,7 +94,7 @@ func (s *Server) registerBackupScheduleTools(srv *mcp.Server) {
 			return nil, backupScheduleToOut(sc), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_backup_schedule_delete", "Stop scheduled backups",
+	addWrite(s, srv, destructiveTool("sds_backup_schedule_delete", "Stop scheduled backups",
 		"Delete a backup schedule by its resource@target name. The backups it made are kept."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in struct {
 			Name string `json:"name" jsonschema:"resource@target"`

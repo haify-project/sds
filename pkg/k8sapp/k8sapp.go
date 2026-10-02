@@ -1,5 +1,5 @@
 // Package k8sapp creates databases on Kubernetes whose data lives on an SDS
-// volume. sds-mcp exposes it as the sds_app_create / sds_app_list tools.
+// volume. sds-mcp exposes it as the sds_k8s_app_create / sds_k8s_app_list tools.
 package k8sapp
 
 import (

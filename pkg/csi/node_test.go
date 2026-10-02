@@ -51,7 +51,7 @@ func (m *recordingMounter) FSStats(string) (FSStats, error) { return m.stats, m.
 func (m *recordingMounter) BlockSize(string) (int64, error) { return m.blockSize, nil }
 
 func newTestNode(b SDSBackend, m Mounter) *nodeServer {
-	return NewNodeServer(b, m, "n1", "10.0.0.1", zap.NewNop()).(*nodeServer)
+	return NewNodeServer(b, m, "n1", zap.NewNop()).(*nodeServer)
 }
 
 func TestNodeGetInfoReportsTopology(t *testing.T) {

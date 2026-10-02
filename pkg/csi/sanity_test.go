@@ -31,7 +31,7 @@ func TestSanity(t *testing.T) {
 		zap.NewNop(),
 		csi.NewIdentityServer(),
 		csi.NewControllerServer(b, zap.NewNop()),
-		csi.NewNodeServer(b, nop, "n1", "10.0.0.1", zap.NewNop()),
+		csi.NewNodeServer(b, nop, "n1", zap.NewNop()),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())

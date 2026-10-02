@@ -16,7 +16,7 @@ func main() {
 	endpoint := flag.String("endpoint", "unix:///csi/csi.sock", "CSI gRPC endpoint")
 	sdsAddr := flag.String("sds-controller", "sds-controller:3374", "sds-controller gRPC address")
 	nodeName := flag.String("node-name", os.Getenv("NODE_NAME"), "Kubernetes node name")
-	nodeIP := flag.String("node-ip", os.Getenv("NODE_IP"), "this node's storage IP")
+	nodeIP := flag.String("node-ip", os.Getenv("NODE_IP"), "this node's storage IP, registered with the controller at startup")
 	flag.Parse()
 
 	log, _ := zap.NewProduction()
@@ -45,7 +45,7 @@ func main() {
 	d := csi.NewDriver(*endpoint, log,
 		csi.NewIdentityServer(),
 		nil,
-		csi.NewNodeServer(sds, csi.NewMounter(), *nodeName, *nodeIP, log),
+		csi.NewNodeServer(sds, csi.NewMounter(), *nodeName, log),
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

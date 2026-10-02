@@ -43,6 +43,11 @@ func (fullClient) SetNodeAddresses(context.Context, []*sdspb.NodeAddressMove) (*
 	return &sdspb.SetNodeAddressResponse{}, nil
 }
 
+func (fullClient) ReplicationTLSStatus(context.Context, []string) ([]*sdspb.NodeTLSInfo, error) {
+	return nil, nil
+}
+func (fullClient) SetResourceTLS(context.Context, string, bool) (string, error) { return "", nil }
+
 func TestRunbooksParse(t *testing.T) {
 	books, err := loadRunbooks()
 	if err != nil {

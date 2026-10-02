@@ -16,7 +16,6 @@ type nodeServer struct {
 	backend  SDSBackend
 	mounter  Mounter
 	nodeName string
-	nodeIP   string
 	log      *zap.Logger
 
 	// singleWriter records, for volumes published with the single-writer
@@ -28,8 +27,8 @@ type nodeServer struct {
 }
 
 // NewNodeServer returns the CSI Node service for this node.
-func NewNodeServer(b SDSBackend, m Mounter, nodeName, nodeIP string, log *zap.Logger) csi.NodeServer {
-	return &nodeServer{backend: b, mounter: m, nodeName: nodeName, nodeIP: nodeIP, log: log,
+func NewNodeServer(b SDSBackend, m Mounter, nodeName string, log *zap.Logger) csi.NodeServer {
+	return &nodeServer{backend: b, mounter: m, nodeName: nodeName, log: log,
 		singleWriter: map[string]string{}}
 }
 

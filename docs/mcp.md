@@ -96,13 +96,17 @@ connection. A tool that is not registered cannot be called by name.
 
 | Role | Tools |
 | ---- | ----- |
-| `read` | the read-only tools: lists, status, health, diagnose, events, logs, audit, runbooks |
+| `read` | the read-only tools: lists, status, health, diagnose, events, logs, audit, gateway exports/LUNs/ACLs/CHAP settings, runbooks |
 | `operate` | plus every mutating tool not marked destructive (the middle column below) |
-| `admin` | plus the destructive ones: delete, remove, restore, stop, evict, drain, renumber, Self-HA enable/disable, DR failback, and the gateway export/LUN/ACL tools |
+| `admin` | plus the destructive ones: delete, remove, restore, stop, evict, drain, renumber, role change, unmount, schedule delete, Self-HA enable/disable, DR failback, and adding or removing gateway exports, LUNs and ACL entries |
 
-`operate` is not a no-interruption role: it includes `sds_resource_set_role`,
-`sds_resource_unmount`, `sds_resource_set_options` and `sds_resource_tls`,
-which demote, unmount or reconnect.
+Anything that loses data, takes a volume away from the node serving it
+(role change, unmount, gateway stop, evict, drain), or stops future snapshots
+or backups is `admin`. `operate` can still briefly take replication links down
+and back, one at a time, while the Primary keeps serving:
+`sds_resource_set_options`, `sds_resource_tls`, `sds_wan_repair`,
+`sds_wan_set_endpoint`. It can also detach a diskless client
+(`sds_resource_detach_diskless`), which ends that node's access.
 
 `--max-role read|operate|admin` caps every token on the main listener, whatever
 the token says. `--admin-listen ADDR` opens a second listener that
@@ -196,18 +200,19 @@ halfway if the order is wrong. They are embedded from
 | Cluster, nodes | `sds_node_list`, `sds_node_health_check`, `sds_diagnose`, `sds_event_list`, `sds_log_list`, `sds_audit_list`, `sds_ocf_agent_list`, `sds_ocf_agent_metadata`, `sds_notify_channel_list`, `sds_replication_tls_status`, `sds_runbook` | `sds_node_register`, `sds_node_set_labels`, `sds_node_undrain`, `sds_notify_channel_test` | `sds_node_drain`, `sds_node_unregister`, `sds_node_set_address` |
 | LVM pools | `sds_pool_list` | `sds_pool_create`, `sds_pool_add_disk`, `sds_pool_add_cache` | `sds_pool_delete`, `sds_pool_remove_cache`, `sds_pool_convert_thin` |
 | ZFS | `sds_zfs_pool_list` | `sds_zfs_volume_create`, `sds_zfs_volume_resize`, `sds_zfs_dataset_create`, `sds_zfs_snapshot_clone` | `sds_zfs_pool_delete`, `sds_zfs_dataset_delete` |
-| Resources, volumes | `sds_resource_list`, `sds_resource_status` | `sds_resource_create`, `sds_resource_adopt`, `sds_resource_add_volume`, `sds_resource_resize_volume`, `sds_resource_set_options`, `sds_resource_set_role`, `sds_resource_mount`, `sds_resource_unmount`, `sds_resource_dual_primary`, `sds_resource_repair`, `sds_resource_verify`, `sds_resource_tls` | `sds_resource_delete`, `sds_resource_remove_volume`, `sds_resource_create_filesystem` |
+| Resources, volumes | `sds_resource_list`, `sds_resource_status` | `sds_resource_create`, `sds_resource_adopt`, `sds_resource_add_volume`, `sds_resource_resize_volume`, `sds_resource_set_options`, `sds_resource_mount`, `sds_resource_dual_primary`, `sds_resource_repair`, `sds_resource_verify`, `sds_resource_tls` | `sds_resource_delete`, `sds_resource_remove_volume`, `sds_resource_create_filesystem`, `sds_resource_set_role`, `sds_resource_unmount` |
 | Replicas, WAN | | `sds_resource_add_replica`, `sds_resource_attach_diskless`, `sds_resource_detach_diskless`, `sds_resource_set_tiebreaker`, `sds_resource_add_dr`, `sds_wan_repair`, `sds_wan_set_endpoint` | `sds_resource_remove_replica`, `sds_resource_dr_failback` |
 | Profiles | `sds_resource_profile_list`, `sds_resource_profile_get`, `sds_resource_profile_max_size` | `sds_resource_profile_create`, `sds_resource_profile_set_options`, `sds_resource_profile_adjust`, `sds_resource_set_profile` | `sds_resource_profile_delete` |
 | Snapshots | `sds_snapshot_list`, `sds_snapshot_schedule_list` | `sds_snapshot_create`, `sds_snapshot_schedule_create` | `sds_snapshot_delete`, `sds_snapshot_restore`, `sds_snapshot_schedule_delete` |
-| Backups | `sds_backup_list`, `sds_backup_target_list`, `sds_backup_schedule_list` | `sds_backup_create`, `sds_backup_import`, `sds_backup_schedule_create`, `sds_backup_schedule_delete` | `sds_backup_delete`, `sds_backup_restore`, `sds_backup_target_delete` |
-| Gateways | `sds_gateway_list`, `sds_gateway_get` | `sds_gateway_create_nfs`, `sds_gateway_create_iscsi`, `sds_gateway_create_nvme`, `sds_gateway_start`, `sds_iscsi_chap` | `sds_gateway_stop`, `sds_gateway_delete`, `sds_nfs_exports`, `sds_iscsi_luns`, `sds_iscsi_initiators`, `sds_nvme_namespaces`, `sds_nvme_hosts` |
+| Backups | `sds_backup_list`, `sds_backup_target_list`, `sds_backup_schedule_list` | `sds_backup_create`, `sds_backup_import`, `sds_backup_schedule_create` | `sds_backup_delete`, `sds_backup_restore`, `sds_backup_target_delete`, `sds_backup_schedule_delete` |
+| Gateways | `sds_gateway_list`, `sds_gateway_get`, `sds_nfs_export_list`, `sds_iscsi_lun_list`, `sds_iscsi_initiator_list`, `sds_iscsi_chap_get`, `sds_nvme_namespace_list`, `sds_nvme_host_list` | `sds_gateway_create_nfs`, `sds_gateway_create_iscsi`, `sds_gateway_create_nvme`, `sds_gateway_start`, `sds_iscsi_chap` | `sds_gateway_stop`, `sds_gateway_delete`, `sds_nfs_exports`, `sds_iscsi_luns`, `sds_iscsi_initiators`, `sds_nvme_namespaces`, `sds_nvme_hosts` |
 | HA, Self-HA | `sds_ha_list`, `sds_ha_status`, `sds_ha_promoter_status`, `sds_ha_get_toml`, `sds_self_ha_status` | `sds_ha_create` | `sds_ha_evict`, `sds_ha_delete`, `sds_ha_sync_toml`, `sds_self_ha_enable`, `sds_self_ha_disable` |
 
 `sds_nfs_exports`, `sds_iscsi_luns`, `sds_iscsi_initiators`,
-`sds_nvme_namespaces` and `sds_nvme_hosts` each take an action (list, add,
-remove) and are marked destructive as a whole, so listing exports, LUNs or
-ACLs needs `admin`. `sds_iscsi_chap` (get, set) needs `operate` for either.
+`sds_nvme_namespaces` and `sds_nvme_hosts` take an action (add, remove) and
+need `admin`; they still accept `list`, which the `*_list` tools answer at
+`read`. `sds_iscsi_chap` sets CHAP at `operate` and still accepts `get`;
+`sds_iscsi_chap_get` answers it at `read`. Neither returns the password.
 
 ### What has no tool
 
