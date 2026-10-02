@@ -797,10 +797,63 @@ sds gateway nvme host add|list|remove ...       # host allow-list
 
 These edits read the gateway's promoter config from the resource's diskful
 nodes — not from the machine the controller runs on — and write the result
-back to all of them. A stopped gateway is edited in its `.toml.disabled` copy
-and stays stopped. If the nodes hold different copies, the one most of them
+back to all of them. If the nodes hold different copies, the one most of them
 hold is used (a tie goes to the first node by name), a warning names the
 nodes that differ, and the write makes them identical again.
+
+**When an edit takes effect.**
+
+- *Stopped gateway*: the edit goes into the `.toml.disabled` copy and takes
+  effect at the next `gateway start`. Nothing on the nodes is touched and the
+  gateway stays stopped.
+- *Running gateway*: the edit takes effect **immediately on the node that runs
+  it**, without restarting the gateway, and the other diskful nodes are ready
+  to run the edited gateway on failover. Per edit:
+
+  | Edit | Applied on the running node by | Clients |
+  | ---- | ------------------------------ | ------- |
+  | `iscsi initiator add` | `targetcli … acls create <iqn> add_mapped_luns=true` (all LUNs mapped) | new initiator can log in at once |
+  | `iscsi initiator remove` | `targetcli … acls delete <iqn>` | that initiator's sessions are closed; others unaffected |
+  | `iscsi chap set` | `targetcli … set auth` on every ACL (or the TPG when all initiators are allowed) | applies at the next login; existing sessions stay |
+  | `iscsi lun add` / `remove` | starts / stops just that LUN's `ocf.rs@lu<N>_<res>` unit | other LUNs unaffected |
+  | `nvme host add` / `remove` | links / unlinks the host in the subsystem's `allowed_hosts` (configfs) | a removed host keeps an existing connection until it reconnects |
+  | `nvme namespace add` / `remove` | starts / stops just that namespace's unit | other namespaces unaffected |
+  | `nfs export add` / `remove` | starts / stops just that export's `exportfs` unit | other exports unaffected |
+
+  Removing the last initiator or host makes the target accept every initiator
+  again (an empty allow-list means "allow all"), live as well. Changes that
+  cannot be applied without restarting the gateway (e.g. removing CHAP) are
+  refused before anything is written; stop the gateway, edit, start it.
+- *Running nowhere* (enabled, but no node has it up): the config is written and
+  drbd-reactor reloaded, which starts it with the edit.
+
+drbd-reactor itself cannot apply a changed promoter config to a running
+gateway: on `systemctl reload drbd-reactor` it stops the old promoter and
+starts a new one, and SDS promoters are written with
+`stop-services-on-exit = true`, so a reload with a changed config stops the
+whole gateway on that node and lets every node race to promote it again.
+SDS therefore never reloads drbd-reactor on the node running the gateway for
+an edit: that node keeps the `.toml` its drbd-reactor loaded and gets the
+edited one as `sds-<type>-<res>.toml.pending`, which drbd-reactor ignores.
+The unit drop-ins in `/run/systemd/system` are rewritten to the edited chain,
+so a unit restart or a later failback uses it, and a drop-in on
+`drbd-reactor.service` (`50-sds-pending-gateway-config.conf`) moves the
+`.pending` file into place before drbd-reactor next starts; the next edit made
+while another node runs the gateway replaces it too. **Do not run
+`systemctl reload drbd-reactor` on the running node by hand to "pick up" a
+gateway edit** — it restarts the gateway. If the live step fails, the command
+says so: the config is saved everywhere and a failover uses it, and
+`sds gateway stop` then `sds gateway start` applies it now (interrupting
+clients).
+
+Initiator IQNs and host NQNs are checked before anything is written, with the
+rules LIO and nvmet apply: an iSCSI name must be `iqn.<yyyy-mm>.<domain with at
+least two labels>[:<name>]` without spaces or `_` (`iqn.2026-10.test:probe` is
+refused, `iqn.2026-10.lab.test:probe` is accepted), `eui.` + 16 hex digits, or
+`naa.` + 16 hex digits starting with 1, 2 or 5; a host NQN must be
+`nqn.<yyyy-mm>.<reversed domain>[:<name>]` or
+`nqn.2014-08.org.nvmexpress:uuid:<uuid>`. A name LIO rejects would otherwise be
+accepted here and fail the target's next start, leaving the gateway down.
 
 `iscsi create` also takes `--allowed-initiators`, `--username`/`--password` for
 CHAP, and `--implementation lio` (the default and the only one supported; `tgt`

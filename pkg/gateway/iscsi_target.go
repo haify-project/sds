@@ -69,7 +69,7 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 	}
 	lines = append(lines[:anchor+1], append([]string{newLine}, lines[anchor+1:]...)...)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveLUN removes a LUN from an iSCSI gateway
@@ -94,7 +94,7 @@ func (i *iSCSIManager) RemoveLUN(ctx context.Context, resource string, lunNumber
 		return fmt.Errorf("LUN %d not found", lunNumber)
 	}
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // ListLUNs lists all configured LUNs for an iSCSI gateway.

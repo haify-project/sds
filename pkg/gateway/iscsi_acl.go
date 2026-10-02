@@ -33,6 +33,12 @@ func (i *iSCSIManager) AddInitiator(ctx context.Context, resource, initiatorIQN 
 		zap.String("resource", resource),
 		zap.String("iqn", initiatorIQN))
 
+	// LIO refuses a malformed name only when the target next starts, which
+	// leaves the gateway down; see validateIQN.
+	if err := validateIQN(initiatorIQN); err != nil {
+		return invalidArgument(err)
+	}
+
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
@@ -61,7 +67,7 @@ func (i *iSCSIManager) AddInitiator(ctx context.Context, resource, initiatorIQN 
 		params["implementation"],
 	)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveInitiator removes an initiator from the iSCSI gateway
@@ -106,7 +112,7 @@ func (i *iSCSIManager) RemoveInitiator(ctx context.Context, resource, initiatorI
 		params["implementation"],
 	)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // ListInitiators lists all initiators for an iSCSI gateway
@@ -170,7 +176,7 @@ func (i *iSCSIManager) SetCHAP(ctx context.Context, resource, username, password
 		params["implementation"],
 	)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // GetCHAP gets CHAP authentication settings

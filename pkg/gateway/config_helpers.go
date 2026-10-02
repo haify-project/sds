@@ -16,13 +16,14 @@ func gatewayConfigPath(pluginID string) string {
 // persistGatewayConfig writes an edited gateway config back to the nodes that
 // may run the gateway (see readGatewayConfig for where it was read from).
 //
-// A running gateway's config goes through writeReactorConfig, which installs
-// it on every diskful node and reloads drbd-reactor. A stopped gateway's
-// config goes back to the .toml.disabled copy and nothing is reloaded: writing
-// the live .toml would start the gateway as a side effect of the edit.
-func (m *Manager) persistGatewayConfig(ctx context.Context, resource, pluginID string, disabled bool, content string) error {
-	if !disabled {
-		return m.writeReactorConfig(ctx, resource, pluginID, content)
+// A gateway that is not stopped goes through editRunningGateway, which writes
+// the config without restarting the gateway and applies the edit where it
+// runs (see live_edit.go). A stopped gateway's config goes back to the
+// .toml.disabled copy and nothing is reloaded or applied: writing the live
+// .toml would start the gateway as a side effect of the edit.
+func (m *Manager) persistGatewayConfig(ctx context.Context, resource, pluginID string, cfg *gatewayConfig, content string) error {
+	if !cfg.disabled {
+		return m.editRunningGateway(ctx, resource, pluginID, cfg.content, content)
 	}
 	run, _ := m.promoterHosts(ctx, resource)
 	path := gatewayConfigPath(pluginID) + disabledSuffix

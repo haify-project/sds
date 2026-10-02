@@ -2,8 +2,10 @@ package gateway
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -160,6 +162,13 @@ type MockDeploymentClient struct {
 	// for config dump scripts; a host absent from it did not answer. When it
 	// is nil every node holds Configs.
 	NodeConfigs map[string]map[string]string
+	// TargetStates is what systemctl is-active says of a gateway's services
+	// target, per host; a host absent from it did not answer. When it is nil
+	// every host reports "inactive": the gateway runs nowhere.
+	TargetStates map[string]string
+	// ScriptErr fails a base64-wrapped script when the decoded script
+	// contains the key.
+	ScriptErr map[string]error
 }
 
 func (m *MockDeploymentClient) ExecOutput(ctx context.Context, hosts []string, cmd string) (map[string]string, error) {
@@ -170,6 +179,19 @@ func (m *MockDeploymentClient) ExecOutput(ctx context.Context, hosts []string, c
 	m.ExecHosts = append(m.ExecHosts, append([]string(nil), hosts...))
 	if patterns := dumpScriptPatterns(cmd); patterns != nil {
 		return m.dumpConfigs(hosts, patterns), nil
+	}
+	if strings.Contains(decodeScriptCmd(cmd), targetStateMarker) {
+		out := map[string]string{}
+		for _, h := range hosts {
+			state, ok := "inactive", true
+			if m.TargetStates != nil {
+				state, ok = m.TargetStates[h]
+			}
+			if ok {
+				out[h] = targetStateMarker + " " + state + "\n"
+			}
+		}
+		return out, nil
 	}
 	out := map[string]string{}
 	for _, h := range hosts {
@@ -216,7 +238,26 @@ func (m *MockDeploymentClient) Exec(ctx context.Context, hosts []string, cmd str
 	}
 	m.ExecCommands = append(m.ExecCommands, cmd)
 	m.ExecHosts = append(m.ExecHosts, append([]string(nil), hosts...))
+	script := decodeScriptCmd(cmd)
+	for key, err := range m.ScriptErr {
+		if script != "" && strings.Contains(script, key) {
+			return err
+		}
+	}
 	return nil
+}
+
+// decodeScriptCmd returns the script a scriptCmd command runs, or "".
+func decodeScriptCmd(cmd string) string {
+	m := scriptCmdRE.FindStringSubmatch(cmd)
+	if m == nil {
+		return ""
+	}
+	raw, err := base64.StdEncoding.DecodeString(m[1])
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
 // ==================== ServiceIP Tests ====================

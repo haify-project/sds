@@ -10,6 +10,7 @@ go 1.26.0
 toolchain go1.26.8
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -43,7 +44,6 @@ require (
 )
 
 require (
-	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

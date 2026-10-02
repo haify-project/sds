@@ -422,7 +422,7 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 	}
 	lines = append(lines[:anchor+1], append([]string{newLine}, lines[anchor+1:]...)...)
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveNFSExport removes an export from an existing NFS gateway.
@@ -451,7 +451,7 @@ func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath s
 		return fmt.Errorf("export not found: %s", normalizedPath)
 	}
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // ListNFSExports lists all exports for an NFS gateway
