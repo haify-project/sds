@@ -14,6 +14,10 @@ import (
 // matches the stored pool "sds_vg0".
 const managedPoolPrefix = "sds_"
 
+// nodeStateMaintenance is the state the controller reports for a node an
+// operator drained (controller.NodeStateMaintenance).
+const nodeStateMaintenance = "maintenance"
+
 // managedPoolName normalizes a StorageClass pool name the same way the
 // controller does, so it compares equal to the names returned by ListPools.
 func managedPoolName(pool string) string {
@@ -85,6 +89,10 @@ func nodesWithPool(nodes []*sdspb.NodeInfo, pools []*sdspb.PoolInfo, pool, domai
 	}
 	var out []replicaCandidate
 	for _, n := range nodes {
+		// A drained node (sds node drain) takes no new replicas.
+		if n.GetState() == nodeStateMaintenance {
+			continue
+		}
 		for _, key := range []string{n.GetAddress(), n.GetName()} {
 			if free, ok := freeByKey[key]; ok {
 				domain := "node:" + n.GetName()

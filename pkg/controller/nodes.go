@@ -98,12 +98,19 @@ func (nm *NodeManager) RegisterNodeWithReplicationAddress(ctx context.Context, n
 
 	// Preserve any labels a prior registration set, so re-registering a node
 	// (e.g. after a restart or address refresh) does not wipe its rack/zone tags.
+	// A drained node stays drained: re-registering is not an undrain.
 	nm.mu.RLock()
 	var labels map[string]string
-	if existing := nm.nodes[address]; existing != nil && len(existing.Labels) > 0 {
-		labels = make(map[string]string, len(existing.Labels))
-		for k, v := range existing.Labels {
-			labels[k] = v
+	state := NodeStateOnline
+	if existing := nm.nodes[address]; existing != nil {
+		if len(existing.Labels) > 0 {
+			labels = make(map[string]string, len(existing.Labels))
+			for k, v := range existing.Labels {
+				labels[k] = v
+			}
+		}
+		if existing.State == NodeStateMaintenance {
+			state = NodeStateMaintenance
 		}
 	}
 	nm.mu.RUnlock()
@@ -114,7 +121,7 @@ func (nm *NodeManager) RegisterNodeWithReplicationAddress(ctx context.Context, n
 		Address:            address,
 		ReplicationAddress: replicationAddress,
 		Hostname:           hostname,
-		State:              NodeStateOnline,
+		State:              state,
 		LastSeen:           time.Now(),
 		Version:            nm.detectNodeVersion(ctx, address),
 		Capacity:           make(map[string]interface{}),

@@ -182,9 +182,8 @@ sds node set-address orange1=192.168.1.21 orange2=192.168.1.22 orange3=192.168.1
 resource's config, so a resource a renumbering could not reach (a node was
 down) is fixed by repairing it afterwards.
 
-**Draining** a node demotes every resource that is Primary there, promotes it
-on another of its replicas, and marks the node `maintenance` — do this before
-maintenance, not after:
+**Draining** a node marks it `maintenance` and moves every resource that is
+Primary there to another replica — do this before maintenance, not after:
 
 ```bash
 sds node drain orange1
@@ -192,10 +191,22 @@ sds node drain orange1
 sds node undrain orange1
 ```
 
-Drain is a plain demote and promote. A Primary that is mounted, or held by a
-service drbd-reactor runs, cannot be demoted, and the drain stops there with
-DRBD's "held open" error; move those with `ha evict` first (see
-[High availability](#11-high-availability)).
+A `maintenance` node gets no new replicas or tiebreakers (`resource create`,
+CSI provisioning) and keeps that state through health checks and
+re-registration until `undrain`. Undrain moves nothing back.
+
+How each Primary moves:
+
+- **HA resources, gateways, sds-meta** go through drbd-reactor's eviction,
+  the same as `sds ha evict`; drbd-reactor picks the new node.
+- **Everything else** is demoted, then promoted on the first replica in the
+  resource's node list that is diskful, `UpToDate`, connected, and neither
+  drained, offline, nor a WAN resource's DR node. If that promote fails, the
+  original node is promoted back.
+
+A resource that cannot move — no qualifying replica, a mounted volume, a
+failed eviction — stays Primary where it is; the drain moves the rest and
+names each one it left, with the reason. The node stays drained either way.
 
 Unregistering is for a node that is never coming back:
 

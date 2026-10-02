@@ -192,3 +192,23 @@ func TestSelectReplicaNodesSpreadsAcrossFaultDomains(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"a", "b"}, got)
 }
+
+// A drained node must not receive a replica of a new PVC.
+func TestNodesWithPoolSkipsDrainedNode(t *testing.T) {
+	nodes := []*sdspb.NodeInfo{
+		{Name: "n1", Address: "10.0.0.1", State: "online"},
+		{Name: "n2", Address: "10.0.0.2", State: "maintenance"},
+		{Name: "n3", Address: "10.0.0.3", State: "offline"},
+	}
+	pools := []*sdspb.PoolInfo{
+		{Name: "sds_vg0", Node: "10.0.0.1", FreeBytes: 10 * giB},
+		{Name: "sds_vg0", Node: "10.0.0.2", FreeBytes: 900 * giB},
+		{Name: "sds_vg0", Node: "10.0.0.3", FreeBytes: 10 * giB},
+	}
+	got := nodesWithPool(nodes, pools, "vg0", "")
+	var names []string
+	for _, c := range got {
+		names = append(names, c.node)
+	}
+	assert.Equal(t, []string{"n1", "n3"}, names)
+}

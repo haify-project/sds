@@ -194,7 +194,9 @@ func (nm *NodeManager) rekey(ctx context.Context, moves []NodeMove, byName map[s
 		if mv.ReplicationAddress != mv.Address {
 			u.ReplicationAddress = mv.ReplicationAddress
 		}
-		u.State = NodeStateOnline
+		if u.State != NodeStateMaintenance {
+			u.State = NodeStateOnline
+		}
 		updated = append(updated, u)
 	}
 

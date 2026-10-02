@@ -44,7 +44,9 @@ func (rm *ResourceManager) selectTiebreaker(ctx context.Context, nodes []string)
 	// Four tiers, most-preferred first. Within a tier, lowest name wins.
 	var onlineStorage, onlineCompute, offlineStorage, offlineCompute []string
 	for _, n := range all {
-		if n == nil || inUse[n.Name] {
+		// A drained node takes nothing new, not even a diskless vote: it is
+		// about to go down, and a tiebreaker that goes down costs quorum.
+		if n == nil || inUse[n.Name] || n.State == NodeStateMaintenance {
 			continue
 		}
 		// A tiebreaker joins the resource's DRBD connection mesh, so it must sit
