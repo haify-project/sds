@@ -497,3 +497,46 @@ func TestKickPollsSoon(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	assert.LessOrEqual(t, mon.Polls(), 3, "a burst of kicks is one or two polls, not five")
 }
+
+// A warning that clears within the hold is never raised; one that outlasts it
+// is raised once. A critical is raised at once regardless.
+func TestWarningsWaitOutTheHold(t *testing.T) {
+	down := func() NodeStateInfo {
+		s := healthy("Secondary")
+		s.Connection = "Connecting"
+		s.ReplicationState = "StandAlone"
+		return s
+	}
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:       "r",
+		NodeStates: map[string]NodeStateInfo{"n1": healthy("Primary"), "n2": healthy("Secondary")},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister, WarningHold: 30 * time.Second})
+	clock := time.Unix(1000, 0)
+	mon.now = func() time.Time { return clock }
+	ctx := context.Background()
+	mon.Poll(ctx)
+	drain()
+
+	// A blip: down for 10s, then back. Nothing at all is published.
+	lister.list[0].NodeStates["n2"] = down()
+	mon.Poll(ctx)
+	clock = clock.Add(10 * time.Second)
+	mon.Poll(ctx)
+	lister.list[0].NodeStates["n2"] = healthy("Secondary")
+	clock = clock.Add(5 * time.Second)
+	mon.Poll(ctx)
+	assert.Empty(t, drain(), "a link back within the hold is not news")
+
+	// Down for longer than the hold: raised exactly once.
+	lister.list[0].NodeStates["n2"] = down()
+	mon.Poll(ctx)
+	assert.Empty(t, drain())
+	assert.True(t, mon.holding(), "a held warning keeps the monitor on its short interval")
+	clock = clock.Add(31 * time.Second)
+	mon.Poll(ctx)
+	evts := drain()
+	require.Len(t, evts, 1)
+	assert.Equal(t, event.SeverityWarning, evts[0].Severity)
+	assert.Equal(t, event.StatusFiring, evts[0].Status)
+}

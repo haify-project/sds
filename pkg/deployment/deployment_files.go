@@ -327,7 +327,7 @@ func (c *Client) InstallFile(ctx context.Context, hosts []string, localPath, rem
 
 	for _, host := range localHosts {
 		hr := &HostResult{Host: host, Success: true}
-		if out, err := exec.CommandContext(ctx, "sudo", "install", "-D", "-m", modeArg, localPath, remotePath).CombinedOutput(); err != nil {
+		if out, err := localCommand(ctx, fmt.Sprintf("sudo install -D -m %s %s %s", modeArg, shellQuote(localPath), shellQuote(remotePath))).CombinedOutput(); err != nil {
 			hr.Success, hr.Error = false, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 			result.Success = false
 		}

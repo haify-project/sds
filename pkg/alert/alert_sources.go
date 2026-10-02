@@ -46,6 +46,9 @@ type NodeStateInfo struct {
 	// ReplicationState are all empty for such a peer, and reading those empties
 	// as facts is what this field exists to prevent.
 	Connection string
+	// TLS is whether the connection to this peer is encrypted. Carried for
+	// Observer.
+	TLS bool
 	// OutOfSyncKiB is how much of this replica DRBD knows differs from the node
 	// whose status was read. On a connected, Established replica it is non-zero
 	// only after an online verify found blocks that disagree.
@@ -195,6 +198,14 @@ type Observation struct {
 	Resources ResourceObservation
 	Nodes     NodeObservation
 	Pools     PoolObservation
+	// Firing is every condition raised at the end of the poll.
+	Firing []FiringCondition
+}
+
+// FiringCondition is one raised alert, as a metric counts it.
+type FiringCondition struct {
+	Type     string
+	Severity string
 }
 
 // Observer is handed each poll's Observation after the events for it have been

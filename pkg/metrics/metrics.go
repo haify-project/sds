@@ -84,6 +84,8 @@ type Metrics struct {
 	// Up gauge indicates the instance is available (always 1)
 	up prometheus.Gauge
 
+	health healthSeries
+
 	mu sync.Mutex
 }
 
@@ -252,6 +254,8 @@ func New(logger *zap.Logger) (*Metrics, error) {
 		},
 		[]string{"resource"},
 	))
+
+	m.registerHealth(auto)
 
 	// Set up to 1
 	m.up.Set(1)

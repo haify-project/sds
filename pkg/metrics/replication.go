@@ -27,6 +27,13 @@ type ReplicaState struct {
 	// which in practice is only the node that was queried — a node can only
 	// speak for its own quorum, and inferring a peer's would be a guess.
 	Quorum *bool
+	// OutOfSyncBytes is how much DRBD has marked as differing from the node
+	// whose status was read; zero for that node itself.
+	OutOfSyncBytes uint64
+	// TLS is nil for the node whose status was read, which has no connection
+	// to itself, and otherwise whether the connection to this peer is
+	// encrypted.
+	TLS *bool
 }
 
 // ReplicationSnapshot is one complete reading of DRBD replication.
@@ -85,6 +92,10 @@ func (m *Metrics) SetReplication(snap ReplicationSnapshot) {
 		if r.SyncPercent != nil {
 			m.drbdResync.set(id, clampRatio(*r.SyncPercent/100))
 		}
+		m.health.drbdOutOfSync.set(id, float64(r.OutOfSyncBytes))
+		if r.TLS != nil {
+			m.health.drbdTLS.set(id, boolValue(*r.TLS))
+		}
 		if r.Quorum != nil {
 			quorum := 0.0
 			if *r.Quorum {
@@ -111,6 +122,7 @@ func (m *Metrics) replicaSeries() []*seriesSet {
 	return []*seriesSet{
 		m.drbdRole, m.drbdDiskState, m.drbdReplicationState,
 		m.drbdResync, m.drbdQuorum, m.drbdResourceUp,
+		m.health.drbdOutOfSync, m.health.drbdTLS,
 	}
 }
 

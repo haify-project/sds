@@ -1,0 +1,83 @@
+# Prometheus alerting rules for an SDS controller's /metrics endpoint
+# ([metrics] enabled = true in controller.toml). The controller raises its own
+# events too (sds-cli event list); these are for clusters already watched by
+# Prometheus and Alertmanager.
+groups:
+  - name: sds
+    rules:
+      - alert: SDSControllerDown
+        expr: up{job="sds"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "SDS controller {{ $labels.instance }} is not answering"
+
+      - alert: SDSObservationStale
+        expr: time() - sds_controller_last_observation_timestamp_seconds > 600
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "SDS has not read {{ $labels.source }} for over 10 minutes; its series are frozen"
+
+      - alert: SDSNodeUnreachable
+        expr: sds_controller_node_reachable == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "SDS cannot reach node {{ $labels.node }}"
+
+      - alert: SDSQuorumLost
+        expr: sds_drbd_quorum == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.resource }} on {{ $labels.node }} has lost quorum: I/O there is suspended or failing"
+
+      - alert: SDSResourceUnreadable
+        expr: sds_drbd_resource_up == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "No node answered for resource {{ $labels.resource }}"
+
+      - alert: SDSReplicaNotUpToDate
+        expr: sds_drbd_disk_state{state!~"UpToDate|Diskless"} == 1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.resource }} on {{ $labels.node }} is {{ $labels.state }}"
+
+      - alert: SDSOutOfSync
+        expr: sds_drbd_out_of_sync_bytes > 0 and on (resource, node) sds_drbd_replication_state{state="Established"} == 1
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.resource }}: {{ $value | humanize1024 }}B on {{ $labels.node }} marked out of sync; run sds-cli resource verify"
+
+      - alert: SDSThinPoolNearFull
+        expr: sds_controller_pool_thin_used_percent > 85
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Thin pool {{ $labels.pool }} on {{ $labels.node }} is {{ $value | printf \"%.1f\" }}% {{ $labels.kind }} used"
+
+      - alert: SDSThinPoolFull
+        expr: sds_controller_pool_thin_used_percent > 95
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Thin pool {{ $labels.pool }} on {{ $labels.node }} is {{ $value | printf \"%.1f\" }}% {{ $labels.kind }} used: writes and resyncs are about to fail"
+
+      - alert: SDSBackupStale
+        expr: time() - sds_controller_backup_last_success_timestamp_seconds > 2 * 86400
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "No completed backup of {{ $labels.resource }} to {{ $labels.target }} for over two days"
+
+      - alert: SDSOneFailureDomain
+        expr: sds_controller_resource_fault_domain_risk == 1
+        for: 1h
+        labels: {severity: info}
+        annotations:
+          summary: "Losing {{ $labels.domain }} would take {{ $labels.resource }} down"

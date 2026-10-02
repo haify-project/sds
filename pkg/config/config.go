@@ -85,6 +85,10 @@ type AlertConfig struct {
 	// each poll. It is what produces node.unreachable events, and it is the only
 	// check that costs a round trip per node, so it has its own switch.
 	CheckNodes bool `mapstructure:"check_nodes"`
+	// WarningHoldSec is how long a warning condition must last before it is
+	// raised, so a link that drops and reconnects within it is not reported.
+	// Critical conditions are never held. Zero raises warnings at once.
+	WarningHoldSec int `mapstructure:"warning_hold_sec"`
 	// HistorySize is how many past events are retained for late-joining clients.
 	// Zero uses the event package default.
 	HistorySize int `mapstructure:"history_size"`
@@ -501,6 +505,7 @@ func setDefaults() {
 	viper.SetDefault("resource.fault_domain_label", "host")
 	viper.SetDefault("schedule.enabled", true)
 	viper.SetDefault("alert.enabled", false)
+	viper.SetDefault("alert.warning_hold_sec", 30)
 	viper.SetDefault("alert.check_interval_sec", 30)
 	viper.SetDefault("alert.check_nodes", true)
 	viper.SetDefault("alert.watch_drbd_events", true)

@@ -23,6 +23,7 @@ func (c *Controller) alertOptions() alert.Options {
 		IdleInterval: time.Duration(c.config.Alert.IdleIntervalSec) * time.Second,
 		Resources:    c.resources,
 		Logger:       c.logger,
+		WarningHold:  time.Duration(c.config.Alert.WarningHoldSec) * time.Second,
 	}
 	// Node reachability costs an SSH round trip per node per poll, so it is a
 	// separate switch from the resource checks, which are served from state the

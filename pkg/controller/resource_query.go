@@ -301,6 +301,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 				Quorum:           st.Quorum,
 				Connection:       st.Connection,
 				OutOfSyncKiB:     st.OutOfSyncKiB,
+				TLS:              st.TLS,
 			}
 			// Only forward completion the status source actually reported. A
 			// text-parsed state has none, and passing its zero on would export
@@ -309,7 +310,17 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 				percent := st.SyncPercent
 				state.SyncPercent = &percent
 			}
-			item.NodeStates[node] = state
+			// DRBD names a peer by the hostname in its config, which is not
+			// always the name the node is registered and commanded by
+			// (lima-sds-a for node-a). Alerts are read by people who know it
+			// by the latter.
+			key := node
+			if rm.controller.nodes != nil {
+				if name := rm.controller.nodes.GetNodeNameByAddress(node); name != "" {
+					key = name
+				}
+			}
+			item.NodeStates[key] = state
 		}
 
 		// For WAN resources, fold the sds-proxy pair's health into the status so

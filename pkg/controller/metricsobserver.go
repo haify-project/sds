@@ -36,8 +36,12 @@ type metricsObserver struct {
 	// manager's listing costs an SSH round trip per gateway that the poll has
 	// no reason to pay.
 	gateways gatewayRecordLister
-	ctx      context.Context
-	log      *zap.Logger
+	// backups and resources feed the backup and fault-domain series; both are
+	// local reads.
+	backups   backupLister
+	resources resourceLister
+	ctx       context.Context
+	log       *zap.Logger
 }
 
 // gatewayRecordLister is the slice of the database the observer needs, kept as
@@ -61,6 +65,10 @@ func newMetricsObserver(c *Controller) *metricsObserver {
 	// has to happen here rather than at the call site.
 	if c.db != nil {
 		obs.gateways = c.db
+		obs.backups = c.db
+	}
+	if c.resources != nil {
+		obs.resources = c.resources
 	}
 	return obs
 }
@@ -71,6 +79,7 @@ func (o *metricsObserver) Observed(obs alert.Observation) {
 	o.observeNodes(obs.Nodes)
 	o.observePools(obs.Pools)
 	o.observeGateways()
+	o.observeHealth(obs)
 }
 
 // observeResources records resource health and the live DRBD replication view.
@@ -111,6 +120,8 @@ func (o *metricsObserver) observeResources(res alert.ResourceObservation) {
 				ReplicationState: state.ReplicationState,
 				SyncPercent:      state.SyncPercent,
 				Quorum:           state.Quorum,
+				OutOfSyncBytes:   state.OutOfSyncKiB * 1024,
+				TLS:              peerTLS(state),
 			})
 		}
 	}

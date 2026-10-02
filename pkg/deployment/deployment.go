@@ -43,6 +43,22 @@ func getLocalIPs() []string {
 	return ips
 }
 
+// asRootShim makes `sudo` a pass-through for a controller already running as
+// root. The commands are written for remote nodes and say `sudo`; run locally
+// they gain nothing from it, and each one put three lines (COMMAND, session
+// opened, session closed) into the controller's own journal — on a polling
+// controller about 97% of it, drowning every line the controller wrote.
+// Exported so the `bash -c` scripts some commands start see it too.
+const asRootShim = `sudo() { "$@"; }; export -f sudo; `
+
+// localCommand runs a node command on this machine.
+func localCommand(ctx context.Context, cmd string) *exec.Cmd {
+	if os.Geteuid() == 0 {
+		return exec.CommandContext(ctx, "bash", "-c", asRootShim+cmd)
+	}
+	return exec.CommandContext(ctx, "sh", "-c", cmd)
+}
+
 // isLocalIP checks if an IP address is local
 func isLocalIP(host string, localAddrs []string) bool {
 	for _, localIP := range localAddrs {
@@ -205,7 +221,7 @@ func (c *Client) Exec(ctx context.Context, hosts []string, cmd string, opts ...E
 	// Execute on local hosts using os/exec
 	for _, host := range localHosts {
 		start := time.Now()
-		output, err := exec.CommandContext(ctx, "sh", "-c", cmd).CombinedOutput()
+		output, err := localCommand(ctx, cmd).CombinedOutput()
 		end := time.Now()
 		exitCode := 0
 		var errorMsg error = nil

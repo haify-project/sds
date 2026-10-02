@@ -45,7 +45,9 @@ type Monitor struct {
 	observer  Observer
 	log       *zap.Logger
 
-	mu sync.Mutex
+	hold time.Duration
+	now  func() time.Time
+	mu   sync.Mutex
 	// firing tracks which level conditions are currently raised, keyed by
 	// event.Event.Key(), so each is reported once when it starts and once when
 	// it clears rather than on every poll.
@@ -53,7 +55,12 @@ type Monitor struct {
 	// owners records which lister raised each firing condition. Kept alongside
 	// firing rather than derived from the key, so resolveVanished can tell a
 	// subject that disappeared from a source that failed to answer.
-	owners map[string]source
+	// pending holds when each warning condition was first seen, while it
+	// waits out the hold.
+	// raised is what each firing condition is, for the metrics.
+	raised  map[string]FiringCondition
+	pending map[string]time.Time
+	owners  map[string]source
 	// primaries remembers each resource's Primary set between polls. A resource
 	// absent from this map has not been observed yet, which is what suppresses
 	// failover alerts on the first poll.
@@ -114,6 +121,9 @@ type Options struct {
 	Observer Observer
 	// Logger is optional.
 	Logger *zap.Logger
+	// WarningHold is how long a warning condition must last before it is
+	// raised; zero raises it on the first poll that sees it. See alert_hold.go.
+	WarningHold time.Duration
 }
 
 // Default thin pool utilisation thresholds, in percent.
@@ -160,6 +170,10 @@ func NewMonitor(bus *event.Bus, opts Options) *Monitor {
 		stop:         make(chan struct{}),
 		kick:         make(chan struct{}, 1),
 		idleInterval: opts.IdleInterval,
+		hold:         opts.WarningHold,
+		pending:      make(map[string]time.Time),
+		raised:       make(map[string]FiringCondition),
+		now:          time.Now,
 	}
 }
 
@@ -242,7 +256,7 @@ func (m *Monitor) SetEventDriven(on bool) {
 }
 
 func (m *Monitor) nextInterval() time.Duration {
-	if m.eventDriven.Load() && m.steady.Load() {
+	if m.eventDriven.Load() && m.steady.Load() && !m.holding() {
 		return m.idleInterval
 	}
 	return m.interval
@@ -272,6 +286,8 @@ func (m *Monitor) Poll(ctx context.Context) {
 	m.checkNodes(ctx, sc, &obs)
 	m.checkPools(ctx, sc, &obs)
 	m.resolveVanished(sc)
+	m.dropUnseenPending(sc)
+	obs.Firing = m.firingConditions()
 	m.steady.Store(steadyState(obs))
 
 	// After the events, not before: an observer that panics or blocks must not
@@ -381,6 +397,7 @@ func (m *Monitor) resolveVanished(sc *pollScope) {
 	for _, v := range stale {
 		delete(m.firing, v.key)
 		delete(m.owners, v.key)
+		delete(m.raised, v.key)
 	}
 	m.mu.Unlock()
 
@@ -411,13 +428,22 @@ func (m *Monitor) level(tmpl event.Event, sc *pollScope, src source, active bool
 
 	m.mu.Lock()
 	was := m.firing[key]
+	if !active {
+		delete(m.pending, key)
+	}
+	if active && !was && !m.heldLongEnough(key, tmpl.Severity) {
+		m.mu.Unlock()
+		return
+	}
 	switch {
 	case active && !was:
 		m.firing[key] = true
 		m.owners[key] = src
+		m.raised[key] = FiringCondition{Type: string(tmpl.Type), Severity: string(tmpl.Severity)}
 	case !active && was:
 		delete(m.firing, key)
 		delete(m.owners, key)
+		delete(m.raised, key)
 	default:
 		m.mu.Unlock()
 		return

@@ -766,7 +766,14 @@ check_nodes = true      # SSH-probe each node; produces node.unreachable
 history_size = 500
 watch_drbd_events = true  # default; see below
 idle_interval_sec = 300   # default
+warning_hold_sec = 30     # default; see below
 ```
+
+A **warning** is raised only once its condition has lasted `warning_hold_sec`:
+a replica link that drops and reconnects within it is not reported. On a
+cluster with a VM on a laptop, whose bridged network stalls for ten seconds now
+and then, that was dozens of warning-and-recovery pairs a day. Critical
+conditions — a full pool, a lost Primary, an unreachable node — are never held.
 
 With `watch_drbd_events` the controller keeps one `drbdsetup events2` stream
 open to each node. A DRBD state change is checked within a few seconds instead
@@ -823,6 +830,32 @@ the bot URL again afterwards.
 
 The same events are also readable at `GET /v1/events`, streamable at
 `/v1/events/watch`, and pushed to the web UI's bell over `/v1/events/stream`.
+
+### Metrics
+
+`[metrics] enabled = true` serves Prometheus metrics on `port` (path
+`/metrics`). Besides the API's own request counts and latencies:
+
+| Metric | Labels | Meaning |
+| --- | --- | --- |
+| `sds_drbd_role`, `sds_drbd_disk_state`, `sds_drbd_replication_state` | resource, node, role/state | 1 for the state each replica holds now |
+| `sds_drbd_quorum` | resource, node | 0 when the node that answered has lost quorum |
+| `sds_drbd_resource_up` | resource | 0 when no node answered for the resource |
+| `sds_drbd_resync_completed_ratio` | resource, node | 1 when in sync |
+| `sds_drbd_out_of_sync_bytes` | resource, node | data DRBD has marked as differing |
+| `sds_drbd_connection_tls` | resource, node | 1 when that connection is encrypted |
+| `sds_controller_node_reachable` | node | 0 when the controller cannot reach it |
+| `sds_controller_pool_thin_used_percent` | pool, node, kind | thin pool data/metadata use |
+| `sds_controller_storage_capacity_bytes` | pool, node, state | total/used/free |
+| `sds_controller_alerts_firing` | type, severity | conditions raised now |
+| `sds_controller_backup_last_success_timestamp_seconds` | resource, target | newest completed backup |
+| `sds_controller_backup_last_shipped_bytes` | resource, target, kind | what it carried |
+| `sds_controller_resource_fault_domain_risk` | resource, domain | 1 when one domain's loss takes it down |
+| `sds_controller_last_observation_timestamp_seconds` | source | when each source last answered |
+
+A series nobody observed is absent rather than zero: a replica that stopped
+answering has no `sds_drbd_disk_state`, and `sds_drbd_resource_up` says why.
+`deploy/monitoring/prometheus-rules.yml` has alerting rules for all of these.
 
 ---
 

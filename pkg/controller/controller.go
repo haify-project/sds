@@ -372,21 +372,36 @@ func (c *Controller) GetMetrics() *metrics.Metrics {
 	return c.metrics
 }
 
-// ResolveHost resolves a hostname to an address
 // NodeName is the reverse of ResolveHost: the node name registered for an
 // address, or the address itself when none is. Messages meant for an operator
 // name nodes the way every command takes them.
+//
+// The registered node name wins. The hosts map also carries each node's
+// hostname as an alias of the same address, and taking whichever map entry
+// came first returned one name on one call and the other on the next: alerts
+// keyed by node (pool.data_near_full) then cleared as "no longer exists" and
+// fired again under the other name every poll.
 func (c *Controller) NodeName(address string) string {
-	c.hostsLock.RLock()
-	defer c.hostsLock.RUnlock()
-	for name, addr := range c.hostsMap {
-		if addr == address && name != address {
+	if c.nodes != nil {
+		if name := c.nodes.GetNodeNameByAddress(address); name != "" {
 			return name
 		}
+	}
+	c.hostsLock.RLock()
+	defer c.hostsLock.RUnlock()
+	best := ""
+	for name, addr := range c.hostsMap {
+		if addr == address && name != address && (best == "" || name < best) {
+			best = name
+		}
+	}
+	if best != "" {
+		return best
 	}
 	return address
 }
 
+// ResolveHost resolves a hostname to an address
 func (c *Controller) ResolveHost(hostOrAddr string) string {
 	c.hostsLock.RLock()
 	defer c.hostsLock.RUnlock()
