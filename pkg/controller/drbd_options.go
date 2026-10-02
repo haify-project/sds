@@ -7,8 +7,9 @@ import (
 
 // applyDrbdOptions edits an existing DRBD .res config in place, applying each
 // "section/key" -> value entry. Keys without a section go to the resource-level
-// "options" section; "disk/..." keys go to the disk-options sub-block inside
-// "volume 0". Existing keys are replaced, missing keys and missing blocks are
+// "options" section; "disk/..." keys go to the disk-options sub-block of every
+// resource-level volume block, as generateDrbdConfig writes them at create
+// time. Existing keys are replaced, missing keys and missing blocks are
 // created. Volumes, on-sections and unrelated settings are preserved, so this
 // is safe to run against a live, multi-volume resource.
 func applyDrbdOptions(config string, raw map[string]string) (string, error) {
@@ -25,18 +26,55 @@ func applyDrbdOptions(config string, raw map[string]string) (string, error) {
 		if key == "" {
 			return "", fmt.Errorf("invalid option key %q", k)
 		}
-		path := []string{section}
+		paths := [][]string{{section}}
 		if section == "disk" {
-			// disk options live inside the per-volume block, not at top level.
-			path = []string{"volume 0", "disk"}
+			// disk options live inside each per-volume block, not at top level.
+			volumes, err := volumeHeaders(lines)
+			if err != nil {
+				return "", err
+			}
+			paths = paths[:0]
+			for _, vol := range volumes {
+				paths = append(paths, []string{vol, "disk"})
+			}
 		}
-		var err error
-		lines, err = setOptionAtPath(lines, path, key, strings.TrimSpace(v))
-		if err != nil {
-			return "", err
+		for _, path := range paths {
+			var err error
+			lines, err = setOptionAtPath(lines, path, key, strings.TrimSpace(v))
+			if err != nil {
+				return "", err
+			}
 		}
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// volumeHeaders returns the headers ("volume 0", "volume 1", ...) of the
+// resource-level volume blocks. Per-node overrides inside `on` stanzas are not
+// direct children of the resource and are not returned. A config without any
+// volume block yields "volume 0", which setOptionAtPath then creates.
+func volumeHeaders(lines []string) ([]string, error) {
+	open, close, err := resourceBlock(lines)
+	if err != nil {
+		return nil, err
+	}
+	var headers []string
+	depth := 0
+	for i := open + 1; i < close; i++ {
+		if depth == 0 {
+			if f := strings.Fields(strings.TrimSpace(lines[i])); len(f) >= 3 && f[0] == "volume" && f[2] == "{" {
+				headers = append(headers, "volume "+f[1])
+			}
+		}
+		depth += braceDelta(lines[i])
+		if depth < 0 {
+			depth = 0
+		}
+	}
+	if len(headers) == 0 {
+		headers = []string{"volume 0"}
+	}
+	return headers, nil
 }
 
 func braceDelta(line string) int {

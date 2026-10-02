@@ -43,7 +43,7 @@ func resourceFs() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&node, "node", "", "Target node (required)")
+	cmd.Flags().StringVar(&node, "node", "", "Node to run mkfs on (default: the resource's current Primary)")
 
 	return cmd
 }

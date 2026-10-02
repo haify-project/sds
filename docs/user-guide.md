@@ -203,9 +203,18 @@ Unregistering is for a node that is never coming back:
 sds node unregister orange4
 ```
 
-It only removes the node from the registry — it does not check what the node
-still holds and does not touch the node — so move its replicas off first (see
-[remove-replica](#7-changing-a-resources-shape)).
+It refuses while anything still uses the node, and names each resource and its
+role there:
+
+```
+node orange4 is still in use by: data (replica, NFS gateway); logs (tiebreaker); move or remove these first
+```
+
+Clear each role first: a replica with `resource remove-replica`, a tiebreaker
+with `ha set-tiebreaker` (move it, or `--remove`), a diskless client with
+`resource diskless detach`, a gateway with `gateway delete`. A WAN resource's
+DR node can only be released by deleting that resource. Once nothing is left,
+unregistering removes the node from the registry; it does not touch the node.
 
 ---
 
@@ -358,9 +367,9 @@ sds resource set-options db --drbd-options disk/c-max-rate=200M,net/max-buffers=
 
 Keys take the form `section/key`; a bare key goes to the resource-level
 `options` section, so `on-no-quorum` needs no prefix but a `net` or `disk`
-option does. At creation `disk/` options go into every volume; `set-options`
-writes them into volume 0 only. `set-options` rewrites the config on every node
-and runs `drbdadm adjust`.
+option does. `disk/` options go into every volume, both at creation and with
+`set-options`. `set-options` rewrites the config on every node and runs
+`drbdadm adjust`.
 
 **Labels** on a resource (`--label app=postgres`, repeatable) are free-form tags
 shown by `resource list`; a profile can carry default labels.
@@ -448,6 +457,11 @@ volumes. It does not ask for confirmation:
 ```bash
 sds resource delete db
 ```
+
+There is no force option, and none is needed: a node that fails to take the
+resource down, or a backing volume that cannot be removed, does not stop the
+delete. Each is logged as a warning in the controller log, and a volume left
+behind has to be removed on its node by hand (`lvremove` or `zfs destroy`).
 
 ---
 

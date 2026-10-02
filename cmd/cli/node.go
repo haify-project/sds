@@ -251,7 +251,11 @@ func nodeUnregister() *cobra.Command {
 		Use:   "unregister <node>",
 		Short: "Unregister a storage node",
 		Long: `Unregister a storage node from the cluster, by name or address.
-This removes the node from the database but does not affect the node itself.`,
+This removes the node from the database but does not affect the node itself.
+
+It refuses while the node still holds a replica, tiebreaker or diskless client,
+is a WAN resource's DR node, or carries a gateway, and lists each resource and
+role so you can move or remove them first.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := address
