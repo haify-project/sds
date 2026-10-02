@@ -72,5 +72,5 @@ func TestGatewayConfigHelpersMore(t *testing.T) {
 
 	// checkGatewayPrereqs empty nodes
 	m := New(nil, nil, zap.NewNop(), nil)
-	assert.NoError(t, m.checkGatewayPrereqs(context.Background(), nil, nil, nil))
+	assert.NoError(t, m.checkGatewayPrereqs(context.Background(), nil, gatewayPrereqs{}))
 }

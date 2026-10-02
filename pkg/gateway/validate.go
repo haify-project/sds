@@ -138,13 +138,42 @@ func validateNQN(nqn string) error {
 	return nil
 }
 
-// parseTransportType parses and validates an NVMe transport type
+// parseTransportType parses and validates an NVMe transport type. fc is not
+// accepted: the generated nvmet-port line addresses the port by the service
+// IP, and an FC port is addressed by WWNN/WWPN.
 func parseTransportType(transport string) error {
-	validTypes := []string{"tcp", "rdma", "fc"}
+	validTypes := []string{"tcp", "rdma"}
 	for _, t := range validTypes {
 		if transport == t {
 			return nil
 		}
 	}
 	return fmt.Errorf("invalid transport type: %s (valid: %v)", transport, validTypes)
+}
+
+// validateISCSIImplementation normalises the requested iSCSI target
+// implementation and refuses the ones the generated config does not support.
+//
+// "lio" historically meant the long-gone lio_node toolchain; every current
+// distribution ships targetcli, which the OCF agents call "lio-t". tgt and iet
+// are refused rather than passed through: with either, the iSCSITarget agent
+// ignores portals= and listens on every address instead of the service IP, tgt
+// needs a tgtd daemon that nothing in the promoter chain starts, and IET is not
+// packaged by current distributions. The stop order the chain relies on
+// (service IP first, then LUNs, then target) has only been verified on LIO.
+func validateISCSIImplementation(implementation string) (string, error) {
+	switch implementation {
+	case "", "lio", "lio-t":
+		return "lio-t", nil
+	case "tgt":
+		return "", fmt.Errorf("iSCSI implementation \"tgt\" is not supported: SDS gateways run on LIO (targetcli) only; " +
+			"with tgt the iSCSITarget agent ignores the service-IP portal and needs a tgtd daemon the promoter chain " +
+			"does not start. Use --implementation lio")
+	case "iet":
+		return "", fmt.Errorf("iSCSI implementation \"iet\" is not supported: SDS gateways run on LIO (targetcli) only; " +
+			"with iet the iSCSITarget agent ignores the service-IP portal, and IET is not packaged by current " +
+			"distributions. Use --implementation lio")
+	default:
+		return "", fmt.Errorf("unknown iSCSI implementation %q: SDS gateways run on LIO (targetcli) only; use --implementation lio", implementation)
+	}
 }

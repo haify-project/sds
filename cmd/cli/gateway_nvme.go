@@ -84,7 +84,7 @@ func nvmeCreate() *cobra.Command {
 	cmd.Flags().StringVar(&resource, "resource", "", "DRBD resource name")
 	cmd.Flags().StringVar(&nqn, "nqn", "", "NVMe Qualified Name (NQN)")
 	cmd.Flags().StringVar(&serviceIP, "service-ip", "", "Service IP (e.g., 192.168.1.150/24)")
-	cmd.Flags().StringVar(&transportType, "transport", "tcp", "Transport type (tcp, rdma)")
+	cmd.Flags().StringVar(&transportType, "transport", "tcp", "Transport type (tcp, rdma); loads nvmet-tcp or nvmet-rdma on the nodes")
 
 	_ = cmd.MarkFlagRequired("resource")
 	_ = cmd.MarkFlagRequired("nqn")

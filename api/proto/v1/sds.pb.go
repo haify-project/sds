@@ -14066,7 +14066,7 @@ type CreateISCSIGatewayRequest struct {
 	AllowedInitiators []string               `protobuf:"bytes,4,rep,name=allowed_initiators,json=allowedInitiators,proto3" json:"allowed_initiators,omitempty"`                              // Allowed initiator IQNs
 	Username          string                 `protobuf:"bytes,5,opt,name=username,proto3" json:"username,omitempty"`                                                                         // CHAP username (optional)
 	Password          string                 `protobuf:"bytes,6,opt,name=password,proto3" json:"password,omitempty"`                                                                         // CHAP password (optional)
-	Implementation    string                 `protobuf:"bytes,7,opt,name=implementation,proto3" json:"implementation,omitempty"`                                                             // iSCSI implementation (lio, tgt, iet)
+	Implementation    string                 `protobuf:"bytes,7,opt,name=implementation,proto3" json:"implementation,omitempty"`                                                             // iSCSI implementation: lio (default; tgt and iet are refused)
 	Options           map[string]string      `protobuf:"bytes,8,rep,name=options,proto3" json:"options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Additional options
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache

@@ -38,6 +38,12 @@ func (i *iSCSIManager) CreateISCSIGateway(ctx context.Context, req *v1.CreateISC
 			Message: err.Error(),
 		}, invalidArgument(err)
 	}
+	if _, err := validateISCSIImplementation(req.Implementation); err != nil {
+		return &v1.CreateISCSIGatewayResponse{
+			Success: false,
+			Message: err.Error(),
+		}, invalidArgument(err)
+	}
 
 	// Parse service IP
 	serviceIP, err := parseServiceIP(req.ServiceIp)
@@ -52,9 +58,7 @@ func (i *iSCSIManager) CreateISCSIGateway(ctx context.Context, req *v1.CreateISC
 	// needs are not installed on the resource's nodes, rather than writing a
 	// promoter config that silently fails to start.
 	if res, rerr := i.resources.GetResource(ctx, req.Resource); rerr == nil && res != nil {
-		if err := i.checkGatewayPrereqs(ctx, res.Nodes,
-			[]string{"Filesystem", "IPaddr2", "iSCSITarget", "iSCSILogicalUnit"},
-			[]string{"targetcli"}); err != nil {
+		if err := i.checkGatewayPrereqs(ctx, gatewayNodes(res), iscsiPrereqs()); err != nil {
 			return &v1.CreateISCSIGatewayResponse{Success: false, Message: err.Error()}, err
 		}
 	}
@@ -169,7 +173,7 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
         "ocf:heartbeat:iSCSITarget target iqn={{ .IQN }} portals={{ .Portal }} {{ .CHAPArgs }}allowed_initiators={{ .AllowedInitiators }} implementation={{ .Implementation }}",
 {{ range $idx, $lun := .LUNs }}
-        "ocf:heartbeat:iSCSILogicalUnit lu{{ $lun.Number }} target_iqn={{ $.IQN }} lun={{ $lun.Number }} path={{ $lun.Device }} product_id={{ $lun.Serial }} scsi_sn={{ $lun.Serial }}",
+        "ocf:heartbeat:iSCSILogicalUnit lu{{ $lun.Number }} target_iqn={{ $.IQN }} lun={{ $lun.Number }} path={{ $lun.Device }} product_id={{ $lun.Serial }} scsi_sn={{ $lun.Serial }} implementation={{ $.Implementation }}",
 {{ end }}
         "ocf:heartbeat:IPaddr2 service_ip0 ip={{ .IPAddress }} cidr_netmask={{ .Prefix }}",
       ]
@@ -223,7 +227,10 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 	// Default values
 	username := req.Username
 	password := req.Password
-	implementation := req.Implementation
+	implementation, err := validateISCSIImplementation(req.Implementation)
+	if err != nil {
+		return "", err
+	}
 	allowedInitiators := strings.Join(req.AllowedInitiators, " ")
 
 	// Only emit CHAP arguments when credentials were actually supplied.
@@ -233,11 +240,6 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 	chapArgs := ""
 	if username != "" && password != "" {
 		chapArgs = fmt.Sprintf("incoming_username=%s incoming_password=%s ", username, password)
-	}
-	if implementation == "" || implementation == "lio" {
-		// "lio" historically meant the long-gone lio_node toolchain; every
-		// current distro ships targetcli, which the agent calls "lio-t".
-		implementation = "lio-t"
 	}
 	// An empty allowed_initiators list stays empty: the OCF agent treats
 	// each token as an initiator WWN, so a made-up "ALL" fails validation

@@ -150,6 +150,23 @@ func (a *GatewayDeploymentClient) Exec(ctx context.Context, hosts []string, cmd 
 	return nil
 }
 
+// ExecOutput implements gateway.HostOutputReader: it returns what cmd printed
+// on each host where it succeeded, so the gateway manager can read state that
+// exists only on the nodes.
+func (a *GatewayDeploymentClient) ExecOutput(ctx context.Context, hosts []string, cmd string) (map[string]string, error) {
+	result, err := a.dc.Exec(ctx, hosts, cmd)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(result.Hosts))
+	for host, hr := range result.Hosts {
+		if hr != nil && hr.Success {
+			out[host] = hr.Output
+		}
+	}
+	return out, nil
+}
+
 // WanproxyDeploymentClient adapts the controller's deploymentClient to the
 // wanproxy.DeploymentClient interface, converting deployment result types into
 // wanproxy.Result. It mirrors GatewayDeploymentClient (the gateway adapter) and

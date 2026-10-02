@@ -187,14 +187,14 @@ func TestCovEnsureNVMeModules(t *testing.T) {
 	nvme := NewNVMeManager(New(nil, &MockDeploymentClient{}, zap.NewNop(), nil))
 
 	// No nodes is a no-op.
-	require.NoError(t, nvme.ensureNVMeModules(context.Background(), nil))
+	require.NoError(t, nvme.ensureNVMeModules(context.Background(), nil, ""))
 
 	// Successful modprobe path.
-	require.NoError(t, nvme.ensureNVMeModules(context.Background(), []string{"node1"}))
+	require.NoError(t, nvme.ensureNVMeModules(context.Background(), []string{"node1"}, "tcp"))
 
 	// Failure surfaces a helpful error.
 	nvmeFail := NewNVMeManager(New(nil, &MockDeploymentClient{ExecErr: fmt.Errorf("no module")}, zap.NewNop(), nil))
-	err := nvmeFail.ensureNVMeModules(context.Background(), []string{"node1"})
+	err := nvmeFail.ensureNVMeModules(context.Background(), []string{"node1"}, "tcp")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "nvmet kernel modules")
 }

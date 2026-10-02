@@ -25,13 +25,17 @@ SDS 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-react
 
 ## 创建前的检查
 
-创建时 controller 在资源的每个节点上检查 OCF agent 和工具，缺了直接报错，不写配置：
+创建时 controller 在资源的每个 diskful 节点上检查 OCF agent 和工具，缺了直接报错（列出缺什么、装哪个包），不写配置：
 
-| 网关 | OCF agent（`ocf:heartbeat:`） | 工具 |
-| ---- | ---------------------------- | ---- |
-| NFS | Filesystem, IPaddr2, nfsserver, exportfs | |
-| iSCSI | Filesystem, IPaddr2, iSCSITarget, iSCSILogicalUnit | targetcli |
-| NVMe-oF | Filesystem, IPaddr2, nvmet-subsystem, nvmet-namespace, nvmet-port | |
+| 网关 | OCF agent（`ocf:heartbeat:`） | 工具 | 安装 |
+| ---- | ---------------------------- | ---- | ---- |
+| NFS | Filesystem, IPaddr2, nfsserver, exportfs | rpc.nfsd, exportfs | `nfs-kernel-server`（Debian/Ubuntu）/ `nfs-utils`（EL） |
+| iSCSI | Filesystem, IPaddr2, iSCSITarget, iSCSILogicalUnit | targetcli | `targetcli-fb`（Debian/Ubuntu）/ `targetcli`（EL） |
+| NVMe-oF | Filesystem, IPaddr2, nvmet-subsystem, nvmet-namespace, nvmet-port | | |
+
+OCF agent 来自 `resource-agents-extra`（Debian/Ubuntu）或 `resource-agents`（EL）。
+NVMe-oF 随后加载 `nvmet` 和传输对应的模块（`nvmet-tcp` 或 `nvmet-rdma`），追加到
+`/etc/modules-load.d/nvmet.conf`；`rdma` 还要求 `/sys/class/infiniband` 下有 RDMA 设备。
 
 随后在资源自己的节点上提升一次，给 cluster-private 卷（NFS 还有导出卷）做 `mkfs`
 （仅当 `blkid` 查不到文件系统时），因为 Filesystem agent 只挂载不格式化。
@@ -107,14 +111,17 @@ start = [
 start = [
   "ocf:heartbeat:Filesystem fs_cluster_private device=<状态卷> directory=/var/lib/sds-gateway/r0 fstype=ext4 run_fsck=no",
   "ocf:heartbeat:iSCSITarget target iqn=iqn.2024-01.com.example:sds.r0 portals=192.168.1.100:3260 allowed_initiators= implementation=lio-t",
-  "ocf:heartbeat:iSCSILogicalUnit lu1 target_iqn=iqn.2024-01.com.example:sds.r0 lun=1 path=<数据卷> product_id=<serial> scsi_sn=<serial>",
+  "ocf:heartbeat:iSCSILogicalUnit lu1 target_iqn=iqn.2024-01.com.example:sds.r0 lun=1 path=<数据卷> product_id=<serial> scsi_sn=<serial> implementation=lio-t",
   "ocf:heartbeat:IPaddr2 service_ip0 ip=192.168.1.100 cidr_netmask=24",
 ]
 ```
 
 - 每个数据卷一个 LUN，从 1 编号（与 DRBD 卷号无关）。`serial` 是 `md5("<IQN>-<LUN>")`
   前 8 字节的十六进制，只由 IQN 和 LUN 号决定，切换后不变。
-- `--implementation lio`（默认）写成 `lio-t`（targetcli）。
+- `--implementation lio`（默认）写成 `lio-t`（targetcli），target 和每个 LUN 行都写明，
+  否则 iSCSILogicalUnit 会自行选择（ietadm、tgtadm 优先于 targetcli）。只支持 LIO：
+  `tgt`、`iet` 下 iSCSITarget 忽略 `portals`、不绑定 service IP，tgt 还需要 promoter
+  链不会启动的 tgtd，因此创建时直接拒绝。
 - 只有同时给了 `--username` 和 `--password` 才写 `incoming_username=… incoming_password=…`。
 - `--allowed-initiators` 以空格连接写入 `allowed_initiators`；为空表示不限制。
 - service IP 放在最后：否则停止时 LUN 先被删而 portal 仍可达，initiator 收到
@@ -135,7 +142,7 @@ start = [
 
 - `serial` 是 `sha256(NQN)` 前 8 字节的十六进制。namespace 从 1 编号；`uuid`/`nguid`
   在创建时随机生成一次，之后只从配置文件读回。
-- `--transport`：`tcp`（默认）或 `rdma`。监听端口 4420。
+- `--transport`：`tcp`（默认）或 `rdma`，写入 `type=`。监听端口 4420。
 - 后续管理：`sds gateway nvme namespace|host ...`。
 
 ## 排障
