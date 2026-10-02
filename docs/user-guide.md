@@ -855,7 +855,8 @@ The same events are also readable at `GET /v1/events`, streamable at
 
 A series nobody observed is absent rather than zero: a replica that stopped
 answering has no `sds_drbd_disk_state`, and `sds_drbd_resource_up` says why.
-`deploy/monitoring/prometheus-rules.yml` has alerting rules for all of these.
+`deploy/monitoring` has alerting rules for all of these and a Docker Compose
+stack (Prometheus plus a Grafana with an "SDS" dashboard) that uses them.
 
 ---
 
