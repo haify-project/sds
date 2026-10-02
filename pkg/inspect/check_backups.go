@@ -63,6 +63,9 @@ func checkBackups(in *Input) []Check {
 		}
 	}
 	out = append(out, leftoverBaseSnapshots(in)...)
+	if len(out) == 0 && enabled == 0 {
+		out = append(out, pass("backups.schedules", AreaBackups, "no backup or snapshot schedules"))
+	}
 	if len(out) == 0 {
 		out = append(out, pass("backups.schedules", AreaBackups,
 			"%s on time, no unreferenced backup snapshots", plural(enabled, "schedule", "schedules")))

@@ -101,7 +101,7 @@ func TestStandAloneAndDisconnected(t *testing.T) {
 	if sa.Fix != "ssh 10.0.0.1 sudo drbdsetup connect meta 1" || sa.Runbook == "" {
 		t.Errorf("fix should reconnect the named peer: %+v", sa)
 	}
-	if c := only(t, checks, "resource.disconnected"); c.Subject != "meta@n1->n3" {
+	if c := only(t, checks, "resource.disconnected"); c.Subject != "meta->n3" || c.Status != StatusFail {
 		t.Errorf("got %+v", c)
 	}
 }
@@ -152,7 +152,9 @@ func TestHAResourceWithoutPrimaryAndRisks(t *testing.T) {
 	only(t, checks, "resource.fault_domain")
 }
 
-func TestPromoterOnTiebreakerFails(t *testing.T) {
+// A diskless Primary works, over the network; a promoter there is noted, not
+// failed.
+func TestPromoterOnTiebreakerWarns(t *testing.T) {
 	in := cluster()
 	healthy2(in, "share")
 	in.Gateways = []Gateway{{Resource: "share", Type: "nfs", Status: "started"}}
@@ -160,7 +162,8 @@ func TestPromoterOnTiebreakerFails(t *testing.T) {
 		in.Probes[n].ReactorConf = []string{"sds-nfs-share.toml"}
 	}
 	c := only(t, checkGateways(in), "gateway.promoter_on_diskless")
-	if c.Subject != "share@n3" || c.Fix != "sds gateway start --resource share" {
+	if c.Subject != "share@n3" || c.Status != StatusWarn || c.Fix != "sds gateway start --resource share" ||
+		!strings.Contains(c.Message, "crosses the network") {
 		t.Errorf("got %+v", c)
 	}
 }

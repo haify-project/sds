@@ -88,9 +88,21 @@ func checkPools(in *Input) []Check {
 		out = append(out, Check{ID: "pool.unreadable", Area: AreaPools, Subject: strings.Join(unreadable, ","), Status: StatusError,
 			Message: "lvs gave no readable answer, so thin pool use there is unknown"})
 	}
+	room, thick := snapshotRoom(in)
+	out = append(out, room...)
 	if len(out) == 0 {
-		out = append(out, pass("pool.usage", AreaPools, "%s below %.0f%% data and metadata, none filling within %.0f days",
-			plural(pools, "thin pool", "thin pools"), near, growthWarnDays))
+		var parts []string
+		if pools > 0 {
+			parts = append(parts, fmt.Sprintf("%s below %.0f%% data and metadata, none filling within %.0f days",
+				plural(pools, "thin pool", "thin pools"), near, growthWarnDays))
+		}
+		if thick > 0 {
+			parts = append(parts, plural(thick, "thick pool has", "thick pools have")+" room for a snapshot of every volume")
+		}
+		if len(parts) == 0 {
+			parts = append(parts, "no pools")
+		}
+		out = append(out, pass("pool.usage", AreaPools, "%s", strings.Join(parts, "; ")))
 	}
 	return out
 }

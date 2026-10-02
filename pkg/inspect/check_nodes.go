@@ -41,7 +41,10 @@ func checkNodes(in *Input) []Check {
 	}
 	out = append(out, consistencyChecks(in)...)
 	out = append(out, hostsChecks(in)...)
-	if len(out) == 0 {
+	switch {
+	case len(in.Nodes) == 0:
+		out = append(out, pass("nodes.health", AreaNodes, "no registered nodes"))
+	case Worst(out) == StatusPass:
 		out = append(out, pass("nodes.health", AreaNodes,
 			"%s answered: clocks within %.0fs, root filesystems below %d%%, addresses in place, DRBD stack loaded and consistent",
 			plural(len(in.Probes), "node", "nodes"), clockWarn, rootFSWarn))
@@ -78,7 +81,18 @@ func nodeChecks(in *Input, n Node, p *NodeProbe) []Check {
 			Fix:     fmt.Sprintf("sds node set-address %s <its-current-address>", n.Name), Runbook: "renumber-nodes"})
 	}
 	for _, a := range []string{n.Address, n.ReplicationAddress} {
-		if net.ParseIP(a) == nil || p.HasAddr(a) || len(p.Addrs) == 0 {
+		ip := net.ParseIP(a)
+		if ip == nil || p.HasAddr(a) || len(p.Addrs) == 0 {
+			continue
+		}
+		// The node answered SSH at a public address that none of its
+		// interfaces carries, as itself: a cloud VM behind NAT. Re-registering
+		// it at the interface address would cut the controller off from it.
+		if !privateAddr(ip) && identityHolds(n, p) {
+			out = append(out, Check{ID: "nodes.address", Area: AreaNodes, Subject: n.Name, Status: StatusPass,
+				Message: fmt.Sprintf("registered at public address %s, which none of its interfaces carries, and it answers there as itself: reached through NAT",
+					a),
+				Evidence: []string{"interfaces: " + strings.Join(p.Addrs, ", ")}})
 			continue
 		}
 		out = append(out, Check{ID: "nodes.address", Area: AreaNodes, Subject: n.Name, Status: StatusWarn,
@@ -141,6 +155,22 @@ func rootCheck(n Node, addr string, p *NodeProbe, st Status) Check {
 		Fix:     fmt.Sprintf("ssh %s 'sudo %s'", addr, lowDiskTool)}
 }
 
+// privateAddr reports RFC 1918, CGNAT (100.64.0.0/10), ULA, loopback and
+// link-local addresses: ones DHCP hands out and NAT hides behind.
+func privateAddr(ip net.IP) bool {
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+		return true
+	}
+	_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
+	return cgnat.Contains(ip)
+}
+
+// identityHolds reports that the node answered as the host it was registered
+// as, or that no hostname was recorded to compare with.
+func identityHolds(n Node, p *NodeProbe) bool {
+	return n.Hostname == "" || p.Hostname == "" || p.Hostname == n.Hostname || p.Hostname == n.Name
+}
+
 // candidateAddr picks the interface address most likely to be the new
 // registered one: same family, not loopback or link-local.
 func candidateAddr(old string, addrs []string) string {
@@ -178,29 +208,50 @@ func consistencyChecks(in *Input) []Check {
 				Evidence: groupEvidence(groups)})
 		}
 	}
-	bins := map[string][]string{}
+	// Binaries are compared only between nodes of one architecture: an
+	// aarch64 and an x86_64 build of the same version never hash alike.
+	byArch := map[string]map[string][]string{}
 	for _, name := range sortedKeys(in.Probes) {
-		if p := in.Probes[name]; p.CtlSHA != "" {
-			bins[p.CtlSHA] = append(bins[p.CtlSHA], name)
+		p := in.Probes[name]
+		if p.CtlSHA == "" {
+			continue
 		}
+		if byArch[p.Arch] == nil {
+			byArch[p.Arch] = map[string][]string{}
+		}
+		byArch[p.Arch][p.CtlSHA] = append(byArch[p.Arch][p.CtlSHA], name)
 	}
-	if len(bins) > 1 {
-		st := StatusWarn
-		msg := "the installed sds-controller binaries differ between nodes"
-		if in.SelfHA != nil {
-			st = StatusFail
-			msg += "; a Self-HA failover starts whichever version that node has, against the same database"
+	for _, arch := range sortedKeys(byArch) {
+		if c, ok := binaryCheck(in, arch, byArch[arch]); ok {
+			out = append(out, c)
 		}
-		var nodes []string
-		for _, ns := range bins {
-			nodes = append(nodes, ns...)
-		}
-		sort.Strings(nodes)
-		out = append(out, Check{ID: "nodes.controller_binary", Area: AreaNodes, Status: st, Message: msg,
-			Evidence: groupEvidence(bins),
-			Fix:      "./scripts/deploy-all.sh " + strings.Join(nodes, ",")})
 	}
 	return out
+}
+
+// binaryCheck compares the controller binaries of one architecture.
+func binaryCheck(in *Input, arch string, bins map[string][]string) (Check, bool) {
+	if len(bins) < 2 {
+		return Check{}, false
+	}
+	which := "nodes"
+	if arch != "" {
+		which = arch + " nodes"
+	}
+	st := StatusWarn
+	msg := "the installed sds-controller binaries differ between " + which
+	if in.SelfHA != nil {
+		st = StatusFail
+		msg += "; a Self-HA failover starts whichever version that node has, against the same database"
+	}
+	var nodes []string
+	for _, ns := range bins {
+		nodes = append(nodes, ns...)
+	}
+	sort.Strings(nodes)
+	return Check{ID: "nodes.controller_binary", Area: AreaNodes, Subject: arch, Status: st, Message: msg,
+		Evidence: groupEvidence(bins),
+		Fix:      "./scripts/deploy-all.sh " + strings.Join(nodes, ",")}, true
 }
 
 func groupEvidence(groups map[string][]string) []string {
@@ -217,6 +268,7 @@ func groupEvidence(groups map[string][]string) []string {
 // machine that is no longer the node.
 func hostsChecks(in *Input) []Check {
 	var out []Check
+	seen := map[string]bool{}
 	for _, holder := range sortedKeys(in.Probes) {
 		for _, e := range in.Probes[holder].Hosts {
 			ip := net.ParseIP(e.IP)
@@ -227,6 +279,12 @@ func hostsChecks(in *Input) []Check {
 				if !namesNode(e.Names, n) || e.IP == n.Address || e.IP == n.ReplicationAddress {
 					continue
 				}
+				// /etc/hosts may carry the same line twice; say it once.
+				key := holder + "|" + n.Name + "|" + e.IP
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
 				out = append(out, Check{ID: "nodes.hosts_entry", Area: AreaNodes, Subject: holder + ":" + n.Name, Status: StatusWarn,
 					Message: fmt.Sprintf("/etc/hosts on %s maps %s to %s, but %s is registered at %s", holder,
 						strings.Join(e.Names, " "), e.IP, n.Name, n.Address),

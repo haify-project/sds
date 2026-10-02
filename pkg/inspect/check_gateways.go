@@ -34,6 +34,13 @@ func checkGateways(in *Input) []Check {
 		out = append(out, promoterChecks(in, r, AreaGateways, "gateway", fmt.Sprintf("sds-%s-%s.toml", g.Type, g.Resource),
 			fmt.Sprintf("sds gateway start --resource %s", g.Resource))...)
 	}
+	if len(out) == 0 && serving == 0 {
+		msg := "no gateways"
+		if len(gws) > 0 {
+			msg = fmt.Sprintf("no gateways serving (%s stopped)", plural(len(gws), "gateway", "gateways"))
+		}
+		out = append(out, pass("gateway.serving", AreaGateways, "%s", msg))
+	}
 	if len(out) == 0 {
 		out = append(out, pass("gateway.serving", AreaGateways,
 			"%s serving: each has one Primary and its promoter on every diskful node", plural(serving, "gateway", "gateways")))
@@ -41,13 +48,12 @@ func checkGateways(in *Input) []Check {
 	return out
 }
 
-// promoterChecks requires a promoter config on every diskful node of r and on
-// none of its tiebreakers or diskless clients.
+// promoterChecks requires a promoter config on every diskful node of r, and
+// notes one on a tiebreaker or diskless client.
 //
 // Missing on a diskful node means failover cannot land there. Present on a
-// tiebreaker is worse: drbd-reactor there tries to start the service stack on
-// a node with no data, and a stack that half-starts can hold a mount or a
-// lock that the real takeover then waits on.
+// diskless node is legal — a diskless Primary reads and writes over the
+// network — but it may be an accident, so it is a warning, not a failure.
 //
 // fix repairs both; empty means copy the config from a node that has it.
 func promoterChecks(in *Input, r Resource, area Area, prefix, file, fix string) []Check {
@@ -89,9 +95,10 @@ func promoterChecks(in *Input, r Resource, area Area, prefix, file, fix string) 
 			continue
 		}
 		name := in.nodeName(n)
-		out = append(out, Check{ID: prefix + ".promoter_on_diskless", Area: area, Subject: r.Name + "@" + name, Status: StatusFail,
-			Message: fmt.Sprintf("%s holds no data for %s but has its promoter config; drbd-reactor there can start the service stack without the data",
-				name, r.Name),
+		out = append(out, Check{ID: prefix + ".promoter_on_diskless", Area: area, Subject: r.Name + "@" + name, Status: StatusWarn,
+			Message: fmt.Sprintf("%s holds no copy of %s but has its promoter config: the service can run there as a diskless Primary, "+
+				"every I/O then crosses the network, and it stops if %s loses its diskful peers. Remove the promoter there if that is not intended",
+				name, r.Name, name),
 			Evidence: []string{"/etc/drbd-reactor.d/" + file + " present on " + name},
 			Fix: firstNonEmpty(fix, fmt.Sprintf("ssh %s sudo rm /etc/drbd-reactor.d/%s && ssh %s sudo systemctl reload drbd-reactor",
 				sshTarget(in, name), file, sshTarget(in, name)))})

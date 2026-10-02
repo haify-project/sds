@@ -22,6 +22,7 @@ import (
 const ProbeScript = `export LC_ALL=C
 echo "probe=1"
 echo "hostname=$(hostname 2>/dev/null)"
+echo "arch=$(uname -m 2>/dev/null)"
 echo "now=$(date +%s.%N 2>/dev/null)"
 echo "ntp=$(timedatectl show -p NTPSynchronized --value 2>/dev/null)"
 df -P / 2>/dev/null | awk 'NR==2 {gsub("%","",$5); print "rootfs="$5}'
@@ -39,6 +40,7 @@ for f in /etc/drbd.d/*.res; do [ -f "$f" ] && echo "res_file=$(basename "$f" .re
 awk '!/^[[:space:]]*#/ && NF>=2 {l=$1; for(i=2;i<=NF;i++){if($i ~ /^#/) break; l=l" "$i}; print "hosts="l}' /etc/hosts 2>/dev/null
 [ -s /etc/sds/drbd-tls/node.crt ] && echo "tls_cert=$(base64 -w0 /etc/sds/drbd-tls/node.crt 2>/dev/null)"
 echo "lvs=$(lvs --noheadings --nosuffix --units b --separator '|' -o vg_name,lv_name,segtype,lv_size,data_percent,metadata_percent 2>/dev/null | base64 -w0)"
+vgs --noheadings --nosuffix --units b --separator '|' -o vg_name,vg_free 2>/dev/null | awk -F'|' '{gsub(/ /,"",$1); gsub(/ /,"",$2); if ($1 != "") print "vg_free="$1" "$2}'
 echo "drbd=$(drbdsetup status --json 2>/dev/null | base64 -w0)"
 echo "end=1"
 `
@@ -68,6 +70,7 @@ type NodeProbe struct {
 	// keys that did arrive are still used.
 	Complete    bool
 	Hostname    string
+	Arch        string  // uname -m
 	Now         float64 // seconds since the epoch, 0 when not reported
 	NTPSynced   string  // "yes", "no", or "" when timedatectl is absent
 	RootUse     int     // percent of / in use, -1 when not reported
@@ -85,8 +88,10 @@ type NodeProbe struct {
 	TLSCert     []byte
 	LVs         []LV
 	LVsOK       bool
-	DRBD        []DRBDResource
-	DRBDOK      bool
+	// VGFree is each volume group's free bytes.
+	VGFree map[string]uint64
+	DRBD   []DRBDResource
+	DRBDOK bool
 	// Problems are parse failures of individual sections, kept as evidence.
 	Problems []string
 }
@@ -150,6 +155,17 @@ func ParseProbe(output string) (*NodeProbe, error) {
 		case "tls_cert":
 			if b, err := base64.StdEncoding.DecodeString(val); err == nil {
 				p.TLSCert = b
+			}
+		case "arch":
+			p.Arch = val
+		case "vg_free":
+			if vg, free, ok := strings.Cut(val, " "); ok {
+				if n, err := strconv.ParseUint(strings.TrimSpace(free), 10, 64); err == nil {
+					if p.VGFree == nil {
+						p.VGFree = map[string]uint64{}
+					}
+					p.VGFree[vg] = n
+				}
 			}
 		case "lvs":
 			p.parseLVs(val)

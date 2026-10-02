@@ -53,6 +53,9 @@ func checkTLS(in *Input) []Check {
 			out = append(out, c)
 		}
 	}
+	if len(out) == 0 && seen == 0 {
+		out = append(out, pass("tls.expiry", AreaTLS, "no TLS certificates in use"))
+	}
 	if len(out) == 0 {
 		out = append(out, pass("tls.expiry", AreaTLS, "%s valid for more than %d days",
 			plural(seen, "certificate", "certificates"), int(certWarn.Hours()/24)))

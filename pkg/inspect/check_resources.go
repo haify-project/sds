@@ -28,23 +28,21 @@ func checkResources(in *Input) []Check {
 			}
 			out = append(out, replicaChecks(in, r, n, p)...)
 		}
+		out = append(out, disconnectedPeers(in, r)...)
 		if r.QuorumRisk {
 			out = append(out, Check{ID: "resource.quorum_risk", Area: AreaResources, Subject: r.Name, Status: StatusWarn,
 				Message:  "two diskful replicas and no tiebreaker: losing either node suspends I/O",
 				Evidence: []string{"diskful: " + strings.Join(r.Diskful, ", ")},
 				Fix:      fmt.Sprintf("sds ha set-tiebreaker %s --node <third-node>", r.Name)})
 		}
-		if r.FaultDomainRisk != "" {
-			out = append(out, Check{ID: "resource.fault_domain", Area: AreaResources, Subject: r.Name, Status: StatusWarn,
-				Message:  "one failure domain holds every copy or the quorum majority: " + r.FaultDomainRisk,
-				Evidence: []string{"diskful: " + strings.Join(r.Diskful, ", ")},
-				Fix:      fmt.Sprintf("sds resource add-replica %s --node <node-in-another-domain>", r.Name),
-				Runbook:  "add-replica"})
-		}
 	}
+	out = append(out, faultDomains(in)...)
 	if len(unreadable) > 0 {
 		out = append(out, Check{ID: "resource.status_unreadable", Area: AreaResources, Subject: strings.Join(dedupe(unreadable), ","),
 			Status: StatusError, Message: "drbdsetup status --json gave no readable answer, so replica states there are unknown"})
+	}
+	if len(out) == 0 && len(in.Resources) == 0 {
+		out = append(out, pass("resource.replicas", AreaResources, "no resources"))
 	}
 	if len(out) == 0 {
 		out = append(out, pass("resource.replicas", AreaResources,
@@ -99,10 +97,7 @@ func replicaChecks(in *Input, r Resource, n string, p *NodeProbe) []Check {
 				Fix:      fmt.Sprintf("ssh %s sudo drbdsetup connect %s %d", addr, r.Name, c.PeerNodeID),
 				Runbook:  "verify-and-repair"})
 		case !c.Connected():
-			out = append(out, Check{ID: "resource.disconnected", Area: AreaResources, Subject: psubject, Status: StatusFail,
-				Message:  fmt.Sprintf("%s cannot reach %s over DRBD (%s)", name, peer, c.ConnectionState),
-				Evidence: ev,
-				Fix:      fmt.Sprintf("ssh %s sudo drbdadm adjust %s", addr, r.Name)})
+			// Judged once per unreachable peer by disconnectedPeers.
 		default:
 			peerDiskless := contains(r.Tiebreakers, peer) || contains(r.Clients, peer)
 			if st := stuckState(c, expectDiskless || peerDiskless); st != "" {
