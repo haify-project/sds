@@ -130,6 +130,41 @@ func TestWebhookRetriesThenGivesUp(t *testing.T) {
 	wh.Wait()
 }
 
+// OnResult hears the final outcome once per event: the last error after every
+// retry failed, nil once one got through.
+func TestWebhookReportsFinalOutcome(t *testing.T) {
+	rec := &recorder{}
+	rec.status.Store(http.StatusNotFound)
+	ts := httptest.NewServer(http.HandlerFunc(rec.serve))
+	defer ts.Close()
+
+	var mu sync.Mutex
+	results := map[uint64]error{}
+	calls := 0
+	bus := NewBus(10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wh := NewWebhook(WebhookConfig{URL: ts.URL, Retries: 1, OnResult: func(e Event, err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		results[e.ID] = err
+		calls++
+	}}, nil)
+	wh.Start(ctx, bus)
+
+	failed := bus.Publish(Event{Type: TypeResourceNoPrimary, Severity: SeverityCritical})
+	require.Eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return calls == 1 }, 5*time.Second, 10*time.Millisecond)
+	rec.status.Store(0)
+	ok := bus.Publish(Event{Type: TypeResourcePromoted})
+	require.Eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return calls == 2 }, 5*time.Second, 10*time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.ErrorContains(t, results[failed.ID], "HTTP 404")
+	assert.NoError(t, results[ok.ID])
+	assert.Equal(t, int32(3), rec.attempts.Load(), "two attempts for the failure, one for the success")
+}
+
 func TestWebhookSucceedsOnRetry(t *testing.T) {
 	rec := &recorder{}
 	rec.status.Store(http.StatusBadGateway)

@@ -132,6 +132,17 @@ func TestInvalidInputs(t *testing.T) {
 	}
 }
 
+// Running an inspection changes nothing on the cluster, so a read-only token
+// may run one, exactly as it may list the reports.
+func TestInspectionRPCsAreReads(t *testing.T) {
+	for _, m := range []string{"RunInspection", "ListInspections", "GetInspection"} {
+		object, action := Classify("/v1.SDSController/" + m)
+		if object != "system" || action != ActRead {
+			t.Errorf("%s: got %s/%s, want system/%s", m, object, action, ActRead)
+		}
+	}
+}
+
 // Notification channels carry a signing secret and decide who gets paged, so
 // they are administrative configuration: readable by an operator, writable only
 // by an admin. That is what the unclassified default already gives them, and

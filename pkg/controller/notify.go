@@ -82,6 +82,9 @@ func (nm *NotifyManager) Reload(ctx context.Context) error {
 				zap.String("channel", ch.Name), zap.Error(err))
 			continue
 		}
+		// The inspection reads these to tell a channel that delivers from one
+		// that has failed every delivery since its receiver moved.
+		cfg.OnResult = nm.controller.recordDelivery(ch.Name)
 		// Derived from the controller's own context, so shutdown still tears
 		// every channel down without the manager being involved.
 		cctx, cancel := context.WithCancel(nm.controller.ctx)

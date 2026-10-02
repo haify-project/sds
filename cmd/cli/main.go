@@ -51,6 +51,7 @@ func main() {
 	rootCmd.AddCommand(healthCommand())
 	rootCmd.AddCommand(rbacCommand())
 	rootCmd.AddCommand(eventCommand())
+	rootCmd.AddCommand(inspectCommand())
 	rootCmd.AddCommand(notifyCommand())
 	rootCmd.AddCommand(wanCommand())
 	rootCmd.AddCommand(backupCommand())

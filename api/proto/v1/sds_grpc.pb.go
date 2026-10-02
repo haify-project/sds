@@ -152,6 +152,9 @@ const (
 	SDSController_SaveNotifyChannel_FullMethodName         = "/v1.SDSController/SaveNotifyChannel"
 	SDSController_DeleteNotifyChannel_FullMethodName       = "/v1.SDSController/DeleteNotifyChannel"
 	SDSController_TestNotifyChannel_FullMethodName         = "/v1.SDSController/TestNotifyChannel"
+	SDSController_RunInspection_FullMethodName             = "/v1.SDSController/RunInspection"
+	SDSController_ListInspections_FullMethodName           = "/v1.SDSController/ListInspections"
+	SDSController_GetInspection_FullMethodName             = "/v1.SDSController/GetInspection"
 	SDSController_RepairWanProxy_FullMethodName            = "/v1.SDSController/RepairWanProxy"
 	SDSController_DRFailback_FullMethodName                = "/v1.SDSController/DRFailback"
 	SDSController_SetWanEndpoint_FullMethodName            = "/v1.SDSController/SetWanEndpoint"
@@ -390,6 +393,18 @@ type SDSControllerClient interface {
 	// inside a 200. It does not go through the event bus, so it neither pages the
 	// other channels nor appears in the event history.
 	TestNotifyChannel(ctx context.Context, in *TestNotifyChannelRequest, opts ...grpc.CallOption) (*TestNotifyChannelResponse, error)
+	// Cluster inspection: deterministic checks of everything around the alerts —
+	// replicas stuck mid-handshake, alerts that reach no channel, node clocks,
+	// disks and addresses, pool growth, late backups, Self-HA readiness,
+	// certificate expiry, leftovers. RunInspection runs one now and waits for
+	// the report; it changes nothing on the cluster. A run already in progress
+	// is not overlapped: the call fails instead.
+	RunInspection(ctx context.Context, in *RunInspectionRequest, opts ...grpc.CallOption) (*RunInspectionResponse, error)
+	// ListInspections lists stored reports, newest first, without their checks.
+	ListInspections(ctx context.Context, in *ListInspectionsRequest, opts ...grpc.CallOption) (*ListInspectionsResponse, error)
+	// GetInspection returns one stored report; id "latest" (or empty) is the
+	// newest.
+	GetInspection(ctx context.Context, in *GetInspectionRequest, opts ...grpc.CallOption) (*GetInspectionResponse, error)
 	// RepairWanProxy reconciles a WAN resource's replication tunnels with what
 	// the controller currently believes its nodes are: it re-provisions the legs
 	// that should exist and removes instances left behind by a node that was
@@ -1756,6 +1771,36 @@ func (c *sDSControllerClient) TestNotifyChannel(ctx context.Context, in *TestNot
 	return out, nil
 }
 
+func (c *sDSControllerClient) RunInspection(ctx context.Context, in *RunInspectionRequest, opts ...grpc.CallOption) (*RunInspectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunInspectionResponse)
+	err := c.cc.Invoke(ctx, SDSController_RunInspection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListInspections(ctx context.Context, in *ListInspectionsRequest, opts ...grpc.CallOption) (*ListInspectionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInspectionsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListInspections_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetInspection(ctx context.Context, in *GetInspectionRequest, opts ...grpc.CallOption) (*GetInspectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetInspectionResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetInspection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) RepairWanProxy(ctx context.Context, in *RepairWanProxyRequest, opts ...grpc.CallOption) (*RepairWanProxyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RepairWanProxyResponse)
@@ -2091,6 +2136,18 @@ type SDSControllerServer interface {
 	// inside a 200. It does not go through the event bus, so it neither pages the
 	// other channels nor appears in the event history.
 	TestNotifyChannel(context.Context, *TestNotifyChannelRequest) (*TestNotifyChannelResponse, error)
+	// Cluster inspection: deterministic checks of everything around the alerts —
+	// replicas stuck mid-handshake, alerts that reach no channel, node clocks,
+	// disks and addresses, pool growth, late backups, Self-HA readiness,
+	// certificate expiry, leftovers. RunInspection runs one now and waits for
+	// the report; it changes nothing on the cluster. A run already in progress
+	// is not overlapped: the call fails instead.
+	RunInspection(context.Context, *RunInspectionRequest) (*RunInspectionResponse, error)
+	// ListInspections lists stored reports, newest first, without their checks.
+	ListInspections(context.Context, *ListInspectionsRequest) (*ListInspectionsResponse, error)
+	// GetInspection returns one stored report; id "latest" (or empty) is the
+	// newest.
+	GetInspection(context.Context, *GetInspectionRequest) (*GetInspectionResponse, error)
 	// RepairWanProxy reconciles a WAN resource's replication tunnels with what
 	// the controller currently believes its nodes are: it re-provisions the legs
 	// that should exist and removes instances left behind by a node that was
@@ -2525,6 +2582,15 @@ func (UnimplementedSDSControllerServer) DeleteNotifyChannel(context.Context, *De
 }
 func (UnimplementedSDSControllerServer) TestNotifyChannel(context.Context, *TestNotifyChannelRequest) (*TestNotifyChannelResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TestNotifyChannel not implemented")
+}
+func (UnimplementedSDSControllerServer) RunInspection(context.Context, *RunInspectionRequest) (*RunInspectionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RunInspection not implemented")
+}
+func (UnimplementedSDSControllerServer) ListInspections(context.Context, *ListInspectionsRequest) (*ListInspectionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListInspections not implemented")
+}
+func (UnimplementedSDSControllerServer) GetInspection(context.Context, *GetInspectionRequest) (*GetInspectionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInspection not implemented")
 }
 func (UnimplementedSDSControllerServer) RepairWanProxy(context.Context, *RepairWanProxyRequest) (*RepairWanProxyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RepairWanProxy not implemented")
@@ -4971,6 +5037,60 @@ func _SDSController_TestNotifyChannel_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_RunInspection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunInspectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RunInspection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RunInspection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RunInspection(ctx, req.(*RunInspectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListInspections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInspectionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListInspections(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListInspections_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListInspections(ctx, req.(*ListInspectionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetInspection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInspectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetInspection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetInspection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetInspection(ctx, req.(*GetInspectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_RepairWanProxy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RepairWanProxyRequest)
 	if err := dec(in); err != nil {
@@ -5682,6 +5802,18 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TestNotifyChannel",
 			Handler:    _SDSController_TestNotifyChannel_Handler,
+		},
+		{
+			MethodName: "RunInspection",
+			Handler:    _SDSController_RunInspection_Handler,
+		},
+		{
+			MethodName: "ListInspections",
+			Handler:    _SDSController_ListInspections_Handler,
+		},
+		{
+			MethodName: "GetInspection",
+			Handler:    _SDSController_GetInspection_Handler,
 		},
 		{
 			MethodName: "RepairWanProxy",

@@ -547,6 +547,25 @@ service SDSController {
     option (google.api.http) = { post: "/v1/notify-channels/{name}/test"; body: "*"; };
   }
 
+  // Cluster inspection: deterministic checks of everything around the alerts —
+  // replicas stuck mid-handshake, alerts that reach no channel, node clocks,
+  // disks and addresses, pool growth, late backups, Self-HA readiness,
+  // certificate expiry, leftovers. RunInspection runs one now and waits for
+  // the report; it changes nothing on the cluster. A run already in progress
+  // is not overlapped: the call fails instead.
+  rpc RunInspection(RunInspectionRequest) returns (RunInspectionResponse) {
+    option (google.api.http) = { post: "/v1/inspections"; body: "*"; };
+  }
+  // ListInspections lists stored reports, newest first, without their checks.
+  rpc ListInspections(ListInspectionsRequest) returns (ListInspectionsResponse) {
+    option (google.api.http) = { get: "/v1/inspections"; };
+  }
+  // GetInspection returns one stored report; id "latest" (or empty) is the
+  // newest.
+  rpc GetInspection(GetInspectionRequest) returns (GetInspectionResponse) {
+    option (google.api.http) = { get: "/v1/inspections/{id}"; };
+  }
+
   // RepairWanProxy reconciles a WAN resource's replication tunnels with what
   // the controller currently believes its nodes are: it re-provisions the legs
   // that should exist and removes instances left behind by a node that was
@@ -3021,4 +3040,74 @@ message SetRbacUserRoleResponse {
   bool success = 1;
   string message = 2;
   bool enabled = 3;
+}
+
+// One finding of an inspection.
+message InspectionCheck {
+  // Stable slug, e.g. "resource.no_primary", "alerts.channel_failing".
+  string id = 1;
+  // resources | gateways | nodes | pools | backups | alerts | selfha | tls | hygiene
+  string area = 2;
+  // The resource, node or channel concerned; empty for an area-wide line.
+  string subject = 3;
+  // pass | warn | fail | error ("error": the check itself could not run).
+  string status = 4;
+  string message = 5;
+  // What was seen, one fact per entry.
+  repeated string evidence = 6;
+  // A command to run as written: `sds ...` or a shell line.
+  string fix = 7;
+  // A runbook (sds_runbook / MCP prompt) covering the repair, when one fits.
+  string runbook = 8;
+}
+
+message InspectionSummary {
+  int32 pass = 1;
+  int32 warn = 2;
+  int32 fail = 3;
+  int32 error = 4;
+}
+
+message InspectionReport {
+  string id = 1;
+  // schedule | manual
+  string trigger = 2;
+  int64 started_at_unix_ms = 3;
+  int64 finished_at_unix_ms = 4;
+  // The areas that were inspected; empty means all.
+  repeated string areas = 5;
+  InspectionSummary summary = 6;
+  // Sorted by area, most serious first. Empty in ListInspections.
+  repeated InspectionCheck checks = 7;
+}
+
+message RunInspectionRequest {
+  // Restrict to these areas; empty inspects everything.
+  repeated string areas = 1;
+}
+
+message RunInspectionResponse {
+  bool success = 1;
+  string message = 2;
+  InspectionReport report = 3;
+}
+
+message ListInspectionsRequest {
+  int32 limit = 1;  // 0 means every stored report
+}
+
+message ListInspectionsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated InspectionReport reports = 3;  // newest first, checks omitted
+}
+
+message GetInspectionRequest {
+  string id = 1;  // a report id, or "latest"
+}
+
+message GetInspectionResponse {
+  bool success = 1;
+  string message = 2;
+  InspectionReport report = 3;
 }

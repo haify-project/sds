@@ -139,6 +139,7 @@ func (s *Server) MCPServer() *mcp.Server {
 	s.registerHATools(srv)
 	s.registerObservabilityTools(srv)
 	s.registerDiagnoseTools(srv)
+	s.registerInspectTools(srv)
 	s.registerNotifyTools(srv)
 	s.registerZFSTools(srv)
 	s.registerTopologyTools(srv)

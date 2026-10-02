@@ -27,6 +27,7 @@ func newBasicTestController(dep deploymentClient) *Controller {
 	ctrl.gateway = gateway.New(nil, nil, zap.NewNop(), nil)
 	ctrl.schedules = NewScheduleManager(ctrl)
 	ctrl.backups = NewBackupManager(ctrl)
+	ctrl.inspections = NewInspectionManager(ctrl)
 	return ctrl
 }
 

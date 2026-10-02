@@ -34,6 +34,11 @@ type WebhookConfig struct {
 	// Retries is how many additional attempts a failed delivery gets. Zero uses
 	// 2 (three attempts in total).
 	Retries int
+	// OnResult, when set, is told the final outcome of each bus-driven
+	// delivery: nil once it was delivered, the last error once every attempt
+	// failed. It runs on the delivery goroutine. A shutdown mid-retry reports
+	// nothing, because nothing was decided.
+	OnResult func(e Event, err error)
 }
 
 // Webhook delivers bus events to an HTTP endpoint.
@@ -112,10 +117,12 @@ func (w *Webhook) deliver(ctx context.Context, e Event) {
 	body, err := w.cfg.Kind.Render(e)
 	if err != nil {
 		w.log.Error("webhook: encode event", zap.Error(err))
+		w.report(e, fmt.Errorf("encode event: %w", err))
 		return
 	}
 
 	backoff := 500 * time.Millisecond
+	var lastErr error
 	for attempt := 0; attempt <= w.cfg.Retries; attempt++ {
 		if attempt > 0 {
 			select {
@@ -126,6 +133,7 @@ func (w *Webhook) deliver(ctx context.Context, e Event) {
 			backoff *= 2
 		}
 		if err := w.post(ctx, body); err != nil {
+			lastErr = err
 			w.log.Warn("webhook: delivery failed",
 				zap.String("url", w.cfg.URL),
 				zap.Uint64("event_id", e.ID),
@@ -138,12 +146,20 @@ func (w *Webhook) deliver(ctx context.Context, e Event) {
 			zap.String("type", string(e.Type)),
 			zap.String("severity", string(e.Severity)),
 			zap.String("resource", e.Resource))
+		w.report(e, nil)
 		return
 	}
 	w.log.Error("webhook: giving up on event",
 		zap.String("url", w.cfg.URL),
 		zap.Uint64("event_id", e.ID),
 		zap.String("message", e.Message))
+	w.report(e, lastErr)
+}
+
+func (w *Webhook) report(e Event, err error) {
+	if w.cfg.OnResult != nil {
+		w.cfg.OnResult(e, err)
+	}
 }
 
 func (w *Webhook) post(ctx context.Context, body []byte) error {

@@ -33,6 +33,7 @@ type Config struct {
 	Schedule ScheduleConfig `mapstructure:"schedule"`
 	SelfHA   SelfHAConfig   `mapstructure:"self_ha"`
 	Alert    AlertConfig    `mapstructure:"alert"`
+	Inspect  InspectConfig  `mapstructure:"inspect"`
 }
 
 // WANConfig tunes opt-in WAN replication.
@@ -482,7 +483,7 @@ func (c *Config) Validate() error {
 	if err := c.TLS.Validate(); err != nil {
 		return err
 	}
-	return nil
+	return c.Inspect.Validate()
 }
 
 func setDefaults() {
@@ -494,8 +495,6 @@ func setDefaults() {
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
-	// Thin by default: a thick LVM pool reserves a fixed COW area per snapshot,
-	// so it cannot hold a retention history. See cmd/cli/pool.go for the numbers.
 	// Thin by default. A thick pool cannot hold a snapshot history: LVM makes
 	// every snapshot reserve a fixed COW area up front (SDS reserves 20% of the
 	// origin), so a 10 GiB pool holding a 6 GiB volume fits two snapshots —
@@ -529,6 +528,7 @@ func setDefaults() {
 	viper.SetDefault("alert.check_pools", true)
 	viper.SetDefault("alert.pool_near_full_percent", 85.0)
 	viper.SetDefault("alert.pool_full_percent", 95.0)
+	inspectDefaults()
 }
 
 // Save saves configuration to file
@@ -551,7 +551,7 @@ func (c *Config) Save(path string) error {
 		{"tls", c.TLS}, {"log", c.Log}, {"storage", c.Storage},
 		{"metrics", c.Metrics}, {"audit", c.Audit}, {"rbac", c.RBAC},
 		{"gateway", c.Gateway}, {"resource", c.Resource},
-		{"schedule", c.Schedule}, {"alert", c.Alert},
+		{"schedule", c.Schedule}, {"alert", c.Alert}, {"inspect", c.Inspect},
 	}
 	for _, s := range sections {
 		var m map[string]any
