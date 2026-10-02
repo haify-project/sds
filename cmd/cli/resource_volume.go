@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/liliang-cn/sds/pkg/util"
 	"github.com/spf13/cobra"
@@ -32,7 +31,7 @@ func resourceAddVolume() *cobra.Command {
 				return fmt.Errorf("pool is required (--pool)")
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sizeBytes, err := util.ParseSize(size)
@@ -92,7 +91,7 @@ func resourceRemoveVolume() *cobra.Command {
 				return fmt.Errorf("invalid volume ID: %s", args[1])
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -131,7 +130,7 @@ func resourceResizeVolume() *cobra.Command {
 			}
 			size = args[2]
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sizeBytes, err := util.ParseSize(size)

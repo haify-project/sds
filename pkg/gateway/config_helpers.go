@@ -115,7 +115,26 @@ func parseOCFParams(content string, skipTokens int) map[string]string {
 		}
 	}
 
+	// A value written quoted (see ocfListValue) comes back with its quotes,
+	// escaped for TOML; the value itself is what is between them.
+	for k, v := range params {
+		params[k] = strings.Trim(strings.ReplaceAll(v, `\"`, `"`), `"`)
+	}
 	return params
+}
+
+// ocfListValue renders a space-separated OCF parameter value. drbd-reactor
+// splits an OCF start line into name=value pairs with shell-word rules, so a
+// list of two or more entries must be double-quoted to reach the agent as one
+// value; unquoted, every entry after the first became a parameter of its own
+// (`OCF_RESKEY_iqn.2026-10.test:probe=`) and silently left the allow-list. The
+// quotes are escaped because the line sits inside a TOML string.
+func ocfListValue(values []string) string {
+	joined := strings.Join(values, " ")
+	if len(values) < 2 {
+		return joined
+	}
+	return `\"` + joined + `\"`
 }
 
 func quotedCommandContent(line string) (string, bool) {
@@ -143,7 +162,7 @@ func buildISCSITargetLine(iqn, portals, username, password string, allowed []str
 		portals,
 		username,
 		password,
-		strings.Join(allowed, " "),
+		ocfListValue(allowed),
 		implementation,
 	)
 }
@@ -211,7 +230,7 @@ func buildNVMeSubsystemLine(nqn string, allowed []string, serial string) string 
 	return fmt.Sprintf(
 		`        "ocf:heartbeat:nvmet-subsystem subsys nqn=%s allowed_initiators=%s serial=%s",`,
 		nqn,
-		strings.Join(allowed, " "),
+		ocfListValue(allowed),
 		serial,
 	)
 }

@@ -2,6 +2,9 @@ package backup
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -348,4 +351,37 @@ func TestParseRcloneListSkipsNoticesAndDirectories(t *testing.T) {
 
 	_, err = parseRcloneList("Failed to lsjson: directory not found")
 	assert.Error(t, err)
+}
+
+func TestFailureDetailsDropRcloneNotices(t *testing.T) {
+	r := &Result{Hosts: map[string]*HostResult{"n1": {Output: "<5>NOTICE: S3 bucket b: Streaming uploads using chunk size 5Mi\n<3>ERROR : connection refused", Success: false}}}
+	assert.Equal(t, "n1: <3>ERROR : connection refused", r.FailureDetails())
+
+	only := &Result{Hosts: map[string]*HostResult{"n1": {Output: "<5>NOTICE: just this", Success: false}}}
+	assert.Contains(t, only.FailureDetails(), "just this")
+}
+
+// Removing an object that is gone must not run deletefile: on RustFS `lsf`
+// of a missing object exits 0 with no output, and deletefile then fails. The
+// rendered command runs in a real shell against an rclone that behaves so.
+func TestRemoveOfAMissingObjectSucceedsWhereLsfExitsZero(t *testing.T) {
+	bin := t.TempDir()
+	stub := "#!/bin/sh\nfor a in \"$@\"; do case $a in lsf) exit 0;; deletefile) echo gone >&2; exit 1;; esac; done\n"
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "rclone"), []byte(stub), 0o755))
+
+	var ran string
+	dep := &fakeDeploy{execFunc: func(cmd string) (*Result, error) {
+		if !strings.Contains(cmd, "deletefile") {
+			return okResult([]string{"n1"}, ""), nil
+		}
+		c := exec.Command("sh", "-c", cmd)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		out, err := c.CombinedOutput()
+		ran = string(out)
+		return &Result{Hosts: map[string]*HostResult{"n1": {Host: "n1", Output: ran, Success: err == nil}}}, nil
+	}}
+	sess, err := NewRclone().Prepare(context.Background(), dep, "n1",
+		TargetSpec{Name: "t", Kind: KindS3, Bucket: "b", User: "k", Secret: "s"})
+	require.NoError(t, err)
+	assert.NoError(t, sess.Remove(context.Background(), "x/manifest.json"), ran)
 }

@@ -19,7 +19,7 @@ func resourcePrimary() *cobra.Command {
 			resource := args[0]
 			node := args[1]
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -52,7 +52,7 @@ func resourceSecondary() *cobra.Command {
 			resource := args[0]
 			node := args[1]
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -136,7 +136,7 @@ func resourcePromote() *cobra.Command {
 			resource := args[0]
 			node := args[1]
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -169,7 +169,7 @@ func resourceDemote() *cobra.Command {
 			resource := args[0]
 			node := args[1]
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()

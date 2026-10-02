@@ -195,7 +195,10 @@ func (s *rcloneSession) SizeBytes(ctx context.Context, objectPath string) (uint6
 // cleanup after a failed backup can be retried freely.
 func (s *rcloneSession) Remove(ctx context.Context, objectPath string) error {
 	remote := shellQuote(s.remotePath(objectPath))
-	cmd := fmt.Sprintf("if %s lsf %s >/dev/null 2>&1; then %s deletefile %s; fi",
+	// `lsf` of a missing object exits 0 with no output on some S3 servers
+	// (RustFS), so its exit status says nothing; whether it printed a name is
+	// what tells an object that is there from one that is already gone.
+	cmd := fmt.Sprintf("if [ -n \"$(%s lsf %s 2>/dev/null)\" ]; then %s deletefile %s; fi",
 		s.rcloneEnv(), remote, s.rcloneEnv(), remote)
 	res, err := s.dep.Exec(ctx, []string{s.host}, bash(cmd))
 	if err != nil {

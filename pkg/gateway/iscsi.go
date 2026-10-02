@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 
 	v1 "github.com/liliang-cn/sds/api/proto/v1"
 	"go.uber.org/zap"
@@ -231,7 +230,7 @@ func (i *iSCSIManager) generateISCSIGatewayConfig(req *v1.CreateISCSIGatewayRequ
 	if err != nil {
 		return "", err
 	}
-	allowedInitiators := strings.Join(req.AllowedInitiators, " ")
+	allowedInitiators := ocfListValue(req.AllowedInitiators)
 
 	// Only emit CHAP arguments when credentials were actually supplied.
 	// Writing literal "username"/"password" placeholders (the old default)

@@ -244,7 +244,7 @@ func (r *Result) FailureDetails() string {
 	for _, host := range failed {
 		reason := ""
 		if h := r.Hosts[host]; h != nil {
-			reason = strings.TrimSpace(h.Output)
+			reason = strings.TrimSpace(withoutNotices(h.Output))
 			if reason == "" && h.Err != nil {
 				reason = strings.TrimSpace(h.Err.Error())
 			}
@@ -346,4 +346,20 @@ func ObjectPath(parts ...string) string {
 		}
 	}
 	return strings.Join(clean, "/")
+}
+
+// withoutNotices drops rclone's NOTICE lines, which come first and push the
+// actual error out of sight ("Streaming uploads using chunk size 5Mi ..."
+// ahead of "connection refused"). Output that is nothing but notices is kept.
+func withoutNotices(out string) string {
+	var kept []string
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, "NOTICE:") {
+			kept = append(kept, line)
+		}
+	}
+	if strings.TrimSpace(strings.Join(kept, "")) == "" {
+		return out
+	}
+	return strings.Join(kept, "\n")
 }

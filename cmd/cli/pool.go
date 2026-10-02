@@ -75,7 +75,7 @@ func poolCreate() *cobra.Command {
 				nodeList[i] = strings.TrimSpace(nodeList[i])
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -170,7 +170,7 @@ func poolDelete() *cobra.Command {
 				return fmt.Errorf("node is required")
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -368,7 +368,7 @@ func poolAddDisk() *cobra.Command {
 				nodeList[i] = strings.TrimSpace(nodeList[i])
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()

@@ -188,7 +188,7 @@ func resourceSnapshotDelete() *cobra.Command {
 				}
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -261,7 +261,7 @@ func resourceSnapshotCreate() *cobra.Command {
 				}
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
 			sdsClient, err := newSDSClient()
@@ -472,7 +472,7 @@ func resourceSnapshotRestore() *cobra.Command {
 // every snapshot command failed unless --pool was given — although the
 // controller has always known which pool a resource is in.
 func snapshotTarget(resource, pool, node string) (string, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 	defer cancel()
 	c, err := newSDSClient()
 	if err != nil {
