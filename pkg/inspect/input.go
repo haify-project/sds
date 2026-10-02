@@ -86,6 +86,9 @@ type DeliveryTarget struct {
 	Enabled bool
 	// Accepts reports whether the channel's filter takes an event.
 	Accepts func(AlertEvent) bool `json:"-"`
+	// Since is when the channel came to exist; an event raised before it was
+	// never offered to it. Zero means it was there all along.
+	Since time.Time
 	// Known is false when nothing has been recorded for the channel yet.
 	Known               bool
 	LastSuccess         time.Time

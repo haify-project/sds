@@ -1,6 +1,7 @@
 package inspect
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -72,5 +73,24 @@ func TestAlertsDeliveringIsAPass(t *testing.T) {
 	in.Alerts.Targets[1].Failed = map[uint64]bool{5: true}
 	if len(find(checkAlerts(in), "alerts.undelivered")) != 0 {
 		t.Errorf("event 5 reached ops")
+	}
+}
+
+// A channel added today did not deliver yesterday's alerts: on orange the
+// first channel was created after 20 alerts had already gone nowhere, and the
+// first run after it reported them all as accepted.
+func TestAlertsRaisedBeforeTheChannelExistedReachedNoOne(t *testing.T) {
+	in := cluster()
+	in.Alerts.Targets = []DeliveryTarget{
+		{Name: "ops", Enabled: true, Accepts: acceptsWarning, Known: true, LastSuccess: t0, Since: t0},
+	}
+	in.Alerts.Events = []AlertEvent{
+		{ID: 1, Type: "resource.no_primary", Severity: "critical", At: t0.Add(-time.Hour)},
+		{ID: 2, Type: "resource.degraded", Severity: "warning", At: t0.Add(time.Minute)},
+	}
+	lost := find(checkAlerts(in), "alerts.undelivered")
+	if len(lost) != 1 || lost[0].Status != StatusFail || len(lost[0].Evidence) != 1 ||
+		!strings.Contains(lost[0].Evidence[0], "before a channel") {
+		t.Fatalf("want only the earlier critical reported:\n%s", dump(lost))
 	}
 }

@@ -192,7 +192,9 @@ func (im *InspectionManager) gatherAlerts(ctx context.Context, in *inspect.Input
 					Accepts:   func(inspect.AlertEvent) bool { return false }})
 				continue
 			}
-			in.Alerts.Targets = append(in.Alerts.Targets, target(ch.Name, ch.Enabled, cfg.Filter))
+			t := target(ch.Name, ch.Enabled, cfg.Filter)
+			t.Since = ch.CreatedAt
+			in.Alerts.Targets = append(in.Alerts.Targets, t)
 		}
 	}
 	for _, wh := range c.config.Alert.Receivers() {

@@ -65,9 +65,13 @@ func undelivered(a AlertInput) (Check, bool) {
 	var lost []string
 	critical := false
 	for _, e := range a.Events {
-		accepted, failed := 0, 0
+		accepted, failed, later := 0, 0, 0
 		for _, t := range a.Targets {
 			if !t.Enabled || (t.Accepts != nil && !t.Accepts(e)) {
+				continue
+			}
+			if !t.Since.IsZero() && e.At.Before(t.Since) {
+				later++
 				continue
 			}
 			accepted++
@@ -79,6 +83,9 @@ func undelivered(a AlertInput) (Check, bool) {
 			continue
 		}
 		why := "no channel accepts it"
+		if later > 0 && accepted == 0 {
+			why = "raised before a channel that accepts it existed"
+		}
 		if accepted > 0 {
 			why = "every channel that accepts it failed to deliver it"
 		}
