@@ -56,8 +56,9 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 
 		for _, configFile := range configFiles {
 			configPath := filepath.Join(DrbdReactorConfigDir, configFile)
-			// A stopped gateway keeps its config as .toml.disabled.
-			rmCmd := fmt.Sprintf("sudo rm -f %s %s.disabled", configPath, configPath)
+			// A stopped gateway keeps its config as .toml.disabled; the node
+			// running an edited gateway may hold a .toml.pending.
+			rmCmd := fmt.Sprintf("sudo rm -f %[1]s %[1]s.disabled %[1]s.pending", configPath)
 			if err := m.deployment.Exec(ctx, []string{host}, rmCmd); err != nil {
 				m.logger.Warn("Failed to remove config file", zap.String("host", host), zap.String("file", configPath), zap.Error(err))
 			}
@@ -147,7 +148,7 @@ func (m *Manager) retirePromoter(ctx context.Context, hosts []string, resource s
 	}
 	script := fmt.Sprintf(`found=
 for b in /etc/drbd-reactor.d/sds-nfs-%[1]s.toml /etc/drbd-reactor.d/sds-iscsi-%[1]s.toml /etc/drbd-reactor.d/sds-nvmeof-%[1]s.toml; do
-  for f in "$b" "$b.disabled"; do
+  for f in "$b" "$b.disabled" "$b.pending"; do
     [ -e "$f" ] && rm -f "$f" && found=1
   done
 done
@@ -243,8 +244,11 @@ done
 // reactor config is renamed to .toml.disabled first so reactor drops the
 // resource, then the target is stopped for real.
 func (m *Manager) StopGateway(ctx context.Context, id string) error {
+	// A .toml.pending is the edited config the running node has not loaded
+	// (see live_edit.go): it, not the .toml, is what the gateway starts from.
 	disableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
   [ -f "$f" ] && mv "$f" "$f.disabled"
+  [ -f "$f.pending" ] && mv -f "$f.pending" "$f.disabled"
 done
 true`, id, id, id)
 	if err := m.runScript(ctx, m.hosts, disableScript); err != nil {

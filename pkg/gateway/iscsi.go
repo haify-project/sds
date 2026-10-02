@@ -37,6 +37,15 @@ func (i *iSCSIManager) CreateISCSIGateway(ctx context.Context, req *v1.CreateISC
 			Message: err.Error(),
 		}, invalidArgument(err)
 	}
+	for _, initiator := range req.AllowedInitiators {
+		if err := validateIQN(initiator); err != nil {
+			err = fmt.Errorf("allowed initiator: %w", err)
+			return &v1.CreateISCSIGatewayResponse{
+				Success: false,
+				Message: err.Error(),
+			}, invalidArgument(err)
+		}
+	}
 	if _, err := validateISCSIImplementation(req.Implementation); err != nil {
 		return &v1.CreateISCSIGatewayResponse{
 			Success: false,

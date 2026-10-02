@@ -250,7 +250,7 @@ func TestCovNVMeRemoveHostErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "allows all initiators")
 
 	// Add then remove a non-existent host => not found.
-	require.NoError(t, nvme.AddHost(context.Background(), "res", "nqn.present"))
+	require.NoError(t, nvme.AddHost(context.Background(), "res", "nqn.2024-01.com.example:present"))
 	err = nvme.RemoveHost(context.Background(), "res", "nqn.absent")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "host not found")
@@ -282,13 +282,13 @@ func TestCovISCSIRemoveInitiatorAndListErrors(t *testing.T) {
 	assert.Equal(t, []string{"ALL"}, list)
 
 	// Add two, then remove one that is absent => not found.
-	require.NoError(t, iscsi.AddInitiator(context.Background(), "res", "iqn.a"))
+	require.NoError(t, iscsi.AddInitiator(context.Background(), "res", "iqn.2024-01.com.example:a"))
 	err = iscsi.RemoveInitiator(context.Background(), "res", "iqn.absent")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
 	// Now removing the present one succeeds.
-	require.NoError(t, iscsi.RemoveInitiator(context.Background(), "res", "iqn.a"))
+	require.NoError(t, iscsi.RemoveInitiator(context.Background(), "res", "iqn.2024-01.com.example:a"))
 }
 
 func TestCovISCSIMutualCHAPUnsupported(t *testing.T) {

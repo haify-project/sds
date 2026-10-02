@@ -123,12 +123,13 @@ func (m *Manager) dumpNodeConfigs(ctx context.Context, hosts []string, patterns 
 }
 
 // readGatewayConfig reads a gateway's promoter config from the nodes that may
-// run it (see promoterHosts). A live .toml is preferred over a .toml.disabled
-// copy on any node: the gateway is stopped only when no node holds it live.
+// run it (see promoterHosts). A live .toml (or its .toml.pending successor) is
+// preferred over a .toml.disabled copy on any node: the gateway is stopped
+// only when no node holds it live.
 func (m *Manager) readGatewayConfig(ctx context.Context, resource, pluginID string) (*gatewayConfig, error) {
 	path := gatewayConfigPath(pluginID)
 	hosts, _ := m.promoterHosts(ctx, resource)
-	byHost, err := m.dumpNodeConfigs(ctx, hosts, path, path+disabledSuffix)
+	byHost, err := m.dumpNodeConfigs(ctx, hosts, path, path+pendingSuffix, path+disabledSuffix)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +138,11 @@ func (m *Manager) readGatewayConfig(ctx context.Context, resource, pluginID stri
 	var missing []string
 	for _, host := range sortedKeys(byHost) {
 		files := byHost[host]
-		if content, ok := files[path]; ok {
+		// A pending copy is the config the node running the gateway was last
+		// edited to (see live_edit.go); its .toml is what drbd-reactor loaded.
+		if content, ok := files[path+pendingSuffix]; ok {
+			copies = append(copies, nodeConfigCopy{host: host, content: content})
+		} else if content, ok := files[path]; ok {
 			copies = append(copies, nodeConfigCopy{host: host, content: content})
 		} else if content, ok := files[path+disabledSuffix]; ok {
 			copies = append(copies, nodeConfigCopy{host: host, disabled: true, content: content})

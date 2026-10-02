@@ -28,6 +28,10 @@ func (n *NVMeManager) AddHost(ctx context.Context, resource, hostNQN string) err
 		zap.String("resource", resource),
 		zap.String("host_nqn", hostNQN))
 
+	if err := validateHostNQN(hostNQN); err != nil {
+		return invalidArgument(err)
+	}
+
 	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
@@ -49,7 +53,7 @@ func (n *NVMeManager) AddHost(ctx context.Context, resource, hostNQN string) err
 	allowed = append(allowed, hostNQN)
 	lines[subsystemIdx] = buildNVMeSubsystemLine(params["nqn"], formatAllowedList(allowed), params["serial"])
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveHost removes a host from the NVMe subsystem
@@ -86,7 +90,7 @@ func (n *NVMeManager) RemoveHost(ctx context.Context, resource, hostNQN string) 
 	}
 
 	lines[subsystemIdx] = buildNVMeSubsystemLine(params["nqn"], formatAllowedList(updated), params["serial"])
-	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // ListHosts lists all hosts for an NVMe subsystem

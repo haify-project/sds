@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -36,15 +37,31 @@ func invalidArgument(err error) error {
 	return status.Error(codes.InvalidArgument, err.Error())
 }
 
-// iSCSI node name prefixes, from RFC 3720 section 3.2.6.
+// iSCSI node names, as LIO accepts them.
 //
-// All three are accepted because LIO accepts all three: a target named
-// "eui.0123456789abcdef" works exactly as well as one named "iqn.…", and there
-// is no layer below this one that would reject it. Refusing it here would be
-// this validator inventing a restriction the storage stack does not have — and
-// it briefly did: when the check was first wired into the create path it only
-// knew "iqn.", which turned a name that had always worked into a rejected
-// request.
+// Target and initiator names both end up in targetcli (`/iscsi create`,
+// `acls create`), which checks them with rtslib's normalize_wwn for the iSCSI
+// fabric: the name is lower-cased, then must be one of
+//
+//	iqn  iqn\.[0-9]{4}-[0-1][0-9]\..*\..*  with no space and no "_"
+//	naa  naa\.[125][0-9a-f]{15}
+//	eui  eui\.[0-9a-f]{16}
+//
+// A name that fails is not refused when sds writes the config but when the
+// agent starts the gateway: the iSCSITarget start fails with "WWN not valid as:
+// iqn, naa, eui", and the gateway stays down on every node it is tried on. On
+// sdt, `initiator add iqn.2026-10.test:probe` did exactly that — "test:probe"
+// has no second dot. So the rules here are rtslib's, not a looser reading of
+// RFC 3720: an RFC-legal name LIO rejects is an outage, not a valid name.
+//
+// naa: rtslib-fb accepts a first digit of 1, 2, 5 and, in newer releases,
+// c-f; only the digits every release accepts are accepted here. A 32-digit
+// (NAA type 6) name is a LUN WWN, never an iSCSI name LIO will take.
+//
+// The prefix must be lower case, as RFC 3720 writes it; the rest may be any
+// case (LIO lower-cases it). Quotes, backslashes, "$" and "`" are refused on
+// top: LIO would take them, but the name is carried inside a quoted OCF
+// parameter in the promoter config and a shell command on the nodes.
 const (
 	iqnPrefix = "iqn."
 	euiPrefix = "eui."
@@ -53,75 +70,78 @@ const (
 
 // iscsiNameFormats is the operator-facing description of what validateIQN
 // accepts, kept in one place so that every rejection names all three formats.
-// A message that mentions only the format the operator did not use reads as
-// "your name is malformed" when the truth may be "this tool only understood one
-// of the three legal spellings" — which is precisely how the eui. regression
-// would have been reported.
 const iscsiNameFormats = `accepted formats are ` +
-	`"iqn." + date + reversed domain + ":" + local name (iqn.2024-01.com.example:sds.data), ` +
+	`"iqn." + year-month + "." + reversed domain with at least two labels, optionally ":" + local name (iqn.2024-01.com.example:sds.data), ` +
 	`"eui." + 16 hex digits (eui.0123456789abcdef), or ` +
-	`"naa." + 16 or 32 hex digits (naa.60014051f1b2c3d4)`
+	`"naa." + 16 hex digits starting with 1, 2 or 5 (naa.5001405f1b2c3d4e)`
 
-// validateIQN validates an iSCSI node name in any of the three formats RFC 3720
-// defines. The name is checked structurally, not just by prefix: an "eui." that
-// is followed by nine characters of base64 is not an EUI-64 identifier, and
-// passing it through would put a name in the target config that no initiator
-// can address.
-//
-// Case: the prefix is matched case-sensitively, in the lowercase form the RFC
-// prescribes, for all three formats — that is the rule the iqn.-only version
-// already applied. Nothing after the prefix is case-normalised, for any of the
-// three, so uppercase hex is accepted exactly as an uppercase domain label in
-// an iqn. name always has been. The alternative — folding case for eui./naa.
-// but not for iqn. — would make one function answer the same question two
-// different ways depending on which prefix the operator happened to pick, which
-// is worse than either rule on its own.
+var (
+	lioIQNRE = regexp.MustCompile(`^iqn\.[0-9]{4}-[0-1][0-9]\..*\..*`)
+	lioEUIRE = regexp.MustCompile(`^eui\.[0-9a-f]{16}$`)
+	lioNAARE = regexp.MustCompile(`^naa\.[125][0-9a-f]{15}$`)
+)
+
+// validateIQN validates an iSCSI target or initiator name against the rules
+// LIO applies (see above).
 func validateIQN(name string) error {
+	if strings.ContainsAny(name, "\"'\\$`") {
+		return fmt.Errorf("invalid iSCSI name %q: quotes, backslashes, \"$\" and \"`\" are not allowed", name)
+	}
+	lower := strings.ToLower(name)
 	switch {
 	case strings.HasPrefix(name, iqnPrefix):
-		// Unchanged from when iqn. was the only accepted format. The rest of an
-		// iqn. name is a date, a reversed domain and an operator-chosen local
-		// part, none of which this layer can meaningfully judge; the colon is
-		// the one piece whose absence makes the name unusable rather than merely
-		// unconventional.
-		if !strings.Contains(name, ":") {
-			return fmt.Errorf("invalid iSCSI name %q: an %q name needs the \":\" separating the "+
-				"naming authority from the local name; %s", name, iqnPrefix, iscsiNameFormats)
+		if !lioIQNRE.MatchString(lower) || strings.ContainsAny(lower, " \t_") {
+			return fmt.Errorf("invalid iSCSI name %q: LIO (targetcli) refuses it — an %q name needs a year-month "+
+				"date, a reversed domain of at least two labels, and no spaces or \"_\"; %s", name, iqnPrefix, iscsiNameFormats)
 		}
-		return nil
 	case strings.HasPrefix(name, euiPrefix):
-		return validateHexName(name, euiPrefix, "16", 16)
+		if !lioEUIRE.MatchString(lower) {
+			return fmt.Errorf("invalid iSCSI name %q: %q must be followed by exactly 16 hexadecimal digits; %s",
+				name, euiPrefix, iscsiNameFormats)
+		}
 	case strings.HasPrefix(name, naaPrefix):
-		return validateHexName(name, naaPrefix, "16 or 32", 16, 32)
+		if !lioNAARE.MatchString(lower) {
+			return fmt.Errorf("invalid iSCSI name %q: %q must be followed by 16 hexadecimal digits, the first "+
+				"1, 2 or 5; %s", name, naaPrefix, iscsiNameFormats)
+		}
 	default:
 		return fmt.Errorf("invalid iSCSI name %q: %s", name, iscsiNameFormats)
 	}
+	return nil
 }
 
-// validateHexName checks the fixed-width hexadecimal body of an eui. or naa.
-// name. The permitted lengths are the format itself, not a style preference:
-// an EUI-64 identifier is exactly 64 bits and an NAA identifier is 64 or 128,
-// so a body one digit short is a typo that would otherwise be copied verbatim
-// into the target definition.
-func validateHexName(name, prefix, want string, lengths ...int) error {
-	body := strings.TrimPrefix(name, prefix)
-	for _, r := range body {
-		if !isHexDigit(r) {
-			return fmt.Errorf("invalid iSCSI name %q: %q must be followed by %s hexadecimal digits, "+
-				"but %q is not one; %s", name, prefix, want, string(r), iscsiNameFormats)
-		}
-	}
-	for _, n := range lengths {
-		if len(body) == n {
-			return nil
-		}
-	}
-	return fmt.Errorf("invalid iSCSI name %q: %q must be followed by %s hexadecimal digits, got %d; %s",
-		name, prefix, want, len(body), iscsiNameFormats)
-}
+// maxNQNLength is NVMF_NQN_SIZE: the NVMe base specification caps an NQN at
+// 223 bytes.
+const maxNQNLength = 223
 
-func isHexDigit(r rune) bool {
-	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+var (
+	hostNQNRE     = regexp.MustCompile(`^nqn\.[0-9]{4}-(0[1-9]|1[0-2])\.[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\S+)?$`)
+	uuidNQNPrefix = "nqn.2014-08.org.nvmexpress:uuid:"
+	uuidRE        = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+)
+
+// validateHostNQN validates an NVMe host NQN for a subsystem's allow-list:
+// nqn.<yyyy-mm>.<reversed domain>[:<name>], or the UUID form
+// nqn.2014-08.org.nvmexpress:uuid:<uuid> that nvme-cli writes to
+// /etc/nvme/hostnqn. The NQN becomes a directory under
+// /sys/kernel/config/nvmet/hosts and a word in the promoter config's
+// allowed_initiators list, so "/", quotes and blanks are refused too.
+func validateHostNQN(nqn string) error {
+	const formats = `expected nqn.<yyyy-mm>.<reversed domain>[:<name>] (nqn.2024-01.com.example:host1) ` +
+		`or nqn.2014-08.org.nvmexpress:uuid:<uuid>`
+	switch {
+	case len(nqn) > maxNQNLength:
+		return fmt.Errorf("invalid host NQN %q: longer than %d bytes", nqn, maxNQNLength)
+	case strings.ContainsAny(nqn, "/\"'\\$`"):
+		return fmt.Errorf("invalid host NQN %q: \"/\", quotes, backslashes, \"$\" and \"`\" are not allowed", nqn)
+	case strings.HasPrefix(nqn, uuidNQNPrefix):
+		if !uuidRE.MatchString(strings.TrimPrefix(nqn, uuidNQNPrefix)) {
+			return fmt.Errorf("invalid host NQN %q: what follows %q must be a UUID", nqn, uuidNQNPrefix)
+		}
+	case !hostNQNRE.MatchString(nqn):
+		return fmt.Errorf("invalid host NQN %q: %s", nqn, formats)
+	}
+	return nil
 }
 
 // validateNQN validates an NQN format

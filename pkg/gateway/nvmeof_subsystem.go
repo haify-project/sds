@@ -81,7 +81,7 @@ func (n *NVMeManager) AddNamespace(ctx context.Context, resource, device string)
 		return err
 	}
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveNamespace removes a namespace from an NVMe-oF gateway
@@ -106,7 +106,7 @@ func (n *NVMeManager) RemoveNamespace(ctx context.Context, resource string, nsid
 		return fmt.Errorf("namespace %d not found", nsid)
 	}
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // ListNamespaces lists all namespaces for an NVMe-oF gateway
@@ -217,7 +217,7 @@ func (n *NVMeManager) DeletePort(ctx context.Context, resource, addr string, por
 		return fmt.Errorf("port not found for addr %s", addr)
 	}
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg, joinConfigLines(lines, trailingNewline))
 }
 
 // ListPorts lists all ports for an NVMe subsystem
