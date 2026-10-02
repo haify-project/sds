@@ -22,6 +22,11 @@ SDS 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-react
   `drbd-services@<r>.target`。只停 target 不够：reactor 几秒内就会重新提升并拉起整条链。
   `gateway start` 把文件改回 `.toml` 并 reload。
 - `sds gateway delete --resource <r>` 先执行 stop，再在所有受管节点上删除 `.toml` 和 `.toml.disabled` 并 reload。
+- 增删 LUN / initiator / CHAP / namespace / host / NFS export 是对这份配置的读-改-写：从资源的
+  diskful 节点读取（controller 本机的 `/etc/drbd-reactor.d` 不参与），任一节点有 `.toml` 就以它为准，
+  只有 `.toml.disabled` 时网关处于停止状态，改动写回 `.toml.disabled`、不会顺带启动网关。
+  各节点内容不一致时取多数节点持有的那份（平局取节点名最小者），日志 warning 列出不一致的节点；
+  随后的写入会让所有 diskful 节点重新一致。
 
 ## 创建前的检查
 

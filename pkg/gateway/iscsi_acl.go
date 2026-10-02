@@ -34,11 +34,11 @@ func (i *iSCSIManager) AddInitiator(ctx context.Context, resource, initiatorIQN 
 		zap.String("iqn", initiatorIQN))
 
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	targetIdx := findLineIndex(lines, func(line string) bool {
@@ -61,7 +61,7 @@ func (i *iSCSIManager) AddInitiator(ctx context.Context, resource, initiatorIQN 
 		params["implementation"],
 	)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveInitiator removes an initiator from the iSCSI gateway
@@ -71,11 +71,11 @@ func (i *iSCSIManager) RemoveInitiator(ctx context.Context, resource, initiatorI
 		zap.String("iqn", initiatorIQN))
 
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	targetIdx := findLineIndex(lines, func(line string) bool {
@@ -106,17 +106,17 @@ func (i *iSCSIManager) RemoveInitiator(ctx context.Context, resource, initiatorI
 		params["implementation"],
 	)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // ListInitiators lists all initiators for an iSCSI gateway
 func (i *iSCSIManager) ListInitiators(ctx context.Context, resource string) ([]string, error) {
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err
 	}
+	content := cfg.content
 
 	for _, line := range strings.Split(content, "\n") {
 		if params, ok := parseISCSITargetLine(line); ok {
@@ -145,11 +145,11 @@ func (i *iSCSIManager) SetCHAP(ctx context.Context, resource, username, password
 	}
 
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	targetIdx := findLineIndex(lines, func(line string) bool {
@@ -170,17 +170,17 @@ func (i *iSCSIManager) SetCHAP(ctx context.Context, resource, username, password
 		params["implementation"],
 	)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // GetCHAP gets CHAP authentication settings
 func (i *iSCSIManager) GetCHAP(ctx context.Context, resource string) (username, password string, mutual bool, err error) {
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return "", "", false, err
 	}
+	content := cfg.content
 
 	for _, line := range strings.Split(content, "\n") {
 		if params, ok := parseISCSITargetLine(line); ok {

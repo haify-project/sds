@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -272,9 +271,7 @@ true`, id, id, id)
 // shell — i.e. silently emptied — before the script runs. Base64-encoding
 // the script makes it immune to that quoting chain.
 func (m *Manager) runScript(ctx context.Context, hosts []string, script string) error {
-	encoded := base64.StdEncoding.EncodeToString([]byte(script))
-	cmd := fmt.Sprintf("echo %s | base64 -d | sudo /bin/sh", encoded)
-	return m.deployment.Exec(ctx, hosts, cmd)
+	return m.deployment.Exec(ctx, hosts, scriptCmd(script))
 }
 
 // flushPortblockRules removes accumulated portblock DROP rules for the

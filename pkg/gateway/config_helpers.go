@@ -3,52 +3,33 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 )
 
-type configStoreReader interface {
-	GetConfig(path string) (string, bool)
-}
-
-type configStoreWriter interface {
-	SetConfig(path, content string)
-}
-
 func gatewayConfigPath(pluginID string) string {
 	return filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("%s.toml", pluginID))
 }
 
-func (m *Manager) readGatewayConfig(path string) (string, error) {
-	content, err := os.ReadFile(path)
-	if err == nil {
-		return string(content), nil
+// persistGatewayConfig writes an edited gateway config back to the nodes that
+// may run the gateway (see readGatewayConfig for where it was read from).
+//
+// A running gateway's config goes through writeReactorConfig, which installs
+// it on every diskful node and reloads drbd-reactor. A stopped gateway's
+// config goes back to the .toml.disabled copy and nothing is reloaded: writing
+// the live .toml would start the gateway as a side effect of the edit.
+func (m *Manager) persistGatewayConfig(ctx context.Context, resource, pluginID string, disabled bool, content string) error {
+	if !disabled {
+		return m.writeReactorConfig(ctx, resource, pluginID, content)
 	}
-
-	if reader, ok := m.deployment.(configStoreReader); ok {
-		if value, exists := reader.GetConfig(path); exists {
-			return value, nil
-		}
+	run, _ := m.promoterHosts(ctx, resource)
+	path := gatewayConfigPath(pluginID) + disabledSuffix
+	if err := m.deployment.DistributeConfig(ctx, run, content, path); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
 	}
-
-	return "", fmt.Errorf("failed to read config: %w", err)
-}
-
-func (m *Manager) persistGatewayConfig(ctx context.Context, resource, pluginID, content string) error {
-	path := gatewayConfigPath(pluginID)
-
-	if writer, ok := m.deployment.(configStoreWriter); ok {
-		writer.SetConfig(path, content)
-	}
-
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil && !os.IsPermission(err) && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to write local config: %w", err)
-	}
-
-	return m.writeReactorConfig(ctx, resource, pluginID, content)
+	return nil
 }
 
 func splitConfigLines(content string) ([]string, bool) {

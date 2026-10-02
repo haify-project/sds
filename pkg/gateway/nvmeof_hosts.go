@@ -29,11 +29,11 @@ func (n *NVMeManager) AddHost(ctx context.Context, resource, hostNQN string) err
 		zap.String("host_nqn", hostNQN))
 
 	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
+	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	subsystemIdx := findLineIndex(lines, func(line string) bool {
@@ -49,7 +49,7 @@ func (n *NVMeManager) AddHost(ctx context.Context, resource, hostNQN string) err
 	allowed = append(allowed, hostNQN)
 	lines[subsystemIdx] = buildNVMeSubsystemLine(params["nqn"], formatAllowedList(allowed), params["serial"])
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveHost removes a host from the NVMe subsystem
@@ -59,11 +59,11 @@ func (n *NVMeManager) RemoveHost(ctx context.Context, resource, hostNQN string) 
 		zap.String("host_nqn", hostNQN))
 
 	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
+	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	subsystemIdx := findLineIndex(lines, func(line string) bool {
@@ -86,17 +86,17 @@ func (n *NVMeManager) RemoveHost(ctx context.Context, resource, hostNQN string) 
 	}
 
 	lines[subsystemIdx] = buildNVMeSubsystemLine(params["nqn"], formatAllowedList(updated), params["serial"])
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // ListHosts lists all hosts for an NVMe subsystem
 func (n *NVMeManager) ListHosts(ctx context.Context, resource string) ([]string, error) {
 	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
+	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err
 	}
+	content := cfg.content
 
 	for _, line := range strings.Split(content, "\n") {
 		if params, ok := parseNVMeSubsystemLine(line); ok {

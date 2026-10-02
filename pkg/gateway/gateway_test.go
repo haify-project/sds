@@ -156,6 +156,10 @@ type MockDeploymentClient struct {
 	// HostOutputs is what ExecOutput reports per host; a host absent from it
 	// did not answer.
 	HostOutputs map[string]string
+	// NodeConfigs is what each node holds in /etc/drbd-reactor.d, by path,
+	// for config dump scripts; a host absent from it did not answer. When it
+	// is nil every node holds Configs.
+	NodeConfigs map[string]map[string]string
 }
 
 func (m *MockDeploymentClient) ExecOutput(ctx context.Context, hosts []string, cmd string) (map[string]string, error) {
@@ -164,6 +168,9 @@ func (m *MockDeploymentClient) ExecOutput(ctx context.Context, hosts []string, c
 	}
 	m.ExecCommands = append(m.ExecCommands, cmd)
 	m.ExecHosts = append(m.ExecHosts, append([]string(nil), hosts...))
+	if patterns := dumpScriptPatterns(cmd); patterns != nil {
+		return m.dumpConfigs(hosts, patterns), nil
+	}
 	out := map[string]string{}
 	for _, h := range hosts {
 		if v, ok := m.HostOutputs[h]; ok {

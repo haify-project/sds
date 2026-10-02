@@ -795,6 +795,13 @@ sds gateway nvme namespace add|list|remove ...  # namespaces
 sds gateway nvme host add|list|remove ...       # host allow-list
 ```
 
+These edits read the gateway's promoter config from the resource's diskful
+nodes — not from the machine the controller runs on — and write the result
+back to all of them. A stopped gateway is edited in its `.toml.disabled` copy
+and stays stopped. If the nodes hold different copies, the one most of them
+hold is used (a tie goes to the first node by name), a warning names the
+nodes that differ, and the write makes them identical again.
+
 `iscsi create` also takes `--allowed-initiators`, `--username`/`--password` for
 CHAP, and `--implementation lio` (the default and the only one supported; `tgt`
 and `iet` are refused). `nvme create` takes `--transport tcp` (default) or

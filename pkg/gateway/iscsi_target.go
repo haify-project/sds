@@ -3,8 +3,6 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"go.uber.org/zap"
@@ -33,11 +31,11 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 		zap.String("device", device))
 
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	for _, line := range lines {
@@ -71,7 +69,7 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 	}
 	lines = append(lines[:anchor+1], append([]string{newLine}, lines[anchor+1:]...)...)
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveLUN removes a LUN from an iSCSI gateway
@@ -81,11 +79,11 @@ func (i *iSCSIManager) RemoveLUN(ctx context.Context, resource string, lunNumber
 		zap.Int("lun", lunNumber))
 
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	lines, removed := removeLine(lines, func(line string) bool {
@@ -96,17 +94,17 @@ func (i *iSCSIManager) RemoveLUN(ctx context.Context, resource string, lunNumber
 		return fmt.Errorf("LUN %d not found", lunNumber)
 	}
 
-	return i.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return i.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // ListLUNs lists all configured LUNs for an iSCSI gateway.
 func (i *iSCSIManager) ListLUNs(ctx context.Context, resource string) ([]map[string]string, error) {
 	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := i.readGatewayConfig(configPath)
+	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err
 	}
+	content := cfg.content
 
 	var luns []map[string]string
 	for _, line := range strings.Split(content, "\n") {
@@ -143,25 +141,19 @@ func (i *iSCSIManager) DeleteTarget(ctx context.Context, resource string) error 
 	return fmt.Errorf("DeleteTarget: use gateway deletion instead")
 }
 
-// ListTargets lists all iSCSI targets
+// ListTargets lists the IQNs of the running iSCSI gateways' targets, read from
+// the managed nodes' /etc/drbd-reactor.d — the controller need not be a
+// gateway node. host is unused: a target's config lives on every diskful node
+// of its resource, so the union over all nodes is the answer.
 func (i *iSCSIManager) ListTargets(ctx context.Context, host string) ([]string, error) {
-	files, err := os.ReadDir(DrbdReactorConfigDir)
+	contents, err := i.readAllNodeConfigs(ctx, "sds-iscsi-*.toml")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config directory: %w", err)
+		return nil, err
 	}
 
 	var targets []string
-	for _, file := range files {
-		if !strings.HasPrefix(file.Name(), "sds-iscsi-") || !strings.HasSuffix(file.Name(), ".toml") {
-			continue
-		}
-
-		content, err := os.ReadFile(filepath.Join(DrbdReactorConfigDir, file.Name()))
-		if err != nil {
-			continue
-		}
-
-		for _, line := range strings.Split(string(content), "\n") {
+	for _, content := range contents {
+		for _, line := range strings.Split(content, "\n") {
 			if params, ok := parseISCSITargetLine(line); ok && params["iqn"] != "" {
 				targets = append(targets, params["iqn"])
 			}

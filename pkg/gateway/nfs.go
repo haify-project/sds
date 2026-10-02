@@ -384,11 +384,11 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		zap.String("export_path", exportPath))
 
 	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
+	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	lines, trailingNewline := splitConfigLines(content)
 	exportID := nextExportID(lines)
@@ -418,11 +418,11 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		}
 	}
 	if anchor < 0 {
-		return fmt.Errorf("failed to locate the nfsserver entry in %s", configPath)
+		return fmt.Errorf("failed to locate the nfsserver entry in %s", gatewayConfigPath(pluginID))
 	}
 	lines = append(lines[:anchor+1], append([]string{newLine}, lines[anchor+1:]...)...)
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // RemoveNFSExport removes an export from an existing NFS gateway.
@@ -432,11 +432,11 @@ func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath s
 		zap.String("export_path", exportPath))
 
 	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
-	configPath := gatewayConfigPath(pluginID)
-	content, err := n.readGatewayConfig(configPath)
+	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
 	}
+	content := cfg.content
 
 	normalizedPath, err := ResolveNFSExportPath(resource, exportPath)
 	if err != nil {
@@ -451,16 +451,17 @@ func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath s
 		return fmt.Errorf("export not found: %s", normalizedPath)
 	}
 
-	return n.persistGatewayConfig(ctx, resource, pluginID, joinConfigLines(lines, trailingNewline))
+	return n.persistGatewayConfig(ctx, resource, pluginID, cfg.disabled, joinConfigLines(lines, trailingNewline))
 }
 
 // ListNFSExports lists all exports for an NFS gateway
 func (n *NFSManager) ListNFSExports(ctx context.Context, resource string) ([]map[string]string, error) {
-	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("sds-nfs-%s.toml", resource))
-	content, err := n.readGatewayConfig(configPath)
+	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
+	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err
 	}
+	content := cfg.content
 
 	var exports []map[string]string
 	lines := strings.Split(content, "\n")

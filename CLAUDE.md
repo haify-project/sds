@@ -249,6 +249,7 @@ written without `lifecycle.go`'s invariants looks correct and isn't.
 | `volumes.go` | Device-path resolution and the cluster-private/payload split. Getting either wrong exports the wrong block device, invisibly |
 | `identity.go` | UUID/serial/FSID — how a client recognises its storage across a failover |
 | `config_helpers.go` | Parsing and building promoter config lines |
+| `config_read.go` | Reading promoter configs back from the nodes that hold them — never the controller's own filesystem, which is usually not a gateway node |
 | `validate.go` | IQN/NQN/transport validation, rejected before any side effect |
 | `nfs.go` | NFS gateway — Filesystem, IPaddr2, nfsserver, exportfs OCF agents |
 | `iscsi.go` + `iscsi_target.go` + `iscsi_acl.go` | iSCSI gateway — iSCSITarget/iSCSILogicalUnit agents; target and LUNs; initiator allow-list and CHAP |
