@@ -192,9 +192,9 @@ func putSchemaVersion(tx *bolt.Tx, version int) error {
 // backupBeforeMigration copies the database aside before the chain runs.
 //
 // The trade-off is disk against recoverability, and it is lopsided here. This
-// file is the cluster's only record of what exists; the audit trail caps it at
-// a few megabytes (see DefaultAuditRetention) and everything else in it is
-// small, so a copy costs roughly nothing on the metadata volume. Losing it
+// file is the cluster's only record of what exists; the audit trail is capped
+// at tens of megabytes ([audit] max_entries) and everything else in it is
+// small, so a copy costs little on the metadata volume. Losing it
 // costs every gateway, HA config and RBAC assignment the operator ever
 // declared, none of which can be reconstructed from the storage nodes.
 //

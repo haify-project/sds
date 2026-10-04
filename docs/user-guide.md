@@ -1320,6 +1320,7 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `pool.metadata_full`, `pool.out_of_space` (LVM already refused writes),
 `pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
 `pool.snapshots_locked` (a near-full pool with only locked snapshots left),
+`audit.shipping_failed`, `audit.truncated`, `approval.requested` (see [Access control](#16-access-control)),
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,
@@ -1497,9 +1498,9 @@ token = "..."
 role = "admin"
 ```
 
-Roles are `admin`, `operator` and `viewer`. Every API call is classified by
-object (pool, resource, gateway, snapshot, backup, node, ha, system) and action
-(read, write). An operator may write pools, resources, gateways, snapshots,
+Roles are `admin`, `operator`, `viewer` and `security-officer`. Every API call is classified by
+object (pool, resource, gateway, snapshot, backup, node, ha, approval, system) and action
+(read, write, approve). An operator may write pools, resources, gateways, snapshots,
 backups and HA, and only read nodes and system settings; a viewer can only
 read; an admin can do everything. `[[rbac.policies]]` entries (`role`,
 `object`, `action`, either may be `*`) add grants or define further roles.
@@ -1519,6 +1520,47 @@ the API, so an admin always remains. The `rbac` commands use the gRPC API
 like every other command, so `--token` and the TLS options below apply to them.
 
 Tokens come from `--token`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`.
+
+**Two-person approval.** A role says what a user may do, and an admin may do
+everything — so one stolen admin token could delete the backup target, the
+backups and the snapshots. With approval on, the calls that destroy data or
+weaken what protects it run only after a *different* user approved that exact
+call:
+
+```toml
+[rbac.approval]
+enabled = true
+ttl_minutes = 60     # how long a request waits, and how long an approved call may then be made
+# methods = [...]    # default: the list below
+```
+
+```bash
+$ sds backup target remove offsite                 # alice
+Error: DeleteBackupTarget needs a second person's approval: request 3f9a1c2b7d10 is pending ...
+$ sds approval list                                # bob
+$ sds approval approve 3f9a1c2b7d10                # bob; alice cannot approve her own
+$ sds backup target remove offsite                 # alice again: runs, once
+```
+
+The approval covers the method and its exact arguments, so approving the
+removal of one target cannot be spent removing another. Who may approve: an
+admin, or a `security-officer`, who can read everything and approve, and change
+nothing. Each new request raises an `approval.requested` event, so approvers
+hear of it — and an unexpected one is a stolen token at work.
+
+The default list: deleting pools, ZFS pools and datasets, resources, volumes
+and snapshots; restoring snapshots and backups (both overwrite the volume);
+adding, replacing or removing a backup target; deleting backups and snapshot
+or backup schedules; and adding users, removing them or changing roles — so
+the stolen token cannot create its own second approver. The web UI's user
+management is held back the same way. Approval needs `[rbac]`; the controller
+refuses to start with one and not the other.
+
+Automation is held back too: the CSI driver deleting a PVC and the Proxmox
+plugin removing or rolling back a VM disk call `DeleteResource` and
+`RestoreSnapshot`, which then wait for an approver like anyone else. Where that
+is not wanted, list `methods` yourself without them — the snapshot and backup
+locks still protect what they lock.
 
 **TLS.** `[tls] enabled = true` with `cert_file` and `key_file` puts the gRPC
 API (port 3374) on TLS; adding `client_ca_file` requires a client certificate
@@ -1541,7 +1583,36 @@ has an environment variable (`SDS_TLS`, `SDS_TLS_CA`, `SDS_TLS_CERT`,
 **Audit.** Every state-changing API call is recorded with caller, target,
 outcome and latency in the controller database (`[audit] enabled`, default
 true; `include_reads = true` records reads too). Read it at `GET /v1/audit`
-on the REST API, or in the web UI.
+on the REST API, or in the web UI. Entries are kept for `retention_days`
+(default 180), and never more than `max_entries` (default 200000) of them, so
+a flood of calls cannot fill the metadata volume. An entry dropped by the cap
+before its retention ran out raises a critical `audit.truncated` event.
+
+The database trail is only as trustworthy as the controller host: whoever
+holds it can rewrite it. To keep a copy they cannot, send the trail off the
+cluster as it is written:
+
+```toml
+[audit]
+syslog = "tls://logs.example.com:6514"   # or tcp://host:514, udp://host:514
+syslog_ca = "/etc/sds/logs-ca.pem"       # tls only; empty = system roots
+webhook_url = "https://audit.example.com/sds"
+webhook_token = "..."                    # sent as Authorization: Bearer
+```
+
+Syslog gets one RFC 5424 message per entry, facility 13 ("log audit"),
+newline-framed over TCP. The webhook gets each batch as a JSON POST,
+`{"source": "sds-controller", "records": [{"seq": N, "event": {...}}]}`. Either
+is sent in order and from where it last left off: each destination's position
+is kept with the trail, so a destination that was down gets everything when it
+is back, and a controller that takes over after a failover carries on where
+the last one stopped. A resend after a failure can repeat an entry, never skip
+one; `seq` tells a duplicate from a gap. A destination failing for five
+minutes raises `audit.shipping_failed`. UDP can lose messages unnoticed; use
+TCP or TLS.
+
+Point it at storage the cluster's credentials cannot rewrite: a log server
+you run elsewhere, or a collector writing to an object store with Object Lock.
 
 ---
 

@@ -165,6 +165,9 @@ const (
 	SDSController_CreateRbacUser_FullMethodName            = "/v1.SDSController/CreateRbacUser"
 	SDSController_DeleteRbacUser_FullMethodName            = "/v1.SDSController/DeleteRbacUser"
 	SDSController_SetRbacUserRole_FullMethodName           = "/v1.SDSController/SetRbacUserRole"
+	SDSController_ListApprovals_FullMethodName             = "/v1.SDSController/ListApprovals"
+	SDSController_ApproveRequest_FullMethodName            = "/v1.SDSController/ApproveRequest"
+	SDSController_RejectRequest_FullMethodName             = "/v1.SDSController/RejectRequest"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -431,6 +434,13 @@ type SDSControllerClient interface {
 	CreateRbacUser(ctx context.Context, in *CreateRbacUserRequest, opts ...grpc.CallOption) (*CreateRbacUserResponse, error)
 	DeleteRbacUser(ctx context.Context, in *DeleteRbacUserRequest, opts ...grpc.CallOption) (*DeleteRbacUserResponse, error)
 	SetRbacUserRole(ctx context.Context, in *SetRbacUserRoleRequest, opts ...grpc.CallOption) (*SetRbacUserRoleResponse, error)
+	// Two-person approval ([rbac.approval]). A call on the approval list made
+	// without an approval fails with FAILED_PRECONDITION and leaves a pending
+	// request; once a different user with the approve right approves it, the
+	// same caller repeats the identical call and it runs, once.
+	ListApprovals(ctx context.Context, in *ListApprovalsRequest, opts ...grpc.CallOption) (*ListApprovalsResponse, error)
+	ApproveRequest(ctx context.Context, in *ApproveRequestRequest, opts ...grpc.CallOption) (*ApproveRequestResponse, error)
+	RejectRequest(ctx context.Context, in *RejectRequestRequest, opts ...grpc.CallOption) (*RejectRequestResponse, error)
 }
 
 type sDSControllerClient struct {
@@ -1910,6 +1920,36 @@ func (c *sDSControllerClient) SetRbacUserRole(ctx context.Context, in *SetRbacUs
 	return out, nil
 }
 
+func (c *sDSControllerClient) ListApprovals(ctx context.Context, in *ListApprovalsRequest, opts ...grpc.CallOption) (*ListApprovalsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListApprovalsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListApprovals_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ApproveRequest(ctx context.Context, in *ApproveRequestRequest, opts ...grpc.CallOption) (*ApproveRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveRequestResponse)
+	err := c.cc.Invoke(ctx, SDSController_ApproveRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RejectRequest(ctx context.Context, in *RejectRequestRequest, opts ...grpc.CallOption) (*RejectRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RejectRequestResponse)
+	err := c.cc.Invoke(ctx, SDSController_RejectRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SDSControllerServer is the server API for SDSController service.
 // All implementations must embed UnimplementedSDSControllerServer
 // for forward compatibility.
@@ -2174,6 +2214,13 @@ type SDSControllerServer interface {
 	CreateRbacUser(context.Context, *CreateRbacUserRequest) (*CreateRbacUserResponse, error)
 	DeleteRbacUser(context.Context, *DeleteRbacUserRequest) (*DeleteRbacUserResponse, error)
 	SetRbacUserRole(context.Context, *SetRbacUserRoleRequest) (*SetRbacUserRoleResponse, error)
+	// Two-person approval ([rbac.approval]). A call on the approval list made
+	// without an approval fails with FAILED_PRECONDITION and leaves a pending
+	// request; once a different user with the approve right approves it, the
+	// same caller repeats the identical call and it runs, once.
+	ListApprovals(context.Context, *ListApprovalsRequest) (*ListApprovalsResponse, error)
+	ApproveRequest(context.Context, *ApproveRequestRequest) (*ApproveRequestResponse, error)
+	RejectRequest(context.Context, *RejectRequestRequest) (*RejectRequestResponse, error)
 	mustEmbedUnimplementedSDSControllerServer()
 }
 
@@ -2621,6 +2668,15 @@ func (UnimplementedSDSControllerServer) DeleteRbacUser(context.Context, *DeleteR
 }
 func (UnimplementedSDSControllerServer) SetRbacUserRole(context.Context, *SetRbacUserRoleRequest) (*SetRbacUserRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetRbacUserRole not implemented")
+}
+func (UnimplementedSDSControllerServer) ListApprovals(context.Context, *ListApprovalsRequest) (*ListApprovalsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListApprovals not implemented")
+}
+func (UnimplementedSDSControllerServer) ApproveRequest(context.Context, *ApproveRequestRequest) (*ApproveRequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApproveRequest not implemented")
+}
+func (UnimplementedSDSControllerServer) RejectRequest(context.Context, *RejectRequestRequest) (*RejectRequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RejectRequest not implemented")
 }
 func (UnimplementedSDSControllerServer) mustEmbedUnimplementedSDSControllerServer() {}
 func (UnimplementedSDSControllerServer) testEmbeddedByValue()                       {}
@@ -5264,6 +5320,60 @@ func _SDSController_SetRbacUserRole_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_ListApprovals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListApprovalsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListApprovals(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListApprovals_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListApprovals(ctx, req.(*ListApprovalsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ApproveRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ApproveRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ApproveRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ApproveRequest(ctx, req.(*ApproveRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RejectRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RejectRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RejectRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RejectRequest(ctx, req.(*RejectRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SDSController_ServiceDesc is the grpc.ServiceDesc for SDSController service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5850,6 +5960,18 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetRbacUserRole",
 			Handler:    _SDSController_SetRbacUserRole_Handler,
+		},
+		{
+			MethodName: "ListApprovals",
+			Handler:    _SDSController_ListApprovals_Handler,
+		},
+		{
+			MethodName: "ApproveRequest",
+			Handler:    _SDSController_ApproveRequest_Handler,
+		},
+		{
+			MethodName: "RejectRequest",
+			Handler:    _SDSController_RejectRequest_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -46,6 +46,8 @@ m = g(r.sub, p.sub) && (p.obj == "*" || r.obj == p.obj) && (p.act == "*" || r.ac
 const (
 	ActRead  = "read"
 	ActWrite = "write"
+	// ActApprove is the right to approve another user's held-back call.
+	ActApprove = "approve"
 )
 
 // User is an identity that authenticates with a bearer token and carries a role.
@@ -77,6 +79,10 @@ func defaultPolicies() []Policy {
 		{"operator", "node", ActRead},
 		{"operator", "system", ActRead},
 		{"viewer", "*", ActRead},
+		// security-officer approves what [rbac.approval] holds back, and
+		// reads everything; it changes nothing itself.
+		{"security-officer", "approval", ActApprove},
+		{"security-officer", "*", ActRead},
 	}
 }
 
@@ -460,6 +466,9 @@ func Classify(fullMethod string) (object, action string) {
 }
 
 func classifyAction(method string) string {
+	if method == "ApproveRequest" || method == "RejectRequest" {
+		return ActApprove
+	}
 	// An inspection reads the cluster and stores a report; it changes nothing
 	// on it, so whoever may read the cluster may run one.
 	if strings.Contains(method, "Status") || method == "RunInspection" {
@@ -475,6 +484,8 @@ func classifyAction(method string) string {
 
 func classifyObject(method string) string {
 	switch {
+	case method == "ListApprovals" || method == "ApproveRequest" || method == "RejectRequest":
+		return "approval"
 	// Before the snapshot case: off-cluster backups are their own object, so an
 	// operator who may ship data off-site can be distinguished from one who may
 	// only snapshot in place. Unclassified would land it in "system", where an

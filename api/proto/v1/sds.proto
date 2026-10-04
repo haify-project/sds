@@ -605,6 +605,20 @@ service SDSController {
   rpc DeleteRbacUser(DeleteRbacUserRequest) returns (DeleteRbacUserResponse);
   rpc SetRbacUserRole(SetRbacUserRoleRequest) returns (SetRbacUserRoleResponse);
 
+  // Two-person approval ([rbac.approval]). A call on the approval list made
+  // without an approval fails with FAILED_PRECONDITION and leaves a pending
+  // request; once a different user with the approve right approves it, the
+  // same caller repeats the identical call and it runs, once.
+  rpc ListApprovals(ListApprovalsRequest) returns (ListApprovalsResponse) {
+    option (google.api.http) = { get: "/v1/approvals"; };
+  }
+  rpc ApproveRequest(ApproveRequestRequest) returns (ApproveRequestResponse) {
+    option (google.api.http) = { post: "/v1/approvals/{id}/approve"; body: "*"; };
+  }
+  rpc RejectRequest(RejectRequestRequest) returns (RejectRequestResponse) {
+    option (google.api.http) = { post: "/v1/approvals/{id}/reject"; body: "*"; };
+  }
+
 }
 
 // Pool messages
@@ -3099,6 +3113,49 @@ message SetRbacUserRoleResponse {
   bool success = 1;
   string message = 2;
   bool enabled = 3;
+}
+
+// ==================== Approvals ====================
+
+message ApprovalInfo {
+  string id = 1;
+  string method = 2;          // e.g. DeleteBackupTarget
+  string request = 3;         // the call's arguments as JSON, secrets masked
+  string requester = 4;
+  string created_at = 5;      // RFC 3339
+  string expires_at = 6;
+  string state = 7;           // pending, approved, rejected, used, expired
+  string decided_by = 8;
+  string decided_at = 9;
+}
+
+message ListApprovalsRequest {
+  bool include_closed = 1;    // also approved, rejected, used and expired ones
+}
+
+message ListApprovalsResponse {
+  bool enabled = 1;
+  repeated ApprovalInfo approvals = 2;
+}
+
+message ApproveRequestRequest {
+  string id = 1;
+}
+
+message ApproveRequestResponse {
+  bool success = 1;
+  string message = 2;
+  ApprovalInfo approval = 3;
+}
+
+message RejectRequestRequest {
+  string id = 1;
+}
+
+message RejectRequestResponse {
+  bool success = 1;
+  string message = 2;
+  ApprovalInfo approval = 3;
 }
 
 // One finding of an inspection.
