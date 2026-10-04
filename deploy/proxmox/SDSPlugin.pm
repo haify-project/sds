@@ -21,8 +21,10 @@ use PVE::Storage::Plugin;
 use PVE::Storage::Custom::SDS::Client qw(_uri_escape);
 use PVE::Storage::Custom::SDS::Capacity qw(pool_capacity);
 use PVE::Storage::Custom::SDS::Naming qw(sds_resource_name volname_from_resource
-    parse_vm_volname kib_to_gb bytes_to_gb gb_to_bytes);
+    parse_vm_volname kib_to_gb bytes_to_gb gb_to_bytes volume_size_bytes);
 use PVE::Storage::Custom::SDS::Activation qw(activate deactivate controller_unreachable local_device_path);
+use PVE::Storage::Custom::SDS::Templates ();
+use PVE::Storage::Custom::SDS::Snapshots ();
 
 use base qw(PVE::Storage::Plugin);
 
@@ -119,6 +121,12 @@ sub properties {
             type        => 'string',
             enum        => [ 'suspend-io', 'io-error' ],
         },
+        exactsize => {
+            description => "Give each new or resized disk exactly the size PVE asks for, instead of rounding up to whole GiB. "
+                . "Needed for online Move Disk onto this storage, which requires a target of the source's exact size.",
+            type    => 'boolean',
+            default => 0,
+        },
     };
 }
 
@@ -133,6 +141,7 @@ sub options {
         apitoken       => { optional => 1 },
         controllerca   => { optional => 1 },
         onnoquorum     => { optional => 1 },
+        exactsize      => { optional => 1 },
         nodes          => { optional => 1 },
         disable        => { optional => 1 },
         content        => { optional => 1 },
@@ -217,6 +226,10 @@ sub parse_volname {
         # (vtype, name, vmid, basename, basevmid, isBase, format)
         return ('images', $volname, $vmid, undef, undef, undef, 'raw');
     }
+    # A template's disk (create_base).
+    if ($volname =~ m/^base-(\d+)-disk-\d+$/) {
+        return ('images', $volname, $1, undef, undef, 1, 'raw');
+    }
 
     die "unable to parse sds volume name '$volname'\n";
 }
@@ -224,9 +237,11 @@ sub parse_volname {
 sub filesystem_path {
     my ($class, $scfg, $volname, $snapname) = @_;
 
-    die "sds volumes cannot be addressed by snapshot path\n" if defined $snapname;
-
     my ($vtype, $name, $vmid) = $class->parse_volname($volname);
+    if (defined $snapname) {
+        my $path = PVE::Storage::Custom::SDS::Snapshots::snapshot_path($class, $scfg, $name, $snapname);
+        return wantarray ? ($path, $vmid, $vtype) : $path;
+    }
     my $resname = sds_resource_name($scfg, $name);
     my $info    = eval { $class->_get_resource($scfg, $resname) };
     if (my $err = $@) {
@@ -249,14 +264,15 @@ sub path {
     return $class->filesystem_path($scfg, $volname, $snapname);
 }
 
+# Templates, full-copy clones and reassigning: SDS/Templates.pm.
 sub create_base {
     my ($class, $storeid, $scfg, $volname) = @_;
-    die "creating base images is not supported by the sds storage plugin\n";
+    return PVE::Storage::Custom::SDS::Templates::create_base($class, $storeid, $scfg, $volname);
 }
 
 sub clone_image {
     my ($class, $scfg, $storeid, $volname, $vmid, $snap) = @_;
-    die "cloning images is not supported by the sds storage plugin\n";
+    return PVE::Storage::Custom::SDS::Templates::clone_image($class, $scfg, $storeid, $volname, $vmid, $snap);
 }
 
 # ---------------------------------------------------------------------------
@@ -297,6 +313,9 @@ sub alloc_image {
         # fight it for the role, and not to alarm on a stopped VM's disk.
         labels => { 'sds.pve/managed-by' => 'pve' },
     };
+    # PVE passes KiB; with exactsize the device is exactly that, rather than
+    # the next whole GiB, so a disk moved here online matches its source.
+    $payload->{sizeBytes}   = $size * 1024         if $scfg->{exactsize};
     $payload->{pool}        = $scfg->{sdspool}     if $scfg->{sdspool};
     $payload->{storageType} = $scfg->{storagetype} if $scfg->{storagetype};
 
@@ -347,15 +366,12 @@ sub list_images {
             next if $owner ne $vmid;
         }
 
-        my $sizegb = 0;
-        if ($info->{volumes} && @{ $info->{volumes} }) {
-            $sizegb = $info->{volumes}[0]{sizeGb} // $info->{volumes}[0]{size_gb} // 0;
-        }
+        my $size = ($info->{volumes} && @{ $info->{volumes} }) ? volume_size_bytes($info->{volumes}[0]) : 0;
 
         push @$result, {
             volid  => $volid,
             format => 'raw',
-            size   => gb_to_bytes($sizegb),
+            size   => $size,
             vmid   => $owner,
         };
     }
@@ -370,11 +386,7 @@ sub volume_size_info {
     my $resname = sds_resource_name($scfg, $name);
     my $info    = $class->_get_resource($scfg, $resname);
 
-    my $sizegb = 0;
-    if ($info->{volumes} && @{ $info->{volumes} }) {
-        $sizegb = $info->{volumes}[0]{sizeGb} // $info->{volumes}[0]{size_gb} // 0;
-    }
-    my $size = gb_to_bytes($sizegb);
+    my $size = ($info->{volumes} && @{ $info->{volumes} }) ? volume_size_bytes($info->{volumes}[0]) : 0;
 
     return wantarray ? ($size, 'raw', 0, undef) : $size;
 }
@@ -431,7 +443,7 @@ sub check_connection {
 sub activate_volume {
     my ($class, $storeid, $scfg, $volname, $snapname, $cache) = @_;
 
-    die "activating a snapshot is not supported by the sds storage plugin\n"
+    return PVE::Storage::Custom::SDS::Snapshots::activate_snapshot($class, $scfg, $volname, $snapname)
         if defined $snapname;
 
     return activate($class, $scfg, $volname);
@@ -440,7 +452,8 @@ sub activate_volume {
 sub deactivate_volume {
     my ($class, $storeid, $scfg, $volname, $snapname, $cache) = @_;
 
-    return 1 if defined $snapname;
+    return PVE::Storage::Custom::SDS::Snapshots::deactivate_snapshot($class, $scfg, $volname, $snapname)
+        if defined $snapname;
 
     return deactivate($class, $scfg, $volname);
 }
@@ -457,6 +470,12 @@ sub volume_resize {
     my $sizegb  = bytes_to_gb($size);
     my $client  = $class->_client($scfg);
 
+    if ($scfg->{exactsize}) {
+        $client->request('PATCH', "/v1/resources/$resname/volumes/0",
+            { resource => $resname, volumeId => 0, sizeBytes => $size });
+        # The controller rounds up to a whole 512-byte sector.
+        return int(($size + 511) / 512) * 512;
+    }
     $client->request('PATCH', "/v1/resources/$resname/volumes/0",
         { resource => $resname, volumeId => 0, sizeGb => $sizegb });
 
@@ -467,59 +486,35 @@ sub volume_resize {
 # Snapshots
 # ---------------------------------------------------------------------------
 
+# Snapshots, and opening one read-only: SDS/Snapshots.pm.
 sub volume_snapshot {
     my ($class, $scfg, $storeid, $volname, $snap) = @_;
-
-    my ($vtype, $name) = $class->parse_volname($volname);
-    my $resname = sds_resource_name($scfg, $name);
-    my ($volpath, $node) = $class->_backing_volume_target($scfg, $resname);
-    my $client = $class->_client($scfg);
-
-    $client->request('POST', "/v1/volumes/$volpath/snapshots",
-        { volume => $volpath, snapshotName => $snap, node => $node });
-
-    return 1;
+    return PVE::Storage::Custom::SDS::Snapshots::snapshot($class, $scfg, $volname, $snap);
 }
 
 sub volume_snapshot_rollback {
     my ($class, $scfg, $storeid, $volname, $snap) = @_;
-
-    my ($vtype, $name) = $class->parse_volname($volname);
-    my $resname = sds_resource_name($scfg, $name);
-    my ($volpath, $node) = $class->_backing_volume_target($scfg, $resname);
-    my $client = $class->_client($scfg);
-
-    $client->request('POST', "/v1/volumes/$volpath/snapshots/$snap/restore",
-        { volume => $volpath, snapshotName => $snap, node => $node });
-
-    return 1;
+    return PVE::Storage::Custom::SDS::Snapshots::rollback($class, $scfg, $volname, $snap);
 }
 
 sub volume_snapshot_delete {
     my ($class, $scfg, $storeid, $volname, $snap, $running) = @_;
-
-    my ($vtype, $name) = $class->parse_volname($volname);
-    my $resname = sds_resource_name($scfg, $name);
-    my ($volpath, $node) = $class->_backing_volume_target($scfg, $resname);
-    my $client = $class->_client($scfg);
-
-    # DELETE has no request body, so the node cannot travel in one: grpc-gateway
-    # binds any leftover field as a query parameter. Omitting it made the
-    # controller fail with "failed to delete snapshot: []" — an empty host list.
-    $client->request('DELETE', "/v1/volumes/$volpath/snapshots/$snap?node=" . _uri_escape($node));
-
-    return 1;
+    return PVE::Storage::Custom::SDS::Snapshots::delete_snapshot($class, $scfg, $volname, $snap);
 }
 
 sub volume_has_feature {
     my ($class, $scfg, $feature, $storeid, $volname, $snapname, $running) = @_;
 
     # Snapshots are taken on the backing LV, so rolling back a running guest is
-    # refused (PVE stops it first). Clones and templates are not supported: they
-    # need image-level copy-on-write, which a raw DRBD device does not provide.
+    # refused (PVE stops it first). A "linked" clone of a template is a full
+    # copy (SDS/Templates.pm): a raw DRBD device has no image-level
+    # copy-on-write. Renaming covers reassigning a disk to another VM.
     my $features = {
         snapshot => { current => 1 },
-        copy     => { current => 1 },
+        copy     => { current => 1, base => 1 },
+        clone    => { base => 1 },
+        template => { current => 1 },
+        rename   => { current => 1 },
     };
 
     my ($vtype, $name, $vmid, $basename, $basevmid, $isBase) = $class->parse_volname($volname);
@@ -532,7 +527,8 @@ sub volume_has_feature {
 
 sub rename_volume {
     my ($class, $scfg, $storeid, $source_volname, $target_vmid, $target_volname) = @_;
-    die "renaming volumes is not supported by the sds storage plugin\n";
+    return PVE::Storage::Custom::SDS::Templates::rename_volume($class, $scfg, $storeid, $source_volname,
+        $target_vmid, $target_volname);
 }
 
 1;

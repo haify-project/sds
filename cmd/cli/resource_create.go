@@ -24,6 +24,7 @@ func resourceCreate() *cobra.Command {
 	var storageType string
 	var protocol string
 	var size string
+	var exactSize bool
 	var drbdOptions map[string]string
 	var wan bool
 	var drNode string
@@ -91,9 +92,15 @@ func resourceCreate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid size format: %s: %w", size, err)
 			}
-			sizeGiB := util.BytesToGiB(sizeBytes)
-			if sizeGiB == 0 {
-				return fmt.Errorf("size too small (minimum 1 GiB)")
+			// Round up: a volume smaller than asked for is the one outcome a
+			// size must never have. --exact-size keeps the exact byte count.
+			sizeGiB := util.BytesToGiB(sizeBytes + (1<<30 - 1))
+			if sizeGiB == 0 || (!exactSize && sizeBytes < 1<<30) {
+				return fmt.Errorf("size too small (minimum 1 GiB, or use --exact-size)")
+			}
+			var exactBytes uint64
+			if exactSize {
+				exactBytes = sizeBytes
 			}
 
 			// Say it here rather than only in the docs. The distinction between
@@ -141,6 +148,7 @@ func resourceCreate() *cobra.Command {
 				Nodes:               nodeList,
 				Protocol:            requestProtocol,
 				SizeGb:              uint32(sizeGiB),
+				SizeBytes:           exactBytes,
 				Pool:                requestPool,
 				StorageType:         requestStorageType,
 				DrbdOptions:         drbdOptions,
@@ -224,7 +232,8 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().StringVar(&pool, "pool", "", "Storage pool name (default: data-pool)")
 	cmd.Flags().StringVar(&storageType, "storage-type", "lvm", "Storage type: lvm, lvm-thin, or zfs")
 	cmd.Flags().StringVar(&protocol, "protocol", "C", "DRBD protocol (A, B, or C)")
-	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required)")
+	cmd.Flags().StringVar(&size, "size", "", "Volume size (e.g., 1G, 10GB, 1TB, 1GiB, required); rounded up to whole GiB")
+	cmd.Flags().BoolVar(&exactSize, "exact-size", false, "Make the device exactly --size bytes (rounded up to 512) instead of whole GiB")
 	cmd.Flags().StringToStringVar(&drbdOptions, "drbd-options", nil, "DRBD options as key=value pairs (e.g., on-no-quorum=suspend-io)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Resource profile name")
 	cmd.Flags().StringToStringVar(&labels, "label", nil, "Resource label as key=value (repeatable)")

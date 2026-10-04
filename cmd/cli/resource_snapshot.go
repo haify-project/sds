@@ -22,6 +22,7 @@ func resourceSnapshot() *cobra.Command {
 	cmd.AddCommand(resourceSnapshotRestore())
 	cmd.AddCommand(resourceSnapshotDelete())
 	cmd.AddCommand(resourceSnapshotSchedule())
+	cmd.AddCommand(resourceSnapshotReplicated())
 
 	return cmd
 }

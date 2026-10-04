@@ -31,6 +31,7 @@ var DefaultApprovalMethods = []string{
 	"DeletePool", "DeleteZFSPool", "DeleteResource", "RemoveVolume", "DeleteZFSDataset",
 	"DeleteSnapshot", "DeleteLvmSnapshot", "DeleteZFSSnapshot",
 	"RestoreSnapshot", "RestoreLvmSnapshot", "RestoreZFSSnapshot", "RestoreBackup",
+	"RollbackResourceSnapshot", "DeleteResourceSnapshot",
 	// What protects it.
 	"DeleteSnapshotSchedule", "UnfreezeSnapshotSchedule", "AddBackupTarget", "DeleteBackupTarget", "DeleteBackup", "DeleteBackupSchedule",
 	// Who may do any of it.

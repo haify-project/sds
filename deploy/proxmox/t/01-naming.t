@@ -9,7 +9,7 @@ use FindBin;
 use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
-use Test::More tests => 29;
+use Test::More tests => 31;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -64,8 +64,10 @@ is($parsed[6], 'raw', 'format is always raw');
 
 is(($P->parse_volname('vm-100-state-snap1'))[2], 100, 'a snapshot state volume belongs to its VM');
 is(($P->parse_volname('vm-100-cloudinit'))[0], 'images', 'a cloud-init drive is an image');
-eval { $P->parse_volname('base-100-disk-0') };
-like($@, qr/unable to parse/, 'base images are rejected');
+my @base = $P->parse_volname('base-100-disk-0');
+is($base[5], 1, 'a template disk parses as a base image');
+is(PVE::Storage::Custom::SDSPlugin::sds_resource_name($scfg, 'base-100-disk-0'), 'pve-base-100-0', 'and maps to its own resource');
+is((PVE::Storage::Custom::SDSPlugin::volname_from_resource($scfg, 'pve-base-100-0'))[0], 'base-100-disk-0', 'both ways');
 
 # --- size rounding ----------------------------------------------------------
 #

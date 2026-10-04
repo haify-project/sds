@@ -89,12 +89,14 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 					pool := ""
 					backingVolume := ""
 					encrypted := false
+					var sizeBytes uint64
 					if dbVol, ok := dbVolumeByID[v.id]; ok {
 						if sizeGB == 0 {
 							sizeGB = uint64(max(dbVol.SizeGB, 0))
 						}
 						pool = dbVol.Pool
 						backingVolume = dbVol.VolumeName
+						sizeBytes = uint64(max(dbVol.SizeBytes, 0))
 						// v.device is the DRBD device (/dev/drbdN); the crypt
 						// layer only shows in the recorded BACKING device. The
 						// resource flag is required as well, so an adopted
@@ -106,6 +108,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 						VolumeID:      uint32(v.id),
 						Device:        v.device,
 						SizeGB:        sizeGB,
+						SizeBytes:     sizeBytes,
 						Pool:          pool,
 						BackingVolume: backingVolume,
 						Encrypted:     encrypted,
@@ -185,6 +188,7 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 				VolumeID:      uint32(volume.VolumeID),
 				Device:        fmt.Sprintf("/dev/drbd/by-res/%s/%d", name, volume.VolumeID),
 				SizeGB:        uint64(max(volume.SizeGB, 0)),
+				SizeBytes:     uint64(max(volume.SizeBytes, 0)),
 				Pool:          volume.Pool,
 				BackingVolume: volume.VolumeName,
 				Encrypted:     dbRes.Encrypted && luksIsMapperPath(volume.Device),

@@ -25,10 +25,10 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	// size_gb/pool shorthand when it is empty (older clients, CLI).
 	volumes := make([]VolumeSpec, 0, len(req.Volumes))
 	for _, v := range req.Volumes {
-		volumes = append(volumes, VolumeSpec{SizeGB: v.SizeGb, Pool: v.Pool})
+		volumes = append(volumes, VolumeSpec{SizeGB: v.SizeGb, Pool: v.Pool, SizeBytes: v.SizeBytes})
 	}
 	if len(volumes) == 0 {
-		volumes = append(volumes, VolumeSpec{SizeGB: req.SizeGb, Pool: req.Pool})
+		volumes = append(volumes, VolumeSpec{SizeGB: req.SizeGb, Pool: req.Pool, SizeBytes: req.SizeBytes})
 	}
 
 	// WAN master switch: the dr_* / wan_port fields only apply when --wan is set.
@@ -207,6 +207,7 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 			VolumeId:      v.VolumeID,
 			Device:        v.Device,
 			SizeGb:        v.SizeGB,
+			SizeBytes:     v.SizeBytes,
 			Pool:          v.Pool,
 			BackingVolume: v.BackingVolume,
 			Encrypted:     v.Encrypted,
@@ -270,6 +271,7 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 				VolumeId:      v.VolumeID,
 				Device:        v.Device,
 				SizeGb:        v.SizeGB,
+				SizeBytes:     v.SizeBytes,
 				Pool:          v.Pool,
 				BackingVolume: v.BackingVolume,
 				Encrypted:     v.Encrypted,
@@ -376,6 +378,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 			VolumeId:      v.VolumeID,
 			Device:        v.Device,
 			SizeGb:        v.SizeGB,
+			SizeBytes:     v.SizeBytes,
 			Pool:          v.Pool,
 			BackingVolume: v.BackingVolume,
 			Encrypted:     v.Encrypted,

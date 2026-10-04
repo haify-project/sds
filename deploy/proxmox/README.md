@@ -93,6 +93,7 @@ live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 | `resourceprefix` | Prefix for generated resource names (default `pve`). Give each PVE cluster its own when several share one sds cluster: VM ids are only unique within a PVE cluster |
 | `apitoken` | Bearer token when sds `[auth]`/`[rbac]` is enabled. `storage.cfg` is readable cluster-wide, so use a token scoped to what the plugin needs rather than an admin token |
 | `onnoquorum` | What a new disk does when its node loses quorum or every UpToDate copy: `suspend-io` (default; the guest's I/O freezes and carries on when quorum returns) or `io-error` (the guest sees I/O errors and typically remounts read-only). Applies to disks created from then on; change an existing one with `sds resource set-options <resource> --drbd-options on-no-quorum=<value>,on-no-data-accessible=<value>` |
+| `exactsize` | `1` gives each new or resized disk exactly the size PVE asks for, rounded up to a 512-byte sector, instead of the next whole GiB (the backing volume is still allocated in GiB; the DRBD device is capped at the exact size). Needed for online Move Disk onto this storage, which refuses a target that is not byte-for-byte the source's size. Default `0` |
 
 Standard PVE options `nodes`, `disable`, `content`, `shared` and `bwlimit` are
 also accepted. `content` may be `images` and `rootdir`; the only format is
@@ -104,13 +105,16 @@ also accepted. `content` may be `images` and `rootdir`; the only format is
 | --- | --- |
 | one VM disk `vm-<vmid>-disk-<n>` | one DRBD resource `<prefix>-<vmid>-<n>` |
 | another volume of the VM: `vm-<vmid>-cloudinit`, `vm-<vmid>-state-<snap>` (a snapshot's RAM), `vm-<vmid>-fleece-<n>` (backup fleecing) | one DRBD resource `<prefix>-<vmid>-<name>` |
-| `alloc_image` | `POST /v1/resources` (size rounded up to whole GiB, protocol C) |
+| `alloc_image` | `POST /v1/resources` (size rounded up to whole GiB, or exact with `exactsize`; protocol C) |
 | `free_image` | `DELETE /v1/resources/<res>` (cascade teardown) |
 | `list_images` | `GET /v1/resources`, filtered by `<prefix>-` |
 | `activate_volume` | `POST .../diskless-clients` if this node is not in the resource, then a quorum-guarded `POST .../primary` |
 | `deactivate_volume` | `POST .../secondary`, then close any dual-primary window, then `DELETE .../diskless-clients/<node>` if this node is only a diskless client |
 | `volume_resize` | `PATCH /v1/resources/<res>/volumes/0` (online grow) |
-| `volume_snapshot` / rollback / delete | sds snapshot of the backing `<pool>/<lv>` |
+| `volume_snapshot` / rollback / delete | `POST/DELETE /v1/resources/<res>/snapshots[/<name>[/rollback]]`: a snapshot on every replica |
+| a template's disk `base-<vmid>-disk-<n>` | DRBD resource `<prefix>-base-<vmid>-<n>` |
+| `create_base` / `rename_volume` | `POST /v1/resources/<res>/rename` |
+| `clone_image` | a new disk on the template's nodes, filled with `POST .../populate` |
 | `status` | `GET /v1/pools`; reports the smallest node's copy of `sdspool` |
 
 One disk per resource means each disk resizes, snapshots and deletes
@@ -123,9 +127,26 @@ pool it is the thin pool's own size and unused data space (`thinSizeBytes`,
 so its free space reads ~0 however empty the pool is. A storage set to
 `storagetype lvm` allocates thick LVs from the group and reports the group.
 
-Snapshots are taken on **one** diskful node, the current Primary when there is
-one, otherwise the first replica. They live on that node's backing volume only
-and are not replicated by DRBD.
+Snapshots are taken on **every** diskful replica at once, with I/O suspended
+across them for the moment it takes (a timer on each node resumes I/O after a
+minute whatever happens to the controller). Each copy carries its replica's
+DRBD metadata too, so rolling back restores every replica together and DRBD
+resyncs nothing. Losing a node loses one copy, not the snapshot. A snapshot
+taken by an earlier version of the plugin lives on one replica only and is
+rolled back the old way: that replica is restored and the others resync the
+whole disk from it.
+
+A snapshot can be opened read-only on a node that holds a replica, which is
+what `vzdump` in snapshot mode needs for a container. On a node without one
+the backup fails, naming the replica nodes to run it on.
+
+**Templates and clones.** Converting a VM to a template renames its disks to
+`base-<vmid>-disk-<n>`; the data stays where it is. A linked clone of a
+template is a full copy — a DRBD device has no image-level copy-on-write — made
+on the template's replica nodes at the template's exact size, so it is
+independent of the template. **Reassigning** a disk to another VM renames it.
+Both renames need the disk stopped and without snapshots; the error says what
+is in the way.
 
 ## Live migration and the dual-primary window
 
@@ -234,14 +255,13 @@ when it is one, give it the lowest priority.
 
 - **Raw only.** DRBD exports a raw block device; qcow2 is not supported and not
   needed (snapshots come from sds, not the image format).
-- **No linked clones, templates or volume renames.** `clone_image`,
-  `create_base` and `rename_volume` refuse; the first two need image-level
-  copy-on-write. Reassigning a disk to another VM is therefore not possible.
+- **Linked clones are full copies.** They take the template's full size and
+  the time to copy it.
 - **Volume names.** `vm-<vmid>-<name>` with `<name>` starting with a letter
-  and made of letters, digits, `_` and `-` (at most 64); PVE's own names all
-  fit. `base-*` volumes are refused with templates.
-- **No snapshot access.** A snapshot cannot be activated or addressed by path.
-- **Whole-gigabyte allocation.** Disk sizes round *up* to the next GiB.
+  and made of letters, digits, `_` and `-` (at most 64), and
+  `base-<vmid>-disk-<n>`; PVE's own names all fit.
+- **Snapshot access** only on a node holding a replica, and only for LVM.
+- **Whole-gigabyte allocation** unless `exactsize` is set.
 - **WAN resources are refused for dual-primary**, so a guest cannot live-migrate
   across a WAN-replicated (asynchronous) resource.
 

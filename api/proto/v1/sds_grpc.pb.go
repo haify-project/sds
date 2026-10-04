@@ -46,6 +46,11 @@ const (
 	SDSController_SetResourceProfile_FullMethodName        = "/v1.SDSController/SetResourceProfile"
 	SDSController_AddVolume_FullMethodName                 = "/v1.SDSController/AddVolume"
 	SDSController_RemoveVolume_FullMethodName              = "/v1.SDSController/RemoveVolume"
+	SDSController_CreateResourceSnapshot_FullMethodName    = "/v1.SDSController/CreateResourceSnapshot"
+	SDSController_ListResourceSnapshots_FullMethodName     = "/v1.SDSController/ListResourceSnapshots"
+	SDSController_RollbackResourceSnapshot_FullMethodName  = "/v1.SDSController/RollbackResourceSnapshot"
+	SDSController_DeleteResourceSnapshot_FullMethodName    = "/v1.SDSController/DeleteResourceSnapshot"
+	SDSController_RenameResource_FullMethodName            = "/v1.SDSController/RenameResource"
 	SDSController_ResizeVolume_FullMethodName              = "/v1.SDSController/ResizeVolume"
 	SDSController_UpdateResourceOptions_FullMethodName     = "/v1.SDSController/UpdateResourceOptions"
 	SDSController_RepairResource_FullMethodName            = "/v1.SDSController/RepairResource"
@@ -208,6 +213,18 @@ type SDSControllerClient interface {
 	SetResourceProfile(ctx context.Context, in *SetResourceProfileRequest, opts ...grpc.CallOption) (*SetResourceProfileResponse, error)
 	AddVolume(ctx context.Context, in *AddVolumeRequest, opts ...grpc.CallOption) (*AddVolumeResponse, error)
 	RemoveVolume(ctx context.Context, in *RemoveVolumeRequest, opts ...grpc.CallOption) (*RemoveVolumeResponse, error)
+	// Renames a resource that nothing else refers to by name: offline (not
+	// Primary anywhere), with no HA config, gateway, schedule, backups or
+	// snapshots, not WAN-replicated or encrypted. Its data, node ids and port
+	// are kept. The Proxmox plugin uses it to reassign disks and make templates.
+	// Resource snapshots: every volume on every diskful replica, taken with
+	// I/O suspended across them, so a rollback restores all replicas together
+	// and resyncs nothing. Backing snapshots are "<backing>_snap_<name>".
+	CreateResourceSnapshot(ctx context.Context, in *CreateResourceSnapshotRequest, opts ...grpc.CallOption) (*CreateResourceSnapshotResponse, error)
+	ListResourceSnapshots(ctx context.Context, in *ListResourceSnapshotsRequest, opts ...grpc.CallOption) (*ListResourceSnapshotsResponse, error)
+	RollbackResourceSnapshot(ctx context.Context, in *RollbackResourceSnapshotRequest, opts ...grpc.CallOption) (*RollbackResourceSnapshotResponse, error)
+	DeleteResourceSnapshot(ctx context.Context, in *DeleteResourceSnapshotRequest, opts ...grpc.CallOption) (*DeleteResourceSnapshotResponse, error)
+	RenameResource(ctx context.Context, in *RenameResourceRequest, opts ...grpc.CallOption) (*RenameResourceResponse, error)
 	ResizeVolume(ctx context.Context, in *ResizeVolumeRequest, opts ...grpc.CallOption) (*ResizeVolumeResponse, error)
 	UpdateResourceOptions(ctx context.Context, in *UpdateResourceOptionsRequest, opts ...grpc.CallOption) (*UpdateResourceOptionsResponse, error)
 	// Brings every participant's copy of a resource's DRBD config back into
@@ -723,6 +740,56 @@ func (c *sDSControllerClient) RemoveVolume(ctx context.Context, in *RemoveVolume
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RemoveVolumeResponse)
 	err := c.cc.Invoke(ctx, SDSController_RemoveVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) CreateResourceSnapshot(ctx context.Context, in *CreateResourceSnapshotRequest, opts ...grpc.CallOption) (*CreateResourceSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateResourceSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateResourceSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListResourceSnapshots(ctx context.Context, in *ListResourceSnapshotsRequest, opts ...grpc.CallOption) (*ListResourceSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResourceSnapshotsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListResourceSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RollbackResourceSnapshot(ctx context.Context, in *RollbackResourceSnapshotRequest, opts ...grpc.CallOption) (*RollbackResourceSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackResourceSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_RollbackResourceSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteResourceSnapshot(ctx context.Context, in *DeleteResourceSnapshotRequest, opts ...grpc.CallOption) (*DeleteResourceSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteResourceSnapshotResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteResourceSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RenameResource(ctx context.Context, in *RenameResourceRequest, opts ...grpc.CallOption) (*RenameResourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameResourceResponse)
+	err := c.cc.Invoke(ctx, SDSController_RenameResource_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2014,6 +2081,18 @@ type SDSControllerServer interface {
 	SetResourceProfile(context.Context, *SetResourceProfileRequest) (*SetResourceProfileResponse, error)
 	AddVolume(context.Context, *AddVolumeRequest) (*AddVolumeResponse, error)
 	RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error)
+	// Renames a resource that nothing else refers to by name: offline (not
+	// Primary anywhere), with no HA config, gateway, schedule, backups or
+	// snapshots, not WAN-replicated or encrypted. Its data, node ids and port
+	// are kept. The Proxmox plugin uses it to reassign disks and make templates.
+	// Resource snapshots: every volume on every diskful replica, taken with
+	// I/O suspended across them, so a rollback restores all replicas together
+	// and resyncs nothing. Backing snapshots are "<backing>_snap_<name>".
+	CreateResourceSnapshot(context.Context, *CreateResourceSnapshotRequest) (*CreateResourceSnapshotResponse, error)
+	ListResourceSnapshots(context.Context, *ListResourceSnapshotsRequest) (*ListResourceSnapshotsResponse, error)
+	RollbackResourceSnapshot(context.Context, *RollbackResourceSnapshotRequest) (*RollbackResourceSnapshotResponse, error)
+	DeleteResourceSnapshot(context.Context, *DeleteResourceSnapshotRequest) (*DeleteResourceSnapshotResponse, error)
+	RenameResource(context.Context, *RenameResourceRequest) (*RenameResourceResponse, error)
 	ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error)
 	UpdateResourceOptions(context.Context, *UpdateResourceOptionsRequest) (*UpdateResourceOptionsResponse, error)
 	// Brings every participant's copy of a resource's DRBD config back into
@@ -2345,6 +2424,21 @@ func (UnimplementedSDSControllerServer) AddVolume(context.Context, *AddVolumeReq
 }
 func (UnimplementedSDSControllerServer) RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveVolume not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateResourceSnapshot(context.Context, *CreateResourceSnapshotRequest) (*CreateResourceSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateResourceSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) ListResourceSnapshots(context.Context, *ListResourceSnapshotsRequest) (*ListResourceSnapshotsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListResourceSnapshots not implemented")
+}
+func (UnimplementedSDSControllerServer) RollbackResourceSnapshot(context.Context, *RollbackResourceSnapshotRequest) (*RollbackResourceSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RollbackResourceSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteResourceSnapshot(context.Context, *DeleteResourceSnapshotRequest) (*DeleteResourceSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteResourceSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) RenameResource(context.Context, *RenameResourceRequest) (*RenameResourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenameResource not implemented")
 }
 func (UnimplementedSDSControllerServer) ResizeVolume(context.Context, *ResizeVolumeRequest) (*ResizeVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResizeVolume not implemented")
@@ -3221,6 +3315,96 @@ func _SDSController_RemoveVolume_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).RemoveVolume(ctx, req.(*RemoveVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_CreateResourceSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateResourceSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateResourceSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateResourceSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateResourceSnapshot(ctx, req.(*CreateResourceSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListResourceSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListResourceSnapshotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListResourceSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListResourceSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListResourceSnapshots(ctx, req.(*ListResourceSnapshotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RollbackResourceSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackResourceSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RollbackResourceSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RollbackResourceSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RollbackResourceSnapshot(ctx, req.(*RollbackResourceSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteResourceSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteResourceSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteResourceSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteResourceSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteResourceSnapshot(ctx, req.(*DeleteResourceSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RenameResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameResourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RenameResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RenameResource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RenameResource(ctx, req.(*RenameResourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5564,6 +5748,26 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveVolume",
 			Handler:    _SDSController_RemoveVolume_Handler,
+		},
+		{
+			MethodName: "CreateResourceSnapshot",
+			Handler:    _SDSController_CreateResourceSnapshot_Handler,
+		},
+		{
+			MethodName: "ListResourceSnapshots",
+			Handler:    _SDSController_ListResourceSnapshots_Handler,
+		},
+		{
+			MethodName: "RollbackResourceSnapshot",
+			Handler:    _SDSController_RollbackResourceSnapshot_Handler,
+		},
+		{
+			MethodName: "DeleteResourceSnapshot",
+			Handler:    _SDSController_DeleteResourceSnapshot_Handler,
+		},
+		{
+			MethodName: "RenameResource",
+			Handler:    _SDSController_RenameResource_Handler,
 		},
 		{
 			MethodName: "ResizeVolume",

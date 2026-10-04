@@ -10,7 +10,7 @@ use warnings;
 use Exporter qw(import);
 our @EXPORT_OK = qw(
     resource_prefix sds_resource_name volname_from_resource parse_vm_volname
-    kib_to_gb bytes_to_gb gb_to_bytes same_pool
+    kib_to_gb bytes_to_gb gb_to_bytes same_pool volume_size_bytes
     _node_participates _other_primary_node
 );
 
@@ -52,6 +52,8 @@ sub resource_prefix {
 
 sub sds_resource_name {
     my ($scfg, $volname) = @_;
+    # A template disk: base-<vmid>-disk-<n> <-> <prefix>-base-<vmid>-<n>.
+    return resource_prefix($scfg) . "-base-$1-$2" if $volname =~ m/^base-(\d+)-disk-(\d+)$/;
     my ($vmid, $idx, $other) = parse_vm_volname($volname);
     die "unable to map volume '$volname' to an sds resource\n" if !defined $vmid;
     return resource_prefix($scfg) . "-$vmid-" . ($idx // $other);
@@ -63,6 +65,7 @@ sub volname_from_resource {
     my ($scfg, $resname) = @_;
     my $prefix = resource_prefix($scfg);
     return ("vm-$1-disk-$2", $1) if $resname =~ m/^\Q$prefix\E-(\d+)-(\d+)$/;
+    return ("base-$1-disk-$2", $1) if $resname =~ m/^\Q$prefix\E-base-(\d+)-(\d+)$/;
     if ($resname =~ m/^\Q$prefix\E-(\d+)-($OTHER_RE)$/) {
         my ($vmid, $other) = ($1, $2);
         # "<prefix>-<vmid>-disk-<n>" has no volume: disk n maps to the short form.
@@ -100,6 +103,16 @@ sub bytes_to_gb {
 sub gb_to_bytes {
     my ($gb) = @_;
     return int($gb) * 1073741824;
+}
+
+# The size of a volume as the controller reports it: its exact size when it
+# was given one (storage option exactsize), else its whole GiB. The REST API
+# renders 64-bit integers as JSON strings, which Perl reads as numbers.
+sub volume_size_bytes {
+    my ($vol) = @_;
+    my $exact = $vol->{sizeBytes} // $vol->{size_bytes} // 0;
+    return int($exact) if $exact;
+    return gb_to_bytes($vol->{sizeGb} // $vol->{size_gb} // 0);
 }
 
 # True when this node already participates in the resource's DRBD mesh, either

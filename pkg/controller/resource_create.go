@@ -124,9 +124,11 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// resources and callers are unaffected); extra volumes use "<name>_vol<K>".
 	resolved := make([]resolvedVolume, len(volumes))
 	for i, v := range volumes {
-		if v.SizeGB == 0 {
-			return fmt.Errorf("volume %d: size must be greater than 0 GB", i)
+		sizeGB, exact, err := volumeSize(v)
+		if err != nil {
+			return fmt.Errorf("volume %d: %w", i, err)
 		}
+		v.SizeGB = sizeGB
 		pool := v.Pool
 		if pool == "" {
 			// Auto-select the pool when none was given: with exactly one
@@ -147,6 +149,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 			volumeName: volumeName,
 			pool:       normalizeManagedName(pool),
 			sizeGB:     v.SizeGB,
+			exactBytes: exact,
 			encrypted:  metadata.Encrypt,
 		}
 		if metadata.Encrypt {
@@ -498,6 +501,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 				VolumeID:     v.id,
 				Pool:         v.pool,
 				SizeGB:       int(v.sizeGB),
+				SizeBytes:    int64(v.exactBytes),
 				// The device DRBD actually consumes, crypt container included.
 				// Teardown and resize read this back to decide what they are
 				// dealing with, exactly as they already do for a zvol.

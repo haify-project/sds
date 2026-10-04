@@ -3197,6 +3197,44 @@
         ]
       }
     },
+    "/v1/resources/{name}/rename": {
+      "post": {
+        "operationId": "SDSController_RenameResource",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RenameResourceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRenameResourceBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{name}/repair": {
       "post": {
         "summary": "Brings every participant's copy of a resource's DRBD config back into\nagreement, tiebreakers and diskless clients included, and applies it.",
@@ -3967,6 +4005,153 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/SDSControllerSetSecondaryBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/snapshots": {
+      "get": {
+        "operationId": "SDSController_ListResourceSnapshots",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListResourceSnapshotsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "summary": "Renames a resource that nothing else refers to by name: offline (not\nPrimary anywhere), with no HA config, gateway, schedule, backups or\nsnapshots, not WAN-replicated or encrypted. Its data, node ids and port\nare kept. The Proxmox plugin uses it to reassign disks and make templates.\nResource snapshots: every volume on every diskful replica, taken with\nI/O suspended across them, so a rollback restores all replicas together\nand resyncs nothing. Backing snapshots are \"\u003cbacking\u003e_snap_\u003cname\u003e\".",
+        "operationId": "SDSController_CreateResourceSnapshot",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateResourceSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerCreateResourceSnapshotBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/snapshots/{name}": {
+      "delete": {
+        "operationId": "SDSController_DeleteResourceSnapshot",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteResourceSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/snapshots/{name}/rollback": {
+      "post": {
+        "operationId": "SDSController_RollbackResourceSnapshot",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RollbackResourceSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRollbackResourceSnapshotBody"
             }
           }
         ],
@@ -5693,6 +5878,14 @@
       },
       "title": "LVM Snapshot messages"
     },
+    "SDSControllerCreateResourceSnapshotBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
     "SDSControllerCreateSnapshotBody": {
       "type": "object",
       "properties": {
@@ -5834,6 +6027,14 @@
     "SDSControllerRejectRequestBody": {
       "type": "object"
     },
+    "SDSControllerRenameResourceBody": {
+      "type": "object",
+      "properties": {
+        "newName": {
+          "type": "string"
+        }
+      }
+    },
     "SDSControllerRepairResourceBody": {
       "type": "object"
     },
@@ -5856,6 +6057,11 @@
         "ignoreFreeSpace": {
           "type": "boolean",
           "description": "ignore_free_space grows the volume although a replica's pool has less free\nspace than the growth. The added area is resynced onto every replica;\nwithout this a pool that cannot hold it refuses the resize, because a full\nthin pool fails the writes and drops the disk."
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "size_bytes grows the device to exactly this many bytes; size_gb is then\nignored."
         }
       }
     },
@@ -5905,6 +6111,9 @@
           "type": "string"
         }
       }
+    },
+    "SDSControllerRollbackResourceSnapshotBody": {
+      "type": "object"
     },
     "SDSControllerRunBackupScheduleBody": {
       "type": "object",
@@ -7252,11 +7461,27 @@
         "encrypt": {
           "type": "boolean",
           "description": "encrypt puts a LUKS2 container between DRBD and the backing LVM/ZFS volume\non every replica, so the pool disks hold ciphertext. This is encryption AT\nREST ONLY: DRBD sits ABOVE the crypt layer, so replication traffic between\nnodes is the same plaintext it always was. Chosen once, at creation: there\nis no in-place conversion, and asking for one on a resource that already\nexists is refused rather than half-applied."
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "size_bytes, for the single-volume shorthand, makes the device exactly\nthis many bytes (rounded up to a 512-byte sector) instead of size_gb\nwhole GiB; size_gb may then be 0. PVE's online Move Disk needs it."
         }
       },
       "title": "Resource messages"
     },
     "v1CreateResourceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateResourceSnapshotResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -7530,6 +7755,17 @@
       }
     },
     "v1DeleteResourceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DeleteResourceSnapshotResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -8749,6 +8985,23 @@
         }
       }
     },
+    "v1ListResourceSnapshotsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1ListResourcesResponse": {
       "type": "object",
       "properties": {
@@ -9507,6 +9760,17 @@
         }
       }
     },
+    "v1RenameResourceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1RepairResourceResponse": {
       "type": "object",
       "properties": {
@@ -9868,6 +10132,17 @@
       }
     },
     "v1RestoreZFSSnapshotResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RollbackResourceSnapshotResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -10414,6 +10689,11 @@
         "encrypted": {
           "type": "boolean",
           "description": "encrypted is true when DRBD consumes this volume through a LUKS2 container\nrather than the backing LV/zvol directly. Snapshots of an encrypted volume\nare snapshots of the ciphertext."
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "size_bytes is the device's exact size when it was given one; 0 means\nsize_gb whole GiB."
         }
       }
     },
@@ -10427,6 +10707,11 @@
         "pool": {
           "type": "string",
           "title": "optional; auto-selected when empty"
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "uint64",
+          "title": "exact device size; see CreateResourceRequest.size_bytes"
         }
       },
       "description": "VolumeSpec is one DRBD volume within a resource. storage_type comes from the\nresource; each volume may target its own pool."

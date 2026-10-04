@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
@@ -34,8 +35,22 @@ func (s *Server) RemoveVolume(ctx context.Context, req *sdspb.RemoveVolumeReques
 	}, nil
 }
 
+// RenameResource renames a resource (resource_rename.go).
+func (s *Server) RenameResource(ctx context.Context, req *sdspb.RenameResourceRequest) (*sdspb.RenameResourceResponse, error) {
+	if err := s.resources.RenameResource(ctx, req.Name, req.NewName); err != nil {
+		return &sdspb.RenameResourceResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.RenameResourceResponse{Success: true,
+		Message: fmt.Sprintf("resource %s renamed to %s", req.Name, req.NewName)}, nil
+}
+
 func (s *Server) ResizeVolume(ctx context.Context, req *sdspb.ResizeVolumeRequest) (*sdspb.ResizeVolumeResponse, error) {
-	err := s.resources.ResizeVolumeOptions(ctx, req.Resource, req.VolumeId, uint64(req.SizeGb), req.IgnoreFreeSpace)
+	var err error
+	if req.SizeBytes > 0 {
+		err = s.resources.ResizeVolumeBytes(ctx, req.Resource, req.VolumeId, req.SizeBytes, req.IgnoreFreeSpace)
+	} else {
+		err = s.resources.ResizeVolumeOptions(ctx, req.Resource, req.VolumeId, uint64(req.SizeGb), req.IgnoreFreeSpace)
+	}
 	if err != nil {
 		return &sdspb.ResizeVolumeResponse{
 			Success: false,

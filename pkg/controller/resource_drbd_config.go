@@ -178,11 +178,17 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 		fmt.Fprintf(&config, "        disk      %s;\n", v.backingDevice(storageType))
 		config.WriteString("        meta-disk internal;\n")
 
-		if len(diskOptKeys) > 0 {
+		if len(diskOptKeys) > 0 || v.exactBytes > 0 {
 			diskOpts := sections["disk"]
 			config.WriteString("        disk {\n")
 			for _, k := range diskOptKeys {
+				if k == "size" && v.exactBytes > 0 {
+					continue
+				}
 				fmt.Fprintf(&config, "            %s %s;\n", k, diskOpts[k])
+			}
+			if v.exactBytes > 0 {
+				fmt.Fprintf(&config, "            size %s;\n", drbdSizeSectors(v.exactBytes))
 			}
 			config.WriteString("        }\n")
 		}
