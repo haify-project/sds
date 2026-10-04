@@ -102,8 +102,15 @@ func (s *Server) AddReplica(ctx context.Context, req *sdspb.AddReplicaRequest) (
 }
 
 func (s *Server) RemoveReplica(ctx context.Context, req *sdspb.RemoveReplicaRequest) (*sdspb.RemoveReplicaResponse, error) {
-	if err := s.resources.RemoveReplica(ctx, req.Resource, req.Node); err != nil {
+	if err := s.resources.RemoveReplicaOptions(ctx, req.Resource, req.Node, req.Lost); err != nil {
 		return &sdspb.RemoveReplicaResponse{Success: false, Message: err.Error()}, nil
+	}
+	if req.Lost {
+		return &sdspb.RemoveReplicaResponse{
+			Success: true,
+			Message: fmt.Sprintf("replica of the lost node %q removed from the survivors; %s",
+				req.Node, LostReplicaCleanup(req.Resource, req.Node)),
+		}, nil
 	}
 	return &sdspb.RemoveReplicaResponse{
 		Success: true,

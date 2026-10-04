@@ -106,14 +106,22 @@ func (c *SDSClient) AddReplicaIgnoringFreeSpace(ctx context.Context, resource, n
 
 // RemoveReplica takes a diskful replica out of a running resource.
 func (c *SDSClient) RemoveReplica(ctx context.Context, resource, node string) error {
-	resp, err := c.client.RemoveReplica(ctx, &sdspb.RemoveReplicaRequest{Resource: resource, Node: node})
+	_, err := c.RemoveReplicaOptions(ctx, resource, node, false)
+	return err
+}
+
+// RemoveReplicaOptions is RemoveReplica; lost removes the replica of a node
+// that is gone for good, without reaching it. It returns the controller's
+// message, which for a lost node says what to clean up on it.
+func (c *SDSClient) RemoveReplicaOptions(ctx context.Context, resource, node string, lost bool) (string, error) {
+	resp, err := c.client.RemoveReplica(ctx, &sdspb.RemoveReplicaRequest{Resource: resource, Node: node, Lost: lost})
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !resp.Success {
-		return fmt.Errorf("%s", resp.Message)
+		return "", fmt.Errorf("%s", resp.Message)
 	}
-	return nil
+	return resp.Message, nil
 }
 
 // RepairWanProxy reconciles a WAN resource's replication tunnels with the

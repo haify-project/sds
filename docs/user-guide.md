@@ -522,7 +522,7 @@ rewrite and reload restarts it. A WAN resource's DR node never gets one.
 tiebreaker or the off-site DR node, or when fewer than two diskful copies would
 remain. It stops the resource on the leaving node first, then rewrites the
 config on every node and adjusts the survivors, so every node must be
-reachable; if a step fails it stops with an error and the registry still lists
+reachable (for a node that never will be, see `--lost` below); if a step fails it stops with an error and the registry still lists
 the replica. After a failed removal, check that every node's
 `/etc/drbd.d/<resource>.res` agrees:
 
@@ -532,7 +532,31 @@ md5sum /etc/drbd.d/db.res
 ```
 
 Mismatched files mean one node has a stale view — copy the correct one over and
-`drbdadm adjust db`.
+`drbdadm adjust db`. Removal also frees the leaver's bitmap slot on the
+survivors (`drbdsetup forget-peer`), which an add-replica later needs.
+
+**A node that is gone for good.** A normal removal has to reach the leaving
+node. When it never will, use `--lost`:
+
+```bash
+sds resource remove-replica db --node node3 --lost --yes
+```
+
+Nothing runs on node3. The survivors (and the tiebreaker and clients) get the
+config without it, are adjusted, and forget its slot; the registry drops it.
+It is refused while node3 answers over SSH, while any survivor is still
+connected to it over DRBD (cut off from the controller is not gone), and
+unless the survivors still hold quorum and an UpToDate copy without it. One
+remaining diskful copy is enough, since node3's is already lost — add a
+replica afterwards. node3 keeps its volume and its old config: if it ever
+comes back, run `drbdadm down db` there and delete
+`/etc/drbd.d/db.res`, its `sds-*-db.toml` promoters and its volume before it
+rejoins anything.
+
+If the survivors lost quorum with it — two replicas and no tiebreaker — give
+them one first: `sds ha set-tiebreaker db <node>` works with a member that is
+gone (no SSH, and no survivor connected to it), skipping it. Then remove it
+with `--lost`.
 
 `resource repair <resource>` rewrites the config on every participant —
 replicas, tiebreaker, diskless clients — so they agree on the volumes and the

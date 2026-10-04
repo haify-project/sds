@@ -161,6 +161,10 @@ func (rm *ResourceManager) SetTiebreaker(ctx context.Context, resource, newNode 
 	if len(participants) == 0 {
 		return fmt.Errorf("rewritten config for %q has no hosts; refusing to distribute", resource)
 	}
+	participants, err = rm.withoutGoneMembers(ctx, resource, newConfig, participants, newNode)
+	if err != nil {
+		return err
+	}
 
 	if _, err := rm.deployment.DistributeConfig(ctx, participants, newConfig, resPath); err != nil {
 		return fmt.Errorf("distribute tiebreaker config: %w", err)
@@ -227,4 +231,45 @@ func (rm *ResourceManager) SetTiebreaker(ctx context.Context, resource, newNode 
 			zap.String("resource", resource), zap.Int("replicas", len(diskful)))
 	}
 	return nil
+}
+
+// withoutGoneMembers drops from participants the members of config that are
+// gone for good, so a tiebreaker can still be set while one is dead.
+//
+// That is the way out for a resource that lost a member and with it its
+// quorum: a new tiebreaker restores the survivors' majority, after which the
+// dead member can be removed with remove-replica --lost. Requiring every member
+// to adjust made that impossible. A member is only skipped when confirmGone
+// agrees it is gone — no SSH, and no answering member still connected to it.
+// The incoming node is never skipped: it is the point of the change.
+func (rm *ResourceManager) withoutGoneMembers(ctx context.Context, resource, config string, participants []string, newNode string) ([]string, error) {
+	newHost := ""
+	if newNode != "" {
+		newHost = rm.controller.ResolveHost(newNode)
+	}
+	var live, gone []memberRef
+	for i, b := range parseOnBlocks(config) {
+		m := memberRef{drbdName: b.name, addr: participants[i]}
+		switch {
+		case m.addr == newHost:
+		case rm.answers(ctx, m.addr):
+			live = append(live, m)
+		default:
+			gone = append(gone, m)
+		}
+	}
+	if len(gone) == 0 {
+		return participants, nil
+	}
+	if _, err := rm.confirmGone(ctx, resource, gone, live); err != nil {
+		return nil, fmt.Errorf("a member of %s does not answer: %w", resource, err)
+	}
+	out := participants
+	for _, g := range gone {
+		out = without(out, g.addr)
+		rm.controller.logger.Warn("Member is gone; it keeps its old config until removed",
+			zap.String("resource", resource), zap.String("member", g.drbdName),
+			zap.String("then", "sds resource remove-replica "+resource+" --node <node> --lost --yes"))
+	}
+	return out, nil
 }
