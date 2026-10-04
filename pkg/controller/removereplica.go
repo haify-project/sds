@@ -20,6 +20,13 @@ import (
 // node may not be Primary, must actually hold a diskful replica, and at least
 // two diskful copies have to remain.
 func (rm *ResourceManager) RemoveReplica(ctx context.Context, resource, node string) error {
+	return rm.RemoveReplicaOptions(ctx, resource, node, false)
+}
+
+// RemoveReplicaOptions is RemoveReplica; lost removes the replica of a node
+// that is gone for good without running anything on it (removereplica_lost.go).
+// Its copy is already gone, so one diskful copy remaining is enough.
+func (rm *ResourceManager) RemoveReplicaOptions(ctx context.Context, resource, node string, lost bool) error {
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
@@ -79,29 +86,13 @@ func (rm *ResourceManager) RemoveReplica(ctx context.Context, resource, node str
 			diskful++
 		}
 	}
-	if diskful < 2 {
+	switch {
+	case lost && diskful < 1:
+		return fmt.Errorf("%s is the last diskful replica of %s; there is nothing left to remove it from", node, resource)
+	case !lost && diskful < 2:
 		return fmt.Errorf(
 			"removing %s from %s would leave only one diskful copy, permanently; add a replica first",
 			node, resource)
-	}
-
-	if err := rm.assertNotPrimary(ctx, resource, node); err != nil {
-		return err
-	}
-
-	hosts, err := rm.resourceHosts(ctx, resource)
-	if err != nil {
-		return err
-	}
-	resPath := fmt.Sprintf("/etc/drbd.d/%s.res", resource)
-	liveConfig, err := rm.readResourceConfig(ctx, hosts, resPath, resource)
-	if err != nil {
-		return err
-	}
-
-	newConfig, err := rm.removeReplicaFromConfig(liveConfig, resource, node)
-	if err != nil {
-		return err
 	}
 
 	leaving := rm.controller.ResolveHost(node)
@@ -110,19 +101,65 @@ func (rm *ResourceManager) RemoveReplica(ctx context.Context, resource, node str
 		survivors = append(survivors, rm.controller.ResolveHost(n))
 	}
 
-	rm.controller.logger.Info("Removing replica from running resource",
-		zap.String("resource", resource), zap.String("node", node),
-		zap.Strings("remaining", remaining))
+	if !lost {
+		if err := rm.assertNotPrimary(ctx, resource, node); err != nil {
+			return err
+		}
+	}
 
-	// Stop the leaver first. Telling the survivors about a peer that is still
-	// connected leaves it trying to reconnect to a mesh it is no longer in.
-	if err := rm.execAllSuccess(ctx, []string{leaving},
-		fmt.Sprintf("sudo drbdadm down %s", resource),
-		"stop the resource on the leaving node"); err != nil {
+	// Read from the survivors: on the lost path the leaver cannot answer, and
+	// asking it first would only cost an SSH timeout.
+	resPath := fmt.Sprintf("/etc/drbd.d/%s.res", resource)
+	liveConfig, err := rm.readResourceConfig(ctx, survivors, resPath, resource)
+	if err != nil {
+		return err
+	}
+	leaverName, err := rm.onBlockNameFor(liveConfig, node)
+	if err != nil {
+		return fmt.Errorf("%w in the config of %q", err, resource)
+	}
+	leaverID, _ := nodeIDOf(liveConfig, leaverName)
+
+	if lost {
+		witnesses := make([]memberRef, 0, len(remaining))
+		for _, n := range remaining {
+			witnesses = append(witnesses, memberRef{drbdName: rm.controller.nodes.GetDRBDNameByRef(n), addr: rm.controller.ResolveHost(n)})
+		}
+		if err := rm.assertLostRemovable(ctx, resource, memberRef{drbdName: leaverName, addr: leaving}, witnesses); err != nil {
+			return err
+		}
+	}
+
+	newConfig, err := rm.removeReplicaFromConfig(liveConfig, resource, node)
+	if err != nil {
 		return err
 	}
 
-	if _, err := rm.deployment.DistributeConfig(ctx, append(survivors, leaving), newConfig, resPath); err != nil {
+	rm.controller.logger.Info("Removing replica from running resource",
+		zap.String("resource", resource), zap.String("node", node), zap.Bool("lost", lost),
+		zap.Strings("remaining", remaining))
+
+	// Tiebreakers and diskless clients hold the same file. Left out, they kept
+	// the leaver as a member: a vote that never arrives, and a connection
+	// retried forever.
+	diskless := rm.disklessParticipantHosts(ctx, resource)
+
+	if !lost {
+		// Stop the leaver first. Telling the survivors about a peer that is
+		// still connected leaves it trying to reconnect to a mesh it is no
+		// longer in.
+		if err := rm.execAllSuccess(ctx, []string{leaving},
+			fmt.Sprintf("sudo drbdadm down %s", resource),
+			"stop the resource on the leaving node"); err != nil {
+			return err
+		}
+	}
+
+	targets := append(append([]string{}, survivors...), diskless...)
+	if !lost {
+		targets = append(targets, leaving)
+	}
+	if _, err := rm.deployment.DistributeConfig(ctx, targets, newConfig, resPath); err != nil {
 		return fmt.Errorf("distribute config without %q: %w", node, err)
 	}
 	if err := rm.execAllSuccess(ctx, survivors,
@@ -130,6 +167,14 @@ func (rm *ResourceManager) RemoveReplica(ctx context.Context, resource, node str
 		"adjust the surviving peers"); err != nil {
 		return err
 	}
+	if len(diskless) > 0 {
+		if err := rm.execAllSuccess(ctx, diskless, fmt.Sprintf("sudo drbdadm adjust %s", resource),
+			"adjust the diskless members"); err != nil {
+			rm.controller.logger.Warn("A diskless member still lists the removed replica; run `sds resource repair` once it answers",
+				zap.String("resource", resource), zap.Error(err))
+		}
+	}
+	rm.forgetPeer(ctx, resource, leaverID, leaverName, survivors)
 
 	// Recorded last, so a failure above leaves the row describing reality.
 	dbRes.Nodes = strings.Join(remaining, ",")
@@ -140,9 +185,20 @@ func (rm *ResourceManager) RemoveReplica(ctx context.Context, resource, node str
 	// The command says it destroys the copy, so the storage goes with it. Left
 	// behind, the volume held pool space nothing accounted for — on a pool that
 	// was already tight, that is how the next add-replica ran it out — and its
-	// name blocked adding a replica back onto the same node.
-	if err := rm.deleteReplicaStorage(ctx, resource, leaving); err != nil {
+	// name blocked adding a replica back onto the same node. A lost node's
+	// storage cannot be reached; it is left, and the caller says so.
+	if lost {
+		rm.controller.logger.Warn("Lost replica removed; its storage and config stay on the node",
+			zap.String("resource", resource), zap.String("node", node),
+			zap.String("cleanup", LostReplicaCleanup(resource, node)))
+	} else if err := rm.deleteReplicaStorage(ctx, resource, leaving); err != nil {
 		return fmt.Errorf("replica removed from %s, but its storage there could not be deleted: %w; remove the volume by hand", node, err)
+	}
+
+	// Its promoter would otherwise outlive its copy of the data.
+	if err := rm.SyncPromoters(ctx, resource, node); err != nil {
+		return fmt.Errorf("replica removed from %s, but the resource's promoters could not be updated: %w; "+
+			"run `sds resource repair %s`", node, err, resource)
 	}
 
 	rm.controller.logger.Info("Replica removed",

@@ -22,6 +22,7 @@ use PVE::Storage::Custom::SDS::Client qw(_uri_escape);
 use PVE::Storage::Custom::SDS::Capacity qw(pool_capacity);
 use PVE::Storage::Custom::SDS::Naming qw(sds_resource_name volname_from_resource
     kib_to_gb bytes_to_gb gb_to_bytes _node_participates _other_primary_node);
+use PVE::Storage::Custom::SDS::Migration qw(assert_live_migration);
 
 use base qw(PVE::Storage::Plugin);
 
@@ -414,7 +415,7 @@ sub activate_volume {
     die "activating a snapshot is not supported by the sds storage plugin\n"
         if defined $snapname;
 
-    my ($vtype, $name) = $class->parse_volname($volname);
+    my ($vtype, $name, $vmid) = $class->parse_volname($volname);
     my $resname = sds_resource_name($scfg, $name);
     my $node    = _nodename();
     my $client  = $class->_client($scfg);
@@ -429,13 +430,15 @@ sub activate_volume {
     }
 
     # Live migration is the one case where two nodes legitimately hold the disk
-    # open at once. Detect it by another node still being Primary, and open the
-    # dual-primary window only then.
+    # open at once. Open the dual-primary window only when another node is
+    # still Primary AND PVE is migrating the guest from there; any other
+    # Primary is a leftover, refused rather than joined (SDS/Migration.pm).
     my $status = $class->_get_status($scfg, $resname);
     my $peer   = _other_primary_node($status, $node);
     my $opened = 0;
 
     if (defined $peer) {
+        assert_live_migration($vmid, $node, $peer, $volname, $resname);
         $class->_set_dual_primary($scfg, $resname, 1);
         $opened = 1;
     }

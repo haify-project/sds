@@ -2014,6 +2014,8 @@ func local_request_SDSController_AddReplica_0(ctx context.Context, marshaler run
 	return msg, metadata, err
 }
 
+var filter_SDSController_RemoveReplica_0 = &utilities.DoubleArray{Encoding: map[string]int{"resource": 0, "node": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
 func request_SDSController_RemoveReplica_0(ctx context.Context, marshaler runtime.Marshaler, client SDSControllerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq RemoveReplicaRequest
@@ -2035,6 +2037,12 @@ func request_SDSController_RemoveReplica_0(ctx context.Context, marshaler runtim
 	protoReq.Node, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_SDSController_RemoveReplica_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
@@ -2064,6 +2072,12 @@ func local_request_SDSController_RemoveReplica_0(ctx context.Context, marshaler 
 	protoReq.Node, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_SDSController_RemoveReplica_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := server.RemoveReplica(ctx, &protoReq)
 	return msg, metadata, err

@@ -7624,9 +7624,13 @@ func (x *AddReplicaRequest) GetIgnoreFreeSpace() bool {
 // inverse of AddReplica; refused when the node is Primary, is the tiebreaker or
 // the DR, or when fewer than two diskful copies would remain.
 type RemoveReplicaRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Resource      string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
-	Node          string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	Node     string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	// lost removes the replica of a node that is gone for good: nothing is run
+	// on it, only the survivors' configs change. Refused while the node answers
+	// or any survivor is still connected to it.
+	Lost          bool `protobuf:"varint,3,opt,name=lost,proto3" json:"lost,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7673,6 +7677,13 @@ func (x *RemoveReplicaRequest) GetNode() string {
 		return x.Node
 	}
 	return ""
+}
+
+func (x *RemoveReplicaRequest) GetLost() bool {
+	if x != nil {
+		return x.Lost
+	}
+	return false
 }
 
 type RemoveReplicaResponse struct {
@@ -21555,10 +21566,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x11AddReplicaRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12*\n" +
-	"\x11ignore_free_space\x18\x03 \x01(\bR\x0fignoreFreeSpace\"F\n" +
+	"\x11ignore_free_space\x18\x03 \x01(\bR\x0fignoreFreeSpace\"Z\n" +
 	"\x14RemoveReplicaRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
-	"\x04node\x18\x02 \x01(\tR\x04node\"K\n" +
+	"\x04node\x18\x02 \x01(\tR\x04node\x12\x12\n" +
+	"\x04lost\x18\x03 \x01(\bR\x04lost\"K\n" +
 	"\x15RemoveReplicaResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"H\n" +

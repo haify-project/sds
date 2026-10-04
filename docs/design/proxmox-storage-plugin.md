@@ -58,6 +58,8 @@ VM on another node.
   conversions.
 - `PVE/Storage/Custom/SDS/Capacity.pm` — turns `GET /v1/pools` into the
   storage's total/free.
+- `PVE/Storage/Custom/SDS/Migration.pm` — whether another node's Primary is a
+  live migration (and so may get the dual-primary window) or a leftover.
 - `install.sh`, `preflight.sh`, `storage.cfg.example`, Perl tests in `t/`.
 
 `storage.cfg` options:
@@ -105,9 +107,13 @@ snapshot node travels as a query parameter.
 ### Live migration
 
 - `activate_volume` on the migration target sees another node still Primary,
-  opens the dual-primary window (`POST …/dual-primary {enable: true}`), then
-  promotes. If the promote fails or the device does not appear, it closes the
-  window before failing.
+  checks that PVE is live-migrating the VM from there (the VM config in
+  pmxcfs is still on another node and carries `lock: migrate`), opens the
+  dual-primary window (`POST …/dual-primary {enable: true}`), then promotes.
+  If the promote fails or the device does not appear, it closes the window
+  before failing. A Primary elsewhere with no migration under way is a
+  leftover from a failed deactivate; activation refuses it rather than run the
+  guest with two writers allowed (`SDS/Migration.pm`).
 - `deactivate_volume` on the source demotes and then always disables
   dual-primary, whether or not a window was opened.
 - Offline migration and HA restart never open the window: only one node

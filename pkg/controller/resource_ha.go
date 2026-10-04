@@ -42,7 +42,12 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		return "", fmt.Errorf("resource not found: %s", resource)
 	}
 
-	nodeNames := strings.Split(dbResource.Nodes, ",")
+	// The DR node of a WAN resource gets no promoter: failing over to its
+	// asynchronous copy is a manual decision (see promoter_placement.go).
+	nodeNames := splitCSV(dbResource.Nodes)
+	if dbResource.WANMode && dbResource.DRNode != "" {
+		nodeNames = without(nodeNames, dbResource.DRNode)
+	}
 	if len(nodeNames) == 0 {
 		return "", fmt.Errorf("no nodes found for resource")
 	}
@@ -252,6 +257,10 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 	_, err = rm.deployment.DistributeConfig(ctx, hosts, configContent, configPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to distribute promoter config: %w", err)
+	}
+	// A DR node may still hold a copy written before DR nodes were left out.
+	if dbResource.WANMode && dbResource.DRNode != "" {
+		rm.retireHaPromoter(ctx, resource, []string{rm.controller.ResolveHost(dbResource.DRNode)})
 	}
 
 	// Reload drbd-reactor on all hosts

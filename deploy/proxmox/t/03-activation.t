@@ -14,7 +14,9 @@ use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
 use MockClient;
-use Test::More tests => 21;
+use Test::More tests => 26;
+use File::Path qw(make_path);
+use File::Temp qw(tempdir);
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -26,6 +28,20 @@ $PVE::Storage::Custom::SDSPlugin::DEVICE_WAIT_SECONDS = 0;
 
 my $scfg = { controller => '10.0.0.1', sdspool => 'vg0' };
 my $mock;
+
+# A stand-in for pmxcfs's /etc/pve/nodes: guest_config('pve1', "lock: migrate")
+# says VM 100's config lives on pve1 and is being migrated away from it.
+my $pve_nodes = tempdir(CLEANUP => 1);
+$PVE::Storage::Custom::SDS::Migration::NODES_DIR = $pve_nodes;
+sub guest_config {
+    my ($owner, $body) = @_;
+    system('rm', '-rf', glob("$pve_nodes/*"));
+    return if !defined $owner;
+    make_path("$pve_nodes/$owner/qemu-server");
+    open(my $fh, '>', "$pve_nodes/$owner/qemu-server/100.conf") or die $!;
+    print $fh "boot: order=scsi0\n$body\nscsi0: sds0:vm-100-disk-0,size=20G\n";
+    close($fh);
+}
 
 # resource_info builds a GET /v1/resources/<name> reply.
 sub resource_info {
@@ -101,6 +117,7 @@ ok(!$mock->called('POST', '/v1/resources/pve-100-0/diskless-clients'),
 # --- live migration: the dual-primary window --------------------------------
 
 $PVEStub::NODENAME = 'pve2';
+guest_config('pve1', 'lock: migrate');
 setup(
     info   => resource_info(clients => [ 'pve1', 'pve2' ]),
     status => resource_status(pve1 => { role => 'Primary' }, n1 => { role => 'Secondary' }),
@@ -144,6 +161,37 @@ like($@, qr/did not appear/, 'a device that never appears is an error, not a sil
 @dual = dual_primary_calls();
 ok(scalar(@dual) == 2 && !$dual[1]{payload}{enable}, 'the window is closed on device timeout too');
 $PVE::Storage::Custom::SDSPlugin::DEVICE_CHECK = sub { return 1 };
+
+# --- a leftover Primary is not a migration ----------------------------------
+#
+# A deactivate that failed earlier leaves the old node Primary. Starting the
+# guest elsewhere must not quietly run it with two writers allowed.
+
+sub leftover_primary_refused {
+    my ($why) = @_;
+    setup(
+        info   => resource_info(clients => [ 'pve1', 'pve2' ]),
+        status => resource_status(pve1 => { role => 'Primary' }),
+    );
+    eval { $P->activate_volume('sds0', $scfg, 'vm-100-disk-0') };
+    my $err = $@;
+    ok($err =~ /still Primary on pve1/ && !dual_primary_calls()
+        && !$mock->called('POST', '/v1/resources/pve-100-0/primary'), $why);
+    return $err;
+}
+
+guest_config('pve1', '');
+my $err = leftover_primary_refused('no migration lock: refused, no window, no promote');
+like($err, qr/sds resource secondary pve-100-0 pve1/, 'the error says how to demote the leftover');
+
+guest_config('pve2', 'lock: migrate');
+leftover_primary_refused('a config already on this node is not an incoming migration');
+
+guest_config('pve1', "\n[snap1]\nlock: migrate");
+leftover_primary_refused('a lock inside a snapshot section does not count');
+
+guest_config(undef);
+leftover_primary_refused('no VM config at all (a container): refused');
 
 # --- deactivate -------------------------------------------------------------
 

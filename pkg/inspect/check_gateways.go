@@ -49,7 +49,9 @@ func checkGateways(in *Input) []Check {
 }
 
 // promoterChecks requires a promoter config on every diskful node of r, and
-// notes one on a tiebreaker or diskless client.
+// notes one on a tiebreaker or diskless client. A WAN resource's DR node is the
+// exception both ways: failover to its asynchronous copy is manual, so it must
+// hold no promoter, and one there is a warning.
 //
 // Missing on a diskful node means failover cannot land there. Present on a
 // diskless node is legal — a diskless Primary reads and writes over the
@@ -63,6 +65,17 @@ func promoterChecks(in *Input, r Resource, area Area, prefix, file, fix string) 
 	for _, n := range r.Diskful {
 		p, ok := in.probe(n)
 		if !ok {
+			continue
+		}
+		if n == r.DR {
+			if p.HasReactorConf(file) {
+				name := in.nodeName(n)
+				out = append(out, Check{ID: prefix + ".promoter_on_dr", Area: area, Subject: r.Name + "@" + name, Status: StatusWarn,
+					Message: fmt.Sprintf("%s is the off-site DR node of %s and has its promoter config: drbd-reactor can promote "+
+						"its asynchronous copy, which may be behind, without anyone deciding to fail over", name, r.Name),
+					Evidence: []string{"/etc/drbd-reactor.d/" + file + " present on " + name},
+					Fix:      "sds resource repair " + r.Name})
+			}
 			continue
 		}
 		switch {

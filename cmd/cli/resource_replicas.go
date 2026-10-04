@@ -10,7 +10,7 @@ import (
 
 func resourceRemoveReplica() *cobra.Command {
 	var node string
-	var yes bool
+	var yes, lost bool
 
 	cmd := &cobra.Command{
 		Use:   "remove-replica <resource> --node <node>",
@@ -25,7 +25,16 @@ the quorum tiebreaker or the off-site DR, or when fewer than two diskful copies
 would remain — unlike a conversion, whose single-copy window closes when the
 resync finishes, this is permanent.
 
-  sds resource remove-replica sds-meta --node node-d`,
+--lost is for a node that is gone for good and will not answer. Nothing runs on
+it: the survivors' configs drop it and free its slot (forget-peer), and its own
+volume and config are left where they are, to be cleaned before it ever
+rejoins. It is refused while the node answers over SSH, while any survivor is
+still connected to it, or unless the survivors hold quorum and an UpToDate copy
+without it. One remaining diskful copy is enough, since the lost one is already
+gone; add a replica afterwards.
+
+  sds resource remove-replica sds-meta --node node-d
+  sds resource remove-replica db --node node3 --lost --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
@@ -33,7 +42,11 @@ resync finishes, this is permanent.
 				return fmt.Errorf("--node is required")
 			}
 			if !yes {
-				fmt.Printf("This destroys the copy of %q on %q. Re-run with --yes to proceed.\n", resource, node)
+				if lost {
+					fmt.Printf("This drops %q from %q for good; if it ever comes back it must be cleaned before it rejoins. Re-run with --yes to proceed.\n", node, resource)
+				} else {
+					fmt.Printf("This destroys the copy of %q on %q. Re-run with --yes to proceed.\n", resource, node)
+				}
 				return nil
 			}
 
@@ -46,16 +59,22 @@ resync finishes, this is permanent.
 			}
 			defer closeClient(sdsClient)
 
-			if err := sdsClient.RemoveReplica(ctx, resource, node); err != nil {
+			msg, err := sdsClient.RemoveReplicaOptions(ctx, resource, node, lost)
+			if err != nil {
 				return fmt.Errorf("failed to remove replica: %w", err)
 			}
-			fmt.Printf("Replica removed from %q.\n", node)
+			if lost {
+				fmt.Println(msg)
+			} else {
+				fmt.Printf("Replica removed from %q.\n", node)
+			}
 			fmt.Printf("  sds resource status %s\n", resource)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&node, "node", "", "Node whose replica is removed")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Confirm destroying that node's copy")
+	cmd.Flags().BoolVar(&lost, "lost", false, "The node is gone for good: remove it from the survivors without reaching it")
 	return cmd
 }
 

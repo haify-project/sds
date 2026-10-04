@@ -20,7 +20,7 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Custom/ as a storage plugin, so they must not sit next to SDSPlugin.pm.
 HELPER_DIR="$PLUGIN_DIR/SDS"
 HELPER_SRC_DIR="$SRC_DIR/PVE/Storage/Custom/SDS"
-HELPER_NAMES=(Capacity.pm Client.pm Naming.pm)
+HELPER_NAMES=(Capacity.pm Client.pm Migration.pm Naming.pm)
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "install.sh must run as root" >&2

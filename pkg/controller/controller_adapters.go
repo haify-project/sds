@@ -99,9 +99,9 @@ func (a *GatewayResourceManager) GetResource(ctx context.Context, name string) (
 		}
 	}
 
-	// Diskful replicas only: resourceHosts reads the resource's own node list,
-	// which never includes its tiebreakers or diskless clients.
-	hosts, _ := a.rm.resourceHosts(ctx, name)
+	// The nodes a gateway may run on: the diskful replicas, never a tiebreaker
+	// or diskless client, and never the DR node, which failover to is manual.
+	hosts, _ := a.rm.failoverHosts(ctx, name)
 
 	return &gateway.ResourceInfo{
 		Name:       info.Name,

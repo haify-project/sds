@@ -148,7 +148,11 @@ small `DeploymentClient` interface.
 
 - WAN legs are protocol A. The DR can lag by whatever is buffered, so
   **failover to the DR is manual**, never automatic: auto-promoting a
-  possibly-behind async secondary risks data loss. drbd-reactor still provides
+  possibly-behind async secondary risks data loss. The DR node therefore never
+  gets a promoter: `ha create`, gateways, `add-replica`/`remove-replica` and
+  `resource repair` place them on the primary-site replicas only, and
+  `resource repair` retires one a DR node was given by an older version.
+  drbd-reactor still provides
   HA within the primary site.
 - `sds resource dr-failover <res> --yes` force-promotes the DR node after
   printing the data-loss warning. Without `--yes` it only prints the warning.

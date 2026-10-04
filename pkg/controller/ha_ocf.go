@@ -374,8 +374,10 @@ func (rm *ResourceManager) GetHaToml(ctx context.Context, resource string) (path
 	return "", "", lastErr
 }
 
-// SyncHaToml validates and distributes an edited promoter TOML to all of a
-// resource's nodes, then reloads drbd-reactor. It never touches DRBD data.
+// SyncHaToml validates and distributes an edited promoter TOML to the nodes
+// that may run it (failoverHosts), then reloads drbd-reactor. It never touches
+// DRBD data. A copy on the DR node, written before DR nodes were excluded, is
+// retired.
 func (rm *ResourceManager) SyncHaToml(ctx context.Context, resource, content string) (string, error) {
 	if rm.deployment == nil {
 		return "", fmt.Errorf("deployment client not set")
@@ -386,9 +388,12 @@ func (rm *ResourceManager) SyncHaToml(ctx context.Context, resource, content str
 	if !strings.Contains(content, "[[promoter]]") {
 		return "", fmt.Errorf("toml content does not contain a [[promoter]] table; refusing to sync")
 	}
-	hosts, err := rm.resourceHosts(ctx, resource)
+	hosts, err := rm.failoverHosts(ctx, resource)
 	if err != nil {
 		return "", err
+	}
+	if dr := rm.drHost(ctx, resource); dr != "" {
+		rm.retireHaPromoter(ctx, resource, []string{dr})
 	}
 	path := haTomlPath(resource)
 	if _, err := rm.deployment.DistributeConfig(ctx, hosts, content, path); err != nil {

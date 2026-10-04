@@ -1505,6 +1505,10 @@ message AddReplicaRequest {
 message RemoveReplicaRequest {
   string resource = 1;
   string node = 2;
+  // lost removes the replica of a node that is gone for good: nothing is run
+  // on it, only the survivors' configs change. Refused while the node answers
+  // or any survivor is still connected to it.
+  bool lost = 3;
 }
 
 message RemoveReplicaResponse {

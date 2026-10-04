@@ -179,3 +179,25 @@ func TestPrimarySeenOnlyThroughPeer(t *testing.T) {
 		t.Errorf("the Primary is visible from n2's connection: %s", dump(got))
 	}
 }
+
+// The DR node of a WAN resource holds an asynchronous copy that may be behind:
+// failover to it is manual, so it should have no promoter, and its lacking one
+// is not a missing promoter.
+func TestPromoterOnDRNodeWarnsAndItsAbsenceIsFine(t *testing.T) {
+	in := cluster()
+	in.Resources = []Resource{{Name: "db", Diskful: []string{"n1", "n2", "n3"}, DR: "n3", ServedBy: "ha"}}
+	view(in, "n1", "db", "Primary", "UpToDate")
+	in.Probes["n1"].ReactorConf = []string{"sds-ha-db.toml"}
+	in.Probes["n2"].ReactorConf = []string{"sds-ha-db.toml"}
+	for _, c := range checkResources(in) {
+		if c.ID == "resource.promoter_missing" || c.ID == "resource.promoter_on_dr" {
+			t.Errorf("a DR node without a promoter is how it should be: %+v", c)
+		}
+	}
+
+	in.Probes["n3"].ReactorConf = []string{"sds-ha-db.toml"}
+	c := only(t, checkResources(in), "resource.promoter_on_dr")
+	if c.Subject != "db@n3" || c.Status != StatusWarn || c.Fix != "sds resource repair db" {
+		t.Errorf("got %+v", c)
+	}
+}

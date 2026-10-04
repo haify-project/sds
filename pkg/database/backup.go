@@ -83,6 +83,11 @@ type BackupVolume struct {
 	// Snapshot is the thin snapshot this image was read from, kept on Node as
 	// the base the next incremental is computed against. Empty once released.
 	Snapshot string
+	// ReadThroughLUKS marks an image of an encrypted volume that was read
+	// through the volume's LUKS container and therefore holds plaintext. An
+	// encrypted volume's image without it was copied from the ciphertext by an
+	// earlier version and cannot be restored.
+	ReadThroughLUKS bool
 }
 
 // Backup is one point-in-time copy of a resource on a target.

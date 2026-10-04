@@ -297,3 +297,32 @@ func diffUnits(oldP, newP *promoterUnits) unitDiff {
 	}
 	return d
 }
+
+// ChainEntry is one entry of a promoter's start list as the node will run it.
+type ChainEntry struct {
+	// Unit is the systemd unit the entry is, e.g. "var-lib-app.mount".
+	Unit string
+	// AgentPath is the OCF agent an "ocf:" entry runs; empty for a plain unit.
+	AgentPath string
+}
+
+// PromoterChain reads a single-resource promoter config's start list.
+func PromoterChain(content string) ([]ChainEntry, error) {
+	p, err := parsePromoterUnits(content)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChainEntry, 0, len(p.Units))
+	for _, u := range p.Units {
+		e := ChainEntry{Unit: u.Name}
+		if u.Agent != "" {
+			for _, env := range u.Env {
+				if v, ok := strings.CutPrefix(env, "AGENT="); ok {
+					e.AgentPath = v
+				}
+			}
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}

@@ -509,11 +509,20 @@ sds resource add-volume db --volume db_logs --size 50G --pool thin-pool
 sds resource remove-volume db 1
 ```
 
+A resource's promoters — its `ha create` config and its gateway — follow the
+replicas. `add-replica` first checks that the new node could run them (the OCF
+agents and services the chain starts, the gateway's tools) and refuses
+otherwise; once the replica is in, it gets a copy of each, plus the mount unit
+an HA config starts, so it can take over as soon as it is UpToDate.
+`remove-replica` retires them from the node that left. Nodes that already
+hold a promoter are never rewritten, since on the node running the service a
+rewrite and reload restarts it. A WAN resource's DR node never gets one.
+
 `remove-replica` is refused when the node is Primary, when it is the
 tiebreaker or the off-site DR node, or when fewer than two diskful copies would
 remain. It stops the resource on the leaving node first, then rewrites the
 config on every node and adjusts the survivors, so every node must be
-reachable; if a step fails it stops with an error and the registry still lists
+reachable (for a node that never will be, see `--lost` below); if a step fails it stops with an error and the registry still lists
 the replica. After a failed removal, check that every node's
 `/etc/drbd.d/<resource>.res` agrees:
 
@@ -523,13 +532,40 @@ md5sum /etc/drbd.d/db.res
 ```
 
 Mismatched files mean one node has a stale view — copy the correct one over and
-`drbdadm adjust db`.
+`drbdadm adjust db`. Removal also frees the leaver's bitmap slot on the
+survivors (`drbdsetup forget-peer`), which an add-replica later needs.
+
+**A node that is gone for good.** A normal removal has to reach the leaving
+node. When it never will, use `--lost`:
+
+```bash
+sds resource remove-replica db --node node3 --lost --yes
+```
+
+Nothing runs on node3. The survivors (and the tiebreaker and clients) get the
+config without it, are adjusted, and forget its slot; the registry drops it.
+It is refused while node3 answers over SSH, while any survivor is still
+connected to it over DRBD (cut off from the controller is not gone), and
+unless the survivors still hold quorum and an UpToDate copy without it. One
+remaining diskful copy is enough, since node3's is already lost — add a
+replica afterwards. node3 keeps its volume and its old config: if it ever
+comes back, run `drbdadm down db` there and delete
+`/etc/drbd.d/db.res`, its `sds-*-db.toml` promoters and its volume before it
+rejoins anything.
+
+If the survivors lost quorum with it — two replicas and no tiebreaker — give
+them one first: `sds ha set-tiebreaker db <node>` works with a member that is
+gone (no SSH, and no survivor connected to it), skipping it. Then remove it
+with `--lost`.
 
 `resource repair <resource>` rewrites the config on every participant —
 replicas, tiebreaker, diskless clients — so they agree on the volumes and the
 registry's node addresses, then runs `drbdadm adjust`. Use it when a tiebreaker
 or client of a multi-volume resource stays `Connecting` and its kernel log says
-a packet arrived "for volume N, which is not configured locally".
+a packet arrived "for volume N, which is not configured locally". It then puts
+the resource's promoters on exactly its primary-site replicas, as
+`add-replica` does: use it after an older version added or removed a replica,
+or gave a DR node a promoter.
 
 **Adopting** an existing DRBD resource that SDS did not create:
 
@@ -1081,6 +1117,13 @@ Understand exactly what this does and does not do:
   that replica is gone — the others are unaffected.
 - **It cannot be enabled later.** Decide at creation.
 - LVM pools only.
+- **Backups are plaintext.** `sds backup` reads each snapshot through a
+  temporary read-only LUKS mapping on the node it backs up from, so the image
+  holds the volume's data and restores onto any replica. The key stays on the
+  node, which means the target receives plaintext: protect it with the target's
+  own encryption and access policy. Backups taken by versions before this held
+  the ciphertext, cannot be restored, and are refused by `backup restore`;
+  the first backup after upgrading is a full one.
 
 **Encrypted replication.** DRBD 9.2 and later can run a connection over kernel
 TLS: the kernel asks `tlshd` (package `ktls-utils`) to do the handshake, then
@@ -1278,7 +1321,7 @@ Each node is probed once over SSH per run; a node that does not answer is a
 
 | Area | Checks |
 | ---- | ------ |
-| resources | a resource under `sds ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a diskful node (warn) or present on a diskless one (warn: it works as a diskless Primary, over the network) |
+| resources | a resource under `sds ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a primary-site diskful node (warn), present on a diskless one (warn: it works as a diskless Primary, over the network) or present on a WAN resource's DR node (warn: it could fail over to the asynchronous copy unasked) |
 | gateways | every gateway not `stopped` has exactly one Primary; its promoter config on every diskful node (warn when missing, and when present on a diskless node) |
 | nodes | SSH reachable; clock skew against the controller (warn > 2 s, fail > 30 s; SSH latency is not counted), NTP synchronised; root filesystem (warn ≥ 85 %, fail ≥ 95 %); the registered address present on an interface (a public address answering as the registered host is taken as NAT, not drift), and the address answering as the registered host; drbd module loaded; drbd-reactor running; DRBD module, drbd-utils, drbd-reactor and `sds-controller` binary the same on every node, the binary compared only between nodes of one architecture (a differing binary fails under Self-HA); `/etc/hosts` mapping a node name to an address it is not registered at |
 | pools | thin pool data and metadata against `[alert] pool_near_full_percent` / `pool_full_percent`; growth since the previous report, warn when full within 14 days, fail within 3; on a thick pool, free space below the copy-on-write area a snapshot of a volume reserves (20 % of it, at least 256 MiB), naming the volumes whose snapshots and backups will fail (warn) |

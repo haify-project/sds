@@ -132,7 +132,9 @@ func TestBackupCreateRecordsACompletedBackup(t *testing.T) {
 	assert.Contains(t, stub.uploads[0], "iflag=fullblock,count_bytes")
 
 	// And it must come from a snapshot, never from the live volume.
-	assert.Contains(t, stub.uploads[0], "if=/dev/vg0/data_data"+backupSnapMarker)
+	assert.Contains(t, stub.uploads[0], "SRC='\\''/dev/vg0/data_data"+backupSnapMarker)
+	assert.Contains(t, stub.uploads[0], `dd if="$SRC"`)
+	assert.NotContains(t, stub.uploads[0], "cryptsetup", "an unencrypted volume is read as it is")
 
 	// pipefail is what turns a dd that dies mid-stream into a failed upload
 	// instead of a truncated object stored successfully.
