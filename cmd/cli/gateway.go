@@ -17,6 +17,7 @@ func gatewayCommand() *cobra.Command {
 	cmd.AddCommand(gatewayISCSI())
 	cmd.AddCommand(gatewayNFS())
 	cmd.AddCommand(gatewayNVMe())
+	cmd.AddCommand(gatewaySMB())
 	cmd.AddCommand(gatewayList())
 	cmd.AddCommand(gatewayGet())
 	cmd.AddCommand(gatewayStatus())

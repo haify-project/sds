@@ -240,6 +240,14 @@ function ClientsSummary({ kind, detail }: { kind: GwKind; detail: GatewayDetail 
     );
   }
 
+  if (kind === 'smb') {
+    const s = detail.shares;
+    if (s.isLoading) return <span>…</span>;
+    if (s.error || !s.data) return <span>—</span>;
+    const names = (s.data.shares ?? []).map((sh) => sh.name);
+    return <span title={names.join(', ') || undefined}>{plural(names.length, 'share')}</span>;
+  }
+
   const q = detail.hosts;
   if (q.isLoading) return <span>…</span>;
   if (q.error || !q.data) return <span>—</span>;

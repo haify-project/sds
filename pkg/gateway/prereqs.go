@@ -84,6 +84,8 @@ type gatewayPrereqs struct {
 	agents  []string
 	tools   []string
 	install string
+	// checks are further shell tests, each "<test> || missing=\"$missing <what>\"".
+	checks []string
 }
 
 // ocfAgentsInstall is where every gateway's agents come from. Ubuntu's
@@ -172,6 +174,7 @@ func prereqScript(p gatewayPrereqs) string {
 		lines = append(lines, fmt.Sprintf(
 			`command -v %[1]s >/dev/null 2>&1 || test -x /usr/sbin/%[1]s || test -x /sbin/%[1]s || missing="$missing %[1]s"`, t))
 	}
+	lines = append(lines, p.checks...)
 	lines = append(lines, `if [ -n "$missing" ]; then echo "missing:$missing"; exit 1; fi`)
 	return strings.Join(lines, "\n")
 }

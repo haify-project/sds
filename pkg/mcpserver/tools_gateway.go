@@ -12,7 +12,7 @@ import (
 
 type gatewayOut struct {
 	Resource string            `json:"resource"`
-	Type     string            `json:"type" jsonschema:"gateway type: nfs, iscsi, or nvmeof"`
+	Type     string            `json:"type" jsonschema:"gateway type: nfs, iscsi, nvmeof, or smb"`
 	State    string            `json:"state,omitempty"`
 	Node     string            `json:"node,omitempty" jsonschema:"node currently serving the gateway"`
 	Path     string            `json:"path,omitempty"`
@@ -163,11 +163,12 @@ func (s *Server) registerGatewayTools(srv *mcp.Server) {
 	s.registerNFSConfig(srv)
 	s.registerISCSIConfig(srv)
 	s.registerNVMeConfig(srv)
+	s.registerSMB(srv)
 }
 
 func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 	addRead(s, srv, readOnlyTool("sds_gateway_list", "List gateways",
-		"List all storage gateways (NFS, iSCSI, NVMe-oF) with their type, state, and serving node."),
+		"List all storage gateways (NFS, iSCSI, NVMe-oF, SMB) with their type, state, and serving node."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, gatewayListOut, error) {
 			gws, err := s.client.ListGateways(ctx)
 			if err != nil {

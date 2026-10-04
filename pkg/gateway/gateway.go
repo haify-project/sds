@@ -155,9 +155,32 @@ type HostOutputReader interface {
 	ExecOutput(ctx context.Context, hosts []string, cmd string) (map[string]string, error)
 }
 
-// storageGatewayTypes are the promoter config types that are gateways; HA and
-// service promoters share the directory and the sds- prefix but are not.
-var storageGatewayTypes = map[string]bool{"nfs": true, "iscsi": true, "nvmeof": true}
+// GatewayTypes are the storage gateway types, as the <type> in a promoter
+// config's name, sds-<type>-<resource>.toml. HA and service promoters share the
+// directory and the sds- prefix but are not gateways.
+//
+// Every path that acts on "the gateway of a resource" without knowing its type
+// — stop, start, delete, retire — iterates over this list, so a new type is
+// added here once rather than in each of their shell loops.
+var GatewayTypes = []string{"nfs", "iscsi", "nvmeof", "smb"}
+
+var storageGatewayTypes = func() map[string]bool {
+	m := map[string]bool{}
+	for _, t := range GatewayTypes {
+		m[t] = true
+	}
+	return m
+}()
+
+// promoterConfigPaths lists, space-separated for a shell loop, the promoter
+// config path every gateway type would use for resource, each with suffix.
+func promoterConfigPaths(resource, suffix string) string {
+	paths := make([]string, 0, len(GatewayTypes))
+	for _, t := range GatewayTypes {
+		paths = append(paths, fmt.Sprintf("%s/sds-%s-%s.toml%s", DrbdReactorConfigDir, t, resource, suffix))
+	}
+	return strings.Join(paths, " ")
+}
 
 // ListGateways lists the storage gateways (NFS, iSCSI, NVMe-oF) configured on
 // the managed nodes, read from their /etc/drbd-reactor.d.

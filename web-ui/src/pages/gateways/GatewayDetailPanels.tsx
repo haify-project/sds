@@ -257,7 +257,7 @@ export function NVMeDetailPanel({
 
 /**
  * The promoter's start[] array, in order. The fixed agents are the ones the
- * generator writes for this protocol (pkg/gateway/{nfs,iscsi,nvmeof}.go); the
+ * generator writes for this protocol (pkg/gateway/{nfs,iscsi,nvmeof,smb}.go); the
  * repeated ones are one per export / LUN / namespace, which is exactly what
  * the list endpoints above parse back out of the same config — so the chain is
  * as long as the gateway really is, not as long as a template says.
@@ -296,6 +296,15 @@ export function StartChainPanel({
       'ocf:heartbeat:IPaddr2 service_ip0',
       'ocf:heartbeat:iSCSITarget target',
       ...luns.map((l) => `ocf:heartbeat:iSCSILogicalUnit lu${l.lun}`),
+    ];
+  } else if (kind === 'smb') {
+    // The service IP comes before smbd here: it binds to the addresses that
+    // exist when it starts (pkg/gateway/smb.go).
+    chain = [
+      'ocf:heartbeat:Filesystem fs_cluster_private',
+      'ocf:heartbeat:Filesystem fs_share',
+      'ocf:heartbeat:IPaddr2 service_ip',
+      'sds-smbd@<resource>.service',
     ];
   } else {
     const namespaces = detail.namespaces.data?.namespaces ?? [];

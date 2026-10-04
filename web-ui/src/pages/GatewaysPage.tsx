@@ -102,7 +102,7 @@ export function GatewaysPage() {
 
   const list = useMemo(() => gateways?.gateways ?? [], [gateways]);
   const counts = useMemo(() => {
-    const c: Record<GwKind, number> = { nfs: 0, iscsi: 0, nvme: 0 };
+    const c: Record<GwKind, number> = { nfs: 0, iscsi: 0, nvme: 0, smb: 0 };
     for (const g of list) c[gwKind(g.type)] += 1;
     return c;
   }, [list]);
@@ -140,6 +140,7 @@ export function GatewaysPage() {
                 { value: 'nfs', label: 'NFS', count: counts.nfs },
                 { value: 'iscsi', label: 'iSCSI', count: counts.iscsi },
                 { value: 'nvme', label: 'NVMe-oF', count: counts.nvme },
+                { value: 'smb', label: 'SMB', count: counts.smb },
               ]}
             />
             <DropdownMenu>
@@ -158,6 +159,9 @@ export function GatewaysPage() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => openCreate('nvme')}>
                   NVMe-oF subsystem
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openCreate('smb')}>
+                  SMB share
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

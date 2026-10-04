@@ -53,6 +53,7 @@ export type {
   NFSExport,
   ISCSILUN,
   NVMeNamespace,
+  SMBShare,
 } from './api/gateways';
 export type {
   AuditEvent,

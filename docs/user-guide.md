@@ -1231,8 +1231,9 @@ loaded on the nodes at creation and added to
 `/sys/class/infiniband`.
 
 **What clients need.** Windows has a built-in iSCSI initiator and a limited
-NFSv3 client; macOS has a built-in NFS client and no iSCSI initiator. There is
-no SMB gateway. Pick the protocol by what the client can actually mount.
+NFSv3 client; macOS has a built-in NFS client and no iSCSI initiator. Both
+have SMB built in (see [SMB](#smb-gateways) below). Pick the protocol by what
+the client can actually mount.
 
 **What creation checks.** Every gateway needs the OCF agents from
 `resource-agents-extra` (Debian/Ubuntu) or `resource-agents` (EL). On top:
@@ -1242,9 +1243,55 @@ no SMB gateway. Pick the protocol by what the client can actually mount.
 | NFS | `rpc.nfsd`, `exportfs` | `nfs-kernel-server` (Debian/Ubuntu), `nfs-utils` (EL) |
 | iSCSI | `targetcli` | `targetcli-fb` (Debian/Ubuntu), `targetcli` (EL) |
 | NVMe-oF | kernel modules, loaded at creation | `linux-modules-extra` on Ubuntu cloud kernels |
+| SMB | `smbd`, `smbpasswd`, `smbcontrol`, `pdbedit`; the distribution's `smbd` not running | `samba` |
 
 Anything missing fails creation with the list of what is missing and what to
 install; no config is written.
+
+### SMB gateways
+
+A workgroup SMB server per resource: standalone Samba, local users, no domain.
+
+```bash
+sds gateway smb create --resource files --service-ip 192.0.2.210/24 [--workgroup OFFICE]
+sds gateway smb user set alice --resource files          # prompts; or --password-stdin
+sds gateway smb share add projects --resource files --path projects --valid-users alice,bob
+sds gateway smb share list --resource files
+sds gateway smb user list --resource files
+```
+
+Clients connect to `\\192.0.2.210\files` (the first share is named after the
+resource unless `--share` says otherwise, and covers the whole data volume).
+
+How it is built, and what that means:
+
+- **Everything Samba keeps is on the gateway's state volume** — `smb.conf`,
+  the shares (`shares.conf`), the user database and secrets, the lock and
+  state directories — so after a failover the next node serves the same users
+  and shares. Share and user changes go to the node serving the gateway and
+  apply immediately (`smbcontrol reload-config`); a stopped gateway refuses
+  them until it is started.
+- **Sessions do not survive a failover.** Without CTDB, Samba has no
+  transparent failover: clients reconnect to the service IP (Windows and
+  macOS do so on their own), and an application holding a file open across the
+  switch sees the error a server restart would cause. Writes acknowledged
+  before the switch are on both replicas (protocol C).
+- **One smbd per gateway**, `sds-smbd@<resource>.service`, bound to the service
+  IP only, so several SMB gateways can run on one node. The distribution's own
+  `smbd` must not run on gateway nodes (it holds port 445 on every address);
+  creation refuses while it does: `systemctl disable --now smbd nmbd`.
+- **Files are owned by one account, `sds-smb`,** on every share. Access is per
+  share — `--valid-users`, `--read-only` — not per-user Unix permissions. Each
+  SMB user also gets a local account (Samba requires one), created with the
+  same uid on every node by the unit before smbd starts; a node where that uid
+  is taken refuses to start the gateway and says why.
+- Users are not added through MCP: a password typed into a model conversation
+  is stored in its transcript. Use the CLI or the web UI. The password crosses
+  the API like a CHAP secret does — use `[tls]`.
+- Removing a share keeps its data; deleting the gateway keeps the volume.
+
+Validated in unit tests only so far: try a failover with your clients before
+relying on it.
 
 ---
 

@@ -14,6 +14,7 @@ export function useGatewayDetail(kind: GwKind, resource: string) {
   const nfs = kind === 'nfs';
   const iscsi = kind === 'iscsi';
   const nvme = kind === 'nvme';
+  const smb = kind === 'smb';
   const exports = useQuery({
     queryKey: ['nfs-exports', resource],
     queryFn: () => api.listNFSExports(resource),
@@ -50,7 +51,13 @@ export function useGatewayDetail(kind: GwKind, resource: string) {
     enabled: nvme,
     retry: false,
   });
-  return { exports, luns, initiators, chap, namespaces, hosts };
+  const shares = useQuery({
+    queryKey: ['smb-shares', resource],
+    queryFn: () => api.listSMBShares(resource),
+    enabled: smb,
+    retry: false,
+  });
+  return { exports, luns, initiators, chap, namespaces, hosts, shares };
 }
 
 export type GatewayDetail = ReturnType<typeof useGatewayDetail>;

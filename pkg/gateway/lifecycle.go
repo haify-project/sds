@@ -47,15 +47,9 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 			zap.String("node", host),
 			zap.String("gateway", id))
 
-		// Delete reactor config files (all types: nfs, iscsi, nvmeof)
-		configFiles := []string{
-			fmt.Sprintf("sds-nfs-%s.toml", id),
-			fmt.Sprintf("sds-iscsi-%s.toml", id),
-			fmt.Sprintf("sds-nvmeof-%s.toml", id),
-		}
-
-		for _, configFile := range configFiles {
-			configPath := filepath.Join(DrbdReactorConfigDir, configFile)
+		// Delete the reactor config of every gateway type.
+		for _, t := range GatewayTypes {
+			configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("sds-%s-%s.toml", t, id))
 			// A stopped gateway keeps its config as .toml.disabled; the node
 			// running an edited gateway may hold a .toml.pending.
 			rmCmd := fmt.Sprintf("sudo rm -f %[1]s %[1]s.disabled %[1]s.pending", configPath)
@@ -147,7 +141,7 @@ func (m *Manager) retirePromoter(ctx context.Context, hosts []string, resource s
 		return
 	}
 	script := fmt.Sprintf(`found=
-for b in /etc/drbd-reactor.d/sds-nfs-%[1]s.toml /etc/drbd-reactor.d/sds-iscsi-%[1]s.toml /etc/drbd-reactor.d/sds-nvmeof-%[1]s.toml; do
+for b in %[1]s; do
   for f in "$b" "$b.disabled" "$b.pending"; do
     [ -e "$f" ] && rm -f "$f" && found=1
   done
@@ -155,7 +149,7 @@ done
 [ -n "$found" ] || exit 0
 systemctl reload drbd-reactor || systemctl restart drbd-reactor
 systemctl stop '%[2]s' 2>/dev/null
-true`, resource, fmt.Sprintf("drbd-services@%s.target", strings.ReplaceAll(resource, "-", "\\x2d")))
+true`, promoterConfigPaths(resource, ""), fmt.Sprintf("drbd-services@%s.target", strings.ReplaceAll(resource, "-", "\\x2d")))
 	if err := m.runScript(ctx, hosts, script); err != nil {
 		m.logger.Warn("Failed to retire gateway promoter on non-replica nodes",
 			zap.String("resource", resource), zap.Strings("hosts", hosts), zap.Error(err))
@@ -184,10 +178,10 @@ func (m *Manager) StartGateway(ctx context.Context, id string) error {
 		return fmt.Errorf("move the service IP to the end of the chain: %w", err)
 	}
 
-	enableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
+	enableScript := fmt.Sprintf(`for f in %s; do
   [ -f "$f.disabled" ] && mv "$f.disabled" "$f"
 done
-true`, id, id, id)
+true`, promoterConfigPaths(id, ""))
 	if err := m.runScript(ctx, run, enableScript); err != nil {
 		return fmt.Errorf("failed to re-enable gateway config: %w", err)
 	}
@@ -216,11 +210,11 @@ if awk -v p="$old" '$5 == p {f=1} END {exit !f}' /proc/self/mountinfo; then
     exit 3
   fi
 fi
-for f in /etc/drbd-reactor.d/sds-nfs-%[4]s.toml.disabled /etc/drbd-reactor.d/sds-iscsi-%[4]s.toml.disabled /etc/drbd-reactor.d/sds-nvmeof-%[4]s.toml.disabled; do
+for f in %[4]s; do
   [ -f "$f" ] || continue
   sed "s#=$old\([/ \"]\)#=$new\1#g" "$f" >"$f.new" && mv "$f.new" "$f"
 done
-true`, oldDir, newDir, legacyClusterPrivateMountPath, id)
+true`, oldDir, newDir, legacyClusterPrivateMountPath, promoterConfigPaths(id, ".disabled"))
 	if err := m.runScript(ctx, hosts, script); err != nil {
 		return fmt.Errorf("move gateway state mount out of %s: %w", legacyClusterPrivateMountPath, err)
 	}
@@ -246,11 +240,11 @@ done
 func (m *Manager) StopGateway(ctx context.Context, id string) error {
 	// A .toml.pending is the edited config the running node has not loaded
 	// (see live_edit.go): it, not the .toml, is what the gateway starts from.
-	disableScript := fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
+	disableScript := fmt.Sprintf(`for f in %s; do
   [ -f "$f" ] && mv "$f" "$f.disabled"
   [ -f "$f.pending" ] && mv -f "$f.pending" "$f.disabled"
 done
-true`, id, id, id)
+true`, promoterConfigPaths(id, ""))
 	if err := m.runScript(ctx, m.hosts, disableScript); err != nil {
 		return fmt.Errorf("failed to disable gateway config: %w", err)
 	}
@@ -286,14 +280,14 @@ func (m *Manager) runScript(ctx context.Context, hosts []string, script string) 
 // which must therefore still exist when this is called. Best-effort: a flush
 // failure is logged, never fatal.
 func (m *Manager) flushPortblockRules(ctx context.Context, hosts []string, id string) {
-	script := fmt.Sprintf(`for b in /etc/drbd-reactor.d/sds-nfs-%s.toml /etc/drbd-reactor.d/sds-iscsi-%s.toml /etc/drbd-reactor.d/sds-nvmeof-%s.toml; do
+	script := fmt.Sprintf(`for b in %s; do
   f=$b; [ -f "$f" ] || f=$b.disabled; [ -f "$f" ] || continue
   ip=$(grep -oE 'ip=[0-9.]+' "$f" | head -1 | cut -d= -f2)
   port=$(grep -oE 'portno=[0-9]+' "$f" | head -1 | cut -d= -f2)
   [ -n "$ip" ] && [ -n "$port" ] || continue
   while iptables -D INPUT -d "$ip" -p tcp -m multiport --dports "$port" -j DROP 2>/dev/null; do :; done
 done
-true`, id, id, id)
+true`, promoterConfigPaths(id, ""))
 	if err := m.runScript(ctx, hosts, script); err != nil {
 		m.logger.Warn("Failed to flush leftover portblock rules",
 			zap.String("gateway", id), zap.Error(err))

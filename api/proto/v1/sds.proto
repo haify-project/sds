@@ -371,6 +371,29 @@ service SDSController {
   rpc ListNFSExports(ListNFSExportsRequest) returns (ListNFSExportsResponse) {
     option (google.api.http) = { post: "/v1/gateways/nfs/exports:list"; body: "*"; };
   }
+  // SMB gateway (workgroup edition): a standalone Samba server per resource,
+  // its users and shares kept on the gateway's state volume.
+  rpc CreateSMBGateway(CreateSMBGatewayRequest) returns (CreateSMBGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb"; body: "*"; };
+  }
+  rpc AddSMBShare(AddSMBShareRequest) returns (AddSMBShareResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/shares:add"; body: "*"; };
+  }
+  rpc RemoveSMBShare(RemoveSMBShareRequest) returns (RemoveSMBShareResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/shares:remove"; body: "*"; };
+  }
+  rpc ListSMBShares(ListSMBSharesRequest) returns (ListSMBSharesResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/shares:list"; body: "*"; };
+  }
+  rpc SetSMBUser(SetSMBUserRequest) returns (SetSMBUserResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/users:set"; body: "*"; };
+  }
+  rpc RemoveSMBUser(RemoveSMBUserRequest) returns (RemoveSMBUserResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/users:remove"; body: "*"; };
+  }
+  rpc ListSMBUsers(ListSMBUsersRequest) returns (ListSMBUsersResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/users:list"; body: "*"; };
+  }
   rpc AddISCSILUN(AddISCSILUNRequest) returns (AddISCSILUNResponse) {
     option (google.api.http) = { post: "/v1/gateways/iscsi/luns:add"; body: "*"; };
   }
@@ -2763,6 +2786,95 @@ message ListNFSExportsResponse {
   bool success = 1;
   string message = 2;
   repeated NFSExportInfo exports = 3;
+}
+
+// SMB gateway messages.
+message CreateSMBGatewayRequest {
+  string resource = 1;
+  // CIDR, e.g. 192.168.1.210/24.
+  string service_ip = 2;
+  // Defaults to WORKGROUP.
+  string workgroup = 3;
+  // The first share, over the whole data volume; defaults to the resource name.
+  string share_name = 4;
+  bool read_only = 5;
+  repeated string valid_users = 6;
+}
+
+message CreateSMBGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;
+}
+
+message SMBShareInfo {
+  string name = 1;
+  // Relative to the gateway's data volume; empty is the whole volume.
+  string path = 2;
+  bool read_only = 3;
+  // Empty: every SMB user of the gateway.
+  repeated string valid_users = 4;
+}
+
+message AddSMBShareRequest {
+  string resource = 1;
+  SMBShareInfo share = 2;
+}
+
+message AddSMBShareResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveSMBShareRequest {
+  string resource = 1;
+  string name = 2;
+}
+
+message RemoveSMBShareResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListSMBSharesRequest {
+  string resource = 1;
+}
+
+message ListSMBSharesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SMBShareInfo shares = 3;
+}
+
+message SetSMBUserRequest {
+  string resource = 1;
+  string user = 2;
+  string password = 3;
+}
+
+message SetSMBUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveSMBUserRequest {
+  string resource = 1;
+  string user = 2;
+}
+
+message RemoveSMBUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListSMBUsersRequest {
+  string resource = 1;
+}
+
+message ListSMBUsersResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string users = 3;
 }
 
 message ISCSILUNInfo {

@@ -64,6 +64,11 @@ type ControllerClient interface {
 	CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGatewayRequest) (*sdspb.CreateNFSGatewayResponse, error)
 	CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISCSIGatewayRequest) (*sdspb.CreateISCSIGatewayResponse, error)
 	CreateNVMeGateway(ctx context.Context, req *sdspb.CreateNVMeGatewayRequest) (*sdspb.CreateNVMeGatewayResponse, error)
+	CreateSMBGateway(ctx context.Context, req *sdspb.CreateSMBGatewayRequest) (*sdspb.CreateSMBGatewayResponse, error)
+	ListSMBShares(ctx context.Context, resource string) ([]*sdspb.SMBShareInfo, error)
+	AddSMBShare(ctx context.Context, resource string, share *sdspb.SMBShareInfo) error
+	RemoveSMBShare(ctx context.Context, resource, name string) error
+	ListSMBUsers(ctx context.Context, resource string) ([]string, error)
 	StartGateway(ctx context.Context, id string) error
 	StopGateway(ctx context.Context, id string) error
 	DeleteGateway(ctx context.Context, id string) error

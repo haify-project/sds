@@ -37,6 +37,15 @@ export interface NVMeNamespace {
   nqn: string;
 }
 
+// An SMB share: path is relative to the gateway's volume, "" for all of it;
+// no validUsers means every user of the gateway.
+export interface SMBShare {
+  name: string;
+  path?: string;
+  readOnly?: boolean;
+  validUsers?: string[];
+}
+
 export const gatewaysApi = (request: RequestFn) => ({
   // ==================== Gateways ====================
   getGateways: () => request<GatewaysResponse>('/gateways'),
@@ -85,6 +94,55 @@ export const gatewaysApi = (request: RequestFn) => ({
     request<ApiResponse & { configPath: string }>('/gateways/nvme', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  // SMB Gateway (workgroup). Shares and users can only be read or changed
+  // while the gateway runs: they live on its state volume.
+  createSMBGateway: (data: {
+    resource: string;
+    serviceIp: string;
+    workgroup?: string;
+    shareName?: string;
+  }) =>
+    request<ApiResponse & { configPath: string }>('/gateways/smb', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listSMBShares: (resource: string) =>
+    request<ApiResponse & { shares?: SMBShare[] }>('/gateways/smb/shares:list', {
+      method: 'POST',
+      body: JSON.stringify({ resource }),
+    }),
+
+  addSMBShare: (resource: string, share: SMBShare) =>
+    request<ApiResponse>('/gateways/smb/shares:add', {
+      method: 'POST',
+      body: JSON.stringify({ resource, share }),
+    }),
+
+  removeSMBShare: (resource: string, name: string) =>
+    request<ApiResponse>('/gateways/smb/shares:remove', {
+      method: 'POST',
+      body: JSON.stringify({ resource, name }),
+    }),
+
+  listSMBUsers: (resource: string) =>
+    request<ApiResponse & { users?: string[] }>('/gateways/smb/users:list', {
+      method: 'POST',
+      body: JSON.stringify({ resource }),
+    }),
+
+  setSMBUser: (resource: string, user: string, password: string) =>
+    request<ApiResponse>('/gateways/smb/users:set', {
+      method: 'POST',
+      body: JSON.stringify({ resource, user, password }),
+    }),
+
+  removeSMBUser: (resource: string, user: string) =>
+    request<ApiResponse>('/gateways/smb/users:remove', {
+      method: 'POST',
+      body: JSON.stringify({ resource, user }),
     }),
 
   deleteGateway: (id: string) =>

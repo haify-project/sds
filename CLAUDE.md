@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working on the SDS (Software Def
 
 ## Project Overview
 
-SDS is a DRBD-based storage management system built in Go. It provides centralized management for storage pools, DRBD resources, snapshots, backups, storage gateways (NFS, iSCSI, NVMe-oF), and HA, with a CSI driver, a Proxmox VE plugin, an MCP server and an embedded web UI on top.
+SDS is a DRBD-based storage management system built in Go. It provides centralized management for storage pools, DRBD resources, snapshots, backups, storage gateways (NFS, iSCSI, NVMe-oF, SMB), and HA, with a CSI driver, a Proxmox VE plugin, an MCP server and an embedded web UI on top.
 
 **Architecture:**
 
@@ -258,13 +258,14 @@ written without `lifecycle.go`'s invariants looks correct and isn't.
 | `nfs.go` | NFS gateway — Filesystem, IPaddr2, nfsserver, exportfs OCF agents |
 | `iscsi.go` + `iscsi_target.go` + `iscsi_acl.go` | iSCSI gateway — iSCSITarget/iSCSILogicalUnit agents; target and LUNs; initiator allow-list and CHAP |
 | `nvmeof.go` + `nvmeof_subsystem.go` + `nvmeof_hosts.go` | NVMe-oF gateway — nvmet-subsystem/nvmet-namespace agents; namespaces, subsystem and port; host allow-list |
+| `smb.go` + `smb_shares.go` | SMB gateway (workgroup) — one `sds-smbd@<resource>` per gateway bound to the service IP (so the IP starts *before* smbd); Samba state, shares and passdb on the state volume; shares and users edited live on the serving node |
 
 **Limitation**: Each file must be under 600 lines — see "File size" below.
 
 ### Gateway Configuration
 
 Gateways create TOML config files in `/etc/drbd-reactor.d/` named
-`sds-<type>-<resource>.toml`, `<type>` being `nfs`, `iscsi` or `nvmeof`
+`sds-<type>-<resource>.toml`, `<type>` being `nfs`, `iscsi`, `nvmeof` or `smb` (the list is `GatewayTypes` in `gateway.go`; type-agnostic stop/start/delete loops iterate it)
 (`sds ha create` writes `sds-ha-<resource>.toml`). NFS example:
 
 ```toml

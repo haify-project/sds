@@ -1456,6 +1456,232 @@
         ]
       }
     },
+    "/v1/gateways/smb": {
+      "post": {
+        "summary": "SMB gateway (workgroup edition): a standalone Samba server per resource,\nits users and shares kept on the gateway's state volume.",
+        "operationId": "SDSController_CreateSMBGateway",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateSMBGatewayResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "SMB gateway messages.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateSMBGatewayRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/gateways/smb/shares:add": {
+      "post": {
+        "operationId": "SDSController_AddSMBShare",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddSMBShareResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1AddSMBShareRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/gateways/smb/shares:list": {
+      "post": {
+        "operationId": "SDSController_ListSMBShares",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSMBSharesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ListSMBSharesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/gateways/smb/shares:remove": {
+      "post": {
+        "operationId": "SDSController_RemoveSMBShare",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RemoveSMBShareResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RemoveSMBShareRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/gateways/smb/users:list": {
+      "post": {
+        "operationId": "SDSController_ListSMBUsers",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSMBUsersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ListSMBUsersRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/gateways/smb/users:remove": {
+      "post": {
+        "operationId": "SDSController_RemoveSMBUser",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RemoveSMBUserResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RemoveSMBUserRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/gateways/smb/users:set": {
+      "post": {
+        "operationId": "SDSController_SetSMBUser",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetSMBUserResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SetSMBUserRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/gateways/{id}": {
       "get": {
         "operationId": "SDSController_GetGateway",
@@ -6865,6 +7091,28 @@
         }
       }
     },
+    "v1AddSMBShareRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "share": {
+          "$ref": "#/definitions/v1SMBShareInfo"
+        }
+      }
+    },
+    "v1AddSMBShareResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1AddVolumeResponse": {
       "type": "object",
       "properties": {
@@ -7766,6 +8014,50 @@
           "type": "boolean"
         },
         "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateSMBGatewayRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "serviceIp": {
+          "type": "string",
+          "description": "CIDR, e.g. 192.168.1.210/24."
+        },
+        "workgroup": {
+          "type": "string",
+          "description": "Defaults to WORKGROUP."
+        },
+        "shareName": {
+          "type": "string",
+          "description": "The first share, over the whole data volume; defaults to the resource name."
+        },
+        "readOnly": {
+          "type": "boolean"
+        },
+        "validUsers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "SMB gateway messages."
+    },
+    "v1CreateSMBGatewayResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "configPath": {
           "type": "string"
         }
       }
@@ -9298,6 +9590,57 @@
         }
       }
     },
+    "v1ListSMBSharesRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ListSMBSharesResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "shares": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SMBShareInfo"
+          }
+        }
+      }
+    },
+    "v1ListSMBUsersRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ListSMBUsersResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1ListSnapshotSchedulesResponse": {
       "type": "object",
       "properties": {
@@ -10130,6 +10473,50 @@
         }
       }
     },
+    "v1RemoveSMBShareRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RemoveSMBShareResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RemoveSMBUserRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RemoveSMBUserResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1RemoveVolumeResponse": {
       "type": "object",
       "properties": {
@@ -10591,6 +10978,28 @@
         }
       }
     },
+    "v1SMBShareInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "Relative to the gateway's data volume; empty is the whole volume."
+        },
+        "readOnly": {
+          "type": "boolean"
+        },
+        "validUsers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Empty: every SMB user of the gateway."
+        }
+      }
+    },
     "v1SaveNotifyChannelRequest": {
       "type": "object",
       "properties": {
@@ -10800,6 +11209,31 @@
         "linksChanged": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "v1SetSMBUserRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetSMBUserResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
         }
       }
     },

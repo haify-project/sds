@@ -92,6 +92,8 @@ func gatewayRole(t database.GatewayType) string {
 		return "iSCSI gateway"
 	case database.GatewayTypeNVMEOF:
 		return "NVMe-oF gateway"
+	case database.GatewayTypeSMB:
+		return "SMB gateway"
 	}
 	return fmt.Sprintf("%s gateway", t)
 }

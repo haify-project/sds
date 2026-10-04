@@ -16,6 +16,8 @@ func TestClassify(t *testing.T) {
 		{"/v1.SDSController/CreateNFSGateway", "gateway", ActWrite},
 		{"/v1.SDSController/AddNVMeNamespace", "gateway", ActWrite},
 		{"/v1.SDSController/ListGateways", "gateway", ActRead},
+		{"/v1.SDSController/SetSMBUser", "gateway", ActWrite},
+		{"/v1.SDSController/ListSMBShares", "gateway", ActRead},
 		{"/v1.SDSController/EnableSelfHa", "ha", ActWrite},
 		{"/v1.SDSController/GetSelfHaStatus", "ha", ActRead},
 		{"/v1.SDSController/RegisterNode", "node", ActWrite},

@@ -117,6 +117,13 @@ const (
 	SDSController_AddNFSExport_FullMethodName              = "/v1.SDSController/AddNFSExport"
 	SDSController_RemoveNFSExport_FullMethodName           = "/v1.SDSController/RemoveNFSExport"
 	SDSController_ListNFSExports_FullMethodName            = "/v1.SDSController/ListNFSExports"
+	SDSController_CreateSMBGateway_FullMethodName          = "/v1.SDSController/CreateSMBGateway"
+	SDSController_AddSMBShare_FullMethodName               = "/v1.SDSController/AddSMBShare"
+	SDSController_RemoveSMBShare_FullMethodName            = "/v1.SDSController/RemoveSMBShare"
+	SDSController_ListSMBShares_FullMethodName             = "/v1.SDSController/ListSMBShares"
+	SDSController_SetSMBUser_FullMethodName                = "/v1.SDSController/SetSMBUser"
+	SDSController_RemoveSMBUser_FullMethodName             = "/v1.SDSController/RemoveSMBUser"
+	SDSController_ListSMBUsers_FullMethodName              = "/v1.SDSController/ListSMBUsers"
 	SDSController_AddISCSILUN_FullMethodName               = "/v1.SDSController/AddISCSILUN"
 	SDSController_RemoveISCSILUN_FullMethodName            = "/v1.SDSController/RemoveISCSILUN"
 	SDSController_ListISCSILUNs_FullMethodName             = "/v1.SDSController/ListISCSILUNs"
@@ -334,6 +341,15 @@ type SDSControllerClient interface {
 	AddNFSExport(ctx context.Context, in *AddNFSExportRequest, opts ...grpc.CallOption) (*AddNFSExportResponse, error)
 	RemoveNFSExport(ctx context.Context, in *RemoveNFSExportRequest, opts ...grpc.CallOption) (*RemoveNFSExportResponse, error)
 	ListNFSExports(ctx context.Context, in *ListNFSExportsRequest, opts ...grpc.CallOption) (*ListNFSExportsResponse, error)
+	// SMB gateway (workgroup edition): a standalone Samba server per resource,
+	// its users and shares kept on the gateway's state volume.
+	CreateSMBGateway(ctx context.Context, in *CreateSMBGatewayRequest, opts ...grpc.CallOption) (*CreateSMBGatewayResponse, error)
+	AddSMBShare(ctx context.Context, in *AddSMBShareRequest, opts ...grpc.CallOption) (*AddSMBShareResponse, error)
+	RemoveSMBShare(ctx context.Context, in *RemoveSMBShareRequest, opts ...grpc.CallOption) (*RemoveSMBShareResponse, error)
+	ListSMBShares(ctx context.Context, in *ListSMBSharesRequest, opts ...grpc.CallOption) (*ListSMBSharesResponse, error)
+	SetSMBUser(ctx context.Context, in *SetSMBUserRequest, opts ...grpc.CallOption) (*SetSMBUserResponse, error)
+	RemoveSMBUser(ctx context.Context, in *RemoveSMBUserRequest, opts ...grpc.CallOption) (*RemoveSMBUserResponse, error)
+	ListSMBUsers(ctx context.Context, in *ListSMBUsersRequest, opts ...grpc.CallOption) (*ListSMBUsersResponse, error)
 	AddISCSILUN(ctx context.Context, in *AddISCSILUNRequest, opts ...grpc.CallOption) (*AddISCSILUNResponse, error)
 	RemoveISCSILUN(ctx context.Context, in *RemoveISCSILUNRequest, opts ...grpc.CallOption) (*RemoveISCSILUNResponse, error)
 	ListISCSILUNs(ctx context.Context, in *ListISCSILUNsRequest, opts ...grpc.CallOption) (*ListISCSILUNsResponse, error)
@@ -1478,6 +1494,76 @@ func (c *sDSControllerClient) ListNFSExports(ctx context.Context, in *ListNFSExp
 	return out, nil
 }
 
+func (c *sDSControllerClient) CreateSMBGateway(ctx context.Context, in *CreateSMBGatewayRequest, opts ...grpc.CallOption) (*CreateSMBGatewayResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateSMBGatewayResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateSMBGateway_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) AddSMBShare(ctx context.Context, in *AddSMBShareRequest, opts ...grpc.CallOption) (*AddSMBShareResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddSMBShareResponse)
+	err := c.cc.Invoke(ctx, SDSController_AddSMBShare_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RemoveSMBShare(ctx context.Context, in *RemoveSMBShareRequest, opts ...grpc.CallOption) (*RemoveSMBShareResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveSMBShareResponse)
+	err := c.cc.Invoke(ctx, SDSController_RemoveSMBShare_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListSMBShares(ctx context.Context, in *ListSMBSharesRequest, opts ...grpc.CallOption) (*ListSMBSharesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSMBSharesResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListSMBShares_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetSMBUser(ctx context.Context, in *SetSMBUserRequest, opts ...grpc.CallOption) (*SetSMBUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSMBUserResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetSMBUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RemoveSMBUser(ctx context.Context, in *RemoveSMBUserRequest, opts ...grpc.CallOption) (*RemoveSMBUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveSMBUserResponse)
+	err := c.cc.Invoke(ctx, SDSController_RemoveSMBUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListSMBUsers(ctx context.Context, in *ListSMBUsersRequest, opts ...grpc.CallOption) (*ListSMBUsersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSMBUsersResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListSMBUsers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) AddISCSILUN(ctx context.Context, in *AddISCSILUNRequest, opts ...grpc.CallOption) (*AddISCSILUNResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddISCSILUNResponse)
@@ -2278,6 +2364,15 @@ type SDSControllerServer interface {
 	AddNFSExport(context.Context, *AddNFSExportRequest) (*AddNFSExportResponse, error)
 	RemoveNFSExport(context.Context, *RemoveNFSExportRequest) (*RemoveNFSExportResponse, error)
 	ListNFSExports(context.Context, *ListNFSExportsRequest) (*ListNFSExportsResponse, error)
+	// SMB gateway (workgroup edition): a standalone Samba server per resource,
+	// its users and shares kept on the gateway's state volume.
+	CreateSMBGateway(context.Context, *CreateSMBGatewayRequest) (*CreateSMBGatewayResponse, error)
+	AddSMBShare(context.Context, *AddSMBShareRequest) (*AddSMBShareResponse, error)
+	RemoveSMBShare(context.Context, *RemoveSMBShareRequest) (*RemoveSMBShareResponse, error)
+	ListSMBShares(context.Context, *ListSMBSharesRequest) (*ListSMBSharesResponse, error)
+	SetSMBUser(context.Context, *SetSMBUserRequest) (*SetSMBUserResponse, error)
+	RemoveSMBUser(context.Context, *RemoveSMBUserRequest) (*RemoveSMBUserResponse, error)
+	ListSMBUsers(context.Context, *ListSMBUsersRequest) (*ListSMBUsersResponse, error)
 	AddISCSILUN(context.Context, *AddISCSILUNRequest) (*AddISCSILUNResponse, error)
 	RemoveISCSILUN(context.Context, *RemoveISCSILUNRequest) (*RemoveISCSILUNResponse, error)
 	ListISCSILUNs(context.Context, *ListISCSILUNsRequest) (*ListISCSILUNsResponse, error)
@@ -2735,6 +2830,27 @@ func (UnimplementedSDSControllerServer) RemoveNFSExport(context.Context, *Remove
 }
 func (UnimplementedSDSControllerServer) ListNFSExports(context.Context, *ListNFSExportsRequest) (*ListNFSExportsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListNFSExports not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateSMBGateway(context.Context, *CreateSMBGatewayRequest) (*CreateSMBGatewayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateSMBGateway not implemented")
+}
+func (UnimplementedSDSControllerServer) AddSMBShare(context.Context, *AddSMBShareRequest) (*AddSMBShareResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddSMBShare not implemented")
+}
+func (UnimplementedSDSControllerServer) RemoveSMBShare(context.Context, *RemoveSMBShareRequest) (*RemoveSMBShareResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveSMBShare not implemented")
+}
+func (UnimplementedSDSControllerServer) ListSMBShares(context.Context, *ListSMBSharesRequest) (*ListSMBSharesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListSMBShares not implemented")
+}
+func (UnimplementedSDSControllerServer) SetSMBUser(context.Context, *SetSMBUserRequest) (*SetSMBUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetSMBUser not implemented")
+}
+func (UnimplementedSDSControllerServer) RemoveSMBUser(context.Context, *RemoveSMBUserRequest) (*RemoveSMBUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveSMBUser not implemented")
+}
+func (UnimplementedSDSControllerServer) ListSMBUsers(context.Context, *ListSMBUsersRequest) (*ListSMBUsersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListSMBUsers not implemented")
 }
 func (UnimplementedSDSControllerServer) AddISCSILUN(context.Context, *AddISCSILUNRequest) (*AddISCSILUNResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddISCSILUN not implemented")
@@ -4713,6 +4829,132 @@ func _SDSController_ListNFSExports_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_CreateSMBGateway_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSMBGatewayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateSMBGateway(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateSMBGateway_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateSMBGateway(ctx, req.(*CreateSMBGatewayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_AddSMBShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddSMBShareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).AddSMBShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_AddSMBShare_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).AddSMBShare(ctx, req.(*AddSMBShareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RemoveSMBShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveSMBShareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RemoveSMBShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RemoveSMBShare_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RemoveSMBShare(ctx, req.(*RemoveSMBShareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListSMBShares_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSMBSharesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListSMBShares(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListSMBShares_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListSMBShares(ctx, req.(*ListSMBSharesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetSMBUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSMBUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetSMBUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetSMBUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetSMBUser(ctx, req.(*SetSMBUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RemoveSMBUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveSMBUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RemoveSMBUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RemoveSMBUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RemoveSMBUser(ctx, req.(*RemoveSMBUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListSMBUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSMBUsersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListSMBUsers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListSMBUsers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListSMBUsers(ctx, req.(*ListSMBUsersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_AddISCSILUN_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddISCSILUNRequest)
 	if err := dec(in); err != nil {
@@ -6256,6 +6498,34 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListNFSExports",
 			Handler:    _SDSController_ListNFSExports_Handler,
+		},
+		{
+			MethodName: "CreateSMBGateway",
+			Handler:    _SDSController_CreateSMBGateway_Handler,
+		},
+		{
+			MethodName: "AddSMBShare",
+			Handler:    _SDSController_AddSMBShare_Handler,
+		},
+		{
+			MethodName: "RemoveSMBShare",
+			Handler:    _SDSController_RemoveSMBShare_Handler,
+		},
+		{
+			MethodName: "ListSMBShares",
+			Handler:    _SDSController_ListSMBShares_Handler,
+		},
+		{
+			MethodName: "SetSMBUser",
+			Handler:    _SDSController_SetSMBUser_Handler,
+		},
+		{
+			MethodName: "RemoveSMBUser",
+			Handler:    _SDSController_RemoveSMBUser_Handler,
+		},
+		{
+			MethodName: "ListSMBUsers",
+			Handler:    _SDSController_ListSMBUsers_Handler,
 		},
 		{
 			MethodName: "AddISCSILUN",

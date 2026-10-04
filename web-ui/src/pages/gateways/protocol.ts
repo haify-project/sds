@@ -2,7 +2,7 @@ import { toneOf, type StatusTone } from '@/components/status';
 
 // ==================== Protocol vocabulary ====================
 
-export type GwKind = 'nfs' | 'iscsi' | 'nvme';
+export type GwKind = 'nfs' | 'iscsi' | 'nvme' | 'smb';
 
 // The ports are the backend's own constants (pkg/gateway/gateway.go), not a
 // guess: a gateway is reachable on exactly one of them.
@@ -10,12 +10,14 @@ export const PROTOCOL: Record<GwKind, { label: string; port: number }> = {
   nfs: { label: 'NFS', port: 2049 },
   iscsi: { label: 'iSCSI', port: 3260 },
   nvme: { label: 'NVMe-oF', port: 4420 },
+  smb: { label: 'SMB', port: 445 },
 };
 
 // The backend reports the NVMe type as "nvmeof" (reactor config naming).
 export function gwKind(type: string | undefined): GwKind {
   if (type === 'nvmeof' || type === 'nvme') return 'nvme';
   if (type === 'iscsi') return 'iscsi';
+  if (type === 'smb') return 'smb';
   return 'nfs';
 }
 
