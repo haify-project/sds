@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,8 +40,11 @@ type controllerBinaryPlan struct {
 // It changes nothing, so enable calls it before any side effect.
 func (rm *ResourceManager) planControllerBinary(ctx context.Context, standbyAddrs []string) (*controllerBinaryPlan, error) {
 	unit, err := os.ReadFile(controllerUnitPath)
+	if errors.Is(err, os.ErrNotExist) {
+		unit, err = os.ReadFile(packagedControllerUnitPath)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", controllerUnitPath, err)
+		return nil, fmt.Errorf("failed to read %s (or the packaged %s): %w", controllerUnitPath, packagedControllerUnitPath, err)
 	}
 	target, err := unitExecStartPath(string(unit))
 	if err != nil {

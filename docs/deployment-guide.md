@@ -255,12 +255,9 @@ sds-controller`, or under Self-HA install the package on every node and then
 `sds ha evict sds-meta`). `apt remove` stops nothing; `apt purge` leaves
 `/etc/sds` and `/var/lib/sds` (the database) in place.
 
-Self-HA reads and replicates `/etc/systemd/system/sds-controller.service`, not
-the packaged unit; copy it before `sds ha self enable`:
-
-```bash
-sudo cp /lib/systemd/system/sds-controller.service /etc/systemd/system/
-```
+Self-HA replicates the controller's unit to the standbys as
+`/etc/systemd/system/sds-controller.service`; with no copy there it reads the
+packaged one in `/lib/systemd/system/`, so nothing needs copying first.
 
 Then configure and start it as below ("Configure and start").
 
@@ -442,9 +439,9 @@ Primary.
 
 Before enabling:
 - the controller runs on a registered node, with `/etc/sds/controller.toml` and
-  `/etc/systemd/system/sds-controller.service` in place (from the Debian
-  package: copy it from `/lib/systemd/system/`, section 4); the unit's
-  `ExecStart` names the binary by absolute path;
+  its unit in `/etc/systemd/system/` (or, from the Debian package,
+  `/lib/systemd/system/`); the unit's `ExecStart` names the binary by
+  absolute path;
 - every other node has the controller's architecture, or a build for its
   architecture sits beside the running binary as `sds-controller-<goarch>`
   (e.g. `/opt/sds/bin/sds-controller-arm64`); otherwise `enable` refuses that
