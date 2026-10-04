@@ -32,6 +32,11 @@ export interface Pool {
   thinDataPercent?: number;
   thinMetadataPercent?: number;
   thinOutOfSpace?: boolean;
+  // VDO-backed thin pools: physical usage under the thin pool, which can run
+  // out while thinDataPercent still shows room.
+  hasVdo?: boolean;
+  vdoPhysicalPercent?: number;
+  vdoSavingPercent?: number;
   // Exact capacity. totalGb/freeGb are rounded to whole gibibytes.
   totalBytes?: string;
   freeBytes?: string;

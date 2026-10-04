@@ -311,6 +311,7 @@ func (sm *StorageManager) GetPoolStatusList(ctx context.Context) ([]alert.PoolSt
 		return nil, err
 	}
 
+	vdo := sm.vdoPoolNames(ctx)
 	out := make([]alert.PoolStatusInfo, 0, len(pools))
 	for _, p := range pools {
 		if p == nil {
@@ -330,6 +331,11 @@ func (sm *StorageManager) GetPoolStatusList(ctx context.Context) ([]alert.PoolSt
 			info.MetaPercent = u.MetaPercent
 			info.OutOfSpace = u.OutOfSpace
 			info.ThinSizeBytes = u.SizeBytes
+		}
+		info.VDO = vdo[p.Name]
+		if v := p.VDO; v != nil {
+			info.VDOPhysicalKnown = true
+			info.VDOPhysicalPercent = v.PhysicalPercent
 		}
 		out = append(out, info)
 	}

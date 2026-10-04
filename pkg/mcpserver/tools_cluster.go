@@ -88,7 +88,7 @@ type healthCheckIn struct {
 
 type poolCreateIn struct {
 	Name    string   `json:"name" jsonschema:"pool name, e.g. data-pool"`
-	Type    string   `json:"type" jsonschema:"pool type: lvm (plain VG), lvm-thin (VG with thin pool), or zfs"`
+	Type    string   `json:"type" jsonschema:"pool type: lvm (plain VG), lvm-thin (VG with thin pool), lvm-thin-vdo (thin pool on VDO: dedup and compression), or zfs"`
 	Nodes   []string `json:"nodes" jsonschema:"nodes to create the pool on"`
 	Devices []string `json:"devices" jsonschema:"block devices to use, e.g. [\"/dev/sdb\"]"`
 	SizeGB  uint64   `json:"size_gb,omitempty" jsonschema:"thin pool size in GiB (lvm-thin only); 0 uses the whole VG"`
@@ -211,7 +211,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, writeTool("sds_pool_create", "Create storage pool",
-		"Create a storage pool on one or more nodes. Types: lvm (plain VG), lvm-thin (VG + thin pool), zfs."),
+		"Create a storage pool on one or more nodes. Types: lvm (plain VG), lvm-thin (VG + thin pool), lvm-thin-vdo (thin pool on VDO), zfs."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in poolCreateIn) (*mcp.CallToolResult, opResult, error) {
 			if len(in.Nodes) == 0 || len(in.Devices) == 0 {
 				return nil, opResult{}, fmt.Errorf("nodes and devices are required")
@@ -226,8 +226,10 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 					err = s.client.CreatePool(ctx, in.Name, "vg", node, in.Devices, in.SizeGB)
 				case "lvm-thin", "thin_pool":
 					err = s.client.CreatePool(ctx, in.Name, "thin_pool", node, in.Devices, in.SizeGB)
+				case "lvm-thin-vdo", "thin_vdo":
+					err = s.client.CreatePool(ctx, in.Name, "thin_vdo", node, in.Devices, in.SizeGB)
 				default:
-					return nil, opResult{}, fmt.Errorf("unsupported pool type %q (use lvm, lvm-thin, or zfs)", in.Type)
+					return nil, opResult{}, fmt.Errorf("unsupported pool type %q (use lvm, lvm-thin, lvm-thin-vdo, or zfs)", in.Type)
 				}
 				if err != nil {
 					failed = append(failed, fmt.Sprintf("%s: %v", node, err))

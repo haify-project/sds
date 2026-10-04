@@ -99,6 +99,13 @@ const (
 	// kernel has dropped the backing device, and any DRBD replica on it is
 	// about to report Diskless.
 	TypePoolOutOfSpace Type = "pool.out_of_space"
+	// TypePoolVDOPhysicalNearFull and TypePoolVDOPhysicalFull are the
+	// near-full and full conditions for the physical space under a VDO-backed
+	// thin pool. Deduplication and compression make it fill at a rate the thin
+	// pool's own figures do not show, and when it is gone VDO fails writes
+	// while the thin pool above it still reports room.
+	TypePoolVDOPhysicalNearFull Type = "pool.vdo_physical_near_full"
+	TypePoolVDOPhysicalFull     Type = "pool.vdo_physical_full"
 	// TypePoolSnapshotsRemoved is published (as info) each time a near-full
 	// thin pool loses a scheduled snapshot to make room. Snapshot history
 	// vanishing is worth knowing about on its own, and a sudden run of these

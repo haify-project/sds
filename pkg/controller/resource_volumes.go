@@ -52,6 +52,9 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 		if err := validateLUKSNames(pool, volume); err != nil {
 			return err
 		}
+		if err := rm.assertEncryptableVDO(ctx, pool); err != nil {
+			return err
+		}
 	}
 
 	hosts, err := rm.resourceHosts(ctx, resource)

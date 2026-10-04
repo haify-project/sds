@@ -54,6 +54,19 @@ func (m *Monitor) checkPools(ctx context.Context, sc *pollScope, obs *Observatio
 			event.TypePoolDataNearFull, event.TypePoolDataFull)
 		m.checkPoolDimension(p, sc, "metadata", p.MetaPercent,
 			event.TypePoolMetadataNearFull, event.TypePoolMetadataFull)
+		// A VDO pool that runs out of physical space fails writes while the
+		// thin pool above it still reports room. Evaluated only while the
+		// figure was read: a pool whose VDO usage is unknown this poll has its
+		// conditions held as they are, neither raised nor cleared.
+		switch {
+		case p.VDO && p.VDOPhysicalKnown:
+			m.checkPoolDimension(p, sc, "VDO physical", p.VDOPhysicalPercent,
+				event.TypePoolVDOPhysicalNearFull, event.TypePoolVDOPhysicalFull)
+		case p.VDO:
+			for _, t := range []event.Type{event.TypePoolVDOPhysicalNearFull, event.TypePoolVDOPhysicalFull} {
+				sc.mark(event.Event{Type: t, Resource: p.Name, Node: p.Node}.Key())
+			}
+		}
 
 		m.level(event.Event{
 			Type:     event.TypePoolOutOfSpace,

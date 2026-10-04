@@ -44,6 +44,9 @@ type PoolInfo struct {
 	// after convert-thin), so FreeGB stays near zero however empty the pool
 	// is. Prefer this when it is present; see poolthin.go.
 	ThinUsage *PoolThinInfo `json:"thin_usage,omitempty"`
+	// VDO is the physical side of a VDO-backed thin pool, nil for any other
+	// pool; see storage_vdo.go.
+	VDO *PoolVDOInfo `json:"vdo,omitempty"`
 }
 
 // StorageManager manages all storage operations
@@ -76,7 +79,7 @@ func poolInfoFromDB(pool *database.Pool) *PoolInfo {
 		TotalGB: uint64(max(pool.TotalGB, 0)),
 		FreeGB:  uint64(max(pool.FreeGB, 0)),
 		Devices: devices,
-		Thin:    pool.Type == "thin_pool",
+		Thin:    isThinPoolType(pool.Type),
 	}
 }
 
@@ -184,6 +187,12 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 		return fmt.Errorf("node not found: %s", node)
 	}
 
+	if normalizedType == vdoPoolType {
+		if err := sm.assertVDOSupported(ctx, address, node); err != nil {
+			return err
+		}
+	}
+
 	// Create PVs first
 	for _, disk := range disks {
 		result, err := sm.controller.deployment.PVCreate(ctx, []string{address}, disk)
@@ -206,7 +215,7 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 	}
 
 	// If type is thin_pool, create a thin pool LV
-	if normalizedType == "thin_pool" {
+	if isThinPoolType(normalizedType) {
 		// An explicit size is honoured; otherwise the pool takes 95% of the
 		// group's free extents. The 5% left unallocated is room for the
 		// metadata area and its spare copy to grow, and for an operator to
@@ -217,11 +226,13 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 			thinSize = fmt.Sprintf("%dG", sizeGB)
 		}
 
-		tpResult, err := sm.controller.deployment.LVCreateThinPool(ctx, []string{address}, name, thinPoolName, thinSize)
-		if err != nil {
+		if normalizedType == vdoPoolType {
+			if err := sm.createVDOThinPool(ctx, address, name, thinSize); err != nil {
+				return err
+			}
+		} else if tpResult, err := sm.controller.deployment.LVCreateThinPool(ctx, []string{address}, name, thinPoolName, thinSize); err != nil {
 			return fmt.Errorf("failed to create thin pool: %w", err)
-		}
-		if !tpResult.AllSuccess() {
+		} else if !tpResult.AllSuccess() {
 			return fmt.Errorf("failed to create thin pool: %s", tpResult.FailureDetails())
 		}
 	}
@@ -409,6 +420,7 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 					pool.ThinUsage = byVG[pool.Name]
 				}
 			}
+			sm.attachVDOUsage(ctx, poolByKey)
 		}
 	}
 
@@ -463,6 +475,9 @@ func (sm *StorageManager) AddDiskToPool(ctx context.Context, pool, disk, node st
 	// record it before trying to grow the pool.
 	sm.recordPoolDevice(ctx, pool, disk)
 
+	if sm.vdoPoolNames(ctx)[pool] {
+		return errVDONotGrown(pool, disk, node)
+	}
 	if err := sm.growThinPoolAfterExtend(ctx, address, pool); err != nil {
 		return fmt.Errorf("disk %s added to %s on %s, but its thin pool was not grown into it: %w",
 			disk, pool, node, err)

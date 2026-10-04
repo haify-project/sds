@@ -425,7 +425,7 @@ func Load(configPath string) (*Config, error) {
 // resolves to one. Accepting "zfs" here would produce a controller that starts
 // cleanly and then fails every pool creation that omits a type, with an error
 // about LVM that names a setting the operator wrote on purpose.
-var validPoolTypeDefaults = []string{"vg", "lvm", "lvm-thin", "thin-pool", "thin_pool"}
+var validPoolTypeDefaults = []string{"vg", "lvm", "lvm-thin", "thin-pool", "thin_pool", "lvm-thin-vdo", "thin_vdo"}
 
 func (c *Config) Validate() error {
 	if c.Server.ListenAddress == "" {

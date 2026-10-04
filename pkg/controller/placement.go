@@ -506,7 +506,7 @@ func (rm *ResourceManager) poolRecordedThin(ctx context.Context, pool string) bo
 	if err != nil || p == nil {
 		return false
 	}
-	return p.Type == "thin_pool"
+	return isThinPoolType(p.Type)
 }
 
 // nodesHostingResources returns the set of node names holding a diskful replica

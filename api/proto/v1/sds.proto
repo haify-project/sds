@@ -796,6 +796,14 @@ message PoolInfo {
   // reports it (1.85 means 1.85x); 0 when not reported. compression above is
   // the algorithm in use.
   double compress_ratio = 24;
+
+  // VDO-backed thin pools (type "thin_vdo"). thin_data_percent above is the
+  // logical space handed out; vdo_physical_percent is the physical space
+  // deduplication and compression did not save, and the one that, at 100%,
+  // turns writes into I/O errors. has_vdo is false for any other pool.
+  bool has_vdo = 25;
+  double vdo_physical_percent = 26;
+  double vdo_saving_percent = 27;
 }
 
 // ZFS messages
