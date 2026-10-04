@@ -222,3 +222,28 @@ func TestHasAllowTwoPrimaries(t *testing.T) {
 		})
 	}
 }
+
+// A live migration opens the window on its source and target only: another
+// host still attached from a guest it once ran, and down, used to fail every
+// migration of that guest.
+func TestSetDualPrimaryOnOpensOnlyTheNamedNodes(t *testing.T) {
+	dep := &fakeDeploymentClient{}
+	ctrl := newDualPrimaryController(t, dep, &database.Resource{
+		Name: "pve-100-0", Nodes: "n1,n2", DisklessClients: "pve",
+	})
+
+	require.NoError(t, ctrl.resources.SetDualPrimaryOn(context.Background(), "pve-100-0", true, []string{"n1", "pve"}))
+	calls := execCmdsMatching(dep, "--allow-two-primaries=yes")
+	require.Len(t, calls, 1)
+	assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.9"}, calls[0].hosts)
+
+	err := ctrl.resources.SetDualPrimaryOn(context.Background(), "pve-100-0", true, []string{"n1", "elsewhere"})
+	require.Error(t, err, "a node outside the resource cannot open its window")
+	assert.Contains(t, err.Error(), "does not take part")
+
+	// Closing always covers everyone, whatever the caller names.
+	require.NoError(t, ctrl.resources.SetDualPrimaryOn(context.Background(), "pve-100-0", false, []string{"n1"}))
+	calls = execCmdsMatching(dep, "--allow-two-primaries=no")
+	require.Len(t, calls, 1)
+	assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.2", "10.0.0.9"}, calls[0].hosts)
+}

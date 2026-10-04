@@ -43,6 +43,19 @@ const (
 // command while checking the outcome is what keeps "best-effort" from meaning
 // "silently gave up".
 func (rm *ResourceManager) SetDualPrimary(ctx context.Context, resource string, enable bool) error {
+	return rm.SetDualPrimaryOn(ctx, resource, enable, nil)
+}
+
+// SetDualPrimaryOn is SetDualPrimary; nodes, when set, limits an enable to
+// those participants.
+//
+// allow-two-primaries only matters on a connection whose two ends are both
+// Primary, and a live migration has exactly one: source to target. Requiring
+// every participant to accept the option meant one PVE host that was down —
+// still attached as a diskless client from a guest it once ran — blocked every
+// live migration of that guest. Disabling is unchanged: it always covers every
+// participant, because a window left open anywhere is what it exists to close.
+func (rm *ResourceManager) SetDualPrimaryOn(ctx context.Context, resource string, enable bool, nodes []string) error {
 	resource = strings.TrimSpace(resource)
 	if resource == "" {
 		return fmt.Errorf("resource name is required")
@@ -83,6 +96,13 @@ func (rm *ResourceManager) SetDualPrimary(ctx context.Context, resource string, 
 			return nil
 		}
 		return fmt.Errorf("resource %q has no nodes", resource)
+	}
+
+	if enable && len(nodes) > 0 {
+		hosts, err = pickDualPrimaryHosts(hosts, rm.resolveAll(nodes))
+		if err != nil {
+			return fmt.Errorf("resource %q: %w", resource, err)
+		}
 	}
 
 	if enable {
@@ -193,4 +213,26 @@ func hasAllowTwoPrimaries(showOutput string) bool {
 		}
 	}
 	return false
+}
+
+// pickDualPrimaryHosts returns the requested hosts, which must all take part
+// in the resource: opening the window on a node outside it would do nothing
+// and report success.
+func pickDualPrimaryHosts(participants, requested []string) ([]string, error) {
+	in := make(map[string]bool, len(participants))
+	for _, h := range participants {
+		in[h] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, h := range requested {
+		if !in[h] {
+			return nil, fmt.Errorf("%s does not take part in it, so it cannot open a dual-primary window", h)
+		}
+		if !seen[h] {
+			seen[h] = true
+			out = append(out, h)
+		}
+	}
+	return out, nil
 }

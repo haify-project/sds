@@ -65,3 +65,15 @@ sds: sds0
 # Note: sds allocates in whole gigabytes, so a disk size is rounded UP to the
 # next GB. Volumes are always raw — snapshots come from sds (LVM/ZFS), not from
 # an image format, so qcow2 is neither supported nor needed here.
+
+# --- I/O errors instead of a frozen guest on lost quorum -------------------
+# New disks suspend I/O when their node loses quorum (on-no-quorum suspend-io),
+# so a guest waits out a partition instead of remounting its filesystems
+# read-only. Set io-error to have the guest see the error instead.
+#
+#sds: sds-ioerror
+#        controller 192.168.1.10
+#        sdspool vg0
+#        onnoquorum io-error
+#        content images
+#        shared 1

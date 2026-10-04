@@ -80,6 +80,7 @@ live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 | `storagetype` | `lvm`, `lvm-thin` or `zfs`. Unset: the controller's default |
 | `resourceprefix` | Prefix for generated resource names (default `pve`). Give each PVE cluster its own when several share one sds cluster: VM ids are only unique within a PVE cluster |
 | `apitoken` | Bearer token when sds `[auth]`/`[rbac]` is enabled. `storage.cfg` is readable cluster-wide, so use a token scoped to what the plugin needs rather than an admin token |
+| `onnoquorum` | What a new disk does when its node loses quorum or every UpToDate copy: `suspend-io` (default; the guest's I/O freezes and carries on when quorum returns) or `io-error` (the guest sees I/O errors and typically remounts read-only). Applies to disks created from then on; change an existing one with `sds resource set-options <resource> --drbd-options on-no-quorum=<value>,on-no-data-accessible=<value>` |
 
 Standard PVE options `nodes`, `disable`, `content`, `shared` and `bwlimit` are
 also accepted. `content` may be `images` and `rootdir`; the only format is
@@ -94,7 +95,7 @@ also accepted. `content` may be `images` and `rootdir`; the only format is
 | `free_image` | `DELETE /v1/resources/<res>` (cascade teardown) |
 | `list_images` | `GET /v1/resources`, filtered by `<prefix>-` |
 | `activate_volume` | `POST .../diskless-clients` if this node is not in the resource, then a quorum-guarded `POST .../primary` |
-| `deactivate_volume` | `POST .../secondary`, then close any dual-primary window |
+| `deactivate_volume` | `POST .../secondary`, then close any dual-primary window, then `DELETE .../diskless-clients/<node>` if this node is only a diskless client |
 | `volume_resize` | `PATCH /v1/resources/<res>/volumes/0` (online grow) |
 | `volume_snapshot` / rollback / delete | sds snapshot of the backing `<pool>/<lv>` |
 | `status` | `GET /v1/pools`; reports the smallest node's copy of `sdspool` |
@@ -127,6 +128,9 @@ plugin brackets the hand-off:
   guest run with two writers allowed. Demote the leftover with
   `sds resource secondary <resource> <node>` and start the guest again.
   Containers never qualify: they migrate by restart.
+- The window is opened on the migration's source and target only — the ends of
+  the one connection that carries two Primaries. A host that is down elsewhere
+  in the resource does not block the migration.
 - The window is closed again on every exit path: a failed promote, a device that
   does not appear within 20 seconds, and `deactivate_volume` (which closes
   unconditionally, since the source deactivates after hand-off).
@@ -141,6 +145,36 @@ sds resource dual-primary <resource> off
 
 **This is not a way to use one volume from two machines.** An ordinary
 filesystem mounted twice will corrupt regardless of what DRBD permits.
+
+## Diskless clients come and go
+
+A host with no replica of a disk attaches to it as a diskless client when the
+guest starts there, and detaches when the guest stops or migrates away. Hosts
+used to stay attached to every disk of every guest they had ever run, so one of
+them being down blocked operations on all of those disks. A detach that fails
+is logged and leaves the host attached, as before. A client that is a
+resource's last quorum vote besides two replicas is not removed but becomes its
+tiebreaker.
+
+## When the controller is unreachable
+
+Starting and stopping a guest go through the controller, and an unreachable
+controller used to mean no guest could start and HA could restart none. Now,
+when no controller answers and the disk is **already up on this node**:
+
+- `activate_volume` promotes it with plain `drbdadm primary` — never
+  `--force`, so DRBD still refuses without quorum and an UpToDate copy within
+  reach. It is refused while another node holds the disk Primary: only the
+  controller can tell a live migration from a leftover.
+- the disk's path resolves locally (`/dev/drbd/by-res/<resource>/0`), so qemu
+  can be started.
+- `deactivate_volume` demotes with `drbdadm secondary` and clears this node's
+  side of any dual-primary window. Run `sds resource dual-primary <resource>
+  off` once the controller is back if a migration was under way.
+
+A disk that is not up on the node, a first attach, and a live migration still
+need the controller. An error from a controller that answered is never
+bypassed.
 
 ## HA
 

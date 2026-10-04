@@ -5708,6 +5708,13 @@
         "enable": {
           "type": "boolean",
           "description": "enable=true is strict: WAN (protocol A / async) resources are REFUSED,\nbecause two Primaries over an async link corrupts data, and a failure on\nany node fails the call.\n\nenable=false is idempotent: it is the caller's cleanup path, so an unknown\nresource or a node that rejects the command is tolerated — but the\neffective state is verified afterwards and an error is returned if any\nreachable node is still dual-primary."
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "nodes limits an enable to these participants — a live migration's source\nand target, the two ends of the only connection that will carry two\nPrimaries. Empty enables it on every participant. Disabling always covers\nevery participant."
         }
       },
       "description": "SetDualPrimary toggles DRBD's allow-two-primaries for a resource. It exists\nfor the live-migration hand-off in the Proxmox VE storage plugin, where the\nsource and target hypervisor both hold the disk open for a moment.\n\nThe toggle is applied at RUNTIME only (drbdadm net-options) and never written\ninto the .res file, so a reboot or `drbdadm adjust` restores single-primary\non its own."

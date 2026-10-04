@@ -15,14 +15,14 @@ package PVE::Storage::Custom::SDSPlugin;
 use strict;
 use warnings;
 
-use JSON::PP ();
+use Cwd ();
 use PVE::INotify;
 use PVE::Storage::Plugin;
 use PVE::Storage::Custom::SDS::Client qw(_uri_escape);
 use PVE::Storage::Custom::SDS::Capacity qw(pool_capacity);
 use PVE::Storage::Custom::SDS::Naming qw(sds_resource_name volname_from_resource
-    kib_to_gb bytes_to_gb gb_to_bytes _node_participates _other_primary_node);
-use PVE::Storage::Custom::SDS::Migration qw(assert_live_migration);
+    kib_to_gb bytes_to_gb gb_to_bytes);
+use PVE::Storage::Custom::SDS::Activation qw(activate deactivate controller_unreachable local_device_path);
 
 use base qw(PVE::Storage::Plugin);
 
@@ -110,6 +110,11 @@ sub properties {
             description => "Bearer token for sds when [auth]/[rbac] is enabled.",
             type        => 'string',
         },
+        onnoquorum => {
+            description => "What a new volume does when its node loses quorum or every UpToDate copy: suspend-io (default) freezes the guest's I/O until it is back, io-error fails it.",
+            type        => 'string',
+            enum        => [ 'suspend-io', 'io-error' ],
+        },
     };
 }
 
@@ -122,6 +127,7 @@ sub options {
         storagetype    => { optional => 1 },
         resourceprefix => { optional => 1 },
         apitoken       => { optional => 1 },
+        onnoquorum     => { optional => 1 },
         nodes          => { optional => 1 },
         disable        => { optional => 1 },
         content        => { optional => 1 },
@@ -193,23 +199,6 @@ sub _backing_volume_target {
     return ("$pool/$lv", $node);
 }
 
-sub _set_dual_primary {
-    my ($class, $scfg, $resname, $enable) = @_;
-    my $client = $class->_client($scfg);
-    $client->request('POST', "/v1/resources/$resname/dual-primary",
-        { resource => $resname, enable => $enable ? JSON::PP::true : JSON::PP::false });
-}
-
-sub _wait_for_device {
-    my ($path) = @_;
-    my $deadline = time() + $DEVICE_WAIT_SECONDS;
-    while (1) {
-        return 1 if $DEVICE_CHECK->($path);
-        return 0 if time() >= $deadline;
-        select(undef, undef, undef, $DEVICE_POLL_INTERVAL);
-    }
-}
-
 # ---------------------------------------------------------------------------
 # Volume naming / paths
 # ---------------------------------------------------------------------------
@@ -232,7 +221,15 @@ sub filesystem_path {
 
     my ($vtype, $name, $vmid) = $class->parse_volname($volname);
     my $resname = sds_resource_name($scfg, $name);
-    my $info    = $class->_get_resource($scfg, $resname);
+    my $info    = eval { $class->_get_resource($scfg, $resname) };
+    if (my $err = $@) {
+        # Without the controller, a volume that is up here is still
+        # addressable: DRBD publishes it under by-res (SDS/Activation.pm).
+        my $local = local_device_path($resname);
+        die $err if !controller_unreachable($err) || !$DEVICE_CHECK->($local);
+        my $device = Cwd::abs_path($local) // $local;
+        return wantarray ? ($device, $vmid, $vtype) : $device;
+    }
     my $vol     = ($info->{volumes} && @{ $info->{volumes} }) ? $info->{volumes}[0] : undef;
     my $device  = $vol ? $vol->{device} : undef;
     die "sds resource '$resname' has no device\n" if !defined($device) || !length($device);
@@ -273,10 +270,20 @@ sub alloc_image {
     my $resname = sds_resource_name($scfg, $name);
     my $sizegb  = kib_to_gb($size);
 
+    # A guest whose disk errors out on lost quorum remounts its filesystems
+    # read-only and needs a reboot; one whose I/O is suspended just waits, and
+    # carries on when quorum returns. If another node took over meanwhile, DRBD
+    # demotes this one (on-suspended-primary-outdated force-secondary, an sds
+    # default) instead of letting it resume stale.
+    my $onnoquorum = $scfg->{onnoquorum} // 'suspend-io';
     my $payload = {
         name        => $resname,
         sizeGb      => $sizegb,
         protocol    => 'C',
+        drbdOptions => {
+            'on-no-quorum'          => $onnoquorum,
+            'on-no-data-accessible' => $onnoquorum,
+        },
     };
     $payload->{pool}        = $scfg->{sdspool}     if $scfg->{sdspool};
     $payload->{storageType} = $scfg->{storagetype} if $scfg->{storagetype};
@@ -415,54 +422,7 @@ sub activate_volume {
     die "activating a snapshot is not supported by the sds storage plugin\n"
         if defined $snapname;
 
-    my ($vtype, $name, $vmid) = $class->parse_volname($volname);
-    my $resname = sds_resource_name($scfg, $name);
-    my $node    = _nodename();
-    my $client  = $class->_client($scfg);
-
-    # A PVE host that stores no replica still has to see /dev/drbdN to run the
-    # guest, so it joins the resource as a diskless client. This is what lets a
-    # compute-only hypervisor take part at all, including as a migration target.
-    my $info = $class->_get_resource($scfg, $resname);
-    if (!_node_participates($info, $node)) {
-        $client->request('POST', "/v1/resources/$resname/diskless-clients",
-            { resource => $resname, node => $node });
-    }
-
-    # Live migration is the one case where two nodes legitimately hold the disk
-    # open at once. Open the dual-primary window only when another node is
-    # still Primary AND PVE is migrating the guest from there; any other
-    # Primary is a leftover, refused rather than joined (SDS/Migration.pm).
-    my $status = $class->_get_status($scfg, $resname);
-    my $peer   = _other_primary_node($status, $node);
-    my $opened = 0;
-
-    if (defined $peer) {
-        assert_live_migration($vmid, $node, $peer, $volname, $resname);
-        $class->_set_dual_primary($scfg, $resname, 1);
-        $opened = 1;
-    }
-
-    eval {
-        # quorum-guarded: sds force-promotes only if this node holds DRBD
-        # quorum and refuses otherwise, so an HA restart after a hard node
-        # failure cannot split-brain.
-        $client->request('POST', "/v1/resources/$resname/primary",
-            { resource => $resname, node => $node, quorumGuarded => JSON::PP::true });
-    };
-    if (my $err = $@) {
-        # Never leave the window open on a failed promote.
-        eval { $class->_set_dual_primary($scfg, $resname, 0) } if $opened;
-        die $err;
-    }
-
-    my $device = $class->filesystem_path($scfg, $volname);
-    if (!_wait_for_device($device)) {
-        eval { $class->_set_dual_primary($scfg, $resname, 0) } if $opened;
-        die "sds volume '$volname' promoted but $device did not appear within ${DEVICE_WAIT_SECONDS}s\n";
-    }
-
-    return 1;
+    return activate($class, $scfg, $volname);
 }
 
 sub deactivate_volume {
@@ -470,29 +430,7 @@ sub deactivate_volume {
 
     return 1 if defined $snapname;
 
-    my ($vtype, $name) = $class->parse_volname($volname);
-    my $resname = sds_resource_name($scfg, $name);
-    my $node    = _nodename();
-    my $client  = $class->_client($scfg);
-
-    my $demote_err;
-    eval {
-        $client->request('POST', "/v1/resources/$resname/secondary",
-            { resource => $resname, node => $node });
-    };
-    $demote_err = $@ if $@;
-
-    # Close the dual-primary window unconditionally: this is the source side of
-    # a completed migration, and leaving it open is the failure mode the whole
-    # bracket exists to prevent. Disabling is idempotent and verified by sds,
-    # so it is safe even when no window was ever opened.
-    eval { $class->_set_dual_primary($scfg, $resname, 0) };
-    my $dual_err = $@;
-
-    die $demote_err if $demote_err;
-    die $dual_err   if $dual_err;
-
-    return 1;
+    return deactivate($class, $scfg, $volname);
 }
 
 # ---------------------------------------------------------------------------

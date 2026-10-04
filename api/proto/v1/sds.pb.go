@@ -5685,7 +5685,12 @@ type SetDualPrimaryRequest struct {
 	// resource or a node that rejects the command is tolerated — but the
 	// effective state is verified afterwards and an error is returned if any
 	// reachable node is still dual-primary.
-	Enable        bool `protobuf:"varint,2,opt,name=enable,proto3" json:"enable,omitempty"`
+	Enable bool `protobuf:"varint,2,opt,name=enable,proto3" json:"enable,omitempty"`
+	// nodes limits an enable to these participants — a live migration's source
+	// and target, the two ends of the only connection that will carry two
+	// Primaries. Empty enables it on every participant. Disabling always covers
+	// every participant.
+	Nodes         []string `protobuf:"bytes,3,rep,name=nodes,proto3" json:"nodes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5732,6 +5737,13 @@ func (x *SetDualPrimaryRequest) GetEnable() bool {
 		return x.Enable
 	}
 	return false
+}
+
+func (x *SetDualPrimaryRequest) GetNodes() []string {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
 }
 
 type SetDualPrimaryResponse struct {
@@ -21432,10 +21444,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04node\x18\x02 \x01(\tR\x04node\"J\n" +
 	"\x14SetSecondaryResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"K\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"a\n" +
 	"\x15SetDualPrimaryRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x16\n" +
-	"\x06enable\x18\x02 \x01(\bR\x06enable\"L\n" +
+	"\x06enable\x18\x02 \x01(\bR\x06enable\x12\x14\n" +
+	"\x05nodes\x18\x03 \x03(\tR\x05nodes\"L\n" +
 	"\x16SetDualPrimaryResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"M\n" +

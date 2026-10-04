@@ -468,7 +468,7 @@ func (s *Server) SetSecondary(ctx context.Context, req *sdspb.SetSecondaryReques
 // window. See ResourceManager.SetDualPrimary for the safety rules (WAN refused,
 // disable idempotent + verified).
 func (s *Server) SetDualPrimary(ctx context.Context, req *sdspb.SetDualPrimaryRequest) (*sdspb.SetDualPrimaryResponse, error) {
-	if err := s.resources.SetDualPrimary(ctx, req.Resource, req.Enable); err != nil {
+	if err := s.resources.SetDualPrimaryOn(ctx, req.Resource, req.Enable, req.Nodes); err != nil {
 		return &sdspb.SetDualPrimaryResponse{
 			Success: false,
 			Message: err.Error(),
