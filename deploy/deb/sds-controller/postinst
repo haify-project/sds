@@ -1,0 +1,71 @@
+#!/bin/sh
+# postinst for sds-controller.
+#
+# The package installs the controller; it never enables or starts it. Without
+# Self-HA exactly one host in a cluster runs sds-controller, and with Self-HA
+# drbd-reactor decides which node runs it: a controller started by a package
+# on a standby would open the database underneath the active one, or fight
+# reactor for it. Turning it on is therefore always the operator's step.
+#
+# For the same reason an upgrade does not restart a running controller: under
+# Self-HA a restart is a failover, and without it a restart can cut a long
+# operation (a resync, a backup) short. The new binary takes effect at the
+# next restart, which the message below asks for.
+
+set -e
+
+CONFIG=/etc/sds/controller.toml
+TEMPLATE=/usr/share/sds-controller/controller.toml.example
+
+case "$1" in
+configure)
+    # Directories the controller and deploy.sh expect. Created only when
+    # absent: under Self-HA /var/lib/sds is the mount point of the sds-meta
+    # volume and must not have its mode or owner changed underneath.
+    for dir in /etc/sds /var/lib/sds /var/log/sds; do
+        [ -d "$dir" ] || install -d -m 0755 "$dir"
+    done
+
+    # The config is copied only when the path is unused, never shipped as a
+    # conffile: a conffile would have dpkg prompt about, or replace, an
+    # operator's config on upgrade. 0600 because [auth]/[rbac] tokens go in
+    # it. The template is read from /usr/share/sds-controller, not from the
+    # doc directory, which minimal images exclude (dpkg path-exclude).
+    if [ ! -e "$CONFIG" ] && [ ! -L "$CONFIG" ]; then
+        install -m 0600 "$TEMPLATE" "$CONFIG"
+        echo "Created $CONFIG from the example; edit it before starting the controller."
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+
+    # A copy from a manual install (make install-cli, deploy.sh) sits earlier
+    # in PATH than /usr/bin and would keep answering to "sds".
+    for name in sds sds-cli sds-mcp; do
+        if [ -e "/usr/local/bin/$name" ]; then
+            echo "Note: /usr/local/bin/$name (a manual install) comes before /usr/bin/$name in PATH; remove it to use the packaged one." >&2
+        fi
+    done
+    # Unit files copied by hand override the packaged ones in /lib.
+    if [ -f /etc/systemd/system/sds-controller.service ]; then
+        echo "Note: /etc/systemd/system/sds-controller.service overrides the packaged unit (Self-HA relies on that copy; otherwise it is left from a manual install)." >&2
+    fi
+
+    if [ -z "$2" ]; then
+        echo "sds-controller is installed but not enabled. Run it on ONE host only:"
+        echo "  systemctl enable --now sds-controller"
+    elif [ -d /run/systemd/system ] && systemctl is-active --quiet sds-controller; then
+        echo "sds-controller keeps running the previous build until it is restarted:"
+        echo "  systemctl restart sds-controller   (under Self-HA: sds ha evict sds-meta)"
+    fi
+    ;;
+abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+*)
+    echo "postinst called with unknown argument '$1'" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

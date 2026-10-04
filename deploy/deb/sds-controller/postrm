@@ -1,0 +1,26 @@
+#!/bin/sh
+# postrm for sds-controller.
+#
+# Purge deliberately leaves /etc/sds and /var/lib/sds alone. controller.toml was
+# copied in by postinst and has almost certainly been edited since, and
+# /var/lib/sds holds the controller database (and, under Self-HA, is the
+# sds-meta mount): the cluster's whole record of its resources. Neither is the
+# package's to delete.
+
+set -e
+
+case "$1" in
+remove|purge)
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+    ;;
+upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+*)
+    echo "postrm called with unknown argument '$1'" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

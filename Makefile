@@ -1,4 +1,4 @@
-.PHONY: kb build test clean install-controller install-cli install-mcp run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure hooks ci
+.PHONY: kb build test clean install-controller install-cli install-mcp run-controller run-cli proto web-ui web-ui-dev web-ui-build ui-sync ui-ensure hooks ci deb deb-pve-plugin
 
 # Sync the freshly built web UI into ui/dist for go:embed. The directory is
 # gitignored and intentionally kept around after builds so plain `go build`
@@ -74,6 +74,17 @@ install-mcp: build
 	@echo "Installing sds-mcp..."
 	sudo cp bin/sds-mcp /usr/local/bin/
 	@echo "MCP server installed to /usr/local/bin/sds-mcp"
+
+# Debian packages into dist/: sds-controller for linux/amd64 and linux/arm64
+# (controller, service-ip, sds, sds-mcp, units) and the sds-pve-plugin Proxmox
+# VE storage plugin. Needs dpkg-deb, Go and web-ui/node_modules (npm ci); see
+# scripts/build-deb.sh for VERSION, ARCHES and SKIP_UI_BUILD.
+deb:
+	./scripts/build-deb.sh
+
+# Just the Proxmox VE plugin package, which needs neither Go nor Node.js.
+deb-pve-plugin:
+	./scripts/build-deb.sh pve-plugin
 
 # Run controller locally
 # configs/controller.toml is local and untracked: copy it from the example.

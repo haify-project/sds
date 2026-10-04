@@ -43,30 +43,78 @@ storage nodes hold the replicas, PVE nodes run the guests.
   (and, for an encrypted resource, as the `/dev/mapper/sds_*` container under
   it). Unfiltered, the host's LVM finds the guest's volume group and may
   activate it, which holds the device open: the VM can then neither migrate nor
-  fail over. `install.sh` prepends `"r|^/dev/drbd|", "r|^/dev/mapper/sds_|"` to
-  `global_filter` in `/etc/lvm/lvm.conf`, keeping PVE's own entries
-  (`lvm-filter.sh`; `SDS_SKIP_LVM_FILTER=1` skips it). It also needs
-  `devices/scan_lvs = 0`, the default, so the backing LVs are not scanned.
+  fail over. The package (or `install.sh`) prepends
+  `"r|^/dev/drbd|", "r|^/dev/mapper/sds_|"` to `global_filter` in
+  `/etc/lvm/lvm.conf`, keeping PVE's own entries (`lvm-filter.sh`;
+  `SDS_SKIP_LVM_FILTER=1` skips it). It also needs `devices/scan_lvs = 0`, the
+  default, so the backing LVs are not scanned.
 
-`./preflight.sh <controller>[,<controller>...]` (the `controller` value from storage.cfg; `SDS_CA=<file>` for a private CA) checks all of the above except
+`preflight.sh <controller>[,<controller>...]` (the `controller` value from storage.cfg; `SDS_CA=<file>` for a private CA) checks all of the above except
 SSH, and exits non-zero if anything required is missing (a missing LVM filter
-is a warning: `install.sh` adds it).
+is a warning: installing adds it). It is in this directory and, once the
+package is installed, in `/usr/share/sds-pve-plugin/`.
 
 ## Install
 
-On every PVE node:
+### From the package (preferred)
+
+Build the package once, on any Debian/Ubuntu machine with a checkout (it needs
+only `dpkg-deb` and Perl, not Go or Node.js):
+
+```bash
+make deb-pve-plugin        # dist/sds-pve-plugin_<version>_all.deb
+```
+
+`make deb` builds it together with the controller packages. Then, on every PVE
+node:
+
+```bash
+./preflight.sh 192.168.1.10                  # from the checkout: verify prerequisites first
+apt install ./sds-pve-plugin_*_all.deb       # the ./ makes apt install a local file
+```
+
+The package replaces `install.sh` and installs exactly the same modules:
+`SDSPlugin.pm` in `/usr/share/perl5/PVE/Storage/Custom/` and the helpers in
+`.../Custom/SDS/`, plus `lvm-filter.sh` and `preflight.sh` in
+`/usr/share/sds-pve-plugin/`. It depends on `libpve-storage-perl`,
+`drbd-utils` and `lvm2`; the DRBD 9 kernel module (`drbd-dkms`) is still
+yours to install. On installation and on every upgrade it:
+
+1. checks that the module compiles (`perl -c`). If it does not, it stops
+   there: `pvedaemon` and `pveproxy` are not restarted and keep running the
+   previous plugin, and apt reports the package as not configured;
+2. adds the LVM filter with `lvm-filter.sh`, unless `SDS_SKIP_LVM_FILTER=1`
+   (`SDS_SKIP_LVM_FILTER=1 apt install ./sds-pve-plugin_*_all.deb`). A
+   failure there is a warning, not an error;
+3. runs `systemctl try-restart pvedaemon pveproxy`, which does not affect
+   running guests.
+
+`apt remove sds-pve-plugin` removes the modules and restarts the two daemons.
+It changes nothing else: it warns if `storage.cfg` still has `sds:` entries,
+but leaves them (other nodes may still use them), and leaves the LVM filter in
+`lvm.conf`.
+
+A node set up with `install.sh` can move to the package directly: dpkg
+replaces the files in place. Do not run `install.sh --uninstall` afterwards:
+it deletes files the package now owns.
+
+### With install.sh
+
+Without the package, on every PVE node:
 
 ```bash
 ./preflight.sh 192.168.1.10     # verify prerequisites first
 sudo ./install.sh               # compile-checks, copies the modules, adds the LVM filter, restarts pvedaemon + pveproxy
 ```
 
-`install.sh` puts `SDSPlugin.pm` in `/usr/share/perl5/PVE/Storage/Custom/` and
-the helpers in `.../Custom/SDS/`. Restarting `pvedaemon` and `pveproxy` does
-not affect running guests. Uninstall with `sudo ./install.sh --uninstall`
-after removing the `sds:` entries from `storage.cfg`.
+`install.sh` does what the package does, from the checkout and without dpkg
+knowing about the files. Uninstall with `sudo ./install.sh --uninstall` after
+removing the `sds:` entries from `storage.cfg`.
 
-Then add a storage entry once (`/etc/pve/storage.cfg` is cluster-wide):
+### Storage entry
+
+With the plugin on every node, add a storage entry once (`/etc/pve/storage.cfg`
+is cluster-wide):
 
 ```
 sds: sds0
