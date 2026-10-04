@@ -305,6 +305,10 @@ func (c *Controller) Start() error {
 	// controller only; its cursor moves with the database on failover.
 	c.startAuditShipper(c.ctx)
 	go c.watchLockClock(c.ctx)
+	c.startAutoEvict(c.ctx)
+	if c.resources != nil {
+		c.resources.resumeMoves(c.ctx)
+	}
 
 	// A backup left "running" belongs to a controller that died mid-transfer;
 	// only the active controller ships backups, so nothing can still be in
@@ -497,6 +501,7 @@ func (c *Controller) loadFromDatabase(ctx context.Context) error {
 			Version:            dbNode.Version,
 			Capacity:           make(map[string]interface{}),
 			Labels:             labels,
+			OfflineSince:       dbNode.OfflineSince,
 		}
 		c.nodes.mu.Unlock()
 

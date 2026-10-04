@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
@@ -26,6 +27,7 @@ func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeReques
 			Hostname:           node.Hostname,
 			State:              string(node.State),
 			LastSeen:           node.LastSeen.Unix(),
+			OfflineSince:       unixOrZero(node.OfflineSince),
 			Version:            node.Version,
 			Labels:             node.Labels,
 		},
@@ -82,6 +84,7 @@ func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb
 			Hostname:           node.Hostname,
 			State:              string(node.State),
 			LastSeen:           node.LastSeen.Unix(),
+			OfflineSince:       unixOrZero(node.OfflineSince),
 			Version:            node.Version,
 			Labels:             node.Labels,
 			ReplicationAddress: node.ReplicationAddress,
@@ -145,6 +148,7 @@ func (s *Server) SetNodeLabels(ctx context.Context, req *sdspb.SetNodeLabelsRequ
 			Hostname:           node.Hostname,
 			State:              string(node.State),
 			LastSeen:           node.LastSeen.Unix(),
+			OfflineSince:       unixOrZero(node.OfflineSince),
 			Version:            node.Version,
 			Labels:             node.Labels,
 			ReplicationAddress: node.ReplicationAddress,
@@ -169,6 +173,7 @@ func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*s
 			Hostname:           n.Hostname,
 			State:              string(n.State),
 			LastSeen:           n.LastSeen.Unix(),
+			OfflineSince:       unixOrZero(n.OfflineSince),
 			Version:            n.Version,
 			Labels:             n.Labels,
 			ReplicationAddress: n.ReplicationAddress,
@@ -204,4 +209,12 @@ func (s *Server) HealthCheck(ctx context.Context, req *sdspb.HealthCheckRequest)
 			AvailableAgents:         health.AvailableAgents,
 		},
 	}, nil
+}
+
+// unixOrZero is t in Unix seconds, or 0 for the zero time.
+func unixOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
 }

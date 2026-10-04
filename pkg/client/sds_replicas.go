@@ -91,6 +91,18 @@ func (c *SDSClient) AddReplica(ctx context.Context, resource, node string) error
 	return nil
 }
 
+// AddReplicaWith adds a replica with AddReplicaRequest's options.
+func (c *SDSClient) AddReplicaWith(ctx context.Context, req *sdspb.AddReplicaRequest) error {
+	resp, err := c.client.AddReplica(ctx, req)
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 // AddReplicaIgnoringFreeSpace adds a replica although the node's pool has less
 // free space than the volume; see AddReplicaRequest.ignore_free_space.
 func (c *SDSClient) AddReplicaIgnoringFreeSpace(ctx context.Context, resource, node string) error {

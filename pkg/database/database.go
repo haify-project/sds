@@ -183,9 +183,12 @@ type Node struct {
 	// Labels is a JSON-encoded map[string]string of arbitrary node tags (e.g.
 	// {"rack":"A","zone":"east"}) used by placement constraints. Empty for nodes
 	// registered before labels existed — deserializes as no labels.
-	Labels    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Labels string
+	// OfflineSince is when the node stopped answering, zero while it does.
+	// Self-healing (auto-evict) counts from it, across controller failovers.
+	OfflineSince time.Time `json:",omitempty"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // SaveNode saves or updates a node

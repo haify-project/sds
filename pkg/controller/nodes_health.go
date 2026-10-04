@@ -102,18 +102,37 @@ func (nm *NodeManager) CheckNodeHealth(ctx context.Context, address string) erro
 // placement reads this state, and a check that flipped it back to online would
 // hand a drained node new replicas. Unreachability still reaches the alert
 // detector through CheckNodeHealth's error.
+//
+// The moment a node goes offline is recorded (OfflineSince) and persisted on
+// each transition, so self-healing can tell five minutes from an hour across a
+// controller failover; a node that answers again gets the configs it missed
+// (self_heal_return.go).
 func (nm *NodeManager) markHealth(address string, state NodeState) {
 	nm.mu.Lock()
-	defer nm.mu.Unlock()
 	n := nm.nodes[address]
 	if n == nil {
+		nm.mu.Unlock()
 		return
 	}
+	wasOffline := !n.OfflineSince.IsZero()
 	if state == NodeStateOnline {
 		n.LastSeen = time.Now()
+		n.OfflineSince = time.Time{}
+	} else if !wasOffline {
+		n.OfflineSince = time.Now()
 	}
-	if n.State != NodeStateMaintenance {
+	if n.State != NodeStateMaintenance && n.State != NodeStateEvicted {
 		n.State = state
+	}
+	changed := wasOffline != !n.OfflineSince.IsZero()
+	name := n.Name
+	nm.mu.Unlock()
+
+	if changed {
+		go nm.persistHealth(address)
+		if state == NodeStateOnline {
+			go nm.controller.resources.repairStaleConfigs(name)
+		}
 	}
 }
 

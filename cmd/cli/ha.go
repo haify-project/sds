@@ -51,6 +51,7 @@ func haCommand() *cobra.Command {
 	cmd.AddCommand(haCreate())
 	cmd.AddCommand(haEvict())
 	cmd.AddCommand(haSetTiebreaker())
+	cmd.AddCommand(haSetPreferredCommand())
 	cmd.AddCommand(haDelete())
 	cmd.AddCommand(haList())
 	cmd.AddCommand(haStatus())

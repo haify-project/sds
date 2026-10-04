@@ -47,6 +47,13 @@ const (
 	// TypeNodeUnreachable fires when the controller cannot reach a registered
 	// node over SSH — the transport every other operation depends on.
 	TypeNodeUnreachable Type = "node.unreachable"
+	// TypeNodeEvicted is published (as info) by self-healing: a replica of
+	// an unreachable node replaced, a node evicted, or — in dry-run, or when
+	// a guard says no — what would have been done and why it was not.
+	TypeNodeEvicted Type = "node.evicted"
+	// TypeReplicaMoved is published (as info) when a move-replica finishes,
+	// or (as a warning) when it could not.
+	TypeReplicaMoved Type = "resource.replica_moved"
 	// TypeWANDegraded fires when a WAN-replicated resource's cross-site link is
 	// broken, which local replica states cannot reveal on their own.
 	TypeWANDegraded Type = "wan.degraded"

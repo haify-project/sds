@@ -68,12 +68,3 @@ func TestRelieveThinPoolRemovesOldestUntilUnderThreshold(t *testing.T) {
 		t.Fatalf("a pool under the threshold loses nothing, removed %v", removed)
 	}
 }
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}

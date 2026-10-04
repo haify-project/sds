@@ -34,6 +34,7 @@ type Config struct {
 	SelfHA   SelfHAConfig   `mapstructure:"self_ha"`
 	Alert    AlertConfig    `mapstructure:"alert"`
 	Inspect  InspectConfig  `mapstructure:"inspect"`
+	SelfHeal SelfHealConfig `mapstructure:"self_heal"`
 }
 
 // WANConfig tunes opt-in WAN replication.
@@ -466,6 +467,9 @@ func (c *Config) Validate() error {
 	if err := c.Alert.WriteAnomaly.validate(); err != nil {
 		return err
 	}
+	if err := c.SelfHeal.validate(); err != nil {
+		return err
+	}
 	if c.Auth.Enabled {
 		if len(c.Auth.Token) < 16 {
 			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
@@ -523,6 +527,7 @@ func setDefaults() {
 	setAuditDefaults()
 	setApprovalDefaults()
 	setWriteAnomalyDefaults()
+	setSelfHealDefaults()
 	viper.SetDefault("rbac.enabled", false)
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)
@@ -564,7 +569,7 @@ func (c *Config) Save(path string) error {
 		{"tls", c.TLS}, {"log", c.Log}, {"storage", c.Storage},
 		{"metrics", c.Metrics}, {"audit", c.Audit}, {"rbac", c.RBAC},
 		{"gateway", c.Gateway}, {"resource", c.Resource},
-		{"schedule", c.Schedule}, {"alert", c.Alert}, {"inspect", c.Inspect},
+		{"schedule", c.Schedule}, {"alert", c.Alert}, {"inspect", c.Inspect}, {"self_heal", c.SelfHeal},
 	}
 	for _, s := range sections {
 		var m map[string]any

@@ -202,3 +202,12 @@ notify_min = "warn"
 # [rbac.approval]
 # enabled = true
 # ttl_minutes = 60
+
+# Self-healing: replace the replicas of a node that stays unreachable.
+# "off" (default), "dry-run" (only say what it would do) or "on". It acts only
+# after after_minutes offline, confirmed by the peers' DRBD as well as SSH,
+# and only while at most max_offline_percent of the nodes are offline.
+[self_heal]
+auto_evict = "off"
+after_minutes = 60
+max_offline_percent = 34

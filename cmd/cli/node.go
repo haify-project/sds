@@ -20,6 +20,7 @@ func nodeCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(nodeList())
+	cmd.AddCommand(nodeLostCommand(), nodeRestoreCommand())
 	cmd.AddCommand(nodeGet())
 	cmd.AddCommand(nodeRegister())
 	cmd.AddCommand(nodeUnregister())
@@ -70,10 +71,14 @@ func nodeList() *cobra.Command {
 				if idx := strings.LastIndex(node.Address, ":"); idx != -1 {
 					displayAddr = node.Address[:idx]
 				}
+				state := node.State
+				if node.OfflineSince > 0 {
+					state += " since " + formatLastSeen(node.OfflineSince)
+				}
 				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 					node.Name,
 					displayAddr,
-					node.State,
+					state,
 					node.Version)
 			}
 
@@ -116,6 +121,9 @@ func nodeGet() *cobra.Command {
 			fmt.Printf("State:     %s\n", foundNode.State)
 			fmt.Printf("Version:   %s\n", foundNode.Version)
 			fmt.Printf("Last Seen: %s\n", formatLastSeen(foundNode.LastSeen))
+			if foundNode.OfflineSince > 0 {
+				fmt.Printf("Offline since: %s\n", formatLastSeen(foundNode.OfflineSince))
+			}
 			if len(foundNode.Labels) > 0 {
 				fmt.Printf("Labels:    %s\n", formatLabels(foundNode.Labels))
 			}

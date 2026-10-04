@@ -91,7 +91,7 @@ make run-cli ARGS="pool list"
 ### Deploy Controller to Server
 
 ```bash
-# Cross-compiles (linux/amd64 by default; TARGET_OS/TARGET_ARCH override),
+# Cross-compiles for each host's own architecture (TARGET_ARCH forces one),
 # installs sds-controller to /opt/sds/bin and sds to /usr/local/bin on each
 # host. With Self-HA (sds-meta exists) only the sds-meta Primary's controller
 # is restarted; without it, every listed host gets an enabled, running

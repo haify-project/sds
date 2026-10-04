@@ -2,8 +2,9 @@
 # Build and deploy SDS to the given hosts.
 # Usage: ./scripts/deploy-all.sh node1,node2,node3
 #
-# Cross-compiles for the nodes (linux/amd64 by default; override with
-# TARGET_OS/TARGET_ARCH) and is self-HA aware (see deploy.sh).
+# Cross-compiles for each node's own architecture (TARGET_ARCH forces one),
+# checks every node gets a binary built for it, and is self-HA aware (see
+# deploy.sh).
 
 set -e
 

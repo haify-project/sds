@@ -35,6 +35,14 @@ type Resource struct {
 	// are quorum-only tiebreakers that must never be promoted or mounted. Empty
 	// for resources with no diskless clients.
 	DisklessClients string
+	// StaleConfigNodes lists members whose copy of the DRBD config was not
+	// updated because they were unreachable at the time (add-replica with
+	// allow_unreachable). They are repaired when they answer again.
+	StaleConfigNodes string `json:",omitempty"`
+	// MoveFrom is the node a move-replica takes this resource's replica off
+	// once the new one, on MoveTo, is UpToDate (pkg/controller/self_heal_move.go).
+	MoveFrom string `json:",omitempty"`
+	MoveTo   string `json:",omitempty"`
 	// WAN replication (opt-in). All zero-valued for an ordinary LAN resource, so
 	// existing records deserialize as LAN and every WAN code path stays gated
 	// behind WANMode. See docs/design/wan-replication.md.
