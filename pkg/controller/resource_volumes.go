@@ -269,6 +269,9 @@ func (rm *ResourceManager) RemoveVolume(ctx context.Context, resource string, vo
 	if volumeID == 0 {
 		return fmt.Errorf("removing volume 0 is not supported")
 	}
+	if err := rm.controller.assertResourceUnlocked(ctx, resource, "removing a volume"); err != nil {
+		return err
+	}
 
 	hosts, err := rm.resourceHosts(ctx, resource)
 	if err != nil {

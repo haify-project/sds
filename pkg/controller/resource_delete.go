@@ -18,6 +18,11 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
+	// Not even --force: the lock exists for the case where whoever is
+	// deleting is not who should be.
+	if err := rm.controller.assertResourceUnlocked(ctx, name, "deleting the resource"); err != nil {
+		return err
+	}
 
 	// If this resource has an HA config (a drbd-reactor promoter + VIP), tear it
 	// down first — otherwise deleting the resource orphans the HA reactor config

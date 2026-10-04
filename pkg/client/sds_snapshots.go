@@ -66,13 +66,21 @@ func (c *SDSClient) ListSnapshots(ctx context.Context, volume, node string) ([]*
 	return resp.Snapshots, nil
 }
 
-// CreateSnapshotSchedule creates a cron-driven snapshot schedule with GFS retention.
+// CreateSnapshotSchedule creates a cron-driven snapshot schedule with GFS
+// retention, keeping the lock of any schedule it replaces.
 func (c *SDSClient) CreateSnapshotSchedule(ctx context.Context, resource, cron string, keep *sdspb.GFSRetention, enabled bool) error {
+	return c.CreateSnapshotScheduleLocked(ctx, resource, cron, keep, enabled, nil)
+}
+
+// CreateSnapshotScheduleLocked is CreateSnapshotSchedule setting how many days
+// the schedule locks its snapshots; nil keeps the current lock.
+func (c *SDSClient) CreateSnapshotScheduleLocked(ctx context.Context, resource, cron string, keep *sdspb.GFSRetention, enabled bool, lockDays *uint32) error {
 	resp, err := c.client.CreateSnapshotSchedule(ctx, &sdspb.CreateSnapshotScheduleRequest{
 		Resource: resource,
 		Cron:     cron,
 		Keep:     keep,
 		Enabled:  enabled,
+		LockDays: lockDays,
 	})
 	if err != nil {
 		return err

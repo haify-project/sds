@@ -5552,6 +5552,10 @@
         "node": {
           "type": "string",
           "description": "node reads the target; empty tries the registered nodes in turn."
+        },
+        "asOf": {
+          "type": "string",
+          "description": "as_of (RFC3339) imports the target as it was at that time: the object\nversions current then, before any later overwrite or delete. Restores of\nwhat it imports read those versions too. S3 targets with versioning only."
         }
       }
     },
@@ -5959,6 +5963,20 @@
         "secretObscured": {
           "type": "boolean",
           "description": "secret_obscured says secret is already in rclone's obscured form."
+        },
+        "lockMode": {
+          "type": "string",
+          "description": "lock_mode turns on S3 Object Lock for every object written: \"governance\"\nor \"compliance\"; empty for none. The bucket must have Object Lock (and so\nversioning) enabled, and rclone 1.74 or later must be on the nodes."
+        },
+        "lockDays": {
+          "type": "integer",
+          "format": "int64",
+          "description": "lock_days is how long every backup stays locked at the least."
+        },
+        "fullEveryDays": {
+          "type": "integer",
+          "format": "int64",
+          "description": "full_every_days is how long an incremental chain grows on a locked\ntarget before the next backup is full (default 7). Every backup of a\nchain is locked until chain start + full_every_days + lock_days, so no\nlink expires before a backup built on it."
         }
       }
     },
@@ -6322,6 +6340,17 @@
         "schedule": {
           "type": "string",
           "description": "schedule is the backup schedule (resource@target) that took it; empty for\na backup taken by hand. A schedule's retention deletes only its own."
+        },
+        "lockMode": {
+          "type": "string",
+          "description": "lock_mode and retain_until (RFC3339) are the Object Lock its objects\ncarry; until then it cannot be deleted, by sds or by anyone using sds's\ncredentials."
+        },
+        "retainUntil": {
+          "type": "string"
+        },
+        "readAt": {
+          "type": "string",
+          "description": "read_at (RFC3339) is the time its objects are read as of, for a backup\nimported with as_of."
         }
       }
     },
@@ -6397,6 +6426,17 @@
         "description": {
           "type": "string",
           "description": "description is a rendered one-line summary for display."
+        },
+        "lockMode": {
+          "type": "string"
+        },
+        "lockDays": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "fullEveryDays": {
+          "type": "integer",
+          "format": "int64"
         }
       },
       "description": "BackupTargetInfo describes a backup repository. The secret is intentionally\nabsent: a credential readable back out of the API leaks through every client\nthat ever renders it."
@@ -6995,6 +7035,11 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "lockDays": {
+          "type": "integer",
+          "format": "int64",
+          "description": "lock_days locks every snapshot the schedule takes for that many days: no\nretention, full pool or API call deletes it before then. Unset keeps the\ncurrent schedule's lock; it can be raised at any time, lowered only once\nnothing is locked."
         }
       }
     },
@@ -9865,6 +9910,15 @@
         },
         "nextRun": {
           "type": "string"
+        },
+        "lockDays": {
+          "type": "integer",
+          "format": "int64",
+          "description": "lock_days locks every snapshot the schedule takes for that many days."
+        },
+        "lockedUntil": {
+          "type": "string",
+          "description": "locked_until (RFC3339) is when the newest snapshot it took stops being\nlocked; until then the schedule and its resource cannot be deleted."
         }
       }
     },

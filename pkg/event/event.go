@@ -92,6 +92,16 @@ const (
 	// kernel has dropped the backing device, and any DRBD replica on it is
 	// about to report Diskless.
 	TypePoolOutOfSpace Type = "pool.out_of_space"
+	// TypePoolSnapshotsRemoved is published (as info) each time a near-full
+	// thin pool loses a scheduled snapshot to make room. Snapshot history
+	// vanishing is worth knowing about on its own, and a sudden run of these
+	// is what a volume being encrypted looks like.
+	TypePoolSnapshotsRemoved Type = "pool.snapshots_removed"
+	// TypePoolSnapshotsLocked is published (as info, at critical severity)
+	// on every scheduled run that finds a thin pool still near full with only
+	// locked (or the newest) snapshots left, so nothing more is removed: the
+	// pool has to grow before its replica's writes fail.
+	TypePoolSnapshotsLocked Type = "pool.snapshots_locked"
 
 	// TypeBackupFailed fires when a scheduled backup did not complete, and
 	// resolves on the schedule's next completed run. A schedule that keeps

@@ -41,6 +41,7 @@ func (bm *BackupManager) AddTarget(ctx context.Context, spec backup.TargetSpec) 
 		Bucket: spec.Bucket, Endpoint: spec.Endpoint, Region: spec.Region,
 		Host: spec.Host, Share: spec.Share,
 		User: spec.User, Secret: spec.Secret, SecretObscured: spec.SecretIsObscured,
+		LockMode: string(spec.LockMode), LockDays: spec.LockDays, FullEveryDays: spec.FullEveryDays,
 	}
 	if err := bm.controller.db.SaveBackupTarget(ctx, t); err != nil {
 		return fmt.Errorf("save backup target: %w", err)
@@ -102,5 +103,6 @@ func targetSpecFromDB(r *database.BackupTarget) backup.TargetSpec {
 		Bucket: r.Bucket, Endpoint: r.Endpoint, Region: r.Region,
 		Host: r.Host, Share: r.Share,
 		User: r.User, Secret: r.Secret, SecretIsObscured: r.SecretObscured,
+		LockMode: backup.LockMode(r.LockMode), LockDays: r.LockDays, FullEveryDays: r.FullEveryDays,
 	}
 }

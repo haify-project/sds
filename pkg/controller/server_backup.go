@@ -22,11 +22,16 @@ func (s *Server) AddBackupTarget(ctx context.Context, req *sdspb.AddBackupTarget
 	if err != nil {
 		return &sdspb.AddBackupTargetResponse{Success: false, Message: err.Error()}, nil
 	}
+	mode, err := backup.ParseLockMode(req.LockMode)
+	if err != nil {
+		return &sdspb.AddBackupTargetResponse{Success: false, Message: err.Error()}, nil
+	}
 	spec := backup.TargetSpec{
 		Name: req.Name, Kind: kind, Prefix: req.Prefix,
 		Bucket: req.Bucket, Endpoint: req.Endpoint, Region: req.Region,
 		Host: req.Host, Share: req.Share,
 		User: req.User, Secret: req.Secret, SecretIsObscured: req.SecretObscured,
+		LockMode: mode, LockDays: int(req.LockDays), FullEveryDays: int(req.FullEveryDays),
 	}
 	if err := s.ctrl.backups.AddTarget(ctx, spec); err != nil {
 		return &sdspb.AddBackupTargetResponse{Success: false, Message: err.Error()}, nil
@@ -49,6 +54,7 @@ func (s *Server) ListBackupTargets(ctx context.Context, req *sdspb.ListBackupTar
 			Bucket: t.Bucket, Endpoint: t.Endpoint, Region: t.Region,
 			Host: t.Host, Share: t.Share, User: t.User,
 			Description: t.Describe(),
+			LockMode:    string(t.LockMode), LockDays: uint32(t.LockDays), FullEveryDays: uint32(t.FullEveryDays),
 		})
 	}
 	return &sdspb.ListBackupTargetsResponse{
@@ -134,6 +140,13 @@ func backupToProto(b *database.Backup) *sdspb.BackupInfo {
 	}
 	if !b.FinishedAt.IsZero() {
 		info.FinishedAt = b.FinishedAt.UTC().Format(time.RFC3339)
+	}
+	info.LockMode = b.LockMode
+	if !b.RetainUntil.IsZero() {
+		info.RetainUntil = b.RetainUntil.UTC().Format(time.RFC3339)
+	}
+	if !b.ReadAt.IsZero() {
+		info.ReadAt = b.ReadAt.UTC().Format(time.RFC3339)
 	}
 	for _, v := range b.Volumes {
 		info.Volumes = append(info.Volumes, &sdspb.BackupVolumeInfo{

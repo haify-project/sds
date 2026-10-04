@@ -41,13 +41,21 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 	sm.controller.logger.Info("Restoring snapshot",
 		zap.String("volume", volume), zap.String("snapshot", snapshotName), zap.String("node", node))
 
+	// A merge consumes the snapshot it merges. A locked one is put back,
+	// under the same name and with the same content, as soon as the merge is
+	// done (see keepLockedSnapshot).
+	merge, err := sm.lockPreservingMerge(ctx, address, vg, lv, snapshotName, snapshotPath, backing)
+	if err != nil {
+		return err
+	}
+
 	resource, disk, err := sm.resourceBackedBy(ctx, address, backing)
 	if err != nil {
 		return err
 	}
 	if resource == "" {
 		// Not under DRBD: a plain LV has no replicas to keep in step.
-		return sm.mergeSnapshot(ctx, address, snapshotPath, backing)
+		return merge()
 	}
 	return sm.restoreReplicated(ctx, resource, address, node, disk, func() error {
 		// An encrypted volume's LV is held open by its LUKS container even
@@ -65,7 +73,7 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 					"sudo cryptsetup open --type luks --key-file %s %s %s", luksKeyPath(name), backing, name))
 			}()
 		}
-		return sm.mergeSnapshot(ctx, address, snapshotPath, backing)
+		return merge()
 	})
 }
 
@@ -74,6 +82,9 @@ func (sm *SnapshotManager) RestoreSnapshot(ctx context.Context, volume, snapshot
 func (sm *SnapshotManager) RestoreZFSSnapshot(ctx context.Context, dataset, snapshotName, node string) error {
 	address := sm.controller.ResolveHost(node)
 	backing := "/dev/zvol/" + dataset
+	if err := sm.assertRollbackKeepsLocks(ctx, address, dataset, snapshotName); err != nil {
+		return err
+	}
 	rollback := func() error {
 		res, err := sm.controller.deployment.ZFSRollback(ctx, []string{address}, dataset, snapshotName)
 		if err != nil {

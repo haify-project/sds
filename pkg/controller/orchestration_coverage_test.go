@@ -172,7 +172,7 @@ func TestScheduleSnapshotAndPruneZFS(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, snaps, 1)
 	assert.Equal(t, "data", strings.Split(snaps[0].Name, "_sched_")[0])
-	ctrl.schedules.pruneVolume(ctx, "n1", "node1", vol, database.GFSPolicy{Hourly: 0, Daily: 1})
+	ctrl.schedules.pruneVolume(ctx, "n1", "node1", vol, database.GFSPolicy{Hourly: 0, Daily: 1}, 0)
 }
 
 func TestScheduleSnapshotThickFallbackAndListError(t *testing.T) {
@@ -187,7 +187,7 @@ func TestScheduleSnapshotThickFallbackAndListError(t *testing.T) {
 	}
 	_, err := ctrl.schedules.listScheduledSnaps(context.Background(), "n1", vol)
 	assert.Error(t, err)
-	ctrl.schedules.pruneVolume(context.Background(), "n1", "node1", vol, database.GFSPolicy{Hourly: 1})
+	ctrl.schedules.pruneVolume(context.Background(), "n1", "node1", vol, database.GFSPolicy{Hourly: 1}, 0)
 	assert.Empty(t, execLines(nil, "n1"))
 }
 

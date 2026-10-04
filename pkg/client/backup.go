@@ -103,7 +103,13 @@ func (c *SDSClient) DeleteBackup(ctx context.Context, id, node string, force boo
 
 // ImportBackups rebuilds backup records from the manifests on a target.
 func (c *SDSClient) ImportBackups(ctx context.Context, target, node string) (*sdspb.ImportBackupsResponse, error) {
-	resp, err := c.client.ImportBackups(ctx, &sdspb.ImportBackupsRequest{Target: target, Node: node})
+	return c.ImportBackupsAsOf(ctx, target, node, "")
+}
+
+// ImportBackupsAsOf is ImportBackups reading the target as it was at asOf
+// (RFC3339); empty reads it as it is.
+func (c *SDSClient) ImportBackupsAsOf(ctx context.Context, target, node, asOf string) (*sdspb.ImportBackupsResponse, error) {
+	resp, err := c.client.ImportBackups(ctx, &sdspb.ImportBackupsRequest{Target: target, Node: node, AsOf: asOf})
 	if err != nil {
 		return nil, err
 	}

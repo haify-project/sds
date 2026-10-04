@@ -176,14 +176,14 @@ func TestScheduleManagerCRUD(t *testing.T) {
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "res1", Nodes: "n1"}))
 
 	policy := database.GFSPolicy{Hourly: 6, Daily: 7, Weekly: 4}
-	require.NoError(t, ctrl.schedules.CreateSchedule(ctx, "res1", "0 * * * *", policy, true))
+	require.NoError(t, ctrl.schedules.CreateSchedule(ctx, "res1", "0 * * * *", policy, true, nil))
 
 	list, err := ctrl.schedules.ListSchedules(ctx)
 	require.NoError(t, err)
 	assert.NotEmpty(t, list)
 
 	// Invalid cron is rejected.
-	err = ctrl.schedules.CreateSchedule(ctx, "res1", "not-a-cron", policy, true)
+	err = ctrl.schedules.CreateSchedule(ctx, "res1", "not-a-cron", policy, true, nil)
 	assert.Error(t, err)
 
 	require.NoError(t, ctrl.schedules.DeleteSchedule(ctx, "res1"))

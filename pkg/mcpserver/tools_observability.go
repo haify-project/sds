@@ -20,7 +20,7 @@ import (
 
 type eventOut struct {
 	ID        uint64            `json:"id" jsonschema:"monotonic id; a gap means the reader fell behind and lost events"`
-	Type      string            `json:"type" jsonschema:"resource.degraded, resource.failover, resource.no_primary, resource.promoted, node.unreachable, wan.degraded, resource.out_of_sync, pool.data_near_full, pool.data_full, pool.metadata_near_full, pool.metadata_full, pool.out_of_space"`
+	Type      string            `json:"type" jsonschema:"resource.degraded, resource.failover, resource.no_primary, resource.promoted, node.unreachable, wan.degraded, resource.out_of_sync, pool.data_near_full, pool.data_full, pool.metadata_near_full, pool.metadata_full, pool.out_of_space, pool.snapshots_removed, pool.snapshots_locked, backup.failed, inspection.completed"`
 	Severity  string            `json:"severity" jsonschema:"info, warning, or critical"`
 	Status    string            `json:"status" jsonschema:"firing when a condition starts, resolved when it clears, info for one-shot events"`
 	Resource  string            `json:"resource,omitempty"`

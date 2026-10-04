@@ -76,6 +76,9 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, volume, snapshotN
 
 // DeleteSnapshot deletes a snapshot
 func (sm *SnapshotManager) DeleteSnapshot(ctx context.Context, volume, snapshotName, node string) error {
+	if err := sm.controller.assertSnapshotUnlocked(ctx, snapshotName); err != nil {
+		return err
+	}
 	address := sm.controller.ResolveHost(node)
 
 	sm.controller.logger.Info("Deleting snapshot",

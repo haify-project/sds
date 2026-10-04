@@ -197,7 +197,13 @@ func (sm *ScheduleManager) pruneBackups(ctx context.Context, s *database.BackupS
 			doomed = append(doomed, b)
 		}
 	}
+	now := time.Now()
 	for _, b := range doomed {
+		// A locked backup cannot go yet; a later run prunes it once the lock
+		// has expired.
+		if lockedNow(b, now) {
+			continue
+		}
 		if err := sm.controller.backups.DeleteBackup(ctx, b.ID, "", false); err != nil {
 			log.Warn("Backup schedule: prune failed", zap.String("backup", b.ID), zap.Error(err))
 			continue

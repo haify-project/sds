@@ -28,11 +28,14 @@ type GFSPolicy struct {
 // each cron tick, then prunes old scheduled snapshots per Keep. One schedule
 // per resource (Name is the resource name).
 type SnapshotSchedule struct {
-	Name      string // unique; equals the target resource name
-	Resource  string
-	Cron      string
-	Enabled   bool
-	Keep      GFSPolicy
+	Name     string // unique; equals the target resource name
+	Resource string
+	Cron     string
+	Enabled  bool
+	Keep     GFSPolicy
+	// LockDays locks every snapshot the schedule takes for that many days:
+	// nothing sds does deletes it before then (pkg/controller/snapshot_lock.go).
+	LockDays  int `json:",omitempty"`
 	LastRun   time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time

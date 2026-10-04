@@ -40,6 +40,8 @@ func backupTargetAddCommand() *cobra.Command {
 	var host, share string
 	var user, secretFile string
 	var secretObscured bool
+	var lockMode string
+	var lockDays, fullEveryDays uint32
 
 	cmd := &cobra.Command{
 		Use:   "add",
@@ -64,7 +66,14 @@ Examples:
   # SMB share on a NAS (the password is obscured for rclone automatically;
   # pass --secret-obscured if you would rather run 'rclone obscure' yourself)
   sds backup target add --name nas --kind smb \
-      --host nas.lan --share backups --user backupuser --secret-file -`,
+      --host nas.lan --share backups --user backupuser --secret-file -
+
+  # Immutable backups: S3 Object Lock, every backup locked for 30 days at least
+  # (the bucket must be created with Object Lock; rclone 1.74+ on the nodes;
+  # the key must not hold s3:BypassGovernanceRetention or s3:DeleteObjectVersion)
+  sds backup target add --name vault --kind s3 --bucket sds-vault \
+      --endpoint https://s3.example.com --user AKIAEXAMPLE \
+      --lock-mode compliance --lock-days 30`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
@@ -90,6 +99,7 @@ Examples:
 				Bucket: bucket, Endpoint: endpoint, Region: region,
 				Host: host, Share: share,
 				User: user, Secret: secret, SecretObscured: secretObscured,
+				LockMode: lockMode, LockDays: lockDays, FullEveryDays: fullEveryDays,
 			}); err != nil {
 				return fmt.Errorf("failed to add backup target: %w", err)
 			}
@@ -112,6 +122,11 @@ Examples:
 	cmd.Flags().StringVar(&user, "user", "", "S3 access key id, or SMB/WebDAV username")
 	cmd.Flags().StringVar(&secretFile, "secret-file", "",
 		"Read the secret from this file (\"-\" for stdin); default: the "+secretEnvVar+" environment variable")
+	cmd.Flags().StringVar(&lockMode, "lock-mode", "",
+		"S3 Object Lock for everything written: governance or compliance (compliance cannot be lifted by anyone before it expires)")
+	cmd.Flags().Uint32Var(&lockDays, "lock-days", 0, "With --lock-mode: how long every backup stays locked at the least")
+	cmd.Flags().Uint32Var(&fullEveryDays, "full-every-days", 0,
+		"With --lock-mode: how long an incremental chain grows before the next backup is full (default 7); a chain's first backups stay locked this much longer")
 	cmd.Flags().BoolVar(&secretObscured, "secret-obscured", false,
 		"The supplied secret is already in rclone's obscured form")
 	return cmd

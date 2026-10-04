@@ -11,6 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/haify-project/sds/pkg/backup"
 	"github.com/haify-project/sds/pkg/database"
 )
 
@@ -33,7 +34,12 @@ type ImportResult struct {
 // ImportBackups records every complete backup on target that this controller
 // does not already know. node names the node that reads the target; empty
 // tries the registered nodes in turn until one has rclone.
-func (bm *BackupManager) ImportBackups(ctx context.Context, targetName, node string) (*ImportResult, error) {
+//
+// asOf, when set, imports the target as it was then: the object versions
+// current at that time, before any overwrite or delete since — what is left
+// to restore from after someone with the target's credentials deleted the
+// backups. What it imports is restored from those versions too.
+func (bm *BackupManager) ImportBackups(ctx context.Context, targetName, node string, asOf time.Time) (*ImportResult, error) {
 	db := bm.controller.db
 	if db == nil {
 		return nil, fmt.Errorf("database not available")
@@ -42,15 +48,20 @@ func (bm *BackupManager) ImportBackups(ctx context.Context, targetName, node str
 	if err != nil {
 		return nil, err
 	}
-	host, err := bm.importHost(ctx, node)
+	spec := targetSpecFromDB(dbTarget)
+	if !asOf.IsZero() && spec.Kind != backup.KindS3 {
+		return nil, fmt.Errorf("--as-of reads object versions, which only S3 targets keep")
+	}
+	host, err := bm.importHost(ctx, node, spec)
 	if err != nil {
 		return nil, err
 	}
 	dep := newBackupDeploymentClient(bm.controller.deployment)
-	sess, err := bm.backend.Prepare(ctx, dep, host, targetSpecFromDB(dbTarget))
+	sess, err := bm.backend.Prepare(ctx, dep, host, spec)
 	if err != nil {
 		return nil, err
 	}
+	sess.SetReadAt(asOf)
 	defer func() {
 		if err := sess.Close(context.WithoutCancel(ctx)); err != nil {
 			bm.controller.logger.Warn("Failed to remove staged backup credentials", zap.String("host", host), zap.Error(err))
@@ -88,6 +99,7 @@ func (bm *BackupManager) ImportBackups(ctx context.Context, targetName, node str
 			res.Skipped[rec.ID] = "already recorded"
 			continue
 		}
+		rec.ReadAt = asOf
 		found = append(found, rec)
 	}
 
@@ -104,11 +116,11 @@ func (bm *BackupManager) ImportBackups(ctx context.Context, targetName, node str
 }
 
 // importHost picks the node that reads the target.
-func (bm *BackupManager) importHost(ctx context.Context, node string) (string, error) {
+func (bm *BackupManager) importHost(ctx context.Context, node string, spec backup.TargetSpec) (string, error) {
 	dep := newBackupDeploymentClient(bm.controller.deployment)
 	if node != "" {
 		host := bm.controller.ResolveHost(node)
-		return host, bm.backend.Preflight(ctx, dep, host)
+		return host, bm.backend.Preflight(ctx, dep, host, spec)
 	}
 	nodes, err := bm.controller.db.ListNodes(ctx)
 	if err != nil {
@@ -117,7 +129,7 @@ func (bm *BackupManager) importHost(ctx context.Context, node string) (string, e
 	var last error
 	for _, n := range nodes {
 		host := bm.controller.ResolveHost(n.Name)
-		if last = bm.backend.Preflight(ctx, dep, host); last == nil {
+		if last = bm.backend.Preflight(ctx, dep, host, spec); last == nil {
 			return host, nil
 		}
 	}
@@ -160,6 +172,12 @@ func backupFromManifest(text, dir, target string, sizes map[string]uint64) (*dat
 		ID: m.ID, Resource: m.Resource, Target: target, Node: m.Node, Backend: m.Backend,
 		State: database.BackupStateCompleted, Prefix: dir, Kind: kind, Parent: m.Parent, Schedule: m.Schedule,
 		TotalBytes: m.TotalBytes, StartedAt: started, FinishedAt: finished,
+		LockMode: m.LockMode,
+	}
+	if m.RetainUntil != "" {
+		if t, err := time.Parse(time.RFC3339, m.RetainUntil); err == nil {
+			rec.RetainUntil = t
+		}
 	}
 	snaps := map[uint32]string{}
 	for _, s := range m.Snapshots {

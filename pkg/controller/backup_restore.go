@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -75,7 +76,7 @@ func (bm *BackupManager) RestoreBackup(ctx context.Context, backupID, resource, 
 	}
 	host := bm.controller.ResolveHost(node)
 	dep := newBackupDeploymentClient(bm.controller.deployment)
-	if err := bm.backend.Preflight(ctx, dep, host); err != nil {
+	if err := bm.backend.Preflight(ctx, dep, host, targetSpecFromDB(dbTarget)); err != nil {
 		return nil, err
 	}
 
@@ -124,6 +125,9 @@ func (bm *BackupManager) RestoreBackup(ctx context.Context, backupID, resource, 
 	// An incremental is the full backup it is built on plus every change
 	// since, applied oldest first.
 	for _, b := range chain {
+		// A locked backup is read as it was written: a version written over
+		// it or a delete marker put on top since changes nothing here.
+		sess.SetReadAt(readAtFor(b))
 		for _, v := range b.Volumes {
 			if v.Ranges == "" {
 				err = bm.restoreVolume(ctx, sess, host, resource, v)
@@ -271,7 +275,14 @@ func (bm *BackupManager) DeleteBackup(ctx context.Context, backupID, node string
 			backupID, strings.Join(deps, ", "))
 	}
 
-	if err := bm.removeBackupObjects(ctx, rec, node); err != nil {
+	touchObjects, err := assertDeletable(rec, force, time.Now())
+	if err != nil {
+		return err
+	}
+	if !touchObjects {
+		bm.controller.logger.Warn("Dropping the record of a locked backup; its objects stay on the target until the lock expires",
+			zap.String("backup", backupID), zap.Time("retain_until", rec.RetainUntil))
+	} else if err := bm.removeBackupObjects(ctx, rec, node); err != nil {
 		if !force {
 			return fmt.Errorf("%w (pass --force to drop the record anyway and leave the objects behind)", err)
 		}

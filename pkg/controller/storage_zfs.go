@@ -395,6 +395,11 @@ func (sm *StorageManager) ZFSListSnapshots(ctx context.Context, dataset, node st
 // ZFSDeleteSnapshot deletes a ZFS snapshot
 func (sm *StorageManager) ZFSDeleteSnapshot(ctx context.Context, snapshot, node string) error {
 	snapshot = normalizeManagedZFSPath(snapshot)
+	if _, name, ok := strings.Cut(snapshot, "@"); ok {
+		if err := sm.controller.assertSnapshotUnlocked(ctx, name); err != nil {
+			return err
+		}
+	}
 	address := sm.controller.ResolveHost(node)
 
 	sm.controller.logger.Info("Deleting ZFS snapshot",

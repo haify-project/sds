@@ -152,6 +152,9 @@ func (sm *StorageManager) backingVolumesOf(ctx context.Context, resource string)
 // DeleteLvmSnapshot deletes an LVM snapshot
 func (sm *StorageManager) DeleteLvmSnapshot(ctx context.Context, vgName, snapshotName, node string) error {
 	vgName = normalizeManagedName(vgName)
+	if err := sm.controller.assertSnapshotUnlocked(ctx, snapshotName); err != nil {
+		return err
+	}
 
 	sm.controller.logger.Info("Deleting LVM snapshot",
 		zap.String("vg_name", vgName),

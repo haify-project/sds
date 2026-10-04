@@ -651,7 +651,35 @@ history can fill the pool while staying inside its policy — and a full pool
 fails the replica's own writes. So after retention, if the pool is still past
 85% (data or metadata), the scheduler removes that volume's oldest scheduled
 snapshots on that node one at a time until it is below, always keeping the
-newest two. It logs each one it removes.
+newest two. It logs each one it removes and raises a `pool.snapshots_removed`
+event.
+
+**Locked snapshots.** That near-full rule removes the *oldest* snapshots — and
+a volume being encrypted by ransomware rewrites every block, so it is exactly
+what fills a thin pool fast, and the oldest snapshots are the clean ones from
+before the attack. A schedule can lock what it takes:
+
+```bash
+sds resource snapshot schedule create --resource db \
+    --cron "0 * * * *" --keep-hourly 24 --keep-daily 7 --lock-days 14
+```
+
+Until a scheduled snapshot is `--lock-days` old (measured from the time in its
+name), sds does not delete it — not retention, not the near-full rule, not
+`snapshot delete`, and not a ZFS `restore` that would roll back past it. While
+any snapshot of the resource is locked, the schedule cannot be deleted, the
+resource or one of its volumes cannot be deleted (not even with `--force`), and
+the lock can be raised but not lowered. Replacing the schedule without
+`--lock-days` keeps its lock. Restoring a locked LVM thin snapshot merges it
+and takes it again under the same name, so its lock is unchanged; a locked
+thick snapshot cannot be restored until its lock passes. The limit is 365 days.
+
+The cost is space: size the pool for `--lock-days` of change. A pool past the
+near-full line with nothing left but locked snapshots is not relieved; it
+raises a critical `pool.snapshots_locked` event, and if it fills, that
+replica's writes fail. And the lock binds sds and its API, not root on a
+storage node, who can `lvremove` anything — for that, back up to a target with
+S3 Object Lock (see [Backups](#9-backups--the-only-copy-that-survives-losing-the-cluster)).
 
 Schedules live in the controller database and survive a restart or a failover —
 the node that becomes active picks them up.
@@ -773,6 +801,81 @@ newest backup's base snapshot is still on that node of this cluster. The
 images are raw block data, so a backup restores onto another architecture or
 pool type: a chain taken from an arm64 node's thin pool restores onto a thick
 LVM volume on x86.
+
+**Immutable backups: S3 Object Lock.** Whoever holds the cluster — a stolen sds
+token, root on a storage node — can delete ordinary backups, and ransomware
+does that first. A locked target stores every object under S3 Object Lock, so
+until its date neither sds nor anyone using sds's keys can delete or overwrite
+it:
+
+```bash
+sds backup target add --name vault --kind s3 --bucket sds-vault \
+    --endpoint https://s3.example.com --user AKIAEXAMPLE \
+    --lock-mode compliance --lock-days 30
+```
+
+- **The bucket** must be created with Object Lock enabled (which turns on
+  versioning; it cannot be added later on most servers). AWS S3, MinIO, Ceph
+  RGW, Backblaze B2 and Wasabi support it. Every backup reads each object's lock
+  back and is **failed** when the server stored it unlocked — some
+  S3-compatible servers accept the headers and ignore them.
+- **rclone 1.74.0 or later** on the nodes; older ones upload unlocked, so the
+  backup is refused before anything is snapshotted.
+- **Modes.** `governance` can be lifted by a principal holding
+  `s3:BypassGovernanceRetention`; `compliance` by no one, the bucket owner
+  included, until it expires.
+- **Chains.** A lock cannot be extended once written, and an incremental needs
+  every backup down to its full one. So every backup of a chain is locked until
+  chain start + `--full-every-days` (default 7) + `--lock-days`, and a backup
+  more than `--full-every-days` after its chain started is full. Each backup is
+  locked for at least `--lock-days`; budget storage for up to
+  `--full-every-days` + `--lock-days` of backups.
+- **Deleting and retention.** `backup delete` refuses a locked backup;
+  `--force` drops only the record and leaves the objects. A schedule's
+  retention leaves locked backups for a later run. Once the lock has expired, a
+  delete leaves a delete marker over the object; add a lifecycle rule that
+  expires noncurrent versions (say 7 days after they become noncurrent) to get
+  the space back.
+- **Restores read what was written.** A locked backup is read as of an hour
+  after it finished (`--s3-version-at`), so a version written over it, or a
+  delete marker on top, changes nothing a restore sees.
+- **After the backups were deleted anyway.** On a versioned bucket a delete
+  only hides an object. `backup import --as-of <RFC3339>` reads the target as
+  it was at that time, records what it finds, and restores read those
+  versions:
+
+  ```bash
+  sds backup import --target vault --as-of 2026-10-01T00:00:00Z
+  ```
+
+**The keys decide whether any of this holds.** sds's S3 credentials are on the
+storage nodes, so assume an attacker has them. They need only:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["s3:PutObject", "s3:PutObjectRetention", "s3:GetObject",
+               "s3:GetObjectVersion", "s3:GetObjectRetention", "s3:DeleteObject",
+               "s3:ListBucket", "s3:ListBucketVersions"],
+    "Resource": ["arn:aws:s3:::sds-vault", "arn:aws:s3:::sds-vault/*"]
+  }]
+}
+```
+
+and must **not** hold `s3:BypassGovernanceRetention`, `s3:DeleteObjectVersion`,
+`s3:PutBucketObjectLockConfiguration`, `s3:PutBucketVersioning` or
+`s3:PutLifecycleConfiguration` — any one of them makes the lock a formality.
+`s3:DeleteObject` only adds delete markers on a versioned bucket. What each
+layer stops:
+
+| Attacker holds | Object Lock (compliance) | Object Lock (governance) |
+| --- | --- | --- |
+| an sds token or admin account | stopped | stopped |
+| root on a storage node (and so sds's S3 keys) | stopped | stopped, if the keys lack the bypass permission |
+| root on the controller | stopped | same as above |
+| the object store account itself | stopped | not stopped |
 
 Know the limits before you build a policy on this:
 - Only a backup listed as `completed` is restorable. `running` means it is still
@@ -1209,6 +1312,8 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `resource.promoted`, `node.unreachable`, `wan.degraded`, `resource.out_of_sync`,
 `pool.data_near_full`, `pool.data_full`, `pool.metadata_near_full`,
 `pool.metadata_full`, `pool.out_of_space` (LVM already refused writes),
+`pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
+`pool.snapshots_locked` (a near-full pool with only locked snapshots left),
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,

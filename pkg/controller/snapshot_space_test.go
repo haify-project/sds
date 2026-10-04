@@ -39,7 +39,7 @@ func TestRelieveThinPoolRemovesOldestUntilUnderThreshold(t *testing.T) {
 	ctrl := newBasicTestController(dep)
 	vol := &ResourceVolumeInfo{Pool: "sds_pool", BackingVolume: "data_data", Device: "/dev/sds_pool/data_data"}
 
-	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", vol)
+	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", "r", vol, 0)
 	want := []string{"data_data_sched_20260920T230000Z", "data_data_sched_20260925T230000Z"}
 	if strings.Join(removed, ",") != strings.Join(want, ",") {
 		t.Fatalf("removed %v, want the two oldest %v and then stop once under the threshold", removed, want)
@@ -53,7 +53,7 @@ func TestRelieveThinPoolRemovesOldestUntilUnderThreshold(t *testing.T) {
 		return successExecResult(hosts, ""), nil
 	}
 	percent = 100
-	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", vol)
+	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", "r", vol, 0)
 	if strings.Join(removed, ",") != strings.Join(want, ",") {
 		t.Fatalf("removed %v; the newest two must survive a pool that stays full", removed)
 	}
@@ -63,7 +63,7 @@ func TestRelieveThinPoolRemovesOldestUntilUnderThreshold(t *testing.T) {
 	}
 
 	removed, percent = nil, 70
-	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", vol)
+	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", "r", vol, 0)
 	if len(removed) != 0 {
 		t.Fatalf("a pool under the threshold loses nothing, removed %v", removed)
 	}

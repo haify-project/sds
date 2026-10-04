@@ -15,6 +15,7 @@ type execCall struct {
 
 type fakeDeploymentClient struct {
 	lvIsThinFunc                        func(ctx context.Context, host, vgName, lvName string) (bool, error)
+	lvCreateThinSnapshotFunc            func(ctx context.Context, hosts []string, vgName, lvName, snapshotName string) (*deployment.ExecResult, error)
 	vgFreeBytesFunc                     func(host, vgName string) (uint64, error)
 	execFunc                            func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error)
 	pvCreateFunc                        func(ctx context.Context, hosts []string, device string, opts ...deployment.LVMOption) (*deployment.ExecResult, error)
@@ -261,6 +262,9 @@ func (f *fakeDeploymentClient) LVCreateSnapshot(ctx context.Context, hosts []str
 }
 
 func (f *fakeDeploymentClient) LVCreateThinSnapshot(ctx context.Context, hosts []string, vgName, lvName, snapshotName string) (*deployment.ExecResult, error) {
+	if f.lvCreateThinSnapshotFunc != nil {
+		return f.lvCreateThinSnapshotFunc(ctx, hosts, vgName, lvName, snapshotName)
+	}
 	return successExecResult(hosts, ""), nil
 }
 

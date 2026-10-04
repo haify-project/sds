@@ -146,6 +146,12 @@ func backupListCommand() *cobra.Command {
 				if b.Schedule != "" {
 					_, _ = fmt.Fprintf(out, "  schedule=%s\n", b.Schedule)
 				}
+				if b.LockMode != "" {
+					_, _ = fmt.Fprintf(out, "  locked (%s) until %s\n", b.LockMode, b.RetainUntil)
+				}
+				if b.ReadAt != "" {
+					_, _ = fmt.Fprintf(out, "  read as of %s\n", b.ReadAt)
+				}
 				if b.StartedAt != "" {
 					_, _ = fmt.Fprintf(out, "  started=%s finished=%s\n", b.StartedAt, orDash(b.FinishedAt))
 				}
