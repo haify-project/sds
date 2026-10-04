@@ -58,6 +58,9 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	if err != nil {
 		return err
 	}
+	if err := rm.assertQuotaForResource(ctx, resource, pool, hosts, uint64(sizeGB)); err != nil {
+		return err
+	}
 	// Tiebreakers and diskless clients carry the resource config too. They get
 	// no LV and no metadata, but the new volume has to appear in their copy —
 	// as `disk none` — or DRBD refuses their connection. See

@@ -119,6 +119,9 @@ func (rm *ResourceManager) resizeVolume(ctx context.Context, resource string, vo
 			return err
 		}
 	}
+	if err := rm.assertResizeQuota(ctx, resource, volumeID, newSizeGB, hosts); err != nil {
+		return err
+	}
 
 	exactBytes, err = rm.exactResizeBytes(ctx, resource, volumeID, newSizeGB, exactBytes)
 	if err != nil {

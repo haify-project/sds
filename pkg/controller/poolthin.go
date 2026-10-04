@@ -52,6 +52,10 @@ type PoolThinInfo struct {
 	// already refused writes; the kernel drops the backing disk out from under
 	// DRBD, which then reports Diskless on a node configured diskful.
 	OutOfSpace bool `json:"out_of_space,omitempty"`
+	// VirtualBytes is what the pool's thin volumes (snapshots left out) could
+	// grow to: the sum of their sizes. Against SizeBytes it is how far the
+	// pool is overcommitted ([quota] max_overcommit_ratio, quota.go).
+	VirtualBytes uint64 `json:"virtual_bytes,omitempty"`
 }
 
 // thinRow is one line of `lvs -o LVMThinFields`.
@@ -75,6 +79,14 @@ type thinRow struct {
 // happens to read 0%.
 func parseThinReport(output string) map[string]*PoolThinInfo {
 	byVG := make(map[string]*PoolThinInfo)
+	virtual := make(map[string]uint64)
+	defer func() {
+		for vg, v := range virtual {
+			if info := byVG[vg]; info != nil {
+				info.VirtualBytes = v
+			}
+		}
+	}()
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -92,6 +104,11 @@ func parseThinReport(output string) map[string]*PoolThinInfo {
 			DataPercent: parseThinPercent(f[4]),
 			MetaPercent: parseThinPercent(f[5]),
 			Attr:        strings.TrimSpace(f[6]),
+		}
+		// A thin volume (not a snapshot: it has no origin) counts toward
+		// the pool's virtual size.
+		if row.SegType == "thin" && (len(f) < 8 || strings.TrimSpace(f[7]) == "") {
+			virtual[row.VG] += row.SizeBytes
 		}
 		if row.VG == "" || row.Name == "" || row.SegType != "thin-pool" {
 			continue

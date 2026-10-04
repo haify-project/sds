@@ -297,6 +297,31 @@ sds pool delete --name data-pool --node node1
 An SSD or NVMe cache in front of a thin pool (`pool add-cache`,
 `pool remove-cache`) is covered in [Storage tiering](#13-storage-tiering).
 
+**Quotas.** A thin pool admits volumes as long as it has room for what is
+already written, so it can promise many times what it holds. `[quota]
+max_overcommit_ratio` caps that: a new resource, replica, volume or resize that
+would take a node's thin pool past that many times its real size (the sum of
+its thin volumes, snapshots not counted) is refused there, and auto-placement
+passes the node over. 0, the default, leaves thin pools unlimited.
+
+Projects are resources sharing a label (`project=<name>` by default,
+`[quota] project_label`). A project's quota caps the total size of its
+resources — counted once each, as asked for, not per replica — and their
+number:
+
+```toml
+[quota]
+max_overcommit_ratio = 3.0
+[[quota.projects]]
+name = "team-a"
+max_gb = 2000
+max_resources = 50
+```
+
+```bash
+sds resource create --name a1 --size 100G --label project=team-a ...
+```
+
 ---
 
 ## 5. Resources — your storage
@@ -1073,6 +1098,8 @@ Per-protocol details:
 
 ```bash
 sds gateway nfs export add|list|remove ...      # extra exports on an NFS gateway
+sds gateway nfs export quota --resource data --path team-a --size 500G
+                                                    # cap an export directory (0 removes)
 sds gateway nfs mount --resource data --target /mnt/data --mkdir --sudo
                                                     # mount it on this machine
 sds gateway iscsi lun add|list|remove ...       # LUNs
@@ -1081,6 +1108,18 @@ sds gateway iscsi initiator add|list|remove ... # initiator allow-list
 sds gateway nvme namespace add|list|remove ...  # namespaces
 sds gateway nvme host add|list|remove ...       # host allow-list
 ```
+
+An export directory's quota is an ext4 project quota on the gateway's
+filesystem, so one export cannot fill the volume for the others. Gateways
+created from this version on support it (the filesystem is made with the
+project feature and mounted with `prjquota`); an older one needs the feature
+added while unmounted — `tune2fs -O quota,project <device>` — and the gateway
+recreated. The gateway nodes need the `quota` package (`setquota`).
+
+Gateways cannot limit a client's IOPS or bandwidth: their I/O is done by kernel
+threads in the root cgroup, which has no I/O limits, and neither LIO nor nvmet
+limits per LUN. Shape traffic to the service IP with `tc` on the gateway nodes
+if you must. DRBD's `c-max-rate` limits resync traffic only; it is not QoS.
 
 These edits read the gateway's promoter config from the resource's diskful
 nodes — not from the machine the controller runs on — and write the result
@@ -1774,6 +1813,15 @@ Other parameters: `storageType` (`lvm`, the default, or `zfs`),
 may then be omitted), `resourceLabels` (`key=value,...`), `faultDomainLabel`
 (default `host`), and `allowRemoteVolumeAccess: "true"`, which opts a volume
 into diskless attachment so a pod can run on a node that holds no replica.
+
+**I/O limits.** `readBytesPerSecond`, `writeBytesPerSecond` (sizes such as
+`200Mi`), `readIOPS` and `writeIOPS` cap a pod's I/O to its volume: when the
+volume is published, the node plugin writes them for the volume's device into
+the pod's cgroup (`io.max`). That needs cgroup v2 with the `io` controller
+enabled for pod cgroups, and the node plugin's `/sys/fs/cgroup` mount from
+`deploy/k8s/30-node.yaml`; where they are missing the volume is still
+published, without limits, and the node plugin logs why. The limits are fixed
+per StorageClass: change one by moving the volume to another class.
 
 The manifests are in `deploy/k8s` (see its README); the CSI section of
 [deployment-guide.md](deployment-guide.md) covers installation.

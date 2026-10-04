@@ -27,7 +27,7 @@ import (
 // segtype is included so the caller can pick out thin pools by type instead of
 // guessing from the name. lv_size is the pool's data capacity, which is what
 // data_percent is a percentage of.
-const LVMThinFields = "vg_name,lv_name,segtype,lv_size,data_percent,metadata_percent,lv_attr"
+const LVMThinFields = "vg_name,lv_name,segtype,lv_size,data_percent,metadata_percent,lv_attr,origin"
 
 // LVSThinReport lists every LV on the given hosts with its thin pool
 // utilisation columns. vgName may be empty to cover all volume groups.

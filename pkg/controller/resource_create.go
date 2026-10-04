@@ -178,6 +178,9 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	if err := rm.assertNodesOnline(nodes); err != nil {
 		return err
 	}
+	if err := rm.assertCreateQuota(ctx, resolved, nodes, metadata.Labels); err != nil {
+		return err
+	}
 
 	rm.controller.logger.Info("Creating DRBD resource",
 		zap.String("name", name),

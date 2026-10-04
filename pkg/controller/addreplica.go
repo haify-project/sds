@@ -107,6 +107,11 @@ func (rm *ResourceManager) AddReplicaWith(ctx context.Context, resource, node st
 			return err
 		}
 	}
+	if pool, sizeGB := rm.memberPoolAndSize(ctx, resource, ""); pool != "" {
+		if err := rm.assertOvercommit(ctx, pool, []string{node}, sizeGB); err != nil {
+			return err
+		}
+	}
 	if err := rm.assertNewMemberTLS(ctx, resource, node); err != nil {
 		return err
 	}

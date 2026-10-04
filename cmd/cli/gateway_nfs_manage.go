@@ -50,6 +50,7 @@ func nfsExportCommand() *cobra.Command {
 	cmd.AddCommand(nfsExportAdd())
 	cmd.AddCommand(nfsExportRemove())
 	cmd.AddCommand(nfsExportList())
+	cmd.AddCommand(nfsExportQuota())
 
 	return cmd
 }

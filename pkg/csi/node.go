@@ -211,6 +211,11 @@ func (s *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	if err := s.mounter.Mount(staging, target, "", opts); err != nil {
 		return nil, status.Errorf(codes.Internal, "bind mount: %v", err)
 	}
+	if hasQoS(req.GetVolumeContext()) {
+		if device, err := s.deviceFor(ctx, req.GetVolumeId()); err == nil {
+			s.applyQoS(req.GetVolumeContext(), device, target)
+		}
+	}
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -300,6 +305,7 @@ func (s *nodeServer) publishBlock(ctx context.Context, req *csi.NodePublishVolum
 	if err := s.mounter.Mount(device, target, "", opts); err != nil {
 		return nil, status.Errorf(codes.Internal, "bind mount %s onto %s: %v", device, target, err)
 	}
+	s.applyQoS(req.GetVolumeContext(), device, target)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 

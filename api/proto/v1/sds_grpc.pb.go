@@ -147,6 +147,7 @@ const (
 	SDSController_DeleteLvmSnapshot_FullMethodName         = "/v1.SDSController/DeleteLvmSnapshot"
 	SDSController_ListLvmSnapshots_FullMethodName          = "/v1.SDSController/ListLvmSnapshots"
 	SDSController_RestoreLvmSnapshot_FullMethodName        = "/v1.SDSController/RestoreLvmSnapshot"
+	SDSController_SetNFSExportQuota_FullMethodName         = "/v1.SDSController/SetNFSExportQuota"
 	SDSController_MoveReplica_FullMethodName               = "/v1.SDSController/MoveReplica"
 	SDSController_PlanRebalance_FullMethodName             = "/v1.SDSController/PlanRebalance"
 	SDSController_MarkNodeLost_FullMethodName              = "/v1.SDSController/MarkNodeLost"
@@ -379,6 +380,9 @@ type SDSControllerClient interface {
 	// at a time. MarkNodeLost removes the replicas of a node that will not
 	// return; RestoreNode cleans what a returned node holds of resources it is
 	// no longer part of and lets it take replicas again.
+	// Caps an NFS export directory with an ext4 project quota (gateways
+	// created from this version on); size 0 removes the cap.
+	SetNFSExportQuota(ctx context.Context, in *SetNFSExportQuotaRequest, opts ...grpc.CallOption) (*SetNFSExportQuotaResponse, error)
 	MoveReplica(ctx context.Context, in *MoveReplicaRequest, opts ...grpc.CallOption) (*MoveReplicaResponse, error)
 	PlanRebalance(ctx context.Context, in *PlanRebalanceRequest, opts ...grpc.CallOption) (*PlanRebalanceResponse, error)
 	MarkNodeLost(ctx context.Context, in *MarkNodeLostRequest, opts ...grpc.CallOption) (*MarkNodeLostResponse, error)
@@ -1774,6 +1778,16 @@ func (c *sDSControllerClient) RestoreLvmSnapshot(ctx context.Context, in *Restor
 	return out, nil
 }
 
+func (c *sDSControllerClient) SetNFSExportQuota(ctx context.Context, in *SetNFSExportQuotaRequest, opts ...grpc.CallOption) (*SetNFSExportQuotaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNFSExportQuotaResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetNFSExportQuota_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) MoveReplica(ctx context.Context, in *MoveReplicaRequest, opts ...grpc.CallOption) (*MoveReplicaResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MoveReplicaResponse)
@@ -2310,6 +2324,9 @@ type SDSControllerServer interface {
 	// at a time. MarkNodeLost removes the replicas of a node that will not
 	// return; RestoreNode cleans what a returned node holds of resources it is
 	// no longer part of and lets it take replicas again.
+	// Caps an NFS export directory with an ext4 project quota (gateways
+	// created from this version on); size 0 removes the cap.
+	SetNFSExportQuota(context.Context, *SetNFSExportQuotaRequest) (*SetNFSExportQuotaResponse, error)
 	MoveReplica(context.Context, *MoveReplicaRequest) (*MoveReplicaResponse, error)
 	PlanRebalance(context.Context, *PlanRebalanceRequest) (*PlanRebalanceResponse, error)
 	MarkNodeLost(context.Context, *MarkNodeLostRequest) (*MarkNodeLostResponse, error)
@@ -2808,6 +2825,9 @@ func (UnimplementedSDSControllerServer) ListLvmSnapshots(context.Context, *ListL
 }
 func (UnimplementedSDSControllerServer) RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RestoreLvmSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) SetNFSExportQuota(context.Context, *SetNFSExportQuotaRequest) (*SetNFSExportQuotaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetNFSExportQuota not implemented")
 }
 func (UnimplementedSDSControllerServer) MoveReplica(context.Context, *MoveReplicaRequest) (*MoveReplicaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveReplica not implemented")
@@ -5233,6 +5253,24 @@ func _SDSController_RestoreLvmSnapshot_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_SetNFSExportQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNFSExportQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetNFSExportQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetNFSExportQuota_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetNFSExportQuota(ctx, req.(*SetNFSExportQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_MoveReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MoveReplicaRequest)
 	if err := dec(in); err != nil {
@@ -6338,6 +6376,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RestoreLvmSnapshot",
 			Handler:    _SDSController_RestoreLvmSnapshot_Handler,
+		},
+		{
+			MethodName: "SetNFSExportQuota",
+			Handler:    _SDSController_SetNFSExportQuota_Handler,
 		},
 		{
 			MethodName: "MoveReplica",

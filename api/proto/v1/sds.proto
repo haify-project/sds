@@ -501,6 +501,11 @@ service SDSController {
   // at a time. MarkNodeLost removes the replicas of a node that will not
   // return; RestoreNode cleans what a returned node holds of resources it is
   // no longer part of and lets it take replicas again.
+  // Caps an NFS export directory with an ext4 project quota (gateways
+  // created from this version on); size 0 removes the cap.
+  rpc SetNFSExportQuota(SetNFSExportQuotaRequest) returns (SetNFSExportQuotaResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/{resource}/quota"; body: "*"; };
+  }
   rpc MoveReplica(MoveReplicaRequest) returns (MoveReplicaResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/move-replica"; body: "*"; };
   }
@@ -1341,6 +1346,16 @@ message SetHaPreferredNodesRequest {
   string policy = 3;          // start-only (drbd-reactor 1.9+) or always; empty = drbd-reactor's default
 }
 message SetHaPreferredNodesResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SetNFSExportQuotaRequest {
+  string resource = 1;
+  string export_path = 2;
+  uint64 size_bytes = 3;
+}
+message SetNFSExportQuotaResponse {
   bool success = 1;
   string message = 2;
 }

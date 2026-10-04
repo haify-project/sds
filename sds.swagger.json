@@ -1193,6 +1193,45 @@
         ]
       }
     },
+    "/v1/gateways/nfs/{resource}/quota": {
+      "post": {
+        "summary": "Self-healing (see docs/user-guide.md \"Self-healing\"). MoveReplica adds\nthe new replica and removes the old one once the new one is UpToDate.\nPlanRebalance proposes moves from the fullest node; apply runs them one\nat a time. MarkNodeLost removes the replicas of a node that will not\nreturn; RestoreNode cleans what a returned node holds of resources it is\nno longer part of and lets it take replicas again.\nCaps an NFS export directory with an ext4 project quota (gateways\ncreated from this version on); size 0 removes the cap.",
+        "operationId": "SDSController_SetNFSExportQuota",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetNFSExportQuotaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetNFSExportQuotaBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/gateways/nvme": {
       "post": {
         "operationId": "SDSController_CreateNVMeGateway",
@@ -3926,7 +3965,6 @@
     },
     "/v1/resources/{resource}/move-replica": {
       "post": {
-        "summary": "Self-healing (see docs/user-guide.md \"Self-healing\"). MoveReplica adds\nthe new replica and removes the old one once the new one is UpToDate.\nPlanRebalance proposes moves from the fullest node; apply runs them one\nat a time. MarkNodeLost removes the replicas of a node that will not\nreturn; RestoreNode cleans what a returned node holds of resources it is\nno longer part of and lets it take replicas again.",
         "operationId": "SDSController_MoveReplica",
         "responses": {
           "200": {
@@ -6361,6 +6399,18 @@
         "policy": {
           "type": "string",
           "title": "start-only (drbd-reactor 1.9+) or always; empty = drbd-reactor's default"
+        }
+      }
+    },
+    "SDSControllerSetNFSExportQuotaBody": {
+      "type": "object",
+      "properties": {
+        "exportPath": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -10623,6 +10673,17 @@
       }
     },
     "v1SetISCSIChapResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetNFSExportQuotaResponse": {
       "type": "object",
       "properties": {
         "success": {
