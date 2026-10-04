@@ -11,7 +11,7 @@ use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 use PVEStub;
 use MockClient;
 use JSON::PP ();
-use Test::More tests => 28;
+use Test::More tests => 32;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -39,6 +39,8 @@ is($create->{payload}{sizeGb}, 20, '20 GiB requested in KiB becomes 20 GB');
 is($create->{payload}{pool}, 'vg0', 'pool from storage.cfg');
 is_deeply($create->{payload}{nodes}, [ 'n1', 'n2' ], 'explicit node list is split and trimmed');
 ok(!exists $create->{payload}{replicas}, 'replicas is not sent when nodes are explicit');
+is_deeply($create->{payload}{labels}, { 'sds.pve/managed-by' => 'pve' },
+    'the resource is labelled as a PVE disk, so sds keeps promoters off it');
 
 # Without an explicit node list, sds auto-places the requested replica count.
 with_mock();
@@ -54,6 +56,18 @@ like($@, qr/unsupported format/, 'qcow2 is refused: DRBD exports a raw device');
 with_mock();
 eval { $P->alloc_image('sds0', $base_scfg, 100, 'raw', 'vm-999-disk-0', 1048576) };
 like($@, qr/illegal name/, 'a disk name from another vmid is refused');
+
+# Not every volume PVE allocates is a disk: cloud-init drives, snapshot RAM
+# state and backup fleecing images have names of their own.
+with_mock();
+is($P->alloc_image('sds0', $base_scfg, 100, 'raw', 'vm-100-cloudinit', 4096), 'vm-100-cloudinit',
+    'a cloud-init drive can be allocated');
+($create) = $mock->calls_for('POST', '/v1/resources');
+is($create->{payload}{name}, 'pve-100-cloudinit', 'and maps to its own resource');
+
+with_mock();
+eval { $P->alloc_image('sds0', $base_scfg, 100, 'raw', 'vm-100-state-two words', 4096) };
+like($@, qr/illegal name/, 'a name that is not resource-safe is refused');
 
 # --- free_image -------------------------------------------------------------
 

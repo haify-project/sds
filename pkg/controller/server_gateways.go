@@ -3,6 +3,9 @@ package controller
 import (
 	"context"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	sdspb "github.com/haify-project/sds/api/proto/v1"
 	"github.com/haify-project/sds/pkg/database"
 	"github.com/haify-project/sds/pkg/gateway"
@@ -10,6 +13,9 @@ import (
 )
 
 func (s *Server) CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGatewayRequest) (*sdspb.CreateNFSGatewayResponse, error) {
+	if err := s.ctrl.assertPromoterAllowed(ctx, req.Resource, "an NFS gateway"); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
 	nfsMgr := gateway.NewNFSManager(s.gateway)
 	resp, err := nfsMgr.CreateNFSGateway(ctx, req)
 	if err != nil {
@@ -45,6 +51,9 @@ func (s *Server) CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGatew
 }
 
 func (s *Server) CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISCSIGatewayRequest) (*sdspb.CreateISCSIGatewayResponse, error) {
+	if err := s.ctrl.assertPromoterAllowed(ctx, req.Resource, "an iSCSI gateway"); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
 	iscsiMgr := gateway.NewISCSIManager(s.gateway)
 	resp, err := iscsiMgr.CreateISCSIGateway(ctx, req)
 	if err != nil {
@@ -81,6 +90,9 @@ func (s *Server) CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISCSIG
 }
 
 func (s *Server) CreateNVMeGateway(ctx context.Context, req *sdspb.CreateNVMeGatewayRequest) (*sdspb.CreateNVMeGatewayResponse, error) {
+	if err := s.ctrl.assertPromoterAllowed(ctx, req.Resource, "an NVMe-oF gateway"); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
 	nvmeMgr := gateway.NewNVMeManager(s.gateway)
 	resp, err := nvmeMgr.CreateNVMeGateway(ctx, req)
 	if err != nil {

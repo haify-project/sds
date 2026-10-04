@@ -21,7 +21,7 @@ use PVE::Storage::Plugin;
 use PVE::Storage::Custom::SDS::Client qw(_uri_escape);
 use PVE::Storage::Custom::SDS::Capacity qw(pool_capacity);
 use PVE::Storage::Custom::SDS::Naming qw(sds_resource_name volname_from_resource
-    kib_to_gb bytes_to_gb gb_to_bytes);
+    parse_vm_volname kib_to_gb bytes_to_gb gb_to_bytes);
 use PVE::Storage::Custom::SDS::Activation qw(activate deactivate controller_unreachable local_device_path);
 
 use base qw(PVE::Storage::Plugin);
@@ -211,9 +211,11 @@ sub _backing_volume_target {
 sub parse_volname {
     my ($class, $volname) = @_;
 
-    if ($volname =~ m/^vm-(\d+)-disk-(\d+)$/) {
+    # Disks, and the other per-VM volumes PVE allocates: cloud-init drives,
+    # snapshot RAM state, backup fleecing images (SDS/Naming.pm).
+    if (my ($vmid) = parse_vm_volname($volname)) {
         # (vtype, name, vmid, basename, basevmid, isBase, format)
-        return ('images', $volname, $1, undef, undef, undef, 'raw');
+        return ('images', $volname, $vmid, undef, undef, undef, 'raw');
     }
 
     die "unable to parse sds volume name '$volname'\n";
@@ -269,8 +271,9 @@ sub alloc_image {
 
     $name //= $class->find_free_diskname($storeid, $scfg, $vmid, 'raw');
 
-    die "illegal name '$name' - should be 'vm-$vmid-disk-<n>'\n"
-        if $name !~ m/^vm-\Q$vmid\E-disk-(\d+)$/;
+    my ($owner) = parse_vm_volname($name);
+    die "illegal name '$name' - should be 'vm-$vmid-disk-<n>' or another 'vm-$vmid-<name>'\n"
+        if !defined($owner) || $owner ne $vmid;
 
     my $resname = sds_resource_name($scfg, $name);
     my $sizegb  = kib_to_gb($size);
@@ -289,6 +292,10 @@ sub alloc_image {
             'on-no-quorum'          => $onnoquorum,
             'on-no-data-accessible' => $onnoquorum,
         },
+        # PVE decides where a VM disk is Primary; the label is how sds knows
+        # to refuse a drbd-reactor promoter (ha create, a gateway) that would
+        # fight it for the role, and not to alarm on a stopped VM's disk.
+        labels => { 'sds.pve/managed-by' => 'pve' },
     };
     $payload->{pool}        = $scfg->{sdspool}     if $scfg->{sdspool};
     $payload->{storageType} = $scfg->{storagetype} if $scfg->{storagetype};

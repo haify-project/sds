@@ -1060,6 +1060,12 @@ sds ha delete db
 `ha create` makes a filesystem of `--fstype` on the device when it finds none,
 and refuses when a `--services` unit is missing on any of the resource's nodes.
 
+`ha create` and the gateways put a drbd-reactor promoter on the resource, so
+they refuse a resource whose Primary something else decides, which the promoter
+would fight for the role: a Proxmox VM disk (labelled `sds.pve/managed-by=pve`
+by the plugin, or named `pve-<vmid>-...` from before it labelled them), a CSI
+volume (`sds.csi/managed-by=csi`), and a resource with diskless clients.
+
 Move it deliberately — for maintenance, or to test that failover works:
 
 ```bash
