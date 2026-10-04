@@ -305,7 +305,14 @@ func (s *Server) RepairResource(ctx context.Context, req *sdspb.RepairResourceRe
 	if err := s.resources.RepairResourceConfig(ctx, req.Name); err != nil {
 		return &sdspb.RepairResourceResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.RepairResourceResponse{Success: true, Message: "Resource config reconciled on every participant and applied"}, nil
+	// Promoters belong on exactly the primary-site replicas; a replica added
+	// or removed by an older version, or a DR node given one, is put right.
+	if err := s.resources.SyncPromoters(ctx, req.Name); err != nil {
+		return &sdspb.RepairResourceResponse{Success: false,
+			Message: "resource config reconciled and applied, but its promoters could not be placed: " + err.Error()}, nil
+	}
+	return &sdspb.RepairResourceResponse{Success: true,
+		Message: "Resource config reconciled on every participant and applied; promoters on the primary-site replicas only"}, nil
 }
 
 func (s *Server) UpdateResourceOptions(ctx context.Context, req *sdspb.UpdateResourceOptionsRequest) (*sdspb.UpdateResourceOptionsResponse, error) {

@@ -145,6 +145,12 @@ func (rm *ResourceManager) RemoveReplica(ctx context.Context, resource, node str
 		return fmt.Errorf("replica removed from %s, but its storage there could not be deleted: %w; remove the volume by hand", node, err)
 	}
 
+	// Its promoter would otherwise outlive its copy of the data.
+	if err := rm.SyncPromoters(ctx, resource, node); err != nil {
+		return fmt.Errorf("replica removed from %s, but the resource's promoters could not be updated: %w; "+
+			"run `sds resource repair %s`", node, err, resource)
+	}
+
 	rm.controller.logger.Info("Replica removed",
 		zap.String("resource", resource), zap.String("node", node))
 	return nil

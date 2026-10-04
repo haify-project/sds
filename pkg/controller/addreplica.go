@@ -97,6 +97,11 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 	}
 
 	newAddr := rm.controller.ResolveHost(node)
+	// A replica takes part in failover, so it gets the resource's promoters
+	// once it is in; check now that it could run them, while refusing is free.
+	if err := rm.checkPromoterPrereqs(ctx, resource, []string{newAddr}); err != nil {
+		return err
+	}
 	primaryAddrs := make([]string, 0, len(primaries))
 	for _, n := range primaries {
 		primaryAddrs = append(primaryAddrs, rm.controller.ResolveHost(n))
@@ -284,6 +289,13 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 
 	rm.controller.logger.Info("Replica added; initial sync runs in the background",
 		zap.String("resource", resource), zap.String("node", node))
+
+	// drbd-reactor will not promote a replica that is still syncing, so the
+	// promoter can go in now and takes effect once the copy is UpToDate.
+	if err := rm.SyncPromoters(ctx, resource); err != nil {
+		return fmt.Errorf("replica added on %s, but the resource's promoters could not be placed there: %w; "+
+			"fix that and run `sds resource repair %s`", node, err, resource)
+	}
 	return nil
 }
 

@@ -233,3 +233,16 @@ func sortedKeys[V any](m map[string]V) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// ConfigDumpCommand is the dispatch command that prints every existing file
+// matching patterns on a node, byte-exact, for ParseConfigDump. The controller
+// reads its own promoter configs (`ha create`) with it.
+func ConfigDumpCommand(patterns ...string) string {
+	return scriptCmd(configDumpScript(patterns...))
+}
+
+// ParseConfigDump returns the files one node's ConfigDumpCommand output holds,
+// by path.
+func ParseConfigDump(out string) (map[string]string, error) {
+	return parseConfigDump(out)
+}

@@ -147,6 +147,9 @@ func (im *InspectionManager) gatherResources(ctx context.Context, in *inspect.In
 			QuorumRisk:      r.QuorumRisk,
 			FaultDomainRisk: r.FaultDomainRisk,
 		}
+		if r.WANMode && r.DRNode != "" {
+			res.DR = im.nodeRef(r.DRNode)
+		}
 		in.Resources = append(in.Resources, res)
 		if res.ServedBy == "self-ha" {
 			in.SelfHA = &inspect.SelfHAInput{Resource: r.Name, Nodes: res.Diskful}

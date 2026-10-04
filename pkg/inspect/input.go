@@ -50,6 +50,9 @@ type Resource struct {
 	Diskful     []string
 	Tiebreakers []string
 	Clients     []string
+	// DR is the node name of a WAN resource's off-site DR replica, which is
+	// also in Diskful; empty for a LAN resource.
+	DR string
 	// ServedBy says why the resource must have a Primary ("ha", "self-ha");
 	// empty when nothing requires one. Gateways are carried separately.
 	ServedBy string

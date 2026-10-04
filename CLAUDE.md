@@ -252,6 +252,7 @@ written without `lifecycle.go`'s invariants looks correct and isn't.
 | `identity.go` | UUID/serial/FSID — how a client recognises its storage across a failover |
 | `config_helpers.go` | Parsing and building promoter config lines |
 | `config_read.go` | Reading promoter configs back from the nodes that hold them — never the controller's own filesystem, which is usually not a gateway node |
+| `placement.go` | Keeping the promoter on exactly the diskful replicas when replicas are added or removed (`SyncPlacement`); the controller's `promoter_placement.go` does the same for `ha create` configs and leaves a WAN resource's DR node out |
 | `live_edit.go` + `live_protocols.go` + `reactor_units.go` | Editing a running gateway: applied live on the node serving it (targetcli, nvmet configfs, single-unit start/stop) because a drbd-reactor reload of a changed promoter stops the whole gateway; the edited config waits as `.toml.pending` there |
 | `validate.go` | IQN/NQN/transport validation, rejected before any side effect |
 | `nfs.go` | NFS gateway — Filesystem, IPaddr2, nfsserver, exportfs OCF agents |

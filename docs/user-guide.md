@@ -509,6 +509,15 @@ sds resource add-volume db --volume db_logs --size 50G --pool thin-pool
 sds resource remove-volume db 1
 ```
 
+A resource's promoters — its `ha create` config and its gateway — follow the
+replicas. `add-replica` first checks that the new node could run them (the OCF
+agents and services the chain starts, the gateway's tools) and refuses
+otherwise; once the replica is in, it gets a copy of each, plus the mount unit
+an HA config starts, so it can take over as soon as it is UpToDate.
+`remove-replica` retires them from the node that left. Nodes that already
+hold a promoter are never rewritten, since on the node running the service a
+rewrite and reload restarts it. A WAN resource's DR node never gets one.
+
 `remove-replica` is refused when the node is Primary, when it is the
 tiebreaker or the off-site DR node, or when fewer than two diskful copies would
 remain. It stops the resource on the leaving node first, then rewrites the
@@ -529,7 +538,10 @@ Mismatched files mean one node has a stale view — copy the correct one over an
 replicas, tiebreaker, diskless clients — so they agree on the volumes and the
 registry's node addresses, then runs `drbdadm adjust`. Use it when a tiebreaker
 or client of a multi-volume resource stays `Connecting` and its kernel log says
-a packet arrived "for volume N, which is not configured locally".
+a packet arrived "for volume N, which is not configured locally". It then puts
+the resource's promoters on exactly its primary-site replicas, as
+`add-replica` does: use it after an older version added or removed a replica,
+or gave a DR node a promoter.
 
 **Adopting** an existing DRBD resource that SDS did not create:
 
@@ -1285,7 +1297,7 @@ Each node is probed once over SSH per run; a node that does not answer is a
 
 | Area | Checks |
 | ---- | ------ |
-| resources | a resource under `sds ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a diskful node (warn) or present on a diskless one (warn: it works as a diskless Primary, over the network) |
+| resources | a resource under `sds ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a primary-site diskful node (warn), present on a diskless one (warn: it works as a diskless Primary, over the network) or present on a WAN resource's DR node (warn: it could fail over to the asynchronous copy unasked) |
 | gateways | every gateway not `stopped` has exactly one Primary; its promoter config on every diskful node (warn when missing, and when present on a diskless node) |
 | nodes | SSH reachable; clock skew against the controller (warn > 2 s, fail > 30 s; SSH latency is not counted), NTP synchronised; root filesystem (warn ≥ 85 %, fail ≥ 95 %); the registered address present on an interface (a public address answering as the registered host is taken as NAT, not drift), and the address answering as the registered host; drbd module loaded; drbd-reactor running; DRBD module, drbd-utils, drbd-reactor and `sds-controller` binary the same on every node, the binary compared only between nodes of one architecture (a differing binary fails under Self-HA); `/etc/hosts` mapping a node name to an address it is not registered at |
 | pools | thin pool data and metadata against `[alert] pool_near_full_percent` / `pool_full_percent`; growth since the previous report, warn when full within 14 days, fail within 3; on a thick pool, free space below the copy-on-write area a snapshot of a volume reserves (20 % of it, at least 256 MiB), naming the volumes whose snapshots and backups will fail (warn) |
