@@ -1286,6 +1286,11 @@ message SetDualPrimaryRequest {
   // effective state is verified afterwards and an error is returned if any
   // reachable node is still dual-primary.
   bool enable = 2;
+  // nodes limits an enable to these participants — a live migration's source
+  // and target, the two ends of the only connection that will carry two
+  // Primaries. Empty enables it on every participant. Disabling always covers
+  // every participant.
+  repeated string nodes = 3;
 }
 
 message SetDualPrimaryResponse {

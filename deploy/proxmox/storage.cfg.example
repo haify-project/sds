@@ -53,15 +53,45 @@ sds: sds0
 #        content images
 #        shared 1
 
+# --- Self-HA and HTTPS -------------------------------------------------------
+# Under Self-HA the controller runs on whichever node holds sds-meta, so list
+# every node that can run it; an address that refuses the connection is
+# skipped. https:// needs `[tls] rest = true` on the controller; the
+# certificate is verified, against controllerca when it is not signed by a CA
+# the PVE nodes already trust. Its names must include the addresses listed.
+#
+#sds: sds-ha
+#        controller https://sds1,https://sds2,https://sds3
+#        controllerca /etc/pve/sds-ca.pem
+#        sdspool vg0
+#        apitoken <token>
+#        content images
+#        shared 1
+
 # Options
-#   controller      required. host or host:port; the REST port defaults to 3375.
+#   controller      required. Comma-separated addresses, each host or host:port
+#                   (port defaults to 3375), optionally prefixed with https://.
+#   controllerca    PEM CA bundle for https:// addresses; default: system store.
 #   sdspool         sds pool (volume group) new volumes are carved from.
 #   sdsnodes        comma-separated nodes to place replicas on (pins placement).
 #   replicas        replica count for auto-placement; ignored with sdsnodes.
 #   storagetype     lvm | lvm-thin | zfs. Defaults to the controller's default.
 #   resourceprefix  prefix for generated resource names (default "pve").
 #   apitoken        bearer token when sds [auth]/[rbac] is enabled.
+#   onnoquorum      suspend-io (default) | io-error, for disks created later.
 #
 # Note: sds allocates in whole gigabytes, so a disk size is rounded UP to the
 # next GB. Volumes are always raw — snapshots come from sds (LVM/ZFS), not from
 # an image format, so qcow2 is neither supported nor needed here.
+
+# --- I/O errors instead of a frozen guest on lost quorum -------------------
+# New disks suspend I/O when their node loses quorum (on-no-quorum suspend-io),
+# so a guest waits out a partition instead of remounting its filesystems
+# read-only. Set io-error to have the guest see the error instead.
+#
+#sds: sds-ioerror
+#        controller 192.168.1.10
+#        sdspool vg0
+#        onnoquorum io-error
+#        content images
+#        shared 1

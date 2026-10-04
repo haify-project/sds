@@ -53,26 +53,34 @@ VM on another node.
 ## Components (`deploy/proxmox/`)
 
 - `SDSPlugin.pm` — storage type `sds`, `PVE::Storage::Custom::SDSPlugin`.
-- `PVE/Storage/Custom/SDS/Client.pm` — REST client; bearer token when set.
+- `PVE/Storage/Custom/SDS/Client.pm` — REST client; bearer token when set;
+  several controller addresses (moves on only when a connection is refused)
+  and `https://` with certificate verification.
 - `PVE/Storage/Custom/SDS/Naming.pm` — volume ↔ resource naming and size
   conversions.
 - `PVE/Storage/Custom/SDS/Capacity.pm` — turns `GET /v1/pools` into the
   storage's total/free.
 - `PVE/Storage/Custom/SDS/Migration.pm` — whether another node's Primary is a
   live migration (and so may get the dual-primary window) or a leftover.
+- `PVE/Storage/Custom/SDS/Activation.pm` — `activate_volume` and
+  `deactivate_volume`: the migration window on two nodes, detaching a diskless
+  client on deactivate, and promoting or demoting with local `drbdadm` when no
+  controller answers.
 - `install.sh`, `preflight.sh`, `storage.cfg.example`, Perl tests in `t/`.
 
 `storage.cfg` options:
 
 | Key | Meaning |
 | --- | --- |
-| `controller` (fixed) | host or host:port; REST port defaults to 3375 |
+| `controller` (fixed) | comma-separated `host`/`host:port`, optionally `https://`; REST port defaults to 3375 |
+| `controllerca` | CA bundle for `https://` addresses; default the system store |
 | `sdspool` | sds pool for new volumes |
 | `sdsnodes` | comma-separated replica nodes; unset = auto-place by free space |
 | `replicas` | replica count for auto-placement (ignored with `sdsnodes`) |
 | `storagetype` | `lvm`, `lvm-thin` or `zfs` |
 | `resourceprefix` | resource name prefix, default `pve`; give each PVE cluster sharing one sds cluster its own |
 | `apitoken` | bearer token when sds `[auth]`/`[rbac]` is enabled |
+| `onnoquorum` | `suspend-io` (default) or `io-error`, sent as `on-no-quorum` and `on-no-data-accessible` for new disks |
 
 The plugin declares storage API version 11. On a PVE release whose accepted
 window does not include 11, `api()` reports the nearest accepted version.
@@ -92,8 +100,8 @@ window does not include 11, `api()` reports the nearest accepted version.
 | `alloc_image` | `POST /v1/resources` | protocol C; pool, storage type, nodes or replicas from `storage.cfg` |
 | `free_image` | `DELETE /v1/resources/{name}` | controller cascades teardown |
 | `activate_volume` | `POST …/diskless-clients` (only if this node is not a participant), then `POST …/primary` with `quorumGuarded` | waits for `/dev/drbdN` to appear |
-| `deactivate_volume` | `POST …/secondary`, then dual-primary off | |
-| `path` | local | `/dev/drbdN` |
+| `deactivate_volume` | `POST …/secondary`, then dual-primary off, then `DELETE …/diskless-clients/{node}` when this node is only a client | without a controller: `drbdadm secondary` |
+| `path` | `GET /v1/resources/{name}` | `/dev/drbdN`; without a controller, the local by-res link of a volume up here |
 | `volume_resize` | `PATCH /v1/resources/{name}/volumes/0` | |
 | `list_images` | `GET /v1/resources` | filtered by naming |
 | `status` | `GET /v1/pools` | the smallest node's total/free for `sdspool`, since a replica must fit on every node; for a thin pool, the thin pool's own size and data usage rather than the VG's |
@@ -109,7 +117,8 @@ snapshot node travels as a query parameter.
 - `activate_volume` on the migration target sees another node still Primary,
   checks that PVE is live-migrating the VM from there (the VM config in
   pmxcfs is still on another node and carries `lock: migrate`), opens the
-  dual-primary window (`POST …/dual-primary {enable: true}`), then promotes.
+  dual-primary window on the source and target only
+  (`POST …/dual-primary {enable: true, nodes: [source, target]}`), then promotes.
   If the promote fails or the device does not appear, it closes the window
   before failing. A Primary elsewhere with no migration under way is a
   leftover from a failed deactivate; activation refuses it rather than run the
@@ -134,7 +143,10 @@ reboot or `drbdadm adjust` returns the resource to single-primary even if the
 "off" call is lost.
 
 - **enable** refuses WAN resources (protocol A; two Primaries over an async
-  link corrupts data) and fails if any node rejects the command.
+  link corrupts data) and fails if any node rejects the command. `nodes`
+  limits it to named participants: a migration names its source and target,
+  the ends of the only connection that carries two Primaries, so a host that
+  is down elsewhere in the resource does not block it.
 - **disable** is idempotent: it tolerates a missing resource and per-node
   command failures, then verifies with `drbdsetup show` and returns an error if
   any node still has `allow-two-primaries`.

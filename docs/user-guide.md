@@ -1398,8 +1398,11 @@ Tokens come from `--token`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`.
 
 **TLS.** `[tls] enabled = true` with `cert_file` and `key_file` puts the gRPC
 API (port 3374) on TLS; adding `client_ca_file` requires a client certificate
-signed by that CA. The REST API on `[server] rest_port` (default 3375, used by the web UI) stays plain
-HTTP. Clients:
+signed by that CA. The REST API on `[server] rest_port` (default 3375) stays
+plain HTTP unless `[tls] rest = true` is also set; then it is served over TLS
+with the same certificate (without client certificates: REST callers carry a
+bearer token, and the web UI proxies to it over a pinned loopback connection).
+REST clients such as the Proxmox plugin then use `https://`. Clients:
 
 ```bash
 sds --tls-ca /etc/sds/ca.crt node list                 # verify against this CA

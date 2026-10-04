@@ -5,21 +5,41 @@
 # failure on the first VM disk creation. Run on every PVE node that should run
 # guests off SDS storage.
 #
-#   ./preflight.sh <controller-host>[:<rest-port>]
+#   ./preflight.sh <controller>[,<controller>...]
 #
-# Exits non-zero if anything required is missing.
+# <controller> is what goes in storage.cfg: host, host:port or [v6]:port,
+# optionally prefixed with https://. Set SDS_CA to a PEM bundle when the
+# controller's certificate is signed by a private CA (storage.cfg's
+# controllerca). Exits non-zero if anything required is missing.
 
 set -uo pipefail
 
 CONTROLLER="${1:-}"
 if [ -z "$CONTROLLER" ]; then
-    echo "usage: $0 <controller-host>[:<rest-port>]" >&2
+    echo "usage: $0 <controller>[,<controller>...]   (host, host:port, optionally https://)" >&2
     exit 2
 fi
 
-HOST="${CONTROLLER%%:*}"
-PORT="${CONTROLLER##*:}"
-[ "$PORT" = "$CONTROLLER" ] && PORT=3375
+# base_url turns one storage.cfg address into scheme://host:port.
+base_url() {
+    local entry="$1" scheme=http
+    case "$entry" in
+        https://*) scheme=https; entry="${entry#https://}" ;;
+        http://*) entry="${entry#http://}" ;;
+    esac
+    entry="${entry%/}"
+    case "$entry" in
+        \[*\]:*) ;;
+        \[*\]) entry="${entry}:3375" ;;
+        *:*:*) entry="[${entry}]:3375" ;;
+        *:*) ;;
+        *) entry="${entry}:3375" ;;
+    esac
+    echo "${scheme}://${entry}"
+}
+
+CURL=(curl -s -m 10)
+[ -n "${SDS_CA:-}" ] && CURL+=(--cacert "$SDS_CA")
 
 FAIL=0
 ok()   { echo "  OK    $*"; }
@@ -67,20 +87,30 @@ else
     bad "sudo not found — install it (apt-get install sudo); the controller runs node commands via sudo"
 fi
 
-# 4. The controller has to be reachable over REST from this node.
-if curl -sf -m 10 -o /dev/null "http://${HOST}:${PORT}/v1/resources"; then
-    ok "sds-controller REST reachable at ${HOST}:${PORT}"
-elif curl -s -m 10 -o /dev/null -w '%{http_code}' "http://${HOST}:${PORT}/v1/resources" | grep -q '^401\|^403'; then
-    ok "sds-controller REST reachable at ${HOST}:${PORT} (auth enabled — set 'apitoken' in storage.cfg)"
-else
-    bad "sds-controller REST not reachable at ${HOST}:${PORT}"
-fi
+# 4. A controller has to be reachable over REST from this node. With Self-HA
+#    only one of the listed addresses answers at a time, so one is enough.
+BASE=""
+IFS=',' read -ra ENTRIES <<< "$CONTROLLER"
+for entry in "${ENTRIES[@]}"; do
+    entry="$(echo "$entry" | tr -d '[:space:]')"
+    [ -n "$entry" ] || continue
+    url="$(base_url "$entry")"
+    code=$("${CURL[@]}" -o /dev/null -w '%{http_code}' "${url}/v1/resources")
+    case "$code" in
+        200) ok "sds-controller REST answers at ${url}"; BASE="${BASE:-$url}" ;;
+        401|403) ok "sds-controller REST answers at ${url} (auth enabled — set 'apitoken' in storage.cfg)"; BASE="${BASE:-$url}" ;;
+        000) warn "no answer at ${url} (fine for a standby Self-HA node; for https, check the certificate and SDS_CA)" ;;
+        *) warn "${url} answered HTTP ${code}" ;;
+    esac
+done
+[ -n "$BASE" ] || bad "no sds-controller REST address in '${CONTROLLER}' answered"
 
 # 5. This node must be registered with SDS under its PVE node name, because the
 #    plugin promotes/attaches by node name. A mismatch is the subtlest failure
 #    mode here, so it is checked explicitly.
 NODENAME=$(hostname)
-NODES_JSON=$(curl -sf -m 10 "http://${HOST}:${PORT}/v1/nodes" 2>/dev/null)
+NODES_JSON=""
+[ -n "$BASE" ] && NODES_JSON=$("${CURL[@]}" -f "${BASE}/v1/nodes" 2>/dev/null)
 if [ -n "$NODES_JSON" ]; then
     if echo "$NODES_JSON" | grep -q "\"name\":\"${NODENAME}\""; then
         ok "node '${NODENAME}' is registered with sds"

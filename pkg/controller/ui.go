@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io/fs"
 	"net"
@@ -79,7 +80,9 @@ type UIServer struct {
 }
 
 // NewUIServer creates a new UI server
-func NewUIServer(logger *zap.Logger, listenAddress string, port int, restPort, aiPort int) (*UIServer, error) {
+//
+// restTLS, when set, is how to dial a REST gateway served over TLS.
+func NewUIServer(logger *zap.Logger, listenAddress string, port int, restPort, aiPort int, restTLS *tls.Config) (*UIServer, error) {
 	// Get the subdirectory from the embed
 	distFS, err := fs.Sub(ui.FS, "dist")
 	if err != nil {
@@ -92,19 +95,29 @@ func NewUIServer(logger *zap.Logger, listenAddress string, port int, restPort, a
 		logger.Warn("Web UI assets are not embedded in this binary; serving a placeholder page. Build with `make build` to include the UI.")
 	}
 
-	mkProxy := func(p int) *httputil.ReverseProxy {
+	mkProxy := func(p int, tlsConf *tls.Config) *httputil.ReverseProxy {
 		// Always loopback: these are the controller's own listeners, and the
 		// hop must not depend on how the UI itself was addressed.
-		u, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", p))
-		return httputil.NewSingleHostReverseProxy(u)
+		scheme := "http"
+		if tlsConf != nil {
+			scheme = "https"
+		}
+		u, _ := url.Parse(fmt.Sprintf("%s://127.0.0.1:%d", scheme, p))
+		proxy := httputil.NewSingleHostReverseProxy(u)
+		if tlsConf != nil {
+			transport := http.DefaultTransport.(*http.Transport).Clone()
+			transport.TLSClientConfig = tlsConf
+			proxy.Transport = transport
+		}
+		return proxy
 	}
 
 	uiServer := &UIServer{
 		logger: logger,
 		distFS: distFS,
 		built:  built,
-		api:    mkProxy(restPort),
-		ai:     mkProxy(aiPort),
+		api:    mkProxy(restPort, restTLS),
+		ai:     mkProxy(aiPort, nil),
 		gz:     make(map[string][]byte),
 	}
 
