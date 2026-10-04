@@ -70,6 +70,10 @@ type BackupManifest struct {
 	Volumes    []BackupManifestVolume   `json:"volumes"`
 	Note       string                   `json:"note"`
 	Snapshots  []BackupManifestSnapshot `json:"snapshots"`
+	// LockMode and RetainUntil (RFC3339) are the Object Lock the objects
+	// carry, so an import knows a backup cannot be deleted before then.
+	LockMode    string `json:"lock_mode,omitempty"`
+	RetainUntil string `json:"retain_until,omitempty"`
 }
 
 // BackupManifestVolume describes one raw image in the manifest.
@@ -236,7 +240,7 @@ func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName,
 	// Everything that can be checked without side effects happens before the
 	// first snapshot, so a node missing rclone costs a round trip rather than a
 	// snapshot that then has to be cleaned up.
-	if err := bm.backend.Preflight(ctx, dep, host); err != nil {
+	if err := bm.backend.Preflight(ctx, dep, host, spec); err != nil {
 		return nil, err
 	}
 
@@ -273,6 +277,9 @@ func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName,
 		var why string
 		if parent, why = bm.incrementalBase(ctx, info, targetName, node, host, sizes, encrypted); parent == nil {
 			bm.controller.logger.Info("Taking a full backup", zap.String("resource", resource), zap.String("reason", why))
+		} else if why = lockedChainRefusal(spec, parent, started); why != "" {
+			parent = nil
+			bm.controller.logger.Info("Taking a full backup", zap.String("resource", resource), zap.String("reason", why))
 		}
 	}
 
@@ -303,6 +310,10 @@ func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName,
 	if parent != nil {
 		rec.Kind, rec.Parent = database.BackupKindIncremental, parent.ID
 	}
+	if spec.Locked() {
+		rec.LockMode, rec.RetainUntil = string(spec.LockMode), chainRetainUntil(spec, parent, started)
+		sess.SetLock(spec.LockMode, rec.RetainUntil)
+	}
 	if err := bm.controller.db.SaveBackup(ctx, rec); err != nil {
 		return nil, fmt.Errorf("record backup: %w", err)
 	}
@@ -329,6 +340,10 @@ func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName,
 		return nil, err
 	}
 	if err := sess.PutText(ctx, manifestPath, manifest); err != nil {
+		bm.failBackup(ctx, sess, rec, append(uploaded, manifestPath), err)
+		return nil, err
+	}
+	if err := verifyLocks(ctx, sess, rec, append(uploaded, manifestPath)); err != nil {
 		bm.failBackup(ctx, sess, rec, append(uploaded, manifestPath), err)
 		return nil, err
 	}
@@ -437,11 +452,15 @@ func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo
 		CreatedAt:  rec.StartedAt.UTC().Format(time.RFC3339),
 		FinishedAt: time.Now().UTC().Format(time.RFC3339),
 		TotalBytes: rec.TotalBytes,
+		LockMode:   rec.LockMode,
 		Note: "Raw full images of each DRBD volume, bounded by the DRBD device size " +
 			"(smaller than the backing LV, whose tail holds DRBD metadata). Restore with " +
 			"`sds backup restore`, or by writing each image to a device of at least that size. " +
 			"An incremental holds only changed ranges: restore its parent chain down to the full " +
 			"backup first, then write each run of its gunzipped image at the offset its ranges list gives.",
+	}
+	if !rec.RetainUntil.IsZero() {
+		m.RetainUntil = rec.RetainUntil.UTC().Format(time.RFC3339)
 	}
 	for _, v := range rec.Volumes {
 		m.Volumes = append(m.Volumes, BackupManifestVolume{

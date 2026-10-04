@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 )
 
 // remoteName is the rclone remote defined in every config this package renders.
@@ -51,7 +52,11 @@ func (b *RcloneBackend) Name() string { return "rclone" }
 // Preflight implements Backend. It runs before anything is snapshotted, so a
 // node without rclone costs an SSH round trip rather than a snapshot, an
 // upload attempt and a confusing partial failure.
-func (b *RcloneBackend) Preflight(ctx context.Context, dep DeploymentClient, host string) error {
+//
+// A target that locks objects needs an rclone that can lock them: an older one
+// accepts the upload and stores it unlocked, which is the one outcome that
+// must never look like success.
+func (b *RcloneBackend) Preflight(ctx context.Context, dep DeploymentClient, host string, target TargetSpec) error {
 	if dep == nil {
 		return fmt.Errorf("backup: deployment client is nil")
 	}
@@ -64,6 +69,13 @@ func (b *RcloneBackend) Preflight(ctx context.Context, dep DeploymentClient, hos
 		return fmt.Errorf(
 			"backup: rclone is required on %s and was not found (install it, e.g. `curl https://rclone.org/install.sh | sudo bash`): %s",
 			host, res.FailureDetails())
+	}
+	if target.Locked() {
+		line := strings.TrimSpace(withoutNotices(res.Output(host)))
+		if !rcloneVersionAtLeast(line, MinRcloneForLock) {
+			return fmt.Errorf("backup: target %q locks its objects, which needs rclone %s or later on %s (found %q)",
+				target.Name, MinRcloneForLock, host, line)
+		}
 	}
 	return nil
 }
@@ -122,6 +134,12 @@ type rcloneSession struct {
 	// contains no secret — only a path — so it is safe in a command line.
 	cfgPath string
 	relPath string
+
+	// lockMode and lockUntil lock every object pushed (SetLock); readAt
+	// pins every read to the versions current at that time (SetReadAt).
+	lockMode  LockMode
+	lockUntil time.Time
+	readAt    time.Time
 }
 
 // remotePath maps an object key to the rclone remote path. The bucket (S3) or
@@ -151,12 +169,12 @@ func (s *rcloneSession) PushCmd(objectPath string, sizeBytes uint64) string {
 	if s.target.Kind == KindS3 {
 		cmd += fmt.Sprintf(" --s3-chunk-size %dM", s3ChunkMiB(sizeBytes))
 	}
-	return cmd + " rcat " + shellQuote(s.remotePath(objectPath))
+	return cmd + s.lockFlags() + " rcat " + shellQuote(s.remotePath(objectPath))
 }
 
 // PullCmd implements Session.
 func (s *rcloneSession) PullCmd(objectPath string) string {
-	return s.rcloneEnv() + " cat " + shellQuote(s.remotePath(objectPath))
+	return s.rcloneEnv() + s.readAtFlag() + " cat " + shellQuote(s.remotePath(objectPath))
 }
 
 // PutText implements Session. Content travels in the command line, so this is
@@ -213,7 +231,7 @@ func (s *rcloneSession) Remove(ctx context.Context, objectPath string) error {
 // List implements Session. One recursive listing of the target root rather
 // than a walk, so a bucket of a thousand backups costs one round trip.
 func (s *rcloneSession) List(ctx context.Context) ([]Object, error) {
-	cmd := s.rcloneEnv() + " lsjson -R --files-only " + shellQuote(s.remotePath(""))
+	cmd := s.rcloneEnv() + s.readAtFlag() + " lsjson -R --files-only " + shellQuote(s.remotePath(""))
 	res, err := s.dep.Exec(ctx, []string{s.host}, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("backup: list target: %w", err)

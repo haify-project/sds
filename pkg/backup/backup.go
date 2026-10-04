@@ -54,6 +54,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Kind is a target's storage protocol.
@@ -119,6 +120,16 @@ type TargetSpec struct {
 	// for the operator; this flag is the escape hatch for an operator who would
 	// rather run `rclone obscure` themselves and paste the result.
 	SecretIsObscured bool
+
+	// LockMode turns on S3 Object Lock for everything written to the target:
+	// LockGovernance or LockCompliance, empty for none. See lock.go.
+	LockMode LockMode
+	// LockDays is how long every backup stays locked at the least.
+	LockDays int
+	// FullEveryDays is how long an incremental chain may grow before the next
+	// backup is a full one; it bounds how much longer than LockDays the
+	// chain's earliest backups stay locked. Defaults to DefaultFullEveryDays.
+	FullEveryDays int
 }
 
 // Validate checks a target is usable before it is stored or dialled.
@@ -156,7 +167,7 @@ func (t TargetSpec) Validate() error {
 	default:
 		return fmt.Errorf("backup: target %q has unknown kind %q", t.Name, t.Kind)
 	}
-	return nil
+	return t.validateLock()
 }
 
 // Describe renders a target for display. It never includes the secret.
@@ -167,7 +178,11 @@ func (t TargetSpec) Describe() string {
 		if ep == "" {
 			ep = "aws"
 		}
-		return fmt.Sprintf("s3 %s/%s (%s)", ep, t.Bucket, joinPrefix(t.Prefix))
+		desc := fmt.Sprintf("s3 %s/%s (%s)", ep, t.Bucket, joinPrefix(t.Prefix))
+		if t.Locked() {
+			desc += fmt.Sprintf(", object lock %s %dd, full every %dd", t.LockMode, t.LockDays, t.FullEvery())
+		}
+		return desc
 	case KindSMB:
 		return fmt.Sprintf("smb //%s/%s (%s)", t.Host, t.Share, joinPrefix(t.Prefix))
 	case KindWebDAV:
@@ -311,6 +326,20 @@ type Session interface {
 	// GetText reads a small text object (a manifest) back.
 	GetText(ctx context.Context, objectPath string) (string, error)
 
+	// SetLock makes every object pushed from now on locked in mode until
+	// until (S3 Object Lock). A zero until turns it off.
+	SetLock(mode LockMode, until time.Time)
+
+	// SetReadAt makes every read from now on — pulls, listings, text — see
+	// the target as it was at t: the object versions current then, before any
+	// later overwrite or delete. A zero t reads the current versions. Writes
+	// are refused while it is set.
+	SetReadAt(t time.Time)
+
+	// LockOf reports the Object Lock mode and retain-until date the target
+	// holds for objectPath; an empty mode means none.
+	LockOf(ctx context.Context, objectPath string) (LockMode, time.Time, error)
+
 	// Close removes the node-local credential material.
 	Close(ctx context.Context) error
 }
@@ -327,9 +356,10 @@ type Backend interface {
 	// future restore knows what wrote it.
 	Name() string
 
-	// Preflight verifies the backend's prerequisites on host. It runs before
-	// any snapshot is taken, so a missing dependency costs nothing.
-	Preflight(ctx context.Context, dep DeploymentClient, host string) error
+	// Preflight verifies the backend's prerequisites on host for target. It
+	// runs before any snapshot is taken, so a missing dependency costs
+	// nothing.
+	Preflight(ctx context.Context, dep DeploymentClient, host string, target TargetSpec) error
 
 	// Prepare stages credentials for target on host.
 	Prepare(ctx context.Context, dep DeploymentClient, host string, target TargetSpec) (Session, error)

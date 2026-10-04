@@ -11481,6 +11481,9 @@ type BackupTargetInfo struct {
 	User     string                 `protobuf:"bytes,9,opt,name=user,proto3" json:"user,omitempty"`
 	// description is a rendered one-line summary for display.
 	Description   string `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`
+	LockMode      string `protobuf:"bytes,11,opt,name=lock_mode,json=lockMode,proto3" json:"lock_mode,omitempty"`
+	LockDays      uint32 `protobuf:"varint,12,opt,name=lock_days,json=lockDays,proto3" json:"lock_days,omitempty"`
+	FullEveryDays uint32 `protobuf:"varint,13,opt,name=full_every_days,json=fullEveryDays,proto3" json:"full_every_days,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11585,6 +11588,27 @@ func (x *BackupTargetInfo) GetDescription() string {
 	return ""
 }
 
+func (x *BackupTargetInfo) GetLockMode() string {
+	if x != nil {
+		return x.LockMode
+	}
+	return ""
+}
+
+func (x *BackupTargetInfo) GetLockDays() uint32 {
+	if x != nil {
+		return x.LockDays
+	}
+	return 0
+}
+
+func (x *BackupTargetInfo) GetFullEveryDays() uint32 {
+	if x != nil {
+		return x.FullEveryDays
+	}
+	return 0
+}
+
 type AddBackupTargetRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Name     string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -11603,8 +11627,19 @@ type AddBackupTargetRequest struct {
 	Secret string `protobuf:"bytes,10,opt,name=secret,proto3" json:"secret,omitempty"`
 	// secret_obscured says secret is already in rclone's obscured form.
 	SecretObscured bool `protobuf:"varint,11,opt,name=secret_obscured,json=secretObscured,proto3" json:"secret_obscured,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// lock_mode turns on S3 Object Lock for every object written: "governance"
+	// or "compliance"; empty for none. The bucket must have Object Lock (and so
+	// versioning) enabled, and rclone 1.74 or later must be on the nodes.
+	LockMode string `protobuf:"bytes,12,opt,name=lock_mode,json=lockMode,proto3" json:"lock_mode,omitempty"`
+	// lock_days is how long every backup stays locked at the least.
+	LockDays uint32 `protobuf:"varint,13,opt,name=lock_days,json=lockDays,proto3" json:"lock_days,omitempty"`
+	// full_every_days is how long an incremental chain grows on a locked
+	// target before the next backup is full (default 7). Every backup of a
+	// chain is locked until chain start + full_every_days + lock_days, so no
+	// link expires before a backup built on it.
+	FullEveryDays uint32 `protobuf:"varint,14,opt,name=full_every_days,json=fullEveryDays,proto3" json:"full_every_days,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AddBackupTargetRequest) Reset() {
@@ -11712,6 +11747,27 @@ func (x *AddBackupTargetRequest) GetSecretObscured() bool {
 		return x.SecretObscured
 	}
 	return false
+}
+
+func (x *AddBackupTargetRequest) GetLockMode() string {
+	if x != nil {
+		return x.LockMode
+	}
+	return ""
+}
+
+func (x *AddBackupTargetRequest) GetLockDays() uint32 {
+	if x != nil {
+		return x.LockDays
+	}
+	return 0
+}
+
+func (x *AddBackupTargetRequest) GetFullEveryDays() uint32 {
+	if x != nil {
+		return x.FullEveryDays
+	}
+	return 0
 }
 
 type AddBackupTargetResponse struct {
@@ -12681,7 +12737,15 @@ type BackupInfo struct {
 	Parent string `protobuf:"bytes,14,opt,name=parent,proto3" json:"parent,omitempty"`
 	// schedule is the backup schedule (resource@target) that took it; empty for
 	// a backup taken by hand. A schedule's retention deletes only its own.
-	Schedule      string `protobuf:"bytes,15,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	Schedule string `protobuf:"bytes,15,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	// lock_mode and retain_until (RFC3339) are the Object Lock its objects
+	// carry; until then it cannot be deleted, by sds or by anyone using sds's
+	// credentials.
+	LockMode    string `protobuf:"bytes,16,opt,name=lock_mode,json=lockMode,proto3" json:"lock_mode,omitempty"`
+	RetainUntil string `protobuf:"bytes,17,opt,name=retain_until,json=retainUntil,proto3" json:"retain_until,omitempty"`
+	// read_at (RFC3339) is the time its objects are read as of, for a backup
+	// imported with as_of.
+	ReadAt        string `protobuf:"bytes,18,opt,name=read_at,json=readAt,proto3" json:"read_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12817,6 +12881,27 @@ func (x *BackupInfo) GetParent() string {
 func (x *BackupInfo) GetSchedule() string {
 	if x != nil {
 		return x.Schedule
+	}
+	return ""
+}
+
+func (x *BackupInfo) GetLockMode() string {
+	if x != nil {
+		return x.LockMode
+	}
+	return ""
+}
+
+func (x *BackupInfo) GetRetainUntil() string {
+	if x != nil {
+		return x.RetainUntil
+	}
+	return ""
+}
+
+func (x *BackupInfo) GetReadAt() string {
+	if x != nil {
+		return x.ReadAt
 	}
 	return ""
 }
@@ -13306,7 +13391,11 @@ type ImportBackupsRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Target string                 `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
 	// node reads the target; empty tries the registered nodes in turn.
-	Node          string `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	Node string `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	// as_of (RFC3339) imports the target as it was at that time: the object
+	// versions current then, before any later overwrite or delete. Restores of
+	// what it imports read those versions too. S3 targets with versioning only.
+	AsOf          string `protobuf:"bytes,3,opt,name=as_of,json=asOf,proto3" json:"as_of,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -13351,6 +13440,13 @@ func (x *ImportBackupsRequest) GetTarget() string {
 func (x *ImportBackupsRequest) GetNode() string {
 	if x != nil {
 		return x.Node
+	}
+	return ""
+}
+
+func (x *ImportBackupsRequest) GetAsOf() string {
+	if x != nil {
+		return x.AsOf
 	}
 	return ""
 }
@@ -21955,7 +22051,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"T\n" +
 	"\x1eDeleteSnapshotScheduleResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xfe\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xe0\x02\n" +
 	"\x10BackupTargetInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
@@ -21967,7 +22063,10 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x05share\x18\b \x01(\tR\x05share\x12\x12\n" +
 	"\x04user\x18\t \x01(\tR\x04user\x12 \n" +
 	"\vdescription\x18\n" +
-	" \x01(\tR\vdescription\"\xa3\x02\n" +
+	" \x01(\tR\vdescription\x12\x1b\n" +
+	"\tlock_mode\x18\v \x01(\tR\blockMode\x12\x1b\n" +
+	"\tlock_days\x18\f \x01(\rR\blockDays\x12&\n" +
+	"\x0ffull_every_days\x18\r \x01(\rR\rfullEveryDays\"\x85\x03\n" +
 	"\x16AddBackupTargetRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
@@ -21980,7 +22079,10 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04user\x18\t \x01(\tR\x04user\x12\x16\n" +
 	"\x06secret\x18\n" +
 	" \x01(\tR\x06secret\x12'\n" +
-	"\x0fsecret_obscured\x18\v \x01(\bR\x0esecretObscured\"M\n" +
+	"\x0fsecret_obscured\x18\v \x01(\bR\x0esecretObscured\x12\x1b\n" +
+	"\tlock_mode\x18\f \x01(\tR\blockMode\x12\x1b\n" +
+	"\tlock_days\x18\r \x01(\rR\blockDays\x12&\n" +
+	"\x0ffull_every_days\x18\x0e \x01(\rR\rfullEveryDays\"M\n" +
 	"\x17AddBackupTargetResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x1a\n" +
@@ -22053,7 +22155,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04pool\x18\x04 \x01(\tR\x04pool\x12%\n" +
 	"\x0ebacking_volume\x18\x05 \x01(\tR\rbackingVolume\x12\x16\n" +
 	"\x06ranges\x18\x06 \x01(\tR\x06ranges\x12#\n" +
-	"\rchanged_bytes\x18\a \x01(\x04R\fchangedBytes\"\x9b\x03\n" +
+	"\rchanged_bytes\x18\a \x01(\x04R\fchangedBytes\"\xf4\x03\n" +
 	"\n" +
 	"BackupInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
@@ -22074,7 +22176,10 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\avolumes\x18\f \x03(\v2\x14.v1.BackupVolumeInfoR\avolumes\x12\x12\n" +
 	"\x04kind\x18\r \x01(\tR\x04kind\x12\x16\n" +
 	"\x06parent\x18\x0e \x01(\tR\x06parent\x12\x1a\n" +
-	"\bschedule\x18\x0f \x01(\tR\bschedule\"q\n" +
+	"\bschedule\x18\x0f \x01(\tR\bschedule\x12\x1b\n" +
+	"\tlock_mode\x18\x10 \x01(\tR\blockMode\x12!\n" +
+	"\fretain_until\x18\x11 \x01(\tR\vretainUntil\x12\x17\n" +
+	"\aread_at\x18\x12 \x01(\tR\x06readAt\"q\n" +
 	"\x13CreateBackupRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +
@@ -22105,10 +22210,11 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x05force\x18\x03 \x01(\bR\x05force\"J\n" +
 	"\x14DeleteBackupResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"B\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"W\n" +
 	"\x14ImportBackupsRequest\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x12\n" +
-	"\x04node\x18\x02 \x01(\tR\x04node\"\xe5\x01\n" +
+	"\x04node\x18\x02 \x01(\tR\x04node\x12\x13\n" +
+	"\x05as_of\x18\x03 \x01(\tR\x04asOf\"\xe5\x01\n" +
 	"\x15ImportBackupsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1a\n" +

@@ -59,6 +59,12 @@ type BackupTarget struct {
 	// SecretObscured marks Secret as already in rclone's obscured form.
 	SecretObscured bool
 
+	// LockMode ("governance", "compliance" or empty), LockDays and
+	// FullEveryDays configure S3 Object Lock for what the target stores.
+	LockMode      string `json:",omitempty"`
+	LockDays      int    `json:",omitempty"`
+	FullEveryDays int    `json:",omitempty"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -116,6 +122,17 @@ type Backup struct {
 	TotalBytes uint64
 	StartedAt  time.Time
 	FinishedAt time.Time
+
+	// LockMode and RetainUntil are the Object Lock every object of the
+	// backup carries: until then neither sds nor anyone with its credentials
+	// can delete or overwrite them. Every backup of an incremental chain
+	// shares the date, so no link expires before a backup built on it.
+	LockMode    string    `json:",omitempty"`
+	RetainUntil time.Time `json:",omitempty"`
+	// ReadAt, when set, is the time the backup's objects are read as of —
+	// the versions current then, whatever was written or deleted since. Set
+	// for a backup imported with --as-of.
+	ReadAt time.Time `json:",omitempty"`
 }
 
 // ==================== BACKUP TARGET ====================

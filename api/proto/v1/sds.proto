@@ -2067,6 +2067,9 @@ message BackupTargetInfo {
   string user = 9;
   // description is a rendered one-line summary for display.
   string description = 10;
+  string lock_mode = 11;
+  uint32 lock_days = 12;
+  uint32 full_every_days = 13;
 }
 
 message AddBackupTargetRequest {
@@ -2086,6 +2089,17 @@ message AddBackupTargetRequest {
   string secret = 10;
   // secret_obscured says secret is already in rclone's obscured form.
   bool secret_obscured = 11;
+  // lock_mode turns on S3 Object Lock for every object written: "governance"
+  // or "compliance"; empty for none. The bucket must have Object Lock (and so
+  // versioning) enabled, and rclone 1.74 or later must be on the nodes.
+  string lock_mode = 12;
+  // lock_days is how long every backup stays locked at the least.
+  uint32 lock_days = 13;
+  // full_every_days is how long an incremental chain grows on a locked
+  // target before the next backup is full (default 7). Every backup of a
+  // chain is locked until chain start + full_every_days + lock_days, so no
+  // link expires before a backup built on it.
+  uint32 full_every_days = 14;
 }
 
 message AddBackupTargetResponse {
@@ -2222,6 +2236,14 @@ message BackupInfo {
   // schedule is the backup schedule (resource@target) that took it; empty for
   // a backup taken by hand. A schedule's retention deletes only its own.
   string schedule = 15;
+  // lock_mode and retain_until (RFC3339) are the Object Lock its objects
+  // carry; until then it cannot be deleted, by sds or by anyone using sds's
+  // credentials.
+  string lock_mode = 16;
+  string retain_until = 17;
+  // read_at (RFC3339) is the time its objects are read as of, for a backup
+  // imported with as_of.
+  string read_at = 18;
 }
 
 message CreateBackupRequest {
@@ -2284,6 +2306,10 @@ message ImportBackupsRequest {
   string target = 1;
   // node reads the target; empty tries the registered nodes in turn.
   string node = 2;
+  // as_of (RFC3339) imports the target as it was at that time: the object
+  // versions current then, before any later overwrite or delete. Restores of
+  // what it imports read those versions too. S3 targets with versioning only.
+  string as_of = 3;
 }
 
 message ImportBackupsResponse {

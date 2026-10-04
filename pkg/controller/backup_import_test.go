@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,7 +80,7 @@ func TestImportRebuildsChainsFromManifests(t *testing.T) {
 		require.NoError(t, f.ctrl.db.DeleteBackup(ctx, id))
 	}
 
-	res, err := f.ctrl.backups.ImportBackups(ctx, "offsite", "10.0.0.1")
+	res, err := f.ctrl.backups.ImportBackups(ctx, "offsite", "10.0.0.1", time.Time{})
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{first.ID, second.ID, third.ID}, res.Imported)
 	assert.Empty(t, res.Skipped)
@@ -101,7 +102,7 @@ func TestImportRebuildsChainsFromManifests(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, f.ran("seek_bytes"), 2, "both incrementals are replayed on the imported full one")
 
-	again, err := f.ctrl.backups.ImportBackups(ctx, "offsite", "10.0.0.1")
+	again, err := f.ctrl.backups.ImportBackups(ctx, "offsite", "10.0.0.1", time.Time{})
 	require.NoError(t, err)
 	assert.Empty(t, again.Imported, "importing twice records nothing twice")
 	assert.Len(t, again.Skipped, 3)
@@ -120,7 +121,7 @@ func TestImportAdoptsTheNewestBaseOnItsOwnCluster(t *testing.T) {
 		require.NoError(t, f.ctrl.db.DeleteBackup(ctx, id))
 	}
 
-	_, err := f.ctrl.backups.ImportBackups(ctx, "offsite", "10.0.0.1")
+	_, err := f.ctrl.backups.ImportBackups(ctx, "offsite", "10.0.0.1", time.Time{})
 	require.NoError(t, err)
 	got, err := f.ctrl.db.GetBackup(ctx, second.ID)
 	require.NoError(t, err)

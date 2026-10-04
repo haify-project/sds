@@ -60,7 +60,15 @@ func (s *Server) RunBackupSchedule(ctx context.Context, req *sdspb.RunBackupSche
 }
 
 func (s *Server) ImportBackups(ctx context.Context, req *sdspb.ImportBackupsRequest) (*sdspb.ImportBackupsResponse, error) {
-	res, err := s.ctrl.backups.ImportBackups(ctx, req.Target, req.Node)
+	var asOf time.Time
+	if req.AsOf != "" {
+		t, perr := time.Parse(time.RFC3339, req.AsOf)
+		if perr != nil {
+			return &sdspb.ImportBackupsResponse{Success: false, Message: fmt.Sprintf("as_of %q is not an RFC3339 time", req.AsOf)}, nil
+		}
+		asOf = t
+	}
+	res, err := s.ctrl.backups.ImportBackups(ctx, req.Target, req.Node, asOf)
 	if err != nil {
 		return &sdspb.ImportBackupsResponse{Success: false, Message: err.Error()}, nil
 	}

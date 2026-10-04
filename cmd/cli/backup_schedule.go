@@ -174,7 +174,7 @@ func backupScheduleRunCommand() *cobra.Command {
 }
 
 func backupImportCommand() *cobra.Command {
-	var target, node string
+	var target, node, asOf string
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Rebuild backup records from what a target holds",
@@ -189,7 +189,15 @@ import, create a resource at least as large as the backup, and
 A backup whose images are not all on the target is skipped and named. Only the
 newest backup of each resource can carry on as the base of the next
 incremental, and only when its snapshot is still on that node of this cluster;
-otherwise the next backup to the target is full.`,
+otherwise the next backup to the target is full.
+
+--as-of reads the target as it was at a time (RFC3339): the object versions
+current then, before any overwrite or delete since. It is the way back after
+someone with the target's credentials deleted the backups — on a versioned S3
+bucket a delete only hides them — and restores of what it imports read those
+same versions.
+
+  sds backup import --target vault --as-of 2026-10-01T00:00:00Z`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if target == "" {
 				return fmt.Errorf("--target is required")
@@ -201,7 +209,7 @@ otherwise the next backup to the target is full.`,
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(c)
-			res, err := c.ImportBackups(ctx, target, node)
+			res, err := c.ImportBackupsAsOf(ctx, target, node, asOf)
 			if err != nil {
 				return fmt.Errorf("import failed: %w", err)
 			}
@@ -223,5 +231,6 @@ otherwise the next backup to the target is full.`,
 	}
 	cmd.Flags().StringVar(&target, "target", "", "Target to read (required); add it first with `backup target add`")
 	cmd.Flags().StringVar(&node, "node", "", "Read the target from this node (default: the first registered node with rclone)")
+	cmd.Flags().StringVar(&asOf, "as-of", "", "Read the target as it was at this RFC3339 time (versioned S3 targets)")
 	return cmd
 }

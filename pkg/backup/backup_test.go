@@ -96,7 +96,7 @@ func TestPreflightNamesTheMissingDependency(t *testing.T) {
 	dep := &fakeDeploy{execFunc: func(cmd string) (*Result, error) {
 		return failResult([]string{"10.0.0.1"}, "rclone is not installed"), nil
 	}}
-	err := NewRclone().Preflight(context.Background(), dep, "10.0.0.1")
+	err := NewRclone().Preflight(context.Background(), dep, "10.0.0.1", TargetSpec{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rclone is required on 10.0.0.1")
 }
