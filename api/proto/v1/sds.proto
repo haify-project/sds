@@ -702,6 +702,33 @@ service SDSController {
     option (google.api.http) = { post: "/v1/approvals/{id}/reject"; body: "*"; };
   }
 
+  // Database applications (`sds app`): a single-instance PostgreSQL, MySQL/
+  // MariaDB or Redis on a resource's DRBD volume, failed over by drbd-reactor
+  // (mount, database unit, service IP last). CreateApp returns the generated
+  // password once; it is kept only on the volume, readable by root.
+  rpc CreateApp(CreateAppRequest) returns (CreateAppResponse) {
+    option (google.api.http) = { post: "/v1/apps"; body: "*"; };
+  }
+  rpc ListApps(ListAppsRequest) returns (ListAppsResponse) {
+    option (google.api.http) = { get: "/v1/apps"; };
+  }
+  rpc GetAppStatus(GetAppStatusRequest) returns (GetAppStatusResponse) {
+    option (google.api.http) = { get: "/v1/apps/{name}"; };
+  }
+  // Takes the app out of drbd-reactor's hands and stops it. The resource and
+  // its data are kept unless delete_data is set.
+  rpc DeleteApp(DeleteAppRequest) returns (DeleteAppResponse) {
+    option (google.api.http) = { delete: "/v1/apps/{name}"; };
+  }
+  // Planned switchover: the app's node stops it and another replica takes over.
+  rpc FailoverApp(FailoverAppRequest) returns (FailoverAppResponse) {
+    option (google.api.http) = { post: "/v1/apps/{name}/failover"; body: "*"; };
+  }
+  // Freezes the database on its node (with a node-side thaw watchdog), takes
+  // a resource snapshot on every replica, and thaws.
+  rpc SnapshotApp(SnapshotAppRequest) returns (SnapshotAppResponse) {
+    option (google.api.http) = { post: "/v1/apps/{name}/snapshots"; body: "*"; };
+  }
 }
 
 // Pool messages
@@ -3553,4 +3580,97 @@ message GetInspectionResponse {
   bool success = 1;
   string message = 2;
   InspectionReport report = 3;
+}
+
+// ---- Database applications (sds app) ----
+
+message AppInfo {
+  string name = 1;
+  string engine = 2;            // postgres, mysql or redis
+  string resource = 3;
+  string service_ip = 4;        // CIDR
+  uint32 port = 5;
+  bool vector = 6;              // postgres with pgvector
+  string mount_point = 7;       // where the Primary mounts the volume
+  string unit = 8;              // the systemd unit drbd-reactor starts
+  string admin_user = 9;        // the account whose password was generated
+  string credentials_file = 10; // the password, root-only, on the volume
+  string version = 11;          // engine version the nodes agreed on
+  string connection = 12;       // how a client reaches it through the service IP
+  int64 created_at_unix = 13;
+}
+
+message CreateAppRequest {
+  string name = 1;
+  string engine = 2;
+  string resource = 3;    // default: the app's name
+  string service_ip = 4;  // CIDR, required
+  uint32 port = 5;        // 0: the engine's default
+  bool vector = 6;        // postgres only
+}
+
+message CreateAppResponse {
+  bool success = 1;
+  string message = 2;
+  AppInfo app = 3;
+  // The generated password, returned only by the call that generated it.
+  // Empty when the volume already held the app's data (data_reused).
+  string password = 4;
+  string primary_node = 5;  // where it was initialized
+  bool data_reused = 6;
+}
+
+message ListAppsRequest {}
+
+message ListAppsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated AppInfo apps = 3;
+}
+
+message GetAppStatusRequest {
+  string name = 1;
+}
+
+message GetAppStatusResponse {
+  bool success = 1;
+  string message = 2;
+  AppInfo app = 3;
+  string primary_node = 4;   // empty when the resource is Primary nowhere
+  string service_state = 5;  // systemctl is-active of the unit there
+  bool healthy = 6;          // the engine's probe answered
+  string state = 7;          // running, degraded or stopped
+  repeated string nodes = 8; // the nodes its promoter runs on
+}
+
+message DeleteAppRequest {
+  string name = 1;
+  bool delete_data = 2;  // also delete the resource and its data
+}
+
+message DeleteAppResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message FailoverAppRequest {
+  string name = 1;
+}
+
+message FailoverAppResponse {
+  bool success = 1;
+  string message = 2;
+  string from_node = 3;
+  string to_node = 4;
+}
+
+message SnapshotAppRequest {
+  string name = 1;
+  string snapshot = 2;
+}
+
+message SnapshotAppResponse {
+  bool success = 1;
+  string message = 2;
+  bool frozen = 3;  // false when the app was not running (nothing to freeze)
 }

@@ -125,6 +125,203 @@
         ]
       }
     },
+    "/v1/apps": {
+      "get": {
+        "operationId": "SDSController_ListApps",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAppsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "post": {
+        "summary": "Database applications (`sds app`): a single-instance PostgreSQL, MySQL/\nMariaDB or Redis on a resource's DRBD volume, failed over by drbd-reactor\n(mount, database unit, service IP last). CreateApp returns the generated\npassword once; it is kept only on the volume, readable by root.",
+        "operationId": "SDSController_CreateApp",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateAppResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateAppRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/apps/{name}": {
+      "get": {
+        "operationId": "SDSController_GetAppStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAppStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      },
+      "delete": {
+        "summary": "Takes the app out of drbd-reactor's hands and stops it. The resource and\nits data are kept unless delete_data is set.",
+        "operationId": "SDSController_DeleteApp",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteAppResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "deleteData",
+            "description": "also delete the resource and its data",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/apps/{name}/failover": {
+      "post": {
+        "summary": "Planned switchover: the app's node stops it and another replica takes over.",
+        "operationId": "SDSController_FailoverApp",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1FailoverAppResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerFailoverAppBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/apps/{name}/snapshots": {
+      "post": {
+        "summary": "Freezes the database on its node (with a node-side thaw watchdog), takes\na resource snapshot on every replica, and thaws.",
+        "operationId": "SDSController_SnapshotApp",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SnapshotAppResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSnapshotAppBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/audit": {
       "get": {
         "summary": "Audit trail: who called what, when, and whether it was allowed. Persisted\nin the database, which lives on the controller's replicated volume, so the\nhistory follows the controller across a failover instead of being split\nacross the journals of whichever nodes happened to be active.",
@@ -6381,6 +6578,9 @@
     "SDSControllerEvictHaBody": {
       "type": "object"
     },
+    "SDSControllerFailoverAppBody": {
+      "type": "object"
+    },
     "SDSControllerFreezeSnapshotScheduleBody": {
       "type": "object",
       "properties": {
@@ -6758,6 +6958,14 @@
         }
       },
       "description": "SetWanEndpointRequest changes where a WAN resource's primary site reaches its\nDR site, and rebuilds the tunnels on it. An empty field keeps its value."
+    },
+    "SDSControllerSnapshotAppBody": {
+      "type": "object",
+      "properties": {
+        "snapshot": {
+          "type": "string"
+        }
+      }
     },
     "SDSControllerStartGatewayBody": {
       "type": "object"
@@ -7171,6 +7379,61 @@
         }
       }
     },
+    "v1AppInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string",
+          "title": "postgres, mysql or redis"
+        },
+        "resource": {
+          "type": "string"
+        },
+        "serviceIp": {
+          "type": "string",
+          "title": "CIDR"
+        },
+        "port": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "vector": {
+          "type": "boolean",
+          "title": "postgres with pgvector"
+        },
+        "mountPoint": {
+          "type": "string",
+          "title": "where the Primary mounts the volume"
+        },
+        "unit": {
+          "type": "string",
+          "title": "the systemd unit drbd-reactor starts"
+        },
+        "adminUser": {
+          "type": "string",
+          "title": "the account whose password was generated"
+        },
+        "credentialsFile": {
+          "type": "string",
+          "title": "the password, root-only, on the volume"
+        },
+        "version": {
+          "type": "string",
+          "title": "engine version the nodes agreed on"
+        },
+        "connection": {
+          "type": "string",
+          "title": "how a client reaches it through the service IP"
+        },
+        "createdAtUnix": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
     "v1ApprovalInfo": {
       "type": "object",
       "properties": {
@@ -7580,6 +7843,59 @@
             "type": "string"
           },
           "description": "Volumes rebuilt on this node; each is resyncing in full from its peers\nwhen the call returns."
+        }
+      }
+    },
+    "v1CreateAppRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "resource": {
+          "type": "string",
+          "title": "default: the app's name"
+        },
+        "serviceIp": {
+          "type": "string",
+          "title": "CIDR, required"
+        },
+        "port": {
+          "type": "integer",
+          "format": "int64",
+          "title": "0: the engine's default"
+        },
+        "vector": {
+          "type": "boolean",
+          "title": "postgres only"
+        }
+      }
+    },
+    "v1CreateAppResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "app": {
+          "$ref": "#/definitions/v1AppInfo"
+        },
+        "password": {
+          "type": "string",
+          "description": "The generated password, returned only by the call that generated it.\nEmpty when the volume already held the app's data (data_reused)."
+        },
+        "primaryNode": {
+          "type": "string",
+          "title": "where it was initialized"
+        },
+        "dataReused": {
+          "type": "boolean"
         }
       }
     },
@@ -8225,6 +8541,17 @@
         }
       }
     },
+    "v1DeleteAppResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1DeleteBackupResponse": {
       "type": "object",
       "properties": {
@@ -8557,6 +8884,23 @@
         }
       }
     },
+    "v1FailoverAppResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "fromNode": {
+          "type": "string"
+        },
+        "toNode": {
+          "type": "string"
+        }
+      }
+    },
     "v1FreezeSnapshotScheduleResponse": {
       "type": "object",
       "properties": {
@@ -8630,6 +8974,43 @@
           "additionalProperties": {
             "type": "string"
           }
+        }
+      }
+    },
+    "v1GetAppStatusResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "app": {
+          "$ref": "#/definitions/v1AppInfo"
+        },
+        "primaryNode": {
+          "type": "string",
+          "title": "empty when the resource is Primary nowhere"
+        },
+        "serviceState": {
+          "type": "string",
+          "title": "systemctl is-active of the unit there"
+        },
+        "healthy": {
+          "type": "boolean",
+          "title": "the engine's probe answered"
+        },
+        "state": {
+          "type": "string",
+          "title": "running, degraded or stopped"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "the nodes its promoter runs on"
         }
       }
     },
@@ -9127,6 +9508,24 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ApprovalInfo"
+          }
+        }
+      }
+    },
+    "v1ListAppsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AppInfo"
           }
         }
       }
@@ -11291,6 +11690,21 @@
             "type": "string"
           },
           "description": "nodes to prepare; empty prepares every registered node."
+        }
+      }
+    },
+    "v1SnapshotAppResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "frozen": {
+          "type": "boolean",
+          "title": "false when the app was not running (nothing to freeze)"
         }
       }
     },

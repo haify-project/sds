@@ -25,15 +25,16 @@ assistants, through [`sds-mcp`](mcp.md).
 9. [Backups — the only copy that survives losing the cluster](#9-backups--the-only-copy-that-survives-losing-the-cluster)
 10. [Gateways — exporting to clients](#10-gateways--exporting-to-clients)
 11. [High availability](#11-high-availability)
-12. [Cross-site replication (WAN DR)](#12-cross-site-replication-wan-dr)
-13. [Storage tiering](#13-storage-tiering)
-14. [Encryption](#14-encryption)
-15. [Alerts and notifications](#15-alerts-and-notifications)
-16. [Access control](#16-access-control)
-17. [Kubernetes](#17-kubernetes)
-18. [The AI Copilot](#18-the-ai-copilot)
-19. [Routine operations](#19-routine-operations)
-20. [When something is wrong](#20-when-something-is-wrong)
+12. [Database applications](#12-database-applications)
+13. [Cross-site replication (WAN DR)](#13-cross-site-replication-wan-dr)
+14. [Storage tiering](#14-storage-tiering)
+15. [Encryption](#15-encryption)
+16. [Alerts and notifications](#16-alerts-and-notifications)
+17. [Access control](#17-access-control)
+18. [Kubernetes](#18-kubernetes)
+19. [The AI Copilot](#19-the-ai-copilot)
+20. [Routine operations](#20-routine-operations)
+21. [When something is wrong](#21-when-something-is-wrong)
 
 ---
 
@@ -335,7 +336,7 @@ What to know before choosing it:
 This is new in SDS; validate it on your hardware and kernel before production.
 
 An SSD or NVMe cache in front of a thin pool (`pool add-cache`,
-`pool remove-cache`) is covered in [Storage tiering](#13-storage-tiering).
+`pool remove-cache`) is covered in [Storage tiering](#14-storage-tiering).
 
 **Quotas.** A thin pool admits volumes as long as it has room for what is
 already written, so it can promise many times what it holds. `[quota]
@@ -514,7 +515,7 @@ sds resource status db      # roles, disk states, replication, per node
 
 Read `status` like this: exactly one node should be `Primary`, every node's disk
 should be `UpToDate`, and replication should be `Established`. Anything else is
-covered in [When something is wrong](#20-when-something-is-wrong).
+covered in [When something is wrong](#21-when-something-is-wrong).
 
 **Diskless clients** let a node mount a resource without storing a copy — it
 reads and writes over the DRBD network:
@@ -858,7 +859,7 @@ none — not by retention, not to relieve a full pool — and every scheduled
 snapshot of the resource is locked until the freeze ends: it cannot be deleted
 through sds, nor the schedule or resource deleted. A freeze can be extended,
 not shortened, except by `unfreeze`, which needs a second person under
-[two-person approval](#16-access-control).
+[two-person approval](#17-access-control).
 
 ```bash
 sds resource snapshot schedule freeze --resource db --hours 72 --reason "investigating"
@@ -1366,7 +1367,190 @@ stops the AI Copilot with the controller.
 
 ---
 
-## 12. Cross-site replication (WAN DR)
+## 12. Database applications
+
+> **Status: new.** The generated files and scripts, the prerequisite checks and
+> the controller's create, status, failover, snapshot and delete flows are
+> covered by unit tests against a simulated cluster. The initialization, health
+> probe and freeze/thaw scripts of PostgreSQL 16, MariaDB 10.11 and Redis 7.0
+> have also been run on a scratch block device, without DRBD or systemd. None of
+> it has yet run on a real DRBD cluster under drbd-reactor. Before you rely on
+> it, test on yours — the list is at the end of this section.
+
+`sds app` runs one database instance — PostgreSQL (optionally with pgvector),
+MySQL or MariaDB, or Redis — on a resource's DRBD volume, the way `ha create`
+runs a service and a gateway runs an export. drbd-reactor mounts the volume,
+starts the database and raises a service IP on the node where the resource is
+Primary; when that node fails, another replica does the same. It is storage
+failover, not database replication: there is one database, its files are on
+DRBD, and clients find it at the service IP wherever it runs.
+
+```bash
+# A resource with two diskful replicas (give it quorum: a third replica or a tiebreaker)
+sds resource create --name orders --port 7010 --size 20G --nodes node1,node2 --pool pool0
+
+sds app create --name orders --engine postgres --service-ip 192.0.2.220/24
+sds app create --name embeddings --engine postgres --vector --resource emb --service-ip 192.0.2.221/24
+sds app create --name sessions --engine redis --port 6380 --service-ip 192.0.2.222/24
+sds app create --name shop --engine mysql --service-ip 192.0.2.223/24
+
+sds app list
+sds app status orders
+sds app failover orders                            # planned switchover
+sds app snapshot orders --snapshot before-upgrade
+sds app delete orders                              # stops it; the resource and data stay
+sds app delete orders --delete-data --yes          # and deletes the resource
+```
+
+`--resource` defaults to the app's name; `--port` to 5432, 3306 or 6379.
+`create` prints the generated password once.
+
+### What `create` does
+
+1. **Refuses** before touching any node when the resource does not exist, has
+   fewer than two diskful replicas, or already has a promoter — an HA config, a
+   gateway or another app (on the nodes or in the controller's records). One
+   resource runs one promoter; `ha create` and the gateways likewise refuse a
+   resource that runs an app.
+2. **Checks every diskful replica**: the OCF `Filesystem` and `IPaddr2` agents,
+   the engine's programs, `fsfreeze`, `runuser`, `setpriv` and `systemd-run`, and
+   that the port is free. It then compares the replicas: the engine must be
+   installed in the same place and the same version (PostgreSQL major; MySQL,
+   MariaDB and Redis major.minor), and **the daemon user must have the same uid
+   and gid on every node**. The data files belong to numeric ids, so on a node
+   where `postgres` has another uid the database would not start after a
+   failover. Every problem is reported at once, naming the nodes and ids.
+3. **Initializes once** on the node already Primary, or the first replica,
+   promoted for the purpose: formats the volume ext4 if `blkid` finds nothing
+   on it (and refuses one carrying another filesystem or a partition table),
+   mounts it, runs `initdb` / `mariadb-install-db` / `mysqld
+   --initialize-insecure` or writes `redis.conf`, sets the password, starts the
+   database once without network access to prove it runs, stops it and
+   unmounts.
+4. **Hands it to drbd-reactor**: demotes the resource, writes
+   `sds-app-<name>.service` and the promoter `/etc/drbd-reactor.d/sds-app-<name>.toml`
+   to every diskful replica, and reloads drbd-reactor, which starts it. The
+   chain is the mount, then the database, then the service IP **last**: the
+   unit counts as started only once the database answers its health probe
+   (for up to 300 seconds, crash recovery included), so clients reach a node
+   only when the database is up there, and lose the address first on the way
+   out.
+
+A volume that already holds the same engine's app — one deleted without
+`--delete-data` — is kept as it is, data and credentials; `create` says so and
+prints no password. Anything else on the volume is refused.
+
+| Engine | Install on every diskful node | Runs as | Health probe | Freeze for a snapshot |
+| ------ | ----------------------------- | ------- | ------------ | --------------------- |
+| `postgres` | `postgresql` (same major); with `--vector` also `postgresql-<major>-pgvector` (Debian/Ubuntu) or `pgvector_<major>` (PGDG) | `postgres` | `pg_isready` on the socket | `CHECKPOINT`, then `fsfreeze` |
+| `mysql` | `mariadb-server` or `mysql-server` (same version) | `mysql` | `mysqladmin ping` | `FLUSH TABLES WITH READ LOCK` held while `fsfreeze` runs |
+| `redis` | `redis-server` (Debian/Ubuntu) or `redis` (EL) | `redis` | `redis-cli PING` | `BGSAVE`, wait, then `fsfreeze` |
+
+The OCF agents come from `resource-agents-extra` (Debian/Ubuntu) or
+`resource-agents` (EL). The distributions start their own instance of the
+engine on install: stop and disable it (`postgresql`, `mariadb`/`mysql`,
+`redis-server`), or `create` refuses the busy port.
+
+### Where things live
+
+Everything the database needs to start lives on the volume, so it fails over
+with the data:
+
+```
+/var/lib/sds-app/<name>/          the volume, mounted on the node running the app
+  data/                           the data directory
+  conf/                           postgresql.sds.conf + pg_hba.conf, my.cnf, or redis.conf
+  sds/password                    the generated password (root only, 0600)
+  sds/client.cnf                  mysql: credentials for the health probe and the snapshot lock
+/etc/systemd/system/sds-app-<name>.service   on every replica; never enable or start it by hand
+/etc/drbd-reactor.d/sds-app-<name>.toml      the promoter, on every replica
+/run/sds-app-<name>/              sockets and pid files, while it runs
+```
+
+Tune the engine in its config on the volume, on the node running it. For
+PostgreSQL, edit `data/postgresql.conf`; the few settings SDS relies on (port,
+listen address, socket directory, `hba_file`) are in `conf/postgresql.sds.conf`,
+included last. Apply a change the engine's own way (`SELECT pg_reload_conf()`,
+`SET GLOBAL`, `CONFIG SET`) or with `sds app failover`, which restarts it on
+another replica. Do not restart the unit by hand: drbd-reactor treats a stopped
+unit as a failure and fails the app over.
+
+**Credentials.** PostgreSQL's `postgres` superuser, MySQL's `root` (local and
+`'root'@'%'`) and Redis's `requirepass` get a generated 32-character password.
+`sds app create` prints it once; afterwards it exists only in
+`/var/lib/sds-app/<name>/sds/password`, readable by root on the node running the
+app. It never appears in a command line or a log: it reaches the node over the
+SSH stream as a 0600 file. The MCP tool `sds_app_create` does not return it.
+
+### Failover
+
+drbd-reactor fails the app over when its node is lost, and when the database
+itself dies — the unit is bound to the promoter's target and has no
+`Restart=`, so a crash moves the app rather than restarting it in place. The
+replica taking over promotes the resource, mounts it, starts the database and
+raises the service IP.
+
+- **Crash-consistent.** The new node starts from what was on disk, exactly as
+  after a power cut, and the engine recovers (WAL replay, InnoDB redo, AOF).
+- **RPO 0 with protocol C.** DRBD acknowledges a write only once it is on both
+  replicas, so every transaction the database committed with an fsync is
+  there: PostgreSQL by default, MySQL/MariaDB with
+  `innodb_flush_log_at_trx_commit = 1` and `sync_binlog = 1` (set by `create`).
+  Redis is configured with `appendfsync everysec` and can lose up to a second
+  of acknowledged writes; set `appendfsync always` in its `redis.conf` for none.
+- **Recovery time** is detection, promotion, the engine's crash recovery and the
+  service IP — usually seconds to tens of seconds; a large uncheckpointed log
+  takes longer.
+- **Clients** lose their connections and must reconnect to the service IP; use
+  a client or pool that retries.
+- **Quorum** is what makes this safe. Give the resource three votes (a third
+  replica or a diskless tiebreaker) so a node cut off from the others loses
+  quorum and stops writing instead of running a second copy.
+
+`sds app failover` is the planned version, through `drbd-reactorctl evict`; it
+fails when no other replica took over. `sds node drain` and `sds ha evict
+<resource>` move an app the same way.
+
+A replica added later (`sds resource add-replica`) gets the unit and promoter
+once it passes the same checks against what the app was created with — engine
+path, version, uid and gid — and nothing otherwise; `add-replica` then fails
+saying what differs, and `sds resource repair <resource>` places them once it
+is fixed. A replica removed loses them.
+
+### Snapshots
+
+`sds app snapshot` freezes the database on its node (see the table), takes a
+[replicated snapshot](#8-snapshots) of every volume on every replica, and thaws.
+Before freezing anything, the node arms a transient systemd timer
+(`sds-app-thaw-<name>`) that thaws the database after 60 seconds by itself, so a
+controller that dies mid-snapshot cannot leave it frozen. Writes stall for the
+seconds the snapshot takes; reads continue. An app that is not running is
+snapshotted without a freeze.
+
+To go back to a snapshot: `sds app delete <name>` (the data stays), `sds
+resource snapshot replicated rollback --resource <res> --name <snap>`, then
+`sds app create` again with the same name, engine and resource — it finds the
+data and keeps it.
+
+### Not yet validated on a real cluster
+
+Test these on your own nodes before production use:
+
+- drbd-reactor running the chain — `Filesystem`, `sds-app-<name>.service` with
+  its wait for the database, `IPaddr2` — and taking it down cleanly;
+- failover by power-off and by `sds app failover`, and the recovery time;
+- MySQL (as opposed to MariaDB) initialization through `mysqld
+  --initialize-insecure`, which has only been unit-tested;
+- `--vector` (pgvector) installation;
+- the snapshot freeze with the thaw watchdog actually firing (stop the
+  controller mid-snapshot);
+- SELinux on EL (`create` labels the data with `chcon`, best effort) and
+  AppArmor on Ubuntu, whose MySQL profile confines `mysqld` to `/var/lib/mysql`;
+- placement on an added replica, and `sds node drain` of a node running an app.
+
+---
+
+## 13. Cross-site replication (WAN DR)
 
 WAN replication keeps an asynchronous replica at another site, over the public
 internet, through a TCP proxy with mTLS. It is opt-in per resource because it
@@ -1452,7 +1636,7 @@ restarts tunnels, so use `--dry-run` first.
 
 ---
 
-## 13. Storage tiering
+## 14. Storage tiering
 
 Put an SSD in front of a thin pool, and every volume in the pool reads and
 writes through it (lvmcache).
@@ -1481,7 +1665,7 @@ through.
 
 ---
 
-## 14. Encryption
+## 15. Encryption
 
 `--encrypt` wraps each replica's backing volume in its own LUKS2 container, so
 the stack is DRBD → LUKS → LVM.
@@ -1546,7 +1730,7 @@ days before one expires.
 
 ---
 
-## 15. Alerts and notifications
+## 16. Alerts and notifications
 
 Turn detection on in `controller.toml`:
 
@@ -1583,7 +1767,7 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 under an `lvm-thin-vdo` pool),
 `pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
 `pool.snapshots_locked` (a near-full pool with only locked snapshots left),
-`audit.shipping_failed`, `audit.truncated`, `approval.requested` (see [Access control](#16-access-control)),
+`audit.shipping_failed`, `audit.truncated`, `approval.requested` (see [Access control](#17-access-control)),
 `controller.clock_jumped`, `resource.write_anomaly`, `node.evicted`,
 `resource.replica_moved`,
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
@@ -1745,7 +1929,7 @@ what the `alerts` area reads.
 
 ---
 
-## 16. Access control
+## 17. Access control
 
 With nothing configured, the API accepts every caller. Two models, in
 `controller.toml`:
@@ -1764,9 +1948,9 @@ role = "admin"
 ```
 
 Roles are `admin`, `operator`, `viewer` and `security-officer`. Every API call is classified by
-object (pool, resource, gateway, snapshot, backup, node, ha, approval, system) and action
+object (pool, resource, gateway, snapshot, backup, node, ha, app, approval, system) and action
 (read, write, approve). An operator may write pools, resources, gateways, snapshots,
-backups and HA, and only read nodes and system settings; a viewer can only
+backups, HA and database apps, and only read nodes and system settings; a viewer can only
 read; an admin can do everything. `[[rbac.policies]]` entries (`role`,
 `object`, `action`, either may be `*`) add grants or define further roles.
 
@@ -1816,7 +2000,8 @@ hear of it — and an unexpected one is a stolen token at work.
 The default list: deleting pools, ZFS pools and datasets, resources, volumes
 and snapshots; restoring snapshots and backups (both overwrite the volume);
 adding, replacing or removing a backup target; deleting backups and snapshot
-or backup schedules; and adding users, removing them or changing roles — so
+or backup schedules; deleting a database app (whose `--delete-data` deletes its
+resource from inside the controller); and adding users, removing them or changing roles — so
 the stolen token cannot create its own second approver. The web UI's user
 management is held back the same way. Approval needs `[rbac]`; the controller
 refuses to start with one and not the other.
@@ -1881,7 +2066,7 @@ you run elsewhere, or a collector writing to an object store with Object Lock.
 
 ---
 
-## 17. Kubernetes
+## 18. Kubernetes
 
 SDS ships a CSI driver. Volumes are DRBD resources; a pod moving between nodes
 gets its storage promoted on the new one.
@@ -1915,6 +2100,13 @@ per StorageClass: change one by moving the volume to another class.
 The manifests are in `deploy/k8s` (see its README); the CSI section of
 [deployment-guide.md](deployment-guide.md) covers installation.
 
+A database on Kubernetes with its data on an SDS volume — the counterpart of
+[`sds app`](#12-database-applications) — is one MCP call: `sds-mcp k8s` serves
+`sds_k8s_app_create`, `sds_k8s_app_list` and `sds_k8s_app_delete`
+([mcp.md](mcp.md#kubernetes-tools)). Deleting keeps the volume claim and the
+password secret unless `delete_data` is set, and creating the app again with
+the same name and template runs it on them.
+
 **Proxmox VE** has the counterpart: a storage plugin (type `sds`) that backs VM
 disks with SDS resources over the controller's REST API. It is in
 `deploy/proxmox`, with its requirements and install steps in that README.
@@ -1925,7 +2117,7 @@ controller, node registration, the pool, Self-HA, the plugin and the
 
 ---
 
-## 18. The AI Copilot
+## 19. The AI Copilot
 
 `sds-ai` is an optional service that answers questions about the cluster in the
 web UI's Copilot sidebar. It reaches the cluster through `sds-mcp`: every
@@ -1959,7 +2151,7 @@ and every question starts from nothing.
 
 ---
 
-## 19. Routine operations
+## 20. Routine operations
 
 **Before a node reboot**
 
@@ -2047,7 +2239,7 @@ sds channel test <each>  # would you actually be told?
 
 ---
 
-## 20. When something is wrong
+## 21. When something is wrong
 
 Start here:
 

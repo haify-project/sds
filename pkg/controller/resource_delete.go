@@ -61,6 +61,22 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		}
 	}
 
+	// An app's promoter holds the resource just as a gateway's does. Its
+	// teardown needs every replica to answer (a replica left with the config
+	// would start the database again), so a failure stops the delete unless
+	// it is forced.
+	if rm.controller.db != nil {
+		if app, aerr := rm.controller.db.GetAppByResource(ctx, name); aerr == nil && app != nil {
+			if err := rm.controller.appManager().teardown(ctx, app); err != nil {
+				if !force {
+					return fmt.Errorf("resource %s runs the app %s, which could not be removed first: %w", name, app.Name, err)
+				}
+				rm.controller.logger.Warn("Failed to remove app during forced resource delete (continuing)",
+					zap.String("resource", name), zap.String("app", app.Name), zap.Error(err))
+			}
+		}
+	}
+
 	hosts, err := rm.resourceHosts(ctx, name)
 	if err != nil {
 		return err

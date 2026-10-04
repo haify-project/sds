@@ -123,6 +123,9 @@ func (rm *ResourceManager) reactorManaged(ctx context.Context, resource string) 
 	if gw, err := rm.controller.db.GetGatewayByResource(ctx, resource); err == nil && gw != nil {
 		return true
 	}
+	if app, err := rm.controller.db.GetAppByResource(ctx, resource); err == nil && app != nil {
+		return true
+	}
 	return false
 }
 

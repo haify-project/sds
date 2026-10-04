@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -76,6 +77,7 @@ func defaultPolicies() []Policy {
 		{"operator", "snapshot", "*"},
 		{"operator", "backup", "*"},
 		{"operator", "ha", "*"},
+		{"operator", "app", "*"},
 		{"operator", "node", ActRead},
 		{"operator", "system", ActRead},
 		{"viewer", "*", ActRead},
@@ -450,6 +452,11 @@ func (e *Engine) Roles() []string {
 	return out
 }
 
+// appMethodRe matches the database application methods (CreateApp,
+// ListApps, GetAppStatus, ...) and nothing that merely starts with "App",
+// such as the approval methods.
+var appMethodRe = regexp.MustCompile(`^[A-Z][a-z]+(App|Apps|AppStatus)$`)
+
 // readVerbs are method-name prefixes that denote a read-only operation.
 var readVerbs = []string{"List", "Get", "Describe", "Watch", "Stream", "Check"}
 
@@ -486,6 +493,10 @@ func classifyObject(method string) string {
 	switch {
 	case method == "ListApprovals" || method == "ApproveRequest" || method == "RejectRequest":
 		return "approval"
+	// Before the snapshot case: SnapshotApp freezes a database and is part of
+	// running it, so whoever may run apps may snapshot them.
+	case appMethodRe.MatchString(method):
+		return "app"
 	// Before the snapshot case: off-cluster backups are their own object, so an
 	// operator who may ship data off-site can be distinguished from one who may
 	// only snapshot in place. Unclassified would land it in "system", where an

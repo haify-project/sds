@@ -188,6 +188,12 @@ const (
 	SDSController_ListApprovals_FullMethodName             = "/v1.SDSController/ListApprovals"
 	SDSController_ApproveRequest_FullMethodName            = "/v1.SDSController/ApproveRequest"
 	SDSController_RejectRequest_FullMethodName             = "/v1.SDSController/RejectRequest"
+	SDSController_CreateApp_FullMethodName                 = "/v1.SDSController/CreateApp"
+	SDSController_ListApps_FullMethodName                  = "/v1.SDSController/ListApps"
+	SDSController_GetAppStatus_FullMethodName              = "/v1.SDSController/GetAppStatus"
+	SDSController_DeleteApp_FullMethodName                 = "/v1.SDSController/DeleteApp"
+	SDSController_FailoverApp_FullMethodName               = "/v1.SDSController/FailoverApp"
+	SDSController_SnapshotApp_FullMethodName               = "/v1.SDSController/SnapshotApp"
 )
 
 // SDSControllerClient is the client API for SDSController service.
@@ -504,6 +510,21 @@ type SDSControllerClient interface {
 	ListApprovals(ctx context.Context, in *ListApprovalsRequest, opts ...grpc.CallOption) (*ListApprovalsResponse, error)
 	ApproveRequest(ctx context.Context, in *ApproveRequestRequest, opts ...grpc.CallOption) (*ApproveRequestResponse, error)
 	RejectRequest(ctx context.Context, in *RejectRequestRequest, opts ...grpc.CallOption) (*RejectRequestResponse, error)
+	// Database applications (`sds app`): a single-instance PostgreSQL, MySQL/
+	// MariaDB or Redis on a resource's DRBD volume, failed over by drbd-reactor
+	// (mount, database unit, service IP last). CreateApp returns the generated
+	// password once; it is kept only on the volume, readable by root.
+	CreateApp(ctx context.Context, in *CreateAppRequest, opts ...grpc.CallOption) (*CreateAppResponse, error)
+	ListApps(ctx context.Context, in *ListAppsRequest, opts ...grpc.CallOption) (*ListAppsResponse, error)
+	GetAppStatus(ctx context.Context, in *GetAppStatusRequest, opts ...grpc.CallOption) (*GetAppStatusResponse, error)
+	// Takes the app out of drbd-reactor's hands and stops it. The resource and
+	// its data are kept unless delete_data is set.
+	DeleteApp(ctx context.Context, in *DeleteAppRequest, opts ...grpc.CallOption) (*DeleteAppResponse, error)
+	// Planned switchover: the app's node stops it and another replica takes over.
+	FailoverApp(ctx context.Context, in *FailoverAppRequest, opts ...grpc.CallOption) (*FailoverAppResponse, error)
+	// Freezes the database on its node (with a node-side thaw watchdog), takes
+	// a resource snapshot on every replica, and thaws.
+	SnapshotApp(ctx context.Context, in *SnapshotAppRequest, opts ...grpc.CallOption) (*SnapshotAppResponse, error)
 }
 
 type sDSControllerClient struct {
@@ -2213,6 +2234,66 @@ func (c *sDSControllerClient) RejectRequest(ctx context.Context, in *RejectReque
 	return out, nil
 }
 
+func (c *sDSControllerClient) CreateApp(ctx context.Context, in *CreateAppRequest, opts ...grpc.CallOption) (*CreateAppResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAppResponse)
+	err := c.cc.Invoke(ctx, SDSController_CreateApp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListApps(ctx context.Context, in *ListAppsRequest, opts ...grpc.CallOption) (*ListAppsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAppsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListApps_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) GetAppStatus(ctx context.Context, in *GetAppStatusRequest, opts ...grpc.CallOption) (*GetAppStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAppStatusResponse)
+	err := c.cc.Invoke(ctx, SDSController_GetAppStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) DeleteApp(ctx context.Context, in *DeleteAppRequest, opts ...grpc.CallOption) (*DeleteAppResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteAppResponse)
+	err := c.cc.Invoke(ctx, SDSController_DeleteApp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) FailoverApp(ctx context.Context, in *FailoverAppRequest, opts ...grpc.CallOption) (*FailoverAppResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailoverAppResponse)
+	err := c.cc.Invoke(ctx, SDSController_FailoverApp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SnapshotApp(ctx context.Context, in *SnapshotAppRequest, opts ...grpc.CallOption) (*SnapshotAppResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SnapshotAppResponse)
+	err := c.cc.Invoke(ctx, SDSController_SnapshotApp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SDSControllerServer is the server API for SDSController service.
 // All implementations must embed UnimplementedSDSControllerServer
 // for forward compatibility.
@@ -2527,6 +2608,21 @@ type SDSControllerServer interface {
 	ListApprovals(context.Context, *ListApprovalsRequest) (*ListApprovalsResponse, error)
 	ApproveRequest(context.Context, *ApproveRequestRequest) (*ApproveRequestResponse, error)
 	RejectRequest(context.Context, *RejectRequestRequest) (*RejectRequestResponse, error)
+	// Database applications (`sds app`): a single-instance PostgreSQL, MySQL/
+	// MariaDB or Redis on a resource's DRBD volume, failed over by drbd-reactor
+	// (mount, database unit, service IP last). CreateApp returns the generated
+	// password once; it is kept only on the volume, readable by root.
+	CreateApp(context.Context, *CreateAppRequest) (*CreateAppResponse, error)
+	ListApps(context.Context, *ListAppsRequest) (*ListAppsResponse, error)
+	GetAppStatus(context.Context, *GetAppStatusRequest) (*GetAppStatusResponse, error)
+	// Takes the app out of drbd-reactor's hands and stops it. The resource and
+	// its data are kept unless delete_data is set.
+	DeleteApp(context.Context, *DeleteAppRequest) (*DeleteAppResponse, error)
+	// Planned switchover: the app's node stops it and another replica takes over.
+	FailoverApp(context.Context, *FailoverAppRequest) (*FailoverAppResponse, error)
+	// Freezes the database on its node (with a node-side thaw watchdog), takes
+	// a resource snapshot on every replica, and thaws.
+	SnapshotApp(context.Context, *SnapshotAppRequest) (*SnapshotAppResponse, error)
 	mustEmbedUnimplementedSDSControllerServer()
 }
 
@@ -3043,6 +3139,24 @@ func (UnimplementedSDSControllerServer) ApproveRequest(context.Context, *Approve
 }
 func (UnimplementedSDSControllerServer) RejectRequest(context.Context, *RejectRequestRequest) (*RejectRequestResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RejectRequest not implemented")
+}
+func (UnimplementedSDSControllerServer) CreateApp(context.Context, *CreateAppRequest) (*CreateAppResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateApp not implemented")
+}
+func (UnimplementedSDSControllerServer) ListApps(context.Context, *ListAppsRequest) (*ListAppsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListApps not implemented")
+}
+func (UnimplementedSDSControllerServer) GetAppStatus(context.Context, *GetAppStatusRequest) (*GetAppStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAppStatus not implemented")
+}
+func (UnimplementedSDSControllerServer) DeleteApp(context.Context, *DeleteAppRequest) (*DeleteAppResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteApp not implemented")
+}
+func (UnimplementedSDSControllerServer) FailoverApp(context.Context, *FailoverAppRequest) (*FailoverAppResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FailoverApp not implemented")
+}
+func (UnimplementedSDSControllerServer) SnapshotApp(context.Context, *SnapshotAppRequest) (*SnapshotAppResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SnapshotApp not implemented")
 }
 func (UnimplementedSDSControllerServer) mustEmbedUnimplementedSDSControllerServer() {}
 func (UnimplementedSDSControllerServer) testEmbeddedByValue()                       {}
@@ -6100,6 +6214,114 @@ func _SDSController_RejectRequest_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_CreateApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAppRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).CreateApp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_CreateApp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).CreateApp(ctx, req.(*CreateAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListApps_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAppsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListApps(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListApps_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListApps(ctx, req.(*ListAppsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_GetAppStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAppStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).GetAppStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_GetAppStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).GetAppStatus(ctx, req.(*GetAppStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_DeleteApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteAppRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).DeleteApp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_DeleteApp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).DeleteApp(ctx, req.(*DeleteAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_FailoverApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailoverAppRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).FailoverApp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_FailoverApp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).FailoverApp(ctx, req.(*FailoverAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SnapshotApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SnapshotAppRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SnapshotApp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SnapshotApp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SnapshotApp(ctx, req.(*SnapshotAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SDSController_ServiceDesc is the grpc.ServiceDesc for SDSController service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -6778,6 +7000,30 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RejectRequest",
 			Handler:    _SDSController_RejectRequest_Handler,
+		},
+		{
+			MethodName: "CreateApp",
+			Handler:    _SDSController_CreateApp_Handler,
+		},
+		{
+			MethodName: "ListApps",
+			Handler:    _SDSController_ListApps_Handler,
+		},
+		{
+			MethodName: "GetAppStatus",
+			Handler:    _SDSController_GetAppStatus_Handler,
+		},
+		{
+			MethodName: "DeleteApp",
+			Handler:    _SDSController_DeleteApp_Handler,
+		},
+		{
+			MethodName: "FailoverApp",
+			Handler:    _SDSController_FailoverApp_Handler,
+		},
+		{
+			MethodName: "SnapshotApp",
+			Handler:    _SDSController_SnapshotApp_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

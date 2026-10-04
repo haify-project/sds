@@ -48,6 +48,7 @@ func main() {
 	rootCmd.AddCommand(resourceCommand())
 	rootCmd.AddCommand(haCommand())
 	rootCmd.AddCommand(gatewayCommand())
+	rootCmd.AddCommand(appCommand())
 	rootCmd.AddCommand(healthCommand())
 	rootCmd.AddCommand(rbacCommand())
 	rootCmd.AddCommand(approvalCommand())

@@ -61,7 +61,7 @@ Flags:
 - `--tls`, `--tls-ca`, `--tls-cert`, `--tls-key`, `--tls-server-name`,
   `--tls-insecure` — connect to a controller with `[tls]` enabled. Same
   meaning and `SDS_TLS*` environment variables as the `sds` CLI
-  ([user guide §16](user-guide.md#16-access-control)).
+  ([user guide §17](user-guide.md#17-access-control)).
 - `--read-only` — register only the read-only tools.
 - `--allow NAME[,NAME]` — register these mutating tools as well, e.g.
   `--allow sds_ha_evict`. Implies `--read-only`. The server refuses to start
@@ -70,8 +70,11 @@ Flags:
 
 ### Kubernetes tools
 
-`sds-mcp k8s` serves `sds_k8s_app_list` and `sds_k8s_app_create` (a database
-on Kubernetes whose data lives on an SDS volume). It uses `--kubeconfig`
+`sds-mcp k8s` serves `sds_k8s_app_list`, `sds_k8s_app_create` and
+`sds_k8s_app_delete` (a database on Kubernetes whose data lives on an SDS
+volume). Delete removes the Deployment and Service and keeps the volume claim
+and password secret unless `delete_data` is set; it touches only objects
+`sds_k8s_app_create` made. It uses `--kubeconfig`
 (or `SDS_KUBECONFIG`), or the in-cluster config inside a pod, and takes
 `--read-only`, `--allow` and `--debug` like the main server.
 
@@ -210,6 +213,7 @@ halfway if the order is wrong. They are embedded from
 | Snapshots | `sds_snapshot_list`, `sds_snapshot_schedule_list` | `sds_snapshot_create`, `sds_snapshot_schedule_create` | `sds_snapshot_delete`, `sds_snapshot_restore`, `sds_snapshot_schedule_delete` |
 | Backups | `sds_backup_list`, `sds_backup_target_list`, `sds_backup_schedule_list` | `sds_backup_create`, `sds_backup_import`, `sds_backup_schedule_create` | `sds_backup_delete`, `sds_backup_restore`, `sds_backup_target_delete`, `sds_backup_schedule_delete` |
 | Gateways | `sds_gateway_list`, `sds_gateway_get`, `sds_nfs_export_list`, `sds_iscsi_lun_list`, `sds_iscsi_initiator_list`, `sds_iscsi_chap_get`, `sds_nvme_namespace_list`, `sds_nvme_host_list`, `sds_gateway_smb_users` | `sds_gateway_create_nfs`, `sds_gateway_create_iscsi`, `sds_gateway_create_nvme`, `sds_gateway_create_smb`, `sds_gateway_start`, `sds_iscsi_chap` | `sds_gateway_stop`, `sds_gateway_delete`, `sds_nfs_exports`, `sds_iscsi_luns`, `sds_iscsi_initiators`, `sds_nvme_namespaces`, `sds_nvme_hosts`, `sds_gateway_smb_shares` |
+| Database apps | `sds_app_list`, `sds_app_status` | `sds_app_create`, `sds_app_snapshot` | `sds_app_failover`, `sds_app_delete` |
 | HA, Self-HA | `sds_ha_list`, `sds_ha_status`, `sds_ha_promoter_status`, `sds_ha_get_toml`, `sds_self_ha_status` | `sds_ha_create` | `sds_ha_evict`, `sds_ha_delete`, `sds_ha_sync_toml`, `sds_self_ha_enable`, `sds_self_ha_disable` |
 
 `sds_nfs_exports`, `sds_iscsi_luns`, `sds_iscsi_initiators`,
@@ -221,6 +225,9 @@ Neither returns the password.
 
 ### What has no tool
 
+- The password `sds app create` generates: `sds_app_create` reports where it
+  is kept (root-only, on the app's volume) instead of returning it, since a
+  tool result is recorded by whatever called it.
 - Commands that take a secret, since a tool argument is recorded by whatever
   called it: `backup target add` (storage credentials), `channel add` (webhook
   URLs and signing keys), `rbac`. The exception is `sds_iscsi_chap`, which sets
