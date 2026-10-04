@@ -718,6 +718,10 @@ message PoolInfo {
   // size should use these.
   uint64 total_bytes = 22;
   uint64 free_bytes = 23;
+  // compress_ratio is how much compression saves on a ZFS pool, as ZFS
+  // reports it (1.85 means 1.85x); 0 when not reported. compression above is
+  // the algorithm in use.
+  double compress_ratio = 24;
 }
 
 // ZFS messages
@@ -730,6 +734,14 @@ message CreateZFSPoolRequest {
   // / refreservation), handled by CreateZFSVolume, not pool creation.
   reserved 4;
   reserved "thin";
+  // compression is the pool's compression algorithm (on, off, lz4, zstd,
+  // zstd-1..19, gzip, gzip-1..9, lzjb, zle), set on its root dataset so every
+  // volume inherits it. Empty keeps OpenZFS's default, which is on (lz4) from
+  // 2.2.
+  string compression = 5;
+  // dedup turns on deduplication for the pool. It costs RAM for the dedup
+  // table on every write; only worth it for data known to repeat.
+  bool dedup = 6;
 }
 
 message CreateZFSPoolResponse {
@@ -2680,6 +2692,8 @@ message HaConfigInfo {
   string mount_point = 3;
   string fs_type = 4;
   repeated string services = 5;
+  repeated OcfAgent ocf_agents = 6;      // OCF agents appended after the services
+  repeated HaStartItem start_items = 7;  // the explicit start list, when one was given
 }
 
 message HaServiceStatus {

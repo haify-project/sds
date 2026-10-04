@@ -495,7 +495,7 @@ func TestLVMOptionsDefault(t *testing.T) {
 
 func TestZFSOptionsDefault(t *testing.T) {
 	opts := &zfsOptions{}
-	assert.False(t, opts.compression)
+	assert.Empty(t, opts.compression)
 	assert.False(t, opts.dedup)
 }
 
@@ -516,8 +516,8 @@ func TestWithLVMForce(t *testing.T) {
 
 func TestWithZFSCompression(t *testing.T) {
 	opts := &zfsOptions{}
-	WithZFSCompression(true)(opts)
-	assert.True(t, opts.compression)
+	WithZFSCompression("zstd")(opts)
+	assert.Equal(t, "zstd", opts.compression)
 }
 
 func TestWithZFSDedup(t *testing.T) {

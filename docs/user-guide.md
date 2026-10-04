@@ -250,6 +250,14 @@ On the nodes the volume group (or zpool) is named with an `sds_` prefix —
 `thin-pool` becomes `sds_thin-pool`. Commands accept either form except
 `pool convert-thin`, which takes the prefixed name.
 
+A ZFS pool compresses: OpenZFS 2.2 and later default to `lz4`.
+`--compression <algorithm>` (`zstd`, `zstd-3`, `gzip-6`, `off`, ...) and
+`--dedup` set it on the pool's root dataset at creation, so every volume
+inherits it; dedup costs RAM on every write and only pays off for data known to
+repeat. `pool get` (and the MCP pool listing) report the algorithm and the ratio
+ZFS achieves (`Compression: zstd, 1.85x achieved`). Encrypted resources are LVM
+only, so ciphertext — which does not compress — never lands on a ZFS pool.
+
 Omitting `--type` gives the controller's `[storage] default_pool_type`, which
 is `thin_pool` unless changed. **Choose thin unless you have a reason not to.**
 A thick (plain `lvm`) pool cannot hold a useful snapshot history: LVM makes every thick snapshot reserve
@@ -926,8 +934,13 @@ install; no config is written.
 ## 11. High availability
 
 `ha create` declares what should run wherever the resource is Primary.
-drbd-reactor then picks a node, mounts the filesystem, raises the VIP, starts the
-services — and moves all of it if that node dies.
+drbd-reactor then picks a node, mounts the filesystem, starts the services,
+raises the VIP — and moves all of it if that node dies. The VIP comes last, so
+clients only reach a node whose services are up, and it is the first thing
+taken down; `ha create` sets `net.ipv4.ip_nonlocal_bind` on the nodes so a
+service that binds to the VIP itself can start before it. (Configs created
+before this ordered the VIP ahead of the services; they keep that order until
+recreated.)
 
 ```bash
 sds ha create db \

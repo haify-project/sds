@@ -7,13 +7,22 @@ import (
 	"strings"
 
 	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/sds/pkg/deployment"
 	"go.uber.org/zap"
 )
 
 // CreateZFSPool creates a ZFS storage pool. A zpool has no thin/thick mode;
 // thin vs thick provisioning is a per-zvol property applied at volume creation.
-func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, vdevs []string) error {
+//
+// compression and dedup are set on the pool's root dataset, so every volume
+// inherits them. Both used to be accepted by the deployment layer and dropped
+// on the floor, so a pool asked to compress did whatever the OpenZFS default
+// was. An empty compression still means that default (on, i.e. lz4, from 2.2).
+func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, vdevs []string, compression string, dedup bool) error {
 	name = normalizeManagedName(name)
+	if compression != "" && !deployment.ValidZFSCompression(compression) {
+		return fmt.Errorf("unknown ZFS compression %q (on, off, lz4, zstd, zstd-1..19, gzip, gzip-1..9, lzjb, zle)", compression)
+	}
 
 	sm.controller.logger.Info("Creating ZFS pool",
 		zap.String("name", name),
@@ -24,7 +33,8 @@ func (sm *StorageManager) CreateZFSPool(ctx context.Context, name, node string, 
 	address := sm.controller.ResolveHost(node)
 
 	// Create ZFS pool
-	result, err := sm.controller.deployment.ZFSCreatePool(ctx, []string{address}, name, vdevs)
+	result, err := sm.controller.deployment.ZFSCreatePool(ctx, []string{address}, name, vdevs,
+		deployment.WithZFSCompression(compression), deployment.WithZFSDedup(dedup))
 	if err != nil {
 		return fmt.Errorf("failed to create ZFS pool: %w", err)
 	}
@@ -80,7 +90,7 @@ func (sm *StorageManager) GetZFSPool(ctx context.Context, poolName, node string)
 			if len(fields) >= 4 {
 				totalSize, _ := strconv.ParseUint(fields[1], 10, 64)
 				freeSize, _ := strconv.ParseUint(fields[2], 10, 64)
-				return &PoolInfo{
+				info := &PoolInfo{
 					Name:       poolName,
 					Type:       "zfs",
 					Node:       node,
@@ -89,7 +99,9 @@ func (sm *StorageManager) GetZFSPool(ctx context.Context, poolName, node string)
 					TotalBytes: totalSize,
 					FreeBytes:  freeSize,
 					Devices:    []string{},
-				}, nil
+				}
+				sm.fillZFSCompression(ctx, []*PoolInfo{info}, map[string]string{node: address})
+				return info, nil
 			}
 		}
 	}
@@ -166,6 +178,16 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 			}
 		}
 	}
+
+	addrs := make(map[string]string, len(result.Hosts))
+	for host := range result.Hosts {
+		if n := sm.controller.NormalizeHost(host); n != "" {
+			addrs[n] = host
+		} else {
+			addrs[host] = host
+		}
+	}
+	sm.fillZFSCompression(ctx, pools, addrs)
 
 	if len(pools) == 0 {
 		if persisted, err := sm.listPersistedPools(ctx); err == nil {

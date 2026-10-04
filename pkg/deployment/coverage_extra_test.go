@@ -139,7 +139,7 @@ func TestCovZFSBuilders(t *testing.T) {
 	}{
 		{"ZFSCreatePool", func() (*ExecResult, error) { return c.ZFSCreatePool(ctx, hosts, "covpool", []string{"/dev/cov-nodev"}) }},
 		{"ZFSCreatePoolOpts", func() (*ExecResult, error) {
-			return c.ZFSCreatePool(ctx, hosts, "covpool", []string{"/dev/cov-nodev"}, WithZFSCompression(true), WithZFSDedup(true))
+			return c.ZFSCreatePool(ctx, hosts, "covpool", []string{"/dev/cov-nodev"}, WithZFSCompression("zstd"), WithZFSDedup(true))
 		}},
 		{"ZFSDestroyPool", func() (*ExecResult, error) { return c.ZFSDestroyPool(ctx, hosts, "covpool") }},
 		{"ZFSListPools", func() (*ExecResult, error) { return c.ZFSListPools(ctx, hosts) }},

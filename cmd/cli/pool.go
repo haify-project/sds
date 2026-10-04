@@ -37,6 +37,8 @@ func poolCreate() *cobra.Command {
 	var nodes string
 	var devices string
 	var size string
+	var compression string
+	var dedup bool
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -93,7 +95,7 @@ func poolCreate() *cobra.Command {
 				case "zfs":
 					// For ZFS, 'disks' are vdevs. A zpool has no thin/thick mode;
 					// thin provisioning is a per-zvol property set at volume creation.
-					err = sdsClient.CreateZFSPool(ctx, name, n, diskList)
+					err = sdsClient.CreateZFSPoolOptions(ctx, name, n, diskList, compression, dedup)
 				// "" reaches the LVM path deliberately: an unspecified type is
 				// resolved by the controller from storage.default_pool_type, and
 				// that setting can only name an LVM type — ZFS pools are built by
@@ -151,6 +153,14 @@ func poolCreate() *cobra.Command {
 	cmd.Flags().StringVar(&nodes, "nodes", "", "Comma-separated nodes where to create the pool")
 	cmd.Flags().StringVar(&devices, "devices", "", "Comma-separated list of devices")
 	cmd.Flags().StringVar(&size, "size", "", "Pool size (e.g., 10G, 10GB, 10GiB, 1T, 1TB)")
+	cmd.Flags().StringVar(&compression, "compression", "", "ZFS only: compression algorithm (lz4, zstd, zstd-N, gzip-N, off, ...); default: OpenZFS's (lz4 from 2.2)")
+	cmd.Flags().BoolVar(&dedup, "dedup", false, "ZFS only: deduplicate (costs RAM on every write; for data known to repeat)")
+	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
+		if (compression != "" || dedup) && poolType != "zfs" {
+			return fmt.Errorf("--compression and --dedup apply to --type zfs only")
+		}
+		return nil
+	}
 
 	return cmd
 }
@@ -233,6 +243,13 @@ func poolGet() *cobra.Command {
 			fmt.Printf("  Node: %s\n", pool.Node)
 			fmt.Printf("  Total: %s\n", util.FormatBytes(total))
 			fmt.Printf("  Free: %s\n", util.FormatBytes(free))
+			if pool.Compression != "" {
+				ratio := ""
+				if pool.CompressRatio > 0 {
+					ratio = fmt.Sprintf(", %.2fx achieved", pool.CompressRatio)
+				}
+				fmt.Printf("  Compression: %s%s\n", pool.Compression, ratio)
+			}
 			// For a thin pool Total and Free are the thin pool's own. The
 			// volume group around it is left with only the extents SDS did not
 			// give the thin pool, which is worth knowing when growing it and

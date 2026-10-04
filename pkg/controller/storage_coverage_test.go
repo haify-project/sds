@@ -200,7 +200,7 @@ func TestStoragePoolFailureBranches(t *testing.T) {
 			},
 		}
 		sm := newBasicTestController(dep).storage
-		assert.Error(t, sm.CreateZFSPool(ctx, "tank", "n1", []string{"/dev/sdb"}))
+		assert.Error(t, sm.CreateZFSPool(ctx, "tank", "n1", []string{"/dev/sdb"}, "", false))
 		assert.Error(t, sm.DeleteZFSPool(ctx, "tank", "n1"))
 	})
 }

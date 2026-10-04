@@ -11,15 +11,37 @@ import (
 
 // ==================== HA CONFIG ====================
 
-// HaConfig represents a highly available configuration
+// HaConfig represents a highly available configuration: what `ha create` was
+// asked for. The promoter config on the nodes is what runs; this is the record
+// of how it was made, kept whole so it can be shown and made again.
 type HaConfig struct {
 	Resource   string
 	VIP        string
 	MountPoint string
 	FsType     string
 	Services   []string
+	// OcfAgents are the OCF agents appended after the services, in order.
+	OcfAgents []HaOcfAgent `json:",omitempty"`
+	// StartItems, when set, is the promoter's start list exactly as given;
+	// it then replaces Services, MountPoint, VIP and OcfAgents as the order.
+	StartItems []HaStartItem `json:",omitempty"`
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+// HaOcfAgent is one OCF resource agent in an HA promoter's start list.
+type HaOcfAgent struct {
+	Provider string
+	Name     string
+	Instance string
+	Params   map[string]string `json:",omitempty"`
+}
+
+// HaStartItem is one entry of an explicit start list: a systemd unit or an
+// OCF agent.
+type HaStartItem struct {
+	SystemdUnit string      `json:",omitempty"`
+	Ocf         *HaOcfAgent `json:",omitempty"`
 }
 
 // SaveHaConfig saves or updates an HA configuration

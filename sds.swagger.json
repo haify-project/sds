@@ -7045,6 +7045,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "compression": {
+          "type": "string",
+          "description": "compression is the pool's compression algorithm (on, off, lz4, zstd,\nzstd-1..19, gzip, gzip-1..9, lzjb, zle), set on its root dataset so every\nvolume inherits it. Empty keeps OpenZFS's default, which is on (lz4) from\n2.2."
+        },
+        "dedup": {
+          "type": "boolean",
+          "description": "dedup turns on deduplication for the pool. It costs RAM for the dedup\ntable on every write; only worth it for data known to repeat."
         }
       },
       "title": "ZFS messages"
@@ -7766,6 +7774,22 @@
           "items": {
             "type": "string"
           }
+        },
+        "ocfAgents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OcfAgent"
+          },
+          "title": "OCF agents appended after the services"
+        },
+        "startItems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HaStartItem"
+          },
+          "title": "the explicit start list, when one was given"
         }
       }
     },
@@ -8894,6 +8918,11 @@
         "freeBytes": {
           "type": "string",
           "format": "uint64"
+        },
+        "compressRatio": {
+          "type": "number",
+          "format": "double",
+          "description": "compress_ratio is how much compression saves on a ZFS pool, as ZFS\nreports it (1.85 means 1.85x); 0 when not reported. compression above is\nthe algorithm in use."
         }
       }
     },
