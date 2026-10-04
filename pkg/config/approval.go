@@ -32,6 +32,10 @@ var DefaultApprovalMethods = []string{
 	"DeleteSnapshot", "DeleteLvmSnapshot", "DeleteZFSSnapshot",
 	"RestoreSnapshot", "RestoreLvmSnapshot", "RestoreZFSSnapshot", "RestoreBackup",
 	"RollbackResourceSnapshot", "DeleteResourceSnapshot",
+	// DeleteApp stops a database and, with delete_data, deletes its resource
+	// from inside the controller, where DeleteResource's own approval would
+	// never be asked for.
+	"DeleteApp",
 	// What protects it.
 	"DeleteSnapshotSchedule", "UnfreezeSnapshotSchedule", "AddBackupTarget", "DeleteBackupTarget", "DeleteBackup", "DeleteBackupSchedule",
 	"MarkNodeLost", "RestoreNode",

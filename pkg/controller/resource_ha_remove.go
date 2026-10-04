@@ -106,11 +106,16 @@ var evictPromoterConfigs = []string{"sds-ha-%s", "sds-nfs-%s", "sds-iscsi-%s", "
 // no other node took the resource over. drbd-reactorctl exits 0 either way:
 // when the local services do not stop in time it re-enables the resource
 // where it was and says so only in its output.
+//
+// An app's config is named after the app, not the resource
+// (sds-app-<name>.toml), so it is found by the resource it promotes.
 func evictScript(resource string) string {
 	names := make([]string, len(evictPromoterConfigs))
 	for i, f := range evictPromoterConfigs {
 		names[i] = fmt.Sprintf(f, resource)
 	}
+	apps := fmt.Sprintf(`$(grep -l '^\[promoter\.resources\.%s\]' /etc/drbd-reactor.d/sds-app-*.toml 2>/dev/null | sed 's#.*/##; s#\.toml$##')`, resource)
+	names = append(names, apps)
 	return fmt.Sprintf(`for n in %[1]s; do
   [ -f /etc/drbd-reactor.d/$n.toml ] || continue
   out=$(drbd-reactorctl evict "$n" 2>&1); rc=$?
@@ -120,7 +125,7 @@ func evictScript(resource string) string {
   echo "no other node took over %[2]s; it is still running here" >&2
   exit 4
 done
-echo "no drbd-reactor promoter manages %[2]s on this node (no HA config or gateway)" >&2
+echo "no drbd-reactor promoter manages %[2]s on this node (no HA config, gateway or app)" >&2
 exit 3
 `, strings.Join(names, " "), resource)
 }

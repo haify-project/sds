@@ -171,6 +171,15 @@ type ControllerClient interface {
 	CreateBackupSchedule(ctx context.Context, req *sdspb.CreateBackupScheduleRequest) (*sdspb.BackupScheduleInfo, error)
 	ListBackupSchedules(ctx context.Context) ([]*sdspb.BackupScheduleInfo, error)
 	DeleteBackupSchedule(ctx context.Context, name string) error
+
+	// Database applications (`sds app`). CreateApp returns the generated
+	// password; the tool does not pass it on (see tools_db_apps.go).
+	CreateApp(ctx context.Context, req client.AppCreateRequest) (*sdspb.CreateAppResponse, error)
+	ListApps(ctx context.Context) ([]*sdspb.AppInfo, error)
+	GetAppStatus(ctx context.Context, name string) (*sdspb.GetAppStatusResponse, error)
+	DeleteApp(ctx context.Context, name string, deleteData bool) (string, error)
+	FailoverApp(ctx context.Context, name string) (*sdspb.FailoverAppResponse, error)
+	SnapshotApp(ctx context.Context, name, snapshot string) (*sdspb.SnapshotAppResponse, error)
 }
 
 // compile-time check: the real gRPC client satisfies the interface.

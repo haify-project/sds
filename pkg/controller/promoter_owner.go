@@ -67,5 +67,10 @@ func (c *Controller) assertPromoterAllowed(ctx context.Context, resource, what s
 		return fmt.Errorf("%s is refused on %s: it has diskless clients (%v) that use it from nodes a promoter "+
 			"does not run on; detach them first", what, resource, clients)
 	}
+	// drbd-reactor runs one promoter per resource; an app's is already there.
+	if app, err := c.db.GetAppByResource(ctx, resource); err == nil && app != nil {
+		return fmt.Errorf("%s is refused on %s: the %s app %s runs on it; delete the app first (sds app delete %s)",
+			what, resource, app.Engine, app.Name, app.Name)
+	}
 	return nil
 }

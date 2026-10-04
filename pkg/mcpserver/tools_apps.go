@@ -17,11 +17,12 @@ import (
 // every tool here is named sds_k8s_* so the model can tell which side a call
 // lands on.
 
-// AppManager creates and lists databases on Kubernetes backed by SDS volumes.
-// *k8sapp.Manager implements it.
+// AppManager creates, lists and deletes databases on Kubernetes backed by SDS
+// volumes. *k8sapp.Manager implements it.
 type AppManager interface {
 	Create(ctx context.Context, r k8sapp.Request) (*k8sapp.Created, error)
 	List(ctx context.Context) ([]k8sapp.Status, error)
+	Delete(ctx context.Context, r k8sapp.DeleteRequest) (*k8sapp.Deleted, error)
 }
 
 type appCreateIn struct {
@@ -31,6 +32,12 @@ type appCreateIn struct {
 	Size         string `json:"size,omitempty" jsonschema:"volume size as a Kubernetes quantity, e.g. 10Gi (default 5Gi)"`
 	StorageClass string `json:"storage_class,omitempty" jsonschema:"SDS StorageClass (default: one that keeps data on the database's node)"`
 	Image        string `json:"image,omitempty" jsonschema:"container image override (default mysql:8.4 or postgres:17)"`
+}
+
+type appDeleteIn struct {
+	Name       string `json:"name" jsonschema:"name of the app (its Deployment)"`
+	Namespace  string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace (default: default)"`
+	DeleteData bool   `json:"delete_data,omitempty" jsonschema:"also delete the volume claim holding the data and the secret holding its password"`
 }
 
 type appListOut struct {
@@ -91,5 +98,20 @@ func (s *Server) registerAppTools(srv *mcp.Server) {
 				return nil, opResult{}, err
 			}
 			return nil, ok(created.Message), nil
+		})
+
+	addWrite(s, srv, destructiveTool("sds_k8s_app_delete", "Delete an SDS-backed app",
+		"Delete a database created by sds_k8s_app_create: its Deployment and Service. The volume claim "+
+			"<name>-data and the secret <name>-auth are kept, so creating the app again with the same name and "+
+			"template runs it on the same data with the same password, unless delete_data is set, which deletes "+
+			"them too (and with them the data, as the StorageClass's reclaim policy decides). Only objects "+
+			"sds_k8s_app_create made are deleted; anything else of the same name is left alone."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in appDeleteIn) (*mcp.CallToolResult, opResult, error) {
+			deleted, err := s.apps.Delete(ctx, k8sapp.DeleteRequest{Name: in.Name, Namespace: in.Namespace,
+				DeleteData: in.DeleteData})
+			if err != nil {
+				return nil, opResult{}, err
+			}
+			return nil, ok(deleted.Message), nil
 		})
 }

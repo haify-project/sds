@@ -184,7 +184,8 @@ Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
 | Package          | Purpose                                                                                |
 | ---------------- | -------------------------------------------------------------------------------------- |
 | `pkg/controller` | Main controller: gRPC handlers (`server*.go`), managers for storage, resources, snapshots, nodes, gateways, HA, Self-HA, backups, WAN, REST gateway and UI server |
-| `pkg/gateway`    | Gateway managers (NFS, iSCSI, NVMe-oF) - generates drbd-reactor configs                |
+| `pkg/gateway`    | Gateway managers (NFS, iSCSI, NVMe-oF, SMB) - generates drbd-reactor configs           |
+| `pkg/apptemplate`| Database apps on a resource (`sds app`: PostgreSQL, MySQL/MariaDB, Redis): unit, promoter, init, probes, freeze/thaw; driven by `pkg/controller/app*.go` |
 | `pkg/deployment` | Wrapper around dispatch for SSH-based operations                                       |
 | `pkg/config`     | Configuration loading with viper                                                       |
 | `pkg/client`     | gRPC client for sds                                                                |

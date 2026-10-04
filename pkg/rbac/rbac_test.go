@@ -36,6 +36,16 @@ func TestClassify(t *testing.T) {
 		{"/v1.SDSController/AddBackupTarget", "backup", ActWrite},
 		{"/v1.SDSController/ListBackups", "backup", ActRead},
 		{"/v1.SDSController/ListBackupTargets", "backup", ActRead},
+		// Database applications are their own object; SnapshotApp is not a
+		// "snapshot" and the approval methods are not apps.
+		{"/v1.SDSController/CreateApp", "app", ActWrite},
+		{"/v1.SDSController/ListApps", "app", ActRead},
+		{"/v1.SDSController/GetAppStatus", "app", ActRead},
+		{"/v1.SDSController/DeleteApp", "app", ActWrite},
+		{"/v1.SDSController/FailoverApp", "app", ActWrite},
+		{"/v1.SDSController/SnapshotApp", "app", ActWrite},
+		{"/v1.SDSController/ListApprovals", "approval", ActRead},
+		{"/v1.SDSController/ApproveRequest", "approval", ActApprove},
 	}
 	for _, c := range cases {
 		obj, act := Classify(c.method)

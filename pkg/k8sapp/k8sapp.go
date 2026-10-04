@@ -1,5 +1,6 @@
 // Package k8sapp creates databases on Kubernetes whose data lives on an SDS
-// volume. sds-mcp exposes it as the sds_k8s_app_create / sds_k8s_app_list tools.
+// volume. sds-mcp exposes it as the sds_k8s_app_create, sds_k8s_app_list and
+// sds_k8s_app_delete tools.
 package k8sapp
 
 import (
@@ -358,11 +359,39 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Created, error) {
 	}
 	secret, pvc, dep, svc := objects(r, tpl, sc, pw)
 
-	if _, err := m.kube.CoreV1().Secrets(r.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
-		return nil, fmt.Errorf("create secret: %w", err)
+	// A claim and secret kept by an earlier Delete of the same app are used
+	// again: the data and the password that opens it belong together. Both are
+	// checked before anything is created.
+	core := m.kube.CoreV1()
+	keepSecret, keepClaim := false, false
+	if old, err := core.Secrets(r.Namespace).Get(ctx, secret.Name, metav1.GetOptions{}); err == nil {
+		if keepSecret, err = keptObject("secret", secret.Name, r.Template, old.Labels, old.Annotations); err != nil {
+			return nil, err
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("get secret: %w", err)
 	}
-	if _, err := m.kube.CoreV1().PersistentVolumeClaims(r.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
-		return nil, fmt.Errorf("create volume claim: %w", err)
+	if old, err := core.PersistentVolumeClaims(r.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{}); err == nil {
+		if keepClaim, err = keptObject("claim", pvc.Name, r.Template, old.Labels, old.Annotations); err != nil {
+			return nil, err
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("get volume claim: %w", err)
+	}
+	if keepClaim && !keepSecret {
+		return nil, &InvalidError{fmt.Errorf("claim %s is kept from an earlier %s but its secret %s is gone, so "+
+			"its password is lost; delete the claim or restore the secret", pvc.Name, r.Name, secret.Name)}
+	}
+
+	if !keepSecret {
+		if _, err := core.Secrets(r.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+			return nil, fmt.Errorf("create secret: %w", err)
+		}
+	}
+	if !keepClaim {
+		if _, err := core.PersistentVolumeClaims(r.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
+			return nil, fmt.Errorf("create volume claim: %w", err)
+		}
 	}
 	if _, err := m.kube.CoreV1().Services(r.Namespace).Create(ctx, svc, metav1.CreateOptions{}); err != nil {
 		return nil, fmt.Errorf("create service: %w", err)
@@ -371,9 +400,14 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Created, error) {
 		return nil, fmt.Errorf("create deployment: %w", err)
 	}
 	host := fmt.Sprintf("%s.%s.svc:%d", r.Name, r.Namespace, tpl.port)
+	msg := fmt.Sprintf("%s %s/%s created on %s (%s); connect at %s, password in secret %s",
+		r.Template, r.Namespace, r.Name, sc, r.Size, host, secret.Name)
+	if keepClaim {
+		msg = fmt.Sprintf("%s %s/%s created on its kept claim %s; connect at %s, password in secret %s",
+			r.Template, r.Namespace, r.Name, pvc.Name, host, secret.Name)
+	}
 	return &Created{
-		Message: fmt.Sprintf("%s %s/%s created on %s (%s); connect at %s, password in secret %s",
-			r.Template, r.Namespace, r.Name, sc, r.Size, host, secret.Name),
+		Message:   msg,
 		Namespace: r.Namespace, Name: r.Name, Service: host, Secret: secret.Name, StorageClass: sc,
 	}, nil
 }
