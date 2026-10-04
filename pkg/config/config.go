@@ -194,6 +194,8 @@ type RBACConfig struct {
 	Enabled  bool         `mapstructure:"enabled"`
 	Users    []RBACUser   `mapstructure:"users"`
 	Policies []RBACPolicy `mapstructure:"policies"`
+	// Approval puts listed calls behind a second person (approval.go).
+	Approval ApprovalConfig `mapstructure:"approval"`
 }
 
 // RBACUser is an identity with a bearer token and a role. Built-in roles are
@@ -456,6 +458,9 @@ func (c *Config) Validate() error {
 	if err := c.Audit.validate(); err != nil {
 		return err
 	}
+	if err := c.RBAC.Approval.validate(c.RBAC.Enabled); err != nil {
+		return err
+	}
 	if c.Auth.Enabled {
 		if len(c.Auth.Token) < 16 {
 			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
@@ -511,6 +516,7 @@ func setDefaults() {
 	viper.SetDefault("metrics.listen_address", "0.0.0.0")
 	viper.SetDefault("metrics.port", 9433)
 	setAuditDefaults()
+	setApprovalDefaults()
 	viper.SetDefault("rbac.enabled", false)
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)

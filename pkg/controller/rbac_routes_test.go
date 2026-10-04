@@ -118,7 +118,7 @@ func TestPoliciesAdminOnly(t *testing.T) {
 
 func TestCreateUserViaHandler(t *testing.T) {
 	engine := routeEngine(t)
-	h := rbacCreateUserHandler(engine)
+	h := rbacCreateUserHandler(engine, nil)
 
 	// viewer cannot create users
 	if w, _ := doReq(h, http.MethodPost, "victor-token-0123456789",
@@ -148,7 +148,7 @@ func TestSetRoleAndDeleteViaHandler(t *testing.T) {
 	}
 
 	// set-role: viewer -> operator
-	setRole := rbacSetRoleHandler(engine)
+	setRole := rbacSetRoleHandler(engine, nil)
 	w, _ := doReq(setRole, http.MethodPut, "alice-token-0123456789",
 		`{"role":"operator"}`, map[string]string{"name": "temp"})
 	if w.Code != http.StatusOK {
@@ -159,7 +159,7 @@ func TestSetRoleAndDeleteViaHandler(t *testing.T) {
 	}
 
 	// delete
-	del := rbacDeleteUserHandler(engine)
+	del := rbacDeleteUserHandler(engine, nil)
 	w, _ = doReq(del, http.MethodDelete, "alice-token-0123456789", "",
 		map[string]string{"name": "temp"})
 	if w.Code != http.StatusOK {

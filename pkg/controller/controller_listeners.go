@@ -71,6 +71,10 @@ func (c *Controller) startGRPCServer() error {
 	case c.config.RBAC.Enabled:
 		unaryInterceptors = append(unaryInterceptors,
 			rbacIdentityUnaryInterceptor(rbacEngine), rbacAuthzUnaryInterceptor(rbacEngine))
+		if c.approvals = newApprovalGate(c.config.RBAC.Approval, c.db, c.events, c.logger); c.approvals != nil {
+			unaryInterceptors = append(unaryInterceptors, approvalUnaryInterceptor(c.approvals))
+			c.logger.Info("Two-person approval enabled", zap.Strings("methods", c.config.RBAC.Approval.ApprovalMethods()))
+		}
 		streamInterceptors = append(streamInterceptors,
 			rbacIdentityStreamInterceptor(rbacEngine), rbacAuthzStreamInterceptor(rbacEngine))
 		c.logger.Info("API authorization enabled (RBAC)",

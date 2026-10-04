@@ -50,6 +50,7 @@ func main() {
 	rootCmd.AddCommand(gatewayCommand())
 	rootCmd.AddCommand(healthCommand())
 	rootCmd.AddCommand(rbacCommand())
+	rootCmd.AddCommand(approvalCommand())
 	rootCmd.AddCommand(eventCommand())
 	rootCmd.AddCommand(inspectCommand())
 	rootCmd.AddCommand(notifyCommand())

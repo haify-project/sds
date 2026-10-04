@@ -167,3 +167,28 @@ func TestNotifyChannelRPCsAreSystemScoped(t *testing.T) {
 		}
 	}
 }
+
+// Deciding a held-back call is its own right: admin has it, security-officer
+// has only it and reading, operator does not have it.
+func TestApprovalRight(t *testing.T) {
+	e, err := New(nil, []User{
+		{Name: "sec", Token: "sec-token-0123456789", Role: "security-officer"},
+		{Name: "op", Token: "op-token-0123456789", Role: "operator"},
+		{Name: "adm", Token: "adm-token-0123456789", Role: "admin"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj, act := Classify("/v1.SDSController/ApproveRequest")
+	if obj != "approval" || act != ActApprove {
+		t.Fatalf("ApproveRequest classified as %s:%s", obj, act)
+	}
+	for user, want := range map[string]bool{"sec": true, "adm": true, "op": false} {
+		if got, _ := e.Enforce(user, obj, act); got != want {
+			t.Errorf("%s approve = %v, want %v", user, got, want)
+		}
+	}
+	if ok, _ := e.Enforce("sec", "backup", ActWrite); ok {
+		t.Error("security-officer must not change anything itself")
+	}
+}

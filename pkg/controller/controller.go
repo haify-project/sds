@@ -58,6 +58,8 @@ type Controller struct {
 	// rbac is the authorization engine, nil when [rbac] is off. Built when the
 	// gRPC server starts; the RBAC RPCs and REST routes both read it.
 	rbac *rbac.Engine
+	// approvals is the two-person approval gate; nil unless [rbac.approval].
+	approvals *approvalGate
 	// Managers
 	storage   *StorageManager
 	resources *ResourceManager

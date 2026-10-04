@@ -17,6 +17,114 @@
     "application/json"
   ],
   "paths": {
+    "/v1/approvals": {
+      "get": {
+        "summary": "Two-person approval ([rbac.approval]). A call on the approval list made\nwithout an approval fails with FAILED_PRECONDITION and leaves a pending\nrequest; once a different user with the approve right approves it, the\nsame caller repeats the identical call and it runs, once.",
+        "operationId": "SDSController_ListApprovals",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListApprovalsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "includeClosed",
+            "description": "also approved, rejected, used and expired ones",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/approvals/{id}/approve": {
+      "post": {
+        "operationId": "SDSController_ApproveRequest",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ApproveRequestResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerApproveRequestBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/approvals/{id}/reject": {
+      "post": {
+        "operationId": "SDSController_RejectRequest",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RejectRequestResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRejectRequestBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/audit": {
       "get": {
         "summary": "Audit trail: who called what, when, and whether it was allowed. Persisted\nin the database, which lives on the controller's replicated volume, so the\nhistory follows the controller across a failover instead of being split\nacross the journals of whichever nodes happened to be active.",
@@ -5455,6 +5563,9 @@
       },
       "description": "AdoptResourceRequest imports an already-existing (foreign) DRBD resource into\nSDS management by recording its metadata in the SDS database. It never\ncreates or modifies the actual DRBD resource or its data. Every field except\nname is optional and auto-discovered from the live .res on a node when\nomitted; a provided value overrides discovery."
     },
+    "SDSControllerApproveRequestBody": {
+      "type": "object"
+    },
     "SDSControllerAttachDisklessClientBody": {
       "type": "object",
       "properties": {
@@ -5629,6 +5740,9 @@
           "description": "node must hold a diskful replica of `resource` AND have source_device\nlocally; the copy runs entirely on that node."
         }
       }
+    },
+    "SDSControllerRejectRequestBody": {
+      "type": "object"
     },
     "SDSControllerRepairResourceBody": {
       "type": "object"
@@ -6226,6 +6340,56 @@
         "volumes": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "v1ApprovalInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "title": "e.g. DeleteBackupTarget"
+        },
+        "request": {
+          "type": "string",
+          "title": "the call's arguments as JSON, secrets masked"
+        },
+        "requester": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "title": "RFC 3339"
+        },
+        "expiresAt": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "title": "pending, approved, rejected, used, expired"
+        },
+        "decidedBy": {
+          "type": "string"
+        },
+        "decidedAt": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ApproveRequestResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "approval": {
+          "$ref": "#/definitions/v1ApprovalInfo"
         }
       }
     },
@@ -8039,6 +8203,21 @@
         }
       }
     },
+    "v1ListApprovalsResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ApprovalInfo"
+          }
+        }
+      }
+    },
     "v1ListAuditEventsResponse": {
       "type": "object",
       "properties": {
@@ -9059,6 +9238,20 @@
         },
         "node": {
           "$ref": "#/definitions/v1NodeInfo"
+        }
+      }
+    },
+    "v1RejectRequestResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "approval": {
+          "$ref": "#/definitions/v1ApprovalInfo"
         }
       }
     },
