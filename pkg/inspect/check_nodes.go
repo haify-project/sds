@@ -208,6 +208,7 @@ func consistencyChecks(in *Input) []Check {
 				Evidence: groupEvidence(groups)})
 		}
 	}
+	out = append(out, binaryArchChecks(in)...)
 	// Binaries are compared only between nodes of one architecture: an
 	// aarch64 and an x86_64 build of the same version never hash alike.
 	byArch := map[string]map[string][]string{}
@@ -303,4 +304,28 @@ func namesNode(names []string, n Node) bool {
 		}
 	}
 	return false
+}
+
+// elfMachineArch maps an ELF e_machine (CtlMachine) to the uname -m it runs on.
+var elfMachineArch = map[string]string{"3e00": "x86_64", "b700": "aarch64", "f300": "riscv64", "1500": "ppc64le", "1600": "s390x"}
+
+// binaryArchChecks fails a node whose controller binary is built for another
+// architecture: the hash comparison above cannot see it, since it only
+// compares nodes of one architecture, and under Self-HA that node is where a
+// failover would try, and fail, to start the controller.
+func binaryArchChecks(in *Input) []Check {
+	var out []Check
+	for _, name := range sortedKeys(in.Probes) {
+		p := in.Probes[name]
+		want, known := elfMachineArch[p.CtlMachine]
+		if p.CtlMachine == "" || p.Arch == "" || !known || want == p.Arch {
+			continue
+		}
+		out = append(out, Check{ID: "nodes.controller_binary_arch", Area: AreaNodes, Subject: name, Status: StatusFail,
+			Message: fmt.Sprintf("the sds-controller binary on %s is built for %s, but the node is %s; it cannot run there",
+				name, want, p.Arch),
+			Evidence: []string{p.CtlBin},
+			Fix:      "./scripts/deploy-all.sh " + name + " (it builds for each node's architecture)"})
+	}
+	return out
 }

@@ -34,7 +34,7 @@ echo "reactor=$(drbd-reactor --version 2>/dev/null | head -1 | awk '{print $NF}'
 echo "reactor_active=$(systemctl is-active drbd-reactor 2>/dev/null)"
 echo "ctl_active=$(systemctl is-active sds-controller 2>/dev/null)"
 bin=$(systemctl cat sds-controller 2>/dev/null | sed -n 's/^ExecStart=[-@+!]*\([^ ]*\).*/\1/p' | tail -1)
-if [ -n "$bin" ] && [ -f "$bin" ]; then echo "ctl_bin=$bin $(sha256sum "$bin" 2>/dev/null | awk '{print $1}')"; fi
+if [ -n "$bin" ] && [ -f "$bin" ]; then echo "ctl_bin=$bin $(sha256sum "$bin" 2>/dev/null | awk '{print $1}')"; echo "ctl_machine=$(od -An -tx1 -j18 -N2 "$bin" 2>/dev/null | tr -d ' \n')"; fi
 for f in /etc/drbd-reactor.d/*.toml /etc/drbd-reactor.d/*.toml.disabled; do [ -f "$f" ] && echo "reactor_conf=$(basename "$f")"; done
 for f in /etc/drbd.d/*.res; do [ -f "$f" ] && echo "res_file=$(basename "$f" .res)"; done
 awk '!/^[[:space:]]*#/ && NF>=2 {l=$1; for(i=2;i<=NF;i++){if($i ~ /^#/) break; l=l" "$i}; print "hosts="l}' /etc/hosts 2>/dev/null
@@ -68,20 +68,23 @@ type LV struct {
 type NodeProbe struct {
 	// Complete is false when the output stopped before its end marker; the
 	// keys that did arrive are still used.
-	Complete    bool
-	Hostname    string
-	Arch        string  // uname -m
-	Now         float64 // seconds since the epoch, 0 when not reported
-	NTPSynced   string  // "yes", "no", or "" when timedatectl is absent
-	RootUse     int     // percent of / in use, -1 when not reported
-	Addrs       []string
-	DRBDKmod    string
-	DRBDUtils   string
-	Reactor     string
-	ReactorUp   string
-	CtlActive   string
-	CtlBin      string
-	CtlSHA      string
+	Complete  bool
+	Hostname  string
+	Arch      string  // uname -m
+	Now       float64 // seconds since the epoch, 0 when not reported
+	NTPSynced string  // "yes", "no", or "" when timedatectl is absent
+	RootUse   int     // percent of / in use, -1 when not reported
+	Addrs     []string
+	DRBDKmod  string
+	DRBDUtils string
+	Reactor   string
+	ReactorUp string
+	CtlActive string
+	CtlBin    string
+	CtlSHA    string
+	// CtlMachine is the ELF e_machine of the controller binary, as the two
+	// little-endian bytes in hex ("3e00" is x86-64, "b700" AArch64).
+	CtlMachine  string
 	ReactorConf []string
 	ResFiles    []string
 	Hosts       []HostsEntry
@@ -158,6 +161,8 @@ func ParseProbe(output string) (*NodeProbe, error) {
 			}
 		case "arch":
 			p.Arch = val
+		case "ctl_machine":
+			p.CtlMachine = val
 		case "vg_free":
 			if vg, free, ok := strings.Cut(val, " "); ok {
 				if n, err := strconv.ParseUint(strings.TrimSpace(free), 10, 64); err == nil {

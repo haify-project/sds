@@ -17,8 +17,6 @@ set -e
 # Configuration
 HOSTS=""
 CONTROLLER_PORT=3374
-CONTROLLER_BINARY="./bin/sds-controller"
-CLI_BINARY="./bin/sds"
 SERVICE_FILE="./configs/sds-controller.service"
 CONFIG_FILE="./configs/controller.toml.example"
 REMOTE_BASE="/opt/sds"
@@ -27,10 +25,13 @@ REMOTE_CLI="/usr/local/bin/sds"
 REMOTE_SERVICE="/etc/systemd/system/sds-controller.service"
 REMOTE_CONFIG="/etc/sds/controller.toml"
 
-# Build target: the nodes are linux/amd64, the build host often is not
-# (e.g. macOS/arm64). Cross-compile by default so the binaries actually run.
+# Build target: the build host is often not what the nodes are (e.g.
+# macOS/arm64), and the nodes need not all be one architecture. With --build
+# each node's architecture is asked (uname -m) and a build is made for each
+# one in bin/linux-<arch>/; TARGET_ARCH forces a single one. Before anything
+# is copied, every host's controller binary is checked to be built for it.
 TARGET_OS="${TARGET_OS:-linux}"
-TARGET_ARCH="${TARGET_ARCH:-amd64}"
+TARGET_ARCH="${TARGET_ARCH:-}"
 
 # Colors
 GREEN='\033[0;32m'
@@ -58,7 +59,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --build             Build before deploying (cross-compiles for ${TARGET_OS}/${TARGET_ARCH})"
             echo "  --cli-only          Only deploy the CLI binary"
             echo "  --target-os OS      Build GOOS (default: $TARGET_OS, or \$TARGET_OS)"
-            echo "  --target-arch ARCH  Build GOARCH (default: $TARGET_ARCH, or \$TARGET_ARCH)"
+            echo "  --target-arch ARCH  Build only this GOARCH (default: each host's own, or \$TARGET_ARCH)"
             exit 0
             ;;
         *) HOSTS="$1"; shift ;;
@@ -70,12 +71,67 @@ if [ -z "$HOSTS" ]; then
     exit 1
 fi
 
-# Build (cross-compiled for the target; `make build` force-syncs the web UI
-# into ui/dist via ui-sync, so the embedded UI is always fresh).
+# goarch_of maps `uname -m` to GOARCH.
+goarch_of() {
+    case "$1" in
+        x86_64) echo amd64 ;;
+        aarch64|arm64) echo arm64 ;;
+        riscv64) echo riscv64 ;;
+        ppc64le) echo ppc64le ;;
+        s390x) echo s390x ;;
+        *) echo "unknown:$1" ;;
+    esac
+}
+
+# elf_goarch reads a binary's ELF e_machine (bytes 18-19).
+elf_goarch() {
+    case "$(od -An -tx1 -j18 -N2 "$1" 2>/dev/null | tr -d ' \n')" in
+        3e00) echo amd64 ;;
+        b700) echo arm64 ;;
+        f300) echo riscv64 ;;
+        1500) echo ppc64le ;;
+        1600) echo s390x ;;
+        *) echo unknown ;;
+    esac
+}
+
+declare -A HOST_ARCH
+for host in ${HOSTS//,/ }; do
+    HOST_ARCH[$host]=$(goarch_of "$(ssh "$host" uname -m)")
+done
+
+# Build (cross-compiled; `make build` force-syncs the web UI into ui/dist via
+# ui-sync, so the embedded UI is always fresh), one build per architecture.
 if [ "$BUILD" = true ]; then
-    log_step "Building binaries for ${TARGET_OS}/${TARGET_ARCH}..."
-    GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" CGO_ENABLED=0 make build 2>&1 | tail -3
+    archs="$TARGET_ARCH"
+    [ -n "$archs" ] || archs=$(printf '%s\n' "${HOST_ARCH[@]}" | sort -u)
+    for arch in $archs; do
+        log_step "Building binaries for ${TARGET_OS}/${arch}..."
+        GOOS="$TARGET_OS" GOARCH="$arch" CGO_ENABLED=0 make build 2>&1 | tail -3
+        mkdir -p "bin/${TARGET_OS}-${arch}"
+        cp bin/sds-controller bin/sds "bin/${TARGET_OS}-${arch}/"
+    done
 fi
+
+# bin_dir is where host's binaries come from: its architecture's build when
+# there is one, else ./bin.
+bin_dir() {
+    if [ -d "bin/${TARGET_OS}-${HOST_ARCH[$1]}" ]; then echo "bin/${TARGET_OS}-${HOST_ARCH[$1]}"; else echo bin; fi
+}
+
+# Refuse before copying anything: a binary of the wrong architecture installs
+# fine and then fails to start, under Self-HA at the worst moment.
+for host in ${HOSTS//,/ }; do
+    dir=$(bin_dir "$host")
+    for b in sds-controller sds; do
+        [ "$CLI_ONLY" = true ] && [ "$b" = sds-controller ] && continue
+        got=$(elf_goarch "$dir/$b")
+        if [ "$got" != "${HOST_ARCH[$host]}" ]; then
+            echo "error: $dir/$b is built for $got but $host is ${HOST_ARCH[$host]}; run with --build" >&2
+            exit 1
+        fi
+    done
+done
 
 log_info "=========================================="
 log_info "Deploying to: $HOSTS (CLI_ONLY: $CLI_ONLY)"
@@ -87,11 +143,11 @@ for host in ${HOSTS//,/ }; do
 
     if [ "$CLI_ONLY" = false ]; then
         ssh "$host" "sudo mkdir -p /etc/sds /opt/sds/bin /var/log/sds /var/lib/sds"
-        scp -q "$CONTROLLER_BINARY" "$host:/tmp/sds-controller"
+        scp -q "$(bin_dir "$host")/sds-controller" "$host:/tmp/sds-controller"
         ssh "$host" "sudo install -m755 /tmp/sds-controller $REMOTE_CONTROLLER && rm -f /tmp/sds-controller"
     fi
 
-    scp -q "$CLI_BINARY" "$host:/tmp/sds"
+    scp -q "$(bin_dir "$host")/sds" "$host:/tmp/sds"
     ssh "$host" "sudo install -m755 /tmp/sds $REMOTE_CLI && sudo ln -sf sds /usr/local/bin/sds-cli && rm -f /tmp/sds"
 
     if [ "$CLI_ONLY" = false ]; then

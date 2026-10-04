@@ -593,6 +593,78 @@ sds ha set-tiebreaker db --node node4
 sds ha set-tiebreaker db --remove       # drop it, accepting the quorum risk
 ```
 
+**Adding a replica while a member is away.** `add-replica` rewrites every
+member's config, so a member that does not answer refuses it. With
+`--allow-unreachable` it goes ahead on the members that answer, as long as
+they are the majority; the ones that were away are recorded and get the new
+config (a `resource repair`) as soon as they answer again.
+
+**Moving a replica** adds the new one, waits until it is UpToDate and only then
+removes the old one, so the resource is never a copy short. It returns once
+the new replica is added; the removal follows by itself, and resumes after a
+controller restart or failover. A Primary is not moved: drain the node first.
+
+```bash
+sds resource move-replica db --from node2 --to node4
+```
+
+**Rebalancing** is by plan, never on its own: each move is a full sync (1 TB
+takes tens of minutes on 10GbE, hours on 1GbE). The plan moves replicas off
+the node holding the most allocated capacity to nodes that hold less, until
+the spread is within a tenth of the mean, and leaves out the controller's
+metadata, WAN resources and CSI volumes (a PersistentVolume's node affinity is
+fixed when it is created), saying so.
+
+```bash
+sds rebalance                  # the plan; nothing changes
+sds rebalance --apply          # run it, one move at a time
+```
+
+**Preferred nodes** for an HA resource order where drbd-reactor starts it:
+each node waits a little longer the further down the list it is. With
+`--policy start-only` (drbd-reactor 1.9+) the order only picks where it
+starts; `always` also moves it back to a more preferred node that returns,
+which is a failover of its own. It is a preference, not a fence: DRBD quorum,
+not this, is what prevents split brain.
+
+```bash
+sds ha set-preferred db --nodes node1,node2 --policy start-only
+```
+
+### Self-healing
+
+A node that dies leaves every resource it held a copy of one replica short.
+With `[self_heal] auto_evict = "on"` the controller replaces those replicas
+itself, and with `"dry-run"` it decides the same and only says what it would
+do (`node.evicted` events). It acts only when all of this holds:
+
+- the node has been offline for `after_minutes` (default 60; the time is kept
+  across controller failovers, and `sds node list` shows it);
+- at most `max_offline_percent` (default 34) of the nodes are offline, and the
+  controller reaches a majority — otherwise it may be the one cut off;
+- for each resource, the `--lost` guard above: the node does not answer over
+  SSH, no surviving member is connected to it over DRBD, and the survivors
+  hold quorum and an UpToDate copy;
+- the node is not drained and not labelled `sds.io/auto-evict=false`, and the
+  resource is not the controller's own metadata, not WAN-replicated and not
+  labelled `sds.io/auto-evict=false`.
+
+It replaces one replica at a time and waits for its sync before the next. The
+new replica goes where placement would put it. When the node holds no replica
+any more it is **evicted**: it gets no new replicas, and when it comes back it
+still holds old configs and volumes. Then:
+
+```bash
+sds node restore node3 --dry-run   # what would be deleted on it
+sds node restore node3             # delete it, and let it take replicas again
+sds node lost node3                # or: it is not coming back
+```
+
+`node restore` takes down, on that node only, every resource it is no longer a
+member of, and deletes its config, promoter configs and the volumes sds named
+after it. `node lost` removes every replica the node still holds the `--lost`
+way and keeps it evicted. Both are on the two-person approval list.
+
 ---
 
 ## 8. Snapshots
@@ -1384,7 +1456,8 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
 `pool.snapshots_locked` (a near-full pool with only locked snapshots left),
 `audit.shipping_failed`, `audit.truncated`, `approval.requested` (see [Access control](#16-access-control)),
-`controller.clock_jumped`, `resource.write_anomaly`,
+`controller.clock_jumped`, `resource.write_anomaly`, `node.evicted`,
+`resource.replica_moved`,
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,

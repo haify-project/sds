@@ -21,6 +21,10 @@ const (
 	NodeStateOffline     NodeState = "offline"
 	NodeStateDegraded    NodeState = "degraded"
 	NodeStateMaintenance NodeState = "maintenance"
+	// NodeStateEvicted is a node self-healing moved every replica off after it
+	// stayed unreachable; it gets no new replicas until `node restore` cleans
+	// what it still holds (self_heal_evict.go).
+	NodeStateEvicted NodeState = "evicted"
 )
 
 // NodeInfo represents node information
@@ -40,6 +44,8 @@ type NodeInfo struct {
 	// Labels are arbitrary key=value tags (e.g. rack=A) used by placement
 	// constraints such as replicas-on-different.
 	Labels map[string]string `json:"labels,omitempty"`
+	// OfflineSince is when the node stopped answering; zero while it answers.
+	OfflineSince time.Time `json:"offline_since,omitempty"`
 }
 
 // NodeManager manages cluster nodes
@@ -109,8 +115,8 @@ func (nm *NodeManager) RegisterNodeWithReplicationAddress(ctx context.Context, n
 				labels[k] = v
 			}
 		}
-		if existing.State == NodeStateMaintenance {
-			state = NodeStateMaintenance
+		if existing.State == NodeStateMaintenance || existing.State == NodeStateEvicted {
+			state = existing.State
 		}
 	}
 	nm.mu.RUnlock()
@@ -504,6 +510,7 @@ func nodeRecord(n *NodeInfo) *database.Node {
 		State:              string(n.State),
 		LastSeen:           n.LastSeen,
 		Version:            n.Version,
+		OfflineSince:       n.OfflineSince,
 	}
 	if len(n.Labels) > 0 {
 		if encoded, err := json.Marshal(n.Labels); err == nil {

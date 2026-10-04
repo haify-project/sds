@@ -25,8 +25,13 @@ type HaConfig struct {
 	// StartItems, when set, is the promoter's start list exactly as given;
 	// it then replaces Services, MountPoint, VIP and OcfAgents as the order.
 	StartItems []HaStartItem `json:",omitempty"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// PreferredNodes orders where drbd-reactor starts the resource
+	// (preferred-nodes), and PreferredNodesPolicy says whether that also
+	// moves it back ("always") or only picks where it starts ("start-only").
+	PreferredNodes       []string `json:",omitempty"`
+	PreferredNodesPolicy string   `json:",omitempty"`
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 // HaOcfAgent is one OCF resource agent in an HA promoter's start list.

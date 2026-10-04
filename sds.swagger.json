@@ -2317,6 +2317,44 @@
         ]
       }
     },
+    "/v1/nodes/{node}/lost": {
+      "post": {
+        "operationId": "SDSController_MarkNodeLost",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1MarkNodeLostResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerMarkNodeLostBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/nodes/{node}/pools/{pool}/cache": {
       "delete": {
         "operationId": "SDSController_RemovePoolCache",
@@ -2426,6 +2464,44 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/nodes/{node}/restore": {
+      "post": {
+        "operationId": "SDSController_RestoreNode",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RestoreNodeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerRestoreNodeBody"
+            }
           }
         ],
         "tags": [
@@ -2710,6 +2786,38 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/SDSControllerAddDiskToPoolBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/rebalance": {
+      "post": {
+        "operationId": "SDSController_PlanRebalance",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PlanRebalanceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1PlanRebalanceRequest"
             }
           }
         ],
@@ -3739,6 +3847,45 @@
         ]
       }
     },
+    "/v1/resources/{resource}/ha/preferred-nodes": {
+      "post": {
+        "summary": "Orders where drbd-reactor starts an HA resource (preferred-nodes). A\npreference, not a fence; DRBD quorum is what prevents split brain.",
+        "operationId": "SDSController_SetHaPreferredNodes",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetHaPreferredNodesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerSetHaPreferredNodesBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/resources/{resource}/ha/tiebreaker": {
       "post": {
         "operationId": "SDSController_SetTiebreaker",
@@ -3769,6 +3916,45 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/SDSControllerSetTiebreakerBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/resources/{resource}/move-replica": {
+      "post": {
+        "summary": "Self-healing (see docs/user-guide.md \"Self-healing\"). MoveReplica adds\nthe new replica and removes the old one once the new one is UpToDate.\nPlanRebalance proposes moves from the fullest node; apply runs them one\nat a time. MarkNodeLost removes the replicas of a node that will not\nreturn; RestoreNode cleans what a returned node holds of resources it is\nno longer part of and lets it take replicas again.",
+        "operationId": "SDSController_MoveReplica",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1MoveReplicaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerMoveReplicaBody"
             }
           }
         ],
@@ -5769,6 +5955,10 @@
         "ignoreFreeSpace": {
           "type": "boolean",
           "description": "ignore_free_space adds the replica although the node's pool has less free\nspace than the volume, which the sync writes in full. Without it that is\nrefused: a full thin pool fails the sync's writes and drops the new disk."
+        },
+        "allowUnreachable": {
+          "type": "boolean",
+          "description": "allow_unreachable adds the replica while a minority of the resource's\nmembers do not answer; they get the new config when they are back."
         }
       },
       "description": "AddReplicaRequest adds a diskful local replica to a running resource. On a\ntwo-site resource the new node also gets its own WAN leg to the DR: DRBD 9 is\na full mesh, and a replica the DR cannot reach ends replication the moment it\nis promoted."
@@ -5993,6 +6183,9 @@
         }
       }
     },
+    "SDSControllerMarkNodeLostBody": {
+      "type": "object"
+    },
     "SDSControllerMountResourceBody": {
       "type": "object",
       "properties": {
@@ -6003,6 +6196,17 @@
           "type": "string"
         },
         "fstype": {
+          "type": "string"
+        }
+      }
+    },
+    "SDSControllerMoveReplicaBody": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
           "type": "string"
         }
       }
@@ -6096,6 +6300,14 @@
         }
       }
     },
+    "SDSControllerRestoreNodeBody": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        }
+      }
+    },
     "SDSControllerRestoreSnapshotBody": {
       "type": "object",
       "properties": {
@@ -6135,6 +6347,22 @@
         }
       },
       "description": "SetDualPrimary toggles DRBD's allow-two-primaries for a resource. It exists\nfor the live-migration hand-off in the Proxmox VE storage plugin, where the\nsource and target hypervisor both hold the disk open for a moment.\n\nThe toggle is applied at RUNTIME only (drbdadm net-options) and never written\ninto the .res file, so a reboot or `drbdadm adjust` restores single-primary\non its own."
+    },
+    "SDSControllerSetHaPreferredNodesBody": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "in order; empty removes the preference"
+        },
+        "policy": {
+          "type": "string",
+          "title": "start-only (drbd-reactor 1.9+) or always; empty = drbd-reactor's default"
+        }
+      }
     },
     "SDSControllerSetNodeAddressBody": {
       "type": "object",
@@ -9107,7 +9335,36 @@
         }
       }
     },
+    "v1MarkNodeLostResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "replicas removed"
+        }
+      }
+    },
     "v1MountResourceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1MoveReplicaResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -9285,6 +9542,11 @@
         "replicationAddress": {
           "type": "string",
           "description": "replication_address is the address DRBD uses for this node. Empty means it\nshares `address` (the historical single-network setup)."
+        },
+        "offlineSince": {
+          "type": "string",
+          "format": "int64",
+          "description": "offline_since is when the node stopped answering (Unix seconds), 0 while\nit answers. Self-healing counts from it."
         }
       }
     },
@@ -9404,6 +9666,45 @@
         }
       },
       "description": "OcfAgent is one OCF resource-agent entry to compose into an HA promoter's\nstart[] list. It renders as \"ocf:\u003cprovider\u003e:\u003cname\u003e \u003cinstance\u003e \u003ck\u003e=\u003cv\u003e ...\"."
+    },
+    "v1PlanRebalanceRequest": {
+      "type": "object",
+      "properties": {
+        "apply": {
+          "type": "boolean",
+          "title": "run the plan (one move at a time); otherwise only propose it"
+        },
+        "maxMoves": {
+          "type": "integer",
+          "format": "int64",
+          "title": "0 = 10"
+        }
+      }
+    },
+    "v1PlanRebalanceResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "moves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RebalanceMove"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "what was left out, and why"
+        }
+      }
     },
     "v1PoolInfo": {
       "type": "object",
@@ -9570,6 +9871,24 @@
         }
       },
       "description": "QuorumInfo is the vote arithmetic behind \"will this resource survive?\"."
+    },
+    "v1RebalanceMove": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "sizeGb": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
     },
     "v1RegisterNodeRequest": {
       "type": "object",
@@ -10120,6 +10439,23 @@
         }
       }
     },
+    "v1RestoreNodeResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1RestoreSnapshotResponse": {
       "type": "object",
       "properties": {
@@ -10248,6 +10584,17 @@
       }
     },
     "v1SetDualPrimaryResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetHaPreferredNodesResponse": {
       "type": "object",
       "properties": {
         "success": {

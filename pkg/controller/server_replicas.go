@@ -92,7 +92,8 @@ func (s *Server) AddDR(ctx context.Context, req *sdspb.AddDRRequest) (*sdspb.Add
 
 // AddReplica adds a diskful local replica to a running resource.
 func (s *Server) AddReplica(ctx context.Context, req *sdspb.AddReplicaRequest) (*sdspb.AddReplicaResponse, error) {
-	if err := s.resources.AddReplicaOptions(ctx, req.Resource, req.Node, req.IgnoreFreeSpace); err != nil {
+	if err := s.resources.AddReplicaWith(ctx, req.Resource, req.Node,
+		AddReplicaOpts{IgnoreFreeSpace: req.IgnoreFreeSpace, AllowUnreachable: req.AllowUnreachable}); err != nil {
 		return &sdspb.AddReplicaResponse{Success: false, Message: err.Error()}, nil
 	}
 	return &sdspb.AddReplicaResponse{

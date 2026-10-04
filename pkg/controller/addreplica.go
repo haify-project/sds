@@ -32,6 +32,21 @@ func (rm *ResourceManager) AddReplica(ctx context.Context, resource, node string
 // the node's pool has less free space than the volume, for a pool known to
 // hold a sparse volume or about to be grown.
 func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node string, ignoreFreeSpace bool) error {
+	return rm.AddReplicaWith(ctx, resource, node, AddReplicaOpts{IgnoreFreeSpace: ignoreFreeSpace})
+}
+
+// AddReplicaOpts are AddReplica's options.
+type AddReplicaOpts struct {
+	// IgnoreFreeSpace adds the replica although the node's pool looks short.
+	IgnoreFreeSpace bool
+	// AllowUnreachable adds the replica while a minority of the resource's
+	// members do not answer (addreplica_unreachable.go).
+	AllowUnreachable bool
+}
+
+// AddReplicaWith is AddReplica with options.
+func (rm *ResourceManager) AddReplicaWith(ctx context.Context, resource, node string, opts AddReplicaOpts) error {
+	ignoreFreeSpace := opts.IgnoreFreeSpace
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
 	}
@@ -96,14 +111,22 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 		return err
 	}
 
+	tiebreakers := splitCSV(dbRes.DisklessNodes)
+	away, err := rm.unreachableMembers(ctx, dbRes, primaries, tiebreakers, opts.AllowUnreachable)
+	if err != nil {
+		return err
+	}
+
 	newAddr := rm.controller.ResolveHost(node)
 	// A replica takes part in failover, so it gets the resource's promoters
 	// once it is in; check now that it could run them, while refusing is free.
 	if err := rm.checkPromoterPrereqs(ctx, resource, []string{newAddr}); err != nil {
 		return err
 	}
-	primaryAddrs := make([]string, 0, len(primaries))
-	for _, n := range primaries {
+	// Commands go to the members that answer; the config still names them all.
+	reachablePrimaries := withoutAll(primaries, away)
+	primaryAddrs := make([]string, 0, len(reachablePrimaries))
+	for _, n := range reachablePrimaries {
 		primaryAddrs = append(primaryAddrs, rm.controller.ResolveHost(n))
 	}
 
@@ -123,10 +146,7 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 		zap.Strings("existing", primaries),
 		zap.Bool("wan", dbRes.WANMode))
 
-	hosts, err := rm.resourceHosts(ctx, resource)
-	if err != nil {
-		return err
-	}
+	hosts := primaryAddrs
 	if len(hosts) == 0 {
 		return fmt.Errorf("resource %q has no reachable hosts", resource)
 	}
@@ -149,7 +169,7 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 	}
 	// A diskful peer needs a bitmap slot on every existing replica, and slots are
 	// allocated once, at create-md time. Check before provisioning anything.
-	if err := rm.assertBitmapSlotFree(ctx, primaryAddrs, primaries, resource); err != nil {
+	if err := rm.assertBitmapSlotFree(ctx, primaryAddrs, reachablePrimaries, resource); err != nil {
 		return err
 	}
 
@@ -169,9 +189,8 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 		return err
 	}
 
-	tiebreakers := splitCSV(dbRes.DisklessNodes)
 	lanHosts := append([]string{}, primaryAddrs...)
-	for _, n := range tiebreakers {
+	for _, n := range withoutAll(tiebreakers, away) {
 		lanHosts = append(lanHosts, rm.controller.ResolveHost(n))
 	}
 	allHosts := append(append([]string{}, lanHosts...), newAddr)
@@ -283,6 +302,11 @@ func (rm *ResourceManager) AddReplicaOptions(ctx context.Context, resource, node
 		updated = append(updated, dbRes.DRNode)
 	}
 	dbRes.Nodes = strings.Join(updated, ",")
+	// The members that were away get this config when they answer again
+	// (self_heal_return.go).
+	if len(away) > 0 {
+		dbRes.StaleConfigNodes = strings.Join(append(splitCSV(dbRes.StaleConfigNodes), away...), ",")
+	}
 	if err := rm.controller.db.SaveResource(ctx, dbRes); err != nil {
 		return fmt.Errorf("record the new replica: %w", err)
 	}

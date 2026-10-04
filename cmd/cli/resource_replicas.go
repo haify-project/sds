@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
 func resourceRemoveReplica() *cobra.Command {
@@ -80,7 +82,7 @@ gone; add a replica afterwards.
 
 func resourceAddReplica() *cobra.Command {
 	var node string
-	var ignoreFreeSpace bool
+	var ignoreFreeSpace, allowUnreachable bool
 
 	cmd := &cobra.Command{
 		Use:   "add-replica <resource> --node <node>",
@@ -112,11 +114,8 @@ replication the moment it was promoted.
 			}
 			defer closeClient(sdsClient)
 
-			add := sdsClient.AddReplica
-			if ignoreFreeSpace {
-				add = sdsClient.AddReplicaIgnoringFreeSpace
-			}
-			if err := add(ctx, resource, node); err != nil {
+			if err := sdsClient.AddReplicaWith(ctx, &sdspb.AddReplicaRequest{Resource: resource, Node: node,
+				IgnoreFreeSpace: ignoreFreeSpace, AllowUnreachable: allowUnreachable}); err != nil {
 				return fmt.Errorf("failed to add replica: %w", err)
 			}
 			fmt.Printf("Replica added on %q. Initial sync runs in the background:\n", node)
@@ -127,6 +126,8 @@ replication the moment it was promoted.
 	cmd.Flags().StringVar(&node, "node", "", "Node that will hold the new replica")
 	cmd.Flags().BoolVar(&ignoreFreeSpace, "ignore-free-space", false,
 		"Add it although the node's pool has less free space than the volume (the sync writes all of it; a full pool drops the new disk)")
+	cmd.Flags().BoolVar(&allowUnreachable, "allow-unreachable", false,
+		"Add it while a minority of the members do not answer; they get the new config when they are back")
 	return cmd
 }
 

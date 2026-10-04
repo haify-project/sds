@@ -14,6 +14,12 @@ func (nm *NodeManager) setMaintenance(ctx context.Context, address string, on bo
 	if on {
 		state = NodeStateMaintenance
 	}
+	return nm.SetNodeState(ctx, address, state)
+}
+
+// SetNodeState sets a node's state by its address, in the registry and the
+// database alike; maintenance and eviction (self_heal_evict.go) use it.
+func (nm *NodeManager) SetNodeState(ctx context.Context, address string, state NodeState) error {
 
 	nm.mu.Lock()
 	n := nm.nodes[address]

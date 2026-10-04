@@ -34,6 +34,7 @@ var DefaultApprovalMethods = []string{
 	"RollbackResourceSnapshot", "DeleteResourceSnapshot",
 	// What protects it.
 	"DeleteSnapshotSchedule", "UnfreezeSnapshotSchedule", "AddBackupTarget", "DeleteBackupTarget", "DeleteBackup", "DeleteBackupSchedule",
+	"MarkNodeLost", "RestoreNode",
 	// Who may do any of it.
 	"CreateRbacUser", "DeleteRbacUser", "SetRbacUserRole",
 }

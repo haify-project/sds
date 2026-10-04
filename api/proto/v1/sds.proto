@@ -160,6 +160,11 @@ service SDSController {
   rpc EvictHa(EvictHaRequest) returns (EvictHaResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/ha/evict"; body: "*"; };
   }
+  // Orders where drbd-reactor starts an HA resource (preferred-nodes). A
+  // preference, not a fence; DRBD quorum is what prevents split brain.
+  rpc SetHaPreferredNodes(SetHaPreferredNodesRequest) returns (SetHaPreferredNodesResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha/preferred-nodes"; body: "*"; };
+  }
   rpc SetTiebreaker(SetTiebreakerRequest) returns (SetTiebreakerResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/ha/tiebreaker"; body: "*"; };
   }
@@ -489,6 +494,24 @@ service SDSController {
   }
   rpc RestoreLvmSnapshot(RestoreLvmSnapshotRequest) returns (RestoreLvmSnapshotResponse) {
     option (google.api.http) = { post: "/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}/restore"; body: "*"; };
+  }
+  // Self-healing (see docs/user-guide.md "Self-healing"). MoveReplica adds
+  // the new replica and removes the old one once the new one is UpToDate.
+  // PlanRebalance proposes moves from the fullest node; apply runs them one
+  // at a time. MarkNodeLost removes the replicas of a node that will not
+  // return; RestoreNode cleans what a returned node holds of resources it is
+  // no longer part of and lets it take replicas again.
+  rpc MoveReplica(MoveReplicaRequest) returns (MoveReplicaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/move-replica"; body: "*"; };
+  }
+  rpc PlanRebalance(PlanRebalanceRequest) returns (PlanRebalanceResponse) {
+    option (google.api.http) = { post: "/v1/rebalance"; body: "*"; };
+  }
+  rpc MarkNodeLost(MarkNodeLostRequest) returns (MarkNodeLostResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/lost"; body: "*"; };
+  }
+  rpc RestoreNode(RestoreNodeRequest) returns (RestoreNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/restore"; body: "*"; };
   }
   rpc DrainNode(DrainNodeRequest) returns (DrainNodeResponse) {
     option (google.api.http) = { post: "/v1/nodes/{name}/drain"; };
@@ -1035,6 +1058,9 @@ message NodeInfo {
   // replication_address is the address DRBD uses for this node. Empty means it
   // shares `address` (the historical single-network setup).
   string replication_address = 8;
+  // offline_since is when the node stopped answering (Unix seconds), 0 while
+  // it answers. Self-healing counts from it.
+  int64 offline_since = 9;
 }
 
 // Health check messages
@@ -1307,6 +1333,59 @@ message DeleteResourceSnapshotRequest {
 message DeleteResourceSnapshotResponse {
   bool success = 1;
   string message = 2;
+}
+
+message SetHaPreferredNodesRequest {
+  string resource = 1;
+  repeated string nodes = 2;  // in order; empty removes the preference
+  string policy = 3;          // start-only (drbd-reactor 1.9+) or always; empty = drbd-reactor's default
+}
+message SetHaPreferredNodesResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message MoveReplicaRequest {
+  string resource = 1;
+  string from = 2;
+  string to = 3;
+}
+message MoveReplicaResponse {
+  bool success = 1;
+  string message = 2;
+}
+message RebalanceMove {
+  string resource = 1;
+  string from = 2;
+  string to = 3;
+  uint64 size_gb = 4;
+}
+message PlanRebalanceRequest {
+  bool apply = 1;         // run the plan (one move at a time); otherwise only propose it
+  uint32 max_moves = 2;   // 0 = 10
+}
+message PlanRebalanceResponse {
+  bool success = 1;
+  string message = 2;
+  repeated RebalanceMove moves = 3;
+  repeated string notes = 4;    // what was left out, and why
+}
+message MarkNodeLostRequest {
+  string node = 1;
+}
+message MarkNodeLostResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string resources = 3;  // replicas removed
+}
+message RestoreNodeRequest {
+  string node = 1;
+  bool dry_run = 2;
+}
+message RestoreNodeResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string plan = 3;
 }
 
 message RenameResourceRequest {
@@ -1611,6 +1690,9 @@ message AddReplicaRequest {
   // space than the volume, which the sync writes in full. Without it that is
   // refused: a full thin pool fails the sync's writes and drops the new disk.
   bool ignore_free_space = 3;
+  // allow_unreachable adds the replica while a minority of the resource's
+  // members do not answer; they get the new config when they are back.
+  bool allow_unreachable = 4;
 }
 
 // RemoveReplicaRequest takes a diskful replica out of a running resource. The

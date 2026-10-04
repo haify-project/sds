@@ -65,6 +65,7 @@ const (
 	SDSController_UnmountResource_FullMethodName           = "/v1.SDSController/UnmountResource"
 	SDSController_MakeHa_FullMethodName                    = "/v1.SDSController/MakeHa"
 	SDSController_EvictHa_FullMethodName                   = "/v1.SDSController/EvictHa"
+	SDSController_SetHaPreferredNodes_FullMethodName       = "/v1.SDSController/SetHaPreferredNodes"
 	SDSController_SetTiebreaker_FullMethodName             = "/v1.SDSController/SetTiebreaker"
 	SDSController_SetupReplicationTLS_FullMethodName       = "/v1.SDSController/SetupReplicationTLS"
 	SDSController_GetReplicationTLSStatus_FullMethodName   = "/v1.SDSController/GetReplicationTLSStatus"
@@ -146,6 +147,10 @@ const (
 	SDSController_DeleteLvmSnapshot_FullMethodName         = "/v1.SDSController/DeleteLvmSnapshot"
 	SDSController_ListLvmSnapshots_FullMethodName          = "/v1.SDSController/ListLvmSnapshots"
 	SDSController_RestoreLvmSnapshot_FullMethodName        = "/v1.SDSController/RestoreLvmSnapshot"
+	SDSController_MoveReplica_FullMethodName               = "/v1.SDSController/MoveReplica"
+	SDSController_PlanRebalance_FullMethodName             = "/v1.SDSController/PlanRebalance"
+	SDSController_MarkNodeLost_FullMethodName              = "/v1.SDSController/MarkNodeLost"
+	SDSController_RestoreNode_FullMethodName               = "/v1.SDSController/RestoreNode"
 	SDSController_DrainNode_FullMethodName                 = "/v1.SDSController/DrainNode"
 	SDSController_UndrainNode_FullMethodName               = "/v1.SDSController/UndrainNode"
 	SDSController_ConvertPoolToThin_FullMethodName         = "/v1.SDSController/ConvertPoolToThin"
@@ -241,6 +246,9 @@ type SDSControllerClient interface {
 	UnmountResource(ctx context.Context, in *UnmountResourceRequest, opts ...grpc.CallOption) (*UnmountResourceResponse, error)
 	MakeHa(ctx context.Context, in *MakeHaRequest, opts ...grpc.CallOption) (*MakeHaResponse, error)
 	EvictHa(ctx context.Context, in *EvictHaRequest, opts ...grpc.CallOption) (*EvictHaResponse, error)
+	// Orders where drbd-reactor starts an HA resource (preferred-nodes). A
+	// preference, not a fence; DRBD quorum is what prevents split brain.
+	SetHaPreferredNodes(ctx context.Context, in *SetHaPreferredNodesRequest, opts ...grpc.CallOption) (*SetHaPreferredNodesResponse, error)
 	SetTiebreaker(ctx context.Context, in *SetTiebreakerRequest, opts ...grpc.CallOption) (*SetTiebreakerResponse, error)
 	// Encrypted DRBD replication: prepare nodes (key, certificate from the
 	// controller's replication CA, tlshd), report their readiness, and switch a
@@ -365,6 +373,16 @@ type SDSControllerClient interface {
 	DeleteLvmSnapshot(ctx context.Context, in *DeleteLvmSnapshotRequest, opts ...grpc.CallOption) (*DeleteLvmSnapshotResponse, error)
 	ListLvmSnapshots(ctx context.Context, in *ListLvmSnapshotsRequest, opts ...grpc.CallOption) (*ListLvmSnapshotsResponse, error)
 	RestoreLvmSnapshot(ctx context.Context, in *RestoreLvmSnapshotRequest, opts ...grpc.CallOption) (*RestoreLvmSnapshotResponse, error)
+	// Self-healing (see docs/user-guide.md "Self-healing"). MoveReplica adds
+	// the new replica and removes the old one once the new one is UpToDate.
+	// PlanRebalance proposes moves from the fullest node; apply runs them one
+	// at a time. MarkNodeLost removes the replicas of a node that will not
+	// return; RestoreNode cleans what a returned node holds of resources it is
+	// no longer part of and lets it take replicas again.
+	MoveReplica(ctx context.Context, in *MoveReplicaRequest, opts ...grpc.CallOption) (*MoveReplicaResponse, error)
+	PlanRebalance(ctx context.Context, in *PlanRebalanceRequest, opts ...grpc.CallOption) (*PlanRebalanceResponse, error)
+	MarkNodeLost(ctx context.Context, in *MarkNodeLostRequest, opts ...grpc.CallOption) (*MarkNodeLostResponse, error)
+	RestoreNode(ctx context.Context, in *RestoreNodeRequest, opts ...grpc.CallOption) (*RestoreNodeResponse, error)
 	DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error)
 	UndrainNode(ctx context.Context, in *UndrainNodeRequest, opts ...grpc.CallOption) (*UndrainNodeResponse, error)
 	// ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.
@@ -930,6 +948,16 @@ func (c *sDSControllerClient) EvictHa(ctx context.Context, in *EvictHaRequest, o
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EvictHaResponse)
 	err := c.cc.Invoke(ctx, SDSController_EvictHa_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) SetHaPreferredNodes(ctx context.Context, in *SetHaPreferredNodesRequest, opts ...grpc.CallOption) (*SetHaPreferredNodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetHaPreferredNodesResponse)
+	err := c.cc.Invoke(ctx, SDSController_SetHaPreferredNodes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1746,6 +1774,46 @@ func (c *sDSControllerClient) RestoreLvmSnapshot(ctx context.Context, in *Restor
 	return out, nil
 }
 
+func (c *sDSControllerClient) MoveReplica(ctx context.Context, in *MoveReplicaRequest, opts ...grpc.CallOption) (*MoveReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MoveReplicaResponse)
+	err := c.cc.Invoke(ctx, SDSController_MoveReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) PlanRebalance(ctx context.Context, in *PlanRebalanceRequest, opts ...grpc.CallOption) (*PlanRebalanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PlanRebalanceResponse)
+	err := c.cc.Invoke(ctx, SDSController_PlanRebalance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) MarkNodeLost(ctx context.Context, in *MarkNodeLostRequest, opts ...grpc.CallOption) (*MarkNodeLostResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MarkNodeLostResponse)
+	err := c.cc.Invoke(ctx, SDSController_MarkNodeLost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RestoreNode(ctx context.Context, in *RestoreNodeRequest, opts ...grpc.CallOption) (*RestoreNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreNodeResponse)
+	err := c.cc.Invoke(ctx, SDSController_RestoreNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sDSControllerClient) DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DrainNodeResponse)
@@ -2109,6 +2177,9 @@ type SDSControllerServer interface {
 	UnmountResource(context.Context, *UnmountResourceRequest) (*UnmountResourceResponse, error)
 	MakeHa(context.Context, *MakeHaRequest) (*MakeHaResponse, error)
 	EvictHa(context.Context, *EvictHaRequest) (*EvictHaResponse, error)
+	// Orders where drbd-reactor starts an HA resource (preferred-nodes). A
+	// preference, not a fence; DRBD quorum is what prevents split brain.
+	SetHaPreferredNodes(context.Context, *SetHaPreferredNodesRequest) (*SetHaPreferredNodesResponse, error)
 	SetTiebreaker(context.Context, *SetTiebreakerRequest) (*SetTiebreakerResponse, error)
 	// Encrypted DRBD replication: prepare nodes (key, certificate from the
 	// controller's replication CA, tlshd), report their readiness, and switch a
@@ -2233,6 +2304,16 @@ type SDSControllerServer interface {
 	DeleteLvmSnapshot(context.Context, *DeleteLvmSnapshotRequest) (*DeleteLvmSnapshotResponse, error)
 	ListLvmSnapshots(context.Context, *ListLvmSnapshotsRequest) (*ListLvmSnapshotsResponse, error)
 	RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error)
+	// Self-healing (see docs/user-guide.md "Self-healing"). MoveReplica adds
+	// the new replica and removes the old one once the new one is UpToDate.
+	// PlanRebalance proposes moves from the fullest node; apply runs them one
+	// at a time. MarkNodeLost removes the replicas of a node that will not
+	// return; RestoreNode cleans what a returned node holds of resources it is
+	// no longer part of and lets it take replicas again.
+	MoveReplica(context.Context, *MoveReplicaRequest) (*MoveReplicaResponse, error)
+	PlanRebalance(context.Context, *PlanRebalanceRequest) (*PlanRebalanceResponse, error)
+	MarkNodeLost(context.Context, *MarkNodeLostRequest) (*MarkNodeLostResponse, error)
+	RestoreNode(context.Context, *RestoreNodeRequest) (*RestoreNodeResponse, error)
 	DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error)
 	UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error)
 	// ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.
@@ -2482,6 +2563,9 @@ func (UnimplementedSDSControllerServer) MakeHa(context.Context, *MakeHaRequest) 
 func (UnimplementedSDSControllerServer) EvictHa(context.Context, *EvictHaRequest) (*EvictHaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EvictHa not implemented")
 }
+func (UnimplementedSDSControllerServer) SetHaPreferredNodes(context.Context, *SetHaPreferredNodesRequest) (*SetHaPreferredNodesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetHaPreferredNodes not implemented")
+}
 func (UnimplementedSDSControllerServer) SetTiebreaker(context.Context, *SetTiebreakerRequest) (*SetTiebreakerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetTiebreaker not implemented")
 }
@@ -2724,6 +2808,18 @@ func (UnimplementedSDSControllerServer) ListLvmSnapshots(context.Context, *ListL
 }
 func (UnimplementedSDSControllerServer) RestoreLvmSnapshot(context.Context, *RestoreLvmSnapshotRequest) (*RestoreLvmSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RestoreLvmSnapshot not implemented")
+}
+func (UnimplementedSDSControllerServer) MoveReplica(context.Context, *MoveReplicaRequest) (*MoveReplicaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveReplica not implemented")
+}
+func (UnimplementedSDSControllerServer) PlanRebalance(context.Context, *PlanRebalanceRequest) (*PlanRebalanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PlanRebalance not implemented")
+}
+func (UnimplementedSDSControllerServer) MarkNodeLost(context.Context, *MarkNodeLostRequest) (*MarkNodeLostResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MarkNodeLost not implemented")
+}
+func (UnimplementedSDSControllerServer) RestoreNode(context.Context, *RestoreNodeRequest) (*RestoreNodeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RestoreNode not implemented")
 }
 func (UnimplementedSDSControllerServer) DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DrainNode not implemented")
@@ -3657,6 +3753,24 @@ func _SDSController_EvictHa_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).EvictHa(ctx, req.(*EvictHaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_SetHaPreferredNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetHaPreferredNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).SetHaPreferredNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_SetHaPreferredNodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).SetHaPreferredNodes(ctx, req.(*SetHaPreferredNodesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5119,6 +5233,78 @@ func _SDSController_RestoreLvmSnapshot_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SDSController_MoveReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveReplicaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).MoveReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_MoveReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).MoveReplica(ctx, req.(*MoveReplicaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_PlanRebalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlanRebalanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).PlanRebalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_PlanRebalance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).PlanRebalance(ctx, req.(*PlanRebalanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_MarkNodeLost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkNodeLostRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).MarkNodeLost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_MarkNodeLost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).MarkNodeLost(ctx, req.(*MarkNodeLostRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RestoreNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RestoreNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RestoreNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RestoreNode(ctx, req.(*RestoreNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SDSController_DrainNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DrainNodeRequest)
 	if err := dec(in); err != nil {
@@ -5826,6 +6012,10 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SDSController_EvictHa_Handler,
 		},
 		{
+			MethodName: "SetHaPreferredNodes",
+			Handler:    _SDSController_SetHaPreferredNodes_Handler,
+		},
+		{
 			MethodName: "SetTiebreaker",
 			Handler:    _SDSController_SetTiebreaker_Handler,
 		},
@@ -6148,6 +6338,22 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RestoreLvmSnapshot",
 			Handler:    _SDSController_RestoreLvmSnapshot_Handler,
+		},
+		{
+			MethodName: "MoveReplica",
+			Handler:    _SDSController_MoveReplica_Handler,
+		},
+		{
+			MethodName: "PlanRebalance",
+			Handler:    _SDSController_PlanRebalance_Handler,
+		},
+		{
+			MethodName: "MarkNodeLost",
+			Handler:    _SDSController_MarkNodeLost_Handler,
+		},
+		{
+			MethodName: "RestoreNode",
+			Handler:    _SDSController_RestoreNode_Handler,
 		},
 		{
 			MethodName: "DrainNode",
