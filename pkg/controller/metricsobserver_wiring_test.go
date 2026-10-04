@@ -27,8 +27,18 @@ func TestAlertOptionsCarryTheMetricsObserver(t *testing.T) {
 	opts := c.alertOptions()
 
 	require.NotNil(t, opts.Observer, "a controller with metrics must feed them from the health poll")
-	_, ok := opts.Observer.(*metricsObserver)
+	obs, ok := opts.Observer.(observers)
+	require.True(t, ok)
+	require.Len(t, obs, 1)
+	_, ok = obs[0].(*metricsObserver)
 	assert.True(t, ok, "the observer attached must be the metrics adapter")
+
+	// The write-anomaly detector reads the same poll.
+	c.config.Alert.WriteAnomaly.Enabled = true
+	obs = c.alertOptions().Observer.(observers)
+	require.Len(t, obs, 2)
+	_, ok = obs[1].(*writeAnomalyDetector)
+	assert.True(t, ok)
 }
 
 // Metrics are optional, and a controller without them must not invent an

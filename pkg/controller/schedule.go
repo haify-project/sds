@@ -197,8 +197,9 @@ func (sm *ScheduleManager) CreateSchedule(ctx context.Context, resource, cronExp
 	}
 	if old != nil {
 		// The last run is what says how long the newest snapshot stays
-		// locked; replacing the schedule must not forget it.
+		// locked, and a freeze outlives a replaced schedule too.
 		s.LastRun, s.CreatedAt = old.LastRun, old.CreatedAt
+		s.FrozenUntil, s.FrozenAt, s.FrozenReason = old.FrozenUntil, old.FrozenAt, old.FrozenReason
 	}
 	if err := sm.controller.db.SaveSnapshotSchedule(ctx, s); err != nil {
 		return fmt.Errorf("save schedule: %w", err)
@@ -349,13 +350,16 @@ func (sm *ScheduleManager) runSchedule(name string) {
 		zap.Int("nodes", len(res.Nodes)), zap.Int("volumes", len(res.Volumes)))
 
 	lock := time.Duration(s.LockDays) * 24 * time.Hour
+	frozen := !scheduleFrozenUntil(s, lockNow()).IsZero()
+	sm.snapshotResource(ctx, res, s, ts)
 	for _, node := range res.Nodes {
 		host := sm.controller.ResolveHost(node)
 		for _, vol := range res.Volumes {
-			sm.snapshotVolume(ctx, host, node, vol, ts)
-			if lock > 0 && isZFSDevice(vol.Device) {
-				sm.controller.holdLockedZFSSnapshot(ctx, host,
-					fmt.Sprintf("%s/%s@%s", vol.Pool, vol.BackingVolume, buildSnapName(vol.BackingVolume, ts)))
+			// A frozen schedule removes nothing, not even to relieve a full
+			// pool: what it froze is the history from before something
+			// started rewriting the volume.
+			if frozen {
+				continue
 			}
 			sm.pruneVolume(ctx, host, node, vol, s.Keep, lock)
 			sm.relieveThinPool(ctx, host, node, s.Resource, vol, lock)

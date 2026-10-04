@@ -115,6 +115,32 @@ func (c *SDSClient) DeleteSnapshotSchedule(ctx context.Context, name string) err
 	return nil
 }
 
+// FreezeSnapshotSchedule freezes resource's schedule for hours (0: a week)
+// and returns when the freeze ends.
+func (c *SDSClient) FreezeSnapshotSchedule(ctx context.Context, resource string, hours uint32, reason string) (string, error) {
+	resp, err := c.client.FreezeSnapshotSchedule(ctx, &sdspb.FreezeSnapshotScheduleRequest{
+		Resource: resource, Hours: hours, Reason: reason})
+	if err != nil {
+		return "", err
+	}
+	if !resp.Success {
+		return "", fmt.Errorf("%s", resp.Message)
+	}
+	return resp.FrozenUntil, nil
+}
+
+// UnfreezeSnapshotSchedule ends a freeze early.
+func (c *SDSClient) UnfreezeSnapshotSchedule(ctx context.Context, resource string) error {
+	resp, err := c.client.UnfreezeSnapshotSchedule(ctx, &sdspb.UnfreezeSnapshotScheduleRequest{Resource: resource})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Message)
+	}
+	return nil
+}
+
 // RestoreSnapshot restores a snapshot to its source volume
 // PopulateVolume copies sourceDevice (an LVM/ZFS snapshot, or another volume's
 // backing store) into an already-created, still-empty resource. It backs CSI

@@ -1,0 +1,137 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/haify-project/sds/pkg/database"
+)
+
+// Freezing a snapshot schedule.
+//
+// When a volume is being rewritten wholesale — what encryption looks like —
+// the history worth having is the snapshots from before it started, and the
+// schedule's own retention is what would delete them: the GFS policy ages
+// them out, and a thin pool filling with the rewritten blocks makes the
+// scheduler remove the oldest. A freeze stops both. A frozen schedule keeps
+// taking snapshots and removes none, and until the freeze ends every
+// scheduled snapshot of the resource is locked against deletion through sds
+// and the schedule and resource cannot be deleted (snapshot_lock.go).
+//
+// The write-anomaly detector freezes a schedule when it fires
+// (write_anomaly.go); an operator can freeze one by hand. Ending a freeze
+// early is a weakening of protection, and is on the two-person approval
+// list.
+
+// defaultFreeze is how long a freeze lasts when nobody says.
+const defaultFreeze = 7 * 24 * time.Hour
+
+// scheduleFrozenUntil is when s's freeze ends, or zero when it is not frozen.
+func scheduleFrozenUntil(s *database.SnapshotSchedule, now time.Time) time.Time {
+	if s == nil || !s.FrozenUntil.After(now) {
+		return time.Time{}
+	}
+	return s.FrozenUntil
+}
+
+// resourceFrozenUntil is when resource's schedule freeze ends, and why it
+// froze; zero when it is not frozen.
+func (c *Controller) resourceFrozenUntil(ctx context.Context, resource string) (time.Time, string) {
+	if c.db == nil || resource == "" {
+		return time.Time{}, ""
+	}
+	s, err := c.db.GetSnapshotSchedule(ctx, resource)
+	if err != nil || s == nil {
+		return time.Time{}, ""
+	}
+	return scheduleFrozenUntil(s, lockNow()), s.FrozenReason
+}
+
+// FreezeSchedule freezes resource's schedule for d (defaultFreeze when zero).
+// A freeze is only ever extended here, never shortened.
+func (sm *ScheduleManager) FreezeSchedule(ctx context.Context, resource string, d time.Duration, reason string) (time.Time, error) {
+	if sm.controller.db == nil {
+		return time.Time{}, fmt.Errorf("database not available")
+	}
+	if d <= 0 {
+		d = defaultFreeze
+	}
+	if d > time.Duration(maxSnapshotLockDays)*24*time.Hour {
+		return time.Time{}, fmt.Errorf("a freeze lasts at most %d days", maxSnapshotLockDays)
+	}
+	s, err := sm.controller.db.GetSnapshotSchedule(ctx, resource)
+	if err != nil || s == nil {
+		return time.Time{}, fmt.Errorf("resource %s has no snapshot schedule to freeze", resource)
+	}
+	now := lockNow()
+	until := now.Add(d)
+	if s.FrozenUntil.After(until) {
+		until = s.FrozenUntil
+	}
+	if s.FrozenUntil.Before(now) {
+		s.FrozenAt = now
+	}
+	s.FrozenUntil, s.FrozenReason = until, reason
+	if err := sm.controller.db.SaveSnapshotSchedule(ctx, s); err != nil {
+		return time.Time{}, fmt.Errorf("save schedule: %w", err)
+	}
+	sm.controller.logger.Warn("Snapshot schedule frozen", zap.String("resource", resource),
+		zap.Time("until", until), zap.String("reason", reason))
+	return until, nil
+}
+
+// UnfreezeSchedule ends resource's freeze now.
+func (sm *ScheduleManager) UnfreezeSchedule(ctx context.Context, resource string) error {
+	if sm.controller.db == nil {
+		return fmt.Errorf("database not available")
+	}
+	s, err := sm.controller.db.GetSnapshotSchedule(ctx, resource)
+	if err != nil || s == nil {
+		return fmt.Errorf("resource %s has no snapshot schedule", resource)
+	}
+	if scheduleFrozenUntil(s, lockNow()).IsZero() {
+		return fmt.Errorf("the snapshot schedule of %s is not frozen", resource)
+	}
+	s.FrozenUntil, s.FrozenReason = time.Time{}, ""
+	if err := sm.controller.db.SaveSnapshotSchedule(ctx, s); err != nil {
+		return fmt.Errorf("save schedule: %w", err)
+	}
+	sm.controller.logger.Warn("Snapshot schedule unfrozen", zap.String("resource", resource))
+	return nil
+}
+
+// snapshotResource snapshots every volume of res on every diskful node at ts,
+// holding the ZFS ones when the schedule locks.
+func (sm *ScheduleManager) snapshotResource(ctx context.Context, res *ResourceInfo, s *database.SnapshotSchedule, ts time.Time) {
+	for _, node := range res.Nodes {
+		host := sm.controller.ResolveHost(node)
+		for _, vol := range res.Volumes {
+			sm.snapshotVolume(ctx, host, node, vol, ts)
+			if (s.LockDays > 0 || !scheduleFrozenUntil(s, lockNow()).IsZero()) && isZFSDevice(vol.Device) {
+				sm.controller.holdLockedZFSSnapshot(ctx, host,
+					fmt.Sprintf("%s/%s@%s", vol.Pool, vol.BackingVolume, buildSnapName(vol.BackingVolume, ts)))
+			}
+		}
+	}
+}
+
+// SnapshotNow takes one scheduled snapshot of resource immediately, outside
+// its cron, and records nothing else: no pruning, no last-run update.
+func (sm *ScheduleManager) SnapshotNow(ctx context.Context, resource string) error {
+	if sm.controller.db == nil {
+		return fmt.Errorf("database not available")
+	}
+	s, err := sm.controller.db.GetSnapshotSchedule(ctx, resource)
+	if err != nil || s == nil {
+		return fmt.Errorf("resource %s has no snapshot schedule", resource)
+	}
+	res, err := sm.controller.resources.GetResource(ctx, resource)
+	if err != nil {
+		return err
+	}
+	sm.snapshotResource(ctx, res, s, time.Now().UTC())
+	return nil
+}

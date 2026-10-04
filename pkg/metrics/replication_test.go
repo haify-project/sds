@@ -127,3 +127,19 @@ func TestSetReplicationClampsResyncRatio(t *testing.T) {
 	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-a"}))
 	assert.Equal(t, 0.0, requireGauge(t, m, "sds_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-b"}))
 }
+
+// Only the node whose status was read reports what it wrote; a peer has no
+// series rather than a zero.
+func TestSetReplicationExportsWrittenBytes(t *testing.T) {
+	m := getTestMetrics(t)
+	m.SetReplication(ReplicationSnapshot{
+		Resources: []string{"data"},
+		Replicas: []ReplicaState{
+			{Resource: "data", Node: "node-a", WrittenBytes: ptr(uint64(4096))},
+			{Resource: "data", Node: "node-b"},
+		},
+	})
+	assert.Equal(t, 4096.0, requireGauge(t, m, "sds_drbd_written_bytes", labels{"resource": "data", "node": "node-a"}))
+	_, ok := gaugeValue(t, m, "sds_drbd_written_bytes", labels{"resource": "data", "node": "node-b"})
+	assert.False(t, ok)
+}

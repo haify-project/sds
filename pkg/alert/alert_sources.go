@@ -53,6 +53,10 @@ type NodeStateInfo struct {
 	// whose status was read. On a connected, Established replica it is non-zero
 	// only after an online verify found blocks that disagree.
 	OutOfSyncKiB uint64
+	// WrittenKiB is what DRBD wrote to this node's backing disks since the
+	// resource came up there, or nil when not reported (peers, text parse).
+	// Carried for Observer: it is what the write-anomaly detector reads.
+	WrittenKiB *uint64
 }
 
 // connected reports whether this replica's link is usable, which is the

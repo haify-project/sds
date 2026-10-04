@@ -125,8 +125,11 @@ func (s *Server) ListSnapshotSchedules(ctx context.Context, req *sdspb.ListSnaps
 			Keep:     gfsToProto(sc.Keep),
 			LockDays: uint32(sc.LockDays),
 		}
-		if until := scheduleLockedUntil(sc, now); !until.IsZero() {
+		if until := scheduleLockedUntil(sc, lockNow()); !until.IsZero() {
 			info.LockedUntil = until.UTC().Format(time.RFC3339)
+		}
+		if until := scheduleFrozenUntil(sc, lockNow()); !until.IsZero() {
+			info.FrozenUntil, info.FrozenReason = until.UTC().Format(time.RFC3339), sc.FrozenReason
 		}
 		if !sc.LastRun.IsZero() {
 			info.LastRun = sc.LastRun.UTC().Format(time.RFC3339)
@@ -153,6 +156,30 @@ func (s *Server) DeleteSnapshotSchedule(ctx context.Context, req *sdspb.DeleteSn
 		Success: true,
 		Message: fmt.Sprintf("Snapshot schedule %q deleted", req.Name),
 	}, nil
+}
+
+// FreezeSnapshotSchedule freezes a resource's schedule (snapshot_freeze.go).
+func (s *Server) FreezeSnapshotSchedule(ctx context.Context, req *sdspb.FreezeSnapshotScheduleRequest) (*sdspb.FreezeSnapshotScheduleResponse, error) {
+	reason := req.Reason
+	if reason == "" {
+		reason = "frozen by hand"
+	}
+	until, err := s.ctrl.schedules.FreezeSchedule(ctx, req.Resource, time.Duration(req.Hours)*time.Hour, reason)
+	if err != nil {
+		return &sdspb.FreezeSnapshotScheduleResponse{Success: false, Message: err.Error()}, nil
+	}
+	at := until.UTC().Format(time.RFC3339)
+	return &sdspb.FreezeSnapshotScheduleResponse{Success: true, FrozenUntil: at,
+		Message: fmt.Sprintf("snapshot schedule of %s frozen until %s", req.Resource, at)}, nil
+}
+
+// UnfreezeSnapshotSchedule ends a freeze early.
+func (s *Server) UnfreezeSnapshotSchedule(ctx context.Context, req *sdspb.UnfreezeSnapshotScheduleRequest) (*sdspb.UnfreezeSnapshotScheduleResponse, error) {
+	if err := s.ctrl.schedules.UnfreezeSchedule(ctx, req.Resource); err != nil {
+		return &sdspb.UnfreezeSnapshotScheduleResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &sdspb.UnfreezeSnapshotScheduleResponse{Success: true,
+		Message: fmt.Sprintf("snapshot schedule of %s unfrozen", req.Resource)}, nil
 }
 
 func gfsFromProto(p *sdspb.GFSRetention) database.GFSPolicy {

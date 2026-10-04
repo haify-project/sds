@@ -102,6 +102,10 @@ func (c *Controller) assertSnapshotUnlocked(ctx context.Context, name string) er
 		return fmt.Errorf("snapshot %s is locked by the snapshot schedule of %s until %s and cannot be deleted before then",
 			name, resource, until.UTC().Format(time.RFC3339))
 	}
+	if until, reason := c.resourceFrozenUntil(ctx, resource); !until.IsZero() {
+		return fmt.Errorf("the snapshot schedule of %s is frozen until %s (%s): none of its snapshots can be deleted before then",
+			resource, until.UTC().Format(time.RFC3339), reason)
+	}
 	return nil
 }
 
@@ -120,15 +124,16 @@ func (c *Controller) resourceSnapshotsLockedUntil(ctx context.Context, resource 
 }
 
 // scheduleLockedUntil is when the newest snapshot s can have taken stops being
-// locked, or zero when that has passed.
+// locked — by its lock, or by a freeze — or zero when that has passed.
 func scheduleLockedUntil(s *database.SnapshotSchedule, now time.Time) time.Time {
+	until := scheduleFrozenUntil(s, now)
 	if s.LockDays <= 0 || s.LastRun.IsZero() {
-		return time.Time{}
-	}
-	if until := s.LastRun.Add(time.Duration(s.LockDays) * 24 * time.Hour); until.After(now) {
 		return until
 	}
-	return time.Time{}
+	if l := s.LastRun.Add(time.Duration(s.LockDays) * 24 * time.Hour); l.After(now) && l.After(until) {
+		return l
+	}
+	return until
 }
 
 // assertResourceUnlocked refuses an operation that would take a resource's

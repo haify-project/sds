@@ -4436,6 +4436,83 @@
         ]
       }
     },
+    "/v1/snapshot-schedules/{resource}/freeze": {
+      "post": {
+        "summary": "Freezing a schedule keeps it snapshotting but stops all pruning, and locks\nevery scheduled snapshot of the resource until the freeze ends. The\nwrite-anomaly detector freezes one when it fires. A freeze is only ever\nextended by Freeze; Unfreeze ends it early.",
+        "operationId": "SDSController_FreezeSnapshotSchedule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1FreezeSnapshotScheduleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerFreezeSnapshotScheduleBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/snapshot-schedules/{resource}/unfreeze": {
+      "post": {
+        "operationId": "SDSController_UnfreezeSnapshotSchedule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UnfreezeSnapshotScheduleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SDSControllerUnfreezeSnapshotScheduleBody"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/volumes/{volume_1}/snapshots": {
       "get": {
         "operationId": "SDSController_ListSnapshots2",
@@ -5657,6 +5734,19 @@
     "SDSControllerEvictHaBody": {
       "type": "object"
     },
+    "SDSControllerFreezeSnapshotScheduleBody": {
+      "type": "object",
+      "properties": {
+        "hours": {
+          "type": "integer",
+          "format": "int64",
+          "title": "0 = 168 (a week)"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
     "SDSControllerImportBackupsBody": {
       "type": "object",
       "properties": {
@@ -5971,6 +6061,9 @@
       }
     },
     "SDSControllerTestNotifyChannelBody": {
+      "type": "object"
+    },
+    "SDSControllerUnfreezeSnapshotScheduleBody": {
       "type": "object"
     },
     "SDSControllerUnmountResourceBody": {
@@ -7654,6 +7747,20 @@
           "type": "boolean"
         },
         "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1FreezeSnapshotScheduleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "frozenUntil": {
           "type": "string"
         }
       }
@@ -10112,6 +10219,13 @@
         "lockedUntil": {
           "type": "string",
           "description": "locked_until (RFC3339) is when the newest snapshot it took stops being\nlocked; until then the schedule and its resource cannot be deleted."
+        },
+        "frozenUntil": {
+          "type": "string",
+          "description": "frozen_until (RFC3339) is when a freeze ends; empty when not frozen."
+        },
+        "frozenReason": {
+          "type": "string"
         }
       }
     },
@@ -10161,6 +10275,17 @@
       }
     },
     "v1UndrainNodeResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UnfreezeSnapshotScheduleResponse": {
       "type": "object",
       "properties": {
         "success": {

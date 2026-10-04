@@ -21,6 +21,7 @@ type healthSeries struct {
 	faultDomainRisk *seriesSet
 	drbdOutOfSync   *seriesSet
 	drbdTLS         *seriesSet
+	drbdWritten     *seriesSet
 }
 
 func gauge(auto promauto.Factory, subsystem, name, help string, labels ...string) *seriesSet {
@@ -47,6 +48,8 @@ func (m *Metrics) registerHealth(auto promauto.Factory) {
 			"Data DRBD has marked as differing between this replica and the node whose status was read", "resource", "node"),
 		drbdTLS: gauge(auto, drbdSubsystem, "connection_tls",
 			"1 when the connection to this peer runs over TLS, 0 when it does not", "resource", "node"),
+		drbdWritten: gauge(auto, drbdSubsystem, "written_bytes",
+			"Bytes DRBD wrote to this node's backing disk since the resource came up there; take rate() of it", "resource", "node"),
 	}
 }
 

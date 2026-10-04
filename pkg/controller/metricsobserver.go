@@ -122,6 +122,7 @@ func (o *metricsObserver) observeResources(res alert.ResourceObservation) {
 				Quorum:           state.Quorum,
 				OutOfSyncBytes:   state.OutOfSyncKiB * 1024,
 				TLS:              peerTLS(state),
+				WrittenBytes:     kibToBytes(state.WrittenKiB),
 			})
 		}
 	}
@@ -261,4 +262,12 @@ func (o *metricsObserver) baseContext() context.Context {
 		return o.ctx
 	}
 	return context.Background()
+}
+
+func kibToBytes(kib *uint64) *uint64 {
+	if kib == nil {
+		return nil
+	}
+	b := *kib * 1024
+	return &b
 }

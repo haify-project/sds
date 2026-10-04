@@ -121,6 +121,11 @@ const (
 	// clock forward to end snapshot and backup locks early looks like. The
 	// locks keep using the counted time (pkg/controller/lock_clock.go).
 	TypeClockJumped Type = "controller.clock_jumped"
+	// TypeResourceWriteAnomaly fires when a resource is written many times
+	// faster than it usually is at that hour of the week — a volume being
+	// rewritten wholesale, which is what encryption by ransomware looks like.
+	// Firing it freezes the resource's snapshot schedule.
+	TypeResourceWriteAnomaly Type = "resource.write_anomaly"
 
 	// TypeBackupFailed fires when a scheduled backup did not complete, and
 	// resolves on the schedule's next completed run. A schedule that keeps

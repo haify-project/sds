@@ -41,8 +41,17 @@ func (c *Controller) alertOptions() alert.Options {
 	// SSH round trips to every node while letting the alert and the panel
 	// disagree about the same instant — the disagreement an operator notices
 	// first and trusts least.
+	var obs observers
 	if c.metrics != nil {
-		opts.Observer = newMetricsObserver(c)
+		obs = append(obs, newMetricsObserver(c))
+	}
+	// The write-anomaly detector reads the same poll for the DRBD write
+	// counters (write_anomaly.go).
+	if c.config.Alert.WriteAnomaly.Enabled {
+		obs = append(obs, newWriteAnomalyDetector(c))
+	}
+	if len(obs) > 0 {
+		opts.Observer = obs
 	}
 	return opts
 }

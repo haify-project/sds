@@ -86,6 +86,8 @@ const (
 	SDSController_CreateSnapshotSchedule_FullMethodName    = "/v1.SDSController/CreateSnapshotSchedule"
 	SDSController_ListSnapshotSchedules_FullMethodName     = "/v1.SDSController/ListSnapshotSchedules"
 	SDSController_DeleteSnapshotSchedule_FullMethodName    = "/v1.SDSController/DeleteSnapshotSchedule"
+	SDSController_FreezeSnapshotSchedule_FullMethodName    = "/v1.SDSController/FreezeSnapshotSchedule"
+	SDSController_UnfreezeSnapshotSchedule_FullMethodName  = "/v1.SDSController/UnfreezeSnapshotSchedule"
 	SDSController_AddBackupTarget_FullMethodName           = "/v1.SDSController/AddBackupTarget"
 	SDSController_ListBackupTargets_FullMethodName         = "/v1.SDSController/ListBackupTargets"
 	SDSController_DeleteBackupTarget_FullMethodName        = "/v1.SDSController/DeleteBackupTarget"
@@ -267,6 +269,12 @@ type SDSControllerClient interface {
 	CreateSnapshotSchedule(ctx context.Context, in *CreateSnapshotScheduleRequest, opts ...grpc.CallOption) (*CreateSnapshotScheduleResponse, error)
 	ListSnapshotSchedules(ctx context.Context, in *ListSnapshotSchedulesRequest, opts ...grpc.CallOption) (*ListSnapshotSchedulesResponse, error)
 	DeleteSnapshotSchedule(ctx context.Context, in *DeleteSnapshotScheduleRequest, opts ...grpc.CallOption) (*DeleteSnapshotScheduleResponse, error)
+	// Freezing a schedule keeps it snapshotting but stops all pruning, and locks
+	// every scheduled snapshot of the resource until the freeze ends. The
+	// write-anomaly detector freezes one when it fires. A freeze is only ever
+	// extended by Freeze; Unfreeze ends it early.
+	FreezeSnapshotSchedule(ctx context.Context, in *FreezeSnapshotScheduleRequest, opts ...grpc.CallOption) (*FreezeSnapshotScheduleResponse, error)
+	UnfreezeSnapshotSchedule(ctx context.Context, in *UnfreezeSnapshotScheduleRequest, opts ...grpc.CallOption) (*UnfreezeSnapshotScheduleResponse, error)
 	// Backup operations: shipping point-in-time copies OFF the cluster to an
 	// S3-compatible object store, an SMB share or a WebDAV endpoint.
 	//
@@ -1115,6 +1123,26 @@ func (c *sDSControllerClient) DeleteSnapshotSchedule(ctx context.Context, in *De
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteSnapshotScheduleResponse)
 	err := c.cc.Invoke(ctx, SDSController_DeleteSnapshotSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) FreezeSnapshotSchedule(ctx context.Context, in *FreezeSnapshotScheduleRequest, opts ...grpc.CallOption) (*FreezeSnapshotScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FreezeSnapshotScheduleResponse)
+	err := c.cc.Invoke(ctx, SDSController_FreezeSnapshotSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) UnfreezeSnapshotSchedule(ctx context.Context, in *UnfreezeSnapshotScheduleRequest, opts ...grpc.CallOption) (*UnfreezeSnapshotScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnfreezeSnapshotScheduleResponse)
+	err := c.cc.Invoke(ctx, SDSController_UnfreezeSnapshotSchedule_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2047,6 +2075,12 @@ type SDSControllerServer interface {
 	CreateSnapshotSchedule(context.Context, *CreateSnapshotScheduleRequest) (*CreateSnapshotScheduleResponse, error)
 	ListSnapshotSchedules(context.Context, *ListSnapshotSchedulesRequest) (*ListSnapshotSchedulesResponse, error)
 	DeleteSnapshotSchedule(context.Context, *DeleteSnapshotScheduleRequest) (*DeleteSnapshotScheduleResponse, error)
+	// Freezing a schedule keeps it snapshotting but stops all pruning, and locks
+	// every scheduled snapshot of the resource until the freeze ends. The
+	// write-anomaly detector freezes one when it fires. A freeze is only ever
+	// extended by Freeze; Unfreeze ends it early.
+	FreezeSnapshotSchedule(context.Context, *FreezeSnapshotScheduleRequest) (*FreezeSnapshotScheduleResponse, error)
+	UnfreezeSnapshotSchedule(context.Context, *UnfreezeSnapshotScheduleRequest) (*UnfreezeSnapshotScheduleResponse, error)
 	// Backup operations: shipping point-in-time copies OFF the cluster to an
 	// S3-compatible object store, an SMB share or a WebDAV endpoint.
 	//
@@ -2431,6 +2465,12 @@ func (UnimplementedSDSControllerServer) ListSnapshotSchedules(context.Context, *
 }
 func (UnimplementedSDSControllerServer) DeleteSnapshotSchedule(context.Context, *DeleteSnapshotScheduleRequest) (*DeleteSnapshotScheduleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteSnapshotSchedule not implemented")
+}
+func (UnimplementedSDSControllerServer) FreezeSnapshotSchedule(context.Context, *FreezeSnapshotScheduleRequest) (*FreezeSnapshotScheduleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FreezeSnapshotSchedule not implemented")
+}
+func (UnimplementedSDSControllerServer) UnfreezeSnapshotSchedule(context.Context, *UnfreezeSnapshotScheduleRequest) (*UnfreezeSnapshotScheduleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnfreezeSnapshotSchedule not implemented")
 }
 func (UnimplementedSDSControllerServer) AddBackupTarget(context.Context, *AddBackupTargetRequest) (*AddBackupTargetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddBackupTarget not implemented")
@@ -3901,6 +3941,42 @@ func _SDSController_DeleteSnapshotSchedule_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).DeleteSnapshotSchedule(ctx, req.(*DeleteSnapshotScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_FreezeSnapshotSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FreezeSnapshotScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).FreezeSnapshotSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_FreezeSnapshotSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).FreezeSnapshotSchedule(ctx, req.(*FreezeSnapshotScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_UnfreezeSnapshotSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnfreezeSnapshotScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).UnfreezeSnapshotSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_UnfreezeSnapshotSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).UnfreezeSnapshotSchedule(ctx, req.(*UnfreezeSnapshotScheduleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5648,6 +5724,14 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteSnapshotSchedule",
 			Handler:    _SDSController_DeleteSnapshotSchedule_Handler,
+		},
+		{
+			MethodName: "FreezeSnapshotSchedule",
+			Handler:    _SDSController_FreezeSnapshotSchedule_Handler,
+		},
+		{
+			MethodName: "UnfreezeSnapshotSchedule",
+			Handler:    _SDSController_UnfreezeSnapshotSchedule_Handler,
 		},
 		{
 			MethodName: "AddBackupTarget",

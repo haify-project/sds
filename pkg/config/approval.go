@@ -32,7 +32,7 @@ var DefaultApprovalMethods = []string{
 	"DeleteSnapshot", "DeleteLvmSnapshot", "DeleteZFSSnapshot",
 	"RestoreSnapshot", "RestoreLvmSnapshot", "RestoreZFSSnapshot", "RestoreBackup",
 	// What protects it.
-	"DeleteSnapshotSchedule", "AddBackupTarget", "DeleteBackupTarget", "DeleteBackup", "DeleteBackupSchedule",
+	"DeleteSnapshotSchedule", "UnfreezeSnapshotSchedule", "AddBackupTarget", "DeleteBackupTarget", "DeleteBackup", "DeleteBackupSchedule",
 	// Who may do any of it.
 	"CreateRbacUser", "DeleteRbacUser", "SetRbacUserRole",
 }
