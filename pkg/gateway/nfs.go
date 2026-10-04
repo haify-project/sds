@@ -17,6 +17,11 @@ import (
 // NFSManager handles NFS gateway operations
 type NFSManager struct {
 	*Manager
+	// projectQuota is set when the export filesystem has ext4's project
+	// quota feature: it is then mounted with prjquota, which directory
+	// quotas need (pkg/controller/nfs_quota.go). An older filesystem without
+	// the feature must not be mounted with it, or the mount fails.
+	projectQuota bool
 }
 
 // NewNFSManager creates a new NFS gateway manager
@@ -105,6 +110,10 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 		}, err
 	}
 
+	if len(resInfo.Nodes) > 0 {
+		n.projectQuota = n.deployment.Exec(ctx, resInfo.Nodes[:1],
+			"sudo tune2fs -l "+payloadDevice(payload, drbdDevice)+" 2>/dev/null | grep -qw project") == nil
+	}
 	config, err := n.generateNFSGatewayConfig(req, serviceIP, drbdDevice, resInfo.Volumes)
 	if err != nil {
 		return &v1.CreateNFSGatewayResponse{
@@ -203,7 +212,7 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
 
       start = [
         "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
-        "ocf:heartbeat:Filesystem fs_export device={{ .ExportDevice }} directory={{ .ExportPath }} fstype={{ .FSType }} run_fsck=no",
+        "ocf:heartbeat:Filesystem fs_export device={{ .ExportDevice }} directory={{ .ExportPath }} fstype={{ .FSType }}{{ if .ProjectQuota }} options=prjquota{{ end }} run_fsck=no",
         "ocf:heartbeat:nfsserver nfsserver nfs_ip={{ .IPAddress }} nfs_shared_infodir={{ .NFSInfoDir }} nfs_server_scope={{ .IPAddress }}",
 {{ range $idx, $client := .AllowedClients }}
         "ocf:heartbeat:exportfs export_{{ $idx }} directory={{ $.ExportPath }} fsid={{ $.FSID }} clientspec={{ $client }} options={{ $.Options }}",
@@ -275,6 +284,7 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
 		FSID               string
 		AllowedClients     []string
 		Options            string
+		ProjectQuota       bool
 	}{
 		Resource:  req.Resource,
 		ServiceIP: req.ServiceIp,
@@ -294,6 +304,7 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
 		FSID:               fsid,
 		AllowedClients:     clientSpecs,
 		Options:            options,
+		ProjectQuota:       n.projectQuota,
 	}
 
 	return executeTemplate(tmpl, data)

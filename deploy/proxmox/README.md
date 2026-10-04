@@ -379,6 +379,15 @@ is a DRBD tiebreaker for sds and a QDevice for corosync — both roles, since a
 QDevice alone gives DRBD no quorum vote. It is usually not a PVE node at all;
 when it is one, give it the lowest priority.
 
+## I/O limits
+
+PVE limits a VM disk's I/O itself: the disk options `mbps_rd`, `mbps_wr`,
+`iops_rd`, `iops_wr` (and their `_max` bursts) are enforced by QEMU on the
+guest's requests, whatever the storage. They work on SDS disks as on any
+other; set them in the VM's hardware tab or with
+`qm set <vmid> --scsi0 sds0:vm-<vmid>-disk-0,iops_wr=2000`. sds adds nothing on
+top.
+
 ## Limitations
 
 - **Raw only.** DRBD exports a raw block device; qcow2 is not supported and not

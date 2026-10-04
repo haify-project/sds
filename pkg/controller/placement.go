@@ -230,6 +230,10 @@ type poolCapacity struct {
 	thin bool
 	// full is LVM's or the thresholds' verdict that a thin pool is out of room.
 	full bool
+	// sizeBytes and virtualBytes are a thin pool's real and promised size;
+	// maxOvercommit, when set, caps their ratio (quota.go).
+	sizeBytes, virtualBytes uint64
+	maxOvercommit           float64
 }
 
 // admits reports whether a pool may host a replica of a volume asking sizeGB.
@@ -262,7 +266,7 @@ func (c poolCapacity) admits(sizeGB uint64) bool {
 	case !c.known:
 		return true
 	case c.thin:
-		return !c.full
+		return !c.full && !c.overcommitted(sizeGB)
 	default:
 		return c.freeGB >= sizeGB
 	}
@@ -297,11 +301,13 @@ func poolPlacementCapacity(p *PoolInfo, recordedThin bool) poolCapacity {
 		}
 		free := float64(u.SizeBytes) * (100 - used) / 100
 		return poolCapacity{
-			freeGB:    bytesToGB(uint64(free)),
-			freeBytes: uint64(free),
-			known:     true,
-			thin:      true,
-			full:      thinPoolExhausted(u),
+			freeGB:       bytesToGB(uint64(free)),
+			freeBytes:    uint64(free),
+			known:        true,
+			thin:         true,
+			full:         thinPoolExhausted(u),
+			sizeBytes:    u.SizeBytes,
+			virtualBytes: u.VirtualBytes,
 		}
 	}
 	if p.Thin || recordedThin {
@@ -397,6 +403,7 @@ func (rm *ResourceManager) placementCandidates(ctx context.Context, pool string,
 			continue
 		}
 		capacity := poolPlacementCapacity(p, recordedThin)
+		capacity.maxOvercommit = rm.maxOvercommit()
 		if !capacity.admits(sizeGB) {
 			continue
 		}

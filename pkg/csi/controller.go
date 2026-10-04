@@ -182,7 +182,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		VolumeId:           name,
 		CapacityBytes:      int64(sizeGB) * giB,
 		AccessibleTopology: topologyFor(replicaNodes, params.AllowRemoteVolumeAccess),
-		VolumeContext:      volumeContextFor(params.AllowRemoteVolumeAccess),
+		VolumeContext:      volumeContextFor(params.AllowRemoteVolumeAccess, params.QoS),
 		ContentSource:      contentSourceOf(req.GetVolumeContentSource()),
 	}}, nil
 }
@@ -210,12 +210,20 @@ func topologyFor(replicaNodes []string, allowRemote bool) []*csi.Topology {
 
 // volumeContextFor carries the remote-access flag into the volume's context so
 // the node service can tell, at stage time, whether a Pod on a non-replica node
-// is allowed to attach the volume diskless.
-func volumeContextFor(allowRemote bool) map[string]string {
-	if !allowRemote {
+// is allowed to attach the volume diskless — and the I/O limits it applies at
+// publish time (qos.go).
+func volumeContextFor(allowRemote bool, qos map[string]string) map[string]string {
+	if !allowRemote && len(qos) == 0 {
 		return nil
 	}
-	return map[string]string{paramAllowRemoteVolumeAccess: "true"}
+	out := map[string]string{}
+	if allowRemote {
+		out[paramAllowRemoteVolumeAccess] = "true"
+	}
+	for k, v := range qos {
+		out[k] = v
+	}
+	return out
 }
 
 func (s *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {

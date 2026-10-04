@@ -26,6 +26,9 @@ type VolumeParams struct {
 	// FaultDomainLabel is the node label naming what fails together (default
 	// "host"); replicas are spread across its values when they can be.
 	FaultDomainLabel string
+	// QoS are the volume's I/O limits, carried to the node in the volume
+	// context (qos.go).
+	QoS map[string]string
 }
 
 // ParseVolumeParams validates and defaults the StorageClass parameters.
@@ -70,5 +73,10 @@ func ParseVolumeParams(p map[string]string) (VolumeParams, error) {
 			out.ResourceLabels[key] = value
 		}
 	}
+	qos, err := parseQoS(p)
+	if err != nil {
+		return out, err
+	}
+	out.QoS = qos
 	return out, nil
 }

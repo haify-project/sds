@@ -51,7 +51,10 @@ func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource strin
 	// previous reactor teardown is still settling, which makes mkfs race a
 	// demote. Retry briefly instead of failing the whole gateway creation.
 	for _, device := range devices {
-		cmd := fmt.Sprintf("sudo blkid %s >/dev/null 2>&1 || sudo mkfs.ext4 -q %s", device, device)
+		// Project quotas let an NFS export directory have a quota of its own
+		// (pkg/controller/nfs_quota.go); the feature can only be added to an
+		// unmounted filesystem, so it is there from the start.
+		cmd := fmt.Sprintf("sudo blkid %s >/dev/null 2>&1 || sudo mkfs.ext4 -q -O quota,project %s", device, device)
 		var lastErr error
 		formatted := false
 		for attempt := 0; attempt < 3; attempt++ {

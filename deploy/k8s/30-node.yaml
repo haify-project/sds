@@ -50,6 +50,9 @@ spec:
             - { name: socket-dir, mountPath: /csi }
             - { name: kubelet-dir, mountPath: /var/lib/kubelet, mountPropagation: Bidirectional }
             - { name: dev-dir, mountPath: /dev }
+            # I/O limits (StorageClass readIOPS etc.) are written into the
+            # pod's cgroup; see pkg/csi/qos.go.
+            - { name: cgroup, mountPath: /sys/fs/cgroup }
       volumes:
         - name: socket-dir
           hostPath: { path: /var/lib/kubelet/plugins/sds.csi.liliang-cn.com, type: DirectoryOrCreate }
@@ -59,3 +62,5 @@ spec:
           hostPath: { path: /var/lib/kubelet, type: Directory }
         - name: dev-dir
           hostPath: { path: /dev, type: Directory }
+        - name: cgroup
+          hostPath: { path: /sys/fs/cgroup, type: Directory }

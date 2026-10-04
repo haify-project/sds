@@ -35,6 +35,7 @@ type Config struct {
 	Alert    AlertConfig    `mapstructure:"alert"`
 	Inspect  InspectConfig  `mapstructure:"inspect"`
 	SelfHeal SelfHealConfig `mapstructure:"self_heal"`
+	Quota    QuotaConfig    `mapstructure:"quota"`
 }
 
 // WANConfig tunes opt-in WAN replication.
@@ -458,16 +459,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if err := c.Audit.validate(); err != nil {
-		return err
-	}
-	if err := c.RBAC.Approval.validate(c.RBAC.Enabled); err != nil {
-		return err
-	}
-	if err := c.Alert.WriteAnomaly.validate(); err != nil {
-		return err
-	}
-	if err := c.SelfHeal.validate(); err != nil {
+	if err := c.validateSections(); err != nil {
 		return err
 	}
 	if c.Auth.Enabled {
@@ -524,10 +516,7 @@ func setDefaults() {
 	viper.SetDefault("metrics.enabled", true)
 	viper.SetDefault("metrics.listen_address", "0.0.0.0")
 	viper.SetDefault("metrics.port", 9433)
-	setAuditDefaults()
-	setApprovalDefaults()
-	setWriteAnomalyDefaults()
-	setSelfHealDefaults()
+	setSectionDefaults()
 	viper.SetDefault("rbac.enabled", false)
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)
@@ -569,7 +558,7 @@ func (c *Config) Save(path string) error {
 		{"tls", c.TLS}, {"log", c.Log}, {"storage", c.Storage},
 		{"metrics", c.Metrics}, {"audit", c.Audit}, {"rbac", c.RBAC},
 		{"gateway", c.Gateway}, {"resource", c.Resource},
-		{"schedule", c.Schedule}, {"alert", c.Alert}, {"inspect", c.Inspect}, {"self_heal", c.SelfHeal},
+		{"schedule", c.Schedule}, {"alert", c.Alert}, {"inspect", c.Inspect}, {"self_heal", c.SelfHeal}, {"quota", c.Quota},
 	}
 	for _, s := range sections {
 		var m map[string]any

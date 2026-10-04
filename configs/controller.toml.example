@@ -211,3 +211,14 @@ notify_min = "warn"
 auto_evict = "off"
 after_minutes = 60
 max_offline_percent = 34
+
+# Quotas. max_overcommit_ratio caps a thin pool's promised size (its thin
+# volumes' sizes) at that many times its real size; 0 = unlimited. A
+# project's resources are those labelled <project_label>=<name>.
+[quota]
+max_overcommit_ratio = 0.0
+project_label = "project"
+# [[quota.projects]]
+# name = "team-a"
+# max_gb = 2000
+# max_resources = 50
