@@ -98,7 +98,7 @@ func (c *Controller) assertSnapshotUnlocked(ctx context.Context, name string) er
 	if resource == "" {
 		return nil
 	}
-	if until := snapshotLockedUntil(name, c.snapshotLockWindow(ctx, resource), time.Now()); !until.IsZero() {
+	if until := snapshotLockedUntil(name, c.snapshotLockWindow(ctx, resource), lockNow()); !until.IsZero() {
 		return fmt.Errorf("snapshot %s is locked by the snapshot schedule of %s until %s and cannot be deleted before then",
 			name, resource, until.UTC().Format(time.RFC3339))
 	}
@@ -116,7 +116,7 @@ func (c *Controller) resourceSnapshotsLockedUntil(ctx context.Context, resource 
 	if err != nil || s == nil {
 		return time.Time{}
 	}
-	return scheduleLockedUntil(s, time.Now())
+	return scheduleLockedUntil(s, lockNow())
 }
 
 // scheduleLockedUntil is when the newest snapshot s can have taken stops being
@@ -220,7 +220,8 @@ func (sm *SnapshotManager) assertRollbackKeepsLocks(ctx context.Context, address
 	if err != nil || res == nil || !res.AllSuccess() {
 		return fmt.Errorf("could not list the snapshots a rollback of %s would destroy; refusing in case one is locked", dataset)
 	}
-	after, now := false, time.Now()
+	after, now := false, lockNow()
+	var later []string
 	for _, line := range execLines(res, address) {
 		_, name, ok := strings.Cut(strings.TrimSpace(line), "@")
 		if !ok {
@@ -231,10 +232,16 @@ func (sm *SnapshotManager) assertRollbackKeepsLocks(ctx context.Context, address
 				return fmt.Errorf("rolling %s back to %s destroys every later snapshot, and %s is locked until %s",
 					dataset, snapshotName, name, until.UTC().Format(time.RFC3339))
 			}
+			later = append(later, name)
 		}
 		if name == snapshotName {
 			after = true
 		}
+	}
+	// Their locks have passed, but a hold placed under one would still make
+	// the rollback fail.
+	for _, name := range later {
+		sm.controller.releaseZFSLockHold(ctx, address, dataset+"@"+name)
 	}
 	return nil
 }

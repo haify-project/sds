@@ -58,7 +58,7 @@ func (sm *ScheduleManager) relieveThinPool(ctx context.Context, host, node, reso
 	if keep < 0 {
 		keep = 0
 	}
-	candidates := unlockedSnaps(snaps[:keep], lock, time.Now())
+	candidates := unlockedSnaps(snaps[:keep], lock, lockNow())
 	for len(candidates) > 0 && overThinThreshold(usage) {
 		oldest := candidates[0]
 		if _, err := sm.controller.deployment.LVRemoveSnapshot(ctx, []string{host}, vol.Pool, oldest.Name); err != nil {

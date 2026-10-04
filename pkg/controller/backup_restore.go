@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -275,7 +274,7 @@ func (bm *BackupManager) DeleteBackup(ctx context.Context, backupID, node string
 			backupID, strings.Join(deps, ", "))
 	}
 
-	touchObjects, err := assertDeletable(rec, force, time.Now())
+	touchObjects, err := assertDeletable(rec, force, lockNow())
 	if err != nil {
 		return err
 	}

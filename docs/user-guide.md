@@ -674,6 +674,16 @@ the lock can be raised but not lowered. Replacing the schedule without
 and takes it again under the same name, so its lock is unchanged; a locked
 thick snapshot cannot be restored until its lock passes. The limit is 365 days.
 
+On ZFS, each locked snapshot also carries a `sds-lock` hold, so `zfs destroy`
+on the node — a cleanup script, a `zfs destroy -r` of the dataset — fails too
+until sds releases the hold when the lock has passed. Root can `zfs release`
+it; it guards against mistakes, not against root.
+
+Locks are judged by the time the controller has counted since it started, not
+by the system clock: moving the clock forward (a `date -s`, a spoofed NTP
+answer) to end the locks early changes nothing, and raises a
+`controller.clock_jumped` event.
+
 The cost is space: size the pool for `--lock-days` of change. A pool past the
 near-full line with nothing left but locked snapshots is not relieved; it
 raises a critical `pool.snapshots_locked` event, and if it fills, that
@@ -1321,6 +1331,7 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
 `pool.snapshots_locked` (a near-full pool with only locked snapshots left),
 `audit.shipping_failed`, `audit.truncated`, `approval.requested` (see [Access control](#16-access-control)),
+`controller.clock_jumped`,
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,

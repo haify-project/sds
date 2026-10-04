@@ -304,6 +304,7 @@ func (c *Controller) Start() error {
 	// The audit trail is sent off the cluster and pruned by the active
 	// controller only; its cursor moves with the database on failover.
 	c.startAuditShipper(c.ctx)
+	go c.watchLockClock(c.ctx)
 
 	// A backup left "running" belongs to a controller that died mid-transfer;
 	// only the active controller ships backups, so nothing can still be in

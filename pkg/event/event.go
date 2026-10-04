@@ -116,6 +116,11 @@ const (
 	// second person's approval ([rbac.approval]): whoever may approve hears
 	// of it, and an unexpected one is a stolen token at work.
 	TypeApprovalRequested Type = "approval.requested"
+	// TypeClockJumped fires when the controller host's clock moved away from
+	// the time the controller has counted since it started — what moving the
+	// clock forward to end snapshot and backup locks early looks like. The
+	// locks keep using the counted time (pkg/controller/lock_clock.go).
+	TypeClockJumped Type = "controller.clock_jumped"
 
 	// TypeBackupFailed fires when a scheduled backup did not complete, and
 	// resolves on the schedule's next completed run. A schedule that keeps

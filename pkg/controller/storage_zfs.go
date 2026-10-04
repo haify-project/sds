@@ -406,6 +406,7 @@ func (sm *StorageManager) ZFSDeleteSnapshot(ctx context.Context, snapshot, node 
 		zap.String("snapshot", snapshot),
 		zap.String("node", node))
 
+	sm.controller.releaseZFSLockHold(ctx, address, snapshot)
 	result, err := sm.controller.deployment.ZFSDestroySnapshot(ctx, []string{address}, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to delete ZFS snapshot: %w", err)

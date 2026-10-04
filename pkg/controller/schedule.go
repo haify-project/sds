@@ -184,7 +184,7 @@ func (sm *ScheduleManager) CreateSchedule(ctx context.Context, resource, cronExp
 	if lockDays != nil {
 		lock = *lockDays
 	}
-	if err := checkScheduleLockChange(old, lock, time.Now()); err != nil {
+	if err := checkScheduleLockChange(old, lock, lockNow()); err != nil {
 		return err
 	}
 	s := &database.SnapshotSchedule{
@@ -215,7 +215,7 @@ func (sm *ScheduleManager) DeleteSchedule(ctx context.Context, name string) erro
 		return fmt.Errorf("database not available")
 	}
 	if s, err := sm.controller.db.GetSnapshotSchedule(ctx, name); err == nil && s != nil {
-		if until := scheduleLockedUntil(s, time.Now()); !until.IsZero() {
+		if until := scheduleLockedUntil(s, lockNow()); !until.IsZero() {
 			return fmt.Errorf("the schedule of %s locks its snapshots and the newest stay locked until %s; it can be deleted after that",
 				s.Resource, until.UTC().Format(time.RFC3339))
 		}
@@ -353,6 +353,10 @@ func (sm *ScheduleManager) runSchedule(name string) {
 		host := sm.controller.ResolveHost(node)
 		for _, vol := range res.Volumes {
 			sm.snapshotVolume(ctx, host, node, vol, ts)
+			if lock > 0 && isZFSDevice(vol.Device) {
+				sm.controller.holdLockedZFSSnapshot(ctx, host,
+					fmt.Sprintf("%s/%s@%s", vol.Pool, vol.BackingVolume, buildSnapName(vol.BackingVolume, ts)))
+			}
 			sm.pruneVolume(ctx, host, node, vol, s.Keep, lock)
 			sm.relieveThinPool(ctx, host, node, s.Resource, vol, lock)
 		}
@@ -414,12 +418,14 @@ func (sm *ScheduleManager) pruneVolume(ctx context.Context, host, node string, v
 			zap.String("node", node), zap.String("volume", vol.BackingVolume), zap.Error(err))
 		return
 	}
-	expired := unlockedSnaps(selectExpiredSnapshots(snaps, policy), lock, time.Now())
+	expired := unlockedSnaps(selectExpiredSnapshots(snaps, policy), lock, lockNow())
 	dep := sm.controller.deployment
 	for _, s := range expired {
 		var derr error
 		if isZFSDevice(vol.Device) {
-			_, derr = dep.ZFSDestroySnapshot(ctx, []string{host}, fmt.Sprintf("%s/%s@%s", vol.Pool, vol.BackingVolume, s.Name))
+			snap := fmt.Sprintf("%s/%s@%s", vol.Pool, vol.BackingVolume, s.Name)
+			sm.controller.releaseZFSLockHold(ctx, host, snap)
+			_, derr = dep.ZFSDestroySnapshot(ctx, []string{host}, snap)
 		} else {
 			_, derr = dep.LVRemoveSnapshot(ctx, []string{host}, vol.Pool, s.Name)
 		}
