@@ -150,6 +150,13 @@ type PoolStatusInfo struct {
 	TotalBytes    uint64
 	FreeBytes     uint64
 	ThinSizeBytes uint64
+	// VDO is true for a VDO-backed thin pool, and VDOPhysicalKnown when its
+	// physical usage, VDOPhysicalPercent, was read this poll. A thin pool on
+	// VDO can be half empty logically and out of physical space, so that
+	// figure is judged on its own.
+	VDO                bool
+	VDOPhysicalKnown   bool
+	VDOPhysicalPercent float64
 }
 
 // PoolLister reports the capacity of every managed pool. It is optional: a

@@ -634,8 +634,15 @@ type PoolInfo struct {
 	// reports it (1.85 means 1.85x); 0 when not reported. compression above is
 	// the algorithm in use.
 	CompressRatio float64 `protobuf:"fixed64,24,opt,name=compress_ratio,json=compressRatio,proto3" json:"compress_ratio,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// VDO-backed thin pools (type "thin_vdo"). thin_data_percent above is the
+	// logical space handed out; vdo_physical_percent is the physical space
+	// deduplication and compression did not save, and the one that, at 100%,
+	// turns writes into I/O errors. has_vdo is false for any other pool.
+	HasVdo             bool    `protobuf:"varint,25,opt,name=has_vdo,json=hasVdo,proto3" json:"has_vdo,omitempty"`
+	VdoPhysicalPercent float64 `protobuf:"fixed64,26,opt,name=vdo_physical_percent,json=vdoPhysicalPercent,proto3" json:"vdo_physical_percent,omitempty"`
+	VdoSavingPercent   float64 `protobuf:"fixed64,27,opt,name=vdo_saving_percent,json=vdoSavingPercent,proto3" json:"vdo_saving_percent,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PoolInfo) Reset() {
@@ -832,6 +839,27 @@ func (x *PoolInfo) GetFreeBytes() uint64 {
 func (x *PoolInfo) GetCompressRatio() float64 {
 	if x != nil {
 		return x.CompressRatio
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetHasVdo() bool {
+	if x != nil {
+		return x.HasVdo
+	}
+	return false
+}
+
+func (x *PoolInfo) GetVdoPhysicalPercent() float64 {
+	if x != nil {
+		return x.VdoPhysicalPercent
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetVdoSavingPercent() float64 {
+	if x != nil {
+		return x.VdoSavingPercent
 	}
 	return 0
 }
@@ -23216,7 +23244,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x04node\x18\x03 \x01(\tR\x04node\"K\n" +
 	"\x15AddDiskToPoolResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xbb\x06\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xb4\a\n" +
 	"\bPoolInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
@@ -23246,7 +23274,10 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
 	"free_bytes\x18\x17 \x01(\x04R\tfreeBytes\x12%\n" +
-	"\x0ecompress_ratio\x18\x18 \x01(\x01R\rcompressRatio\"\x98\x01\n" +
+	"\x0ecompress_ratio\x18\x18 \x01(\x01R\rcompressRatio\x12\x17\n" +
+	"\ahas_vdo\x18\x19 \x01(\bR\x06hasVdo\x120\n" +
+	"\x14vdo_physical_percent\x18\x1a \x01(\x01R\x12vdoPhysicalPercent\x12,\n" +
+	"\x12vdo_saving_percent\x18\x1b \x01(\x01R\x10vdoSavingPercent\"\x98\x01\n" +
 	"\x14CreateZFSPoolRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x14\n" +

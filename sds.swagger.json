@@ -9858,6 +9858,18 @@
           "type": "number",
           "format": "double",
           "description": "compress_ratio is how much compression saves on a ZFS pool, as ZFS\nreports it (1.85 means 1.85x); 0 when not reported. compression above is\nthe algorithm in use."
+        },
+        "hasVdo": {
+          "type": "boolean",
+          "description": "VDO-backed thin pools (type \"thin_vdo\"). thin_data_percent above is the\nlogical space handed out; vdo_physical_percent is the physical space\ndeduplication and compression did not save, and the one that, at 100%,\nturns writes into I/O errors. has_vdo is false for any other pool."
+        },
+        "vdoPhysicalPercent": {
+          "type": "number",
+          "format": "double"
+        },
+        "vdoSavingPercent": {
+          "type": "number",
+          "format": "double"
         }
       }
     },

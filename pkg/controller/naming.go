@@ -22,6 +22,8 @@ func normalizeLVMPoolType(poolType string) (string, error) {
 		return "vg", nil
 	case "lvm-thin", "thin-pool", "thin_pool":
 		return "thin_pool", nil
+	case "lvm-thin-vdo", "thin-vdo", "thin_vdo":
+		return vdoPoolType, nil
 	default:
 		return "", fmt.Errorf("unsupported LVM pool type: %s", poolType)
 	}

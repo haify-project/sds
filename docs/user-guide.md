@@ -236,7 +236,8 @@ unregistering removes the node from the registry; it does not touch the node.
 
 ## 4. Pools
 
-A pool is the storage a node contributes. Three kinds:
+A pool is the storage a node contributes. Three kinds (and a fourth, thin on
+VDO, below):
 
 ```bash
 sds pool create --name data-pool --type lvm      --nodes node1,node2 --devices /dev/sdb
@@ -293,6 +294,45 @@ refused; the freed disks have their PV labels wiped:
 ```bash
 sds pool delete --name data-pool --node node1
 ```
+
+**Thin pools on VDO (`--type lvm-thin-vdo`).** The thin pool's data area sits
+on a VDO volume, so everything written to it is deduplicated and compressed;
+thin volumes, thin snapshots and DRBD above it behave as on a plain thin pool.
+It suits data that repeats — VM images built from the same template, backups,
+logs.
+
+```bash
+sds pool create --name dedup --type lvm-thin-vdo --nodes node1,node2 --devices /dev/sdf
+```
+
+Each node needs the dm-vdo kernel module (kernel 6.9 or later, or kmod-kvdo on
+EL), `vdoformat` from the `vdo` package, and lvm2 2.03.24 or later
+(`--pooldatavdo`); `pool create` checks for all three before it touches the
+disk. Ubuntu 24.04's GA kernel does not ship dm-vdo — use the HWE kernel.
+
+What to know before choosing it:
+
+- **Physical space is the figure to watch.** The thin pool's usage is the
+  logical space handed out; the VDO pool under it fills at whatever rate
+  dedup and compression leave. When VDO runs out of physical space, writes
+  fail with I/O errors although the thin pool still shows room — and DRBD
+  drops the disk. `pool get` shows both (`VDO: 41% physical used, 63% saved`),
+  and `pool.vdo_physical_near_full` / `pool.vdo_physical_full` fire at the
+  same thresholds as the thin pool alerts.
+- **It deduplicates per node.** VDO is under DRBD, so DRBD replicates every
+  logical block in full; it saves disk on each node, not network.
+- **No encryption.** An encrypted resource is refused on a VDO pool:
+  ciphertext neither deduplicates nor compresses.
+- **Deleted snapshots do not give space back to VDO** on current lvm2 (the thin
+  pool does not pass the discard down); the space is reused for new writes
+  inside the pool, but VDO's physical usage does not drop.
+- **Growing is by hand.** `pool add` adds the disk to the group but does not
+  grow the pool: extend the VDO pool's physical size first, then the thin
+  pool's logical size, in the ratio you expect dedup to achieve.
+- VDO costs memory (roughly 1 GB per TB of physical space for its index and
+  block map, more with a larger index) and CPU on every write.
+
+This is new in SDS; validate it on your hardware and kernel before production.
 
 An SSD or NVMe cache in front of a thin pool (`pool add-cache`,
 `pool remove-cache`) is covered in [Storage tiering](#13-storage-tiering).
@@ -1492,6 +1532,8 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `resource.promoted`, `node.unreachable`, `wan.degraded`, `resource.out_of_sync`,
 `pool.data_near_full`, `pool.data_full`, `pool.metadata_near_full`,
 `pool.metadata_full`, `pool.out_of_space` (LVM already refused writes),
+`pool.vdo_physical_near_full`, `pool.vdo_physical_full` (the physical space
+under an `lvm-thin-vdo` pool),
 `pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
 `pool.snapshots_locked` (a near-full pool with only locked snapshots left),
 `audit.shipping_failed`, `audit.truncated`, `approval.requested` (see [Access control](#16-access-control)),

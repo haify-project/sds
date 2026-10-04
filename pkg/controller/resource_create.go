@@ -170,6 +170,11 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		if err := assertEncryptableStorage(storageType); err != nil {
 			return err
 		}
+		for _, v := range resolved {
+			if err := rm.assertEncryptableVDO(ctx, v.pool); err != nil {
+				return err
+			}
+		}
 	}
 
 	// A replica on a node the controller cannot reach fails part-way — after

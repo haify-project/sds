@@ -49,6 +49,7 @@ import {
 const POOL_TYPE_OPTIONS = [
   { value: 'vg', label: 'LVM VG' },
   { value: 'thin_pool', label: 'LVM Thin Pool' },
+  { value: 'thin_vdo', label: 'LVM Thin on VDO' },
   { value: 'zfs', label: 'ZFS' },
 ];
 
@@ -246,6 +247,9 @@ function PoolItem({ pool }: { pool: Pool }) {
               metadata {thin.meta.toFixed(1)}%
             </span>
             <span>VG {free} GB unallocated</span>
+            {pool.hasVdo && (
+              <span>VDO {(pool.vdoPhysicalPercent ?? 0).toFixed(1)}% physical</span>
+            )}
           </div>
           {thin.outOfSpace && (
             <p className="mt-1 text-[0.65rem] text-destructive">

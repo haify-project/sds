@@ -101,7 +101,7 @@ func poolCreate() *cobra.Command {
 				// that setting can only name an LVM type — ZFS pools are built by
 				// a different RPC with vdevs rather than disks, so there is no
 				// empty-type ZFS case to route.
-				case "", "vg", "lvm", "lvm-thin", "thin-pool", "thin_pool":
+				case "", "vg", "lvm", "lvm-thin", "thin-pool", "thin_pool", "lvm-thin-vdo", "thin_vdo":
 					// normalize type for backend if needed, but backend supports "vg" and "thin_pool"
 					// map lvm -> vg, lvm-thin -> thin_pool
 					backendType := poolType
@@ -110,6 +110,8 @@ func poolCreate() *cobra.Command {
 						backendType = "vg"
 					case "lvm-thin":
 						backendType = "thin_pool"
+					case "lvm-thin-vdo":
+						backendType = "thin_vdo"
 					}
 					err = sdsClient.CreatePool(ctx, name, backendType, n, diskList, util.BytesToGiB(sizeBytes))
 				default:
@@ -149,7 +151,7 @@ func poolCreate() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Pool name")
-	cmd.Flags().StringVar(&poolType, "type", "", "Pool type: lvm-thin (snapshot-capable), lvm, zfs (default: the controller's storage.default_pool_type)")
+	cmd.Flags().StringVar(&poolType, "type", "", "Pool type: lvm-thin (snapshot-capable), lvm-thin-vdo (thin on VDO: dedup+compression), lvm, zfs (default: the controller's storage.default_pool_type)")
 	cmd.Flags().StringVar(&nodes, "nodes", "", "Comma-separated nodes where to create the pool")
 	cmd.Flags().StringVar(&devices, "devices", "", "Comma-separated list of devices")
 	cmd.Flags().StringVar(&size, "size", "", "Pool size (e.g., 10G, 10GB, 10GiB, 1T, 1TB)")
@@ -264,6 +266,10 @@ func poolGet() *cobra.Command {
 						"writes are failing and any DRBD replica on it will drop to Diskless\n")
 				}
 			}
+			if pool.HasVdo {
+				fmt.Printf("  VDO: %.2f%% physical used, %.2f%% saved by dedup/compression\n",
+					pool.VdoPhysicalPercent, pool.VdoSavingPercent)
+			}
 			if pool.Cached {
 				fmt.Printf("  Cache: %s %s on %s\n",
 					util.FormatBytes(pool.CacheSizeBytes), pool.CacheMode, pool.CacheDevice)
@@ -343,6 +349,9 @@ func poolList() *cobra.Command {
 					if p.ThinOutOfSpace {
 						usage += ", OUT OF SPACE"
 					}
+				}
+				if p.HasVdo {
+					usage += fmt.Sprintf(", VDO %.1f%% physical", p.VdoPhysicalPercent)
 				}
 				node := p.Node
 				if name := nodeNames[p.Node]; name != "" {

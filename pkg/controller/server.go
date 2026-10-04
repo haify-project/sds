@@ -101,6 +101,11 @@ func pbPoolInfo(p *PoolInfo) *sdspb.PoolInfo {
 		out.ThinMetadataPercent = u.MetaPercent
 		out.ThinOutOfSpace = u.OutOfSpace
 	}
+	if v := p.VDO; v != nil {
+		out.HasVdo = true
+		out.VdoPhysicalPercent = v.PhysicalPercent
+		out.VdoSavingPercent = v.SavingPercent
+	}
 	if c := p.Cache; c != nil {
 		out.Cached = true
 		out.CacheMode = c.Mode
