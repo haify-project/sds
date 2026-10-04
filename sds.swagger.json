@@ -7035,6 +7035,11 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "lockDays": {
+          "type": "integer",
+          "format": "int64",
+          "description": "lock_days locks every snapshot the schedule takes for that many days: no\nretention, full pool or API call deletes it before then. Unset keeps the\ncurrent schedule's lock; it can be raised at any time, lowered only once\nnothing is locked."
         }
       }
     },
@@ -9905,6 +9910,15 @@
         },
         "nextRun": {
           "type": "string"
+        },
+        "lockDays": {
+          "type": "integer",
+          "format": "int64",
+          "description": "lock_days locks every snapshot the schedule takes for that many days."
+        },
+        "lockedUntil": {
+          "type": "string",
+          "description": "locked_until (RFC3339) is when the newest snapshot it took stops being\nlocked; until then the schedule and its resource cannot be deleted."
         }
       }
     },

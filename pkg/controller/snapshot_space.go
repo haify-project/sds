@@ -2,9 +2,13 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/haify-project/sds/pkg/event"
 )
 
 // Retention counts snapshots; it does not look at the pool they fill. On a
@@ -28,7 +32,14 @@ const snapshotsKeptUnderPressure = 2
 
 // relieveThinPool removes the volume's oldest scheduled snapshots on host
 // while its thin pool is past ThinPoolNearFullPercent (data or metadata).
-func (sm *ScheduleManager) relieveThinPool(ctx context.Context, host, node string, vol *ResourceVolumeInfo) {
+//
+// Snapshots still inside the schedule's lock window are never removed
+// (snapshot_lock.go): a pool filling fast is what ransomware rewriting a
+// volume looks like, and the oldest snapshots are the clean ones. Every
+// removal is announced, because history disappearing to make room is worth
+// knowing about; and a pool that stays full once only locked snapshots are
+// left raises a critical event, because its replica is next.
+func (sm *ScheduleManager) relieveThinPool(ctx context.Context, host, node, resource string, vol *ResourceVolumeInfo, lock time.Duration) {
 	if isZFSDevice(vol.Device) || sm.controller.storage == nil {
 		return
 	}
@@ -42,8 +53,14 @@ func (sm *ScheduleManager) relieveThinPool(ctx context.Context, host, node strin
 		return
 	}
 	sort.Slice(snaps, func(i, j int) bool { return snaps[i].TS.Before(snaps[j].TS) })
-	for len(snaps) > snapshotsKeptUnderPressure && overThinThreshold(usage) {
-		oldest := snaps[0]
+	// The newest few always stay; of the rest, only the unlocked may go.
+	keep := len(snaps) - snapshotsKeptUnderPressure
+	if keep < 0 {
+		keep = 0
+	}
+	candidates := unlockedSnaps(snaps[:keep], lock, time.Now())
+	for len(candidates) > 0 && overThinThreshold(usage) {
+		oldest := candidates[0]
 		if _, err := sm.controller.deployment.LVRemoveSnapshot(ctx, []string{host}, vol.Pool, oldest.Name); err != nil {
 			log.Warn("Snapshot schedule: could not remove a snapshot to free a full pool",
 				zap.String("node", node), zap.String("snapshot", oldest.Name), zap.Error(err))
@@ -52,11 +69,31 @@ func (sm *ScheduleManager) relieveThinPool(ctx context.Context, host, node strin
 		log.Warn("Snapshot schedule: removed the oldest snapshot to free a full thin pool",
 			zap.String("node", node), zap.String("pool", vol.Pool), zap.String("snapshot", oldest.Name),
 			zap.Float64("data_percent", usage.DataPercent), zap.Float64("metadata_percent", usage.MetaPercent))
-		snaps = snaps[1:]
+		sm.publishPoolEvent(event.TypePoolSnapshotsRemoved, event.StatusInfo, event.SeverityWarning, node, vol.Pool, resource,
+			fmt.Sprintf("thin pool %s on %s is %.0f%% full: removed snapshot %s of %s to make room. "+
+				"A sudden fill is what a volume being encrypted looks like; check before more history goes",
+				vol.Pool, node, usage.DataPercent, oldest.Name, resource))
+		candidates = candidates[1:]
 		if usage, err = sm.controller.storage.readThinUsage(ctx, host, vol.Pool); err != nil || usage == nil {
 			return
 		}
 	}
+	if overThinThreshold(usage) && lock > 0 {
+		sm.publishPoolEvent(event.TypePoolSnapshotsLocked, event.StatusInfo, event.SeverityCritical, node, vol.Pool, resource,
+			fmt.Sprintf("thin pool %s on %s is %.0f%% full and the snapshots of %s left are locked or the newest; "+
+				"extend the pool now, or its replica's writes will fail and DRBD will drop it",
+				vol.Pool, node, usage.DataPercent, resource))
+	}
+}
+
+func (sm *ScheduleManager) publishPoolEvent(t event.Type, status event.Status, sev event.Severity, node, pool, resource, msg string) {
+	if sm.controller.events == nil {
+		return
+	}
+	sm.controller.events.Publish(event.Event{
+		Type: t, Severity: sev, Status: status, Resource: pool, Node: node, Message: msg,
+		Details: map[string]string{"resource": resource},
+	})
 }
 
 func overThinThreshold(u *PoolThinInfo) bool {

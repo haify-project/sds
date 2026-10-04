@@ -651,7 +651,35 @@ history can fill the pool while staying inside its policy — and a full pool
 fails the replica's own writes. So after retention, if the pool is still past
 85% (data or metadata), the scheduler removes that volume's oldest scheduled
 snapshots on that node one at a time until it is below, always keeping the
-newest two. It logs each one it removes.
+newest two. It logs each one it removes and raises a `pool.snapshots_removed`
+event.
+
+**Locked snapshots.** That near-full rule removes the *oldest* snapshots — and
+a volume being encrypted by ransomware rewrites every block, so it is exactly
+what fills a thin pool fast, and the oldest snapshots are the clean ones from
+before the attack. A schedule can lock what it takes:
+
+```bash
+sds resource snapshot schedule create --resource db \
+    --cron "0 * * * *" --keep-hourly 24 --keep-daily 7 --lock-days 14
+```
+
+Until a scheduled snapshot is `--lock-days` old (measured from the time in its
+name), sds does not delete it — not retention, not the near-full rule, not
+`snapshot delete`, and not a ZFS `restore` that would roll back past it. While
+any snapshot of the resource is locked, the schedule cannot be deleted, the
+resource or one of its volumes cannot be deleted (not even with `--force`), and
+the lock can be raised but not lowered. Replacing the schedule without
+`--lock-days` keeps its lock. Restoring a locked LVM thin snapshot merges it
+and takes it again under the same name, so its lock is unchanged; a locked
+thick snapshot cannot be restored until its lock passes. The limit is 365 days.
+
+The cost is space: size the pool for `--lock-days` of change. A pool past the
+near-full line with nothing left but locked snapshots is not relieved; it
+raises a critical `pool.snapshots_locked` event, and if it fills, that
+replica's writes fail. And the lock binds sds and its API, not root on a
+storage node, who can `lvremove` anything — for that, back up to a target with
+S3 Object Lock (see [Backups](#9-backups--the-only-copy-that-survives-losing-the-cluster)).
 
 Schedules live in the controller database and survive a restart or a failover —
 the node that becomes active picks them up.
@@ -1284,6 +1312,8 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `resource.promoted`, `node.unreachable`, `wan.degraded`, `resource.out_of_sync`,
 `pool.data_near_full`, `pool.data_full`, `pool.metadata_near_full`,
 `pool.metadata_full`, `pool.out_of_space` (LVM already refused writes),
+`pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
+`pool.snapshots_locked` (a near-full pool with only locked snapshots left),
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,

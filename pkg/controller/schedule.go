@@ -160,7 +160,10 @@ func (sm *ScheduleManager) Stop() {
 // CreateSchedule validates and persists a snapshot schedule, then reloads the
 // cron so it takes effect immediately. One schedule per resource: the schedule
 // name is the resource name.
-func (sm *ScheduleManager) CreateSchedule(ctx context.Context, resource, cronExpr string, policy database.GFSPolicy, enabled bool) error {
+//
+// lockDays, when set, locks the snapshots the schedule takes (snapshot_lock.go);
+// nil keeps the lock of the schedule being replaced.
+func (sm *ScheduleManager) CreateSchedule(ctx context.Context, resource, cronExpr string, policy database.GFSPolicy, enabled bool, lockDays *int) error {
 	if err := validateCron(cronExpr); err != nil {
 		return err
 	}
@@ -173,12 +176,29 @@ func (sm *ScheduleManager) CreateSchedule(ctx context.Context, resource, cronExp
 	if _, err := sm.controller.db.GetResource(ctx, resource); err != nil {
 		return fmt.Errorf("resource %q not found", resource)
 	}
+	old, _ := sm.controller.db.GetSnapshotSchedule(ctx, resource)
+	lock := 0
+	if old != nil {
+		lock = old.LockDays
+	}
+	if lockDays != nil {
+		lock = *lockDays
+	}
+	if err := checkScheduleLockChange(old, lock, time.Now()); err != nil {
+		return err
+	}
 	s := &database.SnapshotSchedule{
 		Name:     resource,
 		Resource: resource,
 		Cron:     cronExpr,
 		Enabled:  enabled,
 		Keep:     policy,
+		LockDays: lock,
+	}
+	if old != nil {
+		// The last run is what says how long the newest snapshot stays
+		// locked; replacing the schedule must not forget it.
+		s.LastRun, s.CreatedAt = old.LastRun, old.CreatedAt
 	}
 	if err := sm.controller.db.SaveSnapshotSchedule(ctx, s); err != nil {
 		return fmt.Errorf("save schedule: %w", err)
@@ -193,6 +213,12 @@ func (sm *ScheduleManager) CreateSchedule(ctx context.Context, resource, cronExp
 func (sm *ScheduleManager) DeleteSchedule(ctx context.Context, name string) error {
 	if sm.controller.db == nil {
 		return fmt.Errorf("database not available")
+	}
+	if s, err := sm.controller.db.GetSnapshotSchedule(ctx, name); err == nil && s != nil {
+		if until := scheduleLockedUntil(s, time.Now()); !until.IsZero() {
+			return fmt.Errorf("the schedule of %s locks its snapshots and the newest stay locked until %s; it can be deleted after that",
+				s.Resource, until.UTC().Format(time.RFC3339))
+		}
 	}
 	if err := sm.controller.db.DeleteSnapshotSchedule(ctx, name); err != nil {
 		return fmt.Errorf("delete schedule: %w", err)
@@ -322,12 +348,13 @@ func (sm *ScheduleManager) runSchedule(name string) {
 		zap.String("schedule", name), zap.String("resource", s.Resource),
 		zap.Int("nodes", len(res.Nodes)), zap.Int("volumes", len(res.Volumes)))
 
+	lock := time.Duration(s.LockDays) * 24 * time.Hour
 	for _, node := range res.Nodes {
 		host := sm.controller.ResolveHost(node)
 		for _, vol := range res.Volumes {
 			sm.snapshotVolume(ctx, host, node, vol, ts)
-			sm.pruneVolume(ctx, host, node, vol, s.Keep)
-			sm.relieveThinPool(ctx, host, node, vol)
+			sm.pruneVolume(ctx, host, node, vol, s.Keep, lock)
+			sm.relieveThinPool(ctx, host, node, s.Resource, vol, lock)
 		}
 	}
 
@@ -376,7 +403,10 @@ func cowSize(originGB uint64) string {
 
 // pruneVolume lists scheduled snapshots of vol on host and deletes those the
 // GFS policy no longer retains.
-func (sm *ScheduleManager) pruneVolume(ctx context.Context, host, node string, vol *ResourceVolumeInfo, policy database.GFSPolicy) {
+//
+// A snapshot still inside its lock window is kept whatever the policy says; a
+// later run prunes it once the lock has expired.
+func (sm *ScheduleManager) pruneVolume(ctx context.Context, host, node string, vol *ResourceVolumeInfo, policy database.GFSPolicy, lock time.Duration) {
 	log := sm.controller.logger
 	snaps, err := sm.listScheduledSnaps(ctx, host, vol)
 	if err != nil {
@@ -384,7 +414,7 @@ func (sm *ScheduleManager) pruneVolume(ctx context.Context, host, node string, v
 			zap.String("node", node), zap.String("volume", vol.BackingVolume), zap.Error(err))
 		return
 	}
-	expired := selectExpiredSnapshots(snaps, policy)
+	expired := unlockedSnaps(selectExpiredSnapshots(snaps, policy), lock, time.Now())
 	dep := sm.controller.deployment
 	for _, s := range expired {
 		var derr error

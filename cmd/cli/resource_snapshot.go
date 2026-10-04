@@ -42,10 +42,22 @@ func resourceSnapshotScheduleCreate() *cobra.Command {
 	var resource, cronExpr string
 	var hourly, daily, weekly, monthly, yearly int
 	var disabled bool
+	var lockDays uint32
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create or replace a snapshot schedule for a resource",
+		Long: `Create or replace a snapshot schedule for a resource.
+
+--lock-days N locks every snapshot the schedule takes for N days: retention, a
+full thin pool and API deletes all leave it alone until then, and the schedule
+and resource cannot be deleted, nor the lock lowered, while any is locked. It is
+what keeps the clean snapshots from before a volume was encrypted: a pool
+filling fast used to give up its oldest snapshots first. Size the pool for N
+days of change; a pool that fills with locked snapshots raises a critical
+pool.snapshots_locked event. Root on a storage node can still remove them —
+for that, back up to a locked S3 target. Without the flag a replaced schedule
+keeps its lock.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if resource == "" {
 				return fmt.Errorf("--resource is required")
@@ -69,7 +81,11 @@ func resourceSnapshotScheduleCreate() *cobra.Command {
 				Monthly: int32(monthly),
 				Yearly:  int32(yearly),
 			}
-			if err := sdsClient.CreateSnapshotSchedule(ctx, resource, cronExpr, keep, !disabled); err != nil {
+			var lock *uint32
+			if cmd.Flags().Changed("lock-days") {
+				lock = &lockDays
+			}
+			if err := sdsClient.CreateSnapshotScheduleLocked(ctx, resource, cronExpr, keep, !disabled, lock); err != nil {
 				return fmt.Errorf("failed to create snapshot schedule: %w", err)
 			}
 			fmt.Printf("Snapshot schedule for %q created (cron=%q)\n", resource, cronExpr)
@@ -84,6 +100,7 @@ func resourceSnapshotScheduleCreate() *cobra.Command {
 	cmd.Flags().IntVar(&monthly, "keep-monthly", 0, "Monthly snapshots to retain")
 	cmd.Flags().IntVar(&yearly, "keep-yearly", 0, "Yearly snapshots to retain")
 	cmd.Flags().BoolVar(&disabled, "disabled", false, "Create the schedule disabled")
+	cmd.Flags().Uint32Var(&lockDays, "lock-days", 0, "Lock every snapshot the schedule takes for this many days (see above)")
 	return cmd
 }
 
@@ -122,6 +139,13 @@ func resourceSnapshotScheduleList() *cobra.Command {
 				}
 				if s.NextRun != "" {
 					fmt.Printf("  next run: %s\n", s.NextRun)
+				}
+				if s.LockDays > 0 {
+					fmt.Printf("  snapshots locked for %d days", s.LockDays)
+					if s.LockedUntil != "" {
+						fmt.Printf("; newest locked until %s", s.LockedUntil)
+					}
+					fmt.Println()
 				}
 			}
 			return nil

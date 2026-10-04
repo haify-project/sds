@@ -2019,6 +2019,11 @@ message SnapshotScheduleInfo {
   GFSRetention keep = 5;
   string last_run = 6;
   string next_run = 7;
+  // lock_days locks every snapshot the schedule takes for that many days.
+  uint32 lock_days = 8;
+  // locked_until (RFC3339) is when the newest snapshot it took stops being
+  // locked; until then the schedule and its resource cannot be deleted.
+  string locked_until = 9;
 }
 
 message CreateSnapshotScheduleRequest {
@@ -2026,6 +2031,11 @@ message CreateSnapshotScheduleRequest {
   string cron = 2;
   GFSRetention keep = 3;
   bool enabled = 4;
+  // lock_days locks every snapshot the schedule takes for that many days: no
+  // retention, full pool or API call deletes it before then. Unset keeps the
+  // current schedule's lock; it can be raised at any time, lowered only once
+  // nothing is locked.
+  optional uint32 lock_days = 5;
 }
 
 message CreateSnapshotScheduleResponse {

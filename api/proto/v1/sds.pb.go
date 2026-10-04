@@ -11062,14 +11062,19 @@ func (x *GFSRetention) GetYearly() int32 {
 }
 
 type SnapshotScheduleInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Resource      string                 `protobuf:"bytes,2,opt,name=resource,proto3" json:"resource,omitempty"`
-	Cron          string                 `protobuf:"bytes,3,opt,name=cron,proto3" json:"cron,omitempty"`
-	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Keep          *GFSRetention          `protobuf:"bytes,5,opt,name=keep,proto3" json:"keep,omitempty"`
-	LastRun       string                 `protobuf:"bytes,6,opt,name=last_run,json=lastRun,proto3" json:"last_run,omitempty"`
-	NextRun       string                 `protobuf:"bytes,7,opt,name=next_run,json=nextRun,proto3" json:"next_run,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Name     string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Resource string                 `protobuf:"bytes,2,opt,name=resource,proto3" json:"resource,omitempty"`
+	Cron     string                 `protobuf:"bytes,3,opt,name=cron,proto3" json:"cron,omitempty"`
+	Enabled  bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Keep     *GFSRetention          `protobuf:"bytes,5,opt,name=keep,proto3" json:"keep,omitempty"`
+	LastRun  string                 `protobuf:"bytes,6,opt,name=last_run,json=lastRun,proto3" json:"last_run,omitempty"`
+	NextRun  string                 `protobuf:"bytes,7,opt,name=next_run,json=nextRun,proto3" json:"next_run,omitempty"`
+	// lock_days locks every snapshot the schedule takes for that many days.
+	LockDays uint32 `protobuf:"varint,8,opt,name=lock_days,json=lockDays,proto3" json:"lock_days,omitempty"`
+	// locked_until (RFC3339) is when the newest snapshot it took stops being
+	// locked; until then the schedule and its resource cannot be deleted.
+	LockedUntil   string `protobuf:"bytes,9,opt,name=locked_until,json=lockedUntil,proto3" json:"locked_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11153,12 +11158,31 @@ func (x *SnapshotScheduleInfo) GetNextRun() string {
 	return ""
 }
 
+func (x *SnapshotScheduleInfo) GetLockDays() uint32 {
+	if x != nil {
+		return x.LockDays
+	}
+	return 0
+}
+
+func (x *SnapshotScheduleInfo) GetLockedUntil() string {
+	if x != nil {
+		return x.LockedUntil
+	}
+	return ""
+}
+
 type CreateSnapshotScheduleRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Resource      string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
-	Cron          string                 `protobuf:"bytes,2,opt,name=cron,proto3" json:"cron,omitempty"`
-	Keep          *GFSRetention          `protobuf:"bytes,3,opt,name=keep,proto3" json:"keep,omitempty"`
-	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	Cron     string                 `protobuf:"bytes,2,opt,name=cron,proto3" json:"cron,omitempty"`
+	Keep     *GFSRetention          `protobuf:"bytes,3,opt,name=keep,proto3" json:"keep,omitempty"`
+	Enabled  bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// lock_days locks every snapshot the schedule takes for that many days: no
+	// retention, full pool or API call deletes it before then. Unset keeps the
+	// current schedule's lock; it can be raised at any time, lowered only once
+	// nothing is locked.
+	LockDays      *uint32 `protobuf:"varint,5,opt,name=lock_days,json=lockDays,proto3,oneof" json:"lock_days,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11219,6 +11243,13 @@ func (x *CreateSnapshotScheduleRequest) GetEnabled() bool {
 		return x.Enabled
 	}
 	return false
+}
+
+func (x *CreateSnapshotScheduleRequest) GetLockDays() uint32 {
+	if x != nil && x.LockDays != nil {
+		return *x.LockDays
+	}
+	return 0
 }
 
 type CreateSnapshotScheduleResponse struct {
@@ -22025,7 +22056,7 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\x05daily\x18\x02 \x01(\x05R\x05daily\x12\x16\n" +
 	"\x06weekly\x18\x03 \x01(\x05R\x06weekly\x12\x18\n" +
 	"\amonthly\x18\x04 \x01(\x05R\amonthly\x12\x16\n" +
-	"\x06yearly\x18\x05 \x01(\x05R\x06yearly\"\xd0\x01\n" +
+	"\x06yearly\x18\x05 \x01(\x05R\x06yearly\"\x90\x02\n" +
 	"\x14SnapshotScheduleInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bresource\x18\x02 \x01(\tR\bresource\x12\x12\n" +
@@ -22033,12 +22064,17 @@ const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\aenabled\x18\x04 \x01(\bR\aenabled\x12$\n" +
 	"\x04keep\x18\x05 \x01(\v2\x10.v1.GFSRetentionR\x04keep\x12\x19\n" +
 	"\blast_run\x18\x06 \x01(\tR\alastRun\x12\x19\n" +
-	"\bnext_run\x18\a \x01(\tR\anextRun\"\x8f\x01\n" +
+	"\bnext_run\x18\a \x01(\tR\anextRun\x12\x1b\n" +
+	"\tlock_days\x18\b \x01(\rR\blockDays\x12!\n" +
+	"\flocked_until\x18\t \x01(\tR\vlockedUntil\"\xbf\x01\n" +
 	"\x1dCreateSnapshotScheduleRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
 	"\x04cron\x18\x02 \x01(\tR\x04cron\x12$\n" +
 	"\x04keep\x18\x03 \x01(\v2\x10.v1.GFSRetentionR\x04keep\x12\x18\n" +
-	"\aenabled\x18\x04 \x01(\bR\aenabled\"T\n" +
+	"\aenabled\x18\x04 \x01(\bR\aenabled\x12 \n" +
+	"\tlock_days\x18\x05 \x01(\rH\x00R\blockDays\x88\x01\x01B\f\n" +
+	"\n" +
+	"_lock_days\"T\n" +
 	"\x1eCreateSnapshotScheduleResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x1e\n" +
@@ -23696,6 +23732,7 @@ func file_api_proto_v1_sds_proto_init() {
 		(*HaStartItem_SystemdUnit)(nil),
 		(*HaStartItem_Ocf)(nil),
 	}
+	file_api_proto_v1_sds_proto_msgTypes[170].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

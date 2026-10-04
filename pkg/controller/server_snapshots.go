@@ -94,7 +94,12 @@ func (s *Server) ListSnapshots(ctx context.Context, req *sdspb.ListSnapshotsRequ
 }
 
 func (s *Server) CreateSnapshotSchedule(ctx context.Context, req *sdspb.CreateSnapshotScheduleRequest) (*sdspb.CreateSnapshotScheduleResponse, error) {
-	err := s.ctrl.schedules.CreateSchedule(ctx, req.Resource, req.Cron, gfsFromProto(req.Keep), req.Enabled)
+	var lockDays *int
+	if req.LockDays != nil {
+		n := int(*req.LockDays)
+		lockDays = &n
+	}
+	err := s.ctrl.schedules.CreateSchedule(ctx, req.Resource, req.Cron, gfsFromProto(req.Keep), req.Enabled, lockDays)
 	if err != nil {
 		return &sdspb.CreateSnapshotScheduleResponse{Success: false, Message: err.Error()}, nil
 	}
@@ -118,6 +123,10 @@ func (s *Server) ListSnapshotSchedules(ctx context.Context, req *sdspb.ListSnaps
 			Cron:     sc.Cron,
 			Enabled:  sc.Enabled,
 			Keep:     gfsToProto(sc.Keep),
+			LockDays: uint32(sc.LockDays),
+		}
+		if until := scheduleLockedUntil(sc, now); !until.IsZero() {
+			info.LockedUntil = until.UTC().Format(time.RFC3339)
 		}
 		if !sc.LastRun.IsZero() {
 			info.LastRun = sc.LastRun.UTC().Format(time.RFC3339)
