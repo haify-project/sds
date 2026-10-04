@@ -16,7 +16,7 @@ use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 use PVEStub;
 use MockClient;
 use JSON::PP qw(encode_json);
-use Test::More tests => 21;
+use Test::More tests => 24;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P  = 'PVE::Storage::Custom::SDSPlugin';
@@ -145,25 +145,21 @@ $PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
 my $scfg = { controller => 'c' };
 $PVEStub::NODENAME = 'pve1';    # a compute-only hypervisor: holds no replica
 
+# A snapshot is a resource snapshot, on every replica at once, so the
+# hypervisor — usually holding no replica — never needs to be the one it runs on.
 $P->volume_snapshot($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
-my ($snap_call) = $mock->calls_for('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots');
-ok($snap_call, 'snapshot targets the backing <pool>/<lv> path');
+my ($snap_call) = $mock->calls_for('POST', '/v1/resources/pve-100-0/snapshots');
+ok($snap_call, 'snapshot is a resource snapshot');
+is($snap_call->{payload}{name}, 'before-upgrade', 'named as PVE named it');
 
-# Found on real hardware: the snapshot is taken on the BACKING LV, which only
-# exists on nodes holding a replica. Sending our own node name made every
-# snapshot fail with "failed to create snapshot on <hypervisor>".
-is($snap_call->{payload}{node}, 'n2',
-    'snapshot runs on the Primary replica, never on the diskless hypervisor');
-
-# With no status available, fall back to a diskful node — still never ourselves.
+# One taken this way is rolled back and deleted the same way.
 my $mock2 = MockClient->new(routes => {
-    'GET /v1/resources/pve-100-0'        => $info,
-    'GET /v1/resources/pve-100-0/status' => sub { die "status unavailable\n" },
+    'GET /v1/resources/pve-100-0/snapshots' => { names => [ 'new-style' ] },
 });
 $PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock2 };
-$P->volume_snapshot($scfg, 'sds0', 'vm-100-disk-0', 'fallback');
-my ($fallback) = $mock2->calls_for('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots');
-is($fallback->{payload}{node}, 'n1', 'falls back to the first diskful node');
+$P->volume_snapshot_rollback($scfg, 'sds0', 'vm-100-disk-0', 'new-style');
+ok($mock2->called('POST', '/v1/resources/pve-100-0/snapshots/new-style/rollback'),
+    'a resource snapshot rolls back every replica together');
 
 $PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
 
@@ -171,6 +167,8 @@ $P->volume_snapshot_rollback($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
 ok($mock->called('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots/before-upgrade/restore'),
     'rollback restores the named snapshot');
 
+# Snapshots from earlier plugin versions are on one replica, under their own
+# name, and are rolled back and deleted the old way.
 # Found on real hardware: DELETE carries no body, so grpc-gateway can only take
 # the node from a QUERY parameter. Without it the controller failed with
 # "failed to delete snapshot: []" — it had no host to run on.
@@ -186,5 +184,20 @@ $mock = MockClient->new(routes => {
     'GET /v1/resources/pve-100-0' => { resource => { name => 'pve-100-0', volumes => [ { volumeId => 0 } ] } },
 });
 $PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
-eval { $P->volume_snapshot($scfg, 'sds0', 'vm-100-disk-0', 'snap') };
+eval { $P->volume_snapshot_delete($scfg, 'sds0', 'vm-100-disk-0', 'snap') };
 like($@, qr/no backing volume/, 'a missing backing volume is an explicit error');
+
+# Opening a snapshot read-only (vzdump's snapshot mode) works where a replica
+# is, and says where to go elsewhere.
+$mock = MockClient->new(routes => { 'GET /v1/resources/pve-100-0' => $info });
+$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
+eval { $P->path($scfg, 'vm-100-disk-0', 'sds0', 'before-upgrade') };
+like($@, qr/on its replica nodes \(n1 n2\), not on pve1/, 'a node without a replica has no snapshot to open');
+$PVEStub::NODENAME = 'n1';
+is($P->path($scfg, 'vm-100-disk-0', 'sds0', 'before-upgrade'), '/dev/vg0/pve-100-0_00_snap_before-upgrade',
+    "a replica node opens its own copy of the snapshot");
+my @ran;
+local $PVE::Storage::Custom::SDS::Activation::RUN = sub { push @ran, join(' ', @_); return (0, '') };
+$P->activate_volume('sds0', $scfg, 'vm-100-disk-0', 'before-upgrade');
+is($ran[0], 'lvchange -ay -K vg0/pve-100-0_00_snap_before-upgrade', 'activated despite the skip flag');
+$PVEStub::NODENAME = 'pve1';

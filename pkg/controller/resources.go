@@ -96,6 +96,8 @@ type ResourceVolumeInfo struct {
 	VolumeID uint32
 	Device   string
 	SizeGB   uint64
+	// SizeBytes is the device's exact size when it was given one, else 0.
+	SizeBytes uint64
 	// Pool is the storage pool (volume group) backing this volume.
 	Pool string
 	// BackingVolume is the logical volume name inside the pool
@@ -228,6 +230,10 @@ func (rm *ResourceManager) disklessHosts(ctx context.Context, resource string) [
 type VolumeSpec struct {
 	SizeGB uint32
 	Pool   string
+	// SizeBytes, when set, is the exact size the DRBD device presents
+	// (rounded up to a 512-byte sector); the backing volume is still
+	// allocated in whole GiB. SizeGB may then be left zero (exact_size.go).
+	SizeBytes uint64
 }
 
 // resolvedVolume is a VolumeSpec with its pool auto-selected/normalized, a
@@ -237,6 +243,9 @@ type resolvedVolume struct {
 	volumeName string
 	pool       string
 	sizeGB     uint32
+	// exactBytes caps the DRBD device at this many bytes; zero leaves it at
+	// whatever the backing volume holds.
+	exactBytes uint64
 	minor      int
 	// encrypted routes DRBD at this volume's LUKS container instead of at the
 	// LV/zvol. Carried per volume rather than passed alongside so the config

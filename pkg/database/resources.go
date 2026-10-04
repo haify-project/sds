@@ -231,8 +231,11 @@ type Volume struct {
 	VolumeID     int
 	Pool         string
 	SizeGB       int
-	Device       string
-	CreatedAt    time.Time
+	// SizeBytes is the exact size the DRBD device presents, when the volume
+	// was created or resized to one; zero for whole-GiB volumes.
+	SizeBytes int64 `json:",omitempty"`
+	Device    string
+	CreatedAt time.Time
 }
 
 // SaveVolume saves or updates a volume

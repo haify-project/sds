@@ -621,6 +621,31 @@ takes the resource down on every node, merges the snapshot back on its node,
 and makes every other replica resync that volume from it; until the resync
 finishes there is one complete copy.
 
+**Snapshots of the whole resource.** `snapshot create` snapshots one node.
+A replicated snapshot is taken of every volume on every diskful replica at
+once, with I/O suspended across them for the moment it takes (a systemd timer
+on each node resumes it after a minute whatever happens to the controller):
+
+```bash
+sds resource snapshot replicated create   --resource db --name before-upgrade
+sds resource snapshot replicated list     --resource db
+sds resource snapshot replicated rollback --resource db --name before-upgrade
+sds resource snapshot replicated delete   --resource db --name before-upgrade
+```
+
+Each copy carries its replica's DRBD metadata, so a rollback — which needs the
+resource Secondary everywhere — restores every replica together and resyncs
+nothing. The backing snapshots are named `<backing>_snap_<name>`. The Proxmox
+plugin takes VM snapshots this way. Encrypted resources are snapshotted volume
+by volume.
+
+**Exact sizes and renaming.** `resource create --size 10737418752 --exact-size`
+makes the device exactly that many bytes (rounded up to a 512-byte sector)
+instead of whole GiB; the backing volume is still allocated in GiB and the
+DRBD device capped. A resize keeps it exact. `sds resource rename <old> <new>`
+renames a resource that is not Primary anywhere and that no HA config,
+gateway, schedule, backup or snapshot refers to.
+
 **Scheduled snapshots** with grandfather-father-son retention:
 
 ```bash

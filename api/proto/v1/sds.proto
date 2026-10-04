@@ -94,6 +94,28 @@ service SDSController {
   rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse) {
     option (google.api.http) = { delete: "/v1/resources/{resource}/volumes/{volume_id}"; };
   }
+  // Renames a resource that nothing else refers to by name: offline (not
+  // Primary anywhere), with no HA config, gateway, schedule, backups or
+  // snapshots, not WAN-replicated or encrypted. Its data, node ids and port
+  // are kept. The Proxmox plugin uses it to reassign disks and make templates.
+  // Resource snapshots: every volume on every diskful replica, taken with
+  // I/O suspended across them, so a rollback restores all replicas together
+  // and resyncs nothing. Backing snapshots are "<backing>_snap_<name>".
+  rpc CreateResourceSnapshot(CreateResourceSnapshotRequest) returns (CreateResourceSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/snapshots"; body: "*"; };
+  }
+  rpc ListResourceSnapshots(ListResourceSnapshotsRequest) returns (ListResourceSnapshotsResponse) {
+    option (google.api.http) = { get: "/v1/resources/{resource}/snapshots"; };
+  }
+  rpc RollbackResourceSnapshot(RollbackResourceSnapshotRequest) returns (RollbackResourceSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/snapshots/{name}/rollback"; body: "*"; };
+  }
+  rpc DeleteResourceSnapshot(DeleteResourceSnapshotRequest) returns (DeleteResourceSnapshotResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/snapshots/{name}"; };
+  }
+  rpc RenameResource(RenameResourceRequest) returns (RenameResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/rename"; body: "*"; };
+  }
   rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse) {
     option (google.api.http) = { patch: "/v1/resources/{resource}/volumes/{volume_id}"; body: "*"; };
   }
@@ -1092,6 +1114,10 @@ message CreateResourceRequest {
   // is no in-place conversion, and asking for one on a resource that already
   // exists is refused rather than half-applied.
   bool encrypt = 21;
+  // size_bytes, for the single-volume shorthand, makes the device exactly
+  // this many bytes (rounded up to a 512-byte sector) instead of size_gb
+  // whole GiB; size_gb may then be 0. PVE's online Move Disk needs it.
+  uint64 size_bytes = 22;
 }
 
 // VolumeSpec is one DRBD volume within a resource. storage_type comes from the
@@ -1099,6 +1125,7 @@ message CreateResourceRequest {
 message VolumeSpec {
   uint32 size_gb = 1;
   string pool = 2;  // optional; auto-selected when empty
+  uint64 size_bytes = 3;  // exact device size; see CreateResourceRequest.size_bytes
 }
 
 message CreateResourceResponse {
@@ -1249,6 +1276,49 @@ message RemoveVolumeResponse {
   string message = 2;
 }
 
+message CreateResourceSnapshotRequest {
+  string resource = 1;
+  string name = 2;
+}
+message CreateResourceSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+message ListResourceSnapshotsRequest {
+  string resource = 1;
+}
+message ListResourceSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string names = 3;
+}
+message RollbackResourceSnapshotRequest {
+  string resource = 1;
+  string name = 2;
+}
+message RollbackResourceSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+message DeleteResourceSnapshotRequest {
+  string resource = 1;
+  string name = 2;
+}
+message DeleteResourceSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RenameResourceRequest {
+  string name = 1;
+  string new_name = 2;
+}
+
+message RenameResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
 message ResizeVolumeRequest {
   string resource = 1;
   uint32 volume_id = 2;
@@ -1258,6 +1328,9 @@ message ResizeVolumeRequest {
   // without this a pool that cannot hold it refuses the resize, because a full
   // thin pool fails the writes and drops the disk.
   bool ignore_free_space = 4;
+  // size_bytes grows the device to exactly this many bytes; size_gb is then
+  // ignored.
+  uint64 size_bytes = 5;
 }
 
 message ResizeVolumeResponse {
@@ -1946,6 +2019,9 @@ message VolumeInfo {
   // rather than the backing LV/zvol directly. Snapshots of an encrypted volume
   // are snapshots of the ciphertext.
   bool encrypted = 6;
+  // size_bytes is the device's exact size when it was given one; 0 means
+  // size_gb whole GiB.
+  uint64 size_bytes = 7;
 }
 
 // Snapshot messages

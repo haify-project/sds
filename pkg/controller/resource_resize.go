@@ -67,10 +67,17 @@ func (rm *ResourceManager) ResizeVolume(ctx context.Context, resource string, vo
 // ResizeVolumeOptions is ResizeVolume; ignoreFreeSpace grows the volume
 // although a replica's pool has less free space than the growth.
 func (rm *ResourceManager) ResizeVolumeOptions(ctx context.Context, resource string, volumeID uint32, newSizeGB uint64, ignoreFreeSpace bool) error {
+	return rm.resizeVolume(ctx, resource, volumeID, newSizeGB, 0, ignoreFreeSpace)
+}
+
+// resizeVolume grows a volume to newSizeGB of backing storage; with
+// exactBytes the DRBD device is then set to exactly that size (exact_size.go).
+func (rm *ResourceManager) resizeVolume(ctx context.Context, resource string, volumeID uint32, newSizeGB, exactBytes uint64, ignoreFreeSpace bool) error {
 	rm.controller.logger.Info("Resizing volume",
 		zap.String("resource", resource),
 		zap.Uint32("volume_id", volumeID),
-		zap.Uint64("new_size_gb", newSizeGB))
+		zap.Uint64("new_size_gb", newSizeGB),
+		zap.Uint64("exact_bytes", exactBytes))
 
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
@@ -113,7 +120,16 @@ func (rm *ResourceManager) ResizeVolumeOptions(ctx context.Context, resource str
 		}
 	}
 
+	exactBytes, err = rm.exactResizeBytes(ctx, resource, volumeID, newSizeGB, exactBytes)
+	if err != nil {
+		return err
+	}
 	sizeArg := fmt.Sprintf("%dG", newSizeGB)
+	if exactBytes > 0 {
+		// An exact device must fit with DRBD's metadata beside it, which a
+		// plain "<n>G" backing volume does not leave room for.
+		sizeArg = fmt.Sprintf("%dB", backingVolumeSizeBytes(uint32(newSizeGB), len(hosts)-1, false))
+	}
 	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {
 		volumePath := strings.TrimPrefix(target.DiskPath, "/dev/zvol/")
 		zfsRes, err := rm.deployment.ZFSResizeVolume(ctx, hosts, volumePath, sizeArg)
@@ -138,6 +154,9 @@ func (rm *ResourceManager) ResizeVolumeOptions(ctx context.Context, resource str
 			// the mapping, so the LV must be grown by that much more for the
 			// DRBD device to reach the requested size.
 			sizeArg = fmt.Sprintf("%dB", newSizeGB*1024*1024*1024+luksHeaderBytes)
+			if exactBytes > 0 {
+				sizeArg = fmt.Sprintf("%dB", backingVolumeSizeBytes(uint32(newSizeGB), len(hosts)-1, true))
+			}
 		}
 		resizeCmd := fmt.Sprintf("sudo lvresize -L %s -y %s", sizeArg, lvPath)
 		lvRes, err := rm.deployment.Exec(ctx, hosts, resizeCmd)
@@ -180,7 +199,18 @@ func (rm *ResourceManager) ResizeVolumeOptions(ctx context.Context, resource str
 		}
 	}
 
-	drbdRes, err := rm.deployment.Exec(ctx, []string{hosts[0]}, fmt.Sprintf("sudo drbdadm resize %s/%d", resource, volumeID))
+	resizeCmd := fmt.Sprintf("sudo drbdadm resize %s/%d", resource, volumeID)
+	if exactBytes > 0 {
+		// The size is written to every participant's config first, or the
+		// next adjust would take the device back to what the file says.
+		if _, _, err := rm.stageResourceConfig(ctx, resource, func(conf string) (string, error) {
+			return setVolumeSizeInConfig(conf, int(volumeID), exactBytes)
+		}); err != nil {
+			return fmt.Errorf("write the new size of %s/%d into its config: %w", resource, volumeID, err)
+		}
+		resizeCmd = fmt.Sprintf("sudo drbdadm resize --size=%s %s/%d", drbdSizeSectors(exactBytes), resource, volumeID)
+	}
+	drbdRes, err := rm.deployment.Exec(ctx, []string{hosts[0]}, resizeCmd)
 	if err != nil {
 		return fmt.Errorf("failed to resize DRBD volume: %w", err)
 	}
@@ -199,6 +229,7 @@ func (rm *ResourceManager) ResizeVolumeOptions(ctx context.Context, resource str
 		if err == nil {
 			if volume := findVolumeRecord(dbVolumes, volumeID); volume != nil {
 				volume.SizeGB = int(newSizeGB)
+				volume.SizeBytes = int64(exactBytes)
 				if err := rm.controller.db.SaveVolume(ctx, volume); err != nil {
 					rm.controller.logger.Warn("Failed to update volume metadata",
 						zap.String("resource", resource),

@@ -11,7 +11,7 @@ use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 use PVEStub;
 use MockClient;
 use JSON::PP ();
-use Test::More tests => 32;
+use Test::More tests => 36;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -169,3 +169,25 @@ my $newsize = $P->volume_resize($base_scfg, 'sds0', 'vm-100-disk-0', 32 * 107374
 my ($patch) = $mock->calls_for('PATCH', '/v1/resources/pve-100-0/volumes/0');
 is($patch->{payload}{sizeGb}, 32, 'resize converts bytes to whole GB');
 is($newsize, 32 * 1073741824, 'returns the size actually allocated');
+
+# --- exactsize ----------------------------------------------------------------
+#
+# Online Move Disk needs a target of the source's exact size; whole GiB is
+# not it.
+
+my $exact_scfg = { %$base_scfg, exactsize => 1 };
+with_mock();
+$P->alloc_image('sds0', $exact_scfg, 100, 'raw', 'vm-100-disk-0', 10 * 1048576 + 3);
+($create) = $mock->calls_for('POST', '/v1/resources');
+is($create->{payload}{sizeBytes}, (10 * 1048576 + 3) * 1024, 'exactsize asks for the size PVE gave, in bytes');
+
+with_mock();
+$newsize = $P->volume_resize($exact_scfg, 'sds0', 'vm-100-disk-0', 5 * 1073741824 + 4096, 1);
+($patch) = $mock->calls_for('PATCH', '/v1/resources/pve-100-0/volumes/0');
+is($patch->{payload}{sizeBytes}, 5 * 1073741824 + 4096, 'an exact resize sends bytes');
+is($newsize, 5 * 1073741824 + 4096, 'and returns them');
+
+with_mock(routes => { 'GET /v1/resources/pve-100-0' => {
+    resource => { name => 'pve-100-0', volumes => [ { sizeGb => 6, sizeBytes => '' . (5 * 1073741824 + 4096) } ] } } });
+my ($exact) = $P->volume_size_info($exact_scfg, 'sds0', 'vm-100-disk-0');
+is($exact, 5 * 1073741824 + 4096, 'the exact size is reported, not the GiB it was allocated in');
