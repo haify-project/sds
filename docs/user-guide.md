@@ -1708,6 +1708,10 @@ The manifests are in `deploy/k8s` (see its README); the CSI section of
 **Proxmox VE** has the counterpart: a storage plugin (type `sds`) that backs VM
 disks with SDS resources over the controller's REST API. It is in
 `deploy/proxmox`, with its requirements and install steps in that README.
+`deploy/proxmox/bootstrap.sh`, run on one PVE node, does those steps for an
+existing PVE cluster: DRBD from LINBIT's repository on every node, the
+controller, node registration, the pool, Self-HA, the plugin and the
+`storage.cfg` entry.
 
 ---
 

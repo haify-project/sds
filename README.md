@@ -114,7 +114,7 @@ The web UI is at `http://node1:3376`. Self-HA for the controller, WAN replicas, 
 
 ## Integrations
 
-Kubernetes: put the controller address in `deploy/k8s/00-sds-controller-endpoint.yaml`, `kubectl apply -f deploy/k8s/`, then use the `sds-drbd` StorageClass ([deploy/k8s/README.md](deploy/k8s/README.md)). Proxmox VE: [deploy/proxmox/README.md](deploy/proxmox/README.md). Prometheus and Grafana: [deploy/monitoring/README.md](deploy/monitoring/README.md).
+Kubernetes: put the controller address in `deploy/k8s/00-sds-controller-endpoint.yaml`, `kubectl apply -f deploy/k8s/`, then use the `sds-drbd` StorageClass ([deploy/k8s/README.md](deploy/k8s/README.md)). Proxmox VE: [deploy/proxmox/README.md](deploy/proxmox/README.md); `deploy/proxmox/bootstrap.sh` sets up an existing PVE cluster (DRBD, controller, Self-HA, plugin, storage entry) in one command. Prometheus and Grafana: [deploy/monitoring/README.md](deploy/monitoring/README.md).
 
 AI assistants:
 
