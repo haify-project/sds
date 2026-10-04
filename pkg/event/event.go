@@ -103,6 +103,16 @@ const (
 	// pool has to grow before its replica's writes fail.
 	TypePoolSnapshotsLocked Type = "pool.snapshots_locked"
 
+	// TypeAuditShippingFailed fires when the audit trail has not reached an
+	// [audit] destination for several minutes, and resolves once it has
+	// caught up. Until then the entries wait in the controller database.
+	TypeAuditShippingFailed Type = "audit.shipping_failed"
+	// TypeAuditTruncated is published (as info, at critical severity) when
+	// [audit] max_entries made the controller drop entries younger than
+	// retention_days: history was lost, or someone is flooding the API to
+	// push an entry out of the trail.
+	TypeAuditTruncated Type = "audit.truncated"
+
 	// TypeBackupFailed fires when a scheduled backup did not complete, and
 	// resolves on the schedule's next completed run. A schedule that keeps
 	// failing leaves the cluster with an ever older last good copy and no

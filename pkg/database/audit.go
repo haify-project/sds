@@ -103,40 +103,64 @@ func (db *DB) AppendAuditEvent(ctx context.Context, ev *AuditEvent) error {
 		if err := b.Put(seqKey(seq), data); err != nil {
 			return err
 		}
-		if b.Stats().KeyN > retention+pruneSlack {
-			return pruneAudit(b, retention)
+		if auditLen(b, seq) > retention+pruneSlack {
+			dropped, err := pruneAudit(b, retention, db.auditCutoff())
+			db.auditTruncated.Add(uint64(dropped))
+			return err
 		}
 		return nil
 	})
 }
 
-// pruneAudit drops the oldest entries until the bucket is back at the cap.
+// auditLen is how many entries the trail holds when last is its newest key.
+// Entries are only ever removed from the front, so the keys are contiguous;
+// this is two cursor seeks where Bucket.Stats walks every page.
+func auditLen(b *bolt.Bucket, last uint64) int {
+	k, _ := b.Cursor().First()
+	if k == nil {
+		return 0
+	}
+	return int(last - binary.BigEndian.Uint64(k) + 1)
+}
+
+// pruneAudit drops the oldest entries until the bucket is back at the cap,
+// and returns how many of them were younger than cutoff: entries the
+// retention period promised to keep, lost to the cap instead.
 // Keys are sequence numbers, so the cursor walks oldest-first.
 //
 // The keys are collected before anything is deleted. Calling Cursor.Delete()
 // and then Next() advances past the key that followed the deleted one, so
 // deleting during the walk removes a scattered subset — it leaves the trail
 // full of holes and discards newer entries while keeping older ones.
-func pruneAudit(b *bolt.Bucket, retention int) error {
-	excess := b.Stats().KeyN - retention
+func pruneAudit(b *bolt.Bucket, retention int, cutoff time.Time) (int, error) {
+	c := b.Cursor()
+	last, _ := c.Last()
+	if last == nil {
+		return 0, nil
+	}
+	excess := auditLen(b, binary.BigEndian.Uint64(last)) - retention
 	if excess <= 0 {
-		return nil
+		return 0, nil
 	}
 
 	doomed := make([][]byte, 0, excess)
-	c := b.Cursor()
-	for k, _ := c.First(); k != nil && len(doomed) < excess; k, _ = c.Next() {
+	young := 0
+	for k, v := c.First(); k != nil && len(doomed) < excess; k, v = c.Next() {
 		// The key is only valid for the life of the transaction, and it is
 		// used within it, but bolt reuses the backing page buffer across
 		// cursor moves — so it has to be copied.
 		doomed = append(doomed, append([]byte(nil), k...))
+		var ev AuditEvent
+		if !cutoff.IsZero() && json.Unmarshal(v, &ev) == nil && ev.Timestamp.After(cutoff) {
+			young++
+		}
 	}
 	for _, k := range doomed {
 		if err := b.Delete(k); err != nil {
-			return err
+			return young, err
 		}
 	}
-	return nil
+	return young, nil
 }
 
 // matches reports whether an event satisfies the filter.
@@ -181,7 +205,9 @@ func (db *DB) ListAuditEvents(ctx context.Context, filter AuditFilter) ([]*Audit
 			// No call has been audited yet; an empty trail is not an error.
 			return nil
 		}
-		total = b.Stats().KeyN
+		if k, _ := b.Cursor().Last(); k != nil {
+			total = auditLen(b, binary.BigEndian.Uint64(k))
+		}
 
 		c := b.Cursor()
 		for k, v := c.Last(); k != nil && len(events) < limit; k, v = c.Prev() {

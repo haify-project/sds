@@ -212,15 +212,6 @@ type RBACPolicy struct {
 	Action string `mapstructure:"action"`
 }
 
-// AuditConfig controls the API audit log. When enabled, every state-changing
-// API call is recorded with the caller, target, outcome and latency under the
-// "audit" logger. Read-only calls (List/Get/…) are skipped unless
-// IncludeReads is set, to keep the audit trail high-signal.
-type AuditConfig struct {
-	Enabled      bool `mapstructure:"enabled"`
-	IncludeReads bool `mapstructure:"include_reads"`
-}
-
 // AuthConfig controls API authentication. When enabled, every gRPC and REST
 // request must carry "Authorization: Bearer <token>"; only gRPC health
 // checks stay open for liveness probes.
@@ -462,6 +453,9 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := c.Audit.validate(); err != nil {
+		return err
+	}
 	if c.Auth.Enabled {
 		if len(c.Auth.Token) < 16 {
 			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
@@ -516,8 +510,7 @@ func setDefaults() {
 	viper.SetDefault("metrics.enabled", true)
 	viper.SetDefault("metrics.listen_address", "0.0.0.0")
 	viper.SetDefault("metrics.port", 9433)
-	viper.SetDefault("audit.enabled", true)
-	viper.SetDefault("audit.include_reads", false)
+	setAuditDefaults()
 	viper.SetDefault("rbac.enabled", false)
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)

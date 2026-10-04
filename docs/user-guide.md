@@ -1320,6 +1320,7 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `pool.metadata_full`, `pool.out_of_space` (LVM already refused writes),
 `pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
 `pool.snapshots_locked` (a near-full pool with only locked snapshots left),
+`audit.shipping_failed`, `audit.truncated` (see [Access control](#16-access-control)),
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,
@@ -1541,7 +1542,36 @@ has an environment variable (`SDS_TLS`, `SDS_TLS_CA`, `SDS_TLS_CERT`,
 **Audit.** Every state-changing API call is recorded with caller, target,
 outcome and latency in the controller database (`[audit] enabled`, default
 true; `include_reads = true` records reads too). Read it at `GET /v1/audit`
-on the REST API, or in the web UI.
+on the REST API, or in the web UI. Entries are kept for `retention_days`
+(default 180), and never more than `max_entries` (default 200000) of them, so
+a flood of calls cannot fill the metadata volume. An entry dropped by the cap
+before its retention ran out raises a critical `audit.truncated` event.
+
+The database trail is only as trustworthy as the controller host: whoever
+holds it can rewrite it. To keep a copy they cannot, send the trail off the
+cluster as it is written:
+
+```toml
+[audit]
+syslog = "tls://logs.example.com:6514"   # or tcp://host:514, udp://host:514
+syslog_ca = "/etc/sds/logs-ca.pem"       # tls only; empty = system roots
+webhook_url = "https://audit.example.com/sds"
+webhook_token = "..."                    # sent as Authorization: Bearer
+```
+
+Syslog gets one RFC 5424 message per entry, facility 13 ("log audit"),
+newline-framed over TCP. The webhook gets each batch as a JSON POST,
+`{"source": "sds-controller", "records": [{"seq": N, "event": {...}}]}`. Either
+is sent in order and from where it last left off: each destination's position
+is kept with the trail, so a destination that was down gets everything when it
+is back, and a controller that takes over after a failover carries on where
+the last one stopped. A resend after a failure can repeat an entry, never skip
+one; `seq` tells a duplicate from a gap. A destination failing for five
+minutes raises `audit.shipping_failed`. UDP can lose messages unnoticed; use
+TCP or TLS.
+
+Point it at storage the cluster's credentials cannot rewrite: a log server
+you run elsewhere, or a collector writing to an object store with Object Lock.
 
 ---
 

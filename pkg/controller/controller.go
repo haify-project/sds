@@ -102,7 +102,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Open database
-	db, err := database.Open(&database.Config{Path: cfg.Database.Path}, logger)
+	db, err := database.Open(&database.Config{
+		Path:           cfg.Database.Path,
+		AuditRetention: cfg.Audit.MaxEntries,
+		AuditMaxAge:    time.Duration(cfg.Audit.RetentionDays) * 24 * time.Hour,
+	}, logger)
 	if err != nil {
 		// A schema this binary cannot safely write is the one open failure that
 		// must not degrade into "continue without persistence". Running on with
@@ -294,6 +298,10 @@ func (c *Controller) Start() error {
 			c.logger.Warn("Failed to start snapshot scheduler", zap.Error(err))
 		}
 	}
+
+	// The audit trail is sent off the cluster and pruned by the active
+	// controller only; its cursor moves with the database on failover.
+	c.startAuditShipper(c.ctx)
 
 	// A backup left "running" belongs to a controller that died mid-transfer;
 	// only the active controller ships backups, so nothing can still be in

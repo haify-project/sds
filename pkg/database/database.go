@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -49,6 +50,11 @@ type DB struct {
 	mu     sync.RWMutex
 	// auditCap bounds the audit trail; zero means DefaultAuditRetention.
 	auditCap int
+	// auditMaxAge is how long audit entries are kept; zero keeps them until
+	// the cap drops them.
+	auditMaxAge time.Duration
+	// auditTruncated counts entries the cap dropped before auditMaxAge.
+	auditTruncated atomic.Uint64
 }
 
 // Config holds database configuration
@@ -57,6 +63,8 @@ type Config struct {
 	// AuditRetention bounds the number of audit entries kept. Zero selects
 	// DefaultAuditRetention.
 	AuditRetention int
+	// AuditMaxAge is how long audit entries are kept. Zero: until the cap.
+	AuditMaxAge time.Duration
 }
 
 // Default database path
@@ -138,10 +146,11 @@ func Open(cfg *Config, logger *zap.Logger) (*DB, error) {
 	}
 
 	database := &DB{
-		db:       db,
-		path:     cfg.Path,
-		logger:   logger,
-		auditCap: cfg.AuditRetention,
+		db:          db,
+		path:        cfg.Path,
+		logger:      logger,
+		auditCap:    cfg.AuditRetention,
+		auditMaxAge: cfg.AuditMaxAge,
 	}
 
 	logger.Info("Database opened", zap.String("path", cfg.Path))

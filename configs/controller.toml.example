@@ -94,6 +94,17 @@ enabled = true
 # Log every state-changing API call (caller, target, outcome, latency).
 enabled = true
 include_reads = false
+# Kept in the controller database this long, and never more entries than
+# max_entries (dropping a younger one raises audit.truncated).
+retention_days = 180
+max_entries = 200000
+# Send every entry off the cluster as it is written, in order, resuming after
+# an outage or a failover. "udp://host:514", "tcp://host:514", "tls://host:6514".
+syslog = ""
+syslog_ca = ""        # PEM bundle for tls://; empty = system roots
+# Each batch as a JSON POST; webhook_token is sent as a Bearer token.
+webhook_url = ""
+webhook_token = ""
 
 [self_ha]
 # Extra systemd units the Self-HA promoter starts with the controller, e.g.

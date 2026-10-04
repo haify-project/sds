@@ -1,6 +1,8 @@
 package database
 
 import (
+	"time"
+
 	"context"
 
 	bolt "go.etcd.io/bbolt"
@@ -34,8 +36,9 @@ func (db *DB) AppendEventRecord(ctx context.Context, record []byte, retention in
 		if err := b.Put(seqKey(seq), record); err != nil {
 			return err
 		}
-		if retention > 0 && b.Stats().KeyN > retention+pruneSlack {
-			return pruneAudit(b, retention)
+		if retention > 0 && auditLen(b, seq) > retention+pruneSlack {
+			_, err := pruneAudit(b, retention, time.Time{})
+			return err
 		}
 		return nil
 	})
