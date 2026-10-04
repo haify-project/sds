@@ -120,7 +120,13 @@ moment. DRBD forbids two Primaries unless `allow-two-primaries` is set, so the
 plugin brackets the hand-off:
 
 - `activate_volume` opens the window **only** when another node currently holds
-  Primary, which is exactly the migration case.
+  Primary **and** PVE is live-migrating the VM from there: the VM's config still
+  sits on the source node with `lock: migrate`. Any other Primary is a leftover
+  (typically an earlier `deactivate_volume` that could not reach the
+  controller), and activation fails naming the node, instead of letting the
+  guest run with two writers allowed. Demote the leftover with
+  `sds resource secondary <resource> <node>` and start the guest again.
+  Containers never qualify: they migrate by restart.
 - The window is closed again on every exit path: a failed promote, a device that
   does not appear within 20 seconds, and `deactivate_volume` (which closes
   unconditionally, since the source deactivates after hand-off).
