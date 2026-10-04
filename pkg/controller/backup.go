@@ -84,6 +84,9 @@ type BackupManifestVolume struct {
 	Ranges string `json:"ranges,omitempty"`
 	// ChangedBytes is how much of the volume an incremental image carries.
 	ChangedBytes uint64 `json:"changed_bytes,omitempty"`
+	// ReadThroughLUKS marks an encrypted volume's image as plaintext, read
+	// through its LUKS container (backup_luks.go).
+	ReadThroughLUKS bool `json:"read_through_luks,omitempty"`
 }
 
 // BackupManifestSnapshot records the snapshot each image was read from.
@@ -195,6 +198,9 @@ func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName,
 	if err != nil {
 		return nil, err
 	}
+	// An encrypted volume's snapshot is LUKS ciphertext; it is read through a
+	// crypt mapping of its own so the image holds what DRBD holds.
+	encrypted := bm.encryptedVolumes(ctx, resource, backing)
 	for _, v := range info.Volumes {
 		if isZFSDevice(backing[v.VolumeID]) {
 			// A zvol snapshot has no block device unless snapdev=visible is set
@@ -265,7 +271,7 @@ func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName,
 	var parent *database.Backup
 	if !full {
 		var why string
-		if parent, why = bm.incrementalBase(ctx, info, targetName, node, host, sizes); parent == nil {
+		if parent, why = bm.incrementalBase(ctx, info, targetName, node, host, sizes, encrypted); parent == nil {
 			bm.controller.logger.Info("Taking a full backup", zap.String("resource", resource), zap.String("reason", why))
 		}
 	}
@@ -306,14 +312,12 @@ func (bm *BackupManager) createBackup(ctx context.Context, resource, targetName,
 	// the volume that failed verification is precisely the one whose remains
 	// are on the target, and it is the one rec.Volumes does not list.
 	var uploaded []string
-	upload := bm.uploadVolumes
 	if parent != nil {
-		upload = func(ctx context.Context, sess backup.Session, host string, info *ResourceInfo,
-			snaps map[uint32]string, sizes map[uint32]uint64, rec *database.Backup, uploaded *[]string) error {
-			return bm.uploadDeltas(ctx, sess, host, info, parent, snaps, sizes, rec, uploaded)
-		}
+		err = bm.uploadDeltas(ctx, sess, host, info, parent, snaps, sizes, encrypted, rec, &uploaded)
+	} else {
+		err = bm.uploadVolumes(ctx, sess, host, info, snaps, sizes, encrypted, rec, &uploaded)
 	}
-	if err := upload(ctx, sess, host, info, snaps, sizes, rec, &uploaded); err != nil {
+	if err != nil {
 		bm.failBackup(ctx, sess, rec, uploaded, err)
 		return nil, err
 	}
@@ -443,6 +447,7 @@ func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo
 		m.Volumes = append(m.Volumes, BackupManifestVolume{
 			VolumeID: v.VolumeID, Object: v.Object, Bytes: v.Bytes,
 			Pool: v.Pool, Backing: v.BackingVolume, Ranges: v.Ranges, ChangedBytes: v.ChangedBytes,
+			ReadThroughLUKS: v.ReadThroughLUKS,
 		})
 	}
 	for _, v := range info.Volumes {

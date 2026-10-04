@@ -52,8 +52,11 @@ func (bm *BackupManager) execDataMove(ctx context.Context, host, cmd string) (*d
 
 // uploadVolumes streams each snapshot to the target and verifies the stored
 // size. It stops at the first failure: half an image is not a backup.
+//
+// encrypted names the volumes that are LUKS containers; their snapshots are
+// read through a crypt mapping, see backup_luks.go.
 func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session, host string,
-	info *ResourceInfo, snaps map[uint32]string, sizes map[uint32]uint64,
+	info *ResourceInfo, snaps map[uint32]string, sizes map[uint32]uint64, encrypted map[uint32]bool,
 	rec *database.Backup, uploaded *[]string) error {
 
 	for _, v := range info.Volumes {
@@ -67,17 +70,23 @@ func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session,
 		// GiB, most of it zeros. gzip is on every node SDS supports, so the
 		// restoring node never lacks the tool to read it back.
 		object := backup.ObjectPath(rec.Prefix, fmt.Sprintf("volume-%d.img.gz", v.VolumeID))
-		snapDev := fmt.Sprintf("/dev/%s/%s", v.Pool, snaps[v.VolumeID])
+		source, closeSource, err := backupSnapshotSource(v.Pool, v.BackingVolume, snaps[v.VolumeID], encrypted[v.VolumeID])
+		if err != nil {
+			return fmt.Errorf("volume %d of %q: %w", v.VolumeID, info.Name, err)
+		}
 
 		// pipefail is what makes a truncated read a failed backup: without it
 		// the pipeline's exit status is rclone's alone, and rclone happily
 		// stores whatever bytes reached it before dd died. The compressed
 		// byte count is taken on the way through, so what the target stored
 		// can still be checked against what was sent.
-		cmd := fmt.Sprintf(`set -e -o pipefail; CNT=$(mktemp); trap 'rm -f "$CNT"' EXIT
-sudo dd if=%s bs=4M count=%d iflag=fullblock,count_bytes status=none | gzip -1 -c | tee >(wc -c > "$CNT") | %s
+		cmd := fmt.Sprintf(`set -e -o pipefail; CNT=$(mktemp); MAP=
+cleanup() { %s; rm -f "$CNT"; }
+trap cleanup EXIT
+%s
+sudo dd if="$SRC" bs=4M count=%d iflag=fullblock,count_bytes status=none | gzip -1 -c | tee >(wc -c > "$CNT") | %s
 for i in $(seq 1 100); do [ -s "$CNT" ] && break; sleep 0.1; done
-echo "SDS_SENT=$(cat "$CNT")"`, snapDev, size, sess.PushCmd(object, size))
+echo "SDS_SENT=$(cat "$CNT")"`, closeSource, source, size, sess.PushCmd(object, size))
 		*uploaded = append(*uploaded, object)
 		res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
 		if err != nil {
@@ -105,7 +114,7 @@ echo "SDS_SENT=$(cat "$CNT")"`, snapDev, size, sess.PushCmd(object, size))
 
 		rec.Volumes = append(rec.Volumes, database.BackupVolume{
 			VolumeID: v.VolumeID, BackingVolume: v.BackingVolume, Pool: v.Pool,
-			Object: object, Bytes: size,
+			Object: object, Bytes: size, ReadThroughLUKS: encrypted[v.VolumeID],
 		})
 		rec.TotalBytes += size
 	}

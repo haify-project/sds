@@ -41,9 +41,9 @@ const deltaCoalesceGap = 1 << 20
 
 // incrementalBase finds the backup the next one can be computed against, or
 // returns the reason a full backup is needed instead. host is where the new
-// backup will be read.
+// backup will be read; encrypted names the volumes that are LUKS containers.
 func (bm *BackupManager) incrementalBase(ctx context.Context, info *ResourceInfo, target, node, host string,
-	sizes map[uint32]uint64) (*database.Backup, string) {
+	sizes map[uint32]uint64, encrypted map[uint32]bool) (*database.Backup, string) {
 
 	parent := bm.latestCompleted(ctx, info.Name, target)
 	if parent == nil {
@@ -70,6 +70,9 @@ func (bm *BackupManager) incrementalBase(ctx context.Context, info *ResourceInfo
 			return nil, fmt.Sprintf("volume %d is backed by a different volume than in the last backup", v.VolumeID)
 		case pv.Bytes != sizes[v.VolumeID]:
 			return nil, fmt.Sprintf("volume %d changed size since the last backup", v.VolumeID)
+		case encrypted[v.VolumeID] && !pv.ReadThroughLUKS:
+			// Changes on top of a ciphertext image would restore to noise.
+			return nil, fmt.Sprintf("the last backup of encrypted volume %d holds its ciphertext, not its data", v.VolumeID)
 		}
 		thin, err := bm.controller.deployment.LVIsThin(ctx, host, pv.Pool, pv.Snapshot)
 		if err != nil || !thin {
@@ -134,7 +137,7 @@ func (bm *BackupManager) restoreChain(ctx context.Context, rec *database.Backup)
 // parent's base snapshot and the new one.
 func (bm *BackupManager) uploadDeltas(ctx context.Context, sess backup.Session, host string,
 	info *ResourceInfo, parent *database.Backup, snaps map[uint32]string, sizes map[uint32]uint64,
-	rec *database.Backup, uploaded *[]string) error {
+	encrypted map[uint32]bool, rec *database.Backup, uploaded *[]string) error {
 
 	bases := make(map[uint32]string, len(parent.Volumes))
 	for _, v := range parent.Volumes {
@@ -144,7 +147,11 @@ func (bm *BackupManager) uploadDeltas(ctx context.Context, sess backup.Session, 
 		size := sizes[v.VolumeID]
 		ranges := backup.ObjectPath(rec.Prefix, fmt.Sprintf("volume-%d.ranges", v.VolumeID))
 		object := backup.ObjectPath(rec.Prefix, fmt.Sprintf("volume-%d.delta.gz", v.VolumeID))
-		cmd := deltaUploadCmd(v.Pool, bases[v.VolumeID], snaps[v.VolumeID], size,
+		source, closeSource, err := backupSnapshotSource(v.Pool, v.BackingVolume, snaps[v.VolumeID], encrypted[v.VolumeID])
+		if err != nil {
+			return fmt.Errorf("volume %d of %q: %w", v.VolumeID, info.Name, err)
+		}
+		cmd := deltaUploadCmd(v.Pool, bases[v.VolumeID], snaps[v.VolumeID], size, source, closeSource,
 			sess.PushCmd(ranges, 0), sess.PushCmd(object, size))
 		*uploaded = append(*uploaded, ranges, object)
 		res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
@@ -171,6 +178,7 @@ func (bm *BackupManager) uploadDeltas(ctx context.Context, sess backup.Session, 
 		rec.Volumes = append(rec.Volumes, database.BackupVolume{
 			VolumeID: v.VolumeID, BackingVolume: v.BackingVolume, Pool: v.Pool,
 			Object: object, Ranges: ranges, Bytes: size, ChangedBytes: report.changed,
+			ReadThroughLUKS: encrypted[v.VolumeID],
 		})
 		rec.TotalBytes += size
 	}
@@ -186,38 +194,49 @@ func (bm *BackupManager) uploadDeltas(ctx context.Context, sess backup.Session, 
 // released whatever happens. Blocks mapped only in base (discarded since) are
 // shipped like changed ones: reading them from the new snapshot yields zeros,
 // which is exactly what a restore must write there.
-func deltaUploadCmd(vg, base, snap string, size uint64, pushRanges, pushData string) string {
+//
+// The data is read from the device source sets up (see backupSnapshotSource):
+// thin_delta's ranges address the LV, and the awk shifts them by $OFF so they
+// address the same bytes of $SRC — on an encrypted volume, the plaintext
+// behind the LUKS header. Ranges inside the header itself are dropped. A
+// discarded block there reads as whatever its zeroed ciphertext decrypts to,
+// not as zeros — which is also what the live volume reads, so the restore
+// still reproduces it exactly.
+func deltaUploadCmd(vg, base, snap string, size uint64, source, closeSource, pushRanges, pushData string) string {
 	return fmt.Sprintf(`set -e -o pipefail
 VG=%s; BASE=%s; NEW=%s; SIZE=%d
-R=$(mktemp); CNT=$(mktemp); DM=
-release() { [ -n "$DM" ] && sudo dmsetup message "$DM-tpool" 0 release_metadata_snap >/dev/null 2>&1; rm -f "$R" "$CNT"; }
+R=$(mktemp); CNT=$(mktemp); DM=; MAP=
+release() { [ -n "$DM" ] && sudo dmsetup message "$DM-tpool" 0 release_metadata_snap >/dev/null 2>&1; %s; rm -f "$R" "$CNT"; }
 trap release EXIT
+%s
 POOL=$(sudo lvs --noheadings -o pool_lv "$VG/$NEW" | tr -d ' ')
 I1=$(sudo lvs --noheadings -o thin_id "$VG/$BASE" | tr -d ' ')
 I2=$(sudo lvs --noheadings -o thin_id "$VG/$NEW" | tr -d ' ')
 DM=$(echo "$VG" | sed 's/-/--/g')-$(echo "$POOL" | sed 's/-/--/g')
 sudo dmsetup message "$DM-tpool" 0 reserve_metadata_snap
-sudo thin_delta -m --snap1 "$I1" --snap2 "$I2" "/dev/mapper/${DM}_tmeta" | awk -v size="$SIZE" -v gap=%d '%s' > "$R"
+sudo thin_delta -m --snap1 "$I1" --snap2 "$I2" "/dev/mapper/${DM}_tmeta" | awk -v size="$SIZE" -v off="$OFF" -v gap=%d '%s' > "$R"
 sudo dmsetup message "$DM-tpool" 0 release_metadata_snap; DM=
 %s < "$R"
 while read -r -u3 off len; do
-  sudo dd if="/dev/$VG/$NEW" bs=1M iflag=skip_bytes,count_bytes,fullblock skip="$off" count="$len" status=none
+  sudo dd if="$SRC" bs=1M iflag=skip_bytes,count_bytes,fullblock skip="$off" count="$len" status=none
 done 3<"$R" | gzip -1 -c | tee >(wc -c > "$CNT") | %s
 for i in $(seq 1 100); do [ -s "$CNT" ] && break; sleep 0.1; done
 echo "SDS_SENT=$(cat "$CNT")"
 echo "SDS_RANGES_BYTES=$(wc -c < "$R")"
 echo "SDS_CHANGED=$(awk '{s+=$2} END {printf "%%.0f", s}' "$R")"`,
 		shellSingleQuote(vg), shellSingleQuote(base), shellSingleQuote(snap), size,
-		deltaCoalesceGap, thinDeltaAwk, pushRanges, pushData)
+		closeSource, source, deltaCoalesceGap, thinDeltaAwk, pushRanges, pushData)
 }
 
 // thinDeltaAwk turns thin_delta's XML into "offset length" byte ranges. Blocks
 // are data_block_size sectors; printf keeps offsets past 2^31 from being
-// printed in exponent form, which mawk does with print.
+// printed in exponent form, which mawk does with print. off (0 when unset) is
+// subtracted from every range first: the bytes before it are a LUKS header.
 const thinDeltaAwk = `/data_block_size=/ { if (match($0, /data_block_size="[0-9]+"/)) bs = substr($0, RSTART+17, RLENGTH-18) * 512 }
 /<(different|right_only|left_only) / {
   match($0, /begin="[0-9]+"/); b = substr($0, RSTART+7, RLENGTH-8) * bs
   match($0, /length="[0-9]+"/); l = substr($0, RSTART+8, RLENGTH-9) * bs
+  b -= off; if (b + l <= 0) next; if (b < 0) { l += b; b = 0 }
   if (b >= size) next
   if (b + l > size) l = size - b
   if (have && b <= cs + cl + gap) { if (b + l > cs + cl) cl = b + l - cs; next }

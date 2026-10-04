@@ -177,6 +177,7 @@ func backupFromManifest(text, dir, target string, sizes map[string]uint64) (*dat
 		rec.Volumes = append(rec.Volumes, database.BackupVolume{
 			VolumeID: v.VolumeID, BackingVolume: v.Backing, Pool: v.Pool, Object: v.Object,
 			Bytes: v.Bytes, Ranges: v.Ranges, ChangedBytes: v.ChangedBytes, Snapshot: snaps[v.VolumeID],
+			ReadThroughLUKS: v.ReadThroughLUKS,
 		})
 	}
 	return rec, nil

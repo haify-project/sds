@@ -52,6 +52,9 @@ func (bm *BackupManager) RestoreBackup(ctx context.Context, backupID, resource, 
 	if err != nil {
 		return nil, err
 	}
+	if err := bm.assertNotCiphertext(ctx, chain); err != nil {
+		return nil, err
+	}
 
 	dbTarget, err := bm.controller.db.GetBackupTarget(ctx, rec.Target)
 	if err != nil {

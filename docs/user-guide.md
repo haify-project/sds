@@ -1081,6 +1081,13 @@ Understand exactly what this does and does not do:
   that replica is gone — the others are unaffected.
 - **It cannot be enabled later.** Decide at creation.
 - LVM pools only.
+- **Backups are plaintext.** `sds backup` reads each snapshot through a
+  temporary read-only LUKS mapping on the node it backs up from, so the image
+  holds the volume's data and restores onto any replica. The key stays on the
+  node, which means the target receives plaintext: protect it with the target's
+  own encryption and access policy. Backups taken by versions before this held
+  the ciphertext, cannot be restored, and are refused by `backup restore`;
+  the first backup after upgrading is a full one.
 
 **Encrypted replication.** DRBD 9.2 and later can run a connection over kernel
 TLS: the kernel asks `tlshd` (package `ktls-utils`) to do the handshake, then
