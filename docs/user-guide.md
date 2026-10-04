@@ -674,12 +674,50 @@ the lock can be raised but not lowered. Replacing the schedule without
 and takes it again under the same name, so its lock is unchanged; a locked
 thick snapshot cannot be restored until its lock passes. The limit is 365 days.
 
+On ZFS, each locked snapshot also carries a `sds-lock` hold, so `zfs destroy`
+on the node — a cleanup script, a `zfs destroy -r` of the dataset — fails too
+until sds releases the hold when the lock has passed. Root can `zfs release`
+it; it guards against mistakes, not against root.
+
+Locks are judged by the time the controller has counted since it started, not
+by the system clock: moving the clock forward (a `date -s`, a spoofed NTP
+answer) to end the locks early changes nothing, and raises a
+`controller.clock_jumped` event.
+
 The cost is space: size the pool for `--lock-days` of change. A pool past the
 near-full line with nothing left but locked snapshots is not relieved; it
 raises a critical `pool.snapshots_locked` event, and if it fills, that
 replica's writes fail. And the lock binds sds and its API, not root on a
 storage node, who can `lvremove` anything — for that, back up to a target with
 S3 Object Lock (see [Backups](#9-backups--the-only-copy-that-survives-losing-the-cluster)).
+
+**Freezing a schedule.** A frozen schedule keeps taking snapshots but removes
+none — not by retention, not to relieve a full pool — and every scheduled
+snapshot of the resource is locked until the freeze ends: it cannot be deleted
+through sds, nor the schedule or resource deleted. A freeze can be extended,
+not shortened, except by `unfreeze`, which needs a second person under
+[two-person approval](#16-access-control).
+
+```bash
+sds resource snapshot schedule freeze --resource db --hours 72 --reason "investigating"
+sds resource snapshot schedule unfreeze --resource db
+```
+
+**Write anomalies.** Encrypting a volume rewrites it as fast as the disks
+allow. With `[alert] enabled`, the health poll reads how much DRBD wrote to the
+answering node's disk (also exported as `sds_drbd_written_bytes`), and each
+resource learns its usual write rate, overall and by hour of the week; resync
+traffic is left out. Once it has learned (30 normal polls), a rate
+`[alert.write_anomaly] factor` times the usual (default 5) and at least
+`min_mbps` (default 20 MB/s), on two polls in a row, raises a critical
+`resource.write_anomaly`, freezes the resource's schedule for `freeze_hours`
+(default a week) and takes a snapshot right away. It resolves after three
+normal polls; the freeze stays until it ends or is lifted.
+
+It reports a rate, not an attack: a bulk import, a reindex or a restore look
+the same, and are what `unfreeze` is for. Encryption throttled to look normal
+does not trip it. It needs a snapshot schedule on the resource to have
+anything to freeze.
 
 Schedules live in the controller database and survive a restart or a failover —
 the node that becomes active picks them up.
@@ -1321,6 +1359,7 @@ Events: `resource.degraded`, `resource.failover`, `resource.no_primary`,
 `pool.snapshots_removed` (a near-full pool gave up a scheduled snapshot),
 `pool.snapshots_locked` (a near-full pool with only locked snapshots left),
 `audit.shipping_failed`, `audit.truncated`, `approval.requested` (see [Access control](#16-access-control)),
+`controller.clock_jumped`, `resource.write_anomaly`,
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
 (`info`/`warning`/`critical`) and a status — `firing` when a condition starts,

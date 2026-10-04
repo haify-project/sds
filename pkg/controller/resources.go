@@ -85,6 +85,10 @@ type ResourceNodeState struct {
 	Connection string
 	// TLS is whether the connection to this peer is encrypted.
 	TLS bool
+	// WrittenKiB is what DRBD wrote to the answering node's backing disks
+	// since the resource came up there, summed over volumes; nil for peers and
+	// when DRBD did not report it.
+	WrittenKiB *uint64
 }
 
 // ResourceVolumeInfo represents DRBD volume information

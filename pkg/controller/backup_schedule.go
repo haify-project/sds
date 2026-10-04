@@ -197,7 +197,7 @@ func (sm *ScheduleManager) pruneBackups(ctx context.Context, s *database.BackupS
 			doomed = append(doomed, b)
 		}
 	}
-	now := time.Now()
+	now := lockNow()
 	for _, b := range doomed {
 		// A locked backup cannot go yet; a later run prunes it once the lock
 		// has expired.

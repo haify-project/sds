@@ -158,6 +158,18 @@ webhook_min_severity = "warning"   # info | warning | critical
 # min_severity = "info"
 # headers = { X-Token = "..." }
 
+# Write-anomaly detection, on the same poll: each resource learns its usual
+# write rate by hour of the week, and writing factor times that (and at least
+# min_mbps) for two polls in a row — a volume being rewritten wholesale, as
+# ransomware does — raises resource.write_anomaly, freezes the resource's
+# snapshot schedule for freeze_hours (nothing is pruned or deletable) and
+# takes a snapshot. A bulk import or a reindex looks the same.
+[alert.write_anomaly]
+enabled = true
+factor = 5.0
+min_mbps = 20.0
+freeze_hours = 168
+
 # Scheduled cluster inspection (`sds inspect`): read-only checks of what the
 # alerts do not cover, stored as reports. Runs on the snapshot scheduler, so
 # only on the active controller and only while [schedule] enabled = true.

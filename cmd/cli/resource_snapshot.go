@@ -35,6 +35,7 @@ func resourceSnapshotSchedule() *cobra.Command {
 	cmd.AddCommand(resourceSnapshotScheduleCreate())
 	cmd.AddCommand(resourceSnapshotScheduleList())
 	cmd.AddCommand(resourceSnapshotScheduleDelete())
+	cmd.AddCommand(resourceSnapshotScheduleFreeze(), resourceSnapshotScheduleUnfreeze())
 	return cmd
 }
 
@@ -146,6 +147,9 @@ func resourceSnapshotScheduleList() *cobra.Command {
 						fmt.Printf("; newest locked until %s", s.LockedUntil)
 					}
 					fmt.Println()
+				}
+				if s.FrozenUntil != "" {
+					fmt.Printf("  FROZEN until %s (%s): nothing is pruned or deleted\n", s.FrozenUntil, s.FrozenReason)
 				}
 			}
 			return nil

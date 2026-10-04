@@ -271,20 +271,27 @@ func parseVolumesFromStatus(output string) []volumeInfo {
 // that carries live role, disk and replication/resync state. Fields absent in
 // steady state (notably "done") are treated as fully in sync.
 type drbdsetupStatus struct {
-	Name    string `json:"name"`
-	Role    string `json:"role"`
-	Devices []struct {
-		Volume    int    `json:"volume"`
-		DiskState string `json:"disk-state"`
-		// Quorum reports whether the local node currently holds DRBD quorum for
-		// this device. It is a pointer so a missing field (older drbd, or a
-		// diskless view) is distinguishable from an explicit false. A resource
-		// configured with `quorum majority` + `on-no-quorum io-error` blocks I/O
-		// on any node that has lost quorum, which is what makes a guarded
-		// force-promote of a quorate survivor safe.
-		Quorum *bool `json:"quorum"`
-	} `json:"devices"`
+	Name        string           `json:"name"`
+	Role        string           `json:"role"`
+	Devices     []drbdDevice     `json:"devices"`
 	Connections []drbdConnection `json:"connections"`
+}
+
+// drbdDevice is one volume of the answering node in drbdsetup status --json.
+type drbdDevice struct {
+	Volume    int    `json:"volume"`
+	DiskState string `json:"disk-state"`
+	// Quorum reports whether the local node currently holds DRBD quorum for
+	// this device. It is a pointer so a missing field (older drbd, or a
+	// diskless view) is distinguishable from an explicit false. A resource
+	// configured with `quorum majority` + `on-no-quorum io-error` blocks I/O
+	// on any node that has lost quorum, which is what makes a guarded
+	// force-promote of a quorate survivor safe.
+	Quorum *bool `json:"quorum"`
+	// Written is KiB written to this node's backing disk since the
+	// device came up: the application's writes on a Primary, the
+	// replicated ones on a Secondary, and resync traffic on either.
+	Written *uint64 `json:"written"`
 }
 
 // drbdConnection is one peer in drbdsetup status --json.
@@ -348,6 +355,7 @@ func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNode
 		// Quorum is only ever the queried node's own verdict; the peers below
 		// deliberately leave it nil rather than assume they agree.
 		local.Quorum = res.Devices[0].Quorum
+		local.WrittenKiB = sumWritten(res.Devices)
 	}
 	states[localNode] = local
 
@@ -381,4 +389,17 @@ func parseNodeStatesFromJSON(output, localNode string) (map[string]*ResourceNode
 	}
 
 	return states, nil
+}
+
+// sumWritten totals the devices' written counters, or nil when any device did
+// not report one: a partial sum would read as a sudden drop in writes.
+func sumWritten(devices []drbdDevice) *uint64 {
+	var total uint64
+	for _, d := range devices {
+		if d.Written == nil {
+			return nil
+		}
+		total += *d.Written
+	}
+	return &total
 }

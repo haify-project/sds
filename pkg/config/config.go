@@ -113,6 +113,8 @@ type AlertConfig struct {
 	// and nothing is degraded or resyncing. It bounds how late what DRBD does
 	// not report — a thin pool filling — is noticed.
 	IdleIntervalSec int `mapstructure:"idle_interval_sec"`
+	// WriteAnomaly is [alert.write_anomaly] (write_anomaly.go).
+	WriteAnomaly WriteAnomalyConfig `mapstructure:"write_anomaly"`
 }
 
 // WebhookReceiver is one HTTP notification target.
@@ -461,6 +463,9 @@ func (c *Config) Validate() error {
 	if err := c.RBAC.Approval.validate(c.RBAC.Enabled); err != nil {
 		return err
 	}
+	if err := c.Alert.WriteAnomaly.validate(); err != nil {
+		return err
+	}
 	if c.Auth.Enabled {
 		if len(c.Auth.Token) < 16 {
 			return fmt.Errorf("auth.token must be at least 16 characters when auth is enabled")
@@ -517,6 +522,7 @@ func setDefaults() {
 	viper.SetDefault("metrics.port", 9433)
 	setAuditDefaults()
 	setApprovalDefaults()
+	setWriteAnomalyDefaults()
 	viper.SetDefault("rbac.enabled", false)
 	viper.SetDefault("gateway.auto_state_volume", true)
 	viper.SetDefault("gateway.state_volume_size_gb", 1)

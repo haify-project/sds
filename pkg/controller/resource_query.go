@@ -303,6 +303,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 				Connection:       st.Connection,
 				OutOfSyncKiB:     st.OutOfSyncKiB,
 				TLS:              st.TLS,
+				WrittenKiB:       st.WrittenKiB,
 			}
 			// Only forward completion the status source actually reported. A
 			// text-parsed state has none, and passing its zero on would export

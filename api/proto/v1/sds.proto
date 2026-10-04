@@ -253,6 +253,16 @@ service SDSController {
   rpc DeleteSnapshotSchedule(DeleteSnapshotScheduleRequest) returns (DeleteSnapshotScheduleResponse) {
     option (google.api.http) = { delete: "/v1/snapshot-schedules/{name}"; };
   }
+  // Freezing a schedule keeps it snapshotting but stops all pruning, and locks
+  // every scheduled snapshot of the resource until the freeze ends. The
+  // write-anomaly detector freezes one when it fires. A freeze is only ever
+  // extended by Freeze; Unfreeze ends it early.
+  rpc FreezeSnapshotSchedule(FreezeSnapshotScheduleRequest) returns (FreezeSnapshotScheduleResponse) {
+    option (google.api.http) = { post: "/v1/snapshot-schedules/{resource}/freeze"; body: "*"; };
+  }
+  rpc UnfreezeSnapshotSchedule(UnfreezeSnapshotScheduleRequest) returns (UnfreezeSnapshotScheduleResponse) {
+    option (google.api.http) = { post: "/v1/snapshot-schedules/{resource}/unfreeze"; body: "*"; };
+  }
 
   // Backup operations: shipping point-in-time copies OFF the cluster to an
   // S3-compatible object store, an SMB share or a WebDAV endpoint.
@@ -2038,6 +2048,30 @@ message SnapshotScheduleInfo {
   // locked_until (RFC3339) is when the newest snapshot it took stops being
   // locked; until then the schedule and its resource cannot be deleted.
   string locked_until = 9;
+  // frozen_until (RFC3339) is when a freeze ends; empty when not frozen.
+  string frozen_until = 10;
+  string frozen_reason = 11;
+}
+
+message FreezeSnapshotScheduleRequest {
+  string resource = 1;
+  uint32 hours = 2;      // 0 = 168 (a week)
+  string reason = 3;
+}
+
+message FreezeSnapshotScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  string frozen_until = 3;
+}
+
+message UnfreezeSnapshotScheduleRequest {
+  string resource = 1;
+}
+
+message UnfreezeSnapshotScheduleResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message CreateSnapshotScheduleRequest {

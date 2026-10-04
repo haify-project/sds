@@ -34,6 +34,10 @@ type ReplicaState struct {
 	// to itself, and otherwise whether the connection to this peer is
 	// encrypted.
 	TLS *bool
+	// WrittenBytes is what DRBD wrote to this node's backing disk since the
+	// resource came up there, or nil when it was not reported — only the node
+	// whose status was read reports its own.
+	WrittenBytes *uint64
 }
 
 // ReplicationSnapshot is one complete reading of DRBD replication.
@@ -96,6 +100,9 @@ func (m *Metrics) SetReplication(snap ReplicationSnapshot) {
 		if r.TLS != nil {
 			m.health.drbdTLS.set(id, boolValue(*r.TLS))
 		}
+		if r.WrittenBytes != nil {
+			m.health.drbdWritten.set(id, float64(*r.WrittenBytes))
+		}
 		if r.Quorum != nil {
 			quorum := 0.0
 			if *r.Quorum {
@@ -122,7 +129,7 @@ func (m *Metrics) replicaSeries() []*seriesSet {
 	return []*seriesSet{
 		m.drbdRole, m.drbdDiskState, m.drbdReplicationState,
 		m.drbdResync, m.drbdQuorum, m.drbdResourceUp,
-		m.health.drbdOutOfSync, m.health.drbdTLS,
+		m.health.drbdOutOfSync, m.health.drbdTLS, m.health.drbdWritten,
 	}
 }
 
