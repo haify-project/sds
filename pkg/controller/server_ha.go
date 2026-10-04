@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	sdspb "github.com/haify-project/sds/api/proto/v1"
+	"github.com/haify-project/sds/pkg/database"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -213,13 +214,7 @@ func (s *Server) GetHa(ctx context.Context, req *sdspb.GetHaRequest) (*sdspb.Get
 	return &sdspb.GetHaResponse{
 		Success: true,
 		Message: "HA configuration found",
-		Config: &sdspb.HaConfigInfo{
-			Resource:   haCfg.Resource,
-			Vip:        haCfg.VIP,
-			MountPoint: haCfg.MountPoint,
-			FsType:     haCfg.FsType,
-			Services:   haCfg.Services,
-		},
+		Config:  haConfigInfo(haCfg),
 	}, nil
 }
 
@@ -234,13 +229,7 @@ func (s *Server) ListHa(ctx context.Context, req *sdspb.ListHaRequest) (*sdspb.L
 
 	var pbConfigs []*sdspb.HaConfigInfo
 	for _, cfg := range haConfigs {
-		pbConfigs = append(pbConfigs, &sdspb.HaConfigInfo{
-			Resource:   cfg.Resource,
-			Vip:        cfg.VIP,
-			MountPoint: cfg.MountPoint,
-			FsType:     cfg.FsType,
-			Services:   cfg.Services,
-		})
+		pbConfigs = append(pbConfigs, haConfigInfo(cfg))
 	}
 
 	return &sdspb.ListHaResponse{
@@ -275,4 +264,29 @@ func (s *Server) GetHaStatus(ctx context.Context, req *sdspb.GetHaStatusRequest)
 		Message:   "HA status retrieved successfully",
 		Promoters: pbPromoters,
 	}, nil
+}
+
+// haConfigInfo renders a stored HA config for the API, start order included.
+func haConfigInfo(cfg *database.HaConfig) *sdspb.HaConfigInfo {
+	ocf := func(a database.HaOcfAgent) *sdspb.OcfAgent {
+		return &sdspb.OcfAgent{Provider: a.Provider, Name: a.Name, Instance: a.Instance, Params: a.Params}
+	}
+	info := &sdspb.HaConfigInfo{
+		Resource:   cfg.Resource,
+		Vip:        cfg.VIP,
+		MountPoint: cfg.MountPoint,
+		FsType:     cfg.FsType,
+		Services:   cfg.Services,
+	}
+	for _, a := range cfg.OcfAgents {
+		info.OcfAgents = append(info.OcfAgents, ocf(a))
+	}
+	for _, it := range cfg.StartItems {
+		if it.Ocf != nil {
+			info.StartItems = append(info.StartItems, &sdspb.HaStartItem{Item: &sdspb.HaStartItem_Ocf{Ocf: ocf(*it.Ocf)}})
+		} else {
+			info.StartItems = append(info.StartItems, &sdspb.HaStartItem{Item: &sdspb.HaStartItem_SystemdUnit{SystemdUnit: it.SystemdUnit}})
+		}
+	}
+	return info
 }

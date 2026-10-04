@@ -99,14 +99,14 @@ func TestStorageManagerCreateZFSPoolPersistsThinState(t *testing.T) {
 	db := newTestDB(t)
 	ctrl.db = db
 
-	err := ctrl.storage.CreateZFSPool(context.Background(), "tank", "node1", []string{"/dev/nvme0n1"})
+	err := ctrl.storage.CreateZFSPool(context.Background(), "tank", "node1", []string{"/dev/nvme0n1"}, "", false)
 	require.NoError(t, err)
 
 	require.Len(t, dep.zfsCreatePoolCalls, 1)
 	assert.Equal(t, []string{"10.0.0.1"}, dep.zfsCreatePoolCalls[0].hosts)
 	assert.Equal(t, "sds_tank", dep.zfsCreatePoolCalls[0].poolName)
 	assert.Equal(t, []string{"/dev/nvme0n1"}, dep.zfsCreatePoolCalls[0].vdevs)
-	assert.Equal(t, 0, dep.zfsCreatePoolCalls[0].optCount)
+	assert.Equal(t, 2, dep.zfsCreatePoolCalls[0].optCount, "compression and dedup are always passed; empty and false add nothing")
 
 	stored, err := ctrl.db.GetPool(context.Background(), "sds_tank")
 	require.NoError(t, err)
@@ -199,6 +199,8 @@ func TestStorageManagerGetPoolFallsBackToZFS(t *testing.T) {
 				return successExecResult(hosts, ""), nil
 			case strings.Contains(cmd, "zpool list -Hp -o name,size,free,cap sds_tank"):
 				return successExecResult(hosts, "sds_tank\t21474836480\t10737418240\t50%\n"), nil
+			case strings.Contains(cmd, "base64 -d"): // compression and its ratio
+				return successExecResult(hosts, "sds_tank\tcompression\tlz4\n"), nil
 			default:
 				t.Fatalf("unexpected command: %s", cmd)
 				return nil, nil
@@ -213,6 +215,7 @@ func TestStorageManagerGetPoolFallsBackToZFS(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "sds_tank", pool.Name)
 	assert.Equal(t, "zfs", pool.Type)
+	assert.Equal(t, "lz4", pool.Compression)
 	assert.Equal(t, uint64(20), pool.TotalGB)
 	assert.Equal(t, uint64(10), pool.FreeGB)
 }

@@ -28,6 +28,9 @@ type PoolInfo struct {
 	Devices     []string `json:"devices"`
 	Thin        bool     `json:"thin"`
 	Compression string   `json:"compression,omitempty"`
+	// CompressRatio is what compression saves on a ZFS pool, as ZFS reports
+	// it (1.85 = 1.85x); 0 when not known.
+	CompressRatio float64 `json:"compress_ratio,omitempty"`
 	// Cache describes the pool's fast tier, or is nil when it has none. See
 	// poolcache.go — this is what makes a tiered pool distinguishable from a
 	// plain one without a second call.

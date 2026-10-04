@@ -171,3 +171,20 @@ func hostFailure(hr *deployment.HostResult) string {
 	}
 	return "failed"
 }
+
+// ensureNonlocalBind lets a service bind to an HA config's VIP before the VIP
+// is up on the node, which is what the start order requires: the VIP is
+// started last (see generatePromoterConfig). Persisted in sysctl.d so a reboot
+// keeps it; the IPv6 knob is set where the kernel has it.
+func (rm *ResourceManager) ensureNonlocalBind(ctx context.Context, hosts []string) error {
+	script := `f=/etc/sysctl.d/90-sds-ha-vip.conf
+want='# SDS HA: services may bind to the VIP, which starts after them.
+net.ipv4.ip_nonlocal_bind = 1
+net.ipv6.ip_nonlocal_bind = 1'
+[ "$(cat "$f" 2>/dev/null)" = "$want" ] || printf '%s\n' "$want" > "$f"
+sysctl -q -w net.ipv4.ip_nonlocal_bind=1
+sysctl -q -w net.ipv6.ip_nonlocal_bind=1 2>/dev/null
+true`
+	return rm.execAllSuccess(ctx, hosts, "echo "+base64Std(script)+" | base64 -d | sudo /bin/sh",
+		"allow services to bind to the VIP before it is up (ip_nonlocal_bind)")
+}

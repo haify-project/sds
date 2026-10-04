@@ -3,19 +3,27 @@ package deployment
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 // ============ ZFS Operations ============
 
-// ZFSCreatePool creates a ZFS pool
+// ZFSCreatePool creates a ZFS pool. Compression and dedup are set on its root
+// dataset (zpool create -O), so every zvol carved from it inherits them.
+//
+// A zpool has no thin/thick mode: that is a per-zvol property decided at
+// volume creation (zfs create -s -V / refreservation).
 func (c *Client) ZFSCreatePool(ctx context.Context, hosts []string, poolName string, vdevs []string, opts ...ZFSOption) (*ExecResult, error) {
-	// A zpool has no thin/thick mode; it is just the aggregation of vdevs.
-	// Thin vs thick provisioning is a per-zvol property decided at volume
-	// creation time (zfs create -s -V / refreservation), not at the pool level,
-	// so there are currently no pool-level options to apply here.
-	_ = opts
-	cmd := fmt.Sprintf("sudo zpool create -f %s %s", poolName, strings.Join(vdevs, " "))
+	var o zfsOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	props, err := o.createFlags()
+	if err != nil {
+		return nil, err
+	}
+	cmd := fmt.Sprintf("sudo zpool create -f%s %s %s", props, poolName, strings.Join(vdevs, " "))
 	return c.Exec(ctx, hosts, cmd)
 }
 
@@ -106,24 +114,58 @@ func (c *Client) ZFSResizeVolume(ctx context.Context, hosts []string, volumePath
 	return c.Exec(ctx, hosts, cmd)
 }
 
-// ZFSOption configures ZFS operations
+// ZFSOption configures ZFS pool creation.
 type ZFSOption func(*zfsOptions)
 
 type zfsOptions struct {
-	compression bool
+	compression string
 	dedup       bool
 }
 
-// WithZFSCompression enables compression for ZFS
-func WithZFSCompression(compression bool) ZFSOption {
+// zfsCompressionRE is every compression value OpenZFS accepts.
+var zfsCompressionRE = regexp.MustCompile(`^(on|off|lz4|lzjb|zle|gzip(-[1-9])?|zstd(-([1-9]|1[0-9]))?|zstd-fast(-[0-9]+)?)$`)
+
+// ValidZFSCompression reports whether value is a compression setting OpenZFS
+// accepts. It is checked before anything is created, and it is what keeps the
+// value safe to put in a shell command.
+func ValidZFSCompression(value string) bool {
+	return zfsCompressionRE.MatchString(value)
+}
+
+func (o zfsOptions) createFlags() (string, error) {
+	var flags string
+	if o.compression != "" {
+		if !ValidZFSCompression(o.compression) {
+			return "", fmt.Errorf("unknown ZFS compression %q (on, off, lz4, zstd, zstd-1..19, gzip, gzip-1..9, lzjb, zle)", o.compression)
+		}
+		flags += " -O compression=" + o.compression
+	}
+	if o.dedup {
+		flags += " -O dedup=on"
+	}
+	return flags, nil
+}
+
+// WithZFSCompression sets the pool's compression algorithm; empty keeps the
+// OpenZFS default.
+func WithZFSCompression(algorithm string) ZFSOption {
 	return func(o *zfsOptions) {
-		o.compression = compression
+		o.compression = algorithm
 	}
 }
 
-// WithZFSDedup enables dedup for ZFS
+// WithZFSDedup turns on deduplication for the pool.
 func WithZFSDedup(dedup bool) ZFSOption {
 	return func(o *zfsOptions) {
 		o.dedup = dedup
 	}
 }
+
+// ZFSPoolPropertiesScript prints each pool's compression algorithm and
+// achieved ratio, read from its root dataset: "<pool>\t<property>\t<value>"
+// per line. It uses a shell variable, so it has to reach the node
+// base64-wrapped (dispatch's sh -c "..." would empty it).
+const ZFSPoolPropertiesScript = `p=$(zpool list -H -o name 2>/dev/null)
+[ -n "$p" ] && zfs get -H -p -o name,property,value compression,compressratio $p 2>/dev/null
+true
+`

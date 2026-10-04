@@ -54,6 +54,9 @@ type poolOut struct {
 	// live answer.
 	Thin        bool   `json:"thin" jsonschema:"the recorded pool type; thin_pool_lv is the authoritative signal"`
 	Compression string `json:"compression,omitempty"`
+	// CompressRatio is what ZFS compression achieves on the pool (1.85 =
+	// 1.85x); omitted when unknown.
+	CompressRatio float64 `json:"compress_ratio,omitempty"`
 	// Thin pool utilisation. Empty thin_pool_lv means the group holds no thin
 	// pool; that, and not a zero percentage, is how "no thin pool" is told
 	// apart from "a thin pool at 0%".
@@ -196,6 +199,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 					Devices:         p.Devices,
 					Thin:            p.Thin,
 					Compression:     p.Compression,
+					CompressRatio:   p.CompressRatio,
 					ThinPoolLV:      p.ThinPoolLv,
 					ThinSizeBytes:   p.ThinSizeBytes,
 					ThinDataPercent: p.ThinDataPercent,

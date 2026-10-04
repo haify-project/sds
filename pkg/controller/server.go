@@ -82,16 +82,17 @@ func (s *Server) GetPool(ctx context.Context, req *sdspb.GetPoolRequest) (*sdspb
 // pbPoolInfo converts a pool, including its storage tier if it has one.
 func pbPoolInfo(p *PoolInfo) *sdspb.PoolInfo {
 	out := &sdspb.PoolInfo{
-		Name:        p.Name,
-		Type:        p.Type,
-		Node:        p.Node,
-		TotalGb:     p.TotalGB,
-		FreeGb:      p.FreeGB,
-		TotalBytes:  p.TotalBytes,
-		FreeBytes:   p.FreeBytes,
-		Devices:     p.Devices,
-		Thin:        p.Thin,
-		Compression: p.Compression,
+		Name:          p.Name,
+		Type:          p.Type,
+		Node:          p.Node,
+		TotalGb:       p.TotalGB,
+		FreeGb:        p.FreeGB,
+		TotalBytes:    p.TotalBytes,
+		FreeBytes:     p.FreeBytes,
+		Devices:       p.Devices,
+		Thin:          p.Thin,
+		Compression:   p.Compression,
+		CompressRatio: p.CompressRatio,
 	}
 	if u := p.ThinUsage; u != nil {
 		out.ThinPoolLv = u.PoolLV

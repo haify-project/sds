@@ -71,6 +71,9 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 		if err := rm.ensureServiceIP(ctx, hosts); err != nil {
 			return "", err
 		}
+		if err := rm.ensureNonlocalBind(ctx, hosts); err != nil {
+			return "", err
+		}
 	}
 
 	// Step 1: Check DRBD status and ensure resource is up
@@ -321,6 +324,8 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 			MountPoint: mountPoint,
 			FsType:     fsType,
 			Services:   services,
+			OcfAgents:  ocfAgentRecords(ocfAgents),
+			StartItems: startItemRecords(startItems),
 		}
 		if err := rm.controller.db.SaveHaConfig(ctx, haCfg); err != nil {
 			rm.controller.logger.Warn("Failed to save HA config to database", zap.Error(err))
@@ -430,26 +435,32 @@ func (rm *ResourceManager) generatePromoterConfig(resource string, services []st
 		startActions = append(startActions, mountUnit)
 	}
 
-	// Add VIP if specified
-	if inst := vipServiceIPInstance(vip); inst != "" {
-		// Use service-ip systemd unit: service-ip@<IP>-<MASK>.service
-		serviceIPUnit := fmt.Sprintf("\"service-ip@%s.service\"", inst)
-		startActions = append(startActions, serviceIPUnit)
-	}
-
 	// Add systemd services
 	for _, svc := range services {
 		startActions = append(startActions, fmt.Sprintf(`  "%s"`, svc))
 	}
 
 	// Append any extra OCF resource agents, in order, after the built-in
-	// mount/vip/services items.
+	// mount/services items.
 	for _, agent := range ocfAgents {
 		entry := renderOcfStartEntry(agent)
 		if entry == "" {
 			continue
 		}
 		startActions = append(startActions, fmt.Sprintf(`  "%s"`, entry))
+	}
+
+	// The VIP comes last, so it is the last thing up and the first thing
+	// down: clients are only sent to a node whose service is ready, and stop
+	// arriving before it goes away. It used to come before the services,
+	// which during a failover handed clients a node still starting up, and on
+	// the way out kept the address answering for a service that was already
+	// stopping. Gateways have always ordered it this way. A service that binds
+	// to the VIP itself still starts: MakeHa sets ip_nonlocal_bind.
+	if inst := vipServiceIPInstance(vip); inst != "" {
+		// Use service-ip systemd unit: service-ip@<IP>-<MASK>.service
+		serviceIPUnit := fmt.Sprintf("\"service-ip@%s.service\"", inst)
+		startActions = append(startActions, serviceIPUnit)
 	}
 
 	// Generate TOML config

@@ -160,12 +160,12 @@ func TestOptions(t *testing.T) {
 	assert.True(t, lvmOpts.force)
 
 	// Test ZFSOption
-	compressionOpt := WithZFSCompression(true)
+	compressionOpt := WithZFSCompression("lz4")
 	dedupOpt := WithZFSDedup(true)
 
 	zfsOpts := &zfsOptions{}
 	compressionOpt(zfsOpts)
-	assert.True(t, zfsOpts.compression)
+	assert.Equal(t, "lz4", zfsOpts.compression)
 
 	dedupOpt(zfsOpts)
 	assert.True(t, zfsOpts.dedup)

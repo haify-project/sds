@@ -7,12 +7,20 @@ import (
 	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
-// CreateZFSPool creates a ZFS pool
+// CreateZFSPool creates a ZFS pool with the OpenZFS default compression.
 func (c *SDSClient) CreateZFSPool(ctx context.Context, name, node string, vdevs []string) error {
+	return c.CreateZFSPoolOptions(ctx, name, node, vdevs, "", false)
+}
+
+// CreateZFSPoolOptions creates a ZFS pool with the given compression algorithm
+// (empty: the OpenZFS default) and deduplication.
+func (c *SDSClient) CreateZFSPoolOptions(ctx context.Context, name, node string, vdevs []string, compression string, dedup bool) error {
 	req := &sdspb.CreateZFSPoolRequest{
-		Name:  name,
-		Node:  node,
-		Vdevs: vdevs,
+		Name:        name,
+		Node:        node,
+		Vdevs:       vdevs,
+		Compression: compression,
+		Dedup:       dedup,
 	}
 
 	resp, err := c.client.CreateZFSPool(ctx, req)

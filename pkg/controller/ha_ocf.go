@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/haify-project/sds/pkg/database"
 )
 
 // ocfRoot is the OCF root ($OCF_ROOT); ocfResourceDir is the standard on-node
@@ -64,6 +66,29 @@ type OcfAgentSpec struct {
 type HaStartItem struct {
 	SystemdUnit string        // a systemd/mount unit name, e.g. "mysql.service"
 	Ocf         *OcfAgentSpec // an OCF resource agent
+}
+
+// ocfAgentRecords and startItemRecords convert to the database's record of
+// an HA config.
+func ocfAgentRecords(agents []OcfAgentSpec) []database.HaOcfAgent {
+	var out []database.HaOcfAgent
+	for _, a := range agents {
+		out = append(out, database.HaOcfAgent{Provider: a.Provider, Name: a.Name, Instance: a.Instance, Params: a.Params})
+	}
+	return out
+}
+
+func startItemRecords(items []HaStartItem) []database.HaStartItem {
+	var out []database.HaStartItem
+	for _, it := range items {
+		rec := database.HaStartItem{SystemdUnit: it.SystemdUnit}
+		if it.Ocf != nil {
+			rec.Ocf = &database.HaOcfAgent{Provider: it.Ocf.Provider, Name: it.Ocf.Name,
+				Instance: it.Ocf.Instance, Params: it.Ocf.Params}
+		}
+		out = append(out, rec)
+	}
+	return out
 }
 
 // renderStartItem renders one ordered start item as a promoter start[] entry:
