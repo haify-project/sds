@@ -5,7 +5,87 @@ get synchronous replication, HA restart on a surviving node, and RAM-only live
 migration: the disk is already on every node, so migration copies no data.
 
 This is the Proxmox-side counterpart of the Kubernetes CSI driver in
-`deploy/k8s`. Design: `docs/design/proxmox-storage-plugin.md`.
+`deploy/k8s`. Design: `docs/design/proxmox-storage-plugin.md`. Moving VMs off
+VMware vSAN onto this storage:
+[Evacuating VMware vSAN](../../docs/vsan-evacuation.md).
+
+## Bootstrap a cluster
+
+`bootstrap.sh` takes an existing PVE cluster to a working `sds` storage in one
+command. Run it as root on any one PVE node, from a checkout holding Linux
+binaries for the nodes (`GOOS=linux GOARCH=amd64 make build` puts them in
+`bin/`), or with `SDS_CONTROLLER_DEB` pointing at an
+`sds-controller_<version>_<arch>.deb`:
+
+```bash
+./deploy/proxmox/bootstrap.sh --devices /dev/sdb --vip 192.168.1.250/24 --dry-run
+./deploy/proxmox/bootstrap.sh --devices /dev/sdb --vip 192.168.1.250/24
+```
+
+| Step | What it does | Skipped when |
+| ---- | ------------ | ------------ |
+| 1 | Reads the members from `/etc/pve/.members` (falling back to `pvecm nodes` + `corosync.conf`), refuses unless every member is online, and checks root SSH to each in batch mode, the way PVE itself connects (`HostKeyAlias=<node>`, the node's `ssh_known_hosts` in `/etc/pve`) | never: it changes nothing |
+| 2 | On every node: the LINBIT repository (`packages.linbit.com/public`, suite `proxmox-8` or `proxmox-9` from `pveversion`), headers for the running kernel plus `proxmox-default-headers`, `drbd-dkms drbd-utils drbd-reactor sudo`; loads DRBD and requires 9.x; writes a minimal `/etc/drbd-reactor.toml` if there is none; enables drbd-reactor | repository line present, packages installed, DRBD 9 loaded, reactor running |
+| 3 | `/root/.dispatch/config.toml` on every node that can run the controller: root, PVE's root key, one section per node address | file identical; a different existing file is kept, with a warning |
+| 4 | Installs the controller there: the `.deb`, or `sds-controller` + `service-ip` to `/opt/sds/bin`, `service-ip` + `sds` to `/usr/local/bin` and both systemd units, as `make install-controller` does; writes `/etc/sds/controller.toml` from `configs/controller.toml.example` with `listen_address = "0.0.0.0"` and the dispatch path pinned | same package version / same file checksums; an existing `controller.toml` is never replaced |
+| 5 | Starts the controller on this node (or the first storage node), registers every PVE node under its PVE name and corosync address, creates the pool on each storage node | a controller already running anywhere is used; node registered; pool present |
+| 6 | `sds ha self enable --vip ... --pool ... --nodes <storage nodes>` and waits for the controller to answer on the VIP | one storage node, `--no-self-ha`, or Self-HA already on |
+| 7 | Copies this directory to each node, runs `preflight.sh` and `install.sh` (or installs `SDS_PLUGIN_DEB`) | installed plugin files match these (or that package version) |
+| 8 | `pvesm add sds <id> --controller <every controller-capable node> --sdspool <pool> --replicas <n> --storagetype <pool type> --content images,rootdir --shared 1` | the storage ID exists as type `sds` |
+| 9 | Reports a missing corosync QDevice (even vote count) and a missing DRBD tiebreaker (two replicas, fewer than three nodes) | never: it only reports |
+
+Disks are never guessed: `--devices` names them (the same path on every
+storage node; `--node-devices pve3=/dev/nvme1n1` for one that differs, and
+`/dev/disk/by-id/` paths are safest). All disks are checked before step 2, so a
+bad one stops the run before anything is installed. A disk with partitions or
+any signature `wipefs` reports is refused unless `--force-wipe`; a disk that is
+mounted or held by LVM/dm/md (a PVE system disk, `local-lvm`) is refused even
+then. `--storage-nodes` limits the pool to some nodes; the rest still get DRBD,
+registration and the plugin, and run guests as diskless DRBD clients.
+
+**Rerunning** is safe: each step checks before it changes, so on a
+bootstrapped cluster the run prints only what it found. **Dry run**
+(`--dry-run`) runs the read-only checks over SSH and prints each change, with
+its node, instead of making it. **Failure** stops at the first failed step
+and prints the command to resume, with `--from-step N`; step 1 always runs
+again, since every later step needs the member list. `--yes` skips the
+confirmation prompt; `--help` lists everything, including the environment
+variables (`SDS_BIN_DIR`, `SDS_CONFIG_DIR`, `SDS_CONTROLLER_DEB`,
+`SDS_PLUGIN_DEB`, `SDS_LINBIT_REPO`, `SDS_LINBIT_KEY_URL`,
+`SDS_LINBIT_KEY_FINGERPRINT`).
+
+It does **not**: create the PVE cluster (`pvecm create` / `pvecm add` first; a
+one-node cluster is fine), set up a QDevice or PVE HA rules (see
+[HA](#ha)), turn on API auth or TLS (the controller's API is open on the
+network until `[auth]`/`[rbac]` and the storage's `apitoken` are set), put
+DRBD on a separate storage network, create ZFS pools (`--pool-type` is
+`lvm-thin` or `lvm`, because Self-HA's metadata volume is LVM), restart a
+controller whose binary it updated (it says so; restart it yourself), or
+remove anything.
+
+Before running it on a real cluster:
+
+- **`apt-get update` must succeed on every node.** A node with the
+  `pve-enterprise` repository and no subscription fails it; switch that node to
+  the no-subscription repository first.
+- **The LINBIT key.** It is fetched over HTTPS and trusted as such unless
+  `SDS_LINBIT_KEY_FINGERPRINT` is set, in which case a key with another
+  fingerprint is refused. Take the fingerprint from LINBIT's documentation.
+  If the public Proxmox suite lacks a package (`drbd-reactor` among them), set
+  `SDS_LINBIT_REPO` to a source line that has it.
+- **Kernel upgrades rebuild DRBD.** It is a DKMS module; a PVE kernel newer
+  than the installed `drbd-dkms` supports leaves the node without DRBD after
+  the reboot. After every kernel upgrade, before rebooting, check
+  `dkms status drbd` lists the new kernel as installed.
+  `proxmox-default-headers` is installed so new kernels get headers.
+- **Addresses.** Nodes are registered and reached at the address PVE lists for
+  them (the corosync link). To move DRBD traffic to a storage network
+  afterwards: `sds node set-address <node> <ip> --replication-address <ip>`.
+- **The VIP** must be a free address in the nodes' subnet. Self-HA moves the
+  controller's database onto DRBD, which takes a minute or two; its log is
+  `/var/log/sds/selfha-handoff.log` on the node that ran it.
+- `install.sh` restarts `pvedaemon` and `pveproxy`, which running guests do not
+  notice, and adds the LVM filter described under Requirements.
 
 ## What it is
 
@@ -43,30 +123,78 @@ storage nodes hold the replicas, PVE nodes run the guests.
   (and, for an encrypted resource, as the `/dev/mapper/sds_*` container under
   it). Unfiltered, the host's LVM finds the guest's volume group and may
   activate it, which holds the device open: the VM can then neither migrate nor
-  fail over. `install.sh` prepends `"r|^/dev/drbd|", "r|^/dev/mapper/sds_|"` to
-  `global_filter` in `/etc/lvm/lvm.conf`, keeping PVE's own entries
-  (`lvm-filter.sh`; `SDS_SKIP_LVM_FILTER=1` skips it). It also needs
-  `devices/scan_lvs = 0`, the default, so the backing LVs are not scanned.
+  fail over. The package (or `install.sh`) prepends
+  `"r|^/dev/drbd|", "r|^/dev/mapper/sds_|"` to `global_filter` in
+  `/etc/lvm/lvm.conf`, keeping PVE's own entries (`lvm-filter.sh`;
+  `SDS_SKIP_LVM_FILTER=1` skips it). It also needs `devices/scan_lvs = 0`, the
+  default, so the backing LVs are not scanned.
 
-`./preflight.sh <controller>[,<controller>...]` (the `controller` value from storage.cfg; `SDS_CA=<file>` for a private CA) checks all of the above except
+`preflight.sh <controller>[,<controller>...]` (the `controller` value from storage.cfg; `SDS_CA=<file>` for a private CA) checks all of the above except
 SSH, and exits non-zero if anything required is missing (a missing LVM filter
-is a warning: `install.sh` adds it).
+is a warning: installing adds it). It is in this directory and, once the
+package is installed, in `/usr/share/sds-pve-plugin/`.
 
 ## Install
 
-On every PVE node:
+### From the package (preferred)
+
+Build the package once, on any Debian/Ubuntu machine with a checkout (it needs
+only `dpkg-deb` and Perl, not Go or Node.js):
+
+```bash
+make deb-pve-plugin        # dist/sds-pve-plugin_<version>_all.deb
+```
+
+`make deb` builds it together with the controller packages. Then, on every PVE
+node:
+
+```bash
+./preflight.sh 192.168.1.10                  # from the checkout: verify prerequisites first
+apt install ./sds-pve-plugin_*_all.deb       # the ./ makes apt install a local file
+```
+
+The package replaces `install.sh` and installs exactly the same modules:
+`SDSPlugin.pm` in `/usr/share/perl5/PVE/Storage/Custom/` and the helpers in
+`.../Custom/SDS/`, plus `lvm-filter.sh` and `preflight.sh` in
+`/usr/share/sds-pve-plugin/`. It depends on `libpve-storage-perl`,
+`drbd-utils` and `lvm2`; the DRBD 9 kernel module (`drbd-dkms`) is still
+yours to install. On installation and on every upgrade it:
+
+1. checks that the module compiles (`perl -c`). If it does not, it stops
+   there: `pvedaemon` and `pveproxy` are not restarted and keep running the
+   previous plugin, and apt reports the package as not configured;
+2. adds the LVM filter with `lvm-filter.sh`, unless `SDS_SKIP_LVM_FILTER=1`
+   (`SDS_SKIP_LVM_FILTER=1 apt install ./sds-pve-plugin_*_all.deb`). A
+   failure there is a warning, not an error;
+3. runs `systemctl try-restart pvedaemon pveproxy`, which does not affect
+   running guests.
+
+`apt remove sds-pve-plugin` removes the modules and restarts the two daemons.
+It changes nothing else: it warns if `storage.cfg` still has `sds:` entries,
+but leaves them (other nodes may still use them), and leaves the LVM filter in
+`lvm.conf`.
+
+A node set up with `install.sh` can move to the package directly: dpkg
+replaces the files in place. Do not run `install.sh --uninstall` afterwards:
+it deletes files the package now owns.
+
+### With install.sh
+
+Without the package, on every PVE node:
 
 ```bash
 ./preflight.sh 192.168.1.10     # verify prerequisites first
 sudo ./install.sh               # compile-checks, copies the modules, adds the LVM filter, restarts pvedaemon + pveproxy
 ```
 
-`install.sh` puts `SDSPlugin.pm` in `/usr/share/perl5/PVE/Storage/Custom/` and
-the helpers in `.../Custom/SDS/`. Restarting `pvedaemon` and `pveproxy` does
-not affect running guests. Uninstall with `sudo ./install.sh --uninstall`
-after removing the `sds:` entries from `storage.cfg`.
+`install.sh` does what the package does, from the checkout and without dpkg
+knowing about the files. Uninstall with `sudo ./install.sh --uninstall` after
+removing the `sds:` entries from `storage.cfg`.
 
-Then add a storage entry once (`/etc/pve/storage.cfg` is cluster-wide):
+### Storage entry
+
+With the plugin on every node, add a storage entry once (`/etc/pve/storage.cfg`
+is cluster-wide):
 
 ```
 sds: sds0
@@ -276,3 +404,13 @@ with a plain Perl. It covers the naming round trip, size rounding, allocation
 payloads, capacity reporting, the REST error semantics (the controller reports
 failures as HTTP 200 + `success=false`), and every path that opens or closes
 the dual-primary window.
+
+```bash
+./deploy/proxmox/bootstrap/test.sh
+```
+
+runs `bootstrap.sh --dry-run` against a stub cluster (an `ssh` on `PATH` that
+answers the read-only checks as a fresh or a bootstrapped node would) and
+checks the planned commands, that a bootstrapped cluster gets none, and the
+refusals (offline member, no root SSH, unusable disks, missing `--devices` or
+`--vip`). It needs bash and perl, not PVE.

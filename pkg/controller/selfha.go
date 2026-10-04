@@ -41,6 +41,10 @@ const (
 var (
 	controllerConfigPath = "/etc/sds/controller.toml"
 	controllerUnitPath   = "/etc/systemd/system/sds-controller.service"
+	// packagedControllerUnitPath is where the sds-controller package puts the
+	// unit. Enable reads it when there is no /etc copy, and installs it on
+	// the standbys as controllerUnitPath, which overrides a packaged one.
+	packagedControllerUnitPath = "/lib/systemd/system/sds-controller.service"
 	// dispatchConfigOverride replaces the configured dispatch config path;
 	// tests point it at a fixture.
 	dispatchConfigOverride = ""

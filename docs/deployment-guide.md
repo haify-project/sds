@@ -88,7 +88,8 @@ Cross-compiled (`GOOS`/`GOARCH` set) they land in `$(go env GOPATH)/bin/linux_<a
 
 Tagged releases on GitHub carry a linux/amd64 archive with `sds-controller`
 (UI included), `sds`, `sds-mcp`, `service-ip`, both unit files and
-`controller.toml.example`.
+`controller.toml.example`. `make deb` builds Debian packages instead
+(section 4).
 
 Other binaries:
 - `sds-ai` (`cmd/sds-ai`, its own Go module): `cd cmd/sds-ai && go build .`
@@ -211,6 +212,57 @@ key_path = "/root/.ssh/id_ed25519"
 
 ## 4. Install and start the controller
 
+### From the Debian package (Debian, Ubuntu)
+
+`make deb` builds `dist/sds-controller_<version>_amd64.deb` and `_arm64.deb`
+(plus the Proxmox plugin package, see `deploy/proxmox/README.md`) with plain
+`dpkg-deb`. It needs Go, `dpkg-deb` and the web UI's dependencies
+(`cd web-ui && npm ci`); `SKIP_UI_BUILD=1` embeds the UI already in `ui/dist`
+instead. The version comes from `git describe --tags`, or `VERSION=...`; a tree
+with no tag gets `0.0~git<commits>.<sha>`. The script is
+`scripts/build-deb.sh`.
+
+```bash
+sudo apt install ./sds-controller_*_amd64.deb
+```
+
+| Path | What |
+| ---- | ---- |
+| `/opt/sds/bin/sds-controller`, `/opt/sds/bin/service-ip` | where the unit runs the controller from, and where the controller finds the `service-ip` it installs on HA nodes |
+| `/usr/bin/sds` (`sds-cli` links to it), `/usr/bin/sds-mcp` | the CLI and MCP server; `/opt/sds/bin/sds-mcp` links to the latter for `sds-mcp-http.service` and `sds-ai` |
+| `/lib/systemd/system/` | `sds-controller.service`, `service-ip@.service`, `sds-mcp-http.service` |
+| `/usr/share/doc/sds-controller/controller.toml.example` | the full example config |
+
+The package differs from the manual install below in three places:
+
+- **`sds` is `/usr/bin/sds`**, not `/usr/local/bin/sds`: `/usr/local` belongs
+  to the administrator. Remove copies left there by a manual install
+  (`/usr/local/bin/sds`, `sds-cli`, `sds-mcp`); they come first in `PATH`.
+  Unit files copied to `/etc/systemd/system/` by hand likewise override the
+  packaged ones.
+- **The packaged `service-ip@.service` runs `/opt/sds/bin/service-ip`.** The
+  controller still installs `/usr/local/bin/service-ip` and its own
+  `/etc/systemd/system/service-ip@.service` on any HA node that lacks them,
+  this one included, exactly as without the package.
+- **`/etc/sds/controller.toml` is created from the example only when that path
+  is unused** (mode 0600, as tokens go in it). It is not a conffile, so an
+  upgrade never touches it.
+
+Installing never enables or starts the controller, and an upgrade never
+restarts it: one host per cluster runs it, or drbd-reactor does under
+Self-HA. After an upgrade, restart it yourself (`systemctl restart
+sds-controller`, or under Self-HA install the package on every node and then
+`sds ha evict sds-meta`). `apt remove` stops nothing; `apt purge` leaves
+`/etc/sds` and `/var/lib/sds` (the database) in place.
+
+Self-HA replicates the controller's unit to the standbys as
+`/etc/systemd/system/sds-controller.service`; with no copy there it reads the
+packaged one in `/lib/systemd/system/`, so nothing needs copying first.
+
+Then configure and start it as below ("Configure and start").
+
+### By hand
+
 ```bash
 sudo install -d /opt/sds/bin /etc/sds
 sudo install -m 755 bin/sds-controller bin/service-ip /opt/sds/bin/
@@ -219,6 +271,8 @@ sudo install -m 755 bin/sds /usr/local/bin/sds
 sudo ln -sf sds /usr/local/bin/sds-cli      # older scripts call it sds-cli
 sudo cp configs/sds-controller.service configs/service-ip@.service /etc/systemd/system/
 ```
+
+### Configure and start
 
 Minimal `/etc/sds/controller.toml`:
 
@@ -385,8 +439,9 @@ Primary.
 
 Before enabling:
 - the controller runs on a registered node, with `/etc/sds/controller.toml` and
-  `/etc/systemd/system/sds-controller.service` in place; the unit's `ExecStart`
-  names the binary by absolute path;
+  its unit in `/etc/systemd/system/` (or, from the Debian package,
+  `/lib/systemd/system/`); the unit's `ExecStart` names the binary by
+  absolute path;
 - every other node has the controller's architecture, or a build for its
   architecture sits beside the running binary as `sds-controller-<goarch>`
   (e.g. `/opt/sds/bin/sds-controller-arm64`); otherwise `enable` refuses that

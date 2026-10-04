@@ -1,0 +1,59 @@
+#!/bin/sh
+# postinst for sds-pve-plugin: what deploy/proxmox/install.sh does after it
+# has copied the modules into place.
+#
+# pvedaemon and pveproxy load storage plugins in-process, so they are
+# restarted for a new or changed module to take effect. Restarting them does
+# not disturb running guests. try-restart leaves stopped daemons stopped.
+
+set -e
+
+PLUGIN=/usr/share/perl5/PVE/Storage/Custom/SDSPlugin.pm
+SHARE=/usr/share/sds-pve-plugin
+
+restart_pve() {
+    if [ -d /run/systemd/system ]; then
+        systemctl try-restart pvedaemon pveproxy || true
+    fi
+}
+
+case "$1" in
+configure)
+    # A module that does not compile takes pvedaemon down with it on restart,
+    # so check before restarting. On failure the daemons keep running the
+    # previous plugin from memory and the package is left unconfigured, which
+    # apt reports; do not restart them until a fixed version is installed.
+    if ! perl -c "$PLUGIN" >/dev/null 2>&1; then
+        echo "ERROR: $PLUGIN does not compile on this node; pvedaemon and pveproxy were NOT restarted:" >&2
+        perl -c "$PLUGIN" >&2 || true
+        exit 1
+    fi
+
+    # Keep the host's LVM off the DRBD devices that carry guest disks (see
+    # lvm-filter.sh). A failure is a warning, as in install.sh: the plugin
+    # works without the filter until a guest with LVM inside its disk runs here.
+    # SDS_SKIP_LVM_FILTER=1 leaves lvm.conf to the operator.
+    if [ "${SDS_SKIP_LVM_FILTER:-0}" != "1" ]; then
+        if ! "$SHARE/lvm-filter.sh"; then
+            echo "WARNING: the LVM filter was not added; a guest's LVM inside its disk can be activated on this host." >&2
+            echo "  Fix it and run $SHARE/lvm-filter.sh again (check: $SHARE/lvm-filter.sh --check)." >&2
+        fi
+    fi
+
+    restart_pve
+
+    if [ -z "$2" ]; then
+        echo "Next: check this node with $SHARE/preflight.sh <controller>, then add an"
+        echo "'sds:' entry to /etc/pve/storage.cfg (cluster-wide, once). Every option is in"
+        echo "/usr/share/doc/sds-pve-plugin/storage.cfg.example."
+    fi
+    ;;
+abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+*)
+    echo "postinst called with unknown argument '$1'" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
