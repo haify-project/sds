@@ -131,6 +131,15 @@ for mod in HTTP::Tiny JSON::PP; do
     fi
 done
 
+# 7. LVM must not scan the DRBD devices that carry guest disks, or a guest's
+#    own volume group gets activated on this host and pins the device open
+#    (lvm-filter.sh). install.sh adds the filter, so its absence is a warning.
+if LVM_OUT=$("$(dirname "${BASH_SOURCE[0]}")/lvm-filter.sh" --check 2>&1); then
+    ok "$LVM_OUT"
+else
+    while IFS= read -r line; do warn "$line"; done <<< "$LVM_OUT"
+fi
+
 echo
 if [ "$FAIL" -eq 0 ]; then
     echo "Preflight passed. Install the plugin with: ./install.sh"

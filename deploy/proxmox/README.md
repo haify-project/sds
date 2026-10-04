@@ -38,8 +38,19 @@ A PVE node does **not** need to contribute any disks. A compute-only hypervisor
 attaches to each volume as a diskless client, which is the normal topology:
 storage nodes hold the replicas, PVE nodes run the guests.
 
+- **An LVM filter that skips DRBD devices.** A guest that uses LVM inside its
+  disk writes a PV header to it, and this host sees that disk as `/dev/drbdN`
+  (and, for an encrypted resource, as the `/dev/mapper/sds_*` container under
+  it). Unfiltered, the host's LVM finds the guest's volume group and may
+  activate it, which holds the device open: the VM can then neither migrate nor
+  fail over. `install.sh` prepends `"r|^/dev/drbd|", "r|^/dev/mapper/sds_|"` to
+  `global_filter` in `/etc/lvm/lvm.conf`, keeping PVE's own entries
+  (`lvm-filter.sh`; `SDS_SKIP_LVM_FILTER=1` skips it). It also needs
+  `devices/scan_lvs = 0`, the default, so the backing LVs are not scanned.
+
 `./preflight.sh <controller>[,<controller>...]` (the `controller` value from storage.cfg; `SDS_CA=<file>` for a private CA) checks all of the above except
-SSH, and exits non-zero if anything required is missing.
+SSH, and exits non-zero if anything required is missing (a missing LVM filter
+is a warning: `install.sh` adds it).
 
 ## Install
 
@@ -47,7 +58,7 @@ On every PVE node:
 
 ```bash
 ./preflight.sh 192.168.1.10     # verify prerequisites first
-sudo ./install.sh               # compile-checks, copies the modules, restarts pvedaemon + pveproxy
+sudo ./install.sh               # compile-checks, copies the modules, adds the LVM filter, restarts pvedaemon + pveproxy
 ```
 
 `install.sh` puts `SDSPlugin.pm` in `/usr/share/perl5/PVE/Storage/Custom/` and
@@ -92,6 +103,7 @@ also accepted. `content` may be `images` and `rootdir`; the only format is
 | Proxmox | sds REST call |
 | --- | --- |
 | one VM disk `vm-<vmid>-disk-<n>` | one DRBD resource `<prefix>-<vmid>-<n>` |
+| another volume of the VM: `vm-<vmid>-cloudinit`, `vm-<vmid>-state-<snap>` (a snapshot's RAM), `vm-<vmid>-fleece-<n>` (backup fleecing) | one DRBD resource `<prefix>-<vmid>-<name>` |
 | `alloc_image` | `POST /v1/resources` (size rounded up to whole GiB, protocol C) |
 | `free_image` | `DELETE /v1/resources/<res>` (cascade teardown) |
 | `list_images` | `GET /v1/resources`, filtered by `<prefix>-` |
@@ -185,6 +197,39 @@ holds DRBD quorum and refuses otherwise. A partitioned node therefore cannot
 take over, so HA failover cannot split-brain. The trade-off is deliberate: a
 resource that has lost quorum will not fail over automatically.
 
+PVE decides where a guest runs, and with it where its disks are Primary. So
+`sds ha create` and the sds gateways, which would put a drbd-reactor promoter
+on the disk to fight PVE for the role, refuse a disk the plugin created (it
+labels each `sds.pve/managed-by=pve`) and any resource with diskless clients.
+Use PVE HA for guests; do not use drbd-reactor for them.
+
+### Where HA should restart a guest
+
+A guest runs on any PVE node: one without a replica attaches as a diskless
+client and reads and writes over the network. That makes every node a valid HA
+target, but the replica nodes are the fast ones. Tell `ha-manager` to prefer
+them, without forbidding the rest (a strict rule would leave the guest down
+when both replica nodes are):
+
+```bash
+sds resource list | grep pve-100-        # the guest's disks and their nodes
+
+# PVE 9: node affinity rules
+ha-manager rules add node-affinity sds-vm-100 --resources vm:100 \
+    --nodes pve1:2,pve2:2,pve3:1 --strict 0
+
+# PVE 8: HA groups
+ha-manager groupadd sds-pve1-pve2 --nodes pve1:2,pve2:2,pve3:1
+ha-manager set vm:100 --group sds-pve1-pve2
+```
+
+Guests whose disks share replica nodes can share a rule or group. A guest
+whose disks sit on different replica pairs prefers the nodes common to all of
+them. In a "two storage nodes plus one tiebreaker" cluster, the third machine
+is a DRBD tiebreaker for sds and a QDevice for corosync — both roles, since a
+QDevice alone gives DRBD no quorum vote. It is usually not a PVE node at all;
+when it is one, give it the lowest priority.
+
 ## Limitations
 
 - **Raw only.** DRBD exports a raw block device; qcow2 is not supported and not
@@ -192,6 +237,9 @@ resource that has lost quorum will not fail over automatically.
 - **No linked clones, templates or volume renames.** `clone_image`,
   `create_base` and `rename_volume` refuse; the first two need image-level
   copy-on-write. Reassigning a disk to another VM is therefore not possible.
+- **Volume names.** `vm-<vmid>-<name>` with `<name>` starting with a letter
+  and made of letters, digits, `_` and `-` (at most 64); PVE's own names all
+  fit. `base-*` volumes are refused with templates.
 - **No snapshot access.** A snapshot cannot be activated or addressed by path.
 - **Whole-gigabyte allocation.** Disk sizes round *up* to the next GiB.
 - **WAN resources are refused for dual-primary**, so a guest cannot live-migrate

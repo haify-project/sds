@@ -1,0 +1,71 @@
+package controller
+
+import (
+	"context"
+	"fmt"
+	"regexp"
+)
+
+// Resources whose Primary another system decides.
+//
+// A drbd-reactor promoter — what `ha create` and every gateway write — makes a
+// resource Primary on whichever replica it can and keeps it there. Some
+// resources already have a manager deciding that:
+//
+//   - a Proxmox VM disk is made Primary by the storage plugin on the node PVE
+//     starts the VM on, and moved by PVE live migration and PVE HA;
+//   - a CSI volume is made Primary by the CSI node plugin on the node the pod
+//     is scheduled to;
+//   - a resource with diskless clients is used from nodes the promoter never
+//     runs on (the Proxmox plugin attaches one where a VM runs without a local
+//     replica).
+//
+// A promoter on any of them fights that manager for the role: it promotes a
+// replica while the VM or pod runs elsewhere, or demotes the node it runs on
+// when its own start chain fails. So both are refused up front.
+
+const (
+	// pveManagedByLabel marks a resource the Proxmox plugin created.
+	pveManagedByLabel = "sds.pve/managed-by"
+	// csiManagedByLabel marks a resource the CSI driver created.
+	csiManagedByLabel = "sds.csi/managed-by"
+)
+
+// pveDefaultNameRe matches what the Proxmox plugin names a volume under its
+// default prefix ("pve-<vmid>-<n>", "pve-<vmid>-cloudinit"). Disks created
+// before the plugin labelled them are recognised by it.
+var pveDefaultNameRe = regexp.MustCompile(`^pve-\d+-[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// externallyPromoted names the system that decides where a resource is
+// Primary, or "" when sds itself may.
+func externallyPromoted(name string, labels map[string]string) string {
+	switch {
+	case labels[pveManagedByLabel] == "pve", labels[pveManagedByLabel] == "" && pveDefaultNameRe.MatchString(name):
+		return "Proxmox VE"
+	case labels[csiManagedByLabel] == "csi":
+		return "the CSI driver"
+	}
+	return ""
+}
+
+// assertPromoterAllowed refuses to put a drbd-reactor promoter on resource;
+// what names the operation for the error ("ha create", "an NFS gateway").
+func (c *Controller) assertPromoterAllowed(ctx context.Context, resource, what string) error {
+	if c.db == nil {
+		return nil
+	}
+	res, err := c.db.GetResource(ctx, resource)
+	if err != nil || res == nil {
+		// Not found is the operation's own error to report.
+		return nil
+	}
+	if owner := externallyPromoted(res.Name, res.Labels); owner != "" {
+		return fmt.Errorf("%s is refused on %s: %s decides where it is Primary, and a drbd-reactor promoter "+
+			"would fight it for the role", what, resource, owner)
+	}
+	if clients := splitCSV(res.DisklessClients); len(clients) > 0 {
+		return fmt.Errorf("%s is refused on %s: it has diskless clients (%v) that use it from nodes a promoter "+
+			"does not run on; detach them first", what, resource, clients)
+	}
+	return nil
+}

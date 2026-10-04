@@ -75,6 +75,14 @@ done
 install -m 0644 "$SRC_DIR/$PLUGIN_NAME" "$PLUGIN_DIR/$PLUGIN_NAME"
 echo "Installed $PLUGIN_DIR/$PLUGIN_NAME"
 
+# Keep the host's LVM off the DRBD devices that carry guest disks (see
+# lvm-filter.sh). SDS_SKIP_LVM_FILTER=1 leaves lvm.conf to you.
+if [ "${SDS_SKIP_LVM_FILTER:-0}" != "1" ]; then
+    if ! "$SRC_DIR/lvm-filter.sh"; then
+        echo "WARNING: the LVM filter was not added; a guest's LVM inside its disk can be activated on this host" >&2
+    fi
+fi
+
 reload_pve
 echo "Restarted pvedaemon and pveproxy"
 

@@ -9,7 +9,7 @@ use FindBin;
 use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
-use Test::More tests => 22;
+use Test::More tests => 29;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -41,6 +41,17 @@ ok(!defined((PVE::Storage::Custom::SDSPlugin::volname_from_resource($scfg, 'clus
 ok(!defined((PVE::Storage::Custom::SDSPlugin::volname_from_resource($scfg, 'pve-100-0-extra'))[0]),
     'near-miss name is not claimed');
 
+# The other per-VM volumes PVE allocates map one to one, and never onto a disk.
+for my $round (qw(vm-100-cloudinit vm-100-state-before_upgrade vm-100-fleece-0)) {
+    my $res = PVE::Storage::Custom::SDSPlugin::sds_resource_name($scfg, $round);
+    my ($back) = PVE::Storage::Custom::SDSPlugin::volname_from_resource($scfg, $res);
+    is($back, $round, "round trip $round ($res)");
+}
+ok(!defined((PVE::Storage::Custom::SDSPlugin::volname_from_resource($scfg, 'pve-100-disk-0'))[0]),
+    'the long form of a disk is no volume: disk 0 is pve-100-0');
+eval { PVE::Storage::Custom::SDSPlugin::sds_resource_name($scfg, 'vm-100-disk-x') };
+like($@, qr/unable to map/, 'a malformed disk name is not read as another volume');
+
 eval { PVE::Storage::Custom::SDSPlugin::sds_resource_name($scfg, 'some-random-volume') };
 like($@, qr/unable to map/, 'unmappable volume name dies');
 
@@ -51,6 +62,8 @@ is($parsed[0], 'images', 'vtype');
 is($parsed[2], 100, 'vmid');
 is($parsed[6], 'raw', 'format is always raw');
 
+is(($P->parse_volname('vm-100-state-snap1'))[2], 100, 'a snapshot state volume belongs to its VM');
+is(($P->parse_volname('vm-100-cloudinit'))[0], 'images', 'a cloud-init drive is an image');
 eval { $P->parse_volname('base-100-disk-0') };
 like($@, qr/unable to parse/, 'base images are rejected');
 

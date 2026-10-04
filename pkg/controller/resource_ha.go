@@ -41,6 +41,9 @@ func (rm *ResourceManager) MakeHa(ctx context.Context, resource string, services
 	if dbResource == nil {
 		return "", fmt.Errorf("resource not found: %s", resource)
 	}
+	if err := rm.controller.assertPromoterAllowed(ctx, resource, "ha create"); err != nil {
+		return "", err
+	}
 
 	// The DR node of a WAN resource gets no promoter: failing over to its
 	// asynchronous copy is a manual decision (see promoter_placement.go).

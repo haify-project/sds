@@ -9,7 +9,7 @@ use warnings;
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(
-    resource_prefix sds_resource_name volname_from_resource
+    resource_prefix sds_resource_name volname_from_resource parse_vm_volname
     kib_to_gb bytes_to_gb gb_to_bytes same_pool
     _node_participates _other_primary_node
 );
@@ -21,9 +21,28 @@ our @EXPORT_OK = qw(
 # deletes independently (the same model the CSI driver uses for a PVC).
 #
 # PVE volume "vm-<vmid>-disk-<n>"  <->  sds resource "<prefix>-<vmid>-<n>".
+# PVE volume "vm-<vmid>-<other>"   <->  sds resource "<prefix>-<vmid>-<other>",
+# for the volumes PVE names otherwise: "vm-<vmid>-cloudinit", a snapshot's RAM
+# "vm-<vmid>-state-<snap>", a backup's "vm-<vmid>-fleece-<n>". <other> starts
+# with a letter, so it can never be read back as a disk number, and is not
+# "disk-<n>", whose resource name is the short one.
 # VM ids are unique cluster-wide, so the mapping is collision-free, and it is
 # reversible, which is what makes list_images possible without a side table.
 # ---------------------------------------------------------------------------
+
+# The <other> part of a volume name: DRBD-, LVM- and shell-safe, and short
+# enough that "<prefix>-<vmid>-<other>_data" stays a valid LV name.
+my $OTHER_RE = qr/[A-Za-z][A-Za-z0-9_-]{0,63}/;
+
+# parse_vm_volname splits a PVE volume name into (vmid, disk index) for a
+# disk, (vmid, undef, other) for any other per-VM volume, or an empty list.
+sub parse_vm_volname {
+    my ($volname) = @_;
+    return ($1, $2) if $volname =~ m/^vm-(\d+)-disk-(\d+)$/;
+    return () if $volname =~ m/^vm-\d+-disk-/;
+    return ($1, undef, $2) if $volname =~ m/^vm-(\d+)-($OTHER_RE)$/;
+    return ();
+}
 
 sub resource_prefix {
     my ($scfg) = @_;
@@ -33,9 +52,9 @@ sub resource_prefix {
 
 sub sds_resource_name {
     my ($scfg, $volname) = @_;
-    my ($vmid, $idx) = ($volname =~ m/^vm-(\d+)-disk-(\d+)$/);
+    my ($vmid, $idx, $other) = parse_vm_volname($volname);
     die "unable to map volume '$volname' to an sds resource\n" if !defined $vmid;
-    return resource_prefix($scfg) . "-$vmid-$idx";
+    return resource_prefix($scfg) . "-$vmid-" . ($idx // $other);
 }
 
 # Inverse of sds_resource_name. Returns (volname, vmid), or an empty list when
@@ -43,9 +62,14 @@ sub sds_resource_name {
 sub volname_from_resource {
     my ($scfg, $resname) = @_;
     my $prefix = resource_prefix($scfg);
-    my ($vmid, $idx) = ($resname =~ m/^\Q$prefix\E-(\d+)-(\d+)$/);
-    return () if !defined $vmid;
-    return ("vm-$vmid-disk-$idx", $vmid);
+    return ("vm-$1-disk-$2", $1) if $resname =~ m/^\Q$prefix\E-(\d+)-(\d+)$/;
+    if ($resname =~ m/^\Q$prefix\E-(\d+)-($OTHER_RE)$/) {
+        my ($vmid, $other) = ($1, $2);
+        # "<prefix>-<vmid>-disk-<n>" has no volume: disk n maps to the short form.
+        return () if $other =~ m/^disk-/;
+        return ("vm-$vmid-$other", $vmid);
+    }
+    return ();
 }
 
 # PVE speaks KiB in alloc_image and bytes in volume_resize; sds allocates whole

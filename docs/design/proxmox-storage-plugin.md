@@ -91,6 +91,13 @@ window does not include 11, `api()` reports the nearest accepted version.
 - `vm-<vmid>-disk-<n>` ↔ `<prefix>-<vmid>-<n>`. VM ids are unique per PVE
   cluster, so the mapping is collision-free and reversible; `list_images`
   needs no side table.
+- The other per-VM volumes PVE allocates — `vm-<vmid>-cloudinit`, a snapshot's
+  RAM `vm-<vmid>-state-<snap>`, a backup's `vm-<vmid>-fleece-<n>` — map to
+  `<prefix>-<vmid>-<name>`. `<name>` starts with a letter, so it can never read
+  back as a disk number, and `<prefix>-<vmid>-disk-<n>` maps to nothing.
+- Every resource carries the label `sds.pve/managed-by=pve`: PVE decides where
+  it is Primary, so sds refuses a drbd-reactor promoter on it (`ha create`, a
+  gateway) and does not alarm when a stopped VM's disk has no Primary.
 - Format `raw` only.
 
 ## PVE method → sds REST
