@@ -14,6 +14,7 @@ import { PROTOCOL, gwKind } from './protocol';
 import { ManageNFS } from './ManageNFS';
 import { ManageISCSI } from './ManageISCSI';
 import { ManageNVMe } from './ManageNVMe';
+import { ManageSMB } from './ManageSMB';
 
 // ==================== Manage Dialog ====================
 
@@ -54,6 +55,8 @@ export function ManageDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* SMB share and user changes apply live; the others wait for a restart. */}
+        {kind !== 'smb' && (
         <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/60 p-3 text-sm">
           <div className="flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -75,10 +78,12 @@ export function ManageDialog({
             Restart now
           </Button>
         </div>
+        )}
 
         {kind === 'nfs' && <ManageNFS resource={gateway!.resource} />}
         {kind === 'iscsi' && <ManageISCSI resource={gateway!.resource} />}
         {kind === 'nvme' && <ManageNVMe resource={gateway!.resource} />}
+        {kind === 'smb' && <ManageSMB resource={gateway!.resource} />}
       </DialogContent>
     </Dialog>
   );

@@ -99,7 +99,7 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 
 // evictPromoterConfigs are the promoter configs SDS writes for a resource, in
 // the order evictScript tries them.
-var evictPromoterConfigs = []string{"sds-ha-%s", "sds-nfs-%s", "sds-iscsi-%s", "sds-nvmeof-%s"}
+var evictPromoterConfigs = []string{"sds-ha-%s", "sds-nfs-%s", "sds-iscsi-%s", "sds-nvmeof-%s", "sds-smb-%s"}
 
 // evictScript evicts the resource from the node it runs on through whichever
 // SDS promoter config for it exists there, and fails when none does — or when

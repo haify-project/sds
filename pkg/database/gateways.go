@@ -18,6 +18,7 @@ const (
 	GatewayTypeNFS    GatewayType = "nfs"
 	GatewayTypeISCSI  GatewayType = "iscsi"
 	GatewayTypeNVMEOF GatewayType = "nvmeof"
+	GatewayTypeSMB    GatewayType = "smb"
 )
 
 // Gateway represents a storage gateway

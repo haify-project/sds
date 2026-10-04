@@ -27,6 +27,7 @@ var gatewayKinds = []struct {
 	{"sds-nfs-", nfsPrereqs},
 	{"sds-iscsi-", iscsiPrereqs},
 	{"sds-nvmeof-", nvmePrereqs},
+	{"sds-smb-", smbPrereqs},
 }
 
 // SyncPlacement makes resource's gateway promoter config present on every
@@ -114,6 +115,11 @@ func (m *Manager) placeConfig(ctx context.Context, pluginID string, byHost map[s
 	}
 	if strings.HasPrefix(pluginID, "sds-nfs-") {
 		m.prepareNFSNode(ctx, missing, "")
+	}
+	if strings.HasPrefix(pluginID, "sds-smb-") {
+		if err := m.prepareSMBNode(ctx, missing); err != nil {
+			return err
+		}
 	}
 	if strings.HasPrefix(pluginID, "sds-nvmeof-") {
 		if err := m.loadNVMeModulesFor(ctx, missing, chosen.content); err != nil {

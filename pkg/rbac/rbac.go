@@ -494,7 +494,7 @@ func classifyObject(method string) string {
 		return "backup"
 	case strings.Contains(method, "Snapshot"):
 		return "snapshot"
-	case containsAny(method, "Gateway", "NFS", "ISCSI", "NVMe", "Chap", "Export", "Initiator", "LUN", "Host", "Namespace"):
+	case containsAny(method, "Gateway", "NFS", "ISCSI", "NVMe", "SMB", "Chap", "Export", "Initiator", "LUN", "Host", "Namespace"):
 		return "gateway"
 	case containsAny(method, "Pool", "Disk", "ZFSDataset", "ZFSVolume", "ZFSpool"):
 		return "pool"

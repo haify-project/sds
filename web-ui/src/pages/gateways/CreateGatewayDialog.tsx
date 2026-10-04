@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type GwKind } from './protocol';
+import { CreateSMBForm } from './CreateSMBForm';
 
 // ==================== Create Dialog ====================
 
@@ -43,17 +44,18 @@ export function CreateGatewayDialog({
         <DialogHeader>
           <DialogTitle>Create Gateway</DialogTitle>
           <DialogDescription>
-            Expose a DRBD resource via NFS, iSCSI or NVMe-oF.
+            Expose a DRBD resource via NFS, iSCSI, NVMe-oF or SMB.
           </DialogDescription>
         </DialogHeader>
         <Tabs
           value={type ?? 'nfs'}
           onValueChange={(v) => onTypeChange(v as GwKind)}
         >
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="nfs">NFS</TabsTrigger>
             <TabsTrigger value="iscsi">iSCSI</TabsTrigger>
             <TabsTrigger value="nvme">NVMe</TabsTrigger>
+            <TabsTrigger value="smb">SMB</TabsTrigger>
           </TabsList>
           <TabsContent value="nfs">
             <CreateNFSForm resources={resources} onCreated={onCreated} />
@@ -64,13 +66,16 @@ export function CreateGatewayDialog({
           <TabsContent value="nvme">
             <CreateNVMeForm resources={resources} onCreated={onCreated} />
           </TabsContent>
+          <TabsContent value="smb">
+            <CreateSMBForm resources={resources} onCreated={onCreated} />
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
   );
 }
 
-function ResourceSelect({
+export function ResourceSelect({
   resources,
   value,
   onChange,
