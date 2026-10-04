@@ -21,7 +21,7 @@ import (
 func TestUIServerProxiesAPIOnItsOwnOrigin(t *testing.T) {
 	// Free ports: nothing may answer, or a controller running on this machine
 	// would serve the request and the proxy would look like a file server.
-	srv, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, freePort(t), freePort(t))
+	srv, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, freePort(t), freePort(t), nil)
 	require.NoError(t, err)
 
 	for _, path := range []string{"/v1/nodes", "/v1/rbac/whoami", "/ai/chat/stream"} {
@@ -41,7 +41,7 @@ func TestUIServerProxiesAPIOnItsOwnOrigin(t *testing.T) {
 // Everything that is not an API path still reaches the SPA, including deep
 // links, which the router resolves client-side.
 func TestUIServerStillServesTheSPA(t *testing.T) {
-	srv, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, 3375, 7634)
+	srv, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, 3375, 7634, nil)
 	require.NoError(t, err)
 
 	for _, path := range []string{"/", "/resources", "/nodes"} {

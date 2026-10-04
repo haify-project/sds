@@ -203,7 +203,7 @@ func TestServerEnrichGatewayInfoFallsBackToDBStatus(t *testing.T) {
 }
 
 func TestUIServerServeHTTP(t *testing.T) {
-	ui, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, 3375, 7634)
+	ui, err := NewUIServer(zap.NewNop(), "127.0.0.1", 0, 3375, 7634, nil)
 	require.NoError(t, err)
 
 	// ui/dist is a build artifact, so this test has to hold both on a machine

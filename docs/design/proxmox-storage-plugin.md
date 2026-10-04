@@ -53,7 +53,9 @@ VM on another node.
 ## Components (`deploy/proxmox/`)
 
 - `SDSPlugin.pm` — storage type `sds`, `PVE::Storage::Custom::SDSPlugin`.
-- `PVE/Storage/Custom/SDS/Client.pm` — REST client; bearer token when set.
+- `PVE/Storage/Custom/SDS/Client.pm` — REST client; bearer token when set;
+  several controller addresses (moves on only when a connection is refused)
+  and `https://` with certificate verification.
 - `PVE/Storage/Custom/SDS/Naming.pm` — volume ↔ resource naming and size
   conversions.
 - `PVE/Storage/Custom/SDS/Capacity.pm` — turns `GET /v1/pools` into the
@@ -70,7 +72,8 @@ VM on another node.
 
 | Key | Meaning |
 | --- | --- |
-| `controller` (fixed) | host or host:port; REST port defaults to 3375 |
+| `controller` (fixed) | comma-separated `host`/`host:port`, optionally `https://`; REST port defaults to 3375 |
+| `controllerca` | CA bundle for `https://` addresses; default the system store |
 | `sdspool` | sds pool for new volumes |
 | `sdsnodes` | comma-separated replica nodes; unset = auto-place by free space |
 | `replicas` | replica count for auto-placement (ignored with `sdsnodes`) |

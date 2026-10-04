@@ -3,6 +3,7 @@ package controller
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -42,6 +43,9 @@ type Controller struct {
 	metricsServer *http.Server
 	// UI
 	uiServer *UIServer
+	// restLoopbackTLS is how the UI's proxy dials the REST gateway when it is
+	// served over TLS ([tls] rest); nil for plain HTTP.
+	restLoopbackTLS *tls.Config
 	// events carries operational notifications (degrade, failover, node loss)
 	// from the health detector to Webhook receivers and watch streams. Nil when
 	// notifications are disabled, which is what the API surfaces report on.
@@ -271,7 +275,7 @@ func (c *Controller) Start() error {
 		uiAddr, uiPort := c.config.UI.UIAddress(c.config.Server.ListenAddress)
 		// The UI proxies its own-origin /v1 and /ai to these, so that publishing
 		// the UI port alone is enough to use it from outside the LAN.
-		uiServer, err := NewUIServer(c.logger, uiAddr, uiPort, c.restPort(), defaultAIPort)
+		uiServer, err := NewUIServer(c.logger, uiAddr, uiPort, c.restPort(), defaultAIPort, c.restLoopbackTLS)
 		if err != nil {
 			return fmt.Errorf("failed to create UI server: %w", err)
 		}

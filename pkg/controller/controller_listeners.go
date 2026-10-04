@@ -90,6 +90,9 @@ func (c *Controller) startGRPCServer() error {
 	if err != nil {
 		return fmt.Errorf("failed to configure TLS: %w", err)
 	}
+	if tlsSetup != nil {
+		c.restLoopbackTLS = tlsSetup.restLoopback
+	}
 
 	var opts []grpc.ServerOption
 	if tlsSetup != nil {
@@ -149,6 +152,16 @@ func (c *Controller) startGRPCServer() error {
 	if err != nil {
 		return fmt.Errorf("failed to listen for REST: %w", err)
 	}
+	restScheme := "http"
+	if tlsSetup != nil && tlsSetup.restServer != nil {
+		// [tls] rest: the bearer token on every REST call no longer crosses
+		// the network in the clear. Without it, it still does — logged below.
+		restLis = tls.NewListener(restLis, tlsSetup.restServer)
+		restScheme = "https"
+	} else if tlsSetup != nil {
+		c.logger.Warn("The REST gateway is still PLAINTEXT although [tls] is enabled; set tls.rest = true to serve it over TLS",
+			zap.String("address", restAddr))
+	}
 
 	// Create and register gRPC-Gateway. The default header matcher forwards
 	// well-known headers (Authorization arrives as grpcgateway-authorization,
@@ -186,7 +199,7 @@ func (c *Controller) startGRPCServer() error {
 	c.restServer = gatewayServer
 
 	go func() {
-		c.logger.Info("HTTP REST API gateway listening", zap.String("address", restAddr))
+		c.logger.Info("HTTP REST API gateway listening", zap.String("address", restAddr), zap.String("scheme", restScheme))
 		if err := gatewayServer.Serve(restLis); err != nil && err != http.ErrServerClosed {
 			c.logger.Error("HTTP gateway server error", zap.Error(err))
 		}

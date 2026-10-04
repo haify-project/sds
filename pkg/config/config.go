@@ -270,6 +270,11 @@ type TLSConfig struct {
 	// separate "require_client_cert" switch — a CA configured but not enforced
 	// is exactly the kind of security setting that looks on while being off.
 	ClientCAFile string `mapstructure:"client_ca_file"`
+	// REST also serves the REST gateway (rest_port) over TLS, with the same
+	// certificate. Off by default because REST clients written against plain
+	// HTTP stop working. Server-side only: REST callers authenticate with a
+	// bearer token, and browsers behind the web UI have no client certificate.
+	REST bool `mapstructure:"rest"`
 
 	// Legacy client-viewpoint names. They are still decoded so that a config
 	// which sets them fails loudly at startup instead of being silently
@@ -295,6 +300,9 @@ func (t TLSConfig) Validate() error {
 			"(sds keeps --tls-ca/--tls-cert/--tls-key for the client side.)")
 	}
 	if !t.Enabled {
+		if t.REST {
+			return fmt.Errorf("tls.rest needs tls.enabled: the REST gateway is served with tls.cert_file")
+		}
 		return nil
 	}
 	if t.CertFile == "" || t.KeyFile == "" {

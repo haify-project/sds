@@ -38,7 +38,7 @@ A PVE node does **not** need to contribute any disks. A compute-only hypervisor
 attaches to each volume as a diskless client, which is the normal topology:
 storage nodes hold the replicas, PVE nodes run the guests.
 
-`./preflight.sh <controller-host>[:<rest-port>]` checks all of the above except
+`./preflight.sh <controller>[,<controller>...]` (the `controller` value from storage.cfg; `SDS_CA=<file>` for a private CA) checks all of the above except
 SSH, and exits non-zero if anything required is missing.
 
 ## Install
@@ -73,7 +73,8 @@ live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 
 | Option | Meaning |
 | ------ | ------- |
-| `controller` | Required, cannot be changed after creation. `host` or `host:port`; the REST port defaults to 3375. Plain HTTP |
+| `controller` | Required. Comma-separated addresses, each `host`, `host:port` or `[v6]:port` (port defaults to 3375), optionally prefixed with `https://`. Under Self-HA list every node that can run the controller: an address that refuses the connection is skipped and the next tried; a request that reached a controller and then failed is never resent elsewhere. `pvesm set` cannot change it (it is a fixed option); edit `/etc/pve/storage.cfg` to add addresses |
+| `controllerca` | PEM CA bundle that signs the controller's certificate, for `https://` addresses, e.g. kept in `/etc/pve` so every node has it. Unset: the system trust store. The certificate is verified, names included, so it must cover the addresses listed. `https://` needs `[tls] rest = true` on the controller |
 | `sdspool` | sds pool new volumes are carved from, as `sds pool list` prints it (`sds_vg0`) or without the prefix (`vg0`) |
 | `sdsnodes` | Comma-separated sds nodes to place replicas on. Takes precedence over `replicas` |
 | `replicas` | Replica count for auto-placement by free space (1-16) |

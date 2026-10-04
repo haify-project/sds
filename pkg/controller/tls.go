@@ -30,6 +30,11 @@ type tlsSetup struct {
 	loopbackCreds credentials.TransportCredentials
 	// mutual reports that client certificates are required and verified.
 	mutual bool
+	// restServer is what the REST gateway listens with when [tls] rest is set,
+	// and restLoopback what the web UI's proxy dials it with; both nil
+	// otherwise.
+	restServer   *tls.Config
+	restLoopback *tls.Config
 }
 
 // loopbackIdentityValidity is how long the ephemeral client certificate the
@@ -112,11 +117,29 @@ func newTLSSetup(cfg config.TLSConfig) (*tlsSetup, error) {
 		loopbackConf.Certificates = []tls.Certificate{loopbackCert}
 	}
 
-	return &tlsSetup{
+	setup := &tlsSetup{
 		serverCreds:   credentials.NewTLS(serverConf),
 		loopbackCreds: credentials.NewTLS(loopbackConf),
 		mutual:        cfg.ClientCAFile != "",
-	}, nil
+	}
+	if cfg.REST {
+		// No client certificates here even under mutual TLS: REST callers
+		// authenticate with a bearer token, a browser behind the web UI has
+		// no certificate to present, and the REST gateway's own hop to gRPC
+		// keeps its loopback identity either way.
+		setup.restServer = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+		// The web UI proxies to REST over 127.0.0.1: the same name problem as
+		// the gRPC hop above, solved the same way.
+		setup.restLoopback = &tls.Config{
+			MinVersion:            tls.VersionTLS12,
+			InsecureSkipVerify:    true, // #nosec G402 -- replaced by exact-leaf pinning
+			VerifyPeerCertificate: pinnedLeafVerifier(cert.Certificate[0]),
+		}
+	}
+	return setup, nil
 }
 
 // pinnedLeafVerifier accepts a peer only when its leaf is byte-identical to

@@ -80,7 +80,11 @@ sub plugindata {
 sub properties {
     return {
         controller => {
-            description => "sds-controller address as host or host:port (REST port defaults to 3375).",
+            description => "sds-controller REST address(es), comma-separated, each host or host:port (port defaults to 3375), optionally with https://. List every node that can run the controller under Self-HA.",
+            type        => 'string',
+        },
+        controllerca => {
+            description => "PEM CA bundle that signs the controller's certificate, for https:// addresses. Unset: the system trust store.",
             type        => 'string',
         },
         sdspool => {
@@ -127,6 +131,7 @@ sub options {
         storagetype    => { optional => 1 },
         resourceprefix => { optional => 1 },
         apitoken       => { optional => 1 },
+        controllerca   => { optional => 1 },
         onnoquorum     => { optional => 1 },
         nodes          => { optional => 1 },
         disable        => { optional => 1 },

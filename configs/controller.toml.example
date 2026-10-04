@@ -45,6 +45,10 @@ enabled = false
 # certificate signed by it, and one that is not gets no further than the
 # handshake. Leave it unset for server-only TLS.
 # client_ca_file = "/etc/sds/certs/client-ca.crt"
+# Serve the REST gateway ([server] rest_port) over TLS too, with the same
+# certificate. Off by default: REST clients written for plain HTTP stop
+# working. Client certificates are never asked for on REST.
+rest = false
 
 [log]
 level = "info"  # debug, info, warn, error
