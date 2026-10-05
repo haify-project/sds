@@ -335,6 +335,13 @@ func TestPrimaryHostReadsOnlyTheNodesOwnRole(t *testing.T) {
 	}}
 	assert.Equal(t, "b", primaryHost(res, []string{"a", "b", "c"}))
 	assert.Equal(t, "", primaryHost(res, []string{"a", "c"}), "a peer line and a failed host are not a Primary")
+
+	// `drbdadm status --verbose`, which DRBDStatus runs, first echoes the
+	// drbdsetup command it calls.
+	verbose := &deployment.ExecResult{Hosts: map[string]*deployment.HostResult{
+		"d": {Host: "d", Success: true, Output: "drbdsetup status r --verbose\nr node-id:0 role:Primary suspended:no\n  disk:UpToDate\n"},
+	}}
+	assert.Equal(t, "d", primaryHost(verbose, []string{"d"}))
 }
 
 func TestPromoterOwnerRefusesAResourceWithAnApp(t *testing.T) {

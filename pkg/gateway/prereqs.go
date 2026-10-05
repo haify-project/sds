@@ -47,14 +47,25 @@ func (m *Manager) ensureGatewayPrerequisites(ctx context.Context, resource strin
 	if err := m.resources.SetPrimary(ctx, resource, node, false); err != nil {
 		return fmt.Errorf("failed to promote %s on %s: %w", resource, node, err)
 	}
+	// Project quotas let an NFS export directory have a quota of its own
+	// (pkg/controller/nfs_quota.go); the feature can only be added to an
+	// unmounted filesystem, so it is there from the start. But a filesystem
+	// with the quota feature does not mount at all ("Failed to enable quota
+	// tracking", ESRCH) on a kernel without the quota_v2 format module, which
+	// Ubuntu's cloud kernels ship only in linux-modules-extra. Every node the
+	// filesystem may fail over to has to mount it, so ask them all.
+	mkfsOpts := "-O quota,project "
+	if err := m.deployment.Exec(ctx, nodes, "sudo modprobe -q quota_v2"); err != nil {
+		mkfsOpts = ""
+		m.logger.Warn("Formatting the gateway volumes without ext4 project quotas: the quota_v2 module does not "+
+			"load on every node (Ubuntu cloud kernels: install linux-modules-extra-$(uname -r)); NFS directory "+
+			"quotas will be unavailable on this gateway", zap.String("resource", resource), zap.Error(err))
+	}
 	// A freshly promoted resource can lose Primary for a moment when a
 	// previous reactor teardown is still settling, which makes mkfs race a
 	// demote. Retry briefly instead of failing the whole gateway creation.
 	for _, device := range devices {
-		// Project quotas let an NFS export directory have a quota of its own
-		// (pkg/controller/nfs_quota.go); the feature can only be added to an
-		// unmounted filesystem, so it is there from the start.
-		cmd := fmt.Sprintf("sudo blkid %s >/dev/null 2>&1 || sudo mkfs.ext4 -q -O quota,project %s", device, device)
+		cmd := fmt.Sprintf("sudo blkid %s >/dev/null 2>&1 || sudo mkfs.ext4 -q %s%s", device, mkfsOpts, device)
 		var lastErr error
 		formatted := false
 		for attempt := 0; attempt < 3; attempt++ {

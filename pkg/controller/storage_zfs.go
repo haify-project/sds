@@ -118,7 +118,7 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 	var pools []*PoolInfo
 	seen := make(map[string]bool)
 
-	hosts := sm.controller.GetHosts()
+	hosts := sm.poolHosts(ctx)
 	if len(hosts) == 0 {
 		if persisted, err := sm.listPersistedPools(ctx); err == nil {
 			var zfsPools []*PoolInfo

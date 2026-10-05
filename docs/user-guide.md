@@ -1256,13 +1256,30 @@ A workgroup SMB server per resource: standalone Samba, local users, no domain.
 ```bash
 sds gateway smb create --resource files --service-ip 192.0.2.210/24 [--workgroup OFFICE]
 sds gateway smb user set alice --resource files          # prompts; or --password-stdin
-sds gateway smb share add projects --resource files --path projects --valid-users alice,bob
+sds gateway smb share add public --resource files --path public
 sds gateway smb share list --resource files
 sds gateway smb user list --resource files
 ```
 
 Clients connect to `\\192.0.2.210\files` (the first share is named after the
 resource unless `--share` says otherwise, and covers the whole data volume).
+
+**Shares inside shares.** Samba checks `--valid-users` per share, not per
+directory: a share restricted to alice, inside a share that lets bob in, is
+open to bob through the outer one. `share add` refuses that. The first share
+covers the whole volume and lets in every user unless it was created with
+`--valid-users`, so to give a group a share of its own, either create the
+gateway with `--valid-users` on the first share, or remove the first share and
+add shares side by side:
+
+```bash
+sds gateway smb share remove files --resource files
+sds gateway smb share add public   --resource files --path public
+sds gateway smb share add projects --resource files --path projects --valid-users alice,bob
+```
+
+`share add` checks only the share being added; shares nested before this check
+existed are left as they are — compare `share list` paths and users.
 
 How it is built, and what that means:
 
@@ -2000,7 +2017,9 @@ hear of it — and an unexpected one is a stolen token at work.
 The default list: deleting pools, ZFS pools and datasets, resources, volumes
 and snapshots; restoring snapshots and backups (both overwrite the volume);
 adding, replacing or removing a backup target; deleting backups and snapshot
-or backup schedules; deleting a database app (whose `--delete-data` deletes its
+or backup schedules; replacing a snapshot or backup schedule with one that
+keeps fewer of any kind (its next run would prune the rest — creating one, or
+keeping as many, runs at once); deleting a database app (whose `--delete-data` deletes its
 resource from inside the controller); and adding users, removing them or changing roles — so
 the stolen token cannot create its own second approver. The web UI's user
 management is held back the same way. Approval needs `[rbac]`; the controller

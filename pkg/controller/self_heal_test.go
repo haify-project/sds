@@ -104,3 +104,53 @@ func TestSpread(t *testing.T) {
 	assert.Equal(t, "a", hi)
 	assert.Equal(t, "b", lo)
 }
+
+func TestRebalanceNeverMovesToAFullerPool(t *testing.T) {
+	// sdt3 holds the least by allocation but its thin pool is the most
+	// written: moving a replica there would fill the node that has least room.
+	thin := func(pct float64) *PoolInfo {
+		return &PoolInfo{ThinUsage: &PoolThinInfo{SizeBytes: 10 << 30, DataPercent: pct}}
+	}
+	f3, _ := poolFill(thin(81.6))
+	f2, _ := poolFill(thin(46))
+	fill := map[string]float64{"sdt2": f2, "sdt3": f3}
+	if !fuller(fill, "sdt3", "sdt2") {
+		t.Fatal("sdt3 at 81.6% must count as fuller than sdt2 at 46%")
+	}
+	if fuller(fill, "sdt2", "sdt3") {
+		t.Fatal("sdt2 is the emptier pool and may take the replica")
+	}
+	if fuller(fill, "sdt1", "sdt2") {
+		t.Fatal("a node with no reported fill must not be refused")
+	}
+	if _, ok := poolFill(&PoolInfo{ThinUsage: &PoolThinInfo{}}); ok {
+		t.Fatal("a thin pool reported without its size has no known fill")
+	}
+	thick, ok := poolFill(&PoolInfo{TotalBytes: 100, FreeBytes: 25})
+	if !ok || thick != 0.75 {
+		t.Fatalf("thick pool fill = %v, %v; want 0.75", thick, ok)
+	}
+}
+
+// A resource's tiebreaker is never picked to take a replica: AddReplica and
+// MoveReplica refuse it, so a plan that named it could never run.
+func TestSelectAdditionalReplicasPassesOverBarredNodes(t *testing.T) {
+	ctx := context.Background()
+	ctrl := newPlacementTestCluster(t, "  sds_vg0|214748364800|214748364800|/dev/vdb", "")
+
+	got, err := ctrl.resources.selectAdditionalReplicas(ctx, "vg0", 10, 1, nil, nil, nil, nil)
+	if err != nil || join(got) != "n1" {
+		t.Fatalf("unbarred pick = %v, %v; want n1 on name order", got, err)
+	}
+	got, err = ctrl.resources.selectAdditionalReplicas(ctx, "vg0", 10, 1, nil, []string{"n1"}, nil, nil)
+	if err != nil || join(got) != "n2" {
+		t.Fatalf("pick with n1 barred = %v, %v; want n2", got, err)
+	}
+	if _, err := ctrl.resources.selectAdditionalReplicas(ctx, "vg0", 10, 1, []string{"n2"}, []string{"n1"}, nil, nil); err == nil {
+		t.Fatal("with n2 a replica and n1 barred there is no node left")
+	}
+	r := &database.Resource{DisklessNodes: "n1", DisklessClients: "n3,n4"}
+	if got := join(nonReplicaMembers(r)); got != "n1,n3,n4" {
+		t.Fatalf("nonReplicaMembers = %s", got)
+	}
+}

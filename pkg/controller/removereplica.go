@@ -95,6 +95,15 @@ func (rm *ResourceManager) RemoveReplicaOptions(ctx context.Context, resource, n
 			node, resource)
 	}
 
+	// The leaver's storage goes with it, its snapshots included: while the
+	// schedule locks them that is the same deletion resource delete refuses.
+	// A lost node's storage is left where it is, so nothing is deleted then.
+	if !lost {
+		if err := rm.controller.assertResourceUnlocked(ctx, resource, "removing the replica on "+node); err != nil {
+			return err
+		}
+	}
+
 	leaving := rm.controller.ResolveHost(node)
 	survivors := make([]string, 0, len(remaining))
 	for _, n := range remaining {
@@ -156,9 +165,6 @@ func (rm *ResourceManager) RemoveReplicaOptions(ctx context.Context, resource, n
 	}
 
 	targets := append(append([]string{}, survivors...), diskless...)
-	if !lost {
-		targets = append(targets, leaving)
-	}
 	if _, err := rm.deployment.DistributeConfig(ctx, targets, newConfig, resPath); err != nil {
 		return fmt.Errorf("distribute config without %q: %w", node, err)
 	}
@@ -193,6 +199,12 @@ func (rm *ResourceManager) RemoveReplicaOptions(ctx context.Context, resource, n
 			zap.String("cleanup", LostReplicaCleanup(resource, node)))
 	} else if err := rm.deleteReplicaStorage(ctx, resource, leaving); err != nil {
 		return fmt.Errorf("replica removed from %s, but its storage there could not be deleted: %w; remove the volume by hand", node, err)
+	} else if err := rm.execAllSuccess(ctx, []string{leaving}, "sudo rm -f "+resPath,
+		"delete the resource config on the leaving node"); err != nil {
+		// A config there that no longer names the node only makes drbdadm
+		// answer "not defined for this host"; node restore cleans it later.
+		rm.controller.logger.Warn("Replica removed, but its config stays on the node",
+			zap.String("resource", resource), zap.String("node", node), zap.Error(err))
 	}
 
 	// Its promoter would otherwise outlive its copy of the data.

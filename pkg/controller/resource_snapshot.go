@@ -86,10 +86,11 @@ func (rm *ResourceManager) CreateResourceSnapshot(ctx context.Context, resource,
 	if err != nil {
 		return err
 	}
-	if err := rm.suspendForSnapshot(ctx, resource, hosts); err != nil {
+	watchdog, err := rm.suspendForSnapshot(ctx, resource, hosts)
+	if err != nil {
 		return err
 	}
-	defer rm.resumeAfterSnapshot(resource, hosts)
+	defer rm.resumeAfterSnapshot(resource, hosts, watchdog)
 
 	var made []func()
 	undo := func() {
@@ -113,8 +114,9 @@ func (rm *ResourceManager) CreateResourceSnapshot(ctx context.Context, resource,
 }
 
 // suspendForSnapshot arms each node's resume watchdog, then suspends I/O,
-// the Primary first so nothing new is replicated while the others stop.
-func (rm *ResourceManager) suspendForSnapshot(ctx context.Context, resource string, hosts []string) error {
+// the Primary first so nothing new is replicated while the others stop. It
+// returns the watchdog's unit name, for resumeAfterSnapshot to disarm.
+func (rm *ResourceManager) suspendForSnapshot(ctx context.Context, resource string, hosts []string) (string, error) {
 	ordered := append([]string(nil), hosts...)
 	if info, err := rm.GetResource(ctx, resource); err == nil {
 		for node, st := range info.NodeStates {
@@ -129,19 +131,22 @@ func (rm *ResourceManager) suspendForSnapshot(ctx context.Context, resource stri
 		cmd := fmt.Sprintf("sudo systemd-run --unit=%s --collect --on-active=%d drbdadm resume-io %s && sudo drbdadm suspend-io %s",
 			unit, int(resourceSnapshotWatchdog.Seconds()), resource, resource)
 		if err := rm.execAllSuccess(ctx, []string{host}, cmd, "suspend I/O on "+host); err != nil {
-			rm.resumeAfterSnapshot(resource, ordered[:i+1])
-			return err
+			rm.resumeAfterSnapshot(resource, ordered[:i+1], unit)
+			return "", err
 		}
 	}
-	return nil
+	return unit, nil
 }
 
-// resumeAfterSnapshot resumes I/O everywhere; it runs on its own context so a
-// cancelled request cannot leave a resource suspended until the watchdog.
-func (rm *ResourceManager) resumeAfterSnapshot(resource string, hosts []string) {
+// resumeAfterSnapshot resumes I/O everywhere and disarms the watchdog; it runs
+// on its own context so a cancelled request cannot leave a resource suspended
+// until the watchdog. A watchdog left armed would fire a minute later and
+// resume I/O in the middle of whatever snapshot is suspending it then.
+func (rm *ResourceManager) resumeAfterSnapshot(resource string, hosts []string, watchdog string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if _, err := rm.deployment.Exec(ctx, hosts, "sudo drbdadm resume-io "+resource); err != nil {
+	cmd := fmt.Sprintf("sudo drbdadm resume-io %s; rc=$?; sudo systemctl stop %s.timer >/dev/null 2>&1; exit $rc", resource, watchdog)
+	if _, err := rm.deployment.Exec(ctx, hosts, cmd); err != nil {
 		rm.controller.logger.Warn("Resuming I/O after a snapshot failed; the watchdog resumes it",
 			zap.String("resource", resource), zap.Error(err))
 	}

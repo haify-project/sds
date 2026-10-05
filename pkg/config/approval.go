@@ -38,6 +38,9 @@ var DefaultApprovalMethods = []string{
 	"DeleteApp",
 	// What protects it.
 	"DeleteSnapshotSchedule", "UnfreezeSnapshotSchedule", "AddBackupTarget", "DeleteBackupTarget", "DeleteBackup", "DeleteBackupSchedule",
+	// Only when they replace a schedule with one that keeps less: its next
+	// run would prune what the old one kept.
+	"CreateSnapshotSchedule", "CreateBackupSchedule",
 	"MarkNodeLost", "RestoreNode",
 	// Who may do any of it.
 	"CreateRbacUser", "DeleteRbacUser", "SetRbacUserRole",

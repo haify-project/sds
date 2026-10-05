@@ -43,6 +43,11 @@ func (rm *ResourceManager) MoveReplica(ctx context.Context, resource, from, to s
 	case resource == SelfHaResource:
 		return fmt.Errorf("the controller's own metadata is moved with `ha self`, not here")
 	}
+	// Refused now rather than once the new replica has synced: removing the
+	// old one deletes its locked snapshots.
+	if err := rm.controller.assertResourceUnlocked(ctx, resource, "moving the replica off "+from); err != nil {
+		return err
+	}
 	if info, err := rm.GetResource(ctx, resource); err == nil {
 		for node, st := range info.NodeStates {
 			if strings.EqualFold(st.Role, "Primary") && (node == from || rm.controller.ResolveHost(node) == rm.controller.ResolveHost(from)) {

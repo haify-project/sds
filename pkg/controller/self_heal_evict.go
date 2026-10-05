@@ -175,7 +175,7 @@ func (e *autoEvictor) evictOne(ctx context.Context, n *NodeInfo) bool {
 		}
 		pool, sizeGB := rm.memberPoolAndSize(ctx, r.Name, "")
 		survivors := without(splitCSV(r.Nodes), n.Name)
-		picked, err := rm.selectAdditionalReplicas(ctx, pool, sizeGB, 1, survivors, nil, nil)
+		picked, err := rm.selectAdditionalReplicas(ctx, pool, sizeGB, 1, survivors, nonReplicaMembers(r), nil, nil)
 		if err != nil || len(picked) == 0 {
 			e.announceOnce(n.Name+"/"+r.Name+"/noroom", fmt.Sprintf("no node can take %s's replica of %s: %v", n.Name, r.Name, err))
 			continue

@@ -225,6 +225,9 @@ func TestAddVolumeInheritsEncryptionFromTheResource(t *testing.T) {
 		if strings.Contains(cmd, "command -v cryptsetup") {
 			return successExecResult(hosts, "ok"), nil
 		}
+		if out, ok := settledVolumeStatus(cmd); ok {
+			return successExecResult(hosts, out), nil
+		}
 		return successExecResult(hosts, ""), nil
 	}
 	dep.execCalls = nil

@@ -196,8 +196,8 @@ notify_min = "warn"
 # role = "operator"
 #
 # Two-person approval: deleting data or what protects it (backup targets,
-# backups, snapshots, schedules, resources, pools; restores; user and role
-# changes) waits for a different user with the approve right (admin, or the
+# backups, snapshots, schedules, resources, pools; restores; shortening a
+# schedule's retention; user and role changes) waits for a different user with the approve right (admin, or the
 # security-officer role) to run `sds approval approve <id>`. Needs [rbac].
 # [rbac.approval]
 # enabled = true

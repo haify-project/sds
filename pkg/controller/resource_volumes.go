@@ -227,10 +227,9 @@ func (rm *ResourceManager) AddVolume(ctx context.Context, resource, volume, pool
 	// peer to sync from, so DRBD refuses to open it ("Could not open")
 	// until an initial sync source exists. The volume is empty, so skip
 	// the pointless full sync the LINSTOR way: declare a new current UUID
-	// with a cleared bitmap on one node, which marks all replicas UpToDate.
-	skipSyncCmd := fmt.Sprintf("sudo drbdadm new-current-uuid --clear-bitmap %s/%d", resource, newVolNum)
-	if err := rm.execAllSuccess(ctx, []string{hosts[0]}, skipSyncCmd,
-		"failed to initialize new volume sync state"); err != nil {
+	// with a cleared bitmap on one node, which marks all replicas UpToDate
+	// — once every peer's disk has finished its handshake (volume_settle.go).
+	if err := rm.settleNewVolume(ctx, hosts[0], resource, newVolNum); err != nil {
 		return err
 	}
 

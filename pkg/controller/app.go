@@ -126,16 +126,17 @@ func appHostOutput(res *deployment.ExecResult, host string) (string, bool) {
 }
 
 // primaryHost is the host among hosts whose own role is Primary in the
-// `drbdadm status` output res carries. Only the first line of each output is
-// the node's own role; the lines below it are its peers'.
+// `drbdadm status` output res carries. The node's own role is on the
+// resource line; the lines below it are its peers', and with --verbose
+// drbdadm first echoes the drbdsetup command it runs, so the resource line is
+// not necessarily the first.
 func primaryHost(res *deployment.ExecResult, hosts []string) string {
 	for _, h := range hosts {
 		out, ok := appHostOutput(res, h)
 		if !ok {
 			continue
 		}
-		first, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
-		if strings.Contains(first, "role:Primary") {
+		if parseRoleFromStatus(out) == "Primary" {
 			return h
 		}
 	}

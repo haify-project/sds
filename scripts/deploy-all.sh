@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Build and deploy SDS to the given hosts.
 # Usage: ./scripts/deploy-all.sh node1,node2,node3
 #

@@ -173,3 +173,30 @@ func TestAddSMBShareOnServingNode(t *testing.T) {
 	assert.Contains(t, run.script, "mkdir -p '/srv/gateway-exports/files/p'")
 	assert.Contains(t, run.script, "chown sds-smb:sds-smb")
 }
+
+// A share restricted to some users must not lie inside a share that lets in
+// others: Samba checks valid users per share, so they would reach it through
+// the outer one.
+func TestSMBNestedExposure(t *testing.T) {
+	root := SMBShare{Name: "files"}
+	rootAlice := SMBShare{Name: "files", ValidUsers: []string{"alice"}}
+	proj := SMBShare{Name: "projects", Path: "projects", ValidUsers: []string{"alice"}}
+
+	err := smbNestedExposure([]SMBShare{root}, proj)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lets in every user")
+
+	err = smbNestedExposure([]SMBShare{{Name: "files", ValidUsers: []string{"alice", "bob"}}}, proj)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lets in bob")
+
+	assert.NoError(t, smbNestedExposure([]SMBShare{rootAlice}, proj), "the outer share lets in no one extra")
+	assert.NoError(t, smbNestedExposure([]SMBShare{root}, SMBShare{Name: "pub", Path: "pub"}), "an open share inside an open one")
+	assert.NoError(t, smbNestedExposure([]SMBShare{{Name: "a", Path: "a", ValidUsers: []string{"bob"}}}, proj), "siblings do not overlap")
+	assert.NoError(t, smbNestedExposure([]SMBShare{{Name: "pa", Path: "projects-archive"}}, proj), "a shared name prefix is not nesting")
+
+	// Adding the wide share around an existing restricted one is the same hole.
+	err = smbNestedExposure([]SMBShare{proj}, SMBShare{Name: "all", Path: ""})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "share projects (/projects) lies inside share all")
+}

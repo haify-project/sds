@@ -48,7 +48,9 @@ func TestResourceSnapshotOnEveryReplica(t *testing.T) {
 		assert.Contains(t, joined, h+": sudo systemd-run --unit=sds-snapshot-resume-db-")
 		assert.Contains(t, joined, "--on-active=60 drbdadm resume-io db && sudo drbdadm suspend-io db")
 	}
-	assert.True(t, strings.HasSuffix((*cmds)[len(*cmds)-1], ": sudo drbdadm resume-io db"), "I/O resumes last")
+	last := (*cmds)[len(*cmds)-1]
+	assert.Contains(t, last, ": sudo drbdadm resume-io db;", "I/O resumes last")
+	assert.Regexp(t, `sudo systemctl stop sds-snapshot-resume-db-\d+\.timer`, last, "and the watchdog is disarmed")
 
 	assert.Error(t, ctrl.resources.CreateResourceSnapshot(context.Background(), "db", "bad name"))
 }

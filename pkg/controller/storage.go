@@ -345,7 +345,7 @@ func (sm *StorageManager) ListPools(ctx context.Context) ([]*PoolInfo, error) {
 	// Use map to deduplicate by normalized node name
 	seen := make(map[string]bool)
 
-	hosts := sm.controller.GetHosts()
+	hosts := sm.poolHosts(ctx)
 	if len(hosts) == 0 {
 		if persisted, err := sm.listPersistedPools(ctx); err == nil {
 			return persisted, nil

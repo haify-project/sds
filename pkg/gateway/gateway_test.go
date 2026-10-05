@@ -155,6 +155,8 @@ type MockDeploymentClient struct {
 	ConfigHosts   map[string][]string
 	DistributeErr error
 	ExecErr       error
+	// CmdErr fails a plain (not base64-wrapped) command containing the key.
+	CmdErr map[string]error
 	// HostOutputs is what ExecOutput reports per host; a host absent from it
 	// did not answer.
 	HostOutputs map[string]string
@@ -238,6 +240,11 @@ func (m *MockDeploymentClient) Exec(ctx context.Context, hosts []string, cmd str
 	}
 	m.ExecCommands = append(m.ExecCommands, cmd)
 	m.ExecHosts = append(m.ExecHosts, append([]string(nil), hosts...))
+	for key, err := range m.CmdErr {
+		if strings.Contains(cmd, key) {
+			return err
+		}
+	}
 	script := decodeScriptCmd(cmd)
 	for key, err := range m.ScriptErr {
 		if script != "" && strings.Contains(script, key) {

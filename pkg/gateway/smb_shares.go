@@ -226,9 +226,64 @@ func (s *SMBManager) AddSMBShare(ctx context.Context, resource string, share SMB
 			return fmt.Errorf("share %s already exists on %s", share.Name, resource)
 		}
 	}
+	if err := smbNestedExposure(shares, share); err != nil {
+		return invalidArgument(err)
+	}
 	shares = append(shares, share)
 	s.logger.Info("Adding SMB share", zap.String("resource", resource), zap.String("share", share.Name))
 	return s.writeShares(ctx, host, resource, shares, &share)
+}
+
+// smbNestedExposure refuses a share whose directory overlaps another share's
+// with a wider set of users. Samba checks valid users per share, not per
+// directory, so the files of a share restricted to alice are open to everyone
+// a share of its parent directory lets in — the gateway's first share covers
+// the whole volume and lets in every user unless it was given --valid-users.
+func smbNestedExposure(existing []SMBShare, added SMBShare) error {
+	for _, sh := range existing {
+		outer, inner := sh, added
+		if !smbPathWithin(inner.Path, outer.Path) {
+			outer, inner = added, sh
+			if !smbPathWithin(inner.Path, outer.Path) {
+				continue
+			}
+		}
+		extra := smbUsersBeyond(outer.ValidUsers, inner.ValidUsers)
+		if extra == "" {
+			continue
+		}
+		return fmt.Errorf("share %s (/%s) lies inside share %s (/%s), which lets in %s: they would reach %s's files "+
+			"through %s. Give %s --valid-users that %s also has (remove and re-add it), or put %s outside it",
+			inner.Name, inner.Path, outer.Name, outer.Path, extra, inner.Name, outer.Name, outer.Name, inner.Name, inner.Name)
+	}
+	return nil
+}
+
+// smbPathWithin reports whether dir is base or under it ("" is the volume root).
+func smbPathWithin(dir, base string) bool {
+	return base == "" || dir == base || strings.HasPrefix(dir, base+"/")
+}
+
+// smbUsersBeyond describes who outer lets in that inner does not, or "" when
+// outer lets in no one inner does not. An empty list means every user.
+func smbUsersBeyond(outer, inner []string) string {
+	if len(inner) == 0 {
+		return ""
+	}
+	if len(outer) == 0 {
+		return "every user"
+	}
+	allowed := map[string]bool{}
+	for _, u := range inner {
+		allowed[u] = true
+	}
+	var extra []string
+	for _, u := range outer {
+		if !allowed[u] {
+			extra = append(extra, u)
+		}
+	}
+	return strings.Join(extra, ", ")
 }
 
 // RemoveSMBShare removes a share; its directory and data are left in place.

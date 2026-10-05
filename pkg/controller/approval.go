@@ -123,6 +123,9 @@ func (g *approvalGate) check(ctx context.Context, method, user string, req proto
 	if g == nil || !g.methods[method] {
 		return nil
 	}
+	if weakens, ok := conditionalApproval[method]; ok && !weakens(ctx, g.db, req) {
+		return nil
+	}
 	if user == "" {
 		return status.Error(codes.PermissionDenied, method+" needs a second person's approval, and the caller has no identity")
 	}

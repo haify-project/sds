@@ -424,8 +424,10 @@ func (rm *ResourceManager) placementCandidates(ctx context.Context, pool string,
 // selectAdditionalReplicas picks count more nodes for a resource that already
 // has replicas on existing, keeping the constraints true of the whole set: a
 // new node may not repeat an existing replica's value for an onDifferent key,
-// and must share the existing replicas' value for an onSame key.
-func (rm *ResourceManager) selectAdditionalReplicas(ctx context.Context, pool string, sizeGB uint64, count int, existing, onDifferent, onSame []string) ([]string, error) {
+// and must share the existing replicas' value for an onSame key. Nodes in
+// barred are never picked: a resource's tiebreaker or diskless client, which
+// AddReplica refuses, for a caller that cannot turn one into a replica.
+func (rm *ResourceManager) selectAdditionalReplicas(ctx context.Context, pool string, sizeGB uint64, count int, existing, barred, onDifferent, onSame []string) ([]string, error) {
 	pool = normalizeManagedName(pool)
 	cands, err := rm.placementCandidates(ctx, pool, sizeGB, nil)
 	if err != nil {
@@ -439,8 +441,11 @@ func (rm *ResourceManager) selectAdditionalReplicas(ctx context.Context, pool st
 	for _, n := range nodes {
 		labelsByName[n.Name] = n.Labels
 	}
-	have := make(map[string]bool, len(existing))
+	have := make(map[string]bool, len(existing)+len(barred))
 	for _, n := range existing {
+		have[n] = true
+	}
+	for _, n := range barred {
 		have[n] = true
 	}
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Deploy SDS Controller - first time install or update.
 #
 # Self-HA aware: when the controller is managed by drbd-reactor (the sds-meta
@@ -13,6 +13,12 @@
 # that have none; edit it afterwards.
 
 set -e
+
+# Associative arrays need bash 4; macOS ships 3.2 as /bin/bash.
+if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    echo "error: bash 4 or later is required (found $BASH_VERSION); on macOS: brew install bash" >&2
+    exit 1
+fi
 
 # Configuration
 HOSTS=""
@@ -180,7 +186,7 @@ fi
 ACTIVE_NODE=""
 SELF_HA=false
 for host in ${HOSTS//,/ }; do
-    role=$(ssh "$host" "drbdadm role sds-meta 2>/dev/null" || true)
+    role=$(ssh "$host" "sudo -n drbdadm role sds-meta 2>/dev/null" || true)
     if [ -n "$role" ]; then
         SELF_HA=true
         [ "$role" = "Primary" ] && ACTIVE_NODE="$host"
@@ -192,9 +198,31 @@ if [ "$SELF_HA" = true ]; then
         log_warn "Self-HA detected but no sds-meta Primary among the given hosts; not restarting."
         log_warn "Restart the active controller node manually: ssh <active> sudo systemctl restart sds-controller"
     else
-        log_step "Self-HA cluster: restarting controller only on active node $ACTIVE_NODE..."
-        ssh "$ACTIVE_NODE" "sudo systemctl restart sds-controller.service"
-        log_info "Standby nodes updated; reactor will run the new binary there on failover."
+        # Restarting a promoter-managed unit in place fails its dependency and
+        # makes drbd-reactor fail sds-meta over anyway, unplanned. Every node
+        # has the new binary now, so hand the controller over instead: evict
+        # sds-meta (detached, as `sds ha evict sds-meta` does) and wait for
+        # another node to run it.
+        log_step "Self-HA cluster: moving the controller off $ACTIVE_NODE (evict sds-meta)..."
+        ssh "$ACTIVE_NODE" "sudo systemd-run --unit=sds-selfha-evict --collect drbd-reactorctl evict sds-ha-sds-meta" >/dev/null
+        NEW_ACTIVE=""
+        for _ in $(seq 1 60); do
+            sleep 2
+            for host in ${HOSTS//,/ }; do
+                [ "$host" = "$ACTIVE_NODE" ] && continue
+                if [ "$(ssh "$host" "sudo -n drbdadm role sds-meta 2>/dev/null")" = "Primary" ] &&
+                    ssh "$host" "systemctl is-active -q sds-controller.service"; then
+                    NEW_ACTIVE="$host"
+                    break 2
+                fi
+            done
+        done
+        if [ -n "$NEW_ACTIVE" ]; then
+            log_info "Controller now runs on $NEW_ACTIVE with the new binary."
+            ACTIVE_NODE="$NEW_ACTIVE"
+        else
+            log_warn "No other node took over sds-meta within 120s; check: sds ha self status"
+        fi
     fi
 else
     for host in ${HOSTS//,/ }; do

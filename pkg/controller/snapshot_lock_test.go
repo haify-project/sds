@@ -79,6 +79,16 @@ func TestLockedSnapshotsResistTheAPI(t *testing.T) {
 	assert.ErrorContains(t, ctrl.resources.DeleteResource(ctx, "data", true), "deleting the resource", "not even --force")
 	assert.ErrorContains(t, ctrl.resources.RemoveVolume(ctx, "data", 1), "removing a volume")
 
+	// Removing or moving a replica deletes its storage, snapshots included:
+	// one node at a time, that was every locked snapshot gone.
+	r, err := ctrl.db.GetResource(ctx, "data")
+	require.NoError(t, err)
+	r.Nodes = "n1,n2,n3"
+	require.NoError(t, ctrl.db.SaveResource(ctx, r))
+	assert.ErrorContains(t, ctrl.resources.RemoveReplica(ctx, "data", "n2"), "removing the replica on n2")
+	assert.ErrorContains(t, ctrl.resources.MoveReplica(ctx, "data", "n2", "n4"), "moving the replica off n2")
+	assert.Empty(t, dep.execCalls, "nothing reached a node")
+
 	zero := 0
 	assert.ErrorContains(t, ctrl.schedules.CreateSchedule(ctx, "data", "0 * * * *", database.GFSPolicy{Hourly: 2}, true, &zero), "not lowered")
 	// Replacing the schedule without naming a lock keeps it, and its last run.

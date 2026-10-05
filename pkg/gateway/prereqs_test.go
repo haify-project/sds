@@ -239,3 +239,25 @@ func TestCreateNVMeGatewayRefusesFC(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, dep.ExecCommands)
 }
+
+// Gateway volumes get ext4 project quotas only when every node can mount a
+// filesystem that has them: without the quota_v2 module (Ubuntu cloud kernels
+// ship it in linux-modules-extra) such a filesystem does not mount at all.
+func TestGatewayFormatNeedsQuotaModuleEverywhere(t *testing.T) {
+	format := func(dep *MockDeploymentClient) string {
+		m := New(covResources("data", 2), dep, zap.NewNop(), []string{"node1", "node2"})
+		require.NoError(t, m.ensureGatewayPrerequisites(context.Background(), "data", []string{"node1", "node2"}, "/dev/drbd1"))
+		for _, c := range dep.ExecCommands {
+			if strings.Contains(c, "mkfs.ext4") {
+				return c
+			}
+		}
+		t.Fatal("no mkfs command")
+		return ""
+	}
+	assert.Contains(t, format(&MockDeploymentClient{}), "mkfs.ext4 -q -O quota,project /dev/drbd1")
+
+	without := format(&MockDeploymentClient{CmdErr: map[string]error{"modprobe -q quota_v2": fmt.Errorf("command failed on node2")}})
+	assert.Contains(t, without, "mkfs.ext4 -q /dev/drbd1")
+	assert.NotContains(t, without, "quota")
+}

@@ -166,7 +166,7 @@ func (rm *ResourceManager) adjustMember(ctx context.Context, p *database.Resourc
 	default:
 		missing := p.Replicas - len(nodes)
 		pool, sizeGB := rm.memberPoolAndSize(ctx, m.Name, p.Pool)
-		picked, err := rm.selectAdditionalReplicas(ctx, pool, sizeGB, missing, nodes, p.OnDifferent, p.OnSame)
+		picked, err := rm.selectAdditionalReplicas(ctx, pool, sizeGB, missing, nodes, nil, p.OnDifferent, p.OnSame)
 		if err != nil {
 			res.OK, res.Message = false, strings.Join(append(did, "no room for more replicas: "+err.Error()), "; ")
 			return res

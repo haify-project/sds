@@ -268,6 +268,9 @@ func TestResourceManagerAddVolumePersistsMetadata(t *testing.T) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
 				return successExecResult(hosts, config), nil
 			}
+			if out, ok := settledVolumeStatus(cmd); ok {
+				return successExecResult(hosts, out), nil
+			}
 			return successExecResult(hosts, ""), nil
 		},
 	}
@@ -315,6 +318,9 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
 				return successExecResult(hosts, config), nil
+			}
+			if out, ok := settledVolumeStatus(cmd); ok {
+				return successExecResult(hosts, out), nil
 			}
 			return successExecResult(hosts, ""), nil
 		},
@@ -404,6 +410,9 @@ func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
 				return successExecResult(hosts, config), nil
+			}
+			if out, ok := settledVolumeStatus(cmd); ok {
+				return successExecResult(hosts, out), nil
 			}
 			return successExecResult(hosts, ""), nil
 		},
