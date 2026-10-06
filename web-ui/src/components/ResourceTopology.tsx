@@ -21,9 +21,9 @@ import { toneOf, type StatusTone } from '@/components/status';
 // heading. The card it sits in owns those, and a bordered box inside a card is
 // two frames for one thing.
 
-type NodeKind = 'replica' | 'tiebreaker' | 'client' | 'dr';
+export type NodeKind = 'replica' | 'tiebreaker' | 'client' | 'dr';
 
-interface PlacedNode {
+export interface PlacedNode {
   name: string;
   kind: NodeKind;
   state?: NodeResourceState;
@@ -56,13 +56,11 @@ const MARGIN = 12;
 // labels.
 const MAX_UPSCALE = 1.6;
 
-export function ResourceTopology({
-  resource,
-  status,
-}: {
-  resource: Resource;
-  status: ResourceStatus;
-}) {
+/**
+ * Where a resource's copies live and what each one is: shared by the 2D
+ * diagram and the 3D one, so the two cannot classify a node differently.
+ */
+export function placeNodes(resource: Resource, status: ResourceStatus) {
   // The state map is keyed by DRBD host name; each entry carries the SDS node
   // name so it can be paired back to the node list.
   const stateByNode = new Map<string, NodeResourceState>();
@@ -105,7 +103,9 @@ export function ResourceTopology({
     vols.length > 0 && vols.every((v) => v.pool && v.pool === vols[0].pool)
       ? vols[0].pool
       : undefined;
-  const totalGb = vols.reduce((sum, v) => sum + (v.sizeGb || 0), 0);
+  // sizeGb is a proto int64, i.e. a JSON string: summed as-is it concatenates
+  // ("0" + "2" read as "02 GB").
+  const totalGb = vols.reduce((sum, v) => sum + (Number(v.sizeGb) || 0), 0);
   const backing = [pool, totalGb > 0 ? `${totalGb} GB` : undefined]
     .filter(Boolean)
     .join(' · ');
@@ -139,6 +139,18 @@ export function ResourceTopology({
       proxy: !probed ? ('unknown' as const) : proxyUp ? ('active' as const) : ('inactive' as const),
     };
   };
+
+  return { local, remote, backing, legState };
+}
+
+export function ResourceTopology({
+  resource,
+  status,
+}: {
+  resource: Resource;
+  status: ResourceStatus;
+}) {
+  const { local, remote, backing, legState } = placeNodes(resource, status);
 
   const siteH = (count: number) =>
     SITE_HEADER + SITE_PAD * 2 + count * NODE_H + Math.max(0, count - 1) * NODE_GAP;
@@ -405,7 +417,7 @@ const chipW = (label: string) => label.length * 6.4 + 16;
  * through `toneOf` would paint every healthy quorum vote red; for those the
  * link is the health.
  */
-function railTone(node: PlacedNode): StatusTone {
+export function railTone(node: PlacedNode): StatusTone {
   const st = node.state;
   if (!st) return 'idle';
   if (node.kind === 'tiebreaker' || node.kind === 'client') {

@@ -3,7 +3,7 @@ import { api, Resource } from '../../services/api';
 import { cn } from '@/lib/utils';
 import { toneOf } from '@/components/status';
 import { RoleChip } from '@/components/RoleChip';
-import { ResourceTopology } from '@/components/ResourceTopology';
+import { TopologyView } from '@/components/TopologyView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -315,7 +315,7 @@ export function ResourceDetail({
         </div>
       )}
 
-      <ResourceTopology resource={resource} status={status} />
+      <TopologyView resource={resource} status={status} />
 
       {(resource.profile || Object.keys(resource.labels ?? {}).length > 0) && (
         <section>

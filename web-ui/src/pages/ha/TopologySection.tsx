@@ -1,4 +1,4 @@
-import { ResourceTopology } from '@/components/ResourceTopology';
+import { TopologyView } from '@/components/TopologyView';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type PromoterView } from './promoter';
 import { QuorumPill } from './QuorumPill';
@@ -52,13 +52,13 @@ export function TopologySection({ promoters }: { promoters: PromoterView[] }) {
                 </div>
               </div>
             </CardHeader>
-            {/* ResourceTopology draws a viewBox'd SVG at `w-full`, so today it
-                shrinks to whatever it is given rather than overflowing. This is
-                the box it would scroll in the day it stops — the page itself
-                must never scroll sideways. */}
+            {/* Both renderings fill the width they are given — the 3D canvas
+                and the viewBox'd SVG alike. This is the box they would scroll
+                in the day one stops; the page itself must never scroll
+                sideways. */}
             <CardContent className="overflow-x-auto px-5">
               {resource && status ? (
-                <ResourceTopology resource={resource} status={status} />
+                <TopologyView resource={resource} status={status} />
               ) : (
                 <p className="text-[13px] text-muted-foreground">
                   Replication state for{' '}
