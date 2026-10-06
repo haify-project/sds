@@ -278,9 +278,6 @@ type Pool struct {
 	Devices   string
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	// Raid is the pool's RAID level inside its node ("raid1", ...), empty for
-	// none; a thick pool gives it to every volume created in it.
-	Raid string `json:"raid,omitempty"`
 }
 
 // SavePool saves or updates a pool

@@ -757,9 +757,6 @@ message CreatePoolRequest {
   string node = 3;
   repeated string disks = 4;
   uint64 size_gb = 5;
-  // raid makes the pool survive a failed disk on its node: "" (none),
-  // "raid1", "raid10", "raid5" or "raid6". Needs enough disks for the level.
-  string raid = 6;
 }
 
 message CreatePoolResponse {

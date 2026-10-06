@@ -8355,10 +8355,6 @@
         "sizeGb": {
           "type": "string",
           "format": "uint64"
-        },
-        "raid": {
-          "type": "string",
-          "description": "raid makes the pool survive a failed disk on its node: \"\" (none),\n\"raid1\", \"raid10\", \"raid5\" or \"raid6\". Needs enough disks for the level."
         }
       },
       "title": "Pool messages"

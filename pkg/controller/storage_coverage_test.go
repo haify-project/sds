@@ -151,7 +151,7 @@ func TestStoragePoolFailureBranches(t *testing.T) {
 		dep := &fakeDeploymentClient{pvCreateFunc: func(context.Context, []string, string, ...deployment.LVMOption) (*deployment.ExecResult, error) {
 			return nil, errors.New("pv failed")
 		}}
-		err := newBasicTestController(dep).storage.CreatePool(ctx, "fast", "lvm", "n1", []string{"/dev/sdb"}, 0, "")
+		err := newBasicTestController(dep).storage.CreatePool(ctx, "fast", "lvm", "n1", []string{"/dev/sdb"}, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "create PV")
 	})
@@ -160,7 +160,7 @@ func TestStoragePoolFailureBranches(t *testing.T) {
 		dep := &fakeDeploymentClient{vgCreateFunc: func(context.Context, []string, string, []string) (*deployment.ExecResult, error) {
 			return nil, errors.New("vg failed")
 		}}
-		err := newBasicTestController(dep).storage.CreatePool(ctx, "fast", "lvm", "n1", []string{"/dev/sdb"}, 0, "")
+		err := newBasicTestController(dep).storage.CreatePool(ctx, "fast", "lvm", "n1", []string{"/dev/sdb"}, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "create pool")
 	})
@@ -169,7 +169,7 @@ func TestStoragePoolFailureBranches(t *testing.T) {
 		dep := &fakeDeploymentClient{lvCreateThinPoolFunc: func(context.Context, []string, string, string, string) (*deployment.ExecResult, error) {
 			return nil, errors.New("thin failed")
 		}}
-		err := newBasicTestController(dep).storage.CreatePool(ctx, "fast", "lvm-thin", "n1", []string{"/dev/sdb"}, 10, "")
+		err := newBasicTestController(dep).storage.CreatePool(ctx, "fast", "lvm-thin", "n1", []string{"/dev/sdb"}, 10)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "thin pool")
 	})

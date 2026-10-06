@@ -19,35 +19,6 @@ func addPoolUpkeepCommands(cmd *cobra.Command) {
 	cmd.AddCommand(poolTrim(), poolDisks(), poolRemoveDisk(), poolReplaceDisk(), poolJobs())
 }
 
-// zfsVdevs lays disks out as the vdev list for a RAID level: raid1 is one
-// mirror of all of them, raid10 mirrors of pairs, raid5/raid6 one raidz/raidz2.
-func zfsVdevs(raid string, disks []string) ([]string, error) {
-	need := map[string]int{"": 1, "raid1": 2, "raid10": 4, "raid5": 3, "raid6": 4}[raid]
-	switch {
-	case need == 0:
-		return nil, fmt.Errorf("unknown raid level %q: use raid1, raid10, raid5 or raid6", raid)
-	case len(disks) < need:
-		return nil, fmt.Errorf("%s needs at least %d disks, %d given", raid, need, len(disks))
-	case raid == "raid10" && len(disks)%2 != 0:
-		return nil, fmt.Errorf("raid10 pairs disks into mirrors: give an even number, not %d", len(disks))
-	}
-	switch raid {
-	case "raid1":
-		return append([]string{"mirror"}, disks...), nil
-	case "raid10":
-		var out []string
-		for i := 0; i+1 < len(disks); i += 2 {
-			out = append(out, "mirror", disks[i], disks[i+1])
-		}
-		return out, nil
-	case "raid5":
-		return append([]string{"raidz"}, disks...), nil
-	case "raid6":
-		return append([]string{"raidz2"}, disks...), nil
-	}
-	return disks, nil
-}
-
 func poolTrim() *cobra.Command {
 	var node string
 	cmd := &cobra.Command{
@@ -124,9 +95,8 @@ func poolRemoveDisk() *cobra.Command {
 		Use:   "remove-disk",
 		Short: "Move a disk's data onto the pool's other disks, then take it out",
 		Long: `The data moves first (pvmove), while the pool stays in use; the disk leaves the
-pool only when that is done. The other disks need room for what it holds. A
-RAID pool cannot give up a disk without losing its redundancy: use replace-disk.
-Follow it with: sds pool jobs`,
+pool only when that is done. The other disks need room for what it holds; when
+they have none, use replace-disk. Follow it with: sds pool jobs`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runJob(func(ctx context.Context, c *client.SDSClient) (string, error) {
 				resp, err := c.RemovePoolDisk(ctx, pool, node, disk)
@@ -149,8 +119,7 @@ func poolReplaceDisk() *cobra.Command {
 		Use:   "replace-disk",
 		Short: "Move a disk's data to a new disk, then take the old one out",
 		Long: `For a disk that is failing or too small. The new disk joins the pool, the old
-one's data moves to it (on a RAID pool, each mirror leg is rebuilt on it), and
-the old disk leaves the pool. The pool stays in use throughout.
+one's data moves to it, and the old disk leaves the pool. The pool stays in use throughout.
 Follow it with: sds pool jobs`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runJob(func(ctx context.Context, c *client.SDSClient) (string, error) {

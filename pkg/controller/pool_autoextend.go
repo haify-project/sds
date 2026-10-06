@@ -84,28 +84,18 @@ func (a *thinAutoextender) Observed(obs alert.Observation) {
 
 // extendPlan is how much to grow a pool's data and metadata by, given its
 // sizes and its group's free space. Metadata comes first: a pool whose
-// metadata fills is lost to writes as surely as one whose data does. On a
-// RAID pool every byte of data costs den/num bytes of disk and the metadata
-// is a mirror, which num/den and mirrorMeta account for.
-func extendPlan(dataBytes, metaBytes, free uint64, growData, growMeta bool, percent int, num, den uint64, mirrorMeta bool) (dataAdd, newMeta uint64) {
-	metaCost := uint64(1)
-	if mirrorMeta {
-		metaCost = 2
-	}
+// metadata fills is lost to writes as surely as one whose data does.
+func extendPlan(dataBytes, metaBytes, free uint64, growData, growMeta bool, percent int) (dataAdd, newMeta uint64) {
 	if growMeta && metaBytes > 0 {
 		target := min(metaBytes*2, thinMetadataCeiling)
-		if target > metaBytes && (target-metaBytes)*metaCost <= free {
+		if target > metaBytes && target-metaBytes <= free {
 			newMeta = target
-			free -= (target - metaBytes) * metaCost
+			free -= target - metaBytes
 		}
 	}
 	if growData && dataBytes > 0 {
-		usable := free * num / den
-		if num != den {
-			usable = usable * 98 / 100 // RAID metadata sub-volumes and rounding
-		}
 		// Whole 4 MiB extents: lvextend refuses a size that is not.
-		dataAdd = min(dataBytes*uint64(percent)/100, usable) / (4 << 20) * (4 << 20)
+		dataAdd = min(dataBytes*uint64(percent)/100, free) / (4 << 20) * (4 << 20)
 		if dataAdd < minExtendBytes {
 			dataAdd = 0
 		}
@@ -124,20 +114,7 @@ func (a *thinAutoextender) extend(ctx context.Context, p alert.PoolStatusInfo, g
 		c.logger.Warn("Thin autoextend: could not size the pool", zap.String("pool", key))
 		return
 	}
-	level := c.resources.poolRaid(ctx, p.Name)
-	disks := c.resources.vgDiskCount(ctx, host, p.Name)
-	num, den := raidDataShare(level, disks)
-	if level != "" {
-		// Only the space every image's disk can match is usable.
-		if pvs, _, err := c.storage.poolPVs(ctx, host, p.Name); err == nil {
-			var frees []uint64
-			for _, pv := range pvs {
-				frees = append(frees, pv.SizeBytes-pv.UsedBytes)
-			}
-			free = min(free, raidSymmetricFree(level, frees, disks))
-		}
-	}
-	dataAdd, newMeta := extendPlan(data, meta, free, growData, growMeta, c.config.Storage.Thin.AutoextendPercent, num, den, level != "")
+	dataAdd, newMeta := extendPlan(data, meta, free, growData, growMeta, c.config.Storage.Thin.AutoextendPercent)
 	if dataAdd == 0 && newMeta == 0 {
 		a.mu.Lock()
 		warned := a.warnedVG[key]

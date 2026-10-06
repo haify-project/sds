@@ -169,12 +169,9 @@ func (sm *StorageManager) defaultedPoolType(poolType string) string {
 }
 
 // CreatePool creates a storage pool
-func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64, raid string) error {
+func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64) error {
 	normalizedType, err := normalizeLVMPoolType(sm.defaultedPoolType(poolType))
 	if err != nil {
-		return err
-	}
-	if err := validateRaid(raid, normalizedType, len(disks)); err != nil {
 		return err
 	}
 	name = normalizeManagedName(name)
@@ -233,10 +230,6 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 			if err := sm.createVDOThinPool(ctx, address, name, thinSize); err != nil {
 				return err
 			}
-		} else if raid != "" {
-			if err := sm.createRaidThinPool(ctx, address, name, thinPoolName, raid, len(disks)); err != nil {
-				return err
-			}
 		} else if tpResult, err := sm.controller.deployment.LVCreateThinPool(ctx, []string{address}, name, thinPoolName, thinSize); err != nil {
 			return fmt.Errorf("failed to create thin pool: %w", err)
 		} else if !tpResult.AllSuccess() {
@@ -254,7 +247,6 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 			Type:    normalizedType,
 			Node:    node,
 			Devices: strings.Join(disks, ","),
-			Raid:    raid,
 		}
 		if err := sm.controller.db.SavePool(ctx, dbPool); err != nil {
 			sm.controller.logger.Warn("Failed to save pool to database",

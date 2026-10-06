@@ -24,15 +24,12 @@ const (
 
 // Pool messages
 type CreatePoolRequest struct {
-	state  protoimpl.MessageState `protogen:"open.v1"`
-	Name   string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type   string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Node   string                 `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
-	Disks  []string               `protobuf:"bytes,4,rep,name=disks,proto3" json:"disks,omitempty"`
-	SizeGb uint64                 `protobuf:"varint,5,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	// raid makes the pool survive a failed disk on its node: "" (none),
-	// "raid1", "raid10", "raid5" or "raid6". Needs enough disks for the level.
-	Raid          string `protobuf:"bytes,6,opt,name=raid,proto3" json:"raid,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Node          string                 `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	Disks         []string               `protobuf:"bytes,4,rep,name=disks,proto3" json:"disks,omitempty"`
+	SizeGb        uint64                 `protobuf:"varint,5,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -100,13 +97,6 @@ func (x *CreatePoolRequest) GetSizeGb() uint64 {
 		return x.SizeGb
 	}
 	return 0
-}
-
-func (x *CreatePoolRequest) GetRaid() string {
-	if x != nil {
-		return x.Raid
-	}
-	return ""
 }
 
 type CreatePoolResponse struct {
@@ -25797,14 +25787,13 @@ var File_api_proto_v1_sds_proto protoreflect.FileDescriptor
 
 const file_api_proto_v1_sds_proto_rawDesc = "" +
 	"\n" +
-	"\x16api/proto/v1/sds.proto\x12\x02v1\x1a\x1cgoogle/api/annotations.proto\"\x92\x01\n" +
+	"\x16api/proto/v1/sds.proto\x12\x02v1\x1a\x1cgoogle/api/annotations.proto\"~\n" +
 	"\x11CreatePoolRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
 	"\x04node\x18\x03 \x01(\tR\x04node\x12\x14\n" +
 	"\x05disks\x18\x04 \x03(\tR\x05disks\x12\x17\n" +
-	"\asize_gb\x18\x05 \x01(\x04R\x06sizeGb\x12\x12\n" +
-	"\x04raid\x18\x06 \x01(\tR\x04raid\"H\n" +
+	"\asize_gb\x18\x05 \x01(\x04R\x06sizeGb\"H\n" +
 	"\x12CreatePoolResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\";\n" +

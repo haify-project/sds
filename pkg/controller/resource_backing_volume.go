@@ -123,7 +123,7 @@ func (rm *ResourceManager) createBackingVolume(ctx context.Context, nodeIPs, nod
 				if storageType == "lvm-thin" {
 					return fmt.Errorf("pool %s on %s is recorded as lvm-thin but has no thin pool", pool, nodes[i])
 				}
-				result, err = rm.createThickLV(ctx, []string{nodeIP}, pool, volumeName, size)
+				result, err = rm.deployment.LVCreate(ctx, []string{nodeIP}, pool, volumeName, size)
 				break
 			}
 			result, err = rm.deployment.LVCreateThinVolume(ctx, []string{nodeIP}, pool, thinPool, volumeName, size)

@@ -290,30 +290,6 @@ then extended into the same share of the group's free space `pool create` uses
 metadata area grown in proportion first, so thin volumes can use the new disk
 straight away.
 
-**RAID.** `--raid` keeps an LVM pool alive when one of its disks fails, below
-DRBD, so a dead disk costs neither the node's replica nor a full resync:
-
-```bash
-sds pool create --name fast --nodes node1,node2 --devices /dev/sdb,/dev/sdc --raid raid1
-```
-
-| Level | Disks | Usable |
-| ----- | ----- | ------ |
-| `raid1` | 2 or more | one disk's worth (two copies) |
-| `raid10` | 4 or more, even | half |
-| `raid5` | 3 or more | all but one disk |
-| `raid6` | 5 or more | all but two disks |
-
-On a thin pool, both the data area and the metadata area are RAID (metadata is
-always mirrored). On a thick pool, every volume is created at that level. A
-ZFS pool takes the same flag and builds the vdevs from it: `raid1` is one mirror,
-`raid10` mirrors of pairs, `raid5` raidz, `raid6` raidz2 (4 or more disks). VDO
-pools cannot be RAID.
-
-RAID and DRBD are not redundant with each other. DRBD keeps the data alive when
-a node goes; RAID keeps a node's copy alive when a disk goes, and that copy
-would otherwise take hours to resync.
-
 **Disks.** `pool disks` lists the disks under the pools on every node, with
 their health from SMART or the NVMe health log:
 
@@ -340,10 +316,8 @@ sds pool jobs                      # what is running; --all includes finished on
 ```
 
 `remove-disk` is refused when the other disks have no room for what this one
-holds, when it is the pool's only disk, and on a RAID pool, where taking a disk
-out would lose the redundancy. `replace-disk` works on every pool: the new disk
-joins, the old one's data moves to it (on a RAID pool, each RAID leg on the old
-disk is rebuilt on the new one), then the old disk leaves. Both run as a job on
+holds, and when it is the pool's only disk; `replace-disk` covers both: the new
+disk joins, the old one's data moves to it, then the old disk leaves. Both run as a job on
 the node, so they survive a controller restart or failover. When a job ends,
 it raises a `pool.disk_moved` event. A move takes about as long as reading the
 disk once.
@@ -365,8 +339,7 @@ replica fewer. Three things in `[storage.thin]` prevent that:
   group free. Once a pool's data or metadata use reaches `autoextend_threshold`
   (80%), the controller grows it into that room: metadata is doubled first, then
   data grows by `autoextend_percent` (20) of the pool's size, or by what the group
-  has left if that is less. A RAID pool is grown only by what every one of its
-  disks can match. Each extension raises `pool.extended`. When the group has no
+  has left if that is less. Each extension raises `pool.extended`. When the group has no
   room left, `pool.extended` warns once: that is the time to `pool add` a
   disk. `autoextend_threshold = 0` turns it off.
 

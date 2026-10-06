@@ -18,13 +18,11 @@ import (
 // Taking a disk out of a pool, or swapping it for another, while the pool
 // stays in use (`sds pool remove-disk`, `sds pool replace-disk`).
 //
-// The data on the disk moves first — pvmove for ordinary extents, an image
-// replacement (lvconvert --replace) for the legs of a RAID pool — and only
-// then does the disk leave the volume group. Moving a full disk takes hours,
-// so the work runs on the node as a transient systemd unit that writes its
-// outcome to a status file, and the controller follows it as a storage job
-// that survives a failover. A RAID pool cannot lose a disk without losing its
-// redundancy, so there only a replacement is accepted.
+// The data on the disk moves first (pvmove), and only then does the disk
+// leave the volume group. Moving a full disk takes hours, so the work runs on
+// the node as a transient systemd unit that writes its outcome to a status
+// file, and the controller follows it as a storage job that survives a
+// failover.
 
 const (
 	diskJobPoll   = 15 * time.Second
@@ -53,7 +51,7 @@ func parsePVs(out string) []pvInfo {
 }
 
 // checkRemovable says why disk cannot leave a group made of pvs, or "".
-func checkRemovable(pvs []pvInfo, disk string, raid bool) string {
+func checkRemovable(pvs []pvInfo, disk string) string {
 	var target *pvInfo
 	var freeElsewhere uint64
 	for i := range pvs {
@@ -68,8 +66,6 @@ func checkRemovable(pvs []pvInfo, disk string, raid bool) string {
 		return fmt.Sprintf("%s is not a disk of this pool", disk)
 	case len(pvs) < 2:
 		return fmt.Sprintf("%s is the pool's only disk; delete the pool instead", disk)
-	case raid:
-		return "the pool is RAID: taking a disk out would lose its redundancy; use replace-disk"
 	case target.UsedBytes > freeElsewhere:
 		return fmt.Sprintf("%s holds %s but the other disks have only %s free; add a disk first",
 			disk, formatBytes(target.UsedBytes), formatBytes(freeElsewhere))
@@ -79,7 +75,7 @@ func checkRemovable(pvs []pvInfo, disk string, raid bool) string {
 
 // diskJobScript is what runs on the node. Each step is idempotent enough to
 // be repeated if the unit is restarted after a controller failover.
-func diskJobScript(j *database.StorageJob, raid bool) string {
+func diskJobScript(j *database.StorageJob) string {
 	vg, old := j.Pool, j.Disk
 	status := fmt.Sprintf("%s/%s.status", diskJobStatus, j.ID)
 	var b strings.Builder
@@ -88,11 +84,6 @@ func diskJobScript(j *database.StorageJob, raid bool) string {
 		nw := j.NewDisk
 		fmt.Fprintf(&b, "pvs %s >/dev/null 2>&1 || pvcreate -y %s || fail 'pvcreate %s'\n", nw, nw, nw)
 		fmt.Fprintf(&b, "pvs --noheadings -o vg_name %s | grep -qw %s || vgextend %s %s || fail 'vgextend'\n", nw, vg, vg, nw)
-		if raid {
-			// Every RAID image with extents on the old disk is rebuilt on the new one.
-			fmt.Fprintf(&b, "for lv in $(lvs -a --noheadings -o lv_name,segtype,devices %s | awk '$2 ~ /^raid/ && $3 ~ \"%s\" {gsub(/[\\[\\]]/, \"\", $1); print $1}' | sort -u); do\n", vg, old)
-			fmt.Fprintf(&b, "  lvconvert -y --replace %s %s/$lv %s || fail \"replace $lv\"\ndone\n", old, vg, nw)
-		}
 		fmt.Fprintf(&b, "used=$(pvs --noheadings --nosuffix --units b -o pv_used %s | tr -d ' ')\n", old)
 		fmt.Fprintf(&b, "[ \"${used:-0}\" = 0 ] || pvmove -i 15 %s %s || fail 'pvmove'\n", old, nw)
 	} else {
@@ -109,21 +100,18 @@ func newJobID() string {
 	return time.Now().UTC().Format("20060102-150405") + "-" + hex.EncodeToString(b)
 }
 
-// poolPVs lists the disks of vg on host, and whether any LV in it is RAID.
-func (sm *StorageManager) poolPVs(ctx context.Context, host, vg string) ([]pvInfo, bool, error) {
-	cmd := fmt.Sprintf("sudo pvs --noheadings --nosuffix --units b --separator '|' -o pv_name,pv_size,pv_used -S vg_name=%s; "+
-		"echo '--'; sudo lvs -a --noheadings -o segtype %s", vg, vg)
+// poolPVs lists the disks of vg on host.
+func (sm *StorageManager) poolPVs(ctx context.Context, host, vg string) ([]pvInfo, error) {
+	cmd := fmt.Sprintf("sudo pvs --noheadings --nosuffix --units b --separator '|' -o pv_name,pv_size,pv_used -S vg_name=%s", vg)
 	res, err := sm.controller.deployment.Exec(ctx, []string{host}, cmd)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	hr := res.Hosts[host]
-	if hr == nil || !hr.Success {
-		return nil, false, fmt.Errorf("pool %s not found on that node", vg)
+	if hr == nil || !hr.Success || strings.TrimSpace(hr.Output) == "" {
+		return nil, fmt.Errorf("pool %s not found on that node", vg)
 	}
-	parts := strings.SplitN(hr.Output, "--", 2)
-	raid := len(parts) == 2 && strings.Contains(parts[1], "raid")
-	return parsePVs(parts[0]), raid, nil
+	return parsePVs(hr.Output), nil
 }
 
 // StartDiskJob begins removing disk from pool on node, or replacing it with
@@ -141,7 +129,7 @@ func (sm *StorageManager) StartDiskJob(ctx context.Context, pool, node, disk, ne
 			return "", fmt.Errorf("job %s is already moving data in %s on %s", j.ID, pool, node)
 		}
 	}
-	pvs, raid, err := sm.poolPVs(ctx, host, pool)
+	pvs, err := sm.poolPVs(ctx, host, pool)
 	if err != nil {
 		return "", err
 	}
@@ -156,7 +144,7 @@ func (sm *StorageManager) StartDiskJob(ctx context.Context, pool, node, disk, ne
 		if !containsPV(pvs, disk) {
 			return "", fmt.Errorf("%s is not a disk of %s on %s", disk, pool, node)
 		}
-	} else if why := checkRemovable(pvs, disk, raid); why != "" {
+	} else if why := checkRemovable(pvs, disk); why != "" {
 		return "", fmt.Errorf("%s", why)
 	}
 	j := &database.StorageJob{ID: newJobID(), Kind: kind, State: database.JobRunning, Pool: pool, Node: node,
@@ -164,7 +152,7 @@ func (sm *StorageManager) StartDiskJob(ctx context.Context, pool, node, disk, ne
 	if err := c.db.SaveStorageJob(ctx, j); err != nil {
 		return "", err
 	}
-	if err := sm.launchDiskJob(ctx, host, j, raid); err != nil {
+	if err := sm.launchDiskJob(ctx, host, j); err != nil {
 		j.State, j.Message = database.JobFailed, err.Error()
 		_ = c.db.SaveStorageJob(ctx, j)
 		return "", err
@@ -182,8 +170,8 @@ func containsPV(pvs []pvInfo, name string) bool {
 	return false
 }
 
-func (sm *StorageManager) launchDiskJob(ctx context.Context, host string, j *database.StorageJob, raid bool) error {
-	script := base64Std(diskJobScript(j, raid))
+func (sm *StorageManager) launchDiskJob(ctx context.Context, host string, j *database.StorageJob) error {
+	script := base64Std(diskJobScript(j))
 	cmd := fmt.Sprintf("sudo systemd-run --unit=sds-disk-%s --collect /bin/bash -c 'echo %s | base64 -d | /bin/bash'", j.ID, script)
 	return execFailure(sm.controller.deployment.Exec(ctx, []string{host}, cmd))
 }

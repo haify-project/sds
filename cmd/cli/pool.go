@@ -40,7 +40,6 @@ func poolCreate() *cobra.Command {
 	var size string
 	var compression string
 	var dedup bool
-	var raid string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -97,10 +96,7 @@ func poolCreate() *cobra.Command {
 				case "zfs":
 					// For ZFS, 'disks' are vdevs. A zpool has no thin/thick mode;
 					// thin provisioning is a per-zvol property set at volume creation.
-					var vdevs []string
-					if vdevs, err = zfsVdevs(raid, diskList); err == nil {
-						err = sdsClient.CreateZFSPoolOptions(ctx, name, n, vdevs, compression, dedup)
-					}
+					err = sdsClient.CreateZFSPoolOptions(ctx, name, n, diskList, compression, dedup)
 				// "" reaches the LVM path deliberately: an unspecified type is
 				// resolved by the controller from storage.default_pool_type, and
 				// that setting can only name an LVM type — ZFS pools are built by
@@ -118,7 +114,7 @@ func poolCreate() *cobra.Command {
 					case "lvm-thin-vdo":
 						backendType = "thin_vdo"
 					}
-					err = sdsClient.CreatePoolWithRaid(ctx, name, backendType, n, diskList, util.BytesToGiB(sizeBytes), raid)
+					err = sdsClient.CreatePool(ctx, name, backendType, n, diskList, util.BytesToGiB(sizeBytes))
 				default:
 					err = fmt.Errorf("unsupported pool type: %s", poolType)
 				}
@@ -162,7 +158,6 @@ func poolCreate() *cobra.Command {
 	cmd.Flags().StringVar(&size, "size", "", "Pool size (e.g., 10G, 10GB, 10GiB, 1T, 1TB)")
 	cmd.Flags().StringVar(&compression, "compression", "", "ZFS only: compression algorithm (lz4, zstd, zstd-N, gzip-N, off, ...); default: OpenZFS's (lz4 from 2.2)")
 	cmd.Flags().BoolVar(&dedup, "dedup", false, "ZFS only: deduplicate (costs RAM on every write; for data known to repeat)")
-	cmd.Flags().StringVar(&raid, "raid", "", "Keep the pool alive when one of its disks fails: raid1, raid10, raid5 or raid6 (needs 2, 4, 3 or 5+ disks)")
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		if (compression != "" || dedup) && poolType != "zfs" {
 			return fmt.Errorf("--compression and --dedup apply to --type zfs only")
