@@ -17,6 +17,7 @@ import {
   ScrollText,
   SlidersHorizontal,
   BellRing,
+  Rotate3d,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
@@ -72,7 +73,7 @@ type NavItem = {
   icon: typeof LayoutDashboard;
 };
 
-// Two groups, because the nine destinations answer two different questions:
+// Two groups, because the destinations answer two different questions:
 // "what is the cluster made of" and "what is it doing / who may touch it".
 // Nine flat rows made the operator read the whole list every time.
 const navGroups: { label: string; items: NavItem[] }[] = [
@@ -80,6 +81,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Cluster',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: '3D view', href: '/3d', icon: Rotate3d },
       { name: 'Nodes', href: '/nodes', icon: Server },
       { name: 'Pools', href: '/pools', icon: Database },
       { name: 'Resources', href: '/resources', icon: Box },
@@ -358,7 +360,9 @@ export function MainLayout() {
             <h2 className="text-[13.5px] font-semibold tracking-tight">
               {current?.name ?? 'Dashboard'}
             </h2>
-            {isFetching > 0 && (
+            {/* The 3D view polls continuously and says "live" itself; a
+                spinner that never stops there would only be noise. */}
+            {isFetching > 0 && location.pathname !== '/3d' && (
               <span
                 className="flex items-center gap-1 text-xs text-muted-foreground"
                 role="status"

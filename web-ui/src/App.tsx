@@ -42,6 +42,10 @@ const NotificationsPage = lazy(() =>
 const LogsPage = lazy(() =>
   import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })),
 );
+// The 3D view carries three.js; only those who open it download it.
+const TwinPage = lazy(() =>
+  import('./pages/twin/TwinPage').then((m) => ({ default: m.TwinPage })),
+);
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );
@@ -73,6 +77,7 @@ function App() {
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="3d" element={<TwinPage />} />
               <Route path="nodes" element={<NodesPage />} />
               <Route path="pools" element={<PoolsPage />} />
               <Route path="resources" element={<ResourcesPage />} />

@@ -102,11 +102,17 @@ export function subscribeEvents(handlers: EventStreamHandlers): () => void {
       });
 
       if (response.status === 503) {
-        // Notifications are disabled server-side. Retrying cannot fix that, so
-        // stop and let the UI say so rather than showing a permanent
-        // "reconnecting" state.
-        handlers.onDisabled?.();
-        closed = true;
+        // Notifications disabled server-side: retrying cannot fix that, so stop
+        // and let the UI say so rather than showing a permanent "reconnecting"
+        // state. A 503 that does not say so is something in between — a proxy
+        // while the controller fails over — and is retried like any outage.
+        const body = await response.text().catch(() => '');
+        if (body.includes('notifications are disabled')) {
+          handlers.onDisabled?.();
+          closed = true;
+          return;
+        }
+        scheduleReconnect();
         return;
       }
       if (!response.ok || !response.body) {
