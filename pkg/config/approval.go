@@ -36,6 +36,8 @@ var DefaultApprovalMethods = []string{
 	// from inside the controller, where DeleteResource's own approval would
 	// never be asked for.
 	"DeleteApp",
+	// MoveVolume deletes the volume's snapshots in the old pool.
+	"MoveVolume",
 	// What protects it.
 	"DeleteSnapshotSchedule", "UnfreezeSnapshotSchedule", "AddBackupTarget", "DeleteBackupTarget", "DeleteBackup", "DeleteBackupSchedule",
 	// Only when they replace a schedule with one that keeps less: its next

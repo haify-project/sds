@@ -24,6 +24,14 @@ type ControllerClient interface {
 	DeletePool(ctx context.Context, pool, node string) error
 	AddDiskToPool(ctx context.Context, pool, disk, node string) error
 
+	// Storage upkeep
+	TrimPools(ctx context.Context, node string) (*sdspb.TrimPoolsResponse, error)
+	ListPoolDisks(ctx context.Context, pool, node string) ([]*sdspb.PoolDiskInfo, error)
+	RemovePoolDisk(ctx context.Context, pool, node, disk string) (*sdspb.StorageJobResponse, error)
+	ReplacePoolDisk(ctx context.Context, pool, node, oldDisk, newDisk string) (*sdspb.StorageJobResponse, error)
+	MoveVolume(ctx context.Context, resource string, volumeID int32, pool string) (*sdspb.StorageJobResponse, error)
+	ListStorageJobs(ctx context.Context, includeFinished bool) ([]*sdspb.StorageJobInfo, error)
+
 	// Resources
 	ListResources(ctx context.Context) ([]*sdspb.ResourceInfo, error)
 	ResourceStatus(ctx context.Context, name string) (*sdspb.ResourceStatus, error)

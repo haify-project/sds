@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Trash2, Loader2 } from 'lucide-react';
 import { type PoolOpt } from './types';
+import { MoveVolumeForm } from './MoveVolumeForm';
 
 export function VolumesDialog({
   open,
@@ -95,6 +96,8 @@ export function VolumesDialog({
                 <VolumeRow
                   key={vol.volumeId}
                   resourceName={resource.name}
+                  replicaNodes={resource.nodes}
+                  pools={pools}
                   volume={vol}
                   onChanged={invalidate}
                 />
@@ -117,14 +120,19 @@ export function VolumesDialog({
 
 function VolumeRow({
   resourceName,
+  replicaNodes,
+  pools,
   volume,
   onChanged,
 }: {
   resourceName: string;
+  replicaNodes: string[];
+  pools: PoolOpt[];
   volume: Volume;
   onChanged: () => void;
 }) {
   const [resizing, setResizing] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [newSize, setNewSize] = useState(String(volume.sizeGb));
 
   const resizeMutation = useMutation({
@@ -154,6 +162,7 @@ function VolumeRow({
           <span className="text-sm font-medium">Volume {volume.volumeId}</span>
           <span className="font-mono text-xs text-muted-foreground">
             {volume.device}
+            {volume.pool && ` · ${volume.pool}`}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -164,6 +173,13 @@ function VolumeRow({
             onClick={() => setResizing((v) => !v)}
           >
             Resize
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMoving((v) => !v)}
+          >
+            Move
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -198,6 +214,16 @@ function VolumeRow({
           </AlertDialog>
         </div>
       </div>
+
+      {moving && (
+        <MoveVolumeForm
+          resourceName={resourceName}
+          replicaNodes={replicaNodes}
+          volume={volume}
+          pools={pools}
+          onStarted={() => setMoving(false)}
+        />
+      )}
 
       {resizing && (
         <form

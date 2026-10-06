@@ -15,9 +15,11 @@ const GREEN = ['online',
   'uptodate',
   'connected',
   'healthy',
-  'enabled'];
-const YELLOW = ['secondary', 'syncing', 'inconsistent', 'degraded', 'standby'];
-const RED = ['offline', 'stopped', 'inactive', 'failed', 'error', 'diskless', 'disconnected'];
+  'enabled',
+  // Disk health (SMART).
+  'ok'];
+const YELLOW = ['secondary', 'syncing', 'inconsistent', 'degraded', 'standby', 'warn'];
+const RED = ['offline', 'stopped', 'inactive', 'failed', 'error', 'diskless', 'disconnected', 'fail'];
 
 export function toneOf(status: string | undefined): StatusTone {
   const s = (status || '').toLowerCase();
