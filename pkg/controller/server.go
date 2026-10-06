@@ -37,7 +37,7 @@ func NewServer(ctrl *Controller) *Server {
 // ==================== POOL OPERATIONS ====================
 
 func (s *Server) CreatePool(ctx context.Context, req *sdspb.CreatePoolRequest) (*sdspb.CreatePoolResponse, error) {
-	err := s.storage.CreatePool(ctx, req.Name, req.Type, req.Node, req.Disks, req.SizeGb)
+	err := s.storage.CreatePool(ctx, req.Name, req.Type, req.Node, req.Disks, req.SizeGb, req.Raid)
 	if err != nil {
 		return &sdspb.CreatePoolResponse{
 			Success: false,

@@ -169,9 +169,12 @@ func (sm *StorageManager) defaultedPoolType(poolType string) string {
 }
 
 // CreatePool creates a storage pool
-func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64) error {
+func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64, raid string) error {
 	normalizedType, err := normalizeLVMPoolType(sm.defaultedPoolType(poolType))
 	if err != nil {
+		return err
+	}
+	if err := validateRaid(raid, normalizedType, len(disks)); err != nil {
 		return err
 	}
 	name = normalizeManagedName(name)
@@ -217,17 +220,21 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 	// If type is thin_pool, create a thin pool LV
 	if isThinPoolType(normalizedType) {
 		// An explicit size is honoured; otherwise the pool takes 95% of the
-		// group's free extents. The 5% left unallocated is room for the
-		// metadata area and its spare copy to grow, and for an operator to
-		// act when the pool fills. AddDiskToPool keeps the same ratio.
+		// group's free extents less [storage.thin] reserve_percent. What is
+		// left is room for the metadata area to grow and for the pool to be
+		// grown into before it fills. AddDiskToPool keeps the same ratio.
 		thinPoolName := name + "_thin"
-		thinSize := "95%FREE"
+		thinSize := fmt.Sprintf("%d%%FREE", sm.controller.thinPoolPercentFree())
 		if sizeGB > 0 {
 			thinSize = fmt.Sprintf("%dG", sizeGB)
 		}
 
 		if normalizedType == vdoPoolType {
 			if err := sm.createVDOThinPool(ctx, address, name, thinSize); err != nil {
+				return err
+			}
+		} else if raid != "" {
+			if err := sm.createRaidThinPool(ctx, address, name, thinPoolName, raid, len(disks)); err != nil {
 				return err
 			}
 		} else if tpResult, err := sm.controller.deployment.LVCreateThinPool(ctx, []string{address}, name, thinPoolName, thinSize); err != nil {
@@ -247,6 +254,7 @@ func (sm *StorageManager) CreatePool(ctx context.Context, name, poolType, node s
 			Type:    normalizedType,
 			Node:    node,
 			Devices: strings.Join(disks, ","),
+			Raid:    raid,
 		}
 		if err := sm.controller.db.SavePool(ctx, dbPool); err != nil {
 			sm.controller.logger.Warn("Failed to save pool to database",

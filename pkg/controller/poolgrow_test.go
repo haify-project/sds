@@ -84,16 +84,16 @@ func TestAddDiskToPoolReportsThinGrowFailure(t *testing.T) {
 
 func TestPlanThinGrow(t *testing.T) {
 	// Nothing free: nothing to do.
-	assert.Equal(t, thinGrowPlan{}, planThinGrow(95*gib, thinMetadataFloor, 0))
+	assert.Equal(t, thinGrowPlan{}, planThinGrow(95*gib, thinMetadataFloor, 0, thinPoolGrowPercentFree))
 
 	// Metadata already large enough for the grown pool is left alone.
-	p := planThinGrow(95*gib, 16*gib, 105*gib)
+	p := planThinGrow(95*gib, 16*gib, 105*gib, thinPoolGrowPercentFree)
 	assert.True(t, p.ExtendData)
 	assert.Zero(t, p.MetadataGrowTo)
 
 	// A metadata growth that would not fit in the unallocated share is skipped
 	// rather than starving the data extension.
-	p = planThinGrow(2000*gib, thinMetadataFloor, 1*gib)
+	p = planThinGrow(2000*gib, thinMetadataFloor, 1*gib, thinPoolGrowPercentFree)
 	assert.True(t, p.ExtendData)
 	assert.Zero(t, p.MetadataGrowTo)
 }

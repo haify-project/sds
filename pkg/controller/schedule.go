@@ -302,6 +302,11 @@ func (sm *ScheduleManager) rebuildLocked(ctx context.Context) error {
 				zap.String("cron", spec), zap.Error(err))
 		}
 	}
+	if spec := sm.trimSchedule(); spec != "" {
+		if _, err := c.AddFunc(spec, sm.runTrimSweep); err != nil {
+			sm.controller.logger.Warn("Skipping the trim schedule: invalid cron", zap.String("cron", spec), zap.Error(err))
+		}
+	}
 	if spec := sm.inspectSchedule(); spec != "" {
 		if _, err := c.AddFunc(spec, sm.runInspectionTick); err != nil {
 			sm.controller.logger.Warn("Skipping the inspection schedule: invalid cron",

@@ -151,6 +151,23 @@ const (
 	// severity is the run's worst finding, so a channel filtered to warning
 	// and above hears about an inspection only when it found something.
 	TypeInspectionCompleted Type = "inspection.completed"
+
+	// TypePoolTrimmed is published (as info) after a scheduled trim, with what
+	// it returned to the thin pools, and as a warning when a filesystem would
+	// not trim.
+	TypePoolTrimmed Type = "pool.trimmed"
+	// TypePoolExtended is published when the controller grew a thin pool (or
+	// its metadata) into its volume group's free space before it filled, and
+	// as a warning when it needed to and could not.
+	TypePoolExtended Type = "pool.extended"
+	// TypePoolDiskMoved reports a disk taken out of, or replaced in, a pool:
+	// its data moved off with pvmove. Warning when the move failed.
+	TypePoolDiskMoved Type = "pool.disk_moved"
+	// TypeDiskHealth fires when a disk backing a pool reports SMART or NVMe
+	// health trouble, before it fails.
+	TypeDiskHealth Type = "disk.health"
+	// TypeVolumeMoved reports a volume moved to another pool, node by node.
+	TypeVolumeMoved Type = "resource.volume_moved"
 )
 
 // Severity ranks how much an event should interrupt someone.

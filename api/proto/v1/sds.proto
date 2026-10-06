@@ -21,6 +21,25 @@ service SDSController {
   rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse) {
     option (google.api.http) = { get: "/v1/pools"; };
   }
+  // Storage upkeep: trimming, disks, and long-running storage jobs.
+  rpc TrimPools(TrimPoolsRequest) returns (TrimPoolsResponse) {
+    option (google.api.http) = { post: "/v1/storage/trim"; body: "*"; };
+  }
+  rpc ListPoolDisks(ListPoolDisksRequest) returns (ListPoolDisksResponse) {
+    option (google.api.http) = { get: "/v1/storage/disks"; };
+  }
+  rpc RemovePoolDisk(RemovePoolDiskRequest) returns (StorageJobResponse) {
+    option (google.api.http) = { post: "/v1/storage/disks/remove"; body: "*"; };
+  }
+  rpc ReplacePoolDisk(ReplacePoolDiskRequest) returns (StorageJobResponse) {
+    option (google.api.http) = { post: "/v1/storage/disks/replace"; body: "*"; };
+  }
+  rpc MoveVolume(MoveVolumeRequest) returns (StorageJobResponse) {
+    option (google.api.http) = { post: "/v1/storage/volumes/move"; body: "*"; };
+  }
+  rpc ListStorageJobs(ListStorageJobsRequest) returns (ListStorageJobsResponse) {
+    option (google.api.http) = { get: "/v1/storage/jobs"; };
+  }
   rpc AddDiskToPool(AddDiskToPoolRequest) returns (AddDiskToPoolResponse) {
     option (google.api.http) = { post: "/v1/pools/{pool}/disks"; body: "*"; };
   }
@@ -738,6 +757,9 @@ message CreatePoolRequest {
   string node = 3;
   repeated string disks = 4;
   uint64 size_gb = 5;
+  // raid makes the pool survive a failed disk on its node: "" (none),
+  // "raid1", "raid10", "raid5" or "raid6". Needs enough disks for the level.
+  string raid = 6;
 }
 
 message CreatePoolResponse {
@@ -3673,4 +3695,97 @@ message SnapshotAppResponse {
   bool success = 1;
   string message = 2;
   bool frozen = 3;  // false when the app was not running (nothing to freeze)
+}
+
+// ==================== Storage upkeep ====================
+
+message TrimPoolsRequest {
+  // node limits the trim to one node; empty trims every online node.
+  string node = 1;
+}
+
+message TrimResultInfo {
+  string node = 1;
+  string mount = 2;
+  uint64 bytes = 3;
+  string error = 4;
+}
+
+message TrimPoolsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated TrimResultInfo results = 3;
+}
+
+message ListPoolDisksRequest {
+  string pool = 1;
+  string node = 2;
+}
+
+message PoolDiskInfo {
+  string node = 1;
+  string pool = 2;
+  string device = 3;
+  uint64 size_bytes = 4;
+  uint64 used_bytes = 5;
+  // health is "ok", "warn", "fail" or "unknown" (no SMART on this device,
+  // e.g. a virtual disk); health_detail says why.
+  string health = 6;
+  string health_detail = 7;
+  string model = 8;
+  string serial = 9;
+}
+
+message ListPoolDisksResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PoolDiskInfo disks = 3;
+}
+
+message RemovePoolDiskRequest {
+  string pool = 1;
+  string node = 2;
+  string disk = 3;
+}
+
+message ReplacePoolDiskRequest {
+  string pool = 1;
+  string node = 2;
+  string old_disk = 3;
+  string new_disk = 4;
+}
+
+message MoveVolumeRequest {
+  string resource = 1;
+  int32 volume_id = 2;
+  // pool is the destination pool; it must exist on every diskful node.
+  string pool = 3;
+}
+
+message StorageJobResponse {
+  bool success = 1;
+  string message = 2;
+  string job_id = 3;
+}
+
+message ListStorageJobsRequest {
+  bool include_finished = 1;
+}
+
+message StorageJobInfo {
+  string id = 1;
+  // kind is "remove-disk", "replace-disk" or "move-volume".
+  string kind = 2;
+  string state = 3;
+  string subject = 4;
+  string progress = 5;
+  string message = 6;
+  int64 started_unix = 7;
+  int64 updated_unix = 8;
+}
+
+message ListStorageJobsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated StorageJobInfo jobs = 3;
 }

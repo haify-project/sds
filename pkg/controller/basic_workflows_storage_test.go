@@ -78,7 +78,7 @@ func TestStorageManagerCreatePoolPersistsDatabaseState(t *testing.T) {
 	db := newTestDB(t)
 	ctrl.db = db
 
-	err := ctrl.storage.CreatePool(context.Background(), "data-pool", "lvm-thin", "node1", []string{"/dev/sdb", "/dev/sdc"}, 100)
+	err := ctrl.storage.CreatePool(context.Background(), "data-pool", "lvm-thin", "node1", []string{"/dev/sdb", "/dev/sdc"}, 100, "")
 	require.NoError(t, err)
 
 	stored, err := ctrl.db.GetPool(context.Background(), "sds_data-pool")

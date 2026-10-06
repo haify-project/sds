@@ -50,6 +50,10 @@ func (c *Controller) alertOptions() alert.Options {
 	if c.config.Alert.WriteAnomaly.Enabled {
 		obs = append(obs, newWriteAnomalyDetector(c))
 	}
+	// Thin pools grow before they fill (pool_autoextend.go).
+	if c.config.Storage.Thin.AutoextendThreshold > 0 {
+		obs = append(obs, newThinAutoextender(c))
+	}
 	if len(obs) > 0 {
 		opts.Observer = obs
 	}

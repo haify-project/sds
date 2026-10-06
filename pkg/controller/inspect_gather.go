@@ -44,6 +44,7 @@ func (im *InspectionManager) gather(ctx context.Context) *inspect.Input {
 	im.gatherAlerts(ctx, in)
 	im.gatherBackups(ctx, in)
 	im.gatherTLS(in)
+	im.gatherDisks(ctx, in)
 	if reports, err := im.List(ctx, 0); err == nil {
 		for _, r := range reports {
 			if len(r.Pools) > 0 {

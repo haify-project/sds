@@ -31,5 +31,5 @@ func (rm *ResourceManager) createBackingVolumeOn(ctx context.Context, host, pool
 	if thinPool != "" {
 		return execFailure(rm.deployment.LVCreateThinVolume(ctx, []string{host}, pool, thinPool, volume, size))
 	}
-	return execFailure(rm.deployment.LVCreate(ctx, []string{host}, pool, volume, size))
+	return execFailure(rm.createThickLV(ctx, []string{host}, pool, volume, size))
 }

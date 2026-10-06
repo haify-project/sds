@@ -6,8 +6,7 @@
   },
   "tags": [
     {
-      "name": "SDSController",
-      "description": "SDS Controller Service"
+      "name": "SDSController"
     }
   ],
   "consumes": [
@@ -5345,6 +5344,201 @@
         ]
       }
     },
+    "/v1/storage/disks": {
+      "get": {
+        "operationId": "SDSController_ListPoolDisks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPoolDisksResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/storage/disks/remove": {
+      "post": {
+        "operationId": "SDSController_RemovePoolDisk",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RemovePoolDiskRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/storage/disks/replace": {
+      "post": {
+        "operationId": "SDSController_ReplacePoolDisk",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ReplacePoolDiskRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/storage/jobs": {
+      "get": {
+        "operationId": "SDSController_ListStorageJobs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListStorageJobsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "includeFinished",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/storage/trim": {
+      "post": {
+        "summary": "Storage upkeep: trimming, disks, and long-running storage jobs.",
+        "operationId": "SDSController_TrimPools",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TrimPoolsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1TrimPoolsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
+    "/v1/storage/volumes/move": {
+      "post": {
+        "operationId": "SDSController_MoveVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1MoveVolumeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SDSController"
+        ]
+      }
+    },
     "/v1/volumes/{volume_1}/snapshots": {
       "get": {
         "operationId": "SDSController_ListSnapshots2",
@@ -8161,6 +8355,10 @@
         "sizeGb": {
           "type": "string",
           "format": "uint64"
+        },
+        "raid": {
+          "type": "string",
+          "description": "raid makes the pool survive a failed disk on its node: \"\" (none),\n\"raid1\", \"raid10\", \"raid5\" or \"raid6\". Needs enough disks for the level."
         }
       },
       "title": "Pool messages"
@@ -8173,6 +8371,24 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1CreateRbacUserResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "token": {
+          "type": "string",
+          "description": "The user's token. Returned once and never stored in clear."
         }
       }
     },
@@ -8637,6 +8853,20 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1DeleteRbacUserResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     },
@@ -9141,6 +9371,23 @@
         },
         "pool": {
           "$ref": "#/definitions/v1PoolInfo"
+        }
+      }
+    },
+    "v1GetRbacWhoamiResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "user": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "canAdmin": {
+          "type": "boolean"
         }
       }
     },
@@ -9906,6 +10153,24 @@
         }
       }
     },
+    "v1ListPoolDisksResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PoolDiskInfo"
+          }
+        }
+      }
+    },
     "v1ListPoolsResponse": {
       "type": "object",
       "properties": {
@@ -9920,6 +10185,28 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1PoolInfo"
+          }
+        }
+      }
+    },
+    "v1ListRbacPoliciesResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "policies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RbacPolicy"
+          }
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RbacUser"
           }
         }
       }
@@ -10076,6 +10363,24 @@
         }
       }
     },
+    "v1ListStorageJobsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1StorageJobInfo"
+          }
+        }
+      }
+    },
     "v1ListZFSPoolsResponse": {
       "type": "object",
       "properties": {
@@ -10164,6 +10469,22 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "v1MoveVolumeRequest": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "volumeId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pool": {
+          "type": "string",
+          "description": "pool is the destination pool; it must exist on every diskful node."
         }
       }
     },
@@ -10498,6 +10819,41 @@
         }
       }
     },
+    "v1PoolDiskInfo": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "pool": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "usedBytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "health": {
+          "type": "string",
+          "description": "health is \"ok\", \"warn\", \"fail\" or \"unknown\" (no SMART on this device,\ne.g. a virtual disk); health_detail says why."
+        },
+        "healthDetail": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "serial": {
+          "type": "string"
+        }
+      }
+    },
     "v1PoolInfo": {
       "type": "object",
       "properties": {
@@ -10675,6 +11031,33 @@
         }
       },
       "description": "QuorumInfo is the vote arithmetic behind \"will this resource survive?\"."
+    },
+    "v1RbacPolicy": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "object": {
+          "type": "string",
+          "title": "\"*\" matches every object"
+        },
+        "action": {
+          "type": "string",
+          "title": "read, write or \"*\""
+        }
+      }
+    },
+    "v1RbacUser": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
     },
     "v1RebalanceMove": {
       "type": "object",
@@ -10861,6 +11244,20 @@
         }
       }
     },
+    "v1RemovePoolDiskRequest": {
+      "type": "object",
+      "properties": {
+        "pool": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "disk": {
+          "type": "string"
+        }
+      }
+    },
     "v1RemoveReplicaResponse": {
       "type": "object",
       "properties": {
@@ -10975,6 +11372,23 @@
         "alreadyConsistent": {
           "type": "boolean",
           "description": "True when nothing needed changing."
+        }
+      }
+    },
+    "v1ReplacePoolDiskRequest": {
+      "type": "object",
+      "properties": {
+        "pool": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "oldDisk": {
+          "type": "string"
+        },
+        "newDisk": {
+          "type": "string"
         }
       }
     },
@@ -11564,6 +11978,20 @@
         }
       }
     },
+    "v1SetRbacUserRoleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
     "v1SetResourceProfileOptionsResponse": {
       "type": "object",
       "properties": {
@@ -11794,6 +12222,52 @@
         }
       }
     },
+    "v1StorageJobInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "description": "kind is \"remove-disk\", \"replace-disk\" or \"move-volume\"."
+        },
+        "state": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "startedUnix": {
+          "type": "string",
+          "format": "int64"
+        },
+        "updatedUnix": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1StorageJobResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        }
+      }
+    },
     "v1SyncHaTomlResponse": {
       "type": "object",
       "properties": {
@@ -11814,6 +12288,51 @@
         "message": {
           "type": "string",
           "description": "message carries the far end's own rejection text when it refused, which is\nthe part that says what to fix."
+        }
+      }
+    },
+    "v1TrimPoolsRequest": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "node limits the trim to one node; empty trims every online node."
+        }
+      }
+    },
+    "v1TrimPoolsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TrimResultInfo"
+          }
+        }
+      }
+    },
+    "v1TrimResultInfo": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "mount": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "error": {
+          "type": "string"
         }
       }
     },

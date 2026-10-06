@@ -23,6 +23,12 @@ const (
 	SDSController_DeletePool_FullMethodName                = "/v1.SDSController/DeletePool"
 	SDSController_GetPool_FullMethodName                   = "/v1.SDSController/GetPool"
 	SDSController_ListPools_FullMethodName                 = "/v1.SDSController/ListPools"
+	SDSController_TrimPools_FullMethodName                 = "/v1.SDSController/TrimPools"
+	SDSController_ListPoolDisks_FullMethodName             = "/v1.SDSController/ListPoolDisks"
+	SDSController_RemovePoolDisk_FullMethodName            = "/v1.SDSController/RemovePoolDisk"
+	SDSController_ReplacePoolDisk_FullMethodName           = "/v1.SDSController/ReplacePoolDisk"
+	SDSController_MoveVolume_FullMethodName                = "/v1.SDSController/MoveVolume"
+	SDSController_ListStorageJobs_FullMethodName           = "/v1.SDSController/ListStorageJobs"
 	SDSController_AddDiskToPool_FullMethodName             = "/v1.SDSController/AddDiskToPool"
 	SDSController_RegisterNode_FullMethodName              = "/v1.SDSController/RegisterNode"
 	SDSController_UnregisterNode_FullMethodName            = "/v1.SDSController/UnregisterNode"
@@ -207,6 +213,13 @@ type SDSControllerClient interface {
 	DeletePool(ctx context.Context, in *DeletePoolRequest, opts ...grpc.CallOption) (*DeletePoolResponse, error)
 	GetPool(ctx context.Context, in *GetPoolRequest, opts ...grpc.CallOption) (*GetPoolResponse, error)
 	ListPools(ctx context.Context, in *ListPoolsRequest, opts ...grpc.CallOption) (*ListPoolsResponse, error)
+	// Storage upkeep: trimming, disks, and long-running storage jobs.
+	TrimPools(ctx context.Context, in *TrimPoolsRequest, opts ...grpc.CallOption) (*TrimPoolsResponse, error)
+	ListPoolDisks(ctx context.Context, in *ListPoolDisksRequest, opts ...grpc.CallOption) (*ListPoolDisksResponse, error)
+	RemovePoolDisk(ctx context.Context, in *RemovePoolDiskRequest, opts ...grpc.CallOption) (*StorageJobResponse, error)
+	ReplacePoolDisk(ctx context.Context, in *ReplacePoolDiskRequest, opts ...grpc.CallOption) (*StorageJobResponse, error)
+	MoveVolume(ctx context.Context, in *MoveVolumeRequest, opts ...grpc.CallOption) (*StorageJobResponse, error)
+	ListStorageJobs(ctx context.Context, in *ListStorageJobsRequest, opts ...grpc.CallOption) (*ListStorageJobsResponse, error)
 	AddDiskToPool(ctx context.Context, in *AddDiskToPoolRequest, opts ...grpc.CallOption) (*AddDiskToPoolResponse, error)
 	// Node operations
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
@@ -569,6 +582,66 @@ func (c *sDSControllerClient) ListPools(ctx context.Context, in *ListPoolsReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPoolsResponse)
 	err := c.cc.Invoke(ctx, SDSController_ListPools_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) TrimPools(ctx context.Context, in *TrimPoolsRequest, opts ...grpc.CallOption) (*TrimPoolsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TrimPoolsResponse)
+	err := c.cc.Invoke(ctx, SDSController_TrimPools_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListPoolDisks(ctx context.Context, in *ListPoolDisksRequest, opts ...grpc.CallOption) (*ListPoolDisksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPoolDisksResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListPoolDisks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) RemovePoolDisk(ctx context.Context, in *RemovePoolDiskRequest, opts ...grpc.CallOption) (*StorageJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageJobResponse)
+	err := c.cc.Invoke(ctx, SDSController_RemovePoolDisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ReplacePoolDisk(ctx context.Context, in *ReplacePoolDiskRequest, opts ...grpc.CallOption) (*StorageJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageJobResponse)
+	err := c.cc.Invoke(ctx, SDSController_ReplacePoolDisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) MoveVolume(ctx context.Context, in *MoveVolumeRequest, opts ...grpc.CallOption) (*StorageJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageJobResponse)
+	err := c.cc.Invoke(ctx, SDSController_MoveVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDSControllerClient) ListStorageJobs(ctx context.Context, in *ListStorageJobsRequest, opts ...grpc.CallOption) (*ListStorageJobsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStorageJobsResponse)
+	err := c.cc.Invoke(ctx, SDSController_ListStorageJobs_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2305,6 +2378,13 @@ type SDSControllerServer interface {
 	DeletePool(context.Context, *DeletePoolRequest) (*DeletePoolResponse, error)
 	GetPool(context.Context, *GetPoolRequest) (*GetPoolResponse, error)
 	ListPools(context.Context, *ListPoolsRequest) (*ListPoolsResponse, error)
+	// Storage upkeep: trimming, disks, and long-running storage jobs.
+	TrimPools(context.Context, *TrimPoolsRequest) (*TrimPoolsResponse, error)
+	ListPoolDisks(context.Context, *ListPoolDisksRequest) (*ListPoolDisksResponse, error)
+	RemovePoolDisk(context.Context, *RemovePoolDiskRequest) (*StorageJobResponse, error)
+	ReplacePoolDisk(context.Context, *ReplacePoolDiskRequest) (*StorageJobResponse, error)
+	MoveVolume(context.Context, *MoveVolumeRequest) (*StorageJobResponse, error)
+	ListStorageJobs(context.Context, *ListStorageJobsRequest) (*ListStorageJobsResponse, error)
 	AddDiskToPool(context.Context, *AddDiskToPoolRequest) (*AddDiskToPoolResponse, error)
 	// Node operations
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
@@ -2644,6 +2724,24 @@ func (UnimplementedSDSControllerServer) GetPool(context.Context, *GetPoolRequest
 }
 func (UnimplementedSDSControllerServer) ListPools(context.Context, *ListPoolsRequest) (*ListPoolsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPools not implemented")
+}
+func (UnimplementedSDSControllerServer) TrimPools(context.Context, *TrimPoolsRequest) (*TrimPoolsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TrimPools not implemented")
+}
+func (UnimplementedSDSControllerServer) ListPoolDisks(context.Context, *ListPoolDisksRequest) (*ListPoolDisksResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPoolDisks not implemented")
+}
+func (UnimplementedSDSControllerServer) RemovePoolDisk(context.Context, *RemovePoolDiskRequest) (*StorageJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemovePoolDisk not implemented")
+}
+func (UnimplementedSDSControllerServer) ReplacePoolDisk(context.Context, *ReplacePoolDiskRequest) (*StorageJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplacePoolDisk not implemented")
+}
+func (UnimplementedSDSControllerServer) MoveVolume(context.Context, *MoveVolumeRequest) (*StorageJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveVolume not implemented")
+}
+func (UnimplementedSDSControllerServer) ListStorageJobs(context.Context, *ListStorageJobsRequest) (*ListStorageJobsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListStorageJobs not implemented")
 }
 func (UnimplementedSDSControllerServer) AddDiskToPool(context.Context, *AddDiskToPoolRequest) (*AddDiskToPoolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddDiskToPool not implemented")
@@ -3247,6 +3345,114 @@ func _SDSController_ListPools_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDSControllerServer).ListPools(ctx, req.(*ListPoolsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_TrimPools_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TrimPoolsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).TrimPools(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_TrimPools_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).TrimPools(ctx, req.(*TrimPoolsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListPoolDisks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPoolDisksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListPoolDisks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListPoolDisks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListPoolDisks(ctx, req.(*ListPoolDisksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_RemovePoolDisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePoolDiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).RemovePoolDisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_RemovePoolDisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).RemovePoolDisk(ctx, req.(*RemovePoolDiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ReplacePoolDisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplacePoolDiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ReplacePoolDisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ReplacePoolDisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ReplacePoolDisk(ctx, req.(*ReplacePoolDiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_MoveVolume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveVolumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).MoveVolume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_MoveVolume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).MoveVolume(ctx, req.(*MoveVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDSController_ListStorageJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStorageJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDSControllerServer).ListStorageJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SDSController_ListStorageJobs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDSControllerServer).ListStorageJobs(ctx, req.(*ListStorageJobsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6344,6 +6550,30 @@ var SDSController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPools",
 			Handler:    _SDSController_ListPools_Handler,
+		},
+		{
+			MethodName: "TrimPools",
+			Handler:    _SDSController_TrimPools_Handler,
+		},
+		{
+			MethodName: "ListPoolDisks",
+			Handler:    _SDSController_ListPoolDisks_Handler,
+		},
+		{
+			MethodName: "RemovePoolDisk",
+			Handler:    _SDSController_RemovePoolDisk_Handler,
+		},
+		{
+			MethodName: "ReplacePoolDisk",
+			Handler:    _SDSController_ReplacePoolDisk_Handler,
+		},
+		{
+			MethodName: "MoveVolume",
+			Handler:    _SDSController_MoveVolume_Handler,
+		},
+		{
+			MethodName: "ListStorageJobs",
+			Handler:    _SDSController_ListStorageJobs_Handler,
 		},
 		{
 			MethodName: "AddDiskToPool",

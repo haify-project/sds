@@ -22,6 +22,18 @@ import (
 // the fact and needs extents to grow into.
 const thinPoolGrowPercentFree = 95
 
+// thinPoolPercentFree is the share of a group's free extents a thin pool takes
+// when created or grown: the 95% above, less [storage.thin] reserve_percent,
+// which stays in the group for the pool to be grown into before it fills
+// (pool_autoextend.go).
+func (c *Controller) thinPoolPercentFree() uint64 {
+	pct := thinPoolGrowPercentFree
+	if c.config != nil {
+		pct -= c.config.Storage.Thin.ReservePercent
+	}
+	return uint64(max(pct, 45))
+}
+
 // thinGrowPlan is what to do to an existing thin pool after its group grew.
 type thinGrowPlan struct {
 	// MetadataGrowTo is the size to raise the metadata area to, or zero to
@@ -36,14 +48,14 @@ type thinGrowPlan struct {
 // and capped). Metadata is only ever grown, and only when the growth — paid
 // twice, once for the spare copy — fits comfortably in what is free, so a
 // short group never has its data extension starved by the metadata one.
-func planThinGrow(dataBytes, metaBytes, vgFreeBytes uint64) thinGrowPlan {
+func planThinGrow(dataBytes, metaBytes, vgFreeBytes, pct uint64) thinGrowPlan {
 	if vgFreeBytes == 0 {
 		return thinGrowPlan{}
 	}
 	plan := thinGrowPlan{ExtendData: true}
-	projected := dataBytes + vgFreeBytes*thinPoolGrowPercentFree/100
+	projected := dataBytes + vgFreeBytes*pct/100
 	if target := thinMetadataBytes(projected); target > metaBytes {
-		if 2*(target-metaBytes) < vgFreeBytes*(100-thinPoolGrowPercentFree)/100 {
+		if 2*(target-metaBytes) < vgFreeBytes*(100-pct)/100 {
 			plan.MetadataGrowTo = target
 		}
 	}
@@ -75,7 +87,8 @@ func (sm *StorageManager) growThinPoolAfterExtend(ctx context.Context, address, 
 		return fmt.Errorf("read the free space of %s: %w", vgName, err)
 	}
 
-	plan := planThinGrow(dataBytes, metaBytes, freeBytes)
+	pct := sm.controller.thinPoolPercentFree()
+	plan := planThinGrow(dataBytes, metaBytes, freeBytes, pct)
 	// Metadata first — see LVExtendThinPoolMetadata for why the order matters.
 	if plan.MetadataGrowTo > 0 {
 		if err := execFailure(dep.LVExtendThinPoolMetadata(ctx, []string{address},
@@ -85,7 +98,7 @@ func (sm *StorageManager) growThinPoolAfterExtend(ctx context.Context, address, 
 	}
 	if plan.ExtendData {
 		if err := execFailure(dep.LVExtendThinPoolPercentFree(ctx, []string{address},
-			vgName, thinLV, thinPoolGrowPercentFree)); err != nil {
+			vgName, thinLV, int(pct))); err != nil {
 			return fmt.Errorf("extend %s/%s: %w", vgName, thinLV, err)
 		}
 	}

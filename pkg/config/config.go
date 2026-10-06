@@ -341,6 +341,8 @@ type StorageConfig struct {
 	// compared block by block (DRBD online verify), one resource at a time.
 	// Differences raise resource.out_of_sync. Empty turns it off.
 	VerifySchedule string `mapstructure:"verify_schedule"`
+	// Thin is [storage.thin] (thin.go).
+	Thin ThinConfig `mapstructure:"thin"`
 }
 
 // MetricsConfig represents metrics configuration

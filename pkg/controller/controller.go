@@ -309,6 +309,7 @@ func (c *Controller) Start() error {
 	if c.resources != nil {
 		c.resources.resumeMoves(c.ctx)
 	}
+	c.startStorageUpkeep(c.ctx)
 
 	// A backup left "running" belongs to a controller that died mid-transfer;
 	// only the active controller ships backups, so nothing can still be in

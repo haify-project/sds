@@ -9,12 +9,19 @@ import (
 
 // CreatePool creates a storage pool
 func (c *SDSClient) CreatePool(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64) error {
+	return c.CreatePoolWithRaid(ctx, name, poolType, node, disks, sizeGB, "")
+}
+
+// CreatePoolWithRaid creates a storage pool whose disks form a RAID level
+// inside the node ("" for none).
+func (c *SDSClient) CreatePoolWithRaid(ctx context.Context, name, poolType, node string, disks []string, sizeGB uint64, raid string) error {
 	req := &sdspb.CreatePoolRequest{
 		Name:   name,
 		Type:   poolType,
 		Node:   node,
 		Disks:  disks,
 		SizeGb: sizeGB,
+		Raid:   raid,
 	}
 
 	resp, err := c.client.CreatePool(ctx, req)

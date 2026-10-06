@@ -33,6 +33,11 @@ type Input struct {
 	Backups BackupInput
 	SelfHA  *SelfHAInput
 	TLS     TLSInput
+
+	// Disks are the disks under every pool and their health (disk_health.go);
+	// DisksProbed is false when they could not be read.
+	Disks       []Disk
+	DisksProbed bool
 }
 
 // Node is one registered node.

@@ -16,7 +16,7 @@ var checkers = []checker{
 	{AreaResources, checkResources},
 	{AreaGateways, checkGateways},
 	{AreaNodes, checkNodes},
-	{AreaPools, checkPools},
+	{AreaPools, checkPools}, {AreaPools, checkDisks},
 	{AreaBackups, checkBackups},
 	{AreaAlerts, checkAlerts},
 	{AreaSelfHA, checkSelfHA},

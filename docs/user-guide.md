@@ -285,9 +285,98 @@ sds pool add --pool data-pool --nodes node1 --devices /dev/sde
 ```
 
 The disk joins the volume group. If the group holds a thin pool, that pool is
-then extended into 95% of the group's free space (the same share `pool create`
-uses), with its metadata area grown in proportion first, so thin volumes can
-use the new disk straight away.
+then extended into the same share of the group's free space `pool create` uses
+(95% less `[storage.thin] reserve_percent`, so 85% by default), with its
+metadata area grown in proportion first, so thin volumes can use the new disk
+straight away.
+
+**RAID.** `--raid` keeps an LVM pool alive when one of its disks fails, below
+DRBD, so a dead disk costs neither the node's replica nor a full resync:
+
+```bash
+sds pool create --name fast --nodes node1,node2 --devices /dev/sdb,/dev/sdc --raid raid1
+```
+
+| Level | Disks | Usable |
+| ----- | ----- | ------ |
+| `raid1` | 2 or more | one disk's worth (two copies) |
+| `raid10` | 4 or more, even | half |
+| `raid5` | 3 or more | all but one disk |
+| `raid6` | 5 or more | all but two disks |
+
+On a thin pool, both the data area and the metadata area are RAID (metadata is
+always mirrored). On a thick pool, every volume is created at that level. A
+ZFS pool takes the same flag and builds the vdevs from it: `raid1` is one mirror,
+`raid10` mirrors of pairs, `raid5` raidz, `raid6` raidz2 (4 or more disks). VDO
+pools cannot be RAID.
+
+RAID and DRBD are not redundant with each other. DRBD keeps the data alive when
+a node goes; RAID keeps a node's copy alive when a disk goes, and that copy
+would otherwise take hours to resync.
+
+**Disks.** `pool disks` lists the disks under the pools on every node, with
+their health from SMART or the NVMe health log:
+
+```bash
+sds pool disks                     # every node; --pool, --node to narrow
+```
+
+The health is `ok`, `warn` (an NVMe drive past 90% of its rated endurance or
+with media errors, reallocated or pending sectors on an ATA disk), `fail` (the
+drive's own SMART verdict, an NVMe critical warning or worn-out drive,
+uncorrectable sectors) or
+`unknown` (no `smartctl` on the node, or a device that has no SMART, such as a
+virtual disk). It needs `smartmontools` on the nodes. The daily inspection runs
+the same check (`disk.health`) and raises a `disk.health` event for every disk
+at `warn` (warning) or `fail` (critical).
+
+Taking a disk out moves its data to the group's other disks first (`pvmove`),
+while the pool stays in use, and only then drops it from the pool:
+
+```bash
+sds pool remove-disk  --pool data-pool --node node1 --disk /dev/sdc
+sds pool replace-disk --pool data-pool --node node1 --disk /dev/sdc --new-disk /dev/sdf
+sds pool jobs                      # what is running; --all includes finished ones
+```
+
+`remove-disk` is refused when the other disks have no room for what this one
+holds, when it is the pool's only disk, and on a RAID pool, where taking a disk
+out would lose the redundancy. `replace-disk` works on every pool: the new disk
+joins, the old one's data moves to it (on a RAID pool, each RAID leg on the old
+disk is rebuilt on the new one), then the old disk leaves. Both run as a job on
+the node, so they survive a controller restart or failover. When a job ends,
+it raises a `pool.disk_moved` event. A move takes about as long as reading the
+disk once.
+
+**Keeping thin pools from filling.** A full thin pool is not a slow failure:
+writes to it fail, DRBD drops the disk, and the resource carries on with one
+replica fewer. Three things in `[storage.thin]` prevent that:
+
+- **Trim.** Every day (`trim_schedule`, `30 2 * * *` by default) the controller
+  runs `fstrim` on every mounted DRBD filesystem, on the node serving it. The
+  discards reach every replica, so each node's thin pool gets back the blocks the
+  filesystem freed. To trim now, run `sds pool trim` (`--node` for one node). Each run
+  raises `pool.trimmed` with how much was discarded.
+- **No zeros from resyncs.** A resync onto a thin volume writes every block it
+  copies, holes included, unless DRBD knows the device can discard. Resources
+  on thin pools get `rs-discard-granularity` set automatically, and the
+  controller adds it to older resources that lack it when it starts.
+- **Autoextend.** A new thin pool leaves `reserve_percent` (10) of its volume
+  group free. Once a pool's data or metadata use reaches `autoextend_threshold`
+  (80%), the controller grows it into that room: metadata is doubled first, then
+  data grows by `autoextend_percent` (20) of the pool's size, or by what the group
+  has left if that is less. A RAID pool is grown only by what every one of its
+  disks can match. Each extension raises `pool.extended`. When the group has no
+  room left, `pool.extended` warns once: that is the time to `pool add` a
+  disk. `autoextend_threshold = 0` turns it off.
+
+```toml
+[storage.thin]
+trim_schedule = "30 2 * * *"   # "" turns it off
+reserve_percent = 10           # of a new pool's volume group, left for autoextend
+autoextend_threshold = 80      # 0 turns it off; otherwise 50-95
+autoextend_percent = 20        # 5-100
+```
 
 Deleting a pool is per node, and an LVM pool that still holds any volume is
 refused; the freed disks have their PV labels wiped:
@@ -581,7 +670,25 @@ sds resource remove-replica db --node node3 --yes
 # the pool); remove-volume takes the volume id
 sds resource add-volume db --volume db_logs --size 50G --pool thin-pool
 sds resource remove-volume db 1
+
+# move a volume to another pool, e.g. onto new disks or from thick to thin
+sds resource move-volume db --volume 0 --pool fast
 ```
+
+`move-volume` rebuilds the volume in the target pool one node at a time,
+secondaries first. On each node, the controller waits until the peers are
+UpToDate, then detaches the volume. It creates the new backing volume, attaches
+it, and lets DRBD resync it in full from the peers. Only then does it delete the
+old backing volume and its snapshots. The resource keeps serving throughout: a
+Primary whose disk is detached reads and writes over the network for the
+duration. The pool must exist on every node holding a replica, and the resource
+needs at least two diskful replicas. It is refused for an encrypted resource,
+while one of its replicas is being moved to another node, and while a snapshot
+is locked. It runs as a
+job (`sds pool jobs`) that resumes after a controller restart. A failed job can
+be started again and continues from the nodes not yet moved. The volume's
+snapshots on the old pool are deleted with it, so take a backup first if you
+need them.
 
 A resource's promoters — its `ha create` config and its gateway — follow the
 replicas. `add-replica` first checks that the new node could run them (the OCF
@@ -1915,7 +2022,7 @@ Each node is probed once over SSH per run; a node that does not answer is a
 | resources | a resource under `sds ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a primary-site diskful node (warn), present on a diskless one (warn: it works as a diskless Primary, over the network) or present on a WAN resource's DR node (warn: it could fail over to the asynchronous copy unasked) |
 | gateways | every gateway not `stopped` has exactly one Primary; its promoter config on every diskful node (warn when missing, and when present on a diskless node) |
 | nodes | SSH reachable; clock skew against the controller (warn > 2 s, fail > 30 s; SSH latency is not counted), NTP synchronised; root filesystem (warn ≥ 85 %, fail ≥ 95 %); the registered address present on an interface (a public address answering as the registered host is taken as NAT, not drift), and the address answering as the registered host; drbd module loaded; drbd-reactor running; DRBD module, drbd-utils, drbd-reactor and `sds-controller` binary the same on every node, the binary compared only between nodes of one architecture (a differing binary fails under Self-HA); `/etc/hosts` mapping a node name to an address it is not registered at |
-| pools | thin pool data and metadata against `[alert] pool_near_full_percent` / `pool_full_percent`; growth since the previous report, warn when full within 14 days, fail within 3; on a thick pool, free space below the copy-on-write area a snapshot of a volume reserves (20 % of it, at least 256 MiB), naming the volumes whose snapshots and backups will fail (warn) |
+| pools | thin pool data and metadata against `[alert] pool_near_full_percent` / `pool_full_percent`; growth since the previous report, warn when full within 14 days, fail within 3; on a thick pool, free space below the copy-on-write area a snapshot of a volume reserves (20 % of it, at least 256 MiB), naming the volumes whose snapshots and backups will fail (warn); each disk under a pool, by SMART or the NVMe health log: warn on wear past 90 %, media errors, reallocated or pending sectors, fail on a failed SMART verdict, an NVMe critical warning or uncorrectable sectors (`disk.health`; no check without `smartctl`) |
 | backups | each enabled backup schedule: last run failed, target missing, last success older than 1.5 cron intervals (warn) or 3 (fail); snapshot schedules not run for 1.5 / 3 intervals; schedules enabled while `[schedule] enabled = false`; `_bk_` snapshots no backup record refers to |
 | alerts | `[alert]` enabled; at least one enabled channel; each channel's last deliveries succeeded; every warning or critical raised in the last 24 h was accepted by a channel that delivered it. No test message is sent |
 | selfha | at least two UpToDate copies of `sds-meta`; its promoter config active on every diskful candidate (and noted on a diskless one); exactly one `sds-controller` active, on the `sds-meta` Primary; a controller binary on every candidate |
