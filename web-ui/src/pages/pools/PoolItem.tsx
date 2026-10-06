@@ -44,6 +44,10 @@ export function PoolItem({ pool }: { pool: Pool }) {
       ? ((total - free) / total) * 100
       : 0;
 
+  // The recorded type says "vg" for a group that was adopted or converted to
+  // thin later; a thin pool LV in it is what makes it a thin pool.
+  const shownType = thin && pool.type === 'vg' ? 'thin_pool' : pool.type;
+
   return (
     <div className="rounded-lg border bg-muted/40 p-3">
       <div className="mb-2 flex items-center justify-between">
@@ -52,8 +56,8 @@ export function PoolItem({ pool }: { pool: Pool }) {
           {thin?.outOfSpace && (
             <Badge variant="destructive">out of space</Badge>
           )}
-          <Badge variant="outline" className={poolTypeBadgeClass(pool.type)}>
-            {poolTypeLabel(pool.type)}
+          <Badge variant="outline" className={poolTypeBadgeClass(shownType)}>
+            {poolTypeLabel(shownType)}
           </Badge>
           <AddDiskDialog pool={pool} />
           <DeletePoolDialog pool={pool} />

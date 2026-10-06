@@ -5,11 +5,8 @@ export const POOL_TYPE_OPTIONS = [
   { value: 'zfs', label: 'ZFS' },
 ];
 
-// The pool list reports a thin pool as "thin"; creation takes "thin_pool".
-const TYPE_ALIASES: Record<string, string> = { thin: 'thin_pool' };
-
 export function poolTypeBadgeClass(type: string): string {
-  switch (TYPE_ALIASES[type] ?? type) {
+  switch (type) {
     case 'zfs':
       return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900';
     case 'thin_pool':
@@ -21,6 +18,6 @@ export function poolTypeBadgeClass(type: string): string {
 }
 
 export function poolTypeLabel(type: string): string {
-  const opt = POOL_TYPE_OPTIONS.find((o) => o.value === (TYPE_ALIASES[type] ?? type));
+  const opt = POOL_TYPE_OPTIONS.find((o) => o.value === type);
   return opt ? opt.label : type.toUpperCase();
 }
