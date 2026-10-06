@@ -240,6 +240,15 @@ export function buildModel(
         return [m, down ? { ...rep, health: 'bad' as Health, label: 'node down' } : rep];
       }),
     );
+    // The copy being written by a resync reports only "Inconsistent" from its
+    // own side; the sync shows on its peer. While the resource is syncing, that
+    // copy is the target, not a failure.
+    if ([...reps.values()].some((r) => r.syncing) || summary.tone === 'warn') {
+      for (const [m, rep] of reps) {
+        if (rep.label === 'Inconsistent')
+          reps.set(m, { ...rep, health: 'warn', syncing: true, label: summary.tone === 'warn' ? summary.label : 'syncing' });
+      }
+    }
     let resHealth: Health = summary.tone;
     for (const rep of reps.values()) resHealth = worst(resHealth, rep.health === 'idle' ? 'ok' : rep.health);
     for (const [m, rep] of reps) {
