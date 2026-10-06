@@ -53,7 +53,6 @@ export const ComputerNode = memo(function ComputerNode({
   const hovered = useTwin((s) => s.hovered === id);
   const anchor = useRef<THREE.Object3D>(null);
   const power = useRef<THREE.Mesh>(null);
-  const ring = useRef<THREE.Mesh>(null);
   const pulse = useRef<THREE.Mesh>(null);
   const bayLeds = useRef<(THREE.Mesh | null)[]>([]);
 
@@ -114,10 +113,8 @@ export const ComputerNode = memo(function ComputerNode({
           : base;
       m.emissiveIntensity = flicker;
     });
-    if (ring.current) {
-      ring.current.rotation.y = t * 0.8;
-      ring.current.position.y = TOWER.top + 1.1 + Math.sin(t * 2) * 0.12;
-    }
+    // The controller's case breathes.
+    if (node.controller) haloMat.emissiveIntensity = 1.5 + Math.sin(t * 2.2) * 0.9;
     if (pulse.current) {
       const f = twin.get().flashes.get(id);
       const age = f ? (performance.now() - f.at) / 1000 : 99;
@@ -178,6 +175,20 @@ export const ComputerNode = memo(function ComputerNode({
             <mesh geometry={cyl(0.17, 2.9)} material={mats.glass} />
             <mesh geometry={cyl(0.12, 2.8 * Math.max(0.03, node.fill))} material={fillMat} position={[0, -1.4 + 1.4 * Math.max(0.03, node.fill), 0]} />
           </group>
+          {/* The controller runs here: the case's front edges light up */}
+          {node.controller && (
+            <>
+              {[-0.76, 0.76].map((x) => (
+                <mesh key={x} geometry={rbox(0.07, 3.12, 0.05, 0.025)} material={haloMat} position={[x, 0, faceZ + 0.01]} />
+              ))}
+              <mesh geometry={rbox(1.56, 0.07, 0.05, 0.025)} material={haloMat} position={[0, 1.58, faceZ + 0.01]} />
+              {/* and the rim of its top */}
+              {[-0.76, 0.76].map((x) => (
+                <mesh key={`t${x}`} geometry={rbox(0.07, 0.05, 2.92, 0.02)} material={haloMat} position={[x, 1.655, 0]} />
+              ))}
+              <mesh geometry={rbox(1.56, 0.05, 0.07, 0.02)} material={haloMat} position={[0, 1.655, -1.46]} />
+            </>
+          )}
         </group>
 
         {/* Monitor */}
@@ -194,11 +205,11 @@ export const ComputerNode = memo(function ComputerNode({
         <mesh geometry={rbox(2.3, 0.02, 0.6, 0.01)} material={mats.trim} position={[1.15, PLINTH_H + 0.1, 1.25]} />
       </group>
 
-      {/* The controller runs here: a halo over the tower */}
+      {/* ...and casts a glow on the desk around it */}
       {node.controller && (
-        <mesh ref={ring} position={[TOWER.x, TOWER.top + 1.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.75, 0.07, 12, 48]} />
-          <primitive object={haloMat} attach="material" />
+        <mesh position={[TOWER.x, PLINTH_H + 0.01, 0.2]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[2.6, 3.8]} />
+          <meshBasicMaterial color={palette.accent} transparent opacity={palette.dark ? 0.28 : 0.18} depthWrite={false} />
         </mesh>
       )}
 

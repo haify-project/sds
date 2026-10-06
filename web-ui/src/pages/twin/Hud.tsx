@@ -99,8 +99,8 @@ export function Legend({ model }: { model: TwinModel }) {
         <span className="flex items-center gap-1.5"><i className="size-2 rounded-full bg-status-bad" />degraded / down</span>
       </div>
       <p className="mt-1 text-muted-foreground">
-        Drive lights are the replicas a node holds; the glass tube is its pool. Arcs carry replication, dots are writes
-        leaving the primary.
+        Drive lights are the replicas a node holds, blue for the primary; the glass tube is its pool; the case that glows
+        runs the controller. Dashes run from the primary to its copies.
       </p>
       {types.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-x-3">
