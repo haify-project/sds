@@ -59,6 +59,7 @@ func TestGenerateISCSIGatewayConfig(t *testing.T) {
 	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	require.NotEmpty(t, config)
+	assertSafeUnmount(t, config)
 
 	// Verify config contains expected elements
 	assert.Contains(t, config, "[[promoter]]")

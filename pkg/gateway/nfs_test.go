@@ -108,6 +108,7 @@ func TestGenerateNFSGatewayConfig(t *testing.T) {
 	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
 	require.NotEmpty(t, config)
+	assertSafeUnmount(t, config)
 
 	// Verify config contains expected elements
 	assert.Contains(t, config, "[[promoter]]")

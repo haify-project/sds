@@ -110,6 +110,9 @@ func TestPromoterConfigStartsTheServiceIPLast(t *testing.T) {
 			assert.Equal(t, vip, strings.LastIndex(cfg, `"ocf:`), "nothing follows the service IP")
 			assert.Contains(t, cfg, `target-as = "BindsTo"`)
 			assert.Contains(t, cfg, `on-drbd-demote-failure = "reboot-immediate"`)
+			// force_unmount=true resolves a no-longer-mounted directory to the
+			// root filesystem and kills every process on the node.
+			assert.Contains(t, cfg, "fstype=ext4 run_fsck=no force_unmount=safe")
 		})
 	}
 }

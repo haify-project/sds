@@ -200,3 +200,28 @@ func TestSMBNestedExposure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "share projects (/projects) lies inside share all")
 }
+
+// With force_unmount=true the Filesystem agent finds holders with
+// `fuser -m <dir>`; when <dir> is no longer a mount point that names the root
+// filesystem, and every process on the node is killed — init included. Seen on
+// a test node: drbd-reactor died with the rest and the node silently stopped
+// taking failovers. Every generated Filesystem line must use "safe".
+func assertSafeUnmount(t *testing.T, config string) {
+	t.Helper()
+	n := 0
+	for _, line := range strings.Split(config, "\n") {
+		if strings.Contains(line, "ocf:heartbeat:Filesystem") {
+			n++
+			assert.Contains(t, line, "force_unmount=safe", line)
+		}
+	}
+	assert.NotZero(t, n, "the config mounts nothing")
+}
+
+func TestSMBConfigUnmountsSafely(t *testing.T) {
+	ip, err := parseServiceIP("192.168.1.50/24")
+	require.NoError(t, err)
+	config, err := generateSMBGatewayConfig("files", "/dev/drbd/by-res/files/0", "/dev/drbd/by-res/files/1", ip)
+	require.NoError(t, err)
+	assertSafeUnmount(t, config)
+}

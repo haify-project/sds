@@ -211,8 +211,8 @@ func (n *NFSManager) generateNFSGatewayConfig(req *v1.CreateNFSGatewayRequest, s
       target-as = "BindsTo"
 
       start = [
-        "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no",
-        "ocf:heartbeat:Filesystem fs_export device={{ .ExportDevice }} directory={{ .ExportPath }} fstype={{ .FSType }}{{ if .ProjectQuota }} options=prjquota{{ end }} run_fsck=no",
+        "ocf:heartbeat:Filesystem fs_cluster_private device={{ .DRBDDevice }} directory={{ .ClusterPrivatePath }} fstype={{ .FSType }} run_fsck=no force_unmount=safe",
+        "ocf:heartbeat:Filesystem fs_export device={{ .ExportDevice }} directory={{ .ExportPath }} fstype={{ .FSType }}{{ if .ProjectQuota }} options=prjquota{{ end }} run_fsck=no force_unmount=safe",
         "ocf:heartbeat:nfsserver nfsserver nfs_ip={{ .IPAddress }} nfs_shared_infodir={{ .NFSInfoDir }} nfs_server_scope={{ .IPAddress }}",
 {{ range $idx, $client := .AllowedClients }}
         "ocf:heartbeat:exportfs export_{{ $idx }} directory={{ $.ExportPath }} fsid={{ $.FSID }} clientspec={{ $client }} options={{ $.Options }}",
