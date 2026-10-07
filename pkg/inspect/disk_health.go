@@ -13,13 +13,18 @@ import (
 // pending sectors climb, an SSD wears out — and the warning is only useful if
 // someone reads it before the pool loses the disk.
 
-// DiskProbeScript prints one line per LVM physical volume:
+// managedPrefix marks the volume groups SDS manages; the node's own (its
+// root VG, a hypervisor's) are not pools and are left alone.
+const managedPrefix = "sds_"
+
+// DiskProbeScript prints one line per physical volume of an SDS pool:
 // pv|vg|size|used|disk|<base64 smartctl json, or NOSMARTCTL>. The disk is the
 // PV's parent when the PV is a partition.
 const DiskProbeScript = `pvs --noheadings --units b --nosuffix --separator '|' -o pv_name,vg_name,pv_size,pv_used 2>/dev/null |
 while IFS='|' read -r pv vg size used; do
   pv=$(echo $pv); vg=$(echo $vg)
   case "$pv" in /dev/drbd*) continue;; esac
+  case "$vg" in ` + managedPrefix + `*) ;; *) continue;; esac
   disk=$pv
   # -d: without it lsblk walks the device's children (every LV on it).
   if [ "$(lsblk -ndo type "$pv" 2>/dev/null)" = part ]; then
@@ -61,7 +66,7 @@ func ParseDiskProbe(node, out string) []Disk {
 	var disks []Disk
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		f := strings.SplitN(strings.TrimSpace(line), "|", 6)
-		if len(f) != 6 || f[0] == "" {
+		if len(f) != 6 || f[0] == "" || !strings.HasPrefix(f[1], managedPrefix) {
 			continue
 		}
 		size, _ := strconv.ParseUint(f[2], 10, 64)
