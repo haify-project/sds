@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router';
-import { useIsFetching } from '@tanstack/react-query';
+import { useIsFetching, useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Server,
@@ -21,6 +21,8 @@ import {
   Monitor,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '@/services/api';
+import { isPveManaged } from '@/pages/proxmox/pve';
 import { UserMenu } from '@/components/UserMenu';
 import { NotificationBell } from '@/components/NotificationBell';
 
@@ -72,6 +74,8 @@ type NavItem = {
   name: string;
   href: string;
   icon: typeof LayoutDashboard;
+  /** An integration's page, listed only once the cluster has its disks. */
+  integration?: 'pve';
 };
 
 // Two groups, because the destinations answer two different questions:
@@ -88,7 +92,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { name: 'Resources', href: '/resources', icon: Box },
       { name: 'Gateways', href: '/gateways', icon: Network },
       { name: 'HA', href: '/ha', icon: ShieldCheck },
-      { name: 'Proxmox VE', href: '/proxmox', icon: Monitor },
+      { name: 'Proxmox VE', href: '/proxmox', icon: Monitor, integration: 'pve' },
     ],
   },
   {
@@ -128,6 +132,11 @@ function SidebarContent({
   aiOpen: boolean;
   onToggleCopilot: () => void;
 }) {
+  // Same query key as the Resources page, so this costs no extra request.
+  const { data: resources } = useQuery({ queryKey: ['resources'], queryFn: () => api.getResources() });
+  const integrations = new Set<NavItem['integration']>(
+    (resources?.resources ?? []).some(isPveManaged) ? ['pve'] : [],
+  );
   return (
     <div
       className={cn(
@@ -166,7 +175,7 @@ function SidebarContent({
               <div className="eyebrow px-2.5 pb-2">{group.label}</div>
             )}
             <div className="flex flex-col gap-0.5">
-              {group.items.map((item) => {
+              {group.items.filter((item) => !item.integration || integrations.has(item.integration)).map((item) => {
                 const isActive =
                   pathname === item.href || pathname.startsWith(item.href + '/');
                 return (

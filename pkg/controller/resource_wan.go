@@ -227,18 +227,13 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 	}
 	_, drAddr := rm.wanEndpointAddrs(dbRes)
 
-	// One leg per primary-site replica, each its own systemd instance. Probing
-	// only "haify-proxy@<resource>" reports every leg of a multi-replica resource
-	// as inactive, because that unit name only exists in the single-replica
-	// shape.
-	primaryNodes := make([]string, 0, 4)
-	for _, n := range strings.Split(dbRes.Nodes, ",") {
-		n = strings.TrimSpace(n)
-		if n != "" && n != dbRes.DRNode {
-			primaryNodes = append(primaryNodes, n)
-		}
-	}
-	single := len(primaryNodes) <= 1
+	// One leg per primary-site replica, each its own systemd instance, named
+	// exactly as provisioning and repair name it (the multi spec's legs).
+	// Probing only "haify-proxy@<resource>" reports every leg of a
+	// multi-replica resource as inactive, and so does deriving the leg name
+	// from the node's address after legs were renamed to node names.
+	multi := rm.wanMultiSpecFor(dbRes)
+	single := len(multi.PrimaryNodeKeys) <= 1
 
 	probe := func(label, addr, unit string) {
 		state := "unknown"
@@ -259,9 +254,10 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 	// The DR terminates every leg, so it runs one unit per primary. Report them
 	// per leg rather than collapsing to one line for the DR node, or a single
 	// dead tunnel hides behind a healthy one.
-	for _, n := range primaryNodes {
-		unit := wanproxy.UnitInstance(wanproxy.LegID(name, rm.controller.ResolveHost(n), single))
-		probe(n, rm.controller.ResolveHost(n), unit)
+	for i, leg := range multi.Legs() {
+		n := multi.PrimaryNodeKeys[i]
+		unit := wanproxy.UnitInstance(leg.Resource)
+		probe(n, leg.PrimaryNodeAddr, unit)
 		label := dbRes.DRNode
 		if !single {
 			label = dbRes.DRNode + " (leg " + n + ")"
@@ -272,7 +268,6 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 	// running. Probing from the first node in the list instead reports "WAN
 	// unreachable" whenever that particular replica happens to be down, which
 	// points at the wrong end of the link.
-	multi := rm.wanMultiSpecFor(dbRes)
 	if st, serr := wanproxy.StatusMulti(ctx, rm.wanproxyDeployClient(), multi); serr == nil && st != nil {
 		info.WANReachable = st.WANReachable
 		// Proxy counters from a live primary (the side that holds the backlog).
