@@ -1,19 +1,24 @@
+import { useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { api, type ResourceStatus } from '../services/api';
 import { PageHeader } from '@/components/PageHeader';
+import { StatBand, StatBandItem } from '@/components/StatBand';
+import { SegmentBar } from '@/components/SegmentBar';
+import { SegmentedFilter } from '@/components/SegmentedFilter';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toneOf, TONE_BG } from '@/components/status';
-import { cn } from '@/lib/utils';
-import { ExternalLink, Monitor } from 'lucide-react';
-import { replicationSummary, syncPollInterval, TONE_TEXT } from './resources/replication';
-import { diskBytes, formatGiB, guestsOf, pveGuestUrl, type PveDisk, type PveGuest } from './proxmox/pve';
+import { Monitor } from 'lucide-react';
+import { replicationSummary, syncPollInterval } from './resources/replication';
+import { diskBytes, guestsOf, nodeColumns, runningOn, runsOnReplica, type PveGuest } from './proxmox/pve';
+import { PlacementMatrix } from './proxmox/PlacementMatrix';
 
-// The disks Proxmox VE keeps on SDS, by guest: where each one is replicated,
-// whether its copies are in step, and which node the guest runs on (the one
-// holding its disks Primary).
+type Filter = 'all' | 'running' | 'attention' | 'templates';
+
+// The disks Proxmox VE keeps on SDS, by guest: which nodes hold a replica of
+// each, whether the replicas are in step, and whether the guest runs on a node
+// that holds its disks or reaches them over the network.
 export function ProxmoxPage() {
+  const [filter, setFilter] = useState<Filter>('all');
   const { data: resources, isLoading } = useQuery({
     queryKey: ['resources'],
     queryFn: () => api.getResources(),
@@ -34,35 +39,36 @@ export function ProxmoxPage() {
   const statusOf = new Map<string, ResourceStatus | undefined>(
     disks.map((d, i) => [d.resource.name, statusQueries[i]?.data?.status]),
   );
+  const statusRead = statusQueries.every((q) => !q.isLoading);
   const addressOf = new Map((nodes?.nodes ?? []).map((n) => [n.name, n.address]));
 
-  const totalBytes = disks.reduce((n, d) => n + diskBytes(d.resource), 0);
-  const unsynced = disks.filter((d) => replicationSummary(statusOf.get(d.resource.name)).tone !== 'ok').length;
+  const toneOfDisk = (name: string) => replicationSummary(statusOf.get(name)).tone;
+  const vms = guests.filter((g) => !g.template);
+  const running = vms.filter((g) => runningOn(g, statusOf));
+  const remote = running.filter((g) => !runsOnReplica(g, runningOn(g, statusOf)));
+  const inStep = disks.filter((d) => toneOfDisk(d.resource.name) === 'ok').length;
+  const needsAttention = (g: PveGuest) =>
+    g.disks.some((d) => ['warn', 'bad'].includes(toneOfDisk(d.resource.name))) || remote.includes(g);
+
+  const shown = guests.filter((g) => {
+    if (filter === 'running') return running.includes(g);
+    if (filter === 'attention') return needsAttention(g);
+    if (filter === 'templates') return g.template;
+    return true;
+  });
+  const [capacity, capacityUnit] = splitGiB(disks.reduce((n, d) => n + diskBytes(d.resource), 0));
 
   return (
     <div>
       <PageHeader
         title="Proxmox VE"
-        description={
-          <>
-            <span className="font-mono tabular-nums text-foreground">{guests.length}</span> guests ·{' '}
-            <span className="font-mono tabular-nums text-foreground">{disks.length}</span> disks ·{' '}
-            <span className="font-mono tabular-nums text-foreground">{formatGiB(totalBytes)}</span>
-            {unsynced > 0 ? (
-              <>
-                {' '}
-                · <span className="font-mono tabular-nums text-status-warn-text">{unsynced}</span> not in step
-              </>
-            ) : null}
-          </>
-        }
+        description="Guest disks on SDS: the nodes holding each replica, and the node each guest runs on."
       />
 
       {isLoading ? (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 w-full" />
-          ))}
+          <Skeleton className="h-[106px] w-full" />
+          <Skeleton className="h-64 w-full" />
         </div>
       ) : !guests.length ? (
         <Card>
@@ -78,117 +84,87 @@ export function ProxmoxPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {guests.map((g) => (
-            <GuestCard key={g.vmid} guest={g} statusOf={statusOf} addressOf={addressOf} />
-          ))}
+        <div className="space-y-5">
+          <StatBand className="flex-col divide-x-0 divide-y sm:flex-row sm:divide-x sm:divide-y-0">
+            <StatBandItem
+              label="Running"
+              value={running.length}
+              unit={`/${vms.length}`}
+              loading={!statusRead}
+              detail={`${vms.length - running.length} stopped · ${plural(guests.length - vms.length, 'template')}`}
+            />
+            <StatBandItem
+              label="On a replica node"
+              value={running.length - remote.length}
+              unit={`/${running.length}`}
+              loading={!statusRead}
+              grow={1.3}
+              detail={
+                remote.length ? (
+                  <span className="text-status-warn-text">
+                    {remote.map((g) => `VM ${g.vmid}`).join(', ')}{' '}
+                    {remote.length === 1 ? 'reads its disks' : 'read their disks'} over the network
+                  </span>
+                ) : (
+                  'Every running guest has its disks locally'
+                )
+              }
+            />
+            <StatBandItem
+              label="Replicas in step"
+              value={inStep}
+              unit={`/${disks.length}`}
+              loading={!statusRead}
+              grow={1.3}
+              detail={<SegmentBar segments={disks.map((d) => toneOfDisk(d.resource.name))} />}
+            />
+            <StatBandItem
+              label="Capacity"
+              value={capacity}
+              unit={`${capacityUnit} in ${plural(disks.length, 'disk')}`}
+              grow={1.2}
+            />
+          </StatBand>
+
+          <SegmentedFilter
+            aria-label="Filter guests"
+            className="max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'all', label: 'All', count: guests.length },
+              { value: 'running', label: 'Running', count: running.length },
+              { value: 'attention', label: 'Needs attention', count: guests.filter(needsAttention).length },
+              { value: 'templates', label: 'Templates', count: guests.length - vms.length },
+            ]}
+          />
+
+          {shown.length ? (
+            <PlacementMatrix guests={shown} nodes={nodeColumns(guests)} statusOf={statusOf} addressOf={addressOf} />
+          ) : (
+            <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+              {
+                {
+                  all: '',
+                  running: 'No guest is running.',
+                  attention: 'Every running guest is on a replica node and every replica is in step.',
+                  templates: 'No templates on SDS.',
+                }[filter]
+              }
+            </p>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function GuestCard({
-  guest,
-  statusOf,
-  addressOf,
-}: {
-  guest: PveGuest;
-  statusOf: Map<string, ResourceStatus | undefined>;
-  addressOf: Map<string, string>;
-}) {
-  // The node holding a disk Primary is the node running the guest.
-  const runningOn = guest.disks
-    .map((d) => primaryOf(statusOf.get(d.resource.name)))
-    .find((n): n is string => !!n);
-  const linkNode = runningOn ?? guest.disks[0]?.resource.nodes[0];
-  const linkAddr = linkNode ? addressOf.get(linkNode) : undefined;
-
-  return (
-    <Card className="gap-0 py-0">
-      <CardContent className="p-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-3">
-          <span className="font-medium">
-            {guest.template ? 'Template' : 'VM'} <span className="font-mono tabular-nums">{guest.vmid}</span>
-          </span>
-          <span className="text-sm text-muted-foreground">
-            {runningOn ? (
-              <>
-                running on <span className="text-foreground">{runningOn}</span>
-              </>
-            ) : guest.template ? (
-              'not running'
-            ) : (
-              'stopped'
-            )}
-          </span>
-          {linkAddr ? (
-            <a
-              className="ml-auto inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              href={pveGuestUrl(linkAddr, guest.vmid)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open in Proxmox VE
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          ) : null}
-        </div>
-        <ul className="divide-y">
-          {guest.disks.map((d) => (
-            <DiskRow key={d.resource.name} disk={d} status={statusOf.get(d.resource.name)} />
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  );
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
-function DiskRow({ disk, status }: { disk: PveDisk; status?: ResourceStatus }) {
-  const r = disk.resource;
-  const replication = replicationSummary(status);
-  const stateOf = (node: string) =>
-    Object.entries(status?.nodeStates ?? {}).find(([host, st]) => (st.node || host) === node)?.[1];
-  const diskless = [...(r.disklessNodes ?? []), ...(r.disklessClients ?? [])];
-
-  return (
-    <li className="grid gap-x-4 gap-y-1 px-4 py-2.5 text-sm sm:grid-cols-[minmax(11rem,1.2fr)_5rem_minmax(0,2fr)_8rem] sm:items-center">
-      <div className="min-w-0">
-        <div className="truncate font-mono text-[13px]">{disk.volume}</div>
-        <div className="truncate font-mono text-xs text-muted-foreground">{r.name}</div>
-      </div>
-      <div className="font-mono tabular-nums text-muted-foreground">{formatGiB(diskBytes(r))}</div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {r.nodes.map((n) => {
-          const st = stateOf(n);
-          const tone = st ? toneOf(st.diskState) : 'idle';
-          return (
-            <Badge
-              key={n}
-              variant="outline"
-              className="gap-1.5 bg-card font-normal"
-              title={st ? `${st.diskState}${st.replicationState ? `, ${st.replicationState}` : ''}` : 'state not read yet'}
-            >
-              <span className={cn('h-1.5 w-1.5 rounded-full', TONE_BG[tone])} />
-              {n}
-              {st?.role === 'Primary' ? <span className="text-muted-foreground">Primary</span> : null}
-            </Badge>
-          );
-        })}
-        {diskless.length ? (
-          <span className="text-xs text-muted-foreground" title="Reach the disk over the network, without a copy">
-            + {diskless.join(', ')} without a copy
-          </span>
-        ) : null}
-      </div>
-      <div className={cn('text-sm', TONE_TEXT[replication.tone])} title={replication.title}>
-        {replication.label}
-      </div>
-    </li>
-  );
-}
-
-function primaryOf(status?: ResourceStatus): string | undefined {
-  const hit = Object.entries(status?.nodeStates ?? {}).find(([, st]) => st.role === 'Primary');
-  return hit ? hit[1].node || hit[0] : undefined;
+function splitGiB(bytes: number): [string, string] {
+  const gib = bytes / 1024 ** 3;
+  if (gib >= 1024) return [(gib / 1024).toFixed(1).replace(/\.0$/, ''), 'TiB'];
+  return [gib >= 100 ? gib.toFixed(0) : gib.toFixed(1).replace(/\.0$/, ''), 'GiB'];
 }
