@@ -126,6 +126,27 @@ func TestIdleVolumeLosingItsPrimaryIsNotCritical(t *testing.T) {
 	}
 }
 
+// A guest's disk following a live migration moved; nothing failed over.
+func TestManagedVolumeMovingIsNotAFailover(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:               "cinder-v1",
+		IdleWithoutPrimary: true,
+		NodeStates:         map[string]NodeStateInfo{"n1": healthy("Primary"), "n2": healthy("Secondary")},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+	mon.Poll(ctx)
+	drain()
+
+	lister.list[0].NodeStates = map[string]NodeStateInfo{"n1": healthy("Secondary"), "n2": healthy("Primary")}
+	mon.Poll(ctx)
+	evs := drain()
+	require.Len(t, evs, 1)
+	assert.Equal(t, event.TypeResourcePromoted, evs[0].Type)
+	assert.Equal(t, event.SeverityInfo, evs[0].Severity)
+	assert.Equal(t, map[string]string{"from": "n1", "to": "n2"}, evs[0].Details)
+}
+
 // A resource that has never had a Primary is Secondary by design, not in
 // trouble. Raising a critical for each of those would bury the real ones.
 func TestSecondaryEverywhereIsNotAnAlert(t *testing.T) {

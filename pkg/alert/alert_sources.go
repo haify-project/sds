@@ -79,10 +79,12 @@ type ResourceStatusInfo struct {
 	WANEnabled bool
 	WANHealthy bool
 	WANMessage string
-	// IdleWithoutPrimary marks a resource whose normal resting state has no
-	// Primary: a Kubernetes volume is promoted while a pod uses it and demoted
-	// when the pod goes, which is not a fault. Losing its Primary is not
-	// raised as a critical; degrade, quorum and sync alerts still apply.
+	// IdleWithoutPrimary marks a resource whose Primary another system
+	// decides (Proxmox VE, Kubernetes, OpenStack): it is promoted while a guest
+	// or pod uses it and demoted when that goes, which is not a fault, and it
+	// moves when that system moves its user. Losing its Primary is not raised
+	// as a critical and a move is not a failover; degrade, quorum and sync
+	// alerts still apply.
 	IdleWithoutPrimary bool
 }
 

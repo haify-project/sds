@@ -193,6 +193,21 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 			Message:  fmt.Sprintf("resource %s promoted on %s", res.Name, cur),
 			Details:  map[string]string{"to": cur},
 		})
+	case res.IdleWithoutPrimary:
+		// Proxmox VE, Kubernetes or OpenStack decides where this resource is
+		// Primary, and moving it is their everyday business: a live migration,
+		// a pod rescheduled, an instance started elsewhere. Calling that a
+		// failover, at warning, would put one for every migration in the feed.
+		// A node failure behind a move is reported by its own alerts.
+		m.publish(event.Event{
+			Type:     event.TypeResourcePromoted,
+			Severity: event.SeverityInfo,
+			Status:   event.StatusResolved,
+			Resource: res.Name,
+			Node:     cur,
+			Message:  fmt.Sprintf("resource %s moved: Primary on %s, was %s", res.Name, cur, prev),
+			Details:  map[string]string{"from": prev, "to": cur},
+		})
 	default:
 		// One-shot, not a level condition: a failover has already happened and
 		// there is no later state in which it "clears". Marking it firing would
