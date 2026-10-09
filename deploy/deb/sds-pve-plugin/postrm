@@ -11,7 +11,7 @@ set -e
 case "$1" in
 remove)
     if [ -d /run/systemd/system ]; then
-        systemctl try-restart pvedaemon pveproxy || true
+        systemctl try-restart pvedaemon pveproxy pvestatd pvescheduler pve-ha-crm pve-ha-lrm || true
     fi
     ;;
 purge|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)

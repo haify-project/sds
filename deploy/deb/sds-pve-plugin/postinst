@@ -2,9 +2,10 @@
 # postinst for sds-pve-plugin: what deploy/proxmox/install.sh does after it
 # has copied the modules into place.
 #
-# pvedaemon and pveproxy load storage plugins in-process, so they are
-# restarted for a new or changed module to take effect. Restarting them does
-# not disturb running guests. try-restart leaves stopped daemons stopped.
+# Every PVE daemon that loads storage plugins in-process is restarted for a
+# new or changed module to take effect (install.sh explains why the HA ones
+# matter most). Restarting them does not disturb running guests. try-restart
+# leaves stopped daemons stopped.
 
 set -e
 
@@ -13,7 +14,7 @@ SHARE=/usr/share/sds-pve-plugin
 
 restart_pve() {
     if [ -d /run/systemd/system ]; then
-        systemctl try-restart pvedaemon pveproxy || true
+        systemctl try-restart pvedaemon pveproxy pvestatd pvescheduler pve-ha-crm pve-ha-lrm || true
     fi
 }
 
@@ -24,7 +25,7 @@ configure)
     # previous plugin from memory and the package is left unconfigured, which
     # apt reports; do not restart them until a fixed version is installed.
     if ! perl -c "$PLUGIN" >/dev/null 2>&1; then
-        echo "ERROR: $PLUGIN does not compile on this node; pvedaemon and pveproxy were NOT restarted:" >&2
+        echo "ERROR: $PLUGIN does not compile on this node; the PVE daemons were NOT restarted:" >&2
         perl -c "$PLUGIN" >&2 || true
         exit 1
     fi

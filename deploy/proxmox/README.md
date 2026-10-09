@@ -84,8 +84,11 @@ Before running it on a real cluster:
 - **The VIP** must be a free address in the nodes' subnet. Self-HA moves the
   controller's database onto DRBD, which takes a minute or two; its log is
   `/var/log/sds/selfha-handoff.log` on the node that ran it.
-- `install.sh` restarts `pvedaemon` and `pveproxy`, which running guests do not
-  notice, and adds the LVM filter described under Requirements.
+- `install.sh` restarts the PVE daemons that load storage plugins (`pvedaemon`,
+  `pveproxy`, `pvestatd`, `pvescheduler`, `pve-ha-crm`, `pve-ha-lrm`), which
+  running guests do not notice, and adds the LVM filter described under
+  Requirements. HA cannot start a guest on a node whose `pve-ha-lrm` predates
+  the plugin.
 
 ## What it is
 
@@ -161,15 +164,16 @@ The package replaces `install.sh` and installs exactly the same modules:
 yours to install. On installation and on every upgrade it:
 
 1. checks that the module compiles (`perl -c`). If it does not, it stops
-   there: `pvedaemon` and `pveproxy` are not restarted and keep running the
-   previous plugin, and apt reports the package as not configured;
+   there: the PVE daemons are not restarted and keep running the previous
+   plugin, and apt reports the package as not configured;
 2. adds the LVM filter with `lvm-filter.sh`, unless `SDS_SKIP_LVM_FILTER=1`
    (`SDS_SKIP_LVM_FILTER=1 apt install ./sds-pve-plugin_*_all.deb`). A
    failure there is a warning, not an error;
-3. runs `systemctl try-restart pvedaemon pveproxy`, which does not affect
-   running guests.
+3. runs `systemctl try-restart` on `pvedaemon pveproxy pvestatd pvescheduler
+   pve-ha-crm pve-ha-lrm`, every daemon that loads storage plugins, which does
+   not affect running guests.
 
-`apt remove sds-pve-plugin` removes the modules and restarts the two daemons.
+`apt remove sds-pve-plugin` removes the modules and restarts the same daemons.
 It changes nothing else: it warns if `storage.cfg` still has `sds:` entries,
 but leaves them (other nodes may still use them), and leaves the LVM filter in
 `lvm.conf`.
@@ -184,7 +188,7 @@ Without the package, on every PVE node:
 
 ```bash
 ./preflight.sh 192.168.1.10     # verify prerequisites first
-sudo ./install.sh               # compile-checks, copies the modules, adds the LVM filter, restarts pvedaemon + pveproxy
+sudo ./install.sh               # compile-checks, copies the modules, adds the LVM filter, restarts the PVE daemons
 ```
 
 `install.sh` does what the package does, from the checkout and without dpkg

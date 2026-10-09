@@ -4,7 +4,7 @@
 # The plugin is a Perl module plus its helpers under SDS/, with no dependencies
 # beyond what PVE already ships, so installing is a copy plus a daemon reload.
 #
-#   ./install.sh            install/upgrade, then restart pvedaemon + pveproxy
+#   ./install.sh            install/upgrade, then restart the PVE daemons
 #   ./install.sh --uninstall remove the plugin
 #
 # Run it on every PVE node in the cluster: pvedaemon loads storage plugins
@@ -27,11 +27,19 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Every PVE daemon that loads storage plugins in-process. Each must restart to
+# see a new or changed module: one that does not answers "unsupported type
+# 'sds'". The HA local resource manager is the one that matters most — before
+# it was on this list, the first node failure after an install left HA unable
+# to start the guest anywhere. Restarting them does not disturb running guests;
+# PVE's own upgrades restart the same set.
+PVE_DAEMONS="pvedaemon pveproxy pvestatd pvescheduler pve-ha-crm pve-ha-lrm"
+
 reload_pve() {
-    # Storage plugins are loaded in-process, so the daemons must be restarted
-    # for a new or changed module to take effect. Restarting these does not
-    # disturb running guests.
-    systemctl restart pvedaemon pveproxy
+    # try-restart: a daemon that is not running (HA on a node outside any HA
+    # group never starts its LRM) is left alone.
+    # shellcheck disable=SC2086 # the list is meant to split
+    systemctl try-restart $PVE_DAEMONS
 }
 
 if [ "${1:-}" = "--uninstall" ]; then
@@ -84,7 +92,7 @@ if [ "${SDS_SKIP_LVM_FILTER:-0}" != "1" ]; then
 fi
 
 reload_pve
-echo "Restarted pvedaemon and pveproxy"
+echo "Restarted $PVE_DAEMONS"
 
 cat <<'EOF'
 

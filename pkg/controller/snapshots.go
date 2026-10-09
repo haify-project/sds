@@ -214,11 +214,23 @@ func (sm *SnapshotManager) PopulateVolume(ctx context.Context, resource string, 
 	// conv=fsync forces the copy to reach stable storage (and, through DRBD, the
 	// peers) before dd exits, so a later promote elsewhere cannot read stale
 	// data. Errors are fatal: a partial copy must never look like success.
+	//
+	// When the source is a DRBD backing volume, its own data region bounds the
+	// copy instead, and the target is grown first if it is the smaller of the
+	// two (populate_size.go).
+	copyBytes, err := sm.fitTargetToSource(ctx, resource, volumeID, address, target, sourceDevice)
+	if err != nil {
+		return 0, err
+	}
+	size := fmt.Sprintf("$(sudo blockdev --getsize64 %s)", target)
+	if copyBytes > 0 {
+		size = strconv.FormatUint(copyBytes, 10)
+	}
 	cmd := fmt.Sprintf(
-		"set -e; %s SZ=$(sudo blockdev --getsize64 %s); %s"+
+		"set -e; %s SZ=%s; %s"+
 			"sudo dd if=%s of=%s bs=4M count=$SZ iflag=fullblock,count_bytes oflag=direct conv=$CONV status=none; "+
 			"sudo blockdev --flushbufs %s; echo $SZ",
-		activateSnapshotCmd(sourceDevice), target,
+		activateSnapshotCmd(sourceDevice), size,
 		sparseWriteSetup(sm.controller.resources.zeroReadingReplicas(ctx, resource), target),
 		sourceDevice, target, target)
 	result, err := sm.controller.deployment.Exec(ctx, []string{address}, cmd)
