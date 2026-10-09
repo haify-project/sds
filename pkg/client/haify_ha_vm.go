@@ -8,6 +8,12 @@ import (
 	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
+// LibvirtDomainLabel marks the resources a libvirt guest's disks are on, with
+// the guest's name. The libvirt hook sets it when it starts a guest, and
+// `ha create --vm` when it hands one to drbd-reactor; the web UI lists guests
+// by it.
+const LibvirtDomainLabel = "haify.libvirt/domain"
+
 // A libvirt domain name as the VirtualDomain agent and a promoter line can
 // carry it unquoted: it becomes part of a file path and of an OCF instance id.
 var vmDomainRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,62}$`)

@@ -340,3 +340,17 @@ func (c *HaifyClient) ResourceStatus(ctx context.Context, name string) (*haifypb
 func (c *HaifyClient) VerifyResource(ctx context.Context, req *haifypb.VerifyResourceRequest) (*haifypb.VerifyResourceResponse, error) {
 	return c.client.VerifyResource(ctx, req)
 }
+
+// SetResourceLabels sets the labels in set on resource, then removes the keys
+// in remove, and returns the resource's labels afterwards.
+func (c *HaifyClient) SetResourceLabels(ctx context.Context, resource string, set map[string]string, remove []string) (map[string]string, error) {
+	resp, err := c.client.SetResourceLabels(ctx, &haifypb.SetResourceLabelsRequest{
+		Resource: resource,
+		Labels:   set,
+		Remove:   remove,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetLabels(), nil
+}

@@ -42,6 +42,12 @@ controller.
 A resource that a drbd-reactor promoter manages on the host (`ha create`) is
 left alone: drbd-reactor owns its role.
 
+When it starts a guest the hook labels each of its resources
+`haify.libvirt/domain=<guest>` (`ha create --vm` does the same). The web UI's
+**KVM** page, listed once a labelled resource exists, shows each guest with
+the nodes holding its disks' replicas, the node it runs on, and whether it is
+under HA.
+
 ## Install
 
 On every KVM host, as root, with `python3`, DRBD 9 and drbd-utils installed and

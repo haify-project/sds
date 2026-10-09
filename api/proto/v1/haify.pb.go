@@ -7034,6 +7034,128 @@ func (x *SetSecondaryResponse) GetMessage() string {
 // The toggle is applied at RUNTIME only (drbdadm net-options) and never written
 // into the .res file, so a reboot or `drbdadm adjust` restores single-primary
 // on its own.
+type SetResourceLabelsRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	// Set or replace these keys; a key with an empty value is removed.
+	Labels        map[string]string `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Remove        []string          `protobuf:"bytes,3,rep,name=remove,proto3" json:"remove,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetResourceLabelsRequest) Reset() {
+	*x = SetResourceLabelsRequest{}
+	mi := &file_api_proto_v1_haify_proto_msgTypes[116]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetResourceLabelsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetResourceLabelsRequest) ProtoMessage() {}
+
+func (x *SetResourceLabelsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_haify_proto_msgTypes[116]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetResourceLabelsRequest.ProtoReflect.Descriptor instead.
+func (*SetResourceLabelsRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{116}
+}
+
+func (x *SetResourceLabelsRequest) GetResource() string {
+	if x != nil {
+		return x.Resource
+	}
+	return ""
+}
+
+func (x *SetResourceLabelsRequest) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *SetResourceLabelsRequest) GetRemove() []string {
+	if x != nil {
+		return x.Remove
+	}
+	return nil
+}
+
+type SetResourceLabelsResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Success bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	// The resource's labels afterwards.
+	Labels        map[string]string `protobuf:"bytes,3,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetResourceLabelsResponse) Reset() {
+	*x = SetResourceLabelsResponse{}
+	mi := &file_api_proto_v1_haify_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetResourceLabelsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetResourceLabelsResponse) ProtoMessage() {}
+
+func (x *SetResourceLabelsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_haify_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetResourceLabelsResponse.ProtoReflect.Descriptor instead.
+func (*SetResourceLabelsResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *SetResourceLabelsResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *SetResourceLabelsResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *SetResourceLabelsResponse) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
 type SetDualPrimaryRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Resource string                 `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
@@ -7057,7 +7179,7 @@ type SetDualPrimaryRequest struct {
 
 func (x *SetDualPrimaryRequest) Reset() {
 	*x = SetDualPrimaryRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[116]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7069,7 +7191,7 @@ func (x *SetDualPrimaryRequest) String() string {
 func (*SetDualPrimaryRequest) ProtoMessage() {}
 
 func (x *SetDualPrimaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[116]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7082,7 +7204,7 @@ func (x *SetDualPrimaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDualPrimaryRequest.ProtoReflect.Descriptor instead.
 func (*SetDualPrimaryRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{116}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *SetDualPrimaryRequest) GetResource() string {
@@ -7116,7 +7238,7 @@ type SetDualPrimaryResponse struct {
 
 func (x *SetDualPrimaryResponse) Reset() {
 	*x = SetDualPrimaryResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[117]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7128,7 +7250,7 @@ func (x *SetDualPrimaryResponse) String() string {
 func (*SetDualPrimaryResponse) ProtoMessage() {}
 
 func (x *SetDualPrimaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[117]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7141,7 +7263,7 @@ func (x *SetDualPrimaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDualPrimaryResponse.ProtoReflect.Descriptor instead.
 func (*SetDualPrimaryResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{117}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *SetDualPrimaryResponse) GetSuccess() bool {
@@ -7172,7 +7294,7 @@ type AttachDisklessClientRequest struct {
 
 func (x *AttachDisklessClientRequest) Reset() {
 	*x = AttachDisklessClientRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[118]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7184,7 +7306,7 @@ func (x *AttachDisklessClientRequest) String() string {
 func (*AttachDisklessClientRequest) ProtoMessage() {}
 
 func (x *AttachDisklessClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[118]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7197,7 +7319,7 @@ func (x *AttachDisklessClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachDisklessClientRequest.ProtoReflect.Descriptor instead.
 func (*AttachDisklessClientRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{118}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *AttachDisklessClientRequest) GetResource() string {
@@ -7224,7 +7346,7 @@ type AttachDisklessClientResponse struct {
 
 func (x *AttachDisklessClientResponse) Reset() {
 	*x = AttachDisklessClientResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[119]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7236,7 +7358,7 @@ func (x *AttachDisklessClientResponse) String() string {
 func (*AttachDisklessClientResponse) ProtoMessage() {}
 
 func (x *AttachDisklessClientResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[119]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7249,7 +7371,7 @@ func (x *AttachDisklessClientResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachDisklessClientResponse.ProtoReflect.Descriptor instead.
 func (*AttachDisklessClientResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{119}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *AttachDisklessClientResponse) GetSuccess() bool {
@@ -7278,7 +7400,7 @@ type DetachDisklessClientRequest struct {
 
 func (x *DetachDisklessClientRequest) Reset() {
 	*x = DetachDisklessClientRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[120]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7290,7 +7412,7 @@ func (x *DetachDisklessClientRequest) String() string {
 func (*DetachDisklessClientRequest) ProtoMessage() {}
 
 func (x *DetachDisklessClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[120]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7303,7 +7425,7 @@ func (x *DetachDisklessClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachDisklessClientRequest.ProtoReflect.Descriptor instead.
 func (*DetachDisklessClientRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{120}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *DetachDisklessClientRequest) GetResource() string {
@@ -7330,7 +7452,7 @@ type DetachDisklessClientResponse struct {
 
 func (x *DetachDisklessClientResponse) Reset() {
 	*x = DetachDisklessClientResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[121]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7342,7 +7464,7 @@ func (x *DetachDisklessClientResponse) String() string {
 func (*DetachDisklessClientResponse) ProtoMessage() {}
 
 func (x *DetachDisklessClientResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[121]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7355,7 +7477,7 @@ func (x *DetachDisklessClientResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachDisklessClientResponse.ProtoReflect.Descriptor instead.
 func (*DetachDisklessClientResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{121}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *DetachDisklessClientResponse) GetSuccess() bool {
@@ -7384,7 +7506,7 @@ type CreateFilesystemRequest struct {
 
 func (x *CreateFilesystemRequest) Reset() {
 	*x = CreateFilesystemRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[122]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7396,7 +7518,7 @@ func (x *CreateFilesystemRequest) String() string {
 func (*CreateFilesystemRequest) ProtoMessage() {}
 
 func (x *CreateFilesystemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[122]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7409,7 +7531,7 @@ func (x *CreateFilesystemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFilesystemRequest.ProtoReflect.Descriptor instead.
 func (*CreateFilesystemRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{122}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *CreateFilesystemRequest) GetResource() string {
@@ -7450,7 +7572,7 @@ type CreateFilesystemResponse struct {
 
 func (x *CreateFilesystemResponse) Reset() {
 	*x = CreateFilesystemResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[123]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7462,7 +7584,7 @@ func (x *CreateFilesystemResponse) String() string {
 func (*CreateFilesystemResponse) ProtoMessage() {}
 
 func (x *CreateFilesystemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[123]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7475,7 +7597,7 @@ func (x *CreateFilesystemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFilesystemResponse.ProtoReflect.Descriptor instead.
 func (*CreateFilesystemResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{123}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *CreateFilesystemResponse) GetSuccess() bool {
@@ -7505,7 +7627,7 @@ type MountResourceRequest struct {
 
 func (x *MountResourceRequest) Reset() {
 	*x = MountResourceRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[124]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7517,7 +7639,7 @@ func (x *MountResourceRequest) String() string {
 func (*MountResourceRequest) ProtoMessage() {}
 
 func (x *MountResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[124]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7530,7 +7652,7 @@ func (x *MountResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountResourceRequest.ProtoReflect.Descriptor instead.
 func (*MountResourceRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{124}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *MountResourceRequest) GetResource() string {
@@ -7578,7 +7700,7 @@ type MountResourceResponse struct {
 
 func (x *MountResourceResponse) Reset() {
 	*x = MountResourceResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[125]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7590,7 +7712,7 @@ func (x *MountResourceResponse) String() string {
 func (*MountResourceResponse) ProtoMessage() {}
 
 func (x *MountResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[125]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7603,7 +7725,7 @@ func (x *MountResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountResourceResponse.ProtoReflect.Descriptor instead.
 func (*MountResourceResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{125}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *MountResourceResponse) GetSuccess() bool {
@@ -7631,7 +7753,7 @@ type UnmountResourceRequest struct {
 
 func (x *UnmountResourceRequest) Reset() {
 	*x = UnmountResourceRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[126]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7643,7 +7765,7 @@ func (x *UnmountResourceRequest) String() string {
 func (*UnmountResourceRequest) ProtoMessage() {}
 
 func (x *UnmountResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[126]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7656,7 +7778,7 @@ func (x *UnmountResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnmountResourceRequest.ProtoReflect.Descriptor instead.
 func (*UnmountResourceRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{126}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *UnmountResourceRequest) GetResource() string {
@@ -7690,7 +7812,7 @@ type UnmountResourceResponse struct {
 
 func (x *UnmountResourceResponse) Reset() {
 	*x = UnmountResourceResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[127]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7702,7 +7824,7 @@ func (x *UnmountResourceResponse) String() string {
 func (*UnmountResourceResponse) ProtoMessage() {}
 
 func (x *UnmountResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[127]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7715,7 +7837,7 @@ func (x *UnmountResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnmountResourceResponse.ProtoReflect.Descriptor instead.
 func (*UnmountResourceResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{127}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *UnmountResourceResponse) GetSuccess() bool {
@@ -7746,7 +7868,7 @@ type OcfAgent struct {
 
 func (x *OcfAgent) Reset() {
 	*x = OcfAgent{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[128]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7758,7 +7880,7 @@ func (x *OcfAgent) String() string {
 func (*OcfAgent) ProtoMessage() {}
 
 func (x *OcfAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[128]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7771,7 +7893,7 @@ func (x *OcfAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OcfAgent.ProtoReflect.Descriptor instead.
 func (*OcfAgent) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{128}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *OcfAgent) GetProvider() string {
@@ -7820,7 +7942,7 @@ type HaStartItem struct {
 
 func (x *HaStartItem) Reset() {
 	*x = HaStartItem{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[129]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7832,7 +7954,7 @@ func (x *HaStartItem) String() string {
 func (*HaStartItem) ProtoMessage() {}
 
 func (x *HaStartItem) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[129]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7845,7 +7967,7 @@ func (x *HaStartItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HaStartItem.ProtoReflect.Descriptor instead.
 func (*HaStartItem) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{129}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *HaStartItem) GetItem() isHaStartItem_Item {
@@ -7908,7 +8030,7 @@ type MakeHaRequest struct {
 
 func (x *MakeHaRequest) Reset() {
 	*x = MakeHaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[130]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7920,7 +8042,7 @@ func (x *MakeHaRequest) String() string {
 func (*MakeHaRequest) ProtoMessage() {}
 
 func (x *MakeHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[130]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7933,7 +8055,7 @@ func (x *MakeHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MakeHaRequest.ProtoReflect.Descriptor instead.
 func (*MakeHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{130}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *MakeHaRequest) GetResource() string {
@@ -7996,7 +8118,7 @@ type ResourceAgentInfo struct {
 
 func (x *ResourceAgentInfo) Reset() {
 	*x = ResourceAgentInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[131]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8008,7 +8130,7 @@ func (x *ResourceAgentInfo) String() string {
 func (*ResourceAgentInfo) ProtoMessage() {}
 
 func (x *ResourceAgentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[131]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8021,7 +8143,7 @@ func (x *ResourceAgentInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceAgentInfo.ProtoReflect.Descriptor instead.
 func (*ResourceAgentInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{131}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *ResourceAgentInfo) GetProvider() string {
@@ -8053,7 +8175,7 @@ type ListResourceAgentsRequest struct {
 
 func (x *ListResourceAgentsRequest) Reset() {
 	*x = ListResourceAgentsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[132]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8065,7 +8187,7 @@ func (x *ListResourceAgentsRequest) String() string {
 func (*ListResourceAgentsRequest) ProtoMessage() {}
 
 func (x *ListResourceAgentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[132]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8078,7 +8200,7 @@ func (x *ListResourceAgentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourceAgentsRequest.ProtoReflect.Descriptor instead.
 func (*ListResourceAgentsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{132}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{134}
 }
 
 type ListResourceAgentsResponse struct {
@@ -8090,7 +8212,7 @@ type ListResourceAgentsResponse struct {
 
 func (x *ListResourceAgentsResponse) Reset() {
 	*x = ListResourceAgentsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[133]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8102,7 +8224,7 @@ func (x *ListResourceAgentsResponse) String() string {
 func (*ListResourceAgentsResponse) ProtoMessage() {}
 
 func (x *ListResourceAgentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[133]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8115,7 +8237,7 @@ func (x *ListResourceAgentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourceAgentsResponse.ProtoReflect.Descriptor instead.
 func (*ListResourceAgentsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{133}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *ListResourceAgentsResponse) GetAgents() []*ResourceAgentInfo {
@@ -8140,7 +8262,7 @@ type ResourceAgentParameter struct {
 
 func (x *ResourceAgentParameter) Reset() {
 	*x = ResourceAgentParameter{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[134]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8152,7 +8274,7 @@ func (x *ResourceAgentParameter) String() string {
 func (*ResourceAgentParameter) ProtoMessage() {}
 
 func (x *ResourceAgentParameter) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[134]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8165,7 +8287,7 @@ func (x *ResourceAgentParameter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceAgentParameter.ProtoReflect.Descriptor instead.
 func (*ResourceAgentParameter) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{134}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *ResourceAgentParameter) GetName() string {
@@ -8227,7 +8349,7 @@ type GetResourceAgentMetadataRequest struct {
 
 func (x *GetResourceAgentMetadataRequest) Reset() {
 	*x = GetResourceAgentMetadataRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[135]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8239,7 +8361,7 @@ func (x *GetResourceAgentMetadataRequest) String() string {
 func (*GetResourceAgentMetadataRequest) ProtoMessage() {}
 
 func (x *GetResourceAgentMetadataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[135]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8252,7 +8374,7 @@ func (x *GetResourceAgentMetadataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceAgentMetadataRequest.ProtoReflect.Descriptor instead.
 func (*GetResourceAgentMetadataRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{135}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *GetResourceAgentMetadataRequest) GetProvider() string {
@@ -8283,7 +8405,7 @@ type GetResourceAgentMetadataResponse struct {
 
 func (x *GetResourceAgentMetadataResponse) Reset() {
 	*x = GetResourceAgentMetadataResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[136]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8295,7 +8417,7 @@ func (x *GetResourceAgentMetadataResponse) String() string {
 func (*GetResourceAgentMetadataResponse) ProtoMessage() {}
 
 func (x *GetResourceAgentMetadataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[136]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8308,7 +8430,7 @@ func (x *GetResourceAgentMetadataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceAgentMetadataResponse.ProtoReflect.Descriptor instead.
 func (*GetResourceAgentMetadataResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{136}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *GetResourceAgentMetadataResponse) GetProvider() string {
@@ -8362,7 +8484,7 @@ type GetHaTomlRequest struct {
 
 func (x *GetHaTomlRequest) Reset() {
 	*x = GetHaTomlRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[137]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8374,7 +8496,7 @@ func (x *GetHaTomlRequest) String() string {
 func (*GetHaTomlRequest) ProtoMessage() {}
 
 func (x *GetHaTomlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[137]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8387,7 +8509,7 @@ func (x *GetHaTomlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaTomlRequest.ProtoReflect.Descriptor instead.
 func (*GetHaTomlRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{137}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *GetHaTomlRequest) GetResource() string {
@@ -8408,7 +8530,7 @@ type GetHaTomlResponse struct {
 
 func (x *GetHaTomlResponse) Reset() {
 	*x = GetHaTomlResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[138]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8420,7 +8542,7 @@ func (x *GetHaTomlResponse) String() string {
 func (*GetHaTomlResponse) ProtoMessage() {}
 
 func (x *GetHaTomlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[138]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8433,7 +8555,7 @@ func (x *GetHaTomlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaTomlResponse.ProtoReflect.Descriptor instead.
 func (*GetHaTomlResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{138}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *GetHaTomlResponse) GetResource() string {
@@ -8467,7 +8589,7 @@ type SyncHaTomlRequest struct {
 
 func (x *SyncHaTomlRequest) Reset() {
 	*x = SyncHaTomlRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[139]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8479,7 +8601,7 @@ func (x *SyncHaTomlRequest) String() string {
 func (*SyncHaTomlRequest) ProtoMessage() {}
 
 func (x *SyncHaTomlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[139]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8492,7 +8614,7 @@ func (x *SyncHaTomlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncHaTomlRequest.ProtoReflect.Descriptor instead.
 func (*SyncHaTomlRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{139}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *SyncHaTomlRequest) GetResource() string {
@@ -8519,7 +8641,7 @@ type SyncHaTomlResponse struct {
 
 func (x *SyncHaTomlResponse) Reset() {
 	*x = SyncHaTomlResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[140]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8531,7 +8653,7 @@ func (x *SyncHaTomlResponse) String() string {
 func (*SyncHaTomlResponse) ProtoMessage() {}
 
 func (x *SyncHaTomlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[140]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8544,7 +8666,7 @@ func (x *SyncHaTomlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncHaTomlResponse.ProtoReflect.Descriptor instead.
 func (*SyncHaTomlResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{140}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *SyncHaTomlResponse) GetSuccess() bool {
@@ -8572,7 +8694,7 @@ type MakeHaResponse struct {
 
 func (x *MakeHaResponse) Reset() {
 	*x = MakeHaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[141]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8584,7 +8706,7 @@ func (x *MakeHaResponse) String() string {
 func (*MakeHaResponse) ProtoMessage() {}
 
 func (x *MakeHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[141]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8597,7 +8719,7 @@ func (x *MakeHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MakeHaResponse.ProtoReflect.Descriptor instead.
 func (*MakeHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{141}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *MakeHaResponse) GetSuccess() bool {
@@ -8630,7 +8752,7 @@ type EvictHaRequest struct {
 
 func (x *EvictHaRequest) Reset() {
 	*x = EvictHaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[142]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8642,7 +8764,7 @@ func (x *EvictHaRequest) String() string {
 func (*EvictHaRequest) ProtoMessage() {}
 
 func (x *EvictHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[142]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8655,7 +8777,7 @@ func (x *EvictHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvictHaRequest.ProtoReflect.Descriptor instead.
 func (*EvictHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{142}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *EvictHaRequest) GetResource() string {
@@ -8677,7 +8799,7 @@ type SetTiebreakerRequest struct {
 
 func (x *SetTiebreakerRequest) Reset() {
 	*x = SetTiebreakerRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[143]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8689,7 +8811,7 @@ func (x *SetTiebreakerRequest) String() string {
 func (*SetTiebreakerRequest) ProtoMessage() {}
 
 func (x *SetTiebreakerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[143]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8702,7 +8824,7 @@ func (x *SetTiebreakerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTiebreakerRequest.ProtoReflect.Descriptor instead.
 func (*SetTiebreakerRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{143}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *SetTiebreakerRequest) GetResource() string {
@@ -8731,7 +8853,7 @@ type SetTiebreakerResponse struct {
 
 func (x *SetTiebreakerResponse) Reset() {
 	*x = SetTiebreakerResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[144]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8743,7 +8865,7 @@ func (x *SetTiebreakerResponse) String() string {
 func (*SetTiebreakerResponse) ProtoMessage() {}
 
 func (x *SetTiebreakerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[144]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8756,7 +8878,7 @@ func (x *SetTiebreakerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTiebreakerResponse.ProtoReflect.Descriptor instead.
 func (*SetTiebreakerResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{144}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *SetTiebreakerResponse) GetSuccess() bool {
@@ -8802,7 +8924,7 @@ type AddDRRequest struct {
 
 func (x *AddDRRequest) Reset() {
 	*x = AddDRRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[145]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8814,7 +8936,7 @@ func (x *AddDRRequest) String() string {
 func (*AddDRRequest) ProtoMessage() {}
 
 func (x *AddDRRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[145]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8827,7 +8949,7 @@ func (x *AddDRRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDRRequest.ProtoReflect.Descriptor instead.
 func (*AddDRRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{145}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *AddDRRequest) GetResource() string {
@@ -8876,7 +8998,7 @@ type AddDRResponse struct {
 
 func (x *AddDRResponse) Reset() {
 	*x = AddDRResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[146]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8888,7 +9010,7 @@ func (x *AddDRResponse) String() string {
 func (*AddDRResponse) ProtoMessage() {}
 
 func (x *AddDRResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[146]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8901,7 +9023,7 @@ func (x *AddDRResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDRResponse.ProtoReflect.Descriptor instead.
 func (*AddDRResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{146}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *AddDRResponse) GetSuccess() bool {
@@ -8946,7 +9068,7 @@ type AddReplicaRequest struct {
 
 func (x *AddReplicaRequest) Reset() {
 	*x = AddReplicaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[147]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8958,7 +9080,7 @@ func (x *AddReplicaRequest) String() string {
 func (*AddReplicaRequest) ProtoMessage() {}
 
 func (x *AddReplicaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[147]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8971,7 +9093,7 @@ func (x *AddReplicaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddReplicaRequest.ProtoReflect.Descriptor instead.
 func (*AddReplicaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{147}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *AddReplicaRequest) GetResource() string {
@@ -9019,7 +9141,7 @@ type RemoveReplicaRequest struct {
 
 func (x *RemoveReplicaRequest) Reset() {
 	*x = RemoveReplicaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[148]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9031,7 +9153,7 @@ func (x *RemoveReplicaRequest) String() string {
 func (*RemoveReplicaRequest) ProtoMessage() {}
 
 func (x *RemoveReplicaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[148]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9044,7 +9166,7 @@ func (x *RemoveReplicaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveReplicaRequest.ProtoReflect.Descriptor instead.
 func (*RemoveReplicaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{148}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *RemoveReplicaRequest) GetResource() string {
@@ -9078,7 +9200,7 @@ type RemoveReplicaResponse struct {
 
 func (x *RemoveReplicaResponse) Reset() {
 	*x = RemoveReplicaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[149]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9090,7 +9212,7 @@ func (x *RemoveReplicaResponse) String() string {
 func (*RemoveReplicaResponse) ProtoMessage() {}
 
 func (x *RemoveReplicaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[149]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9103,7 +9225,7 @@ func (x *RemoveReplicaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveReplicaResponse.ProtoReflect.Descriptor instead.
 func (*RemoveReplicaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{149}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *RemoveReplicaResponse) GetSuccess() bool {
@@ -9130,7 +9252,7 @@ type AddReplicaResponse struct {
 
 func (x *AddReplicaResponse) Reset() {
 	*x = AddReplicaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[150]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9142,7 +9264,7 @@ func (x *AddReplicaResponse) String() string {
 func (*AddReplicaResponse) ProtoMessage() {}
 
 func (x *AddReplicaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[150]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9155,7 +9277,7 @@ func (x *AddReplicaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddReplicaResponse.ProtoReflect.Descriptor instead.
 func (*AddReplicaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{150}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *AddReplicaResponse) GetSuccess() bool {
@@ -9182,7 +9304,7 @@ type EvictHaResponse struct {
 
 func (x *EvictHaResponse) Reset() {
 	*x = EvictHaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[151]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9194,7 +9316,7 @@ func (x *EvictHaResponse) String() string {
 func (*EvictHaResponse) ProtoMessage() {}
 
 func (x *EvictHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[151]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9207,7 +9329,7 @@ func (x *EvictHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvictHaResponse.ProtoReflect.Descriptor instead.
 func (*EvictHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{151}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *EvictHaResponse) GetSuccess() bool {
@@ -9238,7 +9360,7 @@ type EnableSelfHaRequest struct {
 
 func (x *EnableSelfHaRequest) Reset() {
 	*x = EnableSelfHaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[152]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9250,7 +9372,7 @@ func (x *EnableSelfHaRequest) String() string {
 func (*EnableSelfHaRequest) ProtoMessage() {}
 
 func (x *EnableSelfHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[152]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9263,7 +9385,7 @@ func (x *EnableSelfHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnableSelfHaRequest.ProtoReflect.Descriptor instead.
 func (*EnableSelfHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{152}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *EnableSelfHaRequest) GetVip() string {
@@ -9313,7 +9435,7 @@ type EnableSelfHaResponse struct {
 
 func (x *EnableSelfHaResponse) Reset() {
 	*x = EnableSelfHaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[153]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9325,7 +9447,7 @@ func (x *EnableSelfHaResponse) String() string {
 func (*EnableSelfHaResponse) ProtoMessage() {}
 
 func (x *EnableSelfHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[153]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9338,7 +9460,7 @@ func (x *EnableSelfHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnableSelfHaResponse.ProtoReflect.Descriptor instead.
 func (*EnableSelfHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{153}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *EnableSelfHaResponse) GetSuccess() bool {
@@ -9378,7 +9500,7 @@ type DisableSelfHaRequest struct {
 
 func (x *DisableSelfHaRequest) Reset() {
 	*x = DisableSelfHaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[154]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9390,7 +9512,7 @@ func (x *DisableSelfHaRequest) String() string {
 func (*DisableSelfHaRequest) ProtoMessage() {}
 
 func (x *DisableSelfHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[154]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9403,7 +9525,7 @@ func (x *DisableSelfHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableSelfHaRequest.ProtoReflect.Descriptor instead.
 func (*DisableSelfHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{154}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *DisableSelfHaRequest) GetNode() string {
@@ -9423,7 +9545,7 @@ type DisableSelfHaResponse struct {
 
 func (x *DisableSelfHaResponse) Reset() {
 	*x = DisableSelfHaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[155]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9435,7 +9557,7 @@ func (x *DisableSelfHaResponse) String() string {
 func (*DisableSelfHaResponse) ProtoMessage() {}
 
 func (x *DisableSelfHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[155]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9448,7 +9570,7 @@ func (x *DisableSelfHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableSelfHaResponse.ProtoReflect.Descriptor instead.
 func (*DisableSelfHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{155}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *DisableSelfHaResponse) GetSuccess() bool {
@@ -9473,7 +9595,7 @@ type GetSelfHaStatusRequest struct {
 
 func (x *GetSelfHaStatusRequest) Reset() {
 	*x = GetSelfHaStatusRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[156]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9485,7 +9607,7 @@ func (x *GetSelfHaStatusRequest) String() string {
 func (*GetSelfHaStatusRequest) ProtoMessage() {}
 
 func (x *GetSelfHaStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[156]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9498,7 +9620,7 @@ func (x *GetSelfHaStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSelfHaStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetSelfHaStatusRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{156}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{158}
 }
 
 type GetSelfHaStatusResponse struct {
@@ -9516,7 +9638,7 @@ type GetSelfHaStatusResponse struct {
 
 func (x *GetSelfHaStatusResponse) Reset() {
 	*x = GetSelfHaStatusResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[157]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9528,7 +9650,7 @@ func (x *GetSelfHaStatusResponse) String() string {
 func (*GetSelfHaStatusResponse) ProtoMessage() {}
 
 func (x *GetSelfHaStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[157]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9541,7 +9663,7 @@ func (x *GetSelfHaStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSelfHaStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetSelfHaStatusResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{157}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *GetSelfHaStatusResponse) GetSuccess() bool {
@@ -9613,7 +9735,7 @@ type AuditEvent struct {
 
 func (x *AuditEvent) Reset() {
 	*x = AuditEvent{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[158]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9625,7 +9747,7 @@ func (x *AuditEvent) String() string {
 func (*AuditEvent) ProtoMessage() {}
 
 func (x *AuditEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[158]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9638,7 +9760,7 @@ func (x *AuditEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEvent.ProtoReflect.Descriptor instead.
 func (*AuditEvent) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{158}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *AuditEvent) GetTimestampUnixMs() int64 {
@@ -9725,7 +9847,7 @@ type ListAuditEventsRequest struct {
 
 func (x *ListAuditEventsRequest) Reset() {
 	*x = ListAuditEventsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[159]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9737,7 +9859,7 @@ func (x *ListAuditEventsRequest) String() string {
 func (*ListAuditEventsRequest) ProtoMessage() {}
 
 func (x *ListAuditEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[159]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9750,7 +9872,7 @@ func (x *ListAuditEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListAuditEventsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{159}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *ListAuditEventsRequest) GetLimit() int32 {
@@ -9808,7 +9930,7 @@ type ListAuditEventsResponse struct {
 
 func (x *ListAuditEventsResponse) Reset() {
 	*x = ListAuditEventsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[160]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9820,7 +9942,7 @@ func (x *ListAuditEventsResponse) String() string {
 func (*ListAuditEventsResponse) ProtoMessage() {}
 
 func (x *ListAuditEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[160]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9833,7 +9955,7 @@ func (x *ListAuditEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListAuditEventsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{160}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *ListAuditEventsResponse) GetSuccess() bool {
@@ -9879,7 +10001,7 @@ type ControllerLogEntry struct {
 
 func (x *ControllerLogEntry) Reset() {
 	*x = ControllerLogEntry{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[161]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9891,7 +10013,7 @@ func (x *ControllerLogEntry) String() string {
 func (*ControllerLogEntry) ProtoMessage() {}
 
 func (x *ControllerLogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[161]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9904,7 +10026,7 @@ func (x *ControllerLogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ControllerLogEntry.ProtoReflect.Descriptor instead.
 func (*ControllerLogEntry) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{161}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *ControllerLogEntry) GetTimestampUnixMs() int64 {
@@ -9960,7 +10082,7 @@ type ListControllerLogsRequest struct {
 
 func (x *ListControllerLogsRequest) Reset() {
 	*x = ListControllerLogsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[162]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9972,7 +10094,7 @@ func (x *ListControllerLogsRequest) String() string {
 func (*ListControllerLogsRequest) ProtoMessage() {}
 
 func (x *ListControllerLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[162]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9985,7 +10107,7 @@ func (x *ListControllerLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListControllerLogsRequest.ProtoReflect.Descriptor instead.
 func (*ListControllerLogsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{162}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *ListControllerLogsRequest) GetLimit() int32 {
@@ -10024,7 +10146,7 @@ type ListControllerLogsResponse struct {
 
 func (x *ListControllerLogsResponse) Reset() {
 	*x = ListControllerLogsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[163]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10036,7 +10158,7 @@ func (x *ListControllerLogsResponse) String() string {
 func (*ListControllerLogsResponse) ProtoMessage() {}
 
 func (x *ListControllerLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[163]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10049,7 +10171,7 @@ func (x *ListControllerLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListControllerLogsResponse.ProtoReflect.Descriptor instead.
 func (*ListControllerLogsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{163}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *ListControllerLogsResponse) GetSuccess() bool {
@@ -10109,7 +10231,7 @@ type CollectNodeDiagnosticsRequest struct {
 
 func (x *CollectNodeDiagnosticsRequest) Reset() {
 	*x = CollectNodeDiagnosticsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[164]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10121,7 +10243,7 @@ func (x *CollectNodeDiagnosticsRequest) String() string {
 func (*CollectNodeDiagnosticsRequest) ProtoMessage() {}
 
 func (x *CollectNodeDiagnosticsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[164]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10134,7 +10256,7 @@ func (x *CollectNodeDiagnosticsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CollectNodeDiagnosticsRequest.ProtoReflect.Descriptor instead.
 func (*CollectNodeDiagnosticsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{164}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *CollectNodeDiagnosticsRequest) GetNodes() []string {
@@ -10187,7 +10309,7 @@ type NodeCollectorOutput struct {
 
 func (x *NodeCollectorOutput) Reset() {
 	*x = NodeCollectorOutput{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[165]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10199,7 +10321,7 @@ func (x *NodeCollectorOutput) String() string {
 func (*NodeCollectorOutput) ProtoMessage() {}
 
 func (x *NodeCollectorOutput) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[165]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10212,7 +10334,7 @@ func (x *NodeCollectorOutput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeCollectorOutput.ProtoReflect.Descriptor instead.
 func (*NodeCollectorOutput) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{165}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *NodeCollectorOutput) GetCollector() string {
@@ -10272,7 +10394,7 @@ type NodeDiagnostics struct {
 
 func (x *NodeDiagnostics) Reset() {
 	*x = NodeDiagnostics{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[166]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10284,7 +10406,7 @@ func (x *NodeDiagnostics) String() string {
 func (*NodeDiagnostics) ProtoMessage() {}
 
 func (x *NodeDiagnostics) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[166]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10297,7 +10419,7 @@ func (x *NodeDiagnostics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeDiagnostics.ProtoReflect.Descriptor instead.
 func (*NodeDiagnostics) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{166}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *NodeDiagnostics) GetNode() string {
@@ -10351,7 +10473,7 @@ type CollectNodeDiagnosticsResponse struct {
 
 func (x *CollectNodeDiagnosticsResponse) Reset() {
 	*x = CollectNodeDiagnosticsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[167]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10363,7 +10485,7 @@ func (x *CollectNodeDiagnosticsResponse) String() string {
 func (*CollectNodeDiagnosticsResponse) ProtoMessage() {}
 
 func (x *CollectNodeDiagnosticsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[167]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10376,7 +10498,7 @@ func (x *CollectNodeDiagnosticsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CollectNodeDiagnosticsResponse.ProtoReflect.Descriptor instead.
 func (*CollectNodeDiagnosticsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{167}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *CollectNodeDiagnosticsResponse) GetSuccess() bool {
@@ -10445,7 +10567,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[168]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10457,7 +10579,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[168]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10470,7 +10592,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{168}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *Event) GetId() uint64 {
@@ -10551,7 +10673,7 @@ type ListEventsRequest struct {
 
 func (x *ListEventsRequest) Reset() {
 	*x = ListEventsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[169]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10563,7 +10685,7 @@ func (x *ListEventsRequest) String() string {
 func (*ListEventsRequest) ProtoMessage() {}
 
 func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[169]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10576,7 +10698,7 @@ func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListEventsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{169}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *ListEventsRequest) GetLimit() int32 {
@@ -10630,7 +10752,7 @@ type ListEventsResponse struct {
 
 func (x *ListEventsResponse) Reset() {
 	*x = ListEventsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[170]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10642,7 +10764,7 @@ func (x *ListEventsResponse) String() string {
 func (*ListEventsResponse) ProtoMessage() {}
 
 func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[170]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10655,7 +10777,7 @@ func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListEventsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{170}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *ListEventsResponse) GetSuccess() bool {
@@ -10705,7 +10827,7 @@ type RepairWanProxyRequest struct {
 
 func (x *RepairWanProxyRequest) Reset() {
 	*x = RepairWanProxyRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[171]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10717,7 +10839,7 @@ func (x *RepairWanProxyRequest) String() string {
 func (*RepairWanProxyRequest) ProtoMessage() {}
 
 func (x *RepairWanProxyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[171]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10730,7 +10852,7 @@ func (x *RepairWanProxyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepairWanProxyRequest.ProtoReflect.Descriptor instead.
 func (*RepairWanProxyRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{171}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *RepairWanProxyRequest) GetName() string {
@@ -10763,7 +10885,7 @@ type RepairWanProxyResponse struct {
 
 func (x *RepairWanProxyResponse) Reset() {
 	*x = RepairWanProxyResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[172]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10775,7 +10897,7 @@ func (x *RepairWanProxyResponse) String() string {
 func (*RepairWanProxyResponse) ProtoMessage() {}
 
 func (x *RepairWanProxyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[172]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10788,7 +10910,7 @@ func (x *RepairWanProxyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepairWanProxyResponse.ProtoReflect.Descriptor instead.
 func (*RepairWanProxyResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{172}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *RepairWanProxyResponse) GetSuccess() bool {
@@ -10841,7 +10963,7 @@ type WatchEventsRequest struct {
 
 func (x *WatchEventsRequest) Reset() {
 	*x = WatchEventsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[173]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10853,7 +10975,7 @@ func (x *WatchEventsRequest) String() string {
 func (*WatchEventsRequest) ProtoMessage() {}
 
 func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[173]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10866,7 +10988,7 @@ func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchEventsRequest.ProtoReflect.Descriptor instead.
 func (*WatchEventsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{173}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *WatchEventsRequest) GetMinSeverity() string {
@@ -10936,7 +11058,7 @@ type ResourceInfo struct {
 
 func (x *ResourceInfo) Reset() {
 	*x = ResourceInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[174]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10948,7 +11070,7 @@ func (x *ResourceInfo) String() string {
 func (*ResourceInfo) ProtoMessage() {}
 
 func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[174]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10961,7 +11083,7 @@ func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceInfo.ProtoReflect.Descriptor instead.
 func (*ResourceInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{174}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *ResourceInfo) GetName() string {
@@ -11116,7 +11238,7 @@ type ResourceStatus struct {
 
 func (x *ResourceStatus) Reset() {
 	*x = ResourceStatus{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[175]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11128,7 +11250,7 @@ func (x *ResourceStatus) String() string {
 func (*ResourceStatus) ProtoMessage() {}
 
 func (x *ResourceStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[175]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11141,7 +11263,7 @@ func (x *ResourceStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceStatus.ProtoReflect.Descriptor instead.
 func (*ResourceStatus) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{175}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *ResourceStatus) GetName() string {
@@ -11266,7 +11388,7 @@ type QuorumInfo struct {
 
 func (x *QuorumInfo) Reset() {
 	*x = QuorumInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[176]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11278,7 +11400,7 @@ func (x *QuorumInfo) String() string {
 func (*QuorumInfo) ProtoMessage() {}
 
 func (x *QuorumInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[176]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11291,7 +11413,7 @@ func (x *QuorumInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuorumInfo.ProtoReflect.Descriptor instead.
 func (*QuorumInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{176}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *QuorumInfo) GetMembers() int32 {
@@ -11359,7 +11481,7 @@ type WANMetrics struct {
 
 func (x *WANMetrics) Reset() {
 	*x = WANMetrics{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[177]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11371,7 +11493,7 @@ func (x *WANMetrics) String() string {
 func (*WANMetrics) ProtoMessage() {}
 
 func (x *WANMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[177]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11384,7 +11506,7 @@ func (x *WANMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WANMetrics.ProtoReflect.Descriptor instead.
 func (*WANMetrics) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{177}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *WANMetrics) GetBufferUsedBytes() uint64 {
@@ -11491,7 +11613,7 @@ type NodeResourceState struct {
 
 func (x *NodeResourceState) Reset() {
 	*x = NodeResourceState{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[178]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11503,7 +11625,7 @@ func (x *NodeResourceState) String() string {
 func (*NodeResourceState) ProtoMessage() {}
 
 func (x *NodeResourceState) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[178]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11516,7 +11638,7 @@ func (x *NodeResourceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeResourceState.ProtoReflect.Descriptor instead.
 func (*NodeResourceState) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{178}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *NodeResourceState) GetRole() string {
@@ -11591,7 +11713,7 @@ type VolumeInfo struct {
 
 func (x *VolumeInfo) Reset() {
 	*x = VolumeInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[179]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11603,7 +11725,7 @@ func (x *VolumeInfo) String() string {
 func (*VolumeInfo) ProtoMessage() {}
 
 func (x *VolumeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[179]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11616,7 +11738,7 @@ func (x *VolumeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VolumeInfo.ProtoReflect.Descriptor instead.
 func (*VolumeInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{179}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *VolumeInfo) GetVolumeId() uint32 {
@@ -11680,7 +11802,7 @@ type CreateSnapshotRequest struct {
 
 func (x *CreateSnapshotRequest) Reset() {
 	*x = CreateSnapshotRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[180]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11692,7 +11814,7 @@ func (x *CreateSnapshotRequest) String() string {
 func (*CreateSnapshotRequest) ProtoMessage() {}
 
 func (x *CreateSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[180]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11705,7 +11827,7 @@ func (x *CreateSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{180}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *CreateSnapshotRequest) GetVolume() string {
@@ -11739,7 +11861,7 @@ type CreateSnapshotResponse struct {
 
 func (x *CreateSnapshotResponse) Reset() {
 	*x = CreateSnapshotResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[181]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11751,7 +11873,7 @@ func (x *CreateSnapshotResponse) String() string {
 func (*CreateSnapshotResponse) ProtoMessage() {}
 
 func (x *CreateSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[181]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11764,7 +11886,7 @@ func (x *CreateSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{181}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *CreateSnapshotResponse) GetSuccess() bool {
@@ -11792,7 +11914,7 @@ type DeleteSnapshotRequest struct {
 
 func (x *DeleteSnapshotRequest) Reset() {
 	*x = DeleteSnapshotRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[182]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11804,7 +11926,7 @@ func (x *DeleteSnapshotRequest) String() string {
 func (*DeleteSnapshotRequest) ProtoMessage() {}
 
 func (x *DeleteSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[182]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11817,7 +11939,7 @@ func (x *DeleteSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{182}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *DeleteSnapshotRequest) GetVolume() string {
@@ -11851,7 +11973,7 @@ type DeleteSnapshotResponse struct {
 
 func (x *DeleteSnapshotResponse) Reset() {
 	*x = DeleteSnapshotResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[183]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11863,7 +11985,7 @@ func (x *DeleteSnapshotResponse) String() string {
 func (*DeleteSnapshotResponse) ProtoMessage() {}
 
 func (x *DeleteSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[183]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11876,7 +11998,7 @@ func (x *DeleteSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{183}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *DeleteSnapshotResponse) GetSuccess() bool {
@@ -11904,7 +12026,7 @@ type RestoreSnapshotRequest struct {
 
 func (x *RestoreSnapshotRequest) Reset() {
 	*x = RestoreSnapshotRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[184]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11916,7 +12038,7 @@ func (x *RestoreSnapshotRequest) String() string {
 func (*RestoreSnapshotRequest) ProtoMessage() {}
 
 func (x *RestoreSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[184]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11929,7 +12051,7 @@ func (x *RestoreSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*RestoreSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{184}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *RestoreSnapshotRequest) GetVolume() string {
@@ -11963,7 +12085,7 @@ type RestoreSnapshotResponse struct {
 
 func (x *RestoreSnapshotResponse) Reset() {
 	*x = RestoreSnapshotResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[185]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11975,7 +12097,7 @@ func (x *RestoreSnapshotResponse) String() string {
 func (*RestoreSnapshotResponse) ProtoMessage() {}
 
 func (x *RestoreSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[185]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11988,7 +12110,7 @@ func (x *RestoreSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*RestoreSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{185}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *RestoreSnapshotResponse) GetSuccess() bool {
@@ -12022,7 +12144,7 @@ type PopulateVolumeRequest struct {
 
 func (x *PopulateVolumeRequest) Reset() {
 	*x = PopulateVolumeRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[186]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12034,7 +12156,7 @@ func (x *PopulateVolumeRequest) String() string {
 func (*PopulateVolumeRequest) ProtoMessage() {}
 
 func (x *PopulateVolumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[186]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12047,7 +12169,7 @@ func (x *PopulateVolumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PopulateVolumeRequest.ProtoReflect.Descriptor instead.
 func (*PopulateVolumeRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{186}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{188}
 }
 
 func (x *PopulateVolumeRequest) GetResource() string {
@@ -12090,7 +12212,7 @@ type PopulateVolumeResponse struct {
 
 func (x *PopulateVolumeResponse) Reset() {
 	*x = PopulateVolumeResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[187]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12102,7 +12224,7 @@ func (x *PopulateVolumeResponse) String() string {
 func (*PopulateVolumeResponse) ProtoMessage() {}
 
 func (x *PopulateVolumeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[187]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12115,7 +12237,7 @@ func (x *PopulateVolumeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PopulateVolumeResponse.ProtoReflect.Descriptor instead.
 func (*PopulateVolumeResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{187}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *PopulateVolumeResponse) GetSuccess() bool {
@@ -12149,7 +12271,7 @@ type ListSnapshotsRequest struct {
 
 func (x *ListSnapshotsRequest) Reset() {
 	*x = ListSnapshotsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[188]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12161,7 +12283,7 @@ func (x *ListSnapshotsRequest) String() string {
 func (*ListSnapshotsRequest) ProtoMessage() {}
 
 func (x *ListSnapshotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[188]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12174,7 +12296,7 @@ func (x *ListSnapshotsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotsRequest.ProtoReflect.Descriptor instead.
 func (*ListSnapshotsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{188}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{190}
 }
 
 func (x *ListSnapshotsRequest) GetVolume() string {
@@ -12202,7 +12324,7 @@ type ListSnapshotsResponse struct {
 
 func (x *ListSnapshotsResponse) Reset() {
 	*x = ListSnapshotsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[189]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12214,7 +12336,7 @@ func (x *ListSnapshotsResponse) String() string {
 func (*ListSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[189]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12227,7 +12349,7 @@ func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{189}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *ListSnapshotsResponse) GetSuccess() bool {
@@ -12267,7 +12389,7 @@ type SnapshotInfo struct {
 
 func (x *SnapshotInfo) Reset() {
 	*x = SnapshotInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[190]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12279,7 +12401,7 @@ func (x *SnapshotInfo) String() string {
 func (*SnapshotInfo) ProtoMessage() {}
 
 func (x *SnapshotInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[190]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12292,7 +12414,7 @@ func (x *SnapshotInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotInfo.ProtoReflect.Descriptor instead.
 func (*SnapshotInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{190}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *SnapshotInfo) GetName() string {
@@ -12345,7 +12467,7 @@ type GFSRetention struct {
 
 func (x *GFSRetention) Reset() {
 	*x = GFSRetention{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[191]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12357,7 +12479,7 @@ func (x *GFSRetention) String() string {
 func (*GFSRetention) ProtoMessage() {}
 
 func (x *GFSRetention) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[191]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12370,7 +12492,7 @@ func (x *GFSRetention) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GFSRetention.ProtoReflect.Descriptor instead.
 func (*GFSRetention) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{191}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *GFSRetention) GetHourly() int32 {
@@ -12431,7 +12553,7 @@ type SnapshotScheduleInfo struct {
 
 func (x *SnapshotScheduleInfo) Reset() {
 	*x = SnapshotScheduleInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[192]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12443,7 +12565,7 @@ func (x *SnapshotScheduleInfo) String() string {
 func (*SnapshotScheduleInfo) ProtoMessage() {}
 
 func (x *SnapshotScheduleInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[192]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12456,7 +12578,7 @@ func (x *SnapshotScheduleInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotScheduleInfo.ProtoReflect.Descriptor instead.
 func (*SnapshotScheduleInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{192}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{194}
 }
 
 func (x *SnapshotScheduleInfo) GetName() string {
@@ -12547,7 +12669,7 @@ type FreezeSnapshotScheduleRequest struct {
 
 func (x *FreezeSnapshotScheduleRequest) Reset() {
 	*x = FreezeSnapshotScheduleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[193]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12559,7 +12681,7 @@ func (x *FreezeSnapshotScheduleRequest) String() string {
 func (*FreezeSnapshotScheduleRequest) ProtoMessage() {}
 
 func (x *FreezeSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[193]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12572,7 +12694,7 @@ func (x *FreezeSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FreezeSnapshotScheduleRequest.ProtoReflect.Descriptor instead.
 func (*FreezeSnapshotScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{193}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *FreezeSnapshotScheduleRequest) GetResource() string {
@@ -12607,7 +12729,7 @@ type FreezeSnapshotScheduleResponse struct {
 
 func (x *FreezeSnapshotScheduleResponse) Reset() {
 	*x = FreezeSnapshotScheduleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[194]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12619,7 +12741,7 @@ func (x *FreezeSnapshotScheduleResponse) String() string {
 func (*FreezeSnapshotScheduleResponse) ProtoMessage() {}
 
 func (x *FreezeSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[194]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12632,7 +12754,7 @@ func (x *FreezeSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FreezeSnapshotScheduleResponse.ProtoReflect.Descriptor instead.
 func (*FreezeSnapshotScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{194}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *FreezeSnapshotScheduleResponse) GetSuccess() bool {
@@ -12665,7 +12787,7 @@ type UnfreezeSnapshotScheduleRequest struct {
 
 func (x *UnfreezeSnapshotScheduleRequest) Reset() {
 	*x = UnfreezeSnapshotScheduleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[195]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12677,7 +12799,7 @@ func (x *UnfreezeSnapshotScheduleRequest) String() string {
 func (*UnfreezeSnapshotScheduleRequest) ProtoMessage() {}
 
 func (x *UnfreezeSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[195]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12690,7 +12812,7 @@ func (x *UnfreezeSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnfreezeSnapshotScheduleRequest.ProtoReflect.Descriptor instead.
 func (*UnfreezeSnapshotScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{195}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *UnfreezeSnapshotScheduleRequest) GetResource() string {
@@ -12710,7 +12832,7 @@ type UnfreezeSnapshotScheduleResponse struct {
 
 func (x *UnfreezeSnapshotScheduleResponse) Reset() {
 	*x = UnfreezeSnapshotScheduleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[196]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12722,7 +12844,7 @@ func (x *UnfreezeSnapshotScheduleResponse) String() string {
 func (*UnfreezeSnapshotScheduleResponse) ProtoMessage() {}
 
 func (x *UnfreezeSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[196]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12735,7 +12857,7 @@ func (x *UnfreezeSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnfreezeSnapshotScheduleResponse.ProtoReflect.Descriptor instead.
 func (*UnfreezeSnapshotScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{196}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{198}
 }
 
 func (x *UnfreezeSnapshotScheduleResponse) GetSuccess() bool {
@@ -12769,7 +12891,7 @@ type CreateSnapshotScheduleRequest struct {
 
 func (x *CreateSnapshotScheduleRequest) Reset() {
 	*x = CreateSnapshotScheduleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[197]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12781,7 +12903,7 @@ func (x *CreateSnapshotScheduleRequest) String() string {
 func (*CreateSnapshotScheduleRequest) ProtoMessage() {}
 
 func (x *CreateSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[197]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12794,7 +12916,7 @@ func (x *CreateSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotScheduleRequest.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{197}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{199}
 }
 
 func (x *CreateSnapshotScheduleRequest) GetResource() string {
@@ -12842,7 +12964,7 @@ type CreateSnapshotScheduleResponse struct {
 
 func (x *CreateSnapshotScheduleResponse) Reset() {
 	*x = CreateSnapshotScheduleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[198]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12854,7 +12976,7 @@ func (x *CreateSnapshotScheduleResponse) String() string {
 func (*CreateSnapshotScheduleResponse) ProtoMessage() {}
 
 func (x *CreateSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[198]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12867,7 +12989,7 @@ func (x *CreateSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSnapshotScheduleResponse.ProtoReflect.Descriptor instead.
 func (*CreateSnapshotScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{198}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{200}
 }
 
 func (x *CreateSnapshotScheduleResponse) GetSuccess() bool {
@@ -12892,7 +13014,7 @@ type ListSnapshotSchedulesRequest struct {
 
 func (x *ListSnapshotSchedulesRequest) Reset() {
 	*x = ListSnapshotSchedulesRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[199]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12904,7 +13026,7 @@ func (x *ListSnapshotSchedulesRequest) String() string {
 func (*ListSnapshotSchedulesRequest) ProtoMessage() {}
 
 func (x *ListSnapshotSchedulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[199]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12917,7 +13039,7 @@ func (x *ListSnapshotSchedulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotSchedulesRequest.ProtoReflect.Descriptor instead.
 func (*ListSnapshotSchedulesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{199}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{201}
 }
 
 type ListSnapshotSchedulesResponse struct {
@@ -12931,7 +13053,7 @@ type ListSnapshotSchedulesResponse struct {
 
 func (x *ListSnapshotSchedulesResponse) Reset() {
 	*x = ListSnapshotSchedulesResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[200]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12943,7 +13065,7 @@ func (x *ListSnapshotSchedulesResponse) String() string {
 func (*ListSnapshotSchedulesResponse) ProtoMessage() {}
 
 func (x *ListSnapshotSchedulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[200]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12956,7 +13078,7 @@ func (x *ListSnapshotSchedulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotSchedulesResponse.ProtoReflect.Descriptor instead.
 func (*ListSnapshotSchedulesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{200}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{202}
 }
 
 func (x *ListSnapshotSchedulesResponse) GetSuccess() bool {
@@ -12989,7 +13111,7 @@ type DeleteSnapshotScheduleRequest struct {
 
 func (x *DeleteSnapshotScheduleRequest) Reset() {
 	*x = DeleteSnapshotScheduleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[201]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13001,7 +13123,7 @@ func (x *DeleteSnapshotScheduleRequest) String() string {
 func (*DeleteSnapshotScheduleRequest) ProtoMessage() {}
 
 func (x *DeleteSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[201]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13014,7 +13136,7 @@ func (x *DeleteSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotScheduleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{201}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{203}
 }
 
 func (x *DeleteSnapshotScheduleRequest) GetName() string {
@@ -13034,7 +13156,7 @@ type DeleteSnapshotScheduleResponse struct {
 
 func (x *DeleteSnapshotScheduleResponse) Reset() {
 	*x = DeleteSnapshotScheduleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[202]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13046,7 +13168,7 @@ func (x *DeleteSnapshotScheduleResponse) String() string {
 func (*DeleteSnapshotScheduleResponse) ProtoMessage() {}
 
 func (x *DeleteSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[202]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13059,7 +13181,7 @@ func (x *DeleteSnapshotScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotScheduleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{202}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{204}
 }
 
 func (x *DeleteSnapshotScheduleResponse) GetSuccess() bool {
@@ -13101,7 +13223,7 @@ type BackupTargetInfo struct {
 
 func (x *BackupTargetInfo) Reset() {
 	*x = BackupTargetInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[203]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13113,7 +13235,7 @@ func (x *BackupTargetInfo) String() string {
 func (*BackupTargetInfo) ProtoMessage() {}
 
 func (x *BackupTargetInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[203]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13126,7 +13248,7 @@ func (x *BackupTargetInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupTargetInfo.ProtoReflect.Descriptor instead.
 func (*BackupTargetInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{203}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{205}
 }
 
 func (x *BackupTargetInfo) GetName() string {
@@ -13255,7 +13377,7 @@ type AddBackupTargetRequest struct {
 
 func (x *AddBackupTargetRequest) Reset() {
 	*x = AddBackupTargetRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[204]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13267,7 +13389,7 @@ func (x *AddBackupTargetRequest) String() string {
 func (*AddBackupTargetRequest) ProtoMessage() {}
 
 func (x *AddBackupTargetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[204]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13280,7 +13402,7 @@ func (x *AddBackupTargetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBackupTargetRequest.ProtoReflect.Descriptor instead.
 func (*AddBackupTargetRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{204}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{206}
 }
 
 func (x *AddBackupTargetRequest) GetName() string {
@@ -13391,7 +13513,7 @@ type AddBackupTargetResponse struct {
 
 func (x *AddBackupTargetResponse) Reset() {
 	*x = AddBackupTargetResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[205]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13403,7 +13525,7 @@ func (x *AddBackupTargetResponse) String() string {
 func (*AddBackupTargetResponse) ProtoMessage() {}
 
 func (x *AddBackupTargetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[205]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13416,7 +13538,7 @@ func (x *AddBackupTargetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBackupTargetResponse.ProtoReflect.Descriptor instead.
 func (*AddBackupTargetResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{205}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *AddBackupTargetResponse) GetSuccess() bool {
@@ -13441,7 +13563,7 @@ type ListBackupTargetsRequest struct {
 
 func (x *ListBackupTargetsRequest) Reset() {
 	*x = ListBackupTargetsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[206]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13453,7 +13575,7 @@ func (x *ListBackupTargetsRequest) String() string {
 func (*ListBackupTargetsRequest) ProtoMessage() {}
 
 func (x *ListBackupTargetsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[206]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13466,7 +13588,7 @@ func (x *ListBackupTargetsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackupTargetsRequest.ProtoReflect.Descriptor instead.
 func (*ListBackupTargetsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{206}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{208}
 }
 
 type ListBackupTargetsResponse struct {
@@ -13480,7 +13602,7 @@ type ListBackupTargetsResponse struct {
 
 func (x *ListBackupTargetsResponse) Reset() {
 	*x = ListBackupTargetsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[207]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[209]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13492,7 +13614,7 @@ func (x *ListBackupTargetsResponse) String() string {
 func (*ListBackupTargetsResponse) ProtoMessage() {}
 
 func (x *ListBackupTargetsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[207]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[209]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13505,7 +13627,7 @@ func (x *ListBackupTargetsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackupTargetsResponse.ProtoReflect.Descriptor instead.
 func (*ListBackupTargetsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{207}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{209}
 }
 
 func (x *ListBackupTargetsResponse) GetSuccess() bool {
@@ -13539,7 +13661,7 @@ type DeleteBackupTargetRequest struct {
 
 func (x *DeleteBackupTargetRequest) Reset() {
 	*x = DeleteBackupTargetRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[208]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[210]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13551,7 +13673,7 @@ func (x *DeleteBackupTargetRequest) String() string {
 func (*DeleteBackupTargetRequest) ProtoMessage() {}
 
 func (x *DeleteBackupTargetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[208]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[210]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13564,7 +13686,7 @@ func (x *DeleteBackupTargetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBackupTargetRequest.ProtoReflect.Descriptor instead.
 func (*DeleteBackupTargetRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{208}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{210}
 }
 
 func (x *DeleteBackupTargetRequest) GetName() string {
@@ -13591,7 +13713,7 @@ type DeleteBackupTargetResponse struct {
 
 func (x *DeleteBackupTargetResponse) Reset() {
 	*x = DeleteBackupTargetResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[209]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[211]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13603,7 +13725,7 @@ func (x *DeleteBackupTargetResponse) String() string {
 func (*DeleteBackupTargetResponse) ProtoMessage() {}
 
 func (x *DeleteBackupTargetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[209]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[211]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13616,7 +13738,7 @@ func (x *DeleteBackupTargetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBackupTargetResponse.ProtoReflect.Descriptor instead.
 func (*DeleteBackupTargetResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{209}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{211}
 }
 
 func (x *DeleteBackupTargetResponse) GetSuccess() bool {
@@ -13657,7 +13779,7 @@ type NotifyChannelInfo struct {
 
 func (x *NotifyChannelInfo) Reset() {
 	*x = NotifyChannelInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[210]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[212]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13669,7 +13791,7 @@ func (x *NotifyChannelInfo) String() string {
 func (*NotifyChannelInfo) ProtoMessage() {}
 
 func (x *NotifyChannelInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[210]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[212]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13682,7 +13804,7 @@ func (x *NotifyChannelInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotifyChannelInfo.ProtoReflect.Descriptor instead.
 func (*NotifyChannelInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{210}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{212}
 }
 
 func (x *NotifyChannelInfo) GetName() string {
@@ -13763,7 +13885,7 @@ type ListNotifyChannelsRequest struct {
 
 func (x *ListNotifyChannelsRequest) Reset() {
 	*x = ListNotifyChannelsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[211]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[213]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13775,7 +13897,7 @@ func (x *ListNotifyChannelsRequest) String() string {
 func (*ListNotifyChannelsRequest) ProtoMessage() {}
 
 func (x *ListNotifyChannelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[211]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[213]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13788,7 +13910,7 @@ func (x *ListNotifyChannelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNotifyChannelsRequest.ProtoReflect.Descriptor instead.
 func (*ListNotifyChannelsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{211}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{213}
 }
 
 type ListNotifyChannelsResponse struct {
@@ -13805,7 +13927,7 @@ type ListNotifyChannelsResponse struct {
 
 func (x *ListNotifyChannelsResponse) Reset() {
 	*x = ListNotifyChannelsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[212]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[214]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13817,7 +13939,7 @@ func (x *ListNotifyChannelsResponse) String() string {
 func (*ListNotifyChannelsResponse) ProtoMessage() {}
 
 func (x *ListNotifyChannelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[212]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[214]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13830,7 +13952,7 @@ func (x *ListNotifyChannelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNotifyChannelsResponse.ProtoReflect.Descriptor instead.
 func (*ListNotifyChannelsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{212}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{214}
 }
 
 func (x *ListNotifyChannelsResponse) GetSuccess() bool {
@@ -13886,7 +14008,7 @@ type SaveNotifyChannelRequest struct {
 
 func (x *SaveNotifyChannelRequest) Reset() {
 	*x = SaveNotifyChannelRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[213]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[215]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13898,7 +14020,7 @@ func (x *SaveNotifyChannelRequest) String() string {
 func (*SaveNotifyChannelRequest) ProtoMessage() {}
 
 func (x *SaveNotifyChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[213]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[215]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13911,7 +14033,7 @@ func (x *SaveNotifyChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveNotifyChannelRequest.ProtoReflect.Descriptor instead.
 func (*SaveNotifyChannelRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{213}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{215}
 }
 
 func (x *SaveNotifyChannelRequest) GetName() string {
@@ -13988,7 +14110,7 @@ type SaveNotifyChannelResponse struct {
 
 func (x *SaveNotifyChannelResponse) Reset() {
 	*x = SaveNotifyChannelResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[214]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[216]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14000,7 +14122,7 @@ func (x *SaveNotifyChannelResponse) String() string {
 func (*SaveNotifyChannelResponse) ProtoMessage() {}
 
 func (x *SaveNotifyChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[214]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[216]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14013,7 +14135,7 @@ func (x *SaveNotifyChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveNotifyChannelResponse.ProtoReflect.Descriptor instead.
 func (*SaveNotifyChannelResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{214}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{216}
 }
 
 func (x *SaveNotifyChannelResponse) GetSuccess() bool {
@@ -14046,7 +14168,7 @@ type DeleteNotifyChannelRequest struct {
 
 func (x *DeleteNotifyChannelRequest) Reset() {
 	*x = DeleteNotifyChannelRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[215]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[217]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14058,7 +14180,7 @@ func (x *DeleteNotifyChannelRequest) String() string {
 func (*DeleteNotifyChannelRequest) ProtoMessage() {}
 
 func (x *DeleteNotifyChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[215]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[217]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14071,7 +14193,7 @@ func (x *DeleteNotifyChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNotifyChannelRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNotifyChannelRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{215}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{217}
 }
 
 func (x *DeleteNotifyChannelRequest) GetName() string {
@@ -14091,7 +14213,7 @@ type DeleteNotifyChannelResponse struct {
 
 func (x *DeleteNotifyChannelResponse) Reset() {
 	*x = DeleteNotifyChannelResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[216]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[218]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14103,7 +14225,7 @@ func (x *DeleteNotifyChannelResponse) String() string {
 func (*DeleteNotifyChannelResponse) ProtoMessage() {}
 
 func (x *DeleteNotifyChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[216]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[218]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14116,7 +14238,7 @@ func (x *DeleteNotifyChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNotifyChannelResponse.ProtoReflect.Descriptor instead.
 func (*DeleteNotifyChannelResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{216}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{218}
 }
 
 func (x *DeleteNotifyChannelResponse) GetSuccess() bool {
@@ -14142,7 +14264,7 @@ type TestNotifyChannelRequest struct {
 
 func (x *TestNotifyChannelRequest) Reset() {
 	*x = TestNotifyChannelRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[217]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[219]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14154,7 +14276,7 @@ func (x *TestNotifyChannelRequest) String() string {
 func (*TestNotifyChannelRequest) ProtoMessage() {}
 
 func (x *TestNotifyChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[217]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[219]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14167,7 +14289,7 @@ func (x *TestNotifyChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestNotifyChannelRequest.ProtoReflect.Descriptor instead.
 func (*TestNotifyChannelRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{217}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{219}
 }
 
 func (x *TestNotifyChannelRequest) GetName() string {
@@ -14189,7 +14311,7 @@ type TestNotifyChannelResponse struct {
 
 func (x *TestNotifyChannelResponse) Reset() {
 	*x = TestNotifyChannelResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[218]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[220]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14201,7 +14323,7 @@ func (x *TestNotifyChannelResponse) String() string {
 func (*TestNotifyChannelResponse) ProtoMessage() {}
 
 func (x *TestNotifyChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[218]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[220]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14214,7 +14336,7 @@ func (x *TestNotifyChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestNotifyChannelResponse.ProtoReflect.Descriptor instead.
 func (*TestNotifyChannelResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{218}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{220}
 }
 
 func (x *TestNotifyChannelResponse) GetSuccess() bool {
@@ -14249,7 +14371,7 @@ type BackupVolumeInfo struct {
 
 func (x *BackupVolumeInfo) Reset() {
 	*x = BackupVolumeInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[219]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[221]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14261,7 +14383,7 @@ func (x *BackupVolumeInfo) String() string {
 func (*BackupVolumeInfo) ProtoMessage() {}
 
 func (x *BackupVolumeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[219]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[221]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14274,7 +14396,7 @@ func (x *BackupVolumeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupVolumeInfo.ProtoReflect.Descriptor instead.
 func (*BackupVolumeInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{219}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{221}
 }
 
 func (x *BackupVolumeInfo) GetVolumeId() uint32 {
@@ -14363,7 +14485,7 @@ type BackupInfo struct {
 
 func (x *BackupInfo) Reset() {
 	*x = BackupInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[220]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[222]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14375,7 +14497,7 @@ func (x *BackupInfo) String() string {
 func (*BackupInfo) ProtoMessage() {}
 
 func (x *BackupInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[220]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[222]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14388,7 +14510,7 @@ func (x *BackupInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupInfo.ProtoReflect.Descriptor instead.
 func (*BackupInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{220}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{222}
 }
 
 func (x *BackupInfo) GetId() string {
@@ -14532,7 +14654,7 @@ type CreateBackupRequest struct {
 
 func (x *CreateBackupRequest) Reset() {
 	*x = CreateBackupRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[221]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[223]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14544,7 +14666,7 @@ func (x *CreateBackupRequest) String() string {
 func (*CreateBackupRequest) ProtoMessage() {}
 
 func (x *CreateBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[221]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[223]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14557,7 +14679,7 @@ func (x *CreateBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateBackupRequest.ProtoReflect.Descriptor instead.
 func (*CreateBackupRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{221}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{223}
 }
 
 func (x *CreateBackupRequest) GetResource() string {
@@ -14599,7 +14721,7 @@ type CreateBackupResponse struct {
 
 func (x *CreateBackupResponse) Reset() {
 	*x = CreateBackupResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[222]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[224]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14611,7 +14733,7 @@ func (x *CreateBackupResponse) String() string {
 func (*CreateBackupResponse) ProtoMessage() {}
 
 func (x *CreateBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[222]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[224]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14624,7 +14746,7 @@ func (x *CreateBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateBackupResponse.ProtoReflect.Descriptor instead.
 func (*CreateBackupResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{222}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{224}
 }
 
 func (x *CreateBackupResponse) GetSuccess() bool {
@@ -14658,7 +14780,7 @@ type ListBackupsRequest struct {
 
 func (x *ListBackupsRequest) Reset() {
 	*x = ListBackupsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[223]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[225]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14670,7 +14792,7 @@ func (x *ListBackupsRequest) String() string {
 func (*ListBackupsRequest) ProtoMessage() {}
 
 func (x *ListBackupsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[223]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[225]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14683,7 +14805,7 @@ func (x *ListBackupsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackupsRequest.ProtoReflect.Descriptor instead.
 func (*ListBackupsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{223}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{225}
 }
 
 func (x *ListBackupsRequest) GetResource() string {
@@ -14711,7 +14833,7 @@ type ListBackupsResponse struct {
 
 func (x *ListBackupsResponse) Reset() {
 	*x = ListBackupsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[224]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[226]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14723,7 +14845,7 @@ func (x *ListBackupsResponse) String() string {
 func (*ListBackupsResponse) ProtoMessage() {}
 
 func (x *ListBackupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[224]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[226]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14736,7 +14858,7 @@ func (x *ListBackupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackupsResponse.ProtoReflect.Descriptor instead.
 func (*ListBackupsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{224}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{226}
 }
 
 func (x *ListBackupsResponse) GetSuccess() bool {
@@ -14774,7 +14896,7 @@ type RestoreBackupRequest struct {
 
 func (x *RestoreBackupRequest) Reset() {
 	*x = RestoreBackupRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[225]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[227]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14786,7 +14908,7 @@ func (x *RestoreBackupRequest) String() string {
 func (*RestoreBackupRequest) ProtoMessage() {}
 
 func (x *RestoreBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[225]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[227]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14799,7 +14921,7 @@ func (x *RestoreBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreBackupRequest.ProtoReflect.Descriptor instead.
 func (*RestoreBackupRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{225}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{227}
 }
 
 func (x *RestoreBackupRequest) GetId() string {
@@ -14834,7 +14956,7 @@ type RestoreBackupResponse struct {
 
 func (x *RestoreBackupResponse) Reset() {
 	*x = RestoreBackupResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[226]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[228]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14846,7 +14968,7 @@ func (x *RestoreBackupResponse) String() string {
 func (*RestoreBackupResponse) ProtoMessage() {}
 
 func (x *RestoreBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[226]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[228]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14859,7 +14981,7 @@ func (x *RestoreBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreBackupResponse.ProtoReflect.Descriptor instead.
 func (*RestoreBackupResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{226}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{228}
 }
 
 func (x *RestoreBackupResponse) GetSuccess() bool {
@@ -14897,7 +15019,7 @@ type DeleteBackupRequest struct {
 
 func (x *DeleteBackupRequest) Reset() {
 	*x = DeleteBackupRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[227]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[229]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14909,7 +15031,7 @@ func (x *DeleteBackupRequest) String() string {
 func (*DeleteBackupRequest) ProtoMessage() {}
 
 func (x *DeleteBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[227]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[229]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14922,7 +15044,7 @@ func (x *DeleteBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBackupRequest.ProtoReflect.Descriptor instead.
 func (*DeleteBackupRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{227}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{229}
 }
 
 func (x *DeleteBackupRequest) GetId() string {
@@ -14956,7 +15078,7 @@ type DeleteBackupResponse struct {
 
 func (x *DeleteBackupResponse) Reset() {
 	*x = DeleteBackupResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[228]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[230]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14968,7 +15090,7 @@ func (x *DeleteBackupResponse) String() string {
 func (*DeleteBackupResponse) ProtoMessage() {}
 
 func (x *DeleteBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[228]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[230]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14981,7 +15103,7 @@ func (x *DeleteBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBackupResponse.ProtoReflect.Descriptor instead.
 func (*DeleteBackupResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{228}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{230}
 }
 
 func (x *DeleteBackupResponse) GetSuccess() bool {
@@ -15013,7 +15135,7 @@ type ImportBackupsRequest struct {
 
 func (x *ImportBackupsRequest) Reset() {
 	*x = ImportBackupsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[229]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[231]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15025,7 +15147,7 @@ func (x *ImportBackupsRequest) String() string {
 func (*ImportBackupsRequest) ProtoMessage() {}
 
 func (x *ImportBackupsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[229]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[231]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15038,7 +15160,7 @@ func (x *ImportBackupsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportBackupsRequest.ProtoReflect.Descriptor instead.
 func (*ImportBackupsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{229}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{231}
 }
 
 func (x *ImportBackupsRequest) GetTarget() string {
@@ -15076,7 +15198,7 @@ type ImportBackupsResponse struct {
 
 func (x *ImportBackupsResponse) Reset() {
 	*x = ImportBackupsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[230]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[232]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15088,7 +15210,7 @@ func (x *ImportBackupsResponse) String() string {
 func (*ImportBackupsResponse) ProtoMessage() {}
 
 func (x *ImportBackupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[230]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[232]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15101,7 +15223,7 @@ func (x *ImportBackupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportBackupsResponse.ProtoReflect.Descriptor instead.
 func (*ImportBackupsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{230}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{232}
 }
 
 func (x *ImportBackupsResponse) GetSuccess() bool {
@@ -15155,7 +15277,7 @@ type BackupScheduleInfo struct {
 
 func (x *BackupScheduleInfo) Reset() {
 	*x = BackupScheduleInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[231]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[233]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15167,7 +15289,7 @@ func (x *BackupScheduleInfo) String() string {
 func (*BackupScheduleInfo) ProtoMessage() {}
 
 func (x *BackupScheduleInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[231]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[233]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15180,7 +15302,7 @@ func (x *BackupScheduleInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupScheduleInfo.ProtoReflect.Descriptor instead.
 func (*BackupScheduleInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{231}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{233}
 }
 
 func (x *BackupScheduleInfo) GetName() string {
@@ -15266,7 +15388,7 @@ type CreateBackupScheduleRequest struct {
 
 func (x *CreateBackupScheduleRequest) Reset() {
 	*x = CreateBackupScheduleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[232]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[234]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15278,7 +15400,7 @@ func (x *CreateBackupScheduleRequest) String() string {
 func (*CreateBackupScheduleRequest) ProtoMessage() {}
 
 func (x *CreateBackupScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[232]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[234]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15291,7 +15413,7 @@ func (x *CreateBackupScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateBackupScheduleRequest.ProtoReflect.Descriptor instead.
 func (*CreateBackupScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{232}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{234}
 }
 
 func (x *CreateBackupScheduleRequest) GetResource() string {
@@ -15340,7 +15462,7 @@ type CreateBackupScheduleResponse struct {
 
 func (x *CreateBackupScheduleResponse) Reset() {
 	*x = CreateBackupScheduleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[233]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[235]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15352,7 +15474,7 @@ func (x *CreateBackupScheduleResponse) String() string {
 func (*CreateBackupScheduleResponse) ProtoMessage() {}
 
 func (x *CreateBackupScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[233]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[235]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15365,7 +15487,7 @@ func (x *CreateBackupScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateBackupScheduleResponse.ProtoReflect.Descriptor instead.
 func (*CreateBackupScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{233}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{235}
 }
 
 func (x *CreateBackupScheduleResponse) GetSuccess() bool {
@@ -15397,7 +15519,7 @@ type ListBackupSchedulesRequest struct {
 
 func (x *ListBackupSchedulesRequest) Reset() {
 	*x = ListBackupSchedulesRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[234]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[236]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15409,7 +15531,7 @@ func (x *ListBackupSchedulesRequest) String() string {
 func (*ListBackupSchedulesRequest) ProtoMessage() {}
 
 func (x *ListBackupSchedulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[234]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[236]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15422,7 +15544,7 @@ func (x *ListBackupSchedulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackupSchedulesRequest.ProtoReflect.Descriptor instead.
 func (*ListBackupSchedulesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{234}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{236}
 }
 
 type ListBackupSchedulesResponse struct {
@@ -15436,7 +15558,7 @@ type ListBackupSchedulesResponse struct {
 
 func (x *ListBackupSchedulesResponse) Reset() {
 	*x = ListBackupSchedulesResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[235]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[237]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15448,7 +15570,7 @@ func (x *ListBackupSchedulesResponse) String() string {
 func (*ListBackupSchedulesResponse) ProtoMessage() {}
 
 func (x *ListBackupSchedulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[235]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[237]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15461,7 +15583,7 @@ func (x *ListBackupSchedulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackupSchedulesResponse.ProtoReflect.Descriptor instead.
 func (*ListBackupSchedulesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{235}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{237}
 }
 
 func (x *ListBackupSchedulesResponse) GetSuccess() bool {
@@ -15494,7 +15616,7 @@ type DeleteBackupScheduleRequest struct {
 
 func (x *DeleteBackupScheduleRequest) Reset() {
 	*x = DeleteBackupScheduleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[236]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[238]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15506,7 +15628,7 @@ func (x *DeleteBackupScheduleRequest) String() string {
 func (*DeleteBackupScheduleRequest) ProtoMessage() {}
 
 func (x *DeleteBackupScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[236]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[238]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15519,7 +15641,7 @@ func (x *DeleteBackupScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBackupScheduleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteBackupScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{236}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{238}
 }
 
 func (x *DeleteBackupScheduleRequest) GetName() string {
@@ -15539,7 +15661,7 @@ type DeleteBackupScheduleResponse struct {
 
 func (x *DeleteBackupScheduleResponse) Reset() {
 	*x = DeleteBackupScheduleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[237]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[239]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15551,7 +15673,7 @@ func (x *DeleteBackupScheduleResponse) String() string {
 func (*DeleteBackupScheduleResponse) ProtoMessage() {}
 
 func (x *DeleteBackupScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[237]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[239]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15564,7 +15686,7 @@ func (x *DeleteBackupScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBackupScheduleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteBackupScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{237}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{239}
 }
 
 func (x *DeleteBackupScheduleResponse) GetSuccess() bool {
@@ -15592,7 +15714,7 @@ type RunBackupScheduleRequest struct {
 
 func (x *RunBackupScheduleRequest) Reset() {
 	*x = RunBackupScheduleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[238]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[240]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15604,7 +15726,7 @@ func (x *RunBackupScheduleRequest) String() string {
 func (*RunBackupScheduleRequest) ProtoMessage() {}
 
 func (x *RunBackupScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[238]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[240]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15617,7 +15739,7 @@ func (x *RunBackupScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunBackupScheduleRequest.ProtoReflect.Descriptor instead.
 func (*RunBackupScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{238}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{240}
 }
 
 func (x *RunBackupScheduleRequest) GetName() string {
@@ -15638,7 +15760,7 @@ type RunBackupScheduleResponse struct {
 
 func (x *RunBackupScheduleResponse) Reset() {
 	*x = RunBackupScheduleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[239]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[241]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15650,7 +15772,7 @@ func (x *RunBackupScheduleResponse) String() string {
 func (*RunBackupScheduleResponse) ProtoMessage() {}
 
 func (x *RunBackupScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[239]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[241]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15663,7 +15785,7 @@ func (x *RunBackupScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunBackupScheduleResponse.ProtoReflect.Descriptor instead.
 func (*RunBackupScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{239}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{241}
 }
 
 func (x *RunBackupScheduleResponse) GetSuccess() bool {
@@ -15702,7 +15824,7 @@ type CreateNFSGatewayRequest struct {
 
 func (x *CreateNFSGatewayRequest) Reset() {
 	*x = CreateNFSGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[240]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[242]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15714,7 +15836,7 @@ func (x *CreateNFSGatewayRequest) String() string {
 func (*CreateNFSGatewayRequest) ProtoMessage() {}
 
 func (x *CreateNFSGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[240]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[242]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15727,7 +15849,7 @@ func (x *CreateNFSGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNFSGatewayRequest.ProtoReflect.Descriptor instead.
 func (*CreateNFSGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{240}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{242}
 }
 
 func (x *CreateNFSGatewayRequest) GetResource() string {
@@ -15783,7 +15905,7 @@ type CreateNFSGatewayResponse struct {
 
 func (x *CreateNFSGatewayResponse) Reset() {
 	*x = CreateNFSGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[241]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[243]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15795,7 +15917,7 @@ func (x *CreateNFSGatewayResponse) String() string {
 func (*CreateNFSGatewayResponse) ProtoMessage() {}
 
 func (x *CreateNFSGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[241]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[243]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15808,7 +15930,7 @@ func (x *CreateNFSGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNFSGatewayResponse.ProtoReflect.Descriptor instead.
 func (*CreateNFSGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{241}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{243}
 }
 
 func (x *CreateNFSGatewayResponse) GetSuccess() bool {
@@ -15848,7 +15970,7 @@ type CreateISCSIGatewayRequest struct {
 
 func (x *CreateISCSIGatewayRequest) Reset() {
 	*x = CreateISCSIGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[242]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[244]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15860,7 +15982,7 @@ func (x *CreateISCSIGatewayRequest) String() string {
 func (*CreateISCSIGatewayRequest) ProtoMessage() {}
 
 func (x *CreateISCSIGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[242]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[244]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15873,7 +15995,7 @@ func (x *CreateISCSIGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateISCSIGatewayRequest.ProtoReflect.Descriptor instead.
 func (*CreateISCSIGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{242}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{244}
 }
 
 func (x *CreateISCSIGatewayRequest) GetResource() string {
@@ -15943,7 +16065,7 @@ type CreateISCSIGatewayResponse struct {
 
 func (x *CreateISCSIGatewayResponse) Reset() {
 	*x = CreateISCSIGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[243]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[245]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15955,7 +16077,7 @@ func (x *CreateISCSIGatewayResponse) String() string {
 func (*CreateISCSIGatewayResponse) ProtoMessage() {}
 
 func (x *CreateISCSIGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[243]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[245]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15968,7 +16090,7 @@ func (x *CreateISCSIGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateISCSIGatewayResponse.ProtoReflect.Descriptor instead.
 func (*CreateISCSIGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{243}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{245}
 }
 
 func (x *CreateISCSIGatewayResponse) GetSuccess() bool {
@@ -16005,7 +16127,7 @@ type CreateNVMeGatewayRequest struct {
 
 func (x *CreateNVMeGatewayRequest) Reset() {
 	*x = CreateNVMeGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[244]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[246]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16017,7 +16139,7 @@ func (x *CreateNVMeGatewayRequest) String() string {
 func (*CreateNVMeGatewayRequest) ProtoMessage() {}
 
 func (x *CreateNVMeGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[244]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[246]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16030,7 +16152,7 @@ func (x *CreateNVMeGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNVMeGatewayRequest.ProtoReflect.Descriptor instead.
 func (*CreateNVMeGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{244}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{246}
 }
 
 func (x *CreateNVMeGatewayRequest) GetResource() string {
@@ -16079,7 +16201,7 @@ type CreateNVMeGatewayResponse struct {
 
 func (x *CreateNVMeGatewayResponse) Reset() {
 	*x = CreateNVMeGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[245]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[247]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16091,7 +16213,7 @@ func (x *CreateNVMeGatewayResponse) String() string {
 func (*CreateNVMeGatewayResponse) ProtoMessage() {}
 
 func (x *CreateNVMeGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[245]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[247]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16104,7 +16226,7 @@ func (x *CreateNVMeGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNVMeGatewayResponse.ProtoReflect.Descriptor instead.
 func (*CreateNVMeGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{245}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{247}
 }
 
 func (x *CreateNVMeGatewayResponse) GetSuccess() bool {
@@ -16137,7 +16259,7 @@ type DeleteGatewayRequest struct {
 
 func (x *DeleteGatewayRequest) Reset() {
 	*x = DeleteGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[246]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[248]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16149,7 +16271,7 @@ func (x *DeleteGatewayRequest) String() string {
 func (*DeleteGatewayRequest) ProtoMessage() {}
 
 func (x *DeleteGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[246]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[248]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16162,7 +16284,7 @@ func (x *DeleteGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGatewayRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{246}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{248}
 }
 
 func (x *DeleteGatewayRequest) GetId() string {
@@ -16182,7 +16304,7 @@ type DeleteGatewayResponse struct {
 
 func (x *DeleteGatewayResponse) Reset() {
 	*x = DeleteGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[247]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[249]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16194,7 +16316,7 @@ func (x *DeleteGatewayResponse) String() string {
 func (*DeleteGatewayResponse) ProtoMessage() {}
 
 func (x *DeleteGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[247]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[249]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16207,7 +16329,7 @@ func (x *DeleteGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGatewayResponse.ProtoReflect.Descriptor instead.
 func (*DeleteGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{247}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{249}
 }
 
 func (x *DeleteGatewayResponse) GetSuccess() bool {
@@ -16233,7 +16355,7 @@ type GetGatewayRequest struct {
 
 func (x *GetGatewayRequest) Reset() {
 	*x = GetGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[248]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[250]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16245,7 +16367,7 @@ func (x *GetGatewayRequest) String() string {
 func (*GetGatewayRequest) ProtoMessage() {}
 
 func (x *GetGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[248]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[250]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16258,7 +16380,7 @@ func (x *GetGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayRequest.ProtoReflect.Descriptor instead.
 func (*GetGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{248}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{250}
 }
 
 func (x *GetGatewayRequest) GetId() string {
@@ -16279,7 +16401,7 @@ type GetGatewayResponse struct {
 
 func (x *GetGatewayResponse) Reset() {
 	*x = GetGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[249]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[251]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16291,7 +16413,7 @@ func (x *GetGatewayResponse) String() string {
 func (*GetGatewayResponse) ProtoMessage() {}
 
 func (x *GetGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[249]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[251]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16304,7 +16426,7 @@ func (x *GetGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayResponse.ProtoReflect.Descriptor instead.
 func (*GetGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{249}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{251}
 }
 
 func (x *GetGatewayResponse) GetSuccess() bool {
@@ -16336,7 +16458,7 @@ type ListGatewaysRequest struct {
 
 func (x *ListGatewaysRequest) Reset() {
 	*x = ListGatewaysRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[250]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[252]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16348,7 +16470,7 @@ func (x *ListGatewaysRequest) String() string {
 func (*ListGatewaysRequest) ProtoMessage() {}
 
 func (x *ListGatewaysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[250]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[252]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16361,7 +16483,7 @@ func (x *ListGatewaysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGatewaysRequest.ProtoReflect.Descriptor instead.
 func (*ListGatewaysRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{250}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{252}
 }
 
 type ListGatewaysResponse struct {
@@ -16375,7 +16497,7 @@ type ListGatewaysResponse struct {
 
 func (x *ListGatewaysResponse) Reset() {
 	*x = ListGatewaysResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[251]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[253]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16387,7 +16509,7 @@ func (x *ListGatewaysResponse) String() string {
 func (*ListGatewaysResponse) ProtoMessage() {}
 
 func (x *ListGatewaysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[251]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[253]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16400,7 +16522,7 @@ func (x *ListGatewaysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGatewaysResponse.ProtoReflect.Descriptor instead.
 func (*ListGatewaysResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{251}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{253}
 }
 
 func (x *ListGatewaysResponse) GetSuccess() bool {
@@ -16433,7 +16555,7 @@ type StartGatewayRequest struct {
 
 func (x *StartGatewayRequest) Reset() {
 	*x = StartGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[252]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[254]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16445,7 +16567,7 @@ func (x *StartGatewayRequest) String() string {
 func (*StartGatewayRequest) ProtoMessage() {}
 
 func (x *StartGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[252]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[254]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16458,7 +16580,7 @@ func (x *StartGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartGatewayRequest.ProtoReflect.Descriptor instead.
 func (*StartGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{252}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{254}
 }
 
 func (x *StartGatewayRequest) GetId() string {
@@ -16478,7 +16600,7 @@ type StartGatewayResponse struct {
 
 func (x *StartGatewayResponse) Reset() {
 	*x = StartGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[253]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[255]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16490,7 +16612,7 @@ func (x *StartGatewayResponse) String() string {
 func (*StartGatewayResponse) ProtoMessage() {}
 
 func (x *StartGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[253]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[255]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16503,7 +16625,7 @@ func (x *StartGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartGatewayResponse.ProtoReflect.Descriptor instead.
 func (*StartGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{253}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{255}
 }
 
 func (x *StartGatewayResponse) GetSuccess() bool {
@@ -16529,7 +16651,7 @@ type StopGatewayRequest struct {
 
 func (x *StopGatewayRequest) Reset() {
 	*x = StopGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[254]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[256]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16541,7 +16663,7 @@ func (x *StopGatewayRequest) String() string {
 func (*StopGatewayRequest) ProtoMessage() {}
 
 func (x *StopGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[254]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[256]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16554,7 +16676,7 @@ func (x *StopGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopGatewayRequest.ProtoReflect.Descriptor instead.
 func (*StopGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{254}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{256}
 }
 
 func (x *StopGatewayRequest) GetId() string {
@@ -16574,7 +16696,7 @@ type StopGatewayResponse struct {
 
 func (x *StopGatewayResponse) Reset() {
 	*x = StopGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[255]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[257]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16586,7 +16708,7 @@ func (x *StopGatewayResponse) String() string {
 func (*StopGatewayResponse) ProtoMessage() {}
 
 func (x *StopGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[255]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[257]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16599,7 +16721,7 @@ func (x *StopGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopGatewayResponse.ProtoReflect.Descriptor instead.
 func (*StopGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{255}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{257}
 }
 
 func (x *StopGatewayResponse) GetSuccess() bool {
@@ -16633,7 +16755,7 @@ type GatewayInfo struct {
 
 func (x *GatewayInfo) Reset() {
 	*x = GatewayInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[256]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[258]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16645,7 +16767,7 @@ func (x *GatewayInfo) String() string {
 func (*GatewayInfo) ProtoMessage() {}
 
 func (x *GatewayInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[256]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[258]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16658,7 +16780,7 @@ func (x *GatewayInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatewayInfo.ProtoReflect.Descriptor instead.
 func (*GatewayInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{256}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{258}
 }
 
 func (x *GatewayInfo) GetId() string {
@@ -16736,7 +16858,7 @@ type NFSExportInfo struct {
 
 func (x *NFSExportInfo) Reset() {
 	*x = NFSExportInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[257]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[259]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16748,7 +16870,7 @@ func (x *NFSExportInfo) String() string {
 func (*NFSExportInfo) ProtoMessage() {}
 
 func (x *NFSExportInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[257]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[259]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16761,7 +16883,7 @@ func (x *NFSExportInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NFSExportInfo.ProtoReflect.Descriptor instead.
 func (*NFSExportInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{257}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{259}
 }
 
 func (x *NFSExportInfo) GetDirectory() string {
@@ -16805,7 +16927,7 @@ type AddNFSExportRequest struct {
 
 func (x *AddNFSExportRequest) Reset() {
 	*x = AddNFSExportRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[258]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[260]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16817,7 +16939,7 @@ func (x *AddNFSExportRequest) String() string {
 func (*AddNFSExportRequest) ProtoMessage() {}
 
 func (x *AddNFSExportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[258]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[260]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16830,7 +16952,7 @@ func (x *AddNFSExportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNFSExportRequest.ProtoReflect.Descriptor instead.
 func (*AddNFSExportRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{258}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{260}
 }
 
 func (x *AddNFSExportRequest) GetResource() string {
@@ -16878,7 +17000,7 @@ type AddNFSExportResponse struct {
 
 func (x *AddNFSExportResponse) Reset() {
 	*x = AddNFSExportResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[259]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[261]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16890,7 +17012,7 @@ func (x *AddNFSExportResponse) String() string {
 func (*AddNFSExportResponse) ProtoMessage() {}
 
 func (x *AddNFSExportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[259]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[261]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16903,7 +17025,7 @@ func (x *AddNFSExportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNFSExportResponse.ProtoReflect.Descriptor instead.
 func (*AddNFSExportResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{259}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{261}
 }
 
 func (x *AddNFSExportResponse) GetSuccess() bool {
@@ -16930,7 +17052,7 @@ type RemoveNFSExportRequest struct {
 
 func (x *RemoveNFSExportRequest) Reset() {
 	*x = RemoveNFSExportRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[260]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[262]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16942,7 +17064,7 @@ func (x *RemoveNFSExportRequest) String() string {
 func (*RemoveNFSExportRequest) ProtoMessage() {}
 
 func (x *RemoveNFSExportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[260]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[262]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16955,7 +17077,7 @@ func (x *RemoveNFSExportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNFSExportRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNFSExportRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{260}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{262}
 }
 
 func (x *RemoveNFSExportRequest) GetResource() string {
@@ -16982,7 +17104,7 @@ type RemoveNFSExportResponse struct {
 
 func (x *RemoveNFSExportResponse) Reset() {
 	*x = RemoveNFSExportResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[261]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[263]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16994,7 +17116,7 @@ func (x *RemoveNFSExportResponse) String() string {
 func (*RemoveNFSExportResponse) ProtoMessage() {}
 
 func (x *RemoveNFSExportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[261]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[263]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17007,7 +17129,7 @@ func (x *RemoveNFSExportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNFSExportResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNFSExportResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{261}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{263}
 }
 
 func (x *RemoveNFSExportResponse) GetSuccess() bool {
@@ -17033,7 +17155,7 @@ type ListNFSExportsRequest struct {
 
 func (x *ListNFSExportsRequest) Reset() {
 	*x = ListNFSExportsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[262]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[264]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17045,7 +17167,7 @@ func (x *ListNFSExportsRequest) String() string {
 func (*ListNFSExportsRequest) ProtoMessage() {}
 
 func (x *ListNFSExportsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[262]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[264]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17058,7 +17180,7 @@ func (x *ListNFSExportsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNFSExportsRequest.ProtoReflect.Descriptor instead.
 func (*ListNFSExportsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{262}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{264}
 }
 
 func (x *ListNFSExportsRequest) GetResource() string {
@@ -17079,7 +17201,7 @@ type ListNFSExportsResponse struct {
 
 func (x *ListNFSExportsResponse) Reset() {
 	*x = ListNFSExportsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[263]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[265]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17091,7 +17213,7 @@ func (x *ListNFSExportsResponse) String() string {
 func (*ListNFSExportsResponse) ProtoMessage() {}
 
 func (x *ListNFSExportsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[263]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[265]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17104,7 +17226,7 @@ func (x *ListNFSExportsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNFSExportsResponse.ProtoReflect.Descriptor instead.
 func (*ListNFSExportsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{263}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{265}
 }
 
 func (x *ListNFSExportsResponse) GetSuccess() bool {
@@ -17146,7 +17268,7 @@ type CreateSMBGatewayRequest struct {
 
 func (x *CreateSMBGatewayRequest) Reset() {
 	*x = CreateSMBGatewayRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[264]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[266]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17158,7 +17280,7 @@ func (x *CreateSMBGatewayRequest) String() string {
 func (*CreateSMBGatewayRequest) ProtoMessage() {}
 
 func (x *CreateSMBGatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[264]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[266]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17171,7 +17293,7 @@ func (x *CreateSMBGatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSMBGatewayRequest.ProtoReflect.Descriptor instead.
 func (*CreateSMBGatewayRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{264}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{266}
 }
 
 func (x *CreateSMBGatewayRequest) GetResource() string {
@@ -17227,7 +17349,7 @@ type CreateSMBGatewayResponse struct {
 
 func (x *CreateSMBGatewayResponse) Reset() {
 	*x = CreateSMBGatewayResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[265]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[267]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17239,7 +17361,7 @@ func (x *CreateSMBGatewayResponse) String() string {
 func (*CreateSMBGatewayResponse) ProtoMessage() {}
 
 func (x *CreateSMBGatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[265]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[267]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17252,7 +17374,7 @@ func (x *CreateSMBGatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSMBGatewayResponse.ProtoReflect.Descriptor instead.
 func (*CreateSMBGatewayResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{265}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{267}
 }
 
 func (x *CreateSMBGatewayResponse) GetSuccess() bool {
@@ -17290,7 +17412,7 @@ type SMBShareInfo struct {
 
 func (x *SMBShareInfo) Reset() {
 	*x = SMBShareInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[266]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[268]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17302,7 +17424,7 @@ func (x *SMBShareInfo) String() string {
 func (*SMBShareInfo) ProtoMessage() {}
 
 func (x *SMBShareInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[266]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[268]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17315,7 +17437,7 @@ func (x *SMBShareInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SMBShareInfo.ProtoReflect.Descriptor instead.
 func (*SMBShareInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{266}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{268}
 }
 
 func (x *SMBShareInfo) GetName() string {
@@ -17356,7 +17478,7 @@ type AddSMBShareRequest struct {
 
 func (x *AddSMBShareRequest) Reset() {
 	*x = AddSMBShareRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[267]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[269]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17368,7 +17490,7 @@ func (x *AddSMBShareRequest) String() string {
 func (*AddSMBShareRequest) ProtoMessage() {}
 
 func (x *AddSMBShareRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[267]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[269]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17381,7 +17503,7 @@ func (x *AddSMBShareRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSMBShareRequest.ProtoReflect.Descriptor instead.
 func (*AddSMBShareRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{267}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{269}
 }
 
 func (x *AddSMBShareRequest) GetResource() string {
@@ -17408,7 +17530,7 @@ type AddSMBShareResponse struct {
 
 func (x *AddSMBShareResponse) Reset() {
 	*x = AddSMBShareResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[268]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[270]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17420,7 +17542,7 @@ func (x *AddSMBShareResponse) String() string {
 func (*AddSMBShareResponse) ProtoMessage() {}
 
 func (x *AddSMBShareResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[268]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[270]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17433,7 +17555,7 @@ func (x *AddSMBShareResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSMBShareResponse.ProtoReflect.Descriptor instead.
 func (*AddSMBShareResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{268}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{270}
 }
 
 func (x *AddSMBShareResponse) GetSuccess() bool {
@@ -17460,7 +17582,7 @@ type RemoveSMBShareRequest struct {
 
 func (x *RemoveSMBShareRequest) Reset() {
 	*x = RemoveSMBShareRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[269]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[271]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17472,7 +17594,7 @@ func (x *RemoveSMBShareRequest) String() string {
 func (*RemoveSMBShareRequest) ProtoMessage() {}
 
 func (x *RemoveSMBShareRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[269]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[271]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17485,7 +17607,7 @@ func (x *RemoveSMBShareRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSMBShareRequest.ProtoReflect.Descriptor instead.
 func (*RemoveSMBShareRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{269}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{271}
 }
 
 func (x *RemoveSMBShareRequest) GetResource() string {
@@ -17512,7 +17634,7 @@ type RemoveSMBShareResponse struct {
 
 func (x *RemoveSMBShareResponse) Reset() {
 	*x = RemoveSMBShareResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[270]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[272]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17524,7 +17646,7 @@ func (x *RemoveSMBShareResponse) String() string {
 func (*RemoveSMBShareResponse) ProtoMessage() {}
 
 func (x *RemoveSMBShareResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[270]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[272]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17537,7 +17659,7 @@ func (x *RemoveSMBShareResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSMBShareResponse.ProtoReflect.Descriptor instead.
 func (*RemoveSMBShareResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{270}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{272}
 }
 
 func (x *RemoveSMBShareResponse) GetSuccess() bool {
@@ -17563,7 +17685,7 @@ type ListSMBSharesRequest struct {
 
 func (x *ListSMBSharesRequest) Reset() {
 	*x = ListSMBSharesRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[271]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[273]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17575,7 +17697,7 @@ func (x *ListSMBSharesRequest) String() string {
 func (*ListSMBSharesRequest) ProtoMessage() {}
 
 func (x *ListSMBSharesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[271]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[273]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17588,7 +17710,7 @@ func (x *ListSMBSharesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSMBSharesRequest.ProtoReflect.Descriptor instead.
 func (*ListSMBSharesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{271}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{273}
 }
 
 func (x *ListSMBSharesRequest) GetResource() string {
@@ -17609,7 +17731,7 @@ type ListSMBSharesResponse struct {
 
 func (x *ListSMBSharesResponse) Reset() {
 	*x = ListSMBSharesResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[272]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[274]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17621,7 +17743,7 @@ func (x *ListSMBSharesResponse) String() string {
 func (*ListSMBSharesResponse) ProtoMessage() {}
 
 func (x *ListSMBSharesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[272]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[274]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17634,7 +17756,7 @@ func (x *ListSMBSharesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSMBSharesResponse.ProtoReflect.Descriptor instead.
 func (*ListSMBSharesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{272}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{274}
 }
 
 func (x *ListSMBSharesResponse) GetSuccess() bool {
@@ -17669,7 +17791,7 @@ type SetSMBUserRequest struct {
 
 func (x *SetSMBUserRequest) Reset() {
 	*x = SetSMBUserRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[273]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[275]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17681,7 +17803,7 @@ func (x *SetSMBUserRequest) String() string {
 func (*SetSMBUserRequest) ProtoMessage() {}
 
 func (x *SetSMBUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[273]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[275]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17694,7 +17816,7 @@ func (x *SetSMBUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSMBUserRequest.ProtoReflect.Descriptor instead.
 func (*SetSMBUserRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{273}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{275}
 }
 
 func (x *SetSMBUserRequest) GetResource() string {
@@ -17728,7 +17850,7 @@ type SetSMBUserResponse struct {
 
 func (x *SetSMBUserResponse) Reset() {
 	*x = SetSMBUserResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[274]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[276]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17740,7 +17862,7 @@ func (x *SetSMBUserResponse) String() string {
 func (*SetSMBUserResponse) ProtoMessage() {}
 
 func (x *SetSMBUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[274]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[276]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17753,7 +17875,7 @@ func (x *SetSMBUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSMBUserResponse.ProtoReflect.Descriptor instead.
 func (*SetSMBUserResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{274}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{276}
 }
 
 func (x *SetSMBUserResponse) GetSuccess() bool {
@@ -17780,7 +17902,7 @@ type RemoveSMBUserRequest struct {
 
 func (x *RemoveSMBUserRequest) Reset() {
 	*x = RemoveSMBUserRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[275]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[277]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17792,7 +17914,7 @@ func (x *RemoveSMBUserRequest) String() string {
 func (*RemoveSMBUserRequest) ProtoMessage() {}
 
 func (x *RemoveSMBUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[275]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[277]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17805,7 +17927,7 @@ func (x *RemoveSMBUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSMBUserRequest.ProtoReflect.Descriptor instead.
 func (*RemoveSMBUserRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{275}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{277}
 }
 
 func (x *RemoveSMBUserRequest) GetResource() string {
@@ -17832,7 +17954,7 @@ type RemoveSMBUserResponse struct {
 
 func (x *RemoveSMBUserResponse) Reset() {
 	*x = RemoveSMBUserResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[276]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[278]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17844,7 +17966,7 @@ func (x *RemoveSMBUserResponse) String() string {
 func (*RemoveSMBUserResponse) ProtoMessage() {}
 
 func (x *RemoveSMBUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[276]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[278]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17857,7 +17979,7 @@ func (x *RemoveSMBUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSMBUserResponse.ProtoReflect.Descriptor instead.
 func (*RemoveSMBUserResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{276}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{278}
 }
 
 func (x *RemoveSMBUserResponse) GetSuccess() bool {
@@ -17883,7 +18005,7 @@ type ListSMBUsersRequest struct {
 
 func (x *ListSMBUsersRequest) Reset() {
 	*x = ListSMBUsersRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[277]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[279]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17895,7 +18017,7 @@ func (x *ListSMBUsersRequest) String() string {
 func (*ListSMBUsersRequest) ProtoMessage() {}
 
 func (x *ListSMBUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[277]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[279]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17908,7 +18030,7 @@ func (x *ListSMBUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSMBUsersRequest.ProtoReflect.Descriptor instead.
 func (*ListSMBUsersRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{277}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{279}
 }
 
 func (x *ListSMBUsersRequest) GetResource() string {
@@ -17929,7 +18051,7 @@ type ListSMBUsersResponse struct {
 
 func (x *ListSMBUsersResponse) Reset() {
 	*x = ListSMBUsersResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[278]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[280]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17941,7 +18063,7 @@ func (x *ListSMBUsersResponse) String() string {
 func (*ListSMBUsersResponse) ProtoMessage() {}
 
 func (x *ListSMBUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[278]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[280]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17954,7 +18076,7 @@ func (x *ListSMBUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSMBUsersResponse.ProtoReflect.Descriptor instead.
 func (*ListSMBUsersResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{278}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{280}
 }
 
 func (x *ListSMBUsersResponse) GetSuccess() bool {
@@ -17989,7 +18111,7 @@ type ISCSILUNInfo struct {
 
 func (x *ISCSILUNInfo) Reset() {
 	*x = ISCSILUNInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[279]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[281]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18001,7 +18123,7 @@ func (x *ISCSILUNInfo) String() string {
 func (*ISCSILUNInfo) ProtoMessage() {}
 
 func (x *ISCSILUNInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[279]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[281]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18014,7 +18136,7 @@ func (x *ISCSILUNInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ISCSILUNInfo.ProtoReflect.Descriptor instead.
 func (*ISCSILUNInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{279}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{281}
 }
 
 func (x *ISCSILUNInfo) GetLun() int32 {
@@ -18049,7 +18171,7 @@ type AddISCSILUNRequest struct {
 
 func (x *AddISCSILUNRequest) Reset() {
 	*x = AddISCSILUNRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[280]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[282]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18061,7 +18183,7 @@ func (x *AddISCSILUNRequest) String() string {
 func (*AddISCSILUNRequest) ProtoMessage() {}
 
 func (x *AddISCSILUNRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[280]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[282]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18074,7 +18196,7 @@ func (x *AddISCSILUNRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSILUNRequest.ProtoReflect.Descriptor instead.
 func (*AddISCSILUNRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{280}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{282}
 }
 
 func (x *AddISCSILUNRequest) GetResource() string {
@@ -18108,7 +18230,7 @@ type AddISCSILUNResponse struct {
 
 func (x *AddISCSILUNResponse) Reset() {
 	*x = AddISCSILUNResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[281]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[283]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18120,7 +18242,7 @@ func (x *AddISCSILUNResponse) String() string {
 func (*AddISCSILUNResponse) ProtoMessage() {}
 
 func (x *AddISCSILUNResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[281]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[283]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18133,7 +18255,7 @@ func (x *AddISCSILUNResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSILUNResponse.ProtoReflect.Descriptor instead.
 func (*AddISCSILUNResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{281}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{283}
 }
 
 func (x *AddISCSILUNResponse) GetSuccess() bool {
@@ -18160,7 +18282,7 @@ type RemoveISCSILUNRequest struct {
 
 func (x *RemoveISCSILUNRequest) Reset() {
 	*x = RemoveISCSILUNRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[282]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[284]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18172,7 +18294,7 @@ func (x *RemoveISCSILUNRequest) String() string {
 func (*RemoveISCSILUNRequest) ProtoMessage() {}
 
 func (x *RemoveISCSILUNRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[282]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[284]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18185,7 +18307,7 @@ func (x *RemoveISCSILUNRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSILUNRequest.ProtoReflect.Descriptor instead.
 func (*RemoveISCSILUNRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{282}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{284}
 }
 
 func (x *RemoveISCSILUNRequest) GetResource() string {
@@ -18212,7 +18334,7 @@ type RemoveISCSILUNResponse struct {
 
 func (x *RemoveISCSILUNResponse) Reset() {
 	*x = RemoveISCSILUNResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[283]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[285]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18224,7 +18346,7 @@ func (x *RemoveISCSILUNResponse) String() string {
 func (*RemoveISCSILUNResponse) ProtoMessage() {}
 
 func (x *RemoveISCSILUNResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[283]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[285]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18237,7 +18359,7 @@ func (x *RemoveISCSILUNResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSILUNResponse.ProtoReflect.Descriptor instead.
 func (*RemoveISCSILUNResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{283}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{285}
 }
 
 func (x *RemoveISCSILUNResponse) GetSuccess() bool {
@@ -18263,7 +18385,7 @@ type ListISCSILUNsRequest struct {
 
 func (x *ListISCSILUNsRequest) Reset() {
 	*x = ListISCSILUNsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[284]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[286]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18275,7 +18397,7 @@ func (x *ListISCSILUNsRequest) String() string {
 func (*ListISCSILUNsRequest) ProtoMessage() {}
 
 func (x *ListISCSILUNsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[284]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[286]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18288,7 +18410,7 @@ func (x *ListISCSILUNsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSILUNsRequest.ProtoReflect.Descriptor instead.
 func (*ListISCSILUNsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{284}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{286}
 }
 
 func (x *ListISCSILUNsRequest) GetResource() string {
@@ -18309,7 +18431,7 @@ type ListISCSILUNsResponse struct {
 
 func (x *ListISCSILUNsResponse) Reset() {
 	*x = ListISCSILUNsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[285]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[287]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18321,7 +18443,7 @@ func (x *ListISCSILUNsResponse) String() string {
 func (*ListISCSILUNsResponse) ProtoMessage() {}
 
 func (x *ListISCSILUNsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[285]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[287]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18334,7 +18456,7 @@ func (x *ListISCSILUNsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSILUNsResponse.ProtoReflect.Descriptor instead.
 func (*ListISCSILUNsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{285}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{287}
 }
 
 func (x *ListISCSILUNsResponse) GetSuccess() bool {
@@ -18368,7 +18490,7 @@ type AddISCSIInitiatorRequest struct {
 
 func (x *AddISCSIInitiatorRequest) Reset() {
 	*x = AddISCSIInitiatorRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[286]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[288]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18380,7 +18502,7 @@ func (x *AddISCSIInitiatorRequest) String() string {
 func (*AddISCSIInitiatorRequest) ProtoMessage() {}
 
 func (x *AddISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[286]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[288]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18393,7 +18515,7 @@ func (x *AddISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSIInitiatorRequest.ProtoReflect.Descriptor instead.
 func (*AddISCSIInitiatorRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{286}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{288}
 }
 
 func (x *AddISCSIInitiatorRequest) GetResource() string {
@@ -18420,7 +18542,7 @@ type AddISCSIInitiatorResponse struct {
 
 func (x *AddISCSIInitiatorResponse) Reset() {
 	*x = AddISCSIInitiatorResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[287]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[289]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18432,7 +18554,7 @@ func (x *AddISCSIInitiatorResponse) String() string {
 func (*AddISCSIInitiatorResponse) ProtoMessage() {}
 
 func (x *AddISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[287]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[289]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18445,7 +18567,7 @@ func (x *AddISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddISCSIInitiatorResponse.ProtoReflect.Descriptor instead.
 func (*AddISCSIInitiatorResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{287}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{289}
 }
 
 func (x *AddISCSIInitiatorResponse) GetSuccess() bool {
@@ -18472,7 +18594,7 @@ type RemoveISCSIInitiatorRequest struct {
 
 func (x *RemoveISCSIInitiatorRequest) Reset() {
 	*x = RemoveISCSIInitiatorRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[288]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[290]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18484,7 +18606,7 @@ func (x *RemoveISCSIInitiatorRequest) String() string {
 func (*RemoveISCSIInitiatorRequest) ProtoMessage() {}
 
 func (x *RemoveISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[288]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[290]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18497,7 +18619,7 @@ func (x *RemoveISCSIInitiatorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSIInitiatorRequest.ProtoReflect.Descriptor instead.
 func (*RemoveISCSIInitiatorRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{288}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{290}
 }
 
 func (x *RemoveISCSIInitiatorRequest) GetResource() string {
@@ -18524,7 +18646,7 @@ type RemoveISCSIInitiatorResponse struct {
 
 func (x *RemoveISCSIInitiatorResponse) Reset() {
 	*x = RemoveISCSIInitiatorResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[289]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[291]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18536,7 +18658,7 @@ func (x *RemoveISCSIInitiatorResponse) String() string {
 func (*RemoveISCSIInitiatorResponse) ProtoMessage() {}
 
 func (x *RemoveISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[289]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[291]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18549,7 +18671,7 @@ func (x *RemoveISCSIInitiatorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveISCSIInitiatorResponse.ProtoReflect.Descriptor instead.
 func (*RemoveISCSIInitiatorResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{289}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{291}
 }
 
 func (x *RemoveISCSIInitiatorResponse) GetSuccess() bool {
@@ -18575,7 +18697,7 @@ type ListISCSIInitiatorsRequest struct {
 
 func (x *ListISCSIInitiatorsRequest) Reset() {
 	*x = ListISCSIInitiatorsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[290]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[292]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18587,7 +18709,7 @@ func (x *ListISCSIInitiatorsRequest) String() string {
 func (*ListISCSIInitiatorsRequest) ProtoMessage() {}
 
 func (x *ListISCSIInitiatorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[290]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[292]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18600,7 +18722,7 @@ func (x *ListISCSIInitiatorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSIInitiatorsRequest.ProtoReflect.Descriptor instead.
 func (*ListISCSIInitiatorsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{290}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{292}
 }
 
 func (x *ListISCSIInitiatorsRequest) GetResource() string {
@@ -18621,7 +18743,7 @@ type ListISCSIInitiatorsResponse struct {
 
 func (x *ListISCSIInitiatorsResponse) Reset() {
 	*x = ListISCSIInitiatorsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[291]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[293]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18633,7 +18755,7 @@ func (x *ListISCSIInitiatorsResponse) String() string {
 func (*ListISCSIInitiatorsResponse) ProtoMessage() {}
 
 func (x *ListISCSIInitiatorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[291]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[293]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18646,7 +18768,7 @@ func (x *ListISCSIInitiatorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListISCSIInitiatorsResponse.ProtoReflect.Descriptor instead.
 func (*ListISCSIInitiatorsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{291}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{293}
 }
 
 func (x *ListISCSIInitiatorsResponse) GetSuccess() bool {
@@ -18682,7 +18804,7 @@ type SetISCSIChapRequest struct {
 
 func (x *SetISCSIChapRequest) Reset() {
 	*x = SetISCSIChapRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[292]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[294]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18694,7 +18816,7 @@ func (x *SetISCSIChapRequest) String() string {
 func (*SetISCSIChapRequest) ProtoMessage() {}
 
 func (x *SetISCSIChapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[292]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[294]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18707,7 +18829,7 @@ func (x *SetISCSIChapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetISCSIChapRequest.ProtoReflect.Descriptor instead.
 func (*SetISCSIChapRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{292}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{294}
 }
 
 func (x *SetISCSIChapRequest) GetResource() string {
@@ -18748,7 +18870,7 @@ type SetISCSIChapResponse struct {
 
 func (x *SetISCSIChapResponse) Reset() {
 	*x = SetISCSIChapResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[293]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[295]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18760,7 +18882,7 @@ func (x *SetISCSIChapResponse) String() string {
 func (*SetISCSIChapResponse) ProtoMessage() {}
 
 func (x *SetISCSIChapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[293]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[295]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18773,7 +18895,7 @@ func (x *SetISCSIChapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetISCSIChapResponse.ProtoReflect.Descriptor instead.
 func (*SetISCSIChapResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{293}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{295}
 }
 
 func (x *SetISCSIChapResponse) GetSuccess() bool {
@@ -18799,7 +18921,7 @@ type GetISCSIChapRequest struct {
 
 func (x *GetISCSIChapRequest) Reset() {
 	*x = GetISCSIChapRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[294]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[296]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18811,7 +18933,7 @@ func (x *GetISCSIChapRequest) String() string {
 func (*GetISCSIChapRequest) ProtoMessage() {}
 
 func (x *GetISCSIChapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[294]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[296]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18824,7 +18946,7 @@ func (x *GetISCSIChapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetISCSIChapRequest.ProtoReflect.Descriptor instead.
 func (*GetISCSIChapRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{294}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{296}
 }
 
 func (x *GetISCSIChapRequest) GetResource() string {
@@ -18847,7 +18969,7 @@ type GetISCSIChapResponse struct {
 
 func (x *GetISCSIChapResponse) Reset() {
 	*x = GetISCSIChapResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[295]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[297]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18859,7 +18981,7 @@ func (x *GetISCSIChapResponse) String() string {
 func (*GetISCSIChapResponse) ProtoMessage() {}
 
 func (x *GetISCSIChapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[295]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[297]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18872,7 +18994,7 @@ func (x *GetISCSIChapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetISCSIChapResponse.ProtoReflect.Descriptor instead.
 func (*GetISCSIChapResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{295}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{297}
 }
 
 func (x *GetISCSIChapResponse) GetSuccess() bool {
@@ -18923,7 +19045,7 @@ type NVMeNamespaceInfo struct {
 
 func (x *NVMeNamespaceInfo) Reset() {
 	*x = NVMeNamespaceInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[296]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[298]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18935,7 +19057,7 @@ func (x *NVMeNamespaceInfo) String() string {
 func (*NVMeNamespaceInfo) ProtoMessage() {}
 
 func (x *NVMeNamespaceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[296]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[298]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18948,7 +19070,7 @@ func (x *NVMeNamespaceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NVMeNamespaceInfo.ProtoReflect.Descriptor instead.
 func (*NVMeNamespaceInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{296}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{298}
 }
 
 func (x *NVMeNamespaceInfo) GetNamespaceId() int32 {
@@ -18996,7 +19118,7 @@ type AddNVMeNamespaceRequest struct {
 
 func (x *AddNVMeNamespaceRequest) Reset() {
 	*x = AddNVMeNamespaceRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[297]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[299]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19008,7 +19130,7 @@ func (x *AddNVMeNamespaceRequest) String() string {
 func (*AddNVMeNamespaceRequest) ProtoMessage() {}
 
 func (x *AddNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[297]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[299]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19021,7 +19143,7 @@ func (x *AddNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeNamespaceRequest.ProtoReflect.Descriptor instead.
 func (*AddNVMeNamespaceRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{297}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{299}
 }
 
 func (x *AddNVMeNamespaceRequest) GetResource() string {
@@ -19048,7 +19170,7 @@ type AddNVMeNamespaceResponse struct {
 
 func (x *AddNVMeNamespaceResponse) Reset() {
 	*x = AddNVMeNamespaceResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[298]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[300]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19060,7 +19182,7 @@ func (x *AddNVMeNamespaceResponse) String() string {
 func (*AddNVMeNamespaceResponse) ProtoMessage() {}
 
 func (x *AddNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[298]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[300]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19073,7 +19195,7 @@ func (x *AddNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeNamespaceResponse.ProtoReflect.Descriptor instead.
 func (*AddNVMeNamespaceResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{298}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{300}
 }
 
 func (x *AddNVMeNamespaceResponse) GetSuccess() bool {
@@ -19100,7 +19222,7 @@ type RemoveNVMeNamespaceRequest struct {
 
 func (x *RemoveNVMeNamespaceRequest) Reset() {
 	*x = RemoveNVMeNamespaceRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[299]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[301]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19112,7 +19234,7 @@ func (x *RemoveNVMeNamespaceRequest) String() string {
 func (*RemoveNVMeNamespaceRequest) ProtoMessage() {}
 
 func (x *RemoveNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[299]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[301]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19125,7 +19247,7 @@ func (x *RemoveNVMeNamespaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeNamespaceRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeNamespaceRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{299}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{301}
 }
 
 func (x *RemoveNVMeNamespaceRequest) GetResource() string {
@@ -19152,7 +19274,7 @@ type RemoveNVMeNamespaceResponse struct {
 
 func (x *RemoveNVMeNamespaceResponse) Reset() {
 	*x = RemoveNVMeNamespaceResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[300]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[302]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19164,7 +19286,7 @@ func (x *RemoveNVMeNamespaceResponse) String() string {
 func (*RemoveNVMeNamespaceResponse) ProtoMessage() {}
 
 func (x *RemoveNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[300]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[302]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19177,7 +19299,7 @@ func (x *RemoveNVMeNamespaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeNamespaceResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeNamespaceResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{300}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{302}
 }
 
 func (x *RemoveNVMeNamespaceResponse) GetSuccess() bool {
@@ -19203,7 +19325,7 @@ type ListNVMeNamespacesRequest struct {
 
 func (x *ListNVMeNamespacesRequest) Reset() {
 	*x = ListNVMeNamespacesRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[301]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[303]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19215,7 +19337,7 @@ func (x *ListNVMeNamespacesRequest) String() string {
 func (*ListNVMeNamespacesRequest) ProtoMessage() {}
 
 func (x *ListNVMeNamespacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[301]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[303]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19228,7 +19350,7 @@ func (x *ListNVMeNamespacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeNamespacesRequest.ProtoReflect.Descriptor instead.
 func (*ListNVMeNamespacesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{301}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{303}
 }
 
 func (x *ListNVMeNamespacesRequest) GetResource() string {
@@ -19249,7 +19371,7 @@ type ListNVMeNamespacesResponse struct {
 
 func (x *ListNVMeNamespacesResponse) Reset() {
 	*x = ListNVMeNamespacesResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[302]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[304]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19261,7 +19383,7 @@ func (x *ListNVMeNamespacesResponse) String() string {
 func (*ListNVMeNamespacesResponse) ProtoMessage() {}
 
 func (x *ListNVMeNamespacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[302]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[304]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19274,7 +19396,7 @@ func (x *ListNVMeNamespacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeNamespacesResponse.ProtoReflect.Descriptor instead.
 func (*ListNVMeNamespacesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{302}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{304}
 }
 
 func (x *ListNVMeNamespacesResponse) GetSuccess() bool {
@@ -19308,7 +19430,7 @@ type AddNVMeHostRequest struct {
 
 func (x *AddNVMeHostRequest) Reset() {
 	*x = AddNVMeHostRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[303]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[305]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19320,7 +19442,7 @@ func (x *AddNVMeHostRequest) String() string {
 func (*AddNVMeHostRequest) ProtoMessage() {}
 
 func (x *AddNVMeHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[303]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[305]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19333,7 +19455,7 @@ func (x *AddNVMeHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeHostRequest.ProtoReflect.Descriptor instead.
 func (*AddNVMeHostRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{303}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{305}
 }
 
 func (x *AddNVMeHostRequest) GetResource() string {
@@ -19360,7 +19482,7 @@ type AddNVMeHostResponse struct {
 
 func (x *AddNVMeHostResponse) Reset() {
 	*x = AddNVMeHostResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[304]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[306]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19372,7 +19494,7 @@ func (x *AddNVMeHostResponse) String() string {
 func (*AddNVMeHostResponse) ProtoMessage() {}
 
 func (x *AddNVMeHostResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[304]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[306]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19385,7 +19507,7 @@ func (x *AddNVMeHostResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddNVMeHostResponse.ProtoReflect.Descriptor instead.
 func (*AddNVMeHostResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{304}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{306}
 }
 
 func (x *AddNVMeHostResponse) GetSuccess() bool {
@@ -19412,7 +19534,7 @@ type RemoveNVMeHostRequest struct {
 
 func (x *RemoveNVMeHostRequest) Reset() {
 	*x = RemoveNVMeHostRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[305]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[307]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19424,7 +19546,7 @@ func (x *RemoveNVMeHostRequest) String() string {
 func (*RemoveNVMeHostRequest) ProtoMessage() {}
 
 func (x *RemoveNVMeHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[305]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[307]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19437,7 +19559,7 @@ func (x *RemoveNVMeHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeHostRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeHostRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{305}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{307}
 }
 
 func (x *RemoveNVMeHostRequest) GetResource() string {
@@ -19464,7 +19586,7 @@ type RemoveNVMeHostResponse struct {
 
 func (x *RemoveNVMeHostResponse) Reset() {
 	*x = RemoveNVMeHostResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[306]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[308]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19476,7 +19598,7 @@ func (x *RemoveNVMeHostResponse) String() string {
 func (*RemoveNVMeHostResponse) ProtoMessage() {}
 
 func (x *RemoveNVMeHostResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[306]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[308]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19489,7 +19611,7 @@ func (x *RemoveNVMeHostResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNVMeHostResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNVMeHostResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{306}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{308}
 }
 
 func (x *RemoveNVMeHostResponse) GetSuccess() bool {
@@ -19515,7 +19637,7 @@ type ListNVMeHostsRequest struct {
 
 func (x *ListNVMeHostsRequest) Reset() {
 	*x = ListNVMeHostsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[307]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[309]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19527,7 +19649,7 @@ func (x *ListNVMeHostsRequest) String() string {
 func (*ListNVMeHostsRequest) ProtoMessage() {}
 
 func (x *ListNVMeHostsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[307]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[309]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19540,7 +19662,7 @@ func (x *ListNVMeHostsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeHostsRequest.ProtoReflect.Descriptor instead.
 func (*ListNVMeHostsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{307}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{309}
 }
 
 func (x *ListNVMeHostsRequest) GetResource() string {
@@ -19561,7 +19683,7 @@ type ListNVMeHostsResponse struct {
 
 func (x *ListNVMeHostsResponse) Reset() {
 	*x = ListNVMeHostsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[308]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[310]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19573,7 +19695,7 @@ func (x *ListNVMeHostsResponse) String() string {
 func (*ListNVMeHostsResponse) ProtoMessage() {}
 
 func (x *ListNVMeHostsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[308]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[310]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19586,7 +19708,7 @@ func (x *ListNVMeHostsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNVMeHostsResponse.ProtoReflect.Descriptor instead.
 func (*ListNVMeHostsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{308}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{310}
 }
 
 func (x *ListNVMeHostsResponse) GetSuccess() bool {
@@ -19619,7 +19741,7 @@ type DeleteHaRequest struct {
 
 func (x *DeleteHaRequest) Reset() {
 	*x = DeleteHaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[309]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[311]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19631,7 +19753,7 @@ func (x *DeleteHaRequest) String() string {
 func (*DeleteHaRequest) ProtoMessage() {}
 
 func (x *DeleteHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[309]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[311]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19644,7 +19766,7 @@ func (x *DeleteHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteHaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{309}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{311}
 }
 
 func (x *DeleteHaRequest) GetResource() string {
@@ -19664,7 +19786,7 @@ type DeleteHaResponse struct {
 
 func (x *DeleteHaResponse) Reset() {
 	*x = DeleteHaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[310]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[312]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19676,7 +19798,7 @@ func (x *DeleteHaResponse) String() string {
 func (*DeleteHaResponse) ProtoMessage() {}
 
 func (x *DeleteHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[310]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[312]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19689,7 +19811,7 @@ func (x *DeleteHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteHaResponse.ProtoReflect.Descriptor instead.
 func (*DeleteHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{310}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{312}
 }
 
 func (x *DeleteHaResponse) GetSuccess() bool {
@@ -19715,7 +19837,7 @@ type GetHaRequest struct {
 
 func (x *GetHaRequest) Reset() {
 	*x = GetHaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[311]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[313]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19727,7 +19849,7 @@ func (x *GetHaRequest) String() string {
 func (*GetHaRequest) ProtoMessage() {}
 
 func (x *GetHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[311]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[313]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19740,7 +19862,7 @@ func (x *GetHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaRequest.ProtoReflect.Descriptor instead.
 func (*GetHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{311}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{313}
 }
 
 func (x *GetHaRequest) GetResource() string {
@@ -19761,7 +19883,7 @@ type GetHaResponse struct {
 
 func (x *GetHaResponse) Reset() {
 	*x = GetHaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[312]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[314]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19773,7 +19895,7 @@ func (x *GetHaResponse) String() string {
 func (*GetHaResponse) ProtoMessage() {}
 
 func (x *GetHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[312]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[314]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19786,7 +19908,7 @@ func (x *GetHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaResponse.ProtoReflect.Descriptor instead.
 func (*GetHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{312}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{314}
 }
 
 func (x *GetHaResponse) GetSuccess() bool {
@@ -19818,7 +19940,7 @@ type ListHaRequest struct {
 
 func (x *ListHaRequest) Reset() {
 	*x = ListHaRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[313]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[315]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19830,7 +19952,7 @@ func (x *ListHaRequest) String() string {
 func (*ListHaRequest) ProtoMessage() {}
 
 func (x *ListHaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[313]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[315]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19843,7 +19965,7 @@ func (x *ListHaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHaRequest.ProtoReflect.Descriptor instead.
 func (*ListHaRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{313}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{315}
 }
 
 type ListHaResponse struct {
@@ -19857,7 +19979,7 @@ type ListHaResponse struct {
 
 func (x *ListHaResponse) Reset() {
 	*x = ListHaResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[314]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[316]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19869,7 +19991,7 @@ func (x *ListHaResponse) String() string {
 func (*ListHaResponse) ProtoMessage() {}
 
 func (x *ListHaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[314]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[316]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19882,7 +20004,7 @@ func (x *ListHaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHaResponse.ProtoReflect.Descriptor instead.
 func (*ListHaResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{314}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{316}
 }
 
 func (x *ListHaResponse) GetSuccess() bool {
@@ -19921,7 +20043,7 @@ type HaConfigInfo struct {
 
 func (x *HaConfigInfo) Reset() {
 	*x = HaConfigInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[315]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[317]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -19933,7 +20055,7 @@ func (x *HaConfigInfo) String() string {
 func (*HaConfigInfo) ProtoMessage() {}
 
 func (x *HaConfigInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[315]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[317]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19946,7 +20068,7 @@ func (x *HaConfigInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HaConfigInfo.ProtoReflect.Descriptor instead.
 func (*HaConfigInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{315}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{317}
 }
 
 func (x *HaConfigInfo) GetResource() string {
@@ -20008,7 +20130,7 @@ type HaServiceStatus struct {
 
 func (x *HaServiceStatus) Reset() {
 	*x = HaServiceStatus{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[316]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[318]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20020,7 +20142,7 @@ func (x *HaServiceStatus) String() string {
 func (*HaServiceStatus) ProtoMessage() {}
 
 func (x *HaServiceStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[316]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[318]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20033,7 +20155,7 @@ func (x *HaServiceStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HaServiceStatus.ProtoReflect.Descriptor instead.
 func (*HaServiceStatus) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{316}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{318}
 }
 
 func (x *HaServiceStatus) GetName() string {
@@ -20063,7 +20185,7 @@ type HaPromoterStatus struct {
 
 func (x *HaPromoterStatus) Reset() {
 	*x = HaPromoterStatus{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[317]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[319]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20075,7 +20197,7 @@ func (x *HaPromoterStatus) String() string {
 func (*HaPromoterStatus) ProtoMessage() {}
 
 func (x *HaPromoterStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[317]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[319]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20088,7 +20210,7 @@ func (x *HaPromoterStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HaPromoterStatus.ProtoReflect.Descriptor instead.
 func (*HaPromoterStatus) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{317}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{319}
 }
 
 func (x *HaPromoterStatus) GetDrbdResource() string {
@@ -20135,7 +20257,7 @@ type GetHaStatusRequest struct {
 
 func (x *GetHaStatusRequest) Reset() {
 	*x = GetHaStatusRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[318]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[320]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20147,7 +20269,7 @@ func (x *GetHaStatusRequest) String() string {
 func (*GetHaStatusRequest) ProtoMessage() {}
 
 func (x *GetHaStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[318]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[320]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20160,7 +20282,7 @@ func (x *GetHaStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetHaStatusRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{318}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{320}
 }
 
 func (x *GetHaStatusRequest) GetResource() string {
@@ -20181,7 +20303,7 @@ type GetHaStatusResponse struct {
 
 func (x *GetHaStatusResponse) Reset() {
 	*x = GetHaStatusResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[319]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[321]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20193,7 +20315,7 @@ func (x *GetHaStatusResponse) String() string {
 func (*GetHaStatusResponse) ProtoMessage() {}
 
 func (x *GetHaStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[319]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[321]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20206,7 +20328,7 @@ func (x *GetHaStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHaStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetHaStatusResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{319}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{321}
 }
 
 func (x *GetHaStatusResponse) GetSuccess() bool {
@@ -20239,7 +20361,7 @@ type DrainNodeRequest struct {
 
 func (x *DrainNodeRequest) Reset() {
 	*x = DrainNodeRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[320]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[322]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20251,7 +20373,7 @@ func (x *DrainNodeRequest) String() string {
 func (*DrainNodeRequest) ProtoMessage() {}
 
 func (x *DrainNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[320]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[322]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20264,7 +20386,7 @@ func (x *DrainNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainNodeRequest.ProtoReflect.Descriptor instead.
 func (*DrainNodeRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{320}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{322}
 }
 
 func (x *DrainNodeRequest) GetName() string {
@@ -20284,7 +20406,7 @@ type ConvertPoolToThinRequest struct {
 
 func (x *ConvertPoolToThinRequest) Reset() {
 	*x = ConvertPoolToThinRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[321]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[323]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20296,7 +20418,7 @@ func (x *ConvertPoolToThinRequest) String() string {
 func (*ConvertPoolToThinRequest) ProtoMessage() {}
 
 func (x *ConvertPoolToThinRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[321]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[323]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20309,7 +20431,7 @@ func (x *ConvertPoolToThinRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConvertPoolToThinRequest.ProtoReflect.Descriptor instead.
 func (*ConvertPoolToThinRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{321}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{323}
 }
 
 func (x *ConvertPoolToThinRequest) GetNode() string {
@@ -20339,7 +20461,7 @@ type ConvertPoolToThinResponse struct {
 
 func (x *ConvertPoolToThinResponse) Reset() {
 	*x = ConvertPoolToThinResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[322]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[324]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20351,7 +20473,7 @@ func (x *ConvertPoolToThinResponse) String() string {
 func (*ConvertPoolToThinResponse) ProtoMessage() {}
 
 func (x *ConvertPoolToThinResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[322]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[324]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20364,7 +20486,7 @@ func (x *ConvertPoolToThinResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConvertPoolToThinResponse.ProtoReflect.Descriptor instead.
 func (*ConvertPoolToThinResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{322}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{324}
 }
 
 func (x *ConvertPoolToThinResponse) GetSuccess() bool {
@@ -20405,7 +20527,7 @@ type AddPoolCacheRequest struct {
 
 func (x *AddPoolCacheRequest) Reset() {
 	*x = AddPoolCacheRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[323]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[325]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20417,7 +20539,7 @@ func (x *AddPoolCacheRequest) String() string {
 func (*AddPoolCacheRequest) ProtoMessage() {}
 
 func (x *AddPoolCacheRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[323]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[325]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20430,7 +20552,7 @@ func (x *AddPoolCacheRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPoolCacheRequest.ProtoReflect.Descriptor instead.
 func (*AddPoolCacheRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{323}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{325}
 }
 
 func (x *AddPoolCacheRequest) GetNode() string {
@@ -20475,7 +20597,7 @@ type AddPoolCacheResponse struct {
 
 func (x *AddPoolCacheResponse) Reset() {
 	*x = AddPoolCacheResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[324]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[326]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20487,7 +20609,7 @@ func (x *AddPoolCacheResponse) String() string {
 func (*AddPoolCacheResponse) ProtoMessage() {}
 
 func (x *AddPoolCacheResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[324]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[326]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20500,7 +20622,7 @@ func (x *AddPoolCacheResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPoolCacheResponse.ProtoReflect.Descriptor instead.
 func (*AddPoolCacheResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{324}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{326}
 }
 
 func (x *AddPoolCacheResponse) GetSuccess() bool {
@@ -20541,7 +20663,7 @@ type RemovePoolCacheRequest struct {
 
 func (x *RemovePoolCacheRequest) Reset() {
 	*x = RemovePoolCacheRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[325]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[327]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20553,7 +20675,7 @@ func (x *RemovePoolCacheRequest) String() string {
 func (*RemovePoolCacheRequest) ProtoMessage() {}
 
 func (x *RemovePoolCacheRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[325]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[327]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20566,7 +20688,7 @@ func (x *RemovePoolCacheRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemovePoolCacheRequest.ProtoReflect.Descriptor instead.
 func (*RemovePoolCacheRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{325}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{327}
 }
 
 func (x *RemovePoolCacheRequest) GetNode() string {
@@ -20593,7 +20715,7 @@ type RemovePoolCacheResponse struct {
 
 func (x *RemovePoolCacheResponse) Reset() {
 	*x = RemovePoolCacheResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[326]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[328]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20605,7 +20727,7 @@ func (x *RemovePoolCacheResponse) String() string {
 func (*RemovePoolCacheResponse) ProtoMessage() {}
 
 func (x *RemovePoolCacheResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[326]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[328]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20618,7 +20740,7 @@ func (x *RemovePoolCacheResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemovePoolCacheResponse.ProtoReflect.Descriptor instead.
 func (*RemovePoolCacheResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{326}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{328}
 }
 
 func (x *RemovePoolCacheResponse) GetSuccess() bool {
@@ -20647,7 +20769,7 @@ type DrainNodeResponse struct {
 
 func (x *DrainNodeResponse) Reset() {
 	*x = DrainNodeResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[327]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[329]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20659,7 +20781,7 @@ func (x *DrainNodeResponse) String() string {
 func (*DrainNodeResponse) ProtoMessage() {}
 
 func (x *DrainNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[327]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[329]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20672,7 +20794,7 @@ func (x *DrainNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainNodeResponse.ProtoReflect.Descriptor instead.
 func (*DrainNodeResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{327}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{329}
 }
 
 func (x *DrainNodeResponse) GetSuccess() bool {
@@ -20705,7 +20827,7 @@ type UndrainNodeRequest struct {
 
 func (x *UndrainNodeRequest) Reset() {
 	*x = UndrainNodeRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[328]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[330]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20717,7 +20839,7 @@ func (x *UndrainNodeRequest) String() string {
 func (*UndrainNodeRequest) ProtoMessage() {}
 
 func (x *UndrainNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[328]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[330]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20730,7 +20852,7 @@ func (x *UndrainNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UndrainNodeRequest.ProtoReflect.Descriptor instead.
 func (*UndrainNodeRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{328}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{330}
 }
 
 func (x *UndrainNodeRequest) GetName() string {
@@ -20750,7 +20872,7 @@ type UndrainNodeResponse struct {
 
 func (x *UndrainNodeResponse) Reset() {
 	*x = UndrainNodeResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[329]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[331]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20762,7 +20884,7 @@ func (x *UndrainNodeResponse) String() string {
 func (*UndrainNodeResponse) ProtoMessage() {}
 
 func (x *UndrainNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[329]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[331]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20775,7 +20897,7 @@ func (x *UndrainNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UndrainNodeResponse.ProtoReflect.Descriptor instead.
 func (*UndrainNodeResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{329}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{331}
 }
 
 func (x *UndrainNodeResponse) GetSuccess() bool {
@@ -20814,7 +20936,7 @@ type SetNodeAddressRequest struct {
 
 func (x *SetNodeAddressRequest) Reset() {
 	*x = SetNodeAddressRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[330]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[332]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20826,7 +20948,7 @@ func (x *SetNodeAddressRequest) String() string {
 func (*SetNodeAddressRequest) ProtoMessage() {}
 
 func (x *SetNodeAddressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[330]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[332]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20839,7 +20961,7 @@ func (x *SetNodeAddressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeAddressRequest.ProtoReflect.Descriptor instead.
 func (*SetNodeAddressRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{330}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{332}
 }
 
 func (x *SetNodeAddressRequest) GetNode() string {
@@ -20881,7 +21003,7 @@ type NodeAddressMove struct {
 
 func (x *NodeAddressMove) Reset() {
 	*x = NodeAddressMove{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[331]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[333]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20893,7 +21015,7 @@ func (x *NodeAddressMove) String() string {
 func (*NodeAddressMove) ProtoMessage() {}
 
 func (x *NodeAddressMove) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[331]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[333]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20906,7 +21028,7 @@ func (x *NodeAddressMove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeAddressMove.ProtoReflect.Descriptor instead.
 func (*NodeAddressMove) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{331}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{333}
 }
 
 func (x *NodeAddressMove) GetNode() string {
@@ -20944,7 +21066,7 @@ type SetNodeAddressResponse struct {
 
 func (x *SetNodeAddressResponse) Reset() {
 	*x = SetNodeAddressResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[332]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[334]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -20956,7 +21078,7 @@ func (x *SetNodeAddressResponse) String() string {
 func (*SetNodeAddressResponse) ProtoMessage() {}
 
 func (x *SetNodeAddressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[332]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[334]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -20969,7 +21091,7 @@ func (x *SetNodeAddressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeAddressResponse.ProtoReflect.Descriptor instead.
 func (*SetNodeAddressResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{332}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{334}
 }
 
 func (x *SetNodeAddressResponse) GetSuccess() bool {
@@ -21012,7 +21134,7 @@ type ProfileMemberResult struct {
 
 func (x *ProfileMemberResult) Reset() {
 	*x = ProfileMemberResult{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[333]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[335]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21024,7 +21146,7 @@ func (x *ProfileMemberResult) String() string {
 func (*ProfileMemberResult) ProtoMessage() {}
 
 func (x *ProfileMemberResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[333]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[335]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21037,7 +21159,7 @@ func (x *ProfileMemberResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProfileMemberResult.ProtoReflect.Descriptor instead.
 func (*ProfileMemberResult) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{333}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{335}
 }
 
 func (x *ProfileMemberResult) GetResource() string {
@@ -21073,7 +21195,7 @@ type SetResourceProfileOptionsRequest struct {
 
 func (x *SetResourceProfileOptionsRequest) Reset() {
 	*x = SetResourceProfileOptionsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[334]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[336]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21085,7 +21207,7 @@ func (x *SetResourceProfileOptionsRequest) String() string {
 func (*SetResourceProfileOptionsRequest) ProtoMessage() {}
 
 func (x *SetResourceProfileOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[334]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[336]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21098,7 +21220,7 @@ func (x *SetResourceProfileOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResourceProfileOptionsRequest.ProtoReflect.Descriptor instead.
 func (*SetResourceProfileOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{334}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{336}
 }
 
 func (x *SetResourceProfileOptionsRequest) GetName() string {
@@ -21127,7 +21249,7 @@ type SetResourceProfileOptionsResponse struct {
 
 func (x *SetResourceProfileOptionsResponse) Reset() {
 	*x = SetResourceProfileOptionsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[335]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[337]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21139,7 +21261,7 @@ func (x *SetResourceProfileOptionsResponse) String() string {
 func (*SetResourceProfileOptionsResponse) ProtoMessage() {}
 
 func (x *SetResourceProfileOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[335]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[337]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21152,7 +21274,7 @@ func (x *SetResourceProfileOptionsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use SetResourceProfileOptionsResponse.ProtoReflect.Descriptor instead.
 func (*SetResourceProfileOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{335}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{337}
 }
 
 func (x *SetResourceProfileOptionsResponse) GetSuccess() bool {
@@ -21196,7 +21318,7 @@ type AdjustResourceProfileRequest struct {
 
 func (x *AdjustResourceProfileRequest) Reset() {
 	*x = AdjustResourceProfileRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[336]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[338]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21208,7 +21330,7 @@ func (x *AdjustResourceProfileRequest) String() string {
 func (*AdjustResourceProfileRequest) ProtoMessage() {}
 
 func (x *AdjustResourceProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[336]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[338]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21221,7 +21343,7 @@ func (x *AdjustResourceProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdjustResourceProfileRequest.ProtoReflect.Descriptor instead.
 func (*AdjustResourceProfileRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{336}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{338}
 }
 
 func (x *AdjustResourceProfileRequest) GetName() string {
@@ -21249,7 +21371,7 @@ type AdjustResourceProfileResponse struct {
 
 func (x *AdjustResourceProfileResponse) Reset() {
 	*x = AdjustResourceProfileResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[337]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[339]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21261,7 +21383,7 @@ func (x *AdjustResourceProfileResponse) String() string {
 func (*AdjustResourceProfileResponse) ProtoMessage() {}
 
 func (x *AdjustResourceProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[337]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[339]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21274,7 +21396,7 @@ func (x *AdjustResourceProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdjustResourceProfileResponse.ProtoReflect.Descriptor instead.
 func (*AdjustResourceProfileResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{337}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{339}
 }
 
 func (x *AdjustResourceProfileResponse) GetSuccess() bool {
@@ -21307,7 +21429,7 @@ type GetResourceProfileMaxSizeRequest struct {
 
 func (x *GetResourceProfileMaxSizeRequest) Reset() {
 	*x = GetResourceProfileMaxSizeRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[338]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[340]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21319,7 +21441,7 @@ func (x *GetResourceProfileMaxSizeRequest) String() string {
 func (*GetResourceProfileMaxSizeRequest) ProtoMessage() {}
 
 func (x *GetResourceProfileMaxSizeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[338]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[340]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21332,7 +21454,7 @@ func (x *GetResourceProfileMaxSizeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceProfileMaxSizeRequest.ProtoReflect.Descriptor instead.
 func (*GetResourceProfileMaxSizeRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{338}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{340}
 }
 
 func (x *GetResourceProfileMaxSizeRequest) GetName() string {
@@ -21359,7 +21481,7 @@ type GetResourceProfileMaxSizeResponse struct {
 
 func (x *GetResourceProfileMaxSizeResponse) Reset() {
 	*x = GetResourceProfileMaxSizeResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[339]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[341]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21371,7 +21493,7 @@ func (x *GetResourceProfileMaxSizeResponse) String() string {
 func (*GetResourceProfileMaxSizeResponse) ProtoMessage() {}
 
 func (x *GetResourceProfileMaxSizeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[339]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[341]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21384,7 +21506,7 @@ func (x *GetResourceProfileMaxSizeResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetResourceProfileMaxSizeResponse.ProtoReflect.Descriptor instead.
 func (*GetResourceProfileMaxSizeResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{339}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{341}
 }
 
 func (x *GetResourceProfileMaxSizeResponse) GetSuccess() bool {
@@ -21434,7 +21556,7 @@ type SetResourceProfileRequest struct {
 
 func (x *SetResourceProfileRequest) Reset() {
 	*x = SetResourceProfileRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[340]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[342]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21446,7 +21568,7 @@ func (x *SetResourceProfileRequest) String() string {
 func (*SetResourceProfileRequest) ProtoMessage() {}
 
 func (x *SetResourceProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[340]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[342]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21459,7 +21581,7 @@ func (x *SetResourceProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResourceProfileRequest.ProtoReflect.Descriptor instead.
 func (*SetResourceProfileRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{340}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{342}
 }
 
 func (x *SetResourceProfileRequest) GetResource() string {
@@ -21486,7 +21608,7 @@ type SetResourceProfileResponse struct {
 
 func (x *SetResourceProfileResponse) Reset() {
 	*x = SetResourceProfileResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[341]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[343]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21498,7 +21620,7 @@ func (x *SetResourceProfileResponse) String() string {
 func (*SetResourceProfileResponse) ProtoMessage() {}
 
 func (x *SetResourceProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[341]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[343]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21511,7 +21633,7 @@ func (x *SetResourceProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResourceProfileResponse.ProtoReflect.Descriptor instead.
 func (*SetResourceProfileResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{341}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{343}
 }
 
 func (x *SetResourceProfileResponse) GetSuccess() bool {
@@ -21550,7 +21672,7 @@ type SetWanEndpointRequest struct {
 
 func (x *SetWanEndpointRequest) Reset() {
 	*x = SetWanEndpointRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[342]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[344]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21562,7 +21684,7 @@ func (x *SetWanEndpointRequest) String() string {
 func (*SetWanEndpointRequest) ProtoMessage() {}
 
 func (x *SetWanEndpointRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[342]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[344]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21575,7 +21697,7 @@ func (x *SetWanEndpointRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWanEndpointRequest.ProtoReflect.Descriptor instead.
 func (*SetWanEndpointRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{342}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{344}
 }
 
 func (x *SetWanEndpointRequest) GetName() string {
@@ -21625,7 +21747,7 @@ type SetWanEndpointResponse struct {
 
 func (x *SetWanEndpointResponse) Reset() {
 	*x = SetWanEndpointResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[343]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[345]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21637,7 +21759,7 @@ func (x *SetWanEndpointResponse) String() string {
 func (*SetWanEndpointResponse) ProtoMessage() {}
 
 func (x *SetWanEndpointResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[343]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[345]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21650,7 +21772,7 @@ func (x *SetWanEndpointResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWanEndpointResponse.ProtoReflect.Descriptor instead.
 func (*SetWanEndpointResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{343}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{345}
 }
 
 func (x *SetWanEndpointResponse) GetSuccess() bool {
@@ -21699,7 +21821,7 @@ type DRFailbackRequest struct {
 
 func (x *DRFailbackRequest) Reset() {
 	*x = DRFailbackRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[344]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[346]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21711,7 +21833,7 @@ func (x *DRFailbackRequest) String() string {
 func (*DRFailbackRequest) ProtoMessage() {}
 
 func (x *DRFailbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[344]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[346]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21724,7 +21846,7 @@ func (x *DRFailbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DRFailbackRequest.ProtoReflect.Descriptor instead.
 func (*DRFailbackRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{344}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{346}
 }
 
 func (x *DRFailbackRequest) GetName() string {
@@ -21769,7 +21891,7 @@ type VerifyResourceRequest struct {
 
 func (x *VerifyResourceRequest) Reset() {
 	*x = VerifyResourceRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[345]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[347]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21781,7 +21903,7 @@ func (x *VerifyResourceRequest) String() string {
 func (*VerifyResourceRequest) ProtoMessage() {}
 
 func (x *VerifyResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[345]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[347]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21794,7 +21916,7 @@ func (x *VerifyResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyResourceRequest.ProtoReflect.Descriptor instead.
 func (*VerifyResourceRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{345}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{347}
 }
 
 func (x *VerifyResourceRequest) GetName() string {
@@ -21847,7 +21969,7 @@ type VerifyPeer struct {
 
 func (x *VerifyPeer) Reset() {
 	*x = VerifyPeer{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[346]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[348]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21859,7 +21981,7 @@ func (x *VerifyPeer) String() string {
 func (*VerifyPeer) ProtoMessage() {}
 
 func (x *VerifyPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[346]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[348]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21872,7 +21994,7 @@ func (x *VerifyPeer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyPeer.ProtoReflect.Descriptor instead.
 func (*VerifyPeer) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{346}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{348}
 }
 
 func (x *VerifyPeer) GetNode() string {
@@ -21932,7 +22054,7 @@ type VerifyResourceResponse struct {
 
 func (x *VerifyResourceResponse) Reset() {
 	*x = VerifyResourceResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[347]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[349]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21944,7 +22066,7 @@ func (x *VerifyResourceResponse) String() string {
 func (*VerifyResourceResponse) ProtoMessage() {}
 
 func (x *VerifyResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[347]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[349]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21957,7 +22079,7 @@ func (x *VerifyResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyResourceResponse.ProtoReflect.Descriptor instead.
 func (*VerifyResourceResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{347}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{349}
 }
 
 func (x *VerifyResourceResponse) GetSuccess() bool {
@@ -22016,7 +22138,7 @@ type DRFailbackResponse struct {
 
 func (x *DRFailbackResponse) Reset() {
 	*x = DRFailbackResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[348]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[350]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22028,7 +22150,7 @@ func (x *DRFailbackResponse) String() string {
 func (*DRFailbackResponse) ProtoMessage() {}
 
 func (x *DRFailbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[348]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[350]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22041,7 +22163,7 @@ func (x *DRFailbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DRFailbackResponse.ProtoReflect.Descriptor instead.
 func (*DRFailbackResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{348}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{350}
 }
 
 func (x *DRFailbackResponse) GetSuccess() bool {
@@ -22082,7 +22204,7 @@ type SetupReplicationTLSRequest struct {
 
 func (x *SetupReplicationTLSRequest) Reset() {
 	*x = SetupReplicationTLSRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[349]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[351]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22094,7 +22216,7 @@ func (x *SetupReplicationTLSRequest) String() string {
 func (*SetupReplicationTLSRequest) ProtoMessage() {}
 
 func (x *SetupReplicationTLSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[349]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[351]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22107,7 +22229,7 @@ func (x *SetupReplicationTLSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetupReplicationTLSRequest.ProtoReflect.Descriptor instead.
 func (*SetupReplicationTLSRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{349}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{351}
 }
 
 func (x *SetupReplicationTLSRequest) GetNodes() []string {
@@ -22126,7 +22248,7 @@ type GetReplicationTLSStatusRequest struct {
 
 func (x *GetReplicationTLSStatusRequest) Reset() {
 	*x = GetReplicationTLSStatusRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[350]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[352]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22138,7 +22260,7 @@ func (x *GetReplicationTLSStatusRequest) String() string {
 func (*GetReplicationTLSStatusRequest) ProtoMessage() {}
 
 func (x *GetReplicationTLSStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[350]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[352]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22151,7 +22273,7 @@ func (x *GetReplicationTLSStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReplicationTLSStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetReplicationTLSStatusRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{350}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{352}
 }
 
 func (x *GetReplicationTLSStatusRequest) GetNodes() []string {
@@ -22174,7 +22296,7 @@ type NodeTLSInfo struct {
 
 func (x *NodeTLSInfo) Reset() {
 	*x = NodeTLSInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[351]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[353]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22186,7 +22308,7 @@ func (x *NodeTLSInfo) String() string {
 func (*NodeTLSInfo) ProtoMessage() {}
 
 func (x *NodeTLSInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[351]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[353]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22199,7 +22321,7 @@ func (x *NodeTLSInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeTLSInfo.ProtoReflect.Descriptor instead.
 func (*NodeTLSInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{351}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{353}
 }
 
 func (x *NodeTLSInfo) GetNode() string {
@@ -22241,7 +22363,7 @@ type ReplicationTLSResponse struct {
 
 func (x *ReplicationTLSResponse) Reset() {
 	*x = ReplicationTLSResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[352]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[354]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22253,7 +22375,7 @@ func (x *ReplicationTLSResponse) String() string {
 func (*ReplicationTLSResponse) ProtoMessage() {}
 
 func (x *ReplicationTLSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[352]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[354]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22266,7 +22388,7 @@ func (x *ReplicationTLSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicationTLSResponse.ProtoReflect.Descriptor instead.
 func (*ReplicationTLSResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{352}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{354}
 }
 
 func (x *ReplicationTLSResponse) GetSuccess() bool {
@@ -22300,7 +22422,7 @@ type SetResourceTLSRequest struct {
 
 func (x *SetResourceTLSRequest) Reset() {
 	*x = SetResourceTLSRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[353]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[355]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22312,7 +22434,7 @@ func (x *SetResourceTLSRequest) String() string {
 func (*SetResourceTLSRequest) ProtoMessage() {}
 
 func (x *SetResourceTLSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[353]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[355]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22325,7 +22447,7 @@ func (x *SetResourceTLSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResourceTLSRequest.ProtoReflect.Descriptor instead.
 func (*SetResourceTLSRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{353}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{355}
 }
 
 func (x *SetResourceTLSRequest) GetResource() string {
@@ -22353,7 +22475,7 @@ type SetResourceTLSResponse struct {
 
 func (x *SetResourceTLSResponse) Reset() {
 	*x = SetResourceTLSResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[354]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[356]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22365,7 +22487,7 @@ func (x *SetResourceTLSResponse) String() string {
 func (*SetResourceTLSResponse) ProtoMessage() {}
 
 func (x *SetResourceTLSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[354]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[356]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22378,7 +22500,7 @@ func (x *SetResourceTLSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResourceTLSResponse.ProtoReflect.Descriptor instead.
 func (*SetResourceTLSResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{354}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{356}
 }
 
 func (x *SetResourceTLSResponse) GetSuccess() bool {
@@ -22410,7 +22532,7 @@ type GetRbacWhoamiRequest struct {
 
 func (x *GetRbacWhoamiRequest) Reset() {
 	*x = GetRbacWhoamiRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[355]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[357]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22422,7 +22544,7 @@ func (x *GetRbacWhoamiRequest) String() string {
 func (*GetRbacWhoamiRequest) ProtoMessage() {}
 
 func (x *GetRbacWhoamiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[355]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[357]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22435,7 +22557,7 @@ func (x *GetRbacWhoamiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRbacWhoamiRequest.ProtoReflect.Descriptor instead.
 func (*GetRbacWhoamiRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{355}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{357}
 }
 
 type GetRbacWhoamiResponse struct {
@@ -22450,7 +22572,7 @@ type GetRbacWhoamiResponse struct {
 
 func (x *GetRbacWhoamiResponse) Reset() {
 	*x = GetRbacWhoamiResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[356]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[358]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22462,7 +22584,7 @@ func (x *GetRbacWhoamiResponse) String() string {
 func (*GetRbacWhoamiResponse) ProtoMessage() {}
 
 func (x *GetRbacWhoamiResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[356]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[358]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22475,7 +22597,7 @@ func (x *GetRbacWhoamiResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRbacWhoamiResponse.ProtoReflect.Descriptor instead.
 func (*GetRbacWhoamiResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{356}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{358}
 }
 
 func (x *GetRbacWhoamiResponse) GetEnabled() bool {
@@ -22514,7 +22636,7 @@ type ListRbacPoliciesRequest struct {
 
 func (x *ListRbacPoliciesRequest) Reset() {
 	*x = ListRbacPoliciesRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[357]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[359]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22526,7 +22648,7 @@ func (x *ListRbacPoliciesRequest) String() string {
 func (*ListRbacPoliciesRequest) ProtoMessage() {}
 
 func (x *ListRbacPoliciesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[357]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[359]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22539,7 +22661,7 @@ func (x *ListRbacPoliciesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRbacPoliciesRequest.ProtoReflect.Descriptor instead.
 func (*ListRbacPoliciesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{357}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{359}
 }
 
 type RbacPolicy struct {
@@ -22553,7 +22675,7 @@ type RbacPolicy struct {
 
 func (x *RbacPolicy) Reset() {
 	*x = RbacPolicy{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[358]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[360]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22565,7 +22687,7 @@ func (x *RbacPolicy) String() string {
 func (*RbacPolicy) ProtoMessage() {}
 
 func (x *RbacPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[358]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[360]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22578,7 +22700,7 @@ func (x *RbacPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RbacPolicy.ProtoReflect.Descriptor instead.
 func (*RbacPolicy) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{358}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{360}
 }
 
 func (x *RbacPolicy) GetRole() string {
@@ -22612,7 +22734,7 @@ type RbacUser struct {
 
 func (x *RbacUser) Reset() {
 	*x = RbacUser{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[359]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[361]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22624,7 +22746,7 @@ func (x *RbacUser) String() string {
 func (*RbacUser) ProtoMessage() {}
 
 func (x *RbacUser) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[359]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[361]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22637,7 +22759,7 @@ func (x *RbacUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RbacUser.ProtoReflect.Descriptor instead.
 func (*RbacUser) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{359}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{361}
 }
 
 func (x *RbacUser) GetName() string {
@@ -22665,7 +22787,7 @@ type ListRbacPoliciesResponse struct {
 
 func (x *ListRbacPoliciesResponse) Reset() {
 	*x = ListRbacPoliciesResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[360]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[362]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22677,7 +22799,7 @@ func (x *ListRbacPoliciesResponse) String() string {
 func (*ListRbacPoliciesResponse) ProtoMessage() {}
 
 func (x *ListRbacPoliciesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[360]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[362]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22690,7 +22812,7 @@ func (x *ListRbacPoliciesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRbacPoliciesResponse.ProtoReflect.Descriptor instead.
 func (*ListRbacPoliciesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{360}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{362}
 }
 
 func (x *ListRbacPoliciesResponse) GetEnabled() bool {
@@ -22726,7 +22848,7 @@ type CreateRbacUserRequest struct {
 
 func (x *CreateRbacUserRequest) Reset() {
 	*x = CreateRbacUserRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[361]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[363]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22738,7 +22860,7 @@ func (x *CreateRbacUserRequest) String() string {
 func (*CreateRbacUserRequest) ProtoMessage() {}
 
 func (x *CreateRbacUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[361]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[363]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22751,7 +22873,7 @@ func (x *CreateRbacUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRbacUserRequest.ProtoReflect.Descriptor instead.
 func (*CreateRbacUserRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{361}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{363}
 }
 
 func (x *CreateRbacUserRequest) GetName() string {
@@ -22788,7 +22910,7 @@ type CreateRbacUserResponse struct {
 
 func (x *CreateRbacUserResponse) Reset() {
 	*x = CreateRbacUserResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[362]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[364]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22800,7 +22922,7 @@ func (x *CreateRbacUserResponse) String() string {
 func (*CreateRbacUserResponse) ProtoMessage() {}
 
 func (x *CreateRbacUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[362]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[364]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22813,7 +22935,7 @@ func (x *CreateRbacUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRbacUserResponse.ProtoReflect.Descriptor instead.
 func (*CreateRbacUserResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{362}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{364}
 }
 
 func (x *CreateRbacUserResponse) GetSuccess() bool {
@@ -22853,7 +22975,7 @@ type DeleteRbacUserRequest struct {
 
 func (x *DeleteRbacUserRequest) Reset() {
 	*x = DeleteRbacUserRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[363]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[365]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22865,7 +22987,7 @@ func (x *DeleteRbacUserRequest) String() string {
 func (*DeleteRbacUserRequest) ProtoMessage() {}
 
 func (x *DeleteRbacUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[363]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[365]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22878,7 +23000,7 @@ func (x *DeleteRbacUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRbacUserRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRbacUserRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{363}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{365}
 }
 
 func (x *DeleteRbacUserRequest) GetName() string {
@@ -22899,7 +23021,7 @@ type DeleteRbacUserResponse struct {
 
 func (x *DeleteRbacUserResponse) Reset() {
 	*x = DeleteRbacUserResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[364]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[366]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22911,7 +23033,7 @@ func (x *DeleteRbacUserResponse) String() string {
 func (*DeleteRbacUserResponse) ProtoMessage() {}
 
 func (x *DeleteRbacUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[364]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[366]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22924,7 +23046,7 @@ func (x *DeleteRbacUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRbacUserResponse.ProtoReflect.Descriptor instead.
 func (*DeleteRbacUserResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{364}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{366}
 }
 
 func (x *DeleteRbacUserResponse) GetSuccess() bool {
@@ -22958,7 +23080,7 @@ type SetRbacUserRoleRequest struct {
 
 func (x *SetRbacUserRoleRequest) Reset() {
 	*x = SetRbacUserRoleRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[365]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[367]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22970,7 +23092,7 @@ func (x *SetRbacUserRoleRequest) String() string {
 func (*SetRbacUserRoleRequest) ProtoMessage() {}
 
 func (x *SetRbacUserRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[365]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[367]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22983,7 +23105,7 @@ func (x *SetRbacUserRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRbacUserRoleRequest.ProtoReflect.Descriptor instead.
 func (*SetRbacUserRoleRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{365}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{367}
 }
 
 func (x *SetRbacUserRoleRequest) GetName() string {
@@ -23011,7 +23133,7 @@ type SetRbacUserRoleResponse struct {
 
 func (x *SetRbacUserRoleResponse) Reset() {
 	*x = SetRbacUserRoleResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[366]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[368]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23023,7 +23145,7 @@ func (x *SetRbacUserRoleResponse) String() string {
 func (*SetRbacUserRoleResponse) ProtoMessage() {}
 
 func (x *SetRbacUserRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[366]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[368]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23036,7 +23158,7 @@ func (x *SetRbacUserRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRbacUserRoleResponse.ProtoReflect.Descriptor instead.
 func (*SetRbacUserRoleResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{366}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{368}
 }
 
 func (x *SetRbacUserRoleResponse) GetSuccess() bool {
@@ -23077,7 +23199,7 @@ type ApprovalInfo struct {
 
 func (x *ApprovalInfo) Reset() {
 	*x = ApprovalInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[367]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[369]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23089,7 +23211,7 @@ func (x *ApprovalInfo) String() string {
 func (*ApprovalInfo) ProtoMessage() {}
 
 func (x *ApprovalInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[367]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[369]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23102,7 +23224,7 @@ func (x *ApprovalInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovalInfo.ProtoReflect.Descriptor instead.
 func (*ApprovalInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{367}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{369}
 }
 
 func (x *ApprovalInfo) GetId() string {
@@ -23177,7 +23299,7 @@ type ListApprovalsRequest struct {
 
 func (x *ListApprovalsRequest) Reset() {
 	*x = ListApprovalsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[368]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[370]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23189,7 +23311,7 @@ func (x *ListApprovalsRequest) String() string {
 func (*ListApprovalsRequest) ProtoMessage() {}
 
 func (x *ListApprovalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[368]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[370]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23202,7 +23324,7 @@ func (x *ListApprovalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovalsRequest.ProtoReflect.Descriptor instead.
 func (*ListApprovalsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{368}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{370}
 }
 
 func (x *ListApprovalsRequest) GetIncludeClosed() bool {
@@ -23222,7 +23344,7 @@ type ListApprovalsResponse struct {
 
 func (x *ListApprovalsResponse) Reset() {
 	*x = ListApprovalsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[369]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[371]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23234,7 +23356,7 @@ func (x *ListApprovalsResponse) String() string {
 func (*ListApprovalsResponse) ProtoMessage() {}
 
 func (x *ListApprovalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[369]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[371]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23247,7 +23369,7 @@ func (x *ListApprovalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovalsResponse.ProtoReflect.Descriptor instead.
 func (*ListApprovalsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{369}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{371}
 }
 
 func (x *ListApprovalsResponse) GetEnabled() bool {
@@ -23273,7 +23395,7 @@ type ApproveRequestRequest struct {
 
 func (x *ApproveRequestRequest) Reset() {
 	*x = ApproveRequestRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[370]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[372]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23285,7 +23407,7 @@ func (x *ApproveRequestRequest) String() string {
 func (*ApproveRequestRequest) ProtoMessage() {}
 
 func (x *ApproveRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[370]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[372]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23298,7 +23420,7 @@ func (x *ApproveRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveRequestRequest.ProtoReflect.Descriptor instead.
 func (*ApproveRequestRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{370}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{372}
 }
 
 func (x *ApproveRequestRequest) GetId() string {
@@ -23319,7 +23441,7 @@ type ApproveRequestResponse struct {
 
 func (x *ApproveRequestResponse) Reset() {
 	*x = ApproveRequestResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[371]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[373]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23331,7 +23453,7 @@ func (x *ApproveRequestResponse) String() string {
 func (*ApproveRequestResponse) ProtoMessage() {}
 
 func (x *ApproveRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[371]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[373]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23344,7 +23466,7 @@ func (x *ApproveRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveRequestResponse.ProtoReflect.Descriptor instead.
 func (*ApproveRequestResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{371}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{373}
 }
 
 func (x *ApproveRequestResponse) GetSuccess() bool {
@@ -23377,7 +23499,7 @@ type RejectRequestRequest struct {
 
 func (x *RejectRequestRequest) Reset() {
 	*x = RejectRequestRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[372]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[374]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23389,7 +23511,7 @@ func (x *RejectRequestRequest) String() string {
 func (*RejectRequestRequest) ProtoMessage() {}
 
 func (x *RejectRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[372]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[374]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23402,7 +23524,7 @@ func (x *RejectRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectRequestRequest.ProtoReflect.Descriptor instead.
 func (*RejectRequestRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{372}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{374}
 }
 
 func (x *RejectRequestRequest) GetId() string {
@@ -23423,7 +23545,7 @@ type RejectRequestResponse struct {
 
 func (x *RejectRequestResponse) Reset() {
 	*x = RejectRequestResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[373]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[375]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23435,7 +23557,7 @@ func (x *RejectRequestResponse) String() string {
 func (*RejectRequestResponse) ProtoMessage() {}
 
 func (x *RejectRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[373]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[375]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23448,7 +23570,7 @@ func (x *RejectRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectRequestResponse.ProtoReflect.Descriptor instead.
 func (*RejectRequestResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{373}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{375}
 }
 
 func (x *RejectRequestResponse) GetSuccess() bool {
@@ -23496,7 +23618,7 @@ type InspectionCheck struct {
 
 func (x *InspectionCheck) Reset() {
 	*x = InspectionCheck{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[374]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[376]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23508,7 +23630,7 @@ func (x *InspectionCheck) String() string {
 func (*InspectionCheck) ProtoMessage() {}
 
 func (x *InspectionCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[374]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[376]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23521,7 +23643,7 @@ func (x *InspectionCheck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InspectionCheck.ProtoReflect.Descriptor instead.
 func (*InspectionCheck) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{374}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{376}
 }
 
 func (x *InspectionCheck) GetId() string {
@@ -23592,7 +23714,7 @@ type InspectionSummary struct {
 
 func (x *InspectionSummary) Reset() {
 	*x = InspectionSummary{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[375]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[377]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23604,7 +23726,7 @@ func (x *InspectionSummary) String() string {
 func (*InspectionSummary) ProtoMessage() {}
 
 func (x *InspectionSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[375]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[377]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23617,7 +23739,7 @@ func (x *InspectionSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InspectionSummary.ProtoReflect.Descriptor instead.
 func (*InspectionSummary) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{375}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{377}
 }
 
 func (x *InspectionSummary) GetPass() int32 {
@@ -23666,7 +23788,7 @@ type InspectionReport struct {
 
 func (x *InspectionReport) Reset() {
 	*x = InspectionReport{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[376]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[378]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23678,7 +23800,7 @@ func (x *InspectionReport) String() string {
 func (*InspectionReport) ProtoMessage() {}
 
 func (x *InspectionReport) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[376]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[378]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23691,7 +23813,7 @@ func (x *InspectionReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InspectionReport.ProtoReflect.Descriptor instead.
 func (*InspectionReport) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{376}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{378}
 }
 
 func (x *InspectionReport) GetId() string {
@@ -23753,7 +23875,7 @@ type RunInspectionRequest struct {
 
 func (x *RunInspectionRequest) Reset() {
 	*x = RunInspectionRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[377]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[379]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23765,7 +23887,7 @@ func (x *RunInspectionRequest) String() string {
 func (*RunInspectionRequest) ProtoMessage() {}
 
 func (x *RunInspectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[377]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[379]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23778,7 +23900,7 @@ func (x *RunInspectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunInspectionRequest.ProtoReflect.Descriptor instead.
 func (*RunInspectionRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{377}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{379}
 }
 
 func (x *RunInspectionRequest) GetAreas() []string {
@@ -23799,7 +23921,7 @@ type RunInspectionResponse struct {
 
 func (x *RunInspectionResponse) Reset() {
 	*x = RunInspectionResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[378]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[380]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23811,7 +23933,7 @@ func (x *RunInspectionResponse) String() string {
 func (*RunInspectionResponse) ProtoMessage() {}
 
 func (x *RunInspectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[378]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[380]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23824,7 +23946,7 @@ func (x *RunInspectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunInspectionResponse.ProtoReflect.Descriptor instead.
 func (*RunInspectionResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{378}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{380}
 }
 
 func (x *RunInspectionResponse) GetSuccess() bool {
@@ -23857,7 +23979,7 @@ type ListInspectionsRequest struct {
 
 func (x *ListInspectionsRequest) Reset() {
 	*x = ListInspectionsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[379]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[381]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23869,7 +23991,7 @@ func (x *ListInspectionsRequest) String() string {
 func (*ListInspectionsRequest) ProtoMessage() {}
 
 func (x *ListInspectionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[379]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[381]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23882,7 +24004,7 @@ func (x *ListInspectionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInspectionsRequest.ProtoReflect.Descriptor instead.
 func (*ListInspectionsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{379}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{381}
 }
 
 func (x *ListInspectionsRequest) GetLimit() int32 {
@@ -23903,7 +24025,7 @@ type ListInspectionsResponse struct {
 
 func (x *ListInspectionsResponse) Reset() {
 	*x = ListInspectionsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[380]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[382]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23915,7 +24037,7 @@ func (x *ListInspectionsResponse) String() string {
 func (*ListInspectionsResponse) ProtoMessage() {}
 
 func (x *ListInspectionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[380]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[382]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23928,7 +24050,7 @@ func (x *ListInspectionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInspectionsResponse.ProtoReflect.Descriptor instead.
 func (*ListInspectionsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{380}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{382}
 }
 
 func (x *ListInspectionsResponse) GetSuccess() bool {
@@ -23961,7 +24083,7 @@ type GetInspectionRequest struct {
 
 func (x *GetInspectionRequest) Reset() {
 	*x = GetInspectionRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[381]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[383]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -23973,7 +24095,7 @@ func (x *GetInspectionRequest) String() string {
 func (*GetInspectionRequest) ProtoMessage() {}
 
 func (x *GetInspectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[381]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[383]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -23986,7 +24108,7 @@ func (x *GetInspectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInspectionRequest.ProtoReflect.Descriptor instead.
 func (*GetInspectionRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{381}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{383}
 }
 
 func (x *GetInspectionRequest) GetId() string {
@@ -24007,7 +24129,7 @@ type GetInspectionResponse struct {
 
 func (x *GetInspectionResponse) Reset() {
 	*x = GetInspectionResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[382]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[384]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24019,7 +24141,7 @@ func (x *GetInspectionResponse) String() string {
 func (*GetInspectionResponse) ProtoMessage() {}
 
 func (x *GetInspectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[382]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[384]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24032,7 +24154,7 @@ func (x *GetInspectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInspectionResponse.ProtoReflect.Descriptor instead.
 func (*GetInspectionResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{382}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{384}
 }
 
 func (x *GetInspectionResponse) GetSuccess() bool {
@@ -24077,7 +24199,7 @@ type AppInfo struct {
 
 func (x *AppInfo) Reset() {
 	*x = AppInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[383]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[385]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24089,7 +24211,7 @@ func (x *AppInfo) String() string {
 func (*AppInfo) ProtoMessage() {}
 
 func (x *AppInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[383]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[385]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24102,7 +24224,7 @@ func (x *AppInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppInfo.ProtoReflect.Descriptor instead.
 func (*AppInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{383}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{385}
 }
 
 func (x *AppInfo) GetName() string {
@@ -24210,7 +24332,7 @@ type CreateAppRequest struct {
 
 func (x *CreateAppRequest) Reset() {
 	*x = CreateAppRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[384]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[386]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24222,7 +24344,7 @@ func (x *CreateAppRequest) String() string {
 func (*CreateAppRequest) ProtoMessage() {}
 
 func (x *CreateAppRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[384]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[386]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24235,7 +24357,7 @@ func (x *CreateAppRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAppRequest.ProtoReflect.Descriptor instead.
 func (*CreateAppRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{384}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{386}
 }
 
 func (x *CreateAppRequest) GetName() string {
@@ -24296,7 +24418,7 @@ type CreateAppResponse struct {
 
 func (x *CreateAppResponse) Reset() {
 	*x = CreateAppResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[385]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[387]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24308,7 +24430,7 @@ func (x *CreateAppResponse) String() string {
 func (*CreateAppResponse) ProtoMessage() {}
 
 func (x *CreateAppResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[385]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[387]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24321,7 +24443,7 @@ func (x *CreateAppResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAppResponse.ProtoReflect.Descriptor instead.
 func (*CreateAppResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{385}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{387}
 }
 
 func (x *CreateAppResponse) GetSuccess() bool {
@@ -24374,7 +24496,7 @@ type ListAppsRequest struct {
 
 func (x *ListAppsRequest) Reset() {
 	*x = ListAppsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[386]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[388]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24386,7 +24508,7 @@ func (x *ListAppsRequest) String() string {
 func (*ListAppsRequest) ProtoMessage() {}
 
 func (x *ListAppsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[386]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[388]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24399,7 +24521,7 @@ func (x *ListAppsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAppsRequest.ProtoReflect.Descriptor instead.
 func (*ListAppsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{386}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{388}
 }
 
 type ListAppsResponse struct {
@@ -24413,7 +24535,7 @@ type ListAppsResponse struct {
 
 func (x *ListAppsResponse) Reset() {
 	*x = ListAppsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[387]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[389]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24425,7 +24547,7 @@ func (x *ListAppsResponse) String() string {
 func (*ListAppsResponse) ProtoMessage() {}
 
 func (x *ListAppsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[387]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[389]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24438,7 +24560,7 @@ func (x *ListAppsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAppsResponse.ProtoReflect.Descriptor instead.
 func (*ListAppsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{387}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{389}
 }
 
 func (x *ListAppsResponse) GetSuccess() bool {
@@ -24471,7 +24593,7 @@ type GetAppStatusRequest struct {
 
 func (x *GetAppStatusRequest) Reset() {
 	*x = GetAppStatusRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[388]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[390]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24483,7 +24605,7 @@ func (x *GetAppStatusRequest) String() string {
 func (*GetAppStatusRequest) ProtoMessage() {}
 
 func (x *GetAppStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[388]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[390]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24496,7 +24618,7 @@ func (x *GetAppStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAppStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetAppStatusRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{388}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{390}
 }
 
 func (x *GetAppStatusRequest) GetName() string {
@@ -24522,7 +24644,7 @@ type GetAppStatusResponse struct {
 
 func (x *GetAppStatusResponse) Reset() {
 	*x = GetAppStatusResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[389]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[391]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24534,7 +24656,7 @@ func (x *GetAppStatusResponse) String() string {
 func (*GetAppStatusResponse) ProtoMessage() {}
 
 func (x *GetAppStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[389]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[391]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24547,7 +24669,7 @@ func (x *GetAppStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAppStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetAppStatusResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{389}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{391}
 }
 
 func (x *GetAppStatusResponse) GetSuccess() bool {
@@ -24616,7 +24738,7 @@ type DeleteAppRequest struct {
 
 func (x *DeleteAppRequest) Reset() {
 	*x = DeleteAppRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[390]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[392]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24628,7 +24750,7 @@ func (x *DeleteAppRequest) String() string {
 func (*DeleteAppRequest) ProtoMessage() {}
 
 func (x *DeleteAppRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[390]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[392]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24641,7 +24763,7 @@ func (x *DeleteAppRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteAppRequest.ProtoReflect.Descriptor instead.
 func (*DeleteAppRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{390}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{392}
 }
 
 func (x *DeleteAppRequest) GetName() string {
@@ -24668,7 +24790,7 @@ type DeleteAppResponse struct {
 
 func (x *DeleteAppResponse) Reset() {
 	*x = DeleteAppResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[391]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[393]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24680,7 +24802,7 @@ func (x *DeleteAppResponse) String() string {
 func (*DeleteAppResponse) ProtoMessage() {}
 
 func (x *DeleteAppResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[391]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[393]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24693,7 +24815,7 @@ func (x *DeleteAppResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteAppResponse.ProtoReflect.Descriptor instead.
 func (*DeleteAppResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{391}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{393}
 }
 
 func (x *DeleteAppResponse) GetSuccess() bool {
@@ -24719,7 +24841,7 @@ type FailoverAppRequest struct {
 
 func (x *FailoverAppRequest) Reset() {
 	*x = FailoverAppRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[392]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[394]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24731,7 +24853,7 @@ func (x *FailoverAppRequest) String() string {
 func (*FailoverAppRequest) ProtoMessage() {}
 
 func (x *FailoverAppRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[392]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[394]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24744,7 +24866,7 @@ func (x *FailoverAppRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailoverAppRequest.ProtoReflect.Descriptor instead.
 func (*FailoverAppRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{392}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{394}
 }
 
 func (x *FailoverAppRequest) GetName() string {
@@ -24766,7 +24888,7 @@ type FailoverAppResponse struct {
 
 func (x *FailoverAppResponse) Reset() {
 	*x = FailoverAppResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[393]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[395]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24778,7 +24900,7 @@ func (x *FailoverAppResponse) String() string {
 func (*FailoverAppResponse) ProtoMessage() {}
 
 func (x *FailoverAppResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[393]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[395]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24791,7 +24913,7 @@ func (x *FailoverAppResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailoverAppResponse.ProtoReflect.Descriptor instead.
 func (*FailoverAppResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{393}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{395}
 }
 
 func (x *FailoverAppResponse) GetSuccess() bool {
@@ -24832,7 +24954,7 @@ type SnapshotAppRequest struct {
 
 func (x *SnapshotAppRequest) Reset() {
 	*x = SnapshotAppRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[394]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[396]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24844,7 +24966,7 @@ func (x *SnapshotAppRequest) String() string {
 func (*SnapshotAppRequest) ProtoMessage() {}
 
 func (x *SnapshotAppRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[394]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[396]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24857,7 +24979,7 @@ func (x *SnapshotAppRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotAppRequest.ProtoReflect.Descriptor instead.
 func (*SnapshotAppRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{394}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{396}
 }
 
 func (x *SnapshotAppRequest) GetName() string {
@@ -24885,7 +25007,7 @@ type SnapshotAppResponse struct {
 
 func (x *SnapshotAppResponse) Reset() {
 	*x = SnapshotAppResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[395]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[397]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24897,7 +25019,7 @@ func (x *SnapshotAppResponse) String() string {
 func (*SnapshotAppResponse) ProtoMessage() {}
 
 func (x *SnapshotAppResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[395]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[397]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24910,7 +25032,7 @@ func (x *SnapshotAppResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotAppResponse.ProtoReflect.Descriptor instead.
 func (*SnapshotAppResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{395}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{397}
 }
 
 func (x *SnapshotAppResponse) GetSuccess() bool {
@@ -24944,7 +25066,7 @@ type TrimPoolsRequest struct {
 
 func (x *TrimPoolsRequest) Reset() {
 	*x = TrimPoolsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[396]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[398]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -24956,7 +25078,7 @@ func (x *TrimPoolsRequest) String() string {
 func (*TrimPoolsRequest) ProtoMessage() {}
 
 func (x *TrimPoolsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[396]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[398]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -24969,7 +25091,7 @@ func (x *TrimPoolsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrimPoolsRequest.ProtoReflect.Descriptor instead.
 func (*TrimPoolsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{396}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{398}
 }
 
 func (x *TrimPoolsRequest) GetNode() string {
@@ -24991,7 +25113,7 @@ type TrimResultInfo struct {
 
 func (x *TrimResultInfo) Reset() {
 	*x = TrimResultInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[397]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[399]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25003,7 +25125,7 @@ func (x *TrimResultInfo) String() string {
 func (*TrimResultInfo) ProtoMessage() {}
 
 func (x *TrimResultInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[397]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[399]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25016,7 +25138,7 @@ func (x *TrimResultInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrimResultInfo.ProtoReflect.Descriptor instead.
 func (*TrimResultInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{397}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{399}
 }
 
 func (x *TrimResultInfo) GetNode() string {
@@ -25058,7 +25180,7 @@ type TrimPoolsResponse struct {
 
 func (x *TrimPoolsResponse) Reset() {
 	*x = TrimPoolsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[398]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[400]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25070,7 +25192,7 @@ func (x *TrimPoolsResponse) String() string {
 func (*TrimPoolsResponse) ProtoMessage() {}
 
 func (x *TrimPoolsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[398]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[400]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25083,7 +25205,7 @@ func (x *TrimPoolsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrimPoolsResponse.ProtoReflect.Descriptor instead.
 func (*TrimPoolsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{398}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{400}
 }
 
 func (x *TrimPoolsResponse) GetSuccess() bool {
@@ -25117,7 +25239,7 @@ type ListPoolDisksRequest struct {
 
 func (x *ListPoolDisksRequest) Reset() {
 	*x = ListPoolDisksRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[399]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[401]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25129,7 +25251,7 @@ func (x *ListPoolDisksRequest) String() string {
 func (*ListPoolDisksRequest) ProtoMessage() {}
 
 func (x *ListPoolDisksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[399]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[401]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25142,7 +25264,7 @@ func (x *ListPoolDisksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPoolDisksRequest.ProtoReflect.Descriptor instead.
 func (*ListPoolDisksRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{399}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{401}
 }
 
 func (x *ListPoolDisksRequest) GetPool() string {
@@ -25178,7 +25300,7 @@ type PoolDiskInfo struct {
 
 func (x *PoolDiskInfo) Reset() {
 	*x = PoolDiskInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[400]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[402]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25190,7 +25312,7 @@ func (x *PoolDiskInfo) String() string {
 func (*PoolDiskInfo) ProtoMessage() {}
 
 func (x *PoolDiskInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[400]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[402]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25203,7 +25325,7 @@ func (x *PoolDiskInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolDiskInfo.ProtoReflect.Descriptor instead.
 func (*PoolDiskInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{400}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{402}
 }
 
 func (x *PoolDiskInfo) GetNode() string {
@@ -25280,7 +25402,7 @@ type ListPoolDisksResponse struct {
 
 func (x *ListPoolDisksResponse) Reset() {
 	*x = ListPoolDisksResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[401]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[403]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25292,7 +25414,7 @@ func (x *ListPoolDisksResponse) String() string {
 func (*ListPoolDisksResponse) ProtoMessage() {}
 
 func (x *ListPoolDisksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[401]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[403]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25305,7 +25427,7 @@ func (x *ListPoolDisksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPoolDisksResponse.ProtoReflect.Descriptor instead.
 func (*ListPoolDisksResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{401}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{403}
 }
 
 func (x *ListPoolDisksResponse) GetSuccess() bool {
@@ -25340,7 +25462,7 @@ type RemovePoolDiskRequest struct {
 
 func (x *RemovePoolDiskRequest) Reset() {
 	*x = RemovePoolDiskRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[402]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[404]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25352,7 +25474,7 @@ func (x *RemovePoolDiskRequest) String() string {
 func (*RemovePoolDiskRequest) ProtoMessage() {}
 
 func (x *RemovePoolDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[402]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[404]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25365,7 +25487,7 @@ func (x *RemovePoolDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemovePoolDiskRequest.ProtoReflect.Descriptor instead.
 func (*RemovePoolDiskRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{402}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{404}
 }
 
 func (x *RemovePoolDiskRequest) GetPool() string {
@@ -25401,7 +25523,7 @@ type ReplacePoolDiskRequest struct {
 
 func (x *ReplacePoolDiskRequest) Reset() {
 	*x = ReplacePoolDiskRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[403]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[405]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25413,7 +25535,7 @@ func (x *ReplacePoolDiskRequest) String() string {
 func (*ReplacePoolDiskRequest) ProtoMessage() {}
 
 func (x *ReplacePoolDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[403]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[405]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25426,7 +25548,7 @@ func (x *ReplacePoolDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplacePoolDiskRequest.ProtoReflect.Descriptor instead.
 func (*ReplacePoolDiskRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{403}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{405}
 }
 
 func (x *ReplacePoolDiskRequest) GetPool() string {
@@ -25469,7 +25591,7 @@ type MoveVolumeRequest struct {
 
 func (x *MoveVolumeRequest) Reset() {
 	*x = MoveVolumeRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[404]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[406]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25481,7 +25603,7 @@ func (x *MoveVolumeRequest) String() string {
 func (*MoveVolumeRequest) ProtoMessage() {}
 
 func (x *MoveVolumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[404]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[406]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25494,7 +25616,7 @@ func (x *MoveVolumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveVolumeRequest.ProtoReflect.Descriptor instead.
 func (*MoveVolumeRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{404}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{406}
 }
 
 func (x *MoveVolumeRequest) GetResource() string {
@@ -25529,7 +25651,7 @@ type StorageJobResponse struct {
 
 func (x *StorageJobResponse) Reset() {
 	*x = StorageJobResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[405]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[407]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25541,7 +25663,7 @@ func (x *StorageJobResponse) String() string {
 func (*StorageJobResponse) ProtoMessage() {}
 
 func (x *StorageJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[405]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[407]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25554,7 +25676,7 @@ func (x *StorageJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageJobResponse.ProtoReflect.Descriptor instead.
 func (*StorageJobResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{405}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{407}
 }
 
 func (x *StorageJobResponse) GetSuccess() bool {
@@ -25587,7 +25709,7 @@ type ListStorageJobsRequest struct {
 
 func (x *ListStorageJobsRequest) Reset() {
 	*x = ListStorageJobsRequest{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[406]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[408]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25599,7 +25721,7 @@ func (x *ListStorageJobsRequest) String() string {
 func (*ListStorageJobsRequest) ProtoMessage() {}
 
 func (x *ListStorageJobsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[406]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[408]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25612,7 +25734,7 @@ func (x *ListStorageJobsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStorageJobsRequest.ProtoReflect.Descriptor instead.
 func (*ListStorageJobsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{406}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{408}
 }
 
 func (x *ListStorageJobsRequest) GetIncludeFinished() bool {
@@ -25639,7 +25761,7 @@ type StorageJobInfo struct {
 
 func (x *StorageJobInfo) Reset() {
 	*x = StorageJobInfo{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[407]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[409]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25651,7 +25773,7 @@ func (x *StorageJobInfo) String() string {
 func (*StorageJobInfo) ProtoMessage() {}
 
 func (x *StorageJobInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[407]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[409]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25664,7 +25786,7 @@ func (x *StorageJobInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageJobInfo.ProtoReflect.Descriptor instead.
 func (*StorageJobInfo) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{407}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{409}
 }
 
 func (x *StorageJobInfo) GetId() string {
@@ -25734,7 +25856,7 @@ type ListStorageJobsResponse struct {
 
 func (x *ListStorageJobsResponse) Reset() {
 	*x = ListStorageJobsResponse{}
-	mi := &file_api_proto_v1_haify_proto_msgTypes[408]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[410]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -25746,7 +25868,7 @@ func (x *ListStorageJobsResponse) String() string {
 func (*ListStorageJobsResponse) ProtoMessage() {}
 
 func (x *ListStorageJobsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_haify_proto_msgTypes[408]
+	mi := &file_api_proto_v1_haify_proto_msgTypes[410]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -25759,7 +25881,7 @@ func (x *ListStorageJobsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStorageJobsResponse.ProtoReflect.Descriptor instead.
 func (*ListStorageJobsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{408}
+	return file_api_proto_v1_haify_proto_rawDescGZIP(), []int{410}
 }
 
 func (x *ListStorageJobsResponse) GetSuccess() bool {
@@ -26281,7 +26403,21 @@ const file_api_proto_v1_haify_proto_rawDesc = "" +
 	"\x04node\x18\x02 \x01(\tR\x04node\"J\n" +
 	"\x14SetSecondaryResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"a\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xcb\x01\n" +
+	"\x18SetResourceLabelsRequest\x12\x1a\n" +
+	"\bresource\x18\x01 \x01(\tR\bresource\x12@\n" +
+	"\x06labels\x18\x02 \x03(\v2(.v1.SetResourceLabelsRequest.LabelsEntryR\x06labels\x12\x16\n" +
+	"\x06remove\x18\x03 \x03(\tR\x06remove\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcd\x01\n" +
+	"\x19SetResourceLabelsResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12A\n" +
+	"\x06labels\x18\x03 \x03(\v2).v1.SetResourceLabelsResponse.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"a\n" +
 	"\x15SetDualPrimaryRequest\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x16\n" +
 	"\x06enable\x18\x02 \x01(\bR\x06enable\x12\x14\n" +
@@ -27694,7 +27830,7 @@ const file_api_proto_v1_haify_proto_rawDesc = "" +
 	"\x17ListStorageJobsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12&\n" +
-	"\x04jobs\x18\x03 \x03(\v2\x12.v1.StorageJobInfoR\x04jobs2\x8d\xa2\x01\n" +
+	"\x04jobs\x18\x03 \x03(\v2\x12.v1.StorageJobInfoR\x04jobs2\x8b\xa3\x01\n" +
 	"\x0fHaifyController\x12Q\n" +
 	"\n" +
 	"CreatePool\x12\x15.v1.CreatePoolRequest\x1a\x16.v1.CreatePoolResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/pools\x12U\n" +
@@ -27746,7 +27882,8 @@ const file_api_proto_v1_haify_proto_rawDesc = "" +
 	"\fSetSecondary\x12\x17.v1.SetSecondaryRequest\x1a\x18.v1.SetSecondaryResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/resources/{resource}/secondary\x12y\n" +
 	"\x0eSetDualPrimary\x12\x19.v1.SetDualPrimaryRequest\x1a\x1a.v1.SetDualPrimaryResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/resources/{resource}/dual-primary\x12\x8f\x01\n" +
 	"\x14AttachDisklessClient\x12\x1f.v1.AttachDisklessClientRequest\x1a .v1.AttachDisklessClientResponse\"4\x82\xd3\xe4\x93\x02.:\x01*\")/v1/resources/{resource}/diskless-clients\x12\x93\x01\n" +
-	"\x14DetachDisklessClient\x12\x1f.v1.DetachDisklessClientRequest\x1a .v1.DetachDisklessClientResponse\"8\x82\xd3\xe4\x93\x022*0/v1/resources/{resource}/diskless-clients/{node}\x12\x91\x01\n" +
+	"\x14DetachDisklessClient\x12\x1f.v1.DetachDisklessClientRequest\x1a .v1.DetachDisklessClientResponse\"8\x82\xd3\xe4\x93\x022*0/v1/resources/{resource}/diskless-clients/{node}\x12|\n" +
+	"\x11SetResourceLabels\x12\x1c.v1.SetResourceLabelsRequest\x1a\x1d.v1.SetResourceLabelsResponse\"*\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/v1/resources/{resource}/labels\x12\x91\x01\n" +
 	"\x10CreateFilesystem\x12\x1b.v1.CreateFilesystemRequest\x1a\x1c.v1.CreateFilesystemResponse\"B\x82\xd3\xe4\x93\x02<:\x01*\"7/v1/resources/{resource}/volumes/{volume_id}/filesystem\x12\x83\x01\n" +
 	"\rMountResource\x12\x18.v1.MountResourceRequest\x1a\x19.v1.MountResourceResponse\"=\x82\xd3\xe4\x93\x027:\x01*\"2/v1/resources/{resource}/volumes/{volume_id}/mount\x12\x8b\x01\n" +
 	"\x0fUnmountResource\x12\x1a.v1.UnmountResourceRequest\x1a\x1b.v1.UnmountResourceResponse\"?\x82\xd3\xe4\x93\x029:\x01*\"4/v1/resources/{resource}/volumes/{volume_id}/unmount\x12W\n" +
@@ -27904,7 +28041,7 @@ func file_api_proto_v1_haify_proto_rawDescGZIP() []byte {
 	return file_api_proto_v1_haify_proto_rawDescData
 }
 
-var file_api_proto_v1_haify_proto_msgTypes = make([]protoimpl.MessageInfo, 432)
+var file_api_proto_v1_haify_proto_msgTypes = make([]protoimpl.MessageInfo, 436)
 var file_api_proto_v1_haify_proto_goTypes = []any{
 	(*CreatePoolRequest)(nil),                 // 0: v1.CreatePoolRequest
 	(*CreatePoolResponse)(nil),                // 1: v1.CreatePoolResponse
@@ -28022,801 +28159,809 @@ var file_api_proto_v1_haify_proto_goTypes = []any{
 	(*SetPrimaryResponse)(nil),                // 113: v1.SetPrimaryResponse
 	(*SetSecondaryRequest)(nil),               // 114: v1.SetSecondaryRequest
 	(*SetSecondaryResponse)(nil),              // 115: v1.SetSecondaryResponse
-	(*SetDualPrimaryRequest)(nil),             // 116: v1.SetDualPrimaryRequest
-	(*SetDualPrimaryResponse)(nil),            // 117: v1.SetDualPrimaryResponse
-	(*AttachDisklessClientRequest)(nil),       // 118: v1.AttachDisklessClientRequest
-	(*AttachDisklessClientResponse)(nil),      // 119: v1.AttachDisklessClientResponse
-	(*DetachDisklessClientRequest)(nil),       // 120: v1.DetachDisklessClientRequest
-	(*DetachDisklessClientResponse)(nil),      // 121: v1.DetachDisklessClientResponse
-	(*CreateFilesystemRequest)(nil),           // 122: v1.CreateFilesystemRequest
-	(*CreateFilesystemResponse)(nil),          // 123: v1.CreateFilesystemResponse
-	(*MountResourceRequest)(nil),              // 124: v1.MountResourceRequest
-	(*MountResourceResponse)(nil),             // 125: v1.MountResourceResponse
-	(*UnmountResourceRequest)(nil),            // 126: v1.UnmountResourceRequest
-	(*UnmountResourceResponse)(nil),           // 127: v1.UnmountResourceResponse
-	(*OcfAgent)(nil),                          // 128: v1.OcfAgent
-	(*HaStartItem)(nil),                       // 129: v1.HaStartItem
-	(*MakeHaRequest)(nil),                     // 130: v1.MakeHaRequest
-	(*ResourceAgentInfo)(nil),                 // 131: v1.ResourceAgentInfo
-	(*ListResourceAgentsRequest)(nil),         // 132: v1.ListResourceAgentsRequest
-	(*ListResourceAgentsResponse)(nil),        // 133: v1.ListResourceAgentsResponse
-	(*ResourceAgentParameter)(nil),            // 134: v1.ResourceAgentParameter
-	(*GetResourceAgentMetadataRequest)(nil),   // 135: v1.GetResourceAgentMetadataRequest
-	(*GetResourceAgentMetadataResponse)(nil),  // 136: v1.GetResourceAgentMetadataResponse
-	(*GetHaTomlRequest)(nil),                  // 137: v1.GetHaTomlRequest
-	(*GetHaTomlResponse)(nil),                 // 138: v1.GetHaTomlResponse
-	(*SyncHaTomlRequest)(nil),                 // 139: v1.SyncHaTomlRequest
-	(*SyncHaTomlResponse)(nil),                // 140: v1.SyncHaTomlResponse
-	(*MakeHaResponse)(nil),                    // 141: v1.MakeHaResponse
-	(*EvictHaRequest)(nil),                    // 142: v1.EvictHaRequest
-	(*SetTiebreakerRequest)(nil),              // 143: v1.SetTiebreakerRequest
-	(*SetTiebreakerResponse)(nil),             // 144: v1.SetTiebreakerResponse
-	(*AddDRRequest)(nil),                      // 145: v1.AddDRRequest
-	(*AddDRResponse)(nil),                     // 146: v1.AddDRResponse
-	(*AddReplicaRequest)(nil),                 // 147: v1.AddReplicaRequest
-	(*RemoveReplicaRequest)(nil),              // 148: v1.RemoveReplicaRequest
-	(*RemoveReplicaResponse)(nil),             // 149: v1.RemoveReplicaResponse
-	(*AddReplicaResponse)(nil),                // 150: v1.AddReplicaResponse
-	(*EvictHaResponse)(nil),                   // 151: v1.EvictHaResponse
-	(*EnableSelfHaRequest)(nil),               // 152: v1.EnableSelfHaRequest
-	(*EnableSelfHaResponse)(nil),              // 153: v1.EnableSelfHaResponse
-	(*DisableSelfHaRequest)(nil),              // 154: v1.DisableSelfHaRequest
-	(*DisableSelfHaResponse)(nil),             // 155: v1.DisableSelfHaResponse
-	(*GetSelfHaStatusRequest)(nil),            // 156: v1.GetSelfHaStatusRequest
-	(*GetSelfHaStatusResponse)(nil),           // 157: v1.GetSelfHaStatusResponse
-	(*AuditEvent)(nil),                        // 158: v1.AuditEvent
-	(*ListAuditEventsRequest)(nil),            // 159: v1.ListAuditEventsRequest
-	(*ListAuditEventsResponse)(nil),           // 160: v1.ListAuditEventsResponse
-	(*ControllerLogEntry)(nil),                // 161: v1.ControllerLogEntry
-	(*ListControllerLogsRequest)(nil),         // 162: v1.ListControllerLogsRequest
-	(*ListControllerLogsResponse)(nil),        // 163: v1.ListControllerLogsResponse
-	(*CollectNodeDiagnosticsRequest)(nil),     // 164: v1.CollectNodeDiagnosticsRequest
-	(*NodeCollectorOutput)(nil),               // 165: v1.NodeCollectorOutput
-	(*NodeDiagnostics)(nil),                   // 166: v1.NodeDiagnostics
-	(*CollectNodeDiagnosticsResponse)(nil),    // 167: v1.CollectNodeDiagnosticsResponse
-	(*Event)(nil),                             // 168: v1.Event
-	(*ListEventsRequest)(nil),                 // 169: v1.ListEventsRequest
-	(*ListEventsResponse)(nil),                // 170: v1.ListEventsResponse
-	(*RepairWanProxyRequest)(nil),             // 171: v1.RepairWanProxyRequest
-	(*RepairWanProxyResponse)(nil),            // 172: v1.RepairWanProxyResponse
-	(*WatchEventsRequest)(nil),                // 173: v1.WatchEventsRequest
-	(*ResourceInfo)(nil),                      // 174: v1.ResourceInfo
-	(*ResourceStatus)(nil),                    // 175: v1.ResourceStatus
-	(*QuorumInfo)(nil),                        // 176: v1.QuorumInfo
-	(*WANMetrics)(nil),                        // 177: v1.WANMetrics
-	(*NodeResourceState)(nil),                 // 178: v1.NodeResourceState
-	(*VolumeInfo)(nil),                        // 179: v1.VolumeInfo
-	(*CreateSnapshotRequest)(nil),             // 180: v1.CreateSnapshotRequest
-	(*CreateSnapshotResponse)(nil),            // 181: v1.CreateSnapshotResponse
-	(*DeleteSnapshotRequest)(nil),             // 182: v1.DeleteSnapshotRequest
-	(*DeleteSnapshotResponse)(nil),            // 183: v1.DeleteSnapshotResponse
-	(*RestoreSnapshotRequest)(nil),            // 184: v1.RestoreSnapshotRequest
-	(*RestoreSnapshotResponse)(nil),           // 185: v1.RestoreSnapshotResponse
-	(*PopulateVolumeRequest)(nil),             // 186: v1.PopulateVolumeRequest
-	(*PopulateVolumeResponse)(nil),            // 187: v1.PopulateVolumeResponse
-	(*ListSnapshotsRequest)(nil),              // 188: v1.ListSnapshotsRequest
-	(*ListSnapshotsResponse)(nil),             // 189: v1.ListSnapshotsResponse
-	(*SnapshotInfo)(nil),                      // 190: v1.SnapshotInfo
-	(*GFSRetention)(nil),                      // 191: v1.GFSRetention
-	(*SnapshotScheduleInfo)(nil),              // 192: v1.SnapshotScheduleInfo
-	(*FreezeSnapshotScheduleRequest)(nil),     // 193: v1.FreezeSnapshotScheduleRequest
-	(*FreezeSnapshotScheduleResponse)(nil),    // 194: v1.FreezeSnapshotScheduleResponse
-	(*UnfreezeSnapshotScheduleRequest)(nil),   // 195: v1.UnfreezeSnapshotScheduleRequest
-	(*UnfreezeSnapshotScheduleResponse)(nil),  // 196: v1.UnfreezeSnapshotScheduleResponse
-	(*CreateSnapshotScheduleRequest)(nil),     // 197: v1.CreateSnapshotScheduleRequest
-	(*CreateSnapshotScheduleResponse)(nil),    // 198: v1.CreateSnapshotScheduleResponse
-	(*ListSnapshotSchedulesRequest)(nil),      // 199: v1.ListSnapshotSchedulesRequest
-	(*ListSnapshotSchedulesResponse)(nil),     // 200: v1.ListSnapshotSchedulesResponse
-	(*DeleteSnapshotScheduleRequest)(nil),     // 201: v1.DeleteSnapshotScheduleRequest
-	(*DeleteSnapshotScheduleResponse)(nil),    // 202: v1.DeleteSnapshotScheduleResponse
-	(*BackupTargetInfo)(nil),                  // 203: v1.BackupTargetInfo
-	(*AddBackupTargetRequest)(nil),            // 204: v1.AddBackupTargetRequest
-	(*AddBackupTargetResponse)(nil),           // 205: v1.AddBackupTargetResponse
-	(*ListBackupTargetsRequest)(nil),          // 206: v1.ListBackupTargetsRequest
-	(*ListBackupTargetsResponse)(nil),         // 207: v1.ListBackupTargetsResponse
-	(*DeleteBackupTargetRequest)(nil),         // 208: v1.DeleteBackupTargetRequest
-	(*DeleteBackupTargetResponse)(nil),        // 209: v1.DeleteBackupTargetResponse
-	(*NotifyChannelInfo)(nil),                 // 210: v1.NotifyChannelInfo
-	(*ListNotifyChannelsRequest)(nil),         // 211: v1.ListNotifyChannelsRequest
-	(*ListNotifyChannelsResponse)(nil),        // 212: v1.ListNotifyChannelsResponse
-	(*SaveNotifyChannelRequest)(nil),          // 213: v1.SaveNotifyChannelRequest
-	(*SaveNotifyChannelResponse)(nil),         // 214: v1.SaveNotifyChannelResponse
-	(*DeleteNotifyChannelRequest)(nil),        // 215: v1.DeleteNotifyChannelRequest
-	(*DeleteNotifyChannelResponse)(nil),       // 216: v1.DeleteNotifyChannelResponse
-	(*TestNotifyChannelRequest)(nil),          // 217: v1.TestNotifyChannelRequest
-	(*TestNotifyChannelResponse)(nil),         // 218: v1.TestNotifyChannelResponse
-	(*BackupVolumeInfo)(nil),                  // 219: v1.BackupVolumeInfo
-	(*BackupInfo)(nil),                        // 220: v1.BackupInfo
-	(*CreateBackupRequest)(nil),               // 221: v1.CreateBackupRequest
-	(*CreateBackupResponse)(nil),              // 222: v1.CreateBackupResponse
-	(*ListBackupsRequest)(nil),                // 223: v1.ListBackupsRequest
-	(*ListBackupsResponse)(nil),               // 224: v1.ListBackupsResponse
-	(*RestoreBackupRequest)(nil),              // 225: v1.RestoreBackupRequest
-	(*RestoreBackupResponse)(nil),             // 226: v1.RestoreBackupResponse
-	(*DeleteBackupRequest)(nil),               // 227: v1.DeleteBackupRequest
-	(*DeleteBackupResponse)(nil),              // 228: v1.DeleteBackupResponse
-	(*ImportBackupsRequest)(nil),              // 229: v1.ImportBackupsRequest
-	(*ImportBackupsResponse)(nil),             // 230: v1.ImportBackupsResponse
-	(*BackupScheduleInfo)(nil),                // 231: v1.BackupScheduleInfo
-	(*CreateBackupScheduleRequest)(nil),       // 232: v1.CreateBackupScheduleRequest
-	(*CreateBackupScheduleResponse)(nil),      // 233: v1.CreateBackupScheduleResponse
-	(*ListBackupSchedulesRequest)(nil),        // 234: v1.ListBackupSchedulesRequest
-	(*ListBackupSchedulesResponse)(nil),       // 235: v1.ListBackupSchedulesResponse
-	(*DeleteBackupScheduleRequest)(nil),       // 236: v1.DeleteBackupScheduleRequest
-	(*DeleteBackupScheduleResponse)(nil),      // 237: v1.DeleteBackupScheduleResponse
-	(*RunBackupScheduleRequest)(nil),          // 238: v1.RunBackupScheduleRequest
-	(*RunBackupScheduleResponse)(nil),         // 239: v1.RunBackupScheduleResponse
-	(*CreateNFSGatewayRequest)(nil),           // 240: v1.CreateNFSGatewayRequest
-	(*CreateNFSGatewayResponse)(nil),          // 241: v1.CreateNFSGatewayResponse
-	(*CreateISCSIGatewayRequest)(nil),         // 242: v1.CreateISCSIGatewayRequest
-	(*CreateISCSIGatewayResponse)(nil),        // 243: v1.CreateISCSIGatewayResponse
-	(*CreateNVMeGatewayRequest)(nil),          // 244: v1.CreateNVMeGatewayRequest
-	(*CreateNVMeGatewayResponse)(nil),         // 245: v1.CreateNVMeGatewayResponse
-	(*DeleteGatewayRequest)(nil),              // 246: v1.DeleteGatewayRequest
-	(*DeleteGatewayResponse)(nil),             // 247: v1.DeleteGatewayResponse
-	(*GetGatewayRequest)(nil),                 // 248: v1.GetGatewayRequest
-	(*GetGatewayResponse)(nil),                // 249: v1.GetGatewayResponse
-	(*ListGatewaysRequest)(nil),               // 250: v1.ListGatewaysRequest
-	(*ListGatewaysResponse)(nil),              // 251: v1.ListGatewaysResponse
-	(*StartGatewayRequest)(nil),               // 252: v1.StartGatewayRequest
-	(*StartGatewayResponse)(nil),              // 253: v1.StartGatewayResponse
-	(*StopGatewayRequest)(nil),                // 254: v1.StopGatewayRequest
-	(*StopGatewayResponse)(nil),               // 255: v1.StopGatewayResponse
-	(*GatewayInfo)(nil),                       // 256: v1.GatewayInfo
-	(*NFSExportInfo)(nil),                     // 257: v1.NFSExportInfo
-	(*AddNFSExportRequest)(nil),               // 258: v1.AddNFSExportRequest
-	(*AddNFSExportResponse)(nil),              // 259: v1.AddNFSExportResponse
-	(*RemoveNFSExportRequest)(nil),            // 260: v1.RemoveNFSExportRequest
-	(*RemoveNFSExportResponse)(nil),           // 261: v1.RemoveNFSExportResponse
-	(*ListNFSExportsRequest)(nil),             // 262: v1.ListNFSExportsRequest
-	(*ListNFSExportsResponse)(nil),            // 263: v1.ListNFSExportsResponse
-	(*CreateSMBGatewayRequest)(nil),           // 264: v1.CreateSMBGatewayRequest
-	(*CreateSMBGatewayResponse)(nil),          // 265: v1.CreateSMBGatewayResponse
-	(*SMBShareInfo)(nil),                      // 266: v1.SMBShareInfo
-	(*AddSMBShareRequest)(nil),                // 267: v1.AddSMBShareRequest
-	(*AddSMBShareResponse)(nil),               // 268: v1.AddSMBShareResponse
-	(*RemoveSMBShareRequest)(nil),             // 269: v1.RemoveSMBShareRequest
-	(*RemoveSMBShareResponse)(nil),            // 270: v1.RemoveSMBShareResponse
-	(*ListSMBSharesRequest)(nil),              // 271: v1.ListSMBSharesRequest
-	(*ListSMBSharesResponse)(nil),             // 272: v1.ListSMBSharesResponse
-	(*SetSMBUserRequest)(nil),                 // 273: v1.SetSMBUserRequest
-	(*SetSMBUserResponse)(nil),                // 274: v1.SetSMBUserResponse
-	(*RemoveSMBUserRequest)(nil),              // 275: v1.RemoveSMBUserRequest
-	(*RemoveSMBUserResponse)(nil),             // 276: v1.RemoveSMBUserResponse
-	(*ListSMBUsersRequest)(nil),               // 277: v1.ListSMBUsersRequest
-	(*ListSMBUsersResponse)(nil),              // 278: v1.ListSMBUsersResponse
-	(*ISCSILUNInfo)(nil),                      // 279: v1.ISCSILUNInfo
-	(*AddISCSILUNRequest)(nil),                // 280: v1.AddISCSILUNRequest
-	(*AddISCSILUNResponse)(nil),               // 281: v1.AddISCSILUNResponse
-	(*RemoveISCSILUNRequest)(nil),             // 282: v1.RemoveISCSILUNRequest
-	(*RemoveISCSILUNResponse)(nil),            // 283: v1.RemoveISCSILUNResponse
-	(*ListISCSILUNsRequest)(nil),              // 284: v1.ListISCSILUNsRequest
-	(*ListISCSILUNsResponse)(nil),             // 285: v1.ListISCSILUNsResponse
-	(*AddISCSIInitiatorRequest)(nil),          // 286: v1.AddISCSIInitiatorRequest
-	(*AddISCSIInitiatorResponse)(nil),         // 287: v1.AddISCSIInitiatorResponse
-	(*RemoveISCSIInitiatorRequest)(nil),       // 288: v1.RemoveISCSIInitiatorRequest
-	(*RemoveISCSIInitiatorResponse)(nil),      // 289: v1.RemoveISCSIInitiatorResponse
-	(*ListISCSIInitiatorsRequest)(nil),        // 290: v1.ListISCSIInitiatorsRequest
-	(*ListISCSIInitiatorsResponse)(nil),       // 291: v1.ListISCSIInitiatorsResponse
-	(*SetISCSIChapRequest)(nil),               // 292: v1.SetISCSIChapRequest
-	(*SetISCSIChapResponse)(nil),              // 293: v1.SetISCSIChapResponse
-	(*GetISCSIChapRequest)(nil),               // 294: v1.GetISCSIChapRequest
-	(*GetISCSIChapResponse)(nil),              // 295: v1.GetISCSIChapResponse
-	(*NVMeNamespaceInfo)(nil),                 // 296: v1.NVMeNamespaceInfo
-	(*AddNVMeNamespaceRequest)(nil),           // 297: v1.AddNVMeNamespaceRequest
-	(*AddNVMeNamespaceResponse)(nil),          // 298: v1.AddNVMeNamespaceResponse
-	(*RemoveNVMeNamespaceRequest)(nil),        // 299: v1.RemoveNVMeNamespaceRequest
-	(*RemoveNVMeNamespaceResponse)(nil),       // 300: v1.RemoveNVMeNamespaceResponse
-	(*ListNVMeNamespacesRequest)(nil),         // 301: v1.ListNVMeNamespacesRequest
-	(*ListNVMeNamespacesResponse)(nil),        // 302: v1.ListNVMeNamespacesResponse
-	(*AddNVMeHostRequest)(nil),                // 303: v1.AddNVMeHostRequest
-	(*AddNVMeHostResponse)(nil),               // 304: v1.AddNVMeHostResponse
-	(*RemoveNVMeHostRequest)(nil),             // 305: v1.RemoveNVMeHostRequest
-	(*RemoveNVMeHostResponse)(nil),            // 306: v1.RemoveNVMeHostResponse
-	(*ListNVMeHostsRequest)(nil),              // 307: v1.ListNVMeHostsRequest
-	(*ListNVMeHostsResponse)(nil),             // 308: v1.ListNVMeHostsResponse
-	(*DeleteHaRequest)(nil),                   // 309: v1.DeleteHaRequest
-	(*DeleteHaResponse)(nil),                  // 310: v1.DeleteHaResponse
-	(*GetHaRequest)(nil),                      // 311: v1.GetHaRequest
-	(*GetHaResponse)(nil),                     // 312: v1.GetHaResponse
-	(*ListHaRequest)(nil),                     // 313: v1.ListHaRequest
-	(*ListHaResponse)(nil),                    // 314: v1.ListHaResponse
-	(*HaConfigInfo)(nil),                      // 315: v1.HaConfigInfo
-	(*HaServiceStatus)(nil),                   // 316: v1.HaServiceStatus
-	(*HaPromoterStatus)(nil),                  // 317: v1.HaPromoterStatus
-	(*GetHaStatusRequest)(nil),                // 318: v1.GetHaStatusRequest
-	(*GetHaStatusResponse)(nil),               // 319: v1.GetHaStatusResponse
-	(*DrainNodeRequest)(nil),                  // 320: v1.DrainNodeRequest
-	(*ConvertPoolToThinRequest)(nil),          // 321: v1.ConvertPoolToThinRequest
-	(*ConvertPoolToThinResponse)(nil),         // 322: v1.ConvertPoolToThinResponse
-	(*AddPoolCacheRequest)(nil),               // 323: v1.AddPoolCacheRequest
-	(*AddPoolCacheResponse)(nil),              // 324: v1.AddPoolCacheResponse
-	(*RemovePoolCacheRequest)(nil),            // 325: v1.RemovePoolCacheRequest
-	(*RemovePoolCacheResponse)(nil),           // 326: v1.RemovePoolCacheResponse
-	(*DrainNodeResponse)(nil),                 // 327: v1.DrainNodeResponse
-	(*UndrainNodeRequest)(nil),                // 328: v1.UndrainNodeRequest
-	(*UndrainNodeResponse)(nil),               // 329: v1.UndrainNodeResponse
-	(*SetNodeAddressRequest)(nil),             // 330: v1.SetNodeAddressRequest
-	(*NodeAddressMove)(nil),                   // 331: v1.NodeAddressMove
-	(*SetNodeAddressResponse)(nil),            // 332: v1.SetNodeAddressResponse
-	(*ProfileMemberResult)(nil),               // 333: v1.ProfileMemberResult
-	(*SetResourceProfileOptionsRequest)(nil),  // 334: v1.SetResourceProfileOptionsRequest
-	(*SetResourceProfileOptionsResponse)(nil), // 335: v1.SetResourceProfileOptionsResponse
-	(*AdjustResourceProfileRequest)(nil),      // 336: v1.AdjustResourceProfileRequest
-	(*AdjustResourceProfileResponse)(nil),     // 337: v1.AdjustResourceProfileResponse
-	(*GetResourceProfileMaxSizeRequest)(nil),  // 338: v1.GetResourceProfileMaxSizeRequest
-	(*GetResourceProfileMaxSizeResponse)(nil), // 339: v1.GetResourceProfileMaxSizeResponse
-	(*SetResourceProfileRequest)(nil),         // 340: v1.SetResourceProfileRequest
-	(*SetResourceProfileResponse)(nil),        // 341: v1.SetResourceProfileResponse
-	(*SetWanEndpointRequest)(nil),             // 342: v1.SetWanEndpointRequest
-	(*SetWanEndpointResponse)(nil),            // 343: v1.SetWanEndpointResponse
-	(*DRFailbackRequest)(nil),                 // 344: v1.DRFailbackRequest
-	(*VerifyResourceRequest)(nil),             // 345: v1.VerifyResourceRequest
-	(*VerifyPeer)(nil),                        // 346: v1.VerifyPeer
-	(*VerifyResourceResponse)(nil),            // 347: v1.VerifyResourceResponse
-	(*DRFailbackResponse)(nil),                // 348: v1.DRFailbackResponse
-	(*SetupReplicationTLSRequest)(nil),        // 349: v1.SetupReplicationTLSRequest
-	(*GetReplicationTLSStatusRequest)(nil),    // 350: v1.GetReplicationTLSStatusRequest
-	(*NodeTLSInfo)(nil),                       // 351: v1.NodeTLSInfo
-	(*ReplicationTLSResponse)(nil),            // 352: v1.ReplicationTLSResponse
-	(*SetResourceTLSRequest)(nil),             // 353: v1.SetResourceTLSRequest
-	(*SetResourceTLSResponse)(nil),            // 354: v1.SetResourceTLSResponse
-	(*GetRbacWhoamiRequest)(nil),              // 355: v1.GetRbacWhoamiRequest
-	(*GetRbacWhoamiResponse)(nil),             // 356: v1.GetRbacWhoamiResponse
-	(*ListRbacPoliciesRequest)(nil),           // 357: v1.ListRbacPoliciesRequest
-	(*RbacPolicy)(nil),                        // 358: v1.RbacPolicy
-	(*RbacUser)(nil),                          // 359: v1.RbacUser
-	(*ListRbacPoliciesResponse)(nil),          // 360: v1.ListRbacPoliciesResponse
-	(*CreateRbacUserRequest)(nil),             // 361: v1.CreateRbacUserRequest
-	(*CreateRbacUserResponse)(nil),            // 362: v1.CreateRbacUserResponse
-	(*DeleteRbacUserRequest)(nil),             // 363: v1.DeleteRbacUserRequest
-	(*DeleteRbacUserResponse)(nil),            // 364: v1.DeleteRbacUserResponse
-	(*SetRbacUserRoleRequest)(nil),            // 365: v1.SetRbacUserRoleRequest
-	(*SetRbacUserRoleResponse)(nil),           // 366: v1.SetRbacUserRoleResponse
-	(*ApprovalInfo)(nil),                      // 367: v1.ApprovalInfo
-	(*ListApprovalsRequest)(nil),              // 368: v1.ListApprovalsRequest
-	(*ListApprovalsResponse)(nil),             // 369: v1.ListApprovalsResponse
-	(*ApproveRequestRequest)(nil),             // 370: v1.ApproveRequestRequest
-	(*ApproveRequestResponse)(nil),            // 371: v1.ApproveRequestResponse
-	(*RejectRequestRequest)(nil),              // 372: v1.RejectRequestRequest
-	(*RejectRequestResponse)(nil),             // 373: v1.RejectRequestResponse
-	(*InspectionCheck)(nil),                   // 374: v1.InspectionCheck
-	(*InspectionSummary)(nil),                 // 375: v1.InspectionSummary
-	(*InspectionReport)(nil),                  // 376: v1.InspectionReport
-	(*RunInspectionRequest)(nil),              // 377: v1.RunInspectionRequest
-	(*RunInspectionResponse)(nil),             // 378: v1.RunInspectionResponse
-	(*ListInspectionsRequest)(nil),            // 379: v1.ListInspectionsRequest
-	(*ListInspectionsResponse)(nil),           // 380: v1.ListInspectionsResponse
-	(*GetInspectionRequest)(nil),              // 381: v1.GetInspectionRequest
-	(*GetInspectionResponse)(nil),             // 382: v1.GetInspectionResponse
-	(*AppInfo)(nil),                           // 383: v1.AppInfo
-	(*CreateAppRequest)(nil),                  // 384: v1.CreateAppRequest
-	(*CreateAppResponse)(nil),                 // 385: v1.CreateAppResponse
-	(*ListAppsRequest)(nil),                   // 386: v1.ListAppsRequest
-	(*ListAppsResponse)(nil),                  // 387: v1.ListAppsResponse
-	(*GetAppStatusRequest)(nil),               // 388: v1.GetAppStatusRequest
-	(*GetAppStatusResponse)(nil),              // 389: v1.GetAppStatusResponse
-	(*DeleteAppRequest)(nil),                  // 390: v1.DeleteAppRequest
-	(*DeleteAppResponse)(nil),                 // 391: v1.DeleteAppResponse
-	(*FailoverAppRequest)(nil),                // 392: v1.FailoverAppRequest
-	(*FailoverAppResponse)(nil),               // 393: v1.FailoverAppResponse
-	(*SnapshotAppRequest)(nil),                // 394: v1.SnapshotAppRequest
-	(*SnapshotAppResponse)(nil),               // 395: v1.SnapshotAppResponse
-	(*TrimPoolsRequest)(nil),                  // 396: v1.TrimPoolsRequest
-	(*TrimResultInfo)(nil),                    // 397: v1.TrimResultInfo
-	(*TrimPoolsResponse)(nil),                 // 398: v1.TrimPoolsResponse
-	(*ListPoolDisksRequest)(nil),              // 399: v1.ListPoolDisksRequest
-	(*PoolDiskInfo)(nil),                      // 400: v1.PoolDiskInfo
-	(*ListPoolDisksResponse)(nil),             // 401: v1.ListPoolDisksResponse
-	(*RemovePoolDiskRequest)(nil),             // 402: v1.RemovePoolDiskRequest
-	(*ReplacePoolDiskRequest)(nil),            // 403: v1.ReplacePoolDiskRequest
-	(*MoveVolumeRequest)(nil),                 // 404: v1.MoveVolumeRequest
-	(*StorageJobResponse)(nil),                // 405: v1.StorageJobResponse
-	(*ListStorageJobsRequest)(nil),            // 406: v1.ListStorageJobsRequest
-	(*StorageJobInfo)(nil),                    // 407: v1.StorageJobInfo
-	(*ListStorageJobsResponse)(nil),           // 408: v1.ListStorageJobsResponse
-	nil,                                       // 409: v1.SetNodeLabelsRequest.LabelsEntry
-	nil,                                       // 410: v1.NodeInfo.LabelsEntry
-	nil,                                       // 411: v1.CreateResourceRequest.DrbdOptionsEntry
-	nil,                                       // 412: v1.CreateResourceRequest.LabelsEntry
-	nil,                                       // 413: v1.AdoptResourceRequest.LabelsEntry
-	nil,                                       // 414: v1.ResourceProfile.DrbdOptionsEntry
-	nil,                                       // 415: v1.ResourceProfile.LabelsEntry
-	nil,                                       // 416: v1.UpdateResourceOptionsRequest.OptionsEntry
-	nil,                                       // 417: v1.OcfAgent.ParamsEntry
-	nil,                                       // 418: v1.ControllerLogEntry.FieldsEntry
-	nil,                                       // 419: v1.Event.DetailsEntry
-	nil,                                       // 420: v1.ResourceInfo.NodeStatesEntry
-	nil,                                       // 421: v1.ResourceInfo.LabelsEntry
-	nil,                                       // 422: v1.ResourceStatus.NodeStatesEntry
-	nil,                                       // 423: v1.ResourceStatus.WanProxyEntry
-	nil,                                       // 424: v1.NotifyChannelInfo.HeadersEntry
-	nil,                                       // 425: v1.SaveNotifyChannelRequest.HeadersEntry
-	nil,                                       // 426: v1.ImportBackupsResponse.SkippedEntry
-	nil,                                       // 427: v1.CreateNFSGatewayRequest.OptionsEntry
-	nil,                                       // 428: v1.CreateISCSIGatewayRequest.OptionsEntry
-	nil,                                       // 429: v1.CreateNVMeGatewayRequest.OptionsEntry
-	nil,                                       // 430: v1.GatewayInfo.OptionsEntry
-	nil,                                       // 431: v1.SetResourceProfileOptionsRequest.OptionsEntry
+	(*SetResourceLabelsRequest)(nil),          // 116: v1.SetResourceLabelsRequest
+	(*SetResourceLabelsResponse)(nil),         // 117: v1.SetResourceLabelsResponse
+	(*SetDualPrimaryRequest)(nil),             // 118: v1.SetDualPrimaryRequest
+	(*SetDualPrimaryResponse)(nil),            // 119: v1.SetDualPrimaryResponse
+	(*AttachDisklessClientRequest)(nil),       // 120: v1.AttachDisklessClientRequest
+	(*AttachDisklessClientResponse)(nil),      // 121: v1.AttachDisklessClientResponse
+	(*DetachDisklessClientRequest)(nil),       // 122: v1.DetachDisklessClientRequest
+	(*DetachDisklessClientResponse)(nil),      // 123: v1.DetachDisklessClientResponse
+	(*CreateFilesystemRequest)(nil),           // 124: v1.CreateFilesystemRequest
+	(*CreateFilesystemResponse)(nil),          // 125: v1.CreateFilesystemResponse
+	(*MountResourceRequest)(nil),              // 126: v1.MountResourceRequest
+	(*MountResourceResponse)(nil),             // 127: v1.MountResourceResponse
+	(*UnmountResourceRequest)(nil),            // 128: v1.UnmountResourceRequest
+	(*UnmountResourceResponse)(nil),           // 129: v1.UnmountResourceResponse
+	(*OcfAgent)(nil),                          // 130: v1.OcfAgent
+	(*HaStartItem)(nil),                       // 131: v1.HaStartItem
+	(*MakeHaRequest)(nil),                     // 132: v1.MakeHaRequest
+	(*ResourceAgentInfo)(nil),                 // 133: v1.ResourceAgentInfo
+	(*ListResourceAgentsRequest)(nil),         // 134: v1.ListResourceAgentsRequest
+	(*ListResourceAgentsResponse)(nil),        // 135: v1.ListResourceAgentsResponse
+	(*ResourceAgentParameter)(nil),            // 136: v1.ResourceAgentParameter
+	(*GetResourceAgentMetadataRequest)(nil),   // 137: v1.GetResourceAgentMetadataRequest
+	(*GetResourceAgentMetadataResponse)(nil),  // 138: v1.GetResourceAgentMetadataResponse
+	(*GetHaTomlRequest)(nil),                  // 139: v1.GetHaTomlRequest
+	(*GetHaTomlResponse)(nil),                 // 140: v1.GetHaTomlResponse
+	(*SyncHaTomlRequest)(nil),                 // 141: v1.SyncHaTomlRequest
+	(*SyncHaTomlResponse)(nil),                // 142: v1.SyncHaTomlResponse
+	(*MakeHaResponse)(nil),                    // 143: v1.MakeHaResponse
+	(*EvictHaRequest)(nil),                    // 144: v1.EvictHaRequest
+	(*SetTiebreakerRequest)(nil),              // 145: v1.SetTiebreakerRequest
+	(*SetTiebreakerResponse)(nil),             // 146: v1.SetTiebreakerResponse
+	(*AddDRRequest)(nil),                      // 147: v1.AddDRRequest
+	(*AddDRResponse)(nil),                     // 148: v1.AddDRResponse
+	(*AddReplicaRequest)(nil),                 // 149: v1.AddReplicaRequest
+	(*RemoveReplicaRequest)(nil),              // 150: v1.RemoveReplicaRequest
+	(*RemoveReplicaResponse)(nil),             // 151: v1.RemoveReplicaResponse
+	(*AddReplicaResponse)(nil),                // 152: v1.AddReplicaResponse
+	(*EvictHaResponse)(nil),                   // 153: v1.EvictHaResponse
+	(*EnableSelfHaRequest)(nil),               // 154: v1.EnableSelfHaRequest
+	(*EnableSelfHaResponse)(nil),              // 155: v1.EnableSelfHaResponse
+	(*DisableSelfHaRequest)(nil),              // 156: v1.DisableSelfHaRequest
+	(*DisableSelfHaResponse)(nil),             // 157: v1.DisableSelfHaResponse
+	(*GetSelfHaStatusRequest)(nil),            // 158: v1.GetSelfHaStatusRequest
+	(*GetSelfHaStatusResponse)(nil),           // 159: v1.GetSelfHaStatusResponse
+	(*AuditEvent)(nil),                        // 160: v1.AuditEvent
+	(*ListAuditEventsRequest)(nil),            // 161: v1.ListAuditEventsRequest
+	(*ListAuditEventsResponse)(nil),           // 162: v1.ListAuditEventsResponse
+	(*ControllerLogEntry)(nil),                // 163: v1.ControllerLogEntry
+	(*ListControllerLogsRequest)(nil),         // 164: v1.ListControllerLogsRequest
+	(*ListControllerLogsResponse)(nil),        // 165: v1.ListControllerLogsResponse
+	(*CollectNodeDiagnosticsRequest)(nil),     // 166: v1.CollectNodeDiagnosticsRequest
+	(*NodeCollectorOutput)(nil),               // 167: v1.NodeCollectorOutput
+	(*NodeDiagnostics)(nil),                   // 168: v1.NodeDiagnostics
+	(*CollectNodeDiagnosticsResponse)(nil),    // 169: v1.CollectNodeDiagnosticsResponse
+	(*Event)(nil),                             // 170: v1.Event
+	(*ListEventsRequest)(nil),                 // 171: v1.ListEventsRequest
+	(*ListEventsResponse)(nil),                // 172: v1.ListEventsResponse
+	(*RepairWanProxyRequest)(nil),             // 173: v1.RepairWanProxyRequest
+	(*RepairWanProxyResponse)(nil),            // 174: v1.RepairWanProxyResponse
+	(*WatchEventsRequest)(nil),                // 175: v1.WatchEventsRequest
+	(*ResourceInfo)(nil),                      // 176: v1.ResourceInfo
+	(*ResourceStatus)(nil),                    // 177: v1.ResourceStatus
+	(*QuorumInfo)(nil),                        // 178: v1.QuorumInfo
+	(*WANMetrics)(nil),                        // 179: v1.WANMetrics
+	(*NodeResourceState)(nil),                 // 180: v1.NodeResourceState
+	(*VolumeInfo)(nil),                        // 181: v1.VolumeInfo
+	(*CreateSnapshotRequest)(nil),             // 182: v1.CreateSnapshotRequest
+	(*CreateSnapshotResponse)(nil),            // 183: v1.CreateSnapshotResponse
+	(*DeleteSnapshotRequest)(nil),             // 184: v1.DeleteSnapshotRequest
+	(*DeleteSnapshotResponse)(nil),            // 185: v1.DeleteSnapshotResponse
+	(*RestoreSnapshotRequest)(nil),            // 186: v1.RestoreSnapshotRequest
+	(*RestoreSnapshotResponse)(nil),           // 187: v1.RestoreSnapshotResponse
+	(*PopulateVolumeRequest)(nil),             // 188: v1.PopulateVolumeRequest
+	(*PopulateVolumeResponse)(nil),            // 189: v1.PopulateVolumeResponse
+	(*ListSnapshotsRequest)(nil),              // 190: v1.ListSnapshotsRequest
+	(*ListSnapshotsResponse)(nil),             // 191: v1.ListSnapshotsResponse
+	(*SnapshotInfo)(nil),                      // 192: v1.SnapshotInfo
+	(*GFSRetention)(nil),                      // 193: v1.GFSRetention
+	(*SnapshotScheduleInfo)(nil),              // 194: v1.SnapshotScheduleInfo
+	(*FreezeSnapshotScheduleRequest)(nil),     // 195: v1.FreezeSnapshotScheduleRequest
+	(*FreezeSnapshotScheduleResponse)(nil),    // 196: v1.FreezeSnapshotScheduleResponse
+	(*UnfreezeSnapshotScheduleRequest)(nil),   // 197: v1.UnfreezeSnapshotScheduleRequest
+	(*UnfreezeSnapshotScheduleResponse)(nil),  // 198: v1.UnfreezeSnapshotScheduleResponse
+	(*CreateSnapshotScheduleRequest)(nil),     // 199: v1.CreateSnapshotScheduleRequest
+	(*CreateSnapshotScheduleResponse)(nil),    // 200: v1.CreateSnapshotScheduleResponse
+	(*ListSnapshotSchedulesRequest)(nil),      // 201: v1.ListSnapshotSchedulesRequest
+	(*ListSnapshotSchedulesResponse)(nil),     // 202: v1.ListSnapshotSchedulesResponse
+	(*DeleteSnapshotScheduleRequest)(nil),     // 203: v1.DeleteSnapshotScheduleRequest
+	(*DeleteSnapshotScheduleResponse)(nil),    // 204: v1.DeleteSnapshotScheduleResponse
+	(*BackupTargetInfo)(nil),                  // 205: v1.BackupTargetInfo
+	(*AddBackupTargetRequest)(nil),            // 206: v1.AddBackupTargetRequest
+	(*AddBackupTargetResponse)(nil),           // 207: v1.AddBackupTargetResponse
+	(*ListBackupTargetsRequest)(nil),          // 208: v1.ListBackupTargetsRequest
+	(*ListBackupTargetsResponse)(nil),         // 209: v1.ListBackupTargetsResponse
+	(*DeleteBackupTargetRequest)(nil),         // 210: v1.DeleteBackupTargetRequest
+	(*DeleteBackupTargetResponse)(nil),        // 211: v1.DeleteBackupTargetResponse
+	(*NotifyChannelInfo)(nil),                 // 212: v1.NotifyChannelInfo
+	(*ListNotifyChannelsRequest)(nil),         // 213: v1.ListNotifyChannelsRequest
+	(*ListNotifyChannelsResponse)(nil),        // 214: v1.ListNotifyChannelsResponse
+	(*SaveNotifyChannelRequest)(nil),          // 215: v1.SaveNotifyChannelRequest
+	(*SaveNotifyChannelResponse)(nil),         // 216: v1.SaveNotifyChannelResponse
+	(*DeleteNotifyChannelRequest)(nil),        // 217: v1.DeleteNotifyChannelRequest
+	(*DeleteNotifyChannelResponse)(nil),       // 218: v1.DeleteNotifyChannelResponse
+	(*TestNotifyChannelRequest)(nil),          // 219: v1.TestNotifyChannelRequest
+	(*TestNotifyChannelResponse)(nil),         // 220: v1.TestNotifyChannelResponse
+	(*BackupVolumeInfo)(nil),                  // 221: v1.BackupVolumeInfo
+	(*BackupInfo)(nil),                        // 222: v1.BackupInfo
+	(*CreateBackupRequest)(nil),               // 223: v1.CreateBackupRequest
+	(*CreateBackupResponse)(nil),              // 224: v1.CreateBackupResponse
+	(*ListBackupsRequest)(nil),                // 225: v1.ListBackupsRequest
+	(*ListBackupsResponse)(nil),               // 226: v1.ListBackupsResponse
+	(*RestoreBackupRequest)(nil),              // 227: v1.RestoreBackupRequest
+	(*RestoreBackupResponse)(nil),             // 228: v1.RestoreBackupResponse
+	(*DeleteBackupRequest)(nil),               // 229: v1.DeleteBackupRequest
+	(*DeleteBackupResponse)(nil),              // 230: v1.DeleteBackupResponse
+	(*ImportBackupsRequest)(nil),              // 231: v1.ImportBackupsRequest
+	(*ImportBackupsResponse)(nil),             // 232: v1.ImportBackupsResponse
+	(*BackupScheduleInfo)(nil),                // 233: v1.BackupScheduleInfo
+	(*CreateBackupScheduleRequest)(nil),       // 234: v1.CreateBackupScheduleRequest
+	(*CreateBackupScheduleResponse)(nil),      // 235: v1.CreateBackupScheduleResponse
+	(*ListBackupSchedulesRequest)(nil),        // 236: v1.ListBackupSchedulesRequest
+	(*ListBackupSchedulesResponse)(nil),       // 237: v1.ListBackupSchedulesResponse
+	(*DeleteBackupScheduleRequest)(nil),       // 238: v1.DeleteBackupScheduleRequest
+	(*DeleteBackupScheduleResponse)(nil),      // 239: v1.DeleteBackupScheduleResponse
+	(*RunBackupScheduleRequest)(nil),          // 240: v1.RunBackupScheduleRequest
+	(*RunBackupScheduleResponse)(nil),         // 241: v1.RunBackupScheduleResponse
+	(*CreateNFSGatewayRequest)(nil),           // 242: v1.CreateNFSGatewayRequest
+	(*CreateNFSGatewayResponse)(nil),          // 243: v1.CreateNFSGatewayResponse
+	(*CreateISCSIGatewayRequest)(nil),         // 244: v1.CreateISCSIGatewayRequest
+	(*CreateISCSIGatewayResponse)(nil),        // 245: v1.CreateISCSIGatewayResponse
+	(*CreateNVMeGatewayRequest)(nil),          // 246: v1.CreateNVMeGatewayRequest
+	(*CreateNVMeGatewayResponse)(nil),         // 247: v1.CreateNVMeGatewayResponse
+	(*DeleteGatewayRequest)(nil),              // 248: v1.DeleteGatewayRequest
+	(*DeleteGatewayResponse)(nil),             // 249: v1.DeleteGatewayResponse
+	(*GetGatewayRequest)(nil),                 // 250: v1.GetGatewayRequest
+	(*GetGatewayResponse)(nil),                // 251: v1.GetGatewayResponse
+	(*ListGatewaysRequest)(nil),               // 252: v1.ListGatewaysRequest
+	(*ListGatewaysResponse)(nil),              // 253: v1.ListGatewaysResponse
+	(*StartGatewayRequest)(nil),               // 254: v1.StartGatewayRequest
+	(*StartGatewayResponse)(nil),              // 255: v1.StartGatewayResponse
+	(*StopGatewayRequest)(nil),                // 256: v1.StopGatewayRequest
+	(*StopGatewayResponse)(nil),               // 257: v1.StopGatewayResponse
+	(*GatewayInfo)(nil),                       // 258: v1.GatewayInfo
+	(*NFSExportInfo)(nil),                     // 259: v1.NFSExportInfo
+	(*AddNFSExportRequest)(nil),               // 260: v1.AddNFSExportRequest
+	(*AddNFSExportResponse)(nil),              // 261: v1.AddNFSExportResponse
+	(*RemoveNFSExportRequest)(nil),            // 262: v1.RemoveNFSExportRequest
+	(*RemoveNFSExportResponse)(nil),           // 263: v1.RemoveNFSExportResponse
+	(*ListNFSExportsRequest)(nil),             // 264: v1.ListNFSExportsRequest
+	(*ListNFSExportsResponse)(nil),            // 265: v1.ListNFSExportsResponse
+	(*CreateSMBGatewayRequest)(nil),           // 266: v1.CreateSMBGatewayRequest
+	(*CreateSMBGatewayResponse)(nil),          // 267: v1.CreateSMBGatewayResponse
+	(*SMBShareInfo)(nil),                      // 268: v1.SMBShareInfo
+	(*AddSMBShareRequest)(nil),                // 269: v1.AddSMBShareRequest
+	(*AddSMBShareResponse)(nil),               // 270: v1.AddSMBShareResponse
+	(*RemoveSMBShareRequest)(nil),             // 271: v1.RemoveSMBShareRequest
+	(*RemoveSMBShareResponse)(nil),            // 272: v1.RemoveSMBShareResponse
+	(*ListSMBSharesRequest)(nil),              // 273: v1.ListSMBSharesRequest
+	(*ListSMBSharesResponse)(nil),             // 274: v1.ListSMBSharesResponse
+	(*SetSMBUserRequest)(nil),                 // 275: v1.SetSMBUserRequest
+	(*SetSMBUserResponse)(nil),                // 276: v1.SetSMBUserResponse
+	(*RemoveSMBUserRequest)(nil),              // 277: v1.RemoveSMBUserRequest
+	(*RemoveSMBUserResponse)(nil),             // 278: v1.RemoveSMBUserResponse
+	(*ListSMBUsersRequest)(nil),               // 279: v1.ListSMBUsersRequest
+	(*ListSMBUsersResponse)(nil),              // 280: v1.ListSMBUsersResponse
+	(*ISCSILUNInfo)(nil),                      // 281: v1.ISCSILUNInfo
+	(*AddISCSILUNRequest)(nil),                // 282: v1.AddISCSILUNRequest
+	(*AddISCSILUNResponse)(nil),               // 283: v1.AddISCSILUNResponse
+	(*RemoveISCSILUNRequest)(nil),             // 284: v1.RemoveISCSILUNRequest
+	(*RemoveISCSILUNResponse)(nil),            // 285: v1.RemoveISCSILUNResponse
+	(*ListISCSILUNsRequest)(nil),              // 286: v1.ListISCSILUNsRequest
+	(*ListISCSILUNsResponse)(nil),             // 287: v1.ListISCSILUNsResponse
+	(*AddISCSIInitiatorRequest)(nil),          // 288: v1.AddISCSIInitiatorRequest
+	(*AddISCSIInitiatorResponse)(nil),         // 289: v1.AddISCSIInitiatorResponse
+	(*RemoveISCSIInitiatorRequest)(nil),       // 290: v1.RemoveISCSIInitiatorRequest
+	(*RemoveISCSIInitiatorResponse)(nil),      // 291: v1.RemoveISCSIInitiatorResponse
+	(*ListISCSIInitiatorsRequest)(nil),        // 292: v1.ListISCSIInitiatorsRequest
+	(*ListISCSIInitiatorsResponse)(nil),       // 293: v1.ListISCSIInitiatorsResponse
+	(*SetISCSIChapRequest)(nil),               // 294: v1.SetISCSIChapRequest
+	(*SetISCSIChapResponse)(nil),              // 295: v1.SetISCSIChapResponse
+	(*GetISCSIChapRequest)(nil),               // 296: v1.GetISCSIChapRequest
+	(*GetISCSIChapResponse)(nil),              // 297: v1.GetISCSIChapResponse
+	(*NVMeNamespaceInfo)(nil),                 // 298: v1.NVMeNamespaceInfo
+	(*AddNVMeNamespaceRequest)(nil),           // 299: v1.AddNVMeNamespaceRequest
+	(*AddNVMeNamespaceResponse)(nil),          // 300: v1.AddNVMeNamespaceResponse
+	(*RemoveNVMeNamespaceRequest)(nil),        // 301: v1.RemoveNVMeNamespaceRequest
+	(*RemoveNVMeNamespaceResponse)(nil),       // 302: v1.RemoveNVMeNamespaceResponse
+	(*ListNVMeNamespacesRequest)(nil),         // 303: v1.ListNVMeNamespacesRequest
+	(*ListNVMeNamespacesResponse)(nil),        // 304: v1.ListNVMeNamespacesResponse
+	(*AddNVMeHostRequest)(nil),                // 305: v1.AddNVMeHostRequest
+	(*AddNVMeHostResponse)(nil),               // 306: v1.AddNVMeHostResponse
+	(*RemoveNVMeHostRequest)(nil),             // 307: v1.RemoveNVMeHostRequest
+	(*RemoveNVMeHostResponse)(nil),            // 308: v1.RemoveNVMeHostResponse
+	(*ListNVMeHostsRequest)(nil),              // 309: v1.ListNVMeHostsRequest
+	(*ListNVMeHostsResponse)(nil),             // 310: v1.ListNVMeHostsResponse
+	(*DeleteHaRequest)(nil),                   // 311: v1.DeleteHaRequest
+	(*DeleteHaResponse)(nil),                  // 312: v1.DeleteHaResponse
+	(*GetHaRequest)(nil),                      // 313: v1.GetHaRequest
+	(*GetHaResponse)(nil),                     // 314: v1.GetHaResponse
+	(*ListHaRequest)(nil),                     // 315: v1.ListHaRequest
+	(*ListHaResponse)(nil),                    // 316: v1.ListHaResponse
+	(*HaConfigInfo)(nil),                      // 317: v1.HaConfigInfo
+	(*HaServiceStatus)(nil),                   // 318: v1.HaServiceStatus
+	(*HaPromoterStatus)(nil),                  // 319: v1.HaPromoterStatus
+	(*GetHaStatusRequest)(nil),                // 320: v1.GetHaStatusRequest
+	(*GetHaStatusResponse)(nil),               // 321: v1.GetHaStatusResponse
+	(*DrainNodeRequest)(nil),                  // 322: v1.DrainNodeRequest
+	(*ConvertPoolToThinRequest)(nil),          // 323: v1.ConvertPoolToThinRequest
+	(*ConvertPoolToThinResponse)(nil),         // 324: v1.ConvertPoolToThinResponse
+	(*AddPoolCacheRequest)(nil),               // 325: v1.AddPoolCacheRequest
+	(*AddPoolCacheResponse)(nil),              // 326: v1.AddPoolCacheResponse
+	(*RemovePoolCacheRequest)(nil),            // 327: v1.RemovePoolCacheRequest
+	(*RemovePoolCacheResponse)(nil),           // 328: v1.RemovePoolCacheResponse
+	(*DrainNodeResponse)(nil),                 // 329: v1.DrainNodeResponse
+	(*UndrainNodeRequest)(nil),                // 330: v1.UndrainNodeRequest
+	(*UndrainNodeResponse)(nil),               // 331: v1.UndrainNodeResponse
+	(*SetNodeAddressRequest)(nil),             // 332: v1.SetNodeAddressRequest
+	(*NodeAddressMove)(nil),                   // 333: v1.NodeAddressMove
+	(*SetNodeAddressResponse)(nil),            // 334: v1.SetNodeAddressResponse
+	(*ProfileMemberResult)(nil),               // 335: v1.ProfileMemberResult
+	(*SetResourceProfileOptionsRequest)(nil),  // 336: v1.SetResourceProfileOptionsRequest
+	(*SetResourceProfileOptionsResponse)(nil), // 337: v1.SetResourceProfileOptionsResponse
+	(*AdjustResourceProfileRequest)(nil),      // 338: v1.AdjustResourceProfileRequest
+	(*AdjustResourceProfileResponse)(nil),     // 339: v1.AdjustResourceProfileResponse
+	(*GetResourceProfileMaxSizeRequest)(nil),  // 340: v1.GetResourceProfileMaxSizeRequest
+	(*GetResourceProfileMaxSizeResponse)(nil), // 341: v1.GetResourceProfileMaxSizeResponse
+	(*SetResourceProfileRequest)(nil),         // 342: v1.SetResourceProfileRequest
+	(*SetResourceProfileResponse)(nil),        // 343: v1.SetResourceProfileResponse
+	(*SetWanEndpointRequest)(nil),             // 344: v1.SetWanEndpointRequest
+	(*SetWanEndpointResponse)(nil),            // 345: v1.SetWanEndpointResponse
+	(*DRFailbackRequest)(nil),                 // 346: v1.DRFailbackRequest
+	(*VerifyResourceRequest)(nil),             // 347: v1.VerifyResourceRequest
+	(*VerifyPeer)(nil),                        // 348: v1.VerifyPeer
+	(*VerifyResourceResponse)(nil),            // 349: v1.VerifyResourceResponse
+	(*DRFailbackResponse)(nil),                // 350: v1.DRFailbackResponse
+	(*SetupReplicationTLSRequest)(nil),        // 351: v1.SetupReplicationTLSRequest
+	(*GetReplicationTLSStatusRequest)(nil),    // 352: v1.GetReplicationTLSStatusRequest
+	(*NodeTLSInfo)(nil),                       // 353: v1.NodeTLSInfo
+	(*ReplicationTLSResponse)(nil),            // 354: v1.ReplicationTLSResponse
+	(*SetResourceTLSRequest)(nil),             // 355: v1.SetResourceTLSRequest
+	(*SetResourceTLSResponse)(nil),            // 356: v1.SetResourceTLSResponse
+	(*GetRbacWhoamiRequest)(nil),              // 357: v1.GetRbacWhoamiRequest
+	(*GetRbacWhoamiResponse)(nil),             // 358: v1.GetRbacWhoamiResponse
+	(*ListRbacPoliciesRequest)(nil),           // 359: v1.ListRbacPoliciesRequest
+	(*RbacPolicy)(nil),                        // 360: v1.RbacPolicy
+	(*RbacUser)(nil),                          // 361: v1.RbacUser
+	(*ListRbacPoliciesResponse)(nil),          // 362: v1.ListRbacPoliciesResponse
+	(*CreateRbacUserRequest)(nil),             // 363: v1.CreateRbacUserRequest
+	(*CreateRbacUserResponse)(nil),            // 364: v1.CreateRbacUserResponse
+	(*DeleteRbacUserRequest)(nil),             // 365: v1.DeleteRbacUserRequest
+	(*DeleteRbacUserResponse)(nil),            // 366: v1.DeleteRbacUserResponse
+	(*SetRbacUserRoleRequest)(nil),            // 367: v1.SetRbacUserRoleRequest
+	(*SetRbacUserRoleResponse)(nil),           // 368: v1.SetRbacUserRoleResponse
+	(*ApprovalInfo)(nil),                      // 369: v1.ApprovalInfo
+	(*ListApprovalsRequest)(nil),              // 370: v1.ListApprovalsRequest
+	(*ListApprovalsResponse)(nil),             // 371: v1.ListApprovalsResponse
+	(*ApproveRequestRequest)(nil),             // 372: v1.ApproveRequestRequest
+	(*ApproveRequestResponse)(nil),            // 373: v1.ApproveRequestResponse
+	(*RejectRequestRequest)(nil),              // 374: v1.RejectRequestRequest
+	(*RejectRequestResponse)(nil),             // 375: v1.RejectRequestResponse
+	(*InspectionCheck)(nil),                   // 376: v1.InspectionCheck
+	(*InspectionSummary)(nil),                 // 377: v1.InspectionSummary
+	(*InspectionReport)(nil),                  // 378: v1.InspectionReport
+	(*RunInspectionRequest)(nil),              // 379: v1.RunInspectionRequest
+	(*RunInspectionResponse)(nil),             // 380: v1.RunInspectionResponse
+	(*ListInspectionsRequest)(nil),            // 381: v1.ListInspectionsRequest
+	(*ListInspectionsResponse)(nil),           // 382: v1.ListInspectionsResponse
+	(*GetInspectionRequest)(nil),              // 383: v1.GetInspectionRequest
+	(*GetInspectionResponse)(nil),             // 384: v1.GetInspectionResponse
+	(*AppInfo)(nil),                           // 385: v1.AppInfo
+	(*CreateAppRequest)(nil),                  // 386: v1.CreateAppRequest
+	(*CreateAppResponse)(nil),                 // 387: v1.CreateAppResponse
+	(*ListAppsRequest)(nil),                   // 388: v1.ListAppsRequest
+	(*ListAppsResponse)(nil),                  // 389: v1.ListAppsResponse
+	(*GetAppStatusRequest)(nil),               // 390: v1.GetAppStatusRequest
+	(*GetAppStatusResponse)(nil),              // 391: v1.GetAppStatusResponse
+	(*DeleteAppRequest)(nil),                  // 392: v1.DeleteAppRequest
+	(*DeleteAppResponse)(nil),                 // 393: v1.DeleteAppResponse
+	(*FailoverAppRequest)(nil),                // 394: v1.FailoverAppRequest
+	(*FailoverAppResponse)(nil),               // 395: v1.FailoverAppResponse
+	(*SnapshotAppRequest)(nil),                // 396: v1.SnapshotAppRequest
+	(*SnapshotAppResponse)(nil),               // 397: v1.SnapshotAppResponse
+	(*TrimPoolsRequest)(nil),                  // 398: v1.TrimPoolsRequest
+	(*TrimResultInfo)(nil),                    // 399: v1.TrimResultInfo
+	(*TrimPoolsResponse)(nil),                 // 400: v1.TrimPoolsResponse
+	(*ListPoolDisksRequest)(nil),              // 401: v1.ListPoolDisksRequest
+	(*PoolDiskInfo)(nil),                      // 402: v1.PoolDiskInfo
+	(*ListPoolDisksResponse)(nil),             // 403: v1.ListPoolDisksResponse
+	(*RemovePoolDiskRequest)(nil),             // 404: v1.RemovePoolDiskRequest
+	(*ReplacePoolDiskRequest)(nil),            // 405: v1.ReplacePoolDiskRequest
+	(*MoveVolumeRequest)(nil),                 // 406: v1.MoveVolumeRequest
+	(*StorageJobResponse)(nil),                // 407: v1.StorageJobResponse
+	(*ListStorageJobsRequest)(nil),            // 408: v1.ListStorageJobsRequest
+	(*StorageJobInfo)(nil),                    // 409: v1.StorageJobInfo
+	(*ListStorageJobsResponse)(nil),           // 410: v1.ListStorageJobsResponse
+	nil,                                       // 411: v1.SetNodeLabelsRequest.LabelsEntry
+	nil,                                       // 412: v1.NodeInfo.LabelsEntry
+	nil,                                       // 413: v1.CreateResourceRequest.DrbdOptionsEntry
+	nil,                                       // 414: v1.CreateResourceRequest.LabelsEntry
+	nil,                                       // 415: v1.AdoptResourceRequest.LabelsEntry
+	nil,                                       // 416: v1.ResourceProfile.DrbdOptionsEntry
+	nil,                                       // 417: v1.ResourceProfile.LabelsEntry
+	nil,                                       // 418: v1.UpdateResourceOptionsRequest.OptionsEntry
+	nil,                                       // 419: v1.SetResourceLabelsRequest.LabelsEntry
+	nil,                                       // 420: v1.SetResourceLabelsResponse.LabelsEntry
+	nil,                                       // 421: v1.OcfAgent.ParamsEntry
+	nil,                                       // 422: v1.ControllerLogEntry.FieldsEntry
+	nil,                                       // 423: v1.Event.DetailsEntry
+	nil,                                       // 424: v1.ResourceInfo.NodeStatesEntry
+	nil,                                       // 425: v1.ResourceInfo.LabelsEntry
+	nil,                                       // 426: v1.ResourceStatus.NodeStatesEntry
+	nil,                                       // 427: v1.ResourceStatus.WanProxyEntry
+	nil,                                       // 428: v1.NotifyChannelInfo.HeadersEntry
+	nil,                                       // 429: v1.SaveNotifyChannelRequest.HeadersEntry
+	nil,                                       // 430: v1.ImportBackupsResponse.SkippedEntry
+	nil,                                       // 431: v1.CreateNFSGatewayRequest.OptionsEntry
+	nil,                                       // 432: v1.CreateISCSIGatewayRequest.OptionsEntry
+	nil,                                       // 433: v1.CreateNVMeGatewayRequest.OptionsEntry
+	nil,                                       // 434: v1.GatewayInfo.OptionsEntry
+	nil,                                       // 435: v1.SetResourceProfileOptionsRequest.OptionsEntry
 }
 var file_api_proto_v1_haify_proto_depIdxs = []int32{
 	10,  // 0: v1.GetPoolResponse.pool:type_name -> v1.PoolInfo
 	10,  // 1: v1.ListPoolsResponse.pools:type_name -> v1.PoolInfo
 	10,  // 2: v1.ListZFSPoolsResponse.pools:type_name -> v1.PoolInfo
-	190, // 3: v1.ListZFSSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
-	190, // 4: v1.ListLvmSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
+	192, // 3: v1.ListZFSSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
+	192, // 4: v1.ListLvmSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
 	53,  // 5: v1.RegisterNodeResponse.node:type_name -> v1.NodeInfo
-	409, // 6: v1.SetNodeLabelsRequest.labels:type_name -> v1.SetNodeLabelsRequest.LabelsEntry
+	411, // 6: v1.SetNodeLabelsRequest.labels:type_name -> v1.SetNodeLabelsRequest.LabelsEntry
 	53,  // 7: v1.SetNodeLabelsResponse.node:type_name -> v1.NodeInfo
 	53,  // 8: v1.GetNodeResponse.node:type_name -> v1.NodeInfo
 	53,  // 9: v1.ListNodesResponse.nodes:type_name -> v1.NodeInfo
-	410, // 10: v1.NodeInfo.labels:type_name -> v1.NodeInfo.LabelsEntry
+	412, // 10: v1.NodeInfo.labels:type_name -> v1.NodeInfo.LabelsEntry
 	56,  // 11: v1.HealthCheckResponse.health:type_name -> v1.NodeHealthInfo
-	411, // 12: v1.CreateResourceRequest.drbd_options:type_name -> v1.CreateResourceRequest.DrbdOptionsEntry
+	413, // 12: v1.CreateResourceRequest.drbd_options:type_name -> v1.CreateResourceRequest.DrbdOptionsEntry
 	58,  // 13: v1.CreateResourceRequest.volumes:type_name -> v1.VolumeSpec
-	412, // 14: v1.CreateResourceRequest.labels:type_name -> v1.CreateResourceRequest.LabelsEntry
-	413, // 15: v1.AdoptResourceRequest.labels:type_name -> v1.AdoptResourceRequest.LabelsEntry
-	174, // 16: v1.GetResourceResponse.resource:type_name -> v1.ResourceInfo
-	174, // 17: v1.ListResourcesResponse.resources:type_name -> v1.ResourceInfo
-	414, // 18: v1.ResourceProfile.drbd_options:type_name -> v1.ResourceProfile.DrbdOptionsEntry
-	415, // 19: v1.ResourceProfile.labels:type_name -> v1.ResourceProfile.LabelsEntry
+	414, // 14: v1.CreateResourceRequest.labels:type_name -> v1.CreateResourceRequest.LabelsEntry
+	415, // 15: v1.AdoptResourceRequest.labels:type_name -> v1.AdoptResourceRequest.LabelsEntry
+	176, // 16: v1.GetResourceResponse.resource:type_name -> v1.ResourceInfo
+	176, // 17: v1.ListResourcesResponse.resources:type_name -> v1.ResourceInfo
+	416, // 18: v1.ResourceProfile.drbd_options:type_name -> v1.ResourceProfile.DrbdOptionsEntry
+	417, // 19: v1.ResourceProfile.labels:type_name -> v1.ResourceProfile.LabelsEntry
 	68,  // 20: v1.CreateResourceProfileRequest.profile:type_name -> v1.ResourceProfile
 	68,  // 21: v1.CreateResourceProfileResponse.profile:type_name -> v1.ResourceProfile
 	68,  // 22: v1.GetResourceProfileResponse.profile:type_name -> v1.ResourceProfile
 	68,  // 23: v1.ListResourceProfilesResponse.profiles:type_name -> v1.ResourceProfile
-	416, // 24: v1.UpdateResourceOptionsRequest.options:type_name -> v1.UpdateResourceOptionsRequest.OptionsEntry
+	418, // 24: v1.UpdateResourceOptionsRequest.options:type_name -> v1.UpdateResourceOptionsRequest.OptionsEntry
 	99,  // 25: v1.PlanRebalanceResponse.moves:type_name -> v1.RebalanceMove
-	175, // 26: v1.ResourceStatusResponse.status:type_name -> v1.ResourceStatus
-	417, // 27: v1.OcfAgent.params:type_name -> v1.OcfAgent.ParamsEntry
-	128, // 28: v1.HaStartItem.ocf:type_name -> v1.OcfAgent
-	128, // 29: v1.MakeHaRequest.ocf_agents:type_name -> v1.OcfAgent
-	129, // 30: v1.MakeHaRequest.start_items:type_name -> v1.HaStartItem
-	131, // 31: v1.ListResourceAgentsResponse.agents:type_name -> v1.ResourceAgentInfo
-	134, // 32: v1.GetResourceAgentMetadataResponse.parameters:type_name -> v1.ResourceAgentParameter
-	158, // 33: v1.ListAuditEventsResponse.events:type_name -> v1.AuditEvent
-	418, // 34: v1.ControllerLogEntry.fields:type_name -> v1.ControllerLogEntry.FieldsEntry
-	161, // 35: v1.ListControllerLogsResponse.entries:type_name -> v1.ControllerLogEntry
-	165, // 36: v1.NodeDiagnostics.collectors:type_name -> v1.NodeCollectorOutput
-	166, // 37: v1.CollectNodeDiagnosticsResponse.nodes:type_name -> v1.NodeDiagnostics
-	419, // 38: v1.Event.details:type_name -> v1.Event.DetailsEntry
-	168, // 39: v1.ListEventsResponse.events:type_name -> v1.Event
-	179, // 40: v1.ResourceInfo.volumes:type_name -> v1.VolumeInfo
-	420, // 41: v1.ResourceInfo.node_states:type_name -> v1.ResourceInfo.NodeStatesEntry
-	421, // 42: v1.ResourceInfo.labels:type_name -> v1.ResourceInfo.LabelsEntry
-	422, // 43: v1.ResourceStatus.node_states:type_name -> v1.ResourceStatus.NodeStatesEntry
-	179, // 44: v1.ResourceStatus.volumes:type_name -> v1.VolumeInfo
-	423, // 45: v1.ResourceStatus.wan_proxy:type_name -> v1.ResourceStatus.WanProxyEntry
-	177, // 46: v1.ResourceStatus.wan_metrics:type_name -> v1.WANMetrics
-	176, // 47: v1.ResourceStatus.quorum:type_name -> v1.QuorumInfo
-	190, // 48: v1.ListSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
-	191, // 49: v1.SnapshotScheduleInfo.keep:type_name -> v1.GFSRetention
-	191, // 50: v1.CreateSnapshotScheduleRequest.keep:type_name -> v1.GFSRetention
-	192, // 51: v1.ListSnapshotSchedulesResponse.schedules:type_name -> v1.SnapshotScheduleInfo
-	203, // 52: v1.ListBackupTargetsResponse.targets:type_name -> v1.BackupTargetInfo
-	424, // 53: v1.NotifyChannelInfo.headers:type_name -> v1.NotifyChannelInfo.HeadersEntry
-	210, // 54: v1.ListNotifyChannelsResponse.channels:type_name -> v1.NotifyChannelInfo
-	425, // 55: v1.SaveNotifyChannelRequest.headers:type_name -> v1.SaveNotifyChannelRequest.HeadersEntry
-	210, // 56: v1.SaveNotifyChannelResponse.channel:type_name -> v1.NotifyChannelInfo
-	219, // 57: v1.BackupInfo.volumes:type_name -> v1.BackupVolumeInfo
-	220, // 58: v1.CreateBackupResponse.backup:type_name -> v1.BackupInfo
-	220, // 59: v1.ListBackupsResponse.backups:type_name -> v1.BackupInfo
-	220, // 60: v1.RestoreBackupResponse.backup:type_name -> v1.BackupInfo
-	426, // 61: v1.ImportBackupsResponse.skipped:type_name -> v1.ImportBackupsResponse.SkippedEntry
-	191, // 62: v1.BackupScheduleInfo.keep:type_name -> v1.GFSRetention
-	191, // 63: v1.CreateBackupScheduleRequest.keep:type_name -> v1.GFSRetention
-	231, // 64: v1.CreateBackupScheduleResponse.schedule:type_name -> v1.BackupScheduleInfo
-	231, // 65: v1.ListBackupSchedulesResponse.schedules:type_name -> v1.BackupScheduleInfo
-	231, // 66: v1.RunBackupScheduleResponse.schedule:type_name -> v1.BackupScheduleInfo
-	427, // 67: v1.CreateNFSGatewayRequest.options:type_name -> v1.CreateNFSGatewayRequest.OptionsEntry
-	428, // 68: v1.CreateISCSIGatewayRequest.options:type_name -> v1.CreateISCSIGatewayRequest.OptionsEntry
-	429, // 69: v1.CreateNVMeGatewayRequest.options:type_name -> v1.CreateNVMeGatewayRequest.OptionsEntry
-	256, // 70: v1.GetGatewayResponse.gateway:type_name -> v1.GatewayInfo
-	256, // 71: v1.ListGatewaysResponse.gateways:type_name -> v1.GatewayInfo
-	430, // 72: v1.GatewayInfo.options:type_name -> v1.GatewayInfo.OptionsEntry
-	257, // 73: v1.ListNFSExportsResponse.exports:type_name -> v1.NFSExportInfo
-	266, // 74: v1.AddSMBShareRequest.share:type_name -> v1.SMBShareInfo
-	266, // 75: v1.ListSMBSharesResponse.shares:type_name -> v1.SMBShareInfo
-	279, // 76: v1.ListISCSILUNsResponse.luns:type_name -> v1.ISCSILUNInfo
-	296, // 77: v1.ListNVMeNamespacesResponse.namespaces:type_name -> v1.NVMeNamespaceInfo
-	315, // 78: v1.GetHaResponse.config:type_name -> v1.HaConfigInfo
-	315, // 79: v1.ListHaResponse.configs:type_name -> v1.HaConfigInfo
-	128, // 80: v1.HaConfigInfo.ocf_agents:type_name -> v1.OcfAgent
-	129, // 81: v1.HaConfigInfo.start_items:type_name -> v1.HaStartItem
-	316, // 82: v1.HaPromoterStatus.target:type_name -> v1.HaServiceStatus
-	316, // 83: v1.HaPromoterStatus.deps:type_name -> v1.HaServiceStatus
-	317, // 84: v1.GetHaStatusResponse.promoters:type_name -> v1.HaPromoterStatus
-	331, // 85: v1.SetNodeAddressRequest.moves:type_name -> v1.NodeAddressMove
-	431, // 86: v1.SetResourceProfileOptionsRequest.options:type_name -> v1.SetResourceProfileOptionsRequest.OptionsEntry
-	68,  // 87: v1.SetResourceProfileOptionsResponse.profile:type_name -> v1.ResourceProfile
-	333, // 88: v1.SetResourceProfileOptionsResponse.members:type_name -> v1.ProfileMemberResult
-	333, // 89: v1.AdjustResourceProfileResponse.members:type_name -> v1.ProfileMemberResult
-	346, // 90: v1.VerifyResourceResponse.peers:type_name -> v1.VerifyPeer
-	351, // 91: v1.ReplicationTLSResponse.nodes:type_name -> v1.NodeTLSInfo
-	358, // 92: v1.ListRbacPoliciesResponse.policies:type_name -> v1.RbacPolicy
-	359, // 93: v1.ListRbacPoliciesResponse.users:type_name -> v1.RbacUser
-	367, // 94: v1.ListApprovalsResponse.approvals:type_name -> v1.ApprovalInfo
-	367, // 95: v1.ApproveRequestResponse.approval:type_name -> v1.ApprovalInfo
-	367, // 96: v1.RejectRequestResponse.approval:type_name -> v1.ApprovalInfo
-	375, // 97: v1.InspectionReport.summary:type_name -> v1.InspectionSummary
-	374, // 98: v1.InspectionReport.checks:type_name -> v1.InspectionCheck
-	376, // 99: v1.RunInspectionResponse.report:type_name -> v1.InspectionReport
-	376, // 100: v1.ListInspectionsResponse.reports:type_name -> v1.InspectionReport
-	376, // 101: v1.GetInspectionResponse.report:type_name -> v1.InspectionReport
-	383, // 102: v1.CreateAppResponse.app:type_name -> v1.AppInfo
-	383, // 103: v1.ListAppsResponse.apps:type_name -> v1.AppInfo
-	383, // 104: v1.GetAppStatusResponse.app:type_name -> v1.AppInfo
-	397, // 105: v1.TrimPoolsResponse.results:type_name -> v1.TrimResultInfo
-	400, // 106: v1.ListPoolDisksResponse.disks:type_name -> v1.PoolDiskInfo
-	407, // 107: v1.ListStorageJobsResponse.jobs:type_name -> v1.StorageJobInfo
-	178, // 108: v1.ResourceInfo.NodeStatesEntry.value:type_name -> v1.NodeResourceState
-	178, // 109: v1.ResourceStatus.NodeStatesEntry.value:type_name -> v1.NodeResourceState
-	0,   // 110: v1.HaifyController.CreatePool:input_type -> v1.CreatePoolRequest
-	2,   // 111: v1.HaifyController.DeletePool:input_type -> v1.DeletePoolRequest
-	4,   // 112: v1.HaifyController.GetPool:input_type -> v1.GetPoolRequest
-	6,   // 113: v1.HaifyController.ListPools:input_type -> v1.ListPoolsRequest
-	396, // 114: v1.HaifyController.TrimPools:input_type -> v1.TrimPoolsRequest
-	399, // 115: v1.HaifyController.ListPoolDisks:input_type -> v1.ListPoolDisksRequest
-	402, // 116: v1.HaifyController.RemovePoolDisk:input_type -> v1.RemovePoolDiskRequest
-	403, // 117: v1.HaifyController.ReplacePoolDisk:input_type -> v1.ReplacePoolDiskRequest
-	404, // 118: v1.HaifyController.MoveVolume:input_type -> v1.MoveVolumeRequest
-	406, // 119: v1.HaifyController.ListStorageJobs:input_type -> v1.ListStorageJobsRequest
-	8,   // 120: v1.HaifyController.AddDiskToPool:input_type -> v1.AddDiskToPoolRequest
-	43,  // 121: v1.HaifyController.RegisterNode:input_type -> v1.RegisterNodeRequest
-	47,  // 122: v1.HaifyController.UnregisterNode:input_type -> v1.UnregisterNodeRequest
-	45,  // 123: v1.HaifyController.SetNodeLabels:input_type -> v1.SetNodeLabelsRequest
-	330, // 124: v1.HaifyController.SetNodeAddress:input_type -> v1.SetNodeAddressRequest
-	49,  // 125: v1.HaifyController.GetNode:input_type -> v1.GetNodeRequest
-	51,  // 126: v1.HaifyController.ListNodes:input_type -> v1.ListNodesRequest
-	54,  // 127: v1.HaifyController.HealthCheck:input_type -> v1.HealthCheckRequest
-	57,  // 128: v1.HaifyController.CreateResource:input_type -> v1.CreateResourceRequest
-	60,  // 129: v1.HaifyController.AdoptResource:input_type -> v1.AdoptResourceRequest
-	62,  // 130: v1.HaifyController.DeleteResource:input_type -> v1.DeleteResourceRequest
-	64,  // 131: v1.HaifyController.GetResource:input_type -> v1.GetResourceRequest
-	66,  // 132: v1.HaifyController.ListResources:input_type -> v1.ListResourcesRequest
-	69,  // 133: v1.HaifyController.CreateResourceProfile:input_type -> v1.CreateResourceProfileRequest
-	71,  // 134: v1.HaifyController.GetResourceProfile:input_type -> v1.GetResourceProfileRequest
-	73,  // 135: v1.HaifyController.ListResourceProfiles:input_type -> v1.ListResourceProfilesRequest
-	75,  // 136: v1.HaifyController.DeleteResourceProfile:input_type -> v1.DeleteResourceProfileRequest
-	334, // 137: v1.HaifyController.SetResourceProfileOptions:input_type -> v1.SetResourceProfileOptionsRequest
-	336, // 138: v1.HaifyController.AdjustResourceProfile:input_type -> v1.AdjustResourceProfileRequest
-	338, // 139: v1.HaifyController.GetResourceProfileMaxSize:input_type -> v1.GetResourceProfileMaxSizeRequest
-	340, // 140: v1.HaifyController.SetResourceProfile:input_type -> v1.SetResourceProfileRequest
-	77,  // 141: v1.HaifyController.AddVolume:input_type -> v1.AddVolumeRequest
-	83,  // 142: v1.HaifyController.RemoveVolume:input_type -> v1.RemoveVolumeRequest
-	85,  // 143: v1.HaifyController.CreateResourceSnapshot:input_type -> v1.CreateResourceSnapshotRequest
-	87,  // 144: v1.HaifyController.ListResourceSnapshots:input_type -> v1.ListResourceSnapshotsRequest
-	89,  // 145: v1.HaifyController.RollbackResourceSnapshot:input_type -> v1.RollbackResourceSnapshotRequest
-	91,  // 146: v1.HaifyController.DeleteResourceSnapshot:input_type -> v1.DeleteResourceSnapshotRequest
-	106, // 147: v1.HaifyController.RenameResource:input_type -> v1.RenameResourceRequest
-	108, // 148: v1.HaifyController.ResizeVolume:input_type -> v1.ResizeVolumeRequest
-	79,  // 149: v1.HaifyController.UpdateResourceOptions:input_type -> v1.UpdateResourceOptionsRequest
-	81,  // 150: v1.HaifyController.RepairResource:input_type -> v1.RepairResourceRequest
-	110, // 151: v1.HaifyController.ResourceStatus:input_type -> v1.ResourceStatusRequest
-	112, // 152: v1.HaifyController.SetPrimary:input_type -> v1.SetPrimaryRequest
-	114, // 153: v1.HaifyController.SetSecondary:input_type -> v1.SetSecondaryRequest
-	116, // 154: v1.HaifyController.SetDualPrimary:input_type -> v1.SetDualPrimaryRequest
-	118, // 155: v1.HaifyController.AttachDisklessClient:input_type -> v1.AttachDisklessClientRequest
-	120, // 156: v1.HaifyController.DetachDisklessClient:input_type -> v1.DetachDisklessClientRequest
-	122, // 157: v1.HaifyController.CreateFilesystem:input_type -> v1.CreateFilesystemRequest
-	124, // 158: v1.HaifyController.MountResource:input_type -> v1.MountResourceRequest
-	126, // 159: v1.HaifyController.UnmountResource:input_type -> v1.UnmountResourceRequest
-	130, // 160: v1.HaifyController.MakeHa:input_type -> v1.MakeHaRequest
-	142, // 161: v1.HaifyController.EvictHa:input_type -> v1.EvictHaRequest
-	93,  // 162: v1.HaifyController.SetHaPreferredNodes:input_type -> v1.SetHaPreferredNodesRequest
-	143, // 163: v1.HaifyController.SetTiebreaker:input_type -> v1.SetTiebreakerRequest
-	349, // 164: v1.HaifyController.SetupReplicationTLS:input_type -> v1.SetupReplicationTLSRequest
-	350, // 165: v1.HaifyController.GetReplicationTLSStatus:input_type -> v1.GetReplicationTLSStatusRequest
-	353, // 166: v1.HaifyController.SetResourceTLS:input_type -> v1.SetResourceTLSRequest
-	145, // 167: v1.HaifyController.AddDR:input_type -> v1.AddDRRequest
-	147, // 168: v1.HaifyController.AddReplica:input_type -> v1.AddReplicaRequest
-	148, // 169: v1.HaifyController.RemoveReplica:input_type -> v1.RemoveReplicaRequest
-	309, // 170: v1.HaifyController.DeleteHa:input_type -> v1.DeleteHaRequest
-	311, // 171: v1.HaifyController.GetHa:input_type -> v1.GetHaRequest
-	313, // 172: v1.HaifyController.ListHa:input_type -> v1.ListHaRequest
-	318, // 173: v1.HaifyController.GetHaStatus:input_type -> v1.GetHaStatusRequest
-	132, // 174: v1.HaifyController.ListResourceAgents:input_type -> v1.ListResourceAgentsRequest
-	135, // 175: v1.HaifyController.GetResourceAgentMetadata:input_type -> v1.GetResourceAgentMetadataRequest
-	137, // 176: v1.HaifyController.GetHaToml:input_type -> v1.GetHaTomlRequest
-	139, // 177: v1.HaifyController.SyncHaToml:input_type -> v1.SyncHaTomlRequest
-	152, // 178: v1.HaifyController.EnableSelfHa:input_type -> v1.EnableSelfHaRequest
-	154, // 179: v1.HaifyController.DisableSelfHa:input_type -> v1.DisableSelfHaRequest
-	156, // 180: v1.HaifyController.GetSelfHaStatus:input_type -> v1.GetSelfHaStatusRequest
-	180, // 181: v1.HaifyController.CreateSnapshot:input_type -> v1.CreateSnapshotRequest
-	182, // 182: v1.HaifyController.DeleteSnapshot:input_type -> v1.DeleteSnapshotRequest
-	184, // 183: v1.HaifyController.RestoreSnapshot:input_type -> v1.RestoreSnapshotRequest
-	188, // 184: v1.HaifyController.ListSnapshots:input_type -> v1.ListSnapshotsRequest
-	186, // 185: v1.HaifyController.PopulateVolume:input_type -> v1.PopulateVolumeRequest
-	197, // 186: v1.HaifyController.CreateSnapshotSchedule:input_type -> v1.CreateSnapshotScheduleRequest
-	199, // 187: v1.HaifyController.ListSnapshotSchedules:input_type -> v1.ListSnapshotSchedulesRequest
-	201, // 188: v1.HaifyController.DeleteSnapshotSchedule:input_type -> v1.DeleteSnapshotScheduleRequest
-	193, // 189: v1.HaifyController.FreezeSnapshotSchedule:input_type -> v1.FreezeSnapshotScheduleRequest
-	195, // 190: v1.HaifyController.UnfreezeSnapshotSchedule:input_type -> v1.UnfreezeSnapshotScheduleRequest
-	204, // 191: v1.HaifyController.AddBackupTarget:input_type -> v1.AddBackupTargetRequest
-	206, // 192: v1.HaifyController.ListBackupTargets:input_type -> v1.ListBackupTargetsRequest
-	208, // 193: v1.HaifyController.DeleteBackupTarget:input_type -> v1.DeleteBackupTargetRequest
-	221, // 194: v1.HaifyController.CreateBackup:input_type -> v1.CreateBackupRequest
-	223, // 195: v1.HaifyController.ListBackups:input_type -> v1.ListBackupsRequest
-	225, // 196: v1.HaifyController.RestoreBackup:input_type -> v1.RestoreBackupRequest
-	227, // 197: v1.HaifyController.DeleteBackup:input_type -> v1.DeleteBackupRequest
-	229, // 198: v1.HaifyController.ImportBackups:input_type -> v1.ImportBackupsRequest
-	232, // 199: v1.HaifyController.CreateBackupSchedule:input_type -> v1.CreateBackupScheduleRequest
-	234, // 200: v1.HaifyController.ListBackupSchedules:input_type -> v1.ListBackupSchedulesRequest
-	236, // 201: v1.HaifyController.DeleteBackupSchedule:input_type -> v1.DeleteBackupScheduleRequest
-	238, // 202: v1.HaifyController.RunBackupSchedule:input_type -> v1.RunBackupScheduleRequest
-	240, // 203: v1.HaifyController.CreateNFSGateway:input_type -> v1.CreateNFSGatewayRequest
-	242, // 204: v1.HaifyController.CreateISCSIGateway:input_type -> v1.CreateISCSIGatewayRequest
-	244, // 205: v1.HaifyController.CreateNVMeGateway:input_type -> v1.CreateNVMeGatewayRequest
-	246, // 206: v1.HaifyController.DeleteGateway:input_type -> v1.DeleteGatewayRequest
-	248, // 207: v1.HaifyController.GetGateway:input_type -> v1.GetGatewayRequest
-	250, // 208: v1.HaifyController.ListGateways:input_type -> v1.ListGatewaysRequest
-	252, // 209: v1.HaifyController.StartGateway:input_type -> v1.StartGatewayRequest
-	254, // 210: v1.HaifyController.StopGateway:input_type -> v1.StopGatewayRequest
-	258, // 211: v1.HaifyController.AddNFSExport:input_type -> v1.AddNFSExportRequest
-	260, // 212: v1.HaifyController.RemoveNFSExport:input_type -> v1.RemoveNFSExportRequest
-	262, // 213: v1.HaifyController.ListNFSExports:input_type -> v1.ListNFSExportsRequest
-	264, // 214: v1.HaifyController.CreateSMBGateway:input_type -> v1.CreateSMBGatewayRequest
-	267, // 215: v1.HaifyController.AddSMBShare:input_type -> v1.AddSMBShareRequest
-	269, // 216: v1.HaifyController.RemoveSMBShare:input_type -> v1.RemoveSMBShareRequest
-	271, // 217: v1.HaifyController.ListSMBShares:input_type -> v1.ListSMBSharesRequest
-	273, // 218: v1.HaifyController.SetSMBUser:input_type -> v1.SetSMBUserRequest
-	275, // 219: v1.HaifyController.RemoveSMBUser:input_type -> v1.RemoveSMBUserRequest
-	277, // 220: v1.HaifyController.ListSMBUsers:input_type -> v1.ListSMBUsersRequest
-	280, // 221: v1.HaifyController.AddISCSILUN:input_type -> v1.AddISCSILUNRequest
-	282, // 222: v1.HaifyController.RemoveISCSILUN:input_type -> v1.RemoveISCSILUNRequest
-	284, // 223: v1.HaifyController.ListISCSILUNs:input_type -> v1.ListISCSILUNsRequest
-	286, // 224: v1.HaifyController.AddISCSIInitiator:input_type -> v1.AddISCSIInitiatorRequest
-	288, // 225: v1.HaifyController.RemoveISCSIInitiator:input_type -> v1.RemoveISCSIInitiatorRequest
-	290, // 226: v1.HaifyController.ListISCSIInitiators:input_type -> v1.ListISCSIInitiatorsRequest
-	292, // 227: v1.HaifyController.SetISCSIChap:input_type -> v1.SetISCSIChapRequest
-	294, // 228: v1.HaifyController.GetISCSIChap:input_type -> v1.GetISCSIChapRequest
-	297, // 229: v1.HaifyController.AddNVMeNamespace:input_type -> v1.AddNVMeNamespaceRequest
-	299, // 230: v1.HaifyController.RemoveNVMeNamespace:input_type -> v1.RemoveNVMeNamespaceRequest
-	301, // 231: v1.HaifyController.ListNVMeNamespaces:input_type -> v1.ListNVMeNamespacesRequest
-	303, // 232: v1.HaifyController.AddNVMeHost:input_type -> v1.AddNVMeHostRequest
-	305, // 233: v1.HaifyController.RemoveNVMeHost:input_type -> v1.RemoveNVMeHostRequest
-	307, // 234: v1.HaifyController.ListNVMeHosts:input_type -> v1.ListNVMeHostsRequest
-	11,  // 235: v1.HaifyController.CreateZFSPool:input_type -> v1.CreateZFSPoolRequest
-	13,  // 236: v1.HaifyController.DeleteZFSPool:input_type -> v1.DeleteZFSPoolRequest
-	15,  // 237: v1.HaifyController.ListZFSpools:input_type -> v1.ListZFSPoolsRequest
-	17,  // 238: v1.HaifyController.CreateZFSDataset:input_type -> v1.CreateZFSDatasetRequest
-	19,  // 239: v1.HaifyController.CreateZFSVolume:input_type -> v1.CreateZFSVolumeRequest
-	21,  // 240: v1.HaifyController.ResizeZFSVolume:input_type -> v1.ResizeZFSVolumeRequest
-	23,  // 241: v1.HaifyController.DeleteZFSDataset:input_type -> v1.DeleteZFSDatasetRequest
-	25,  // 242: v1.HaifyController.CreateZFSSnapshot:input_type -> v1.CreateZFSSnapshotRequest
-	27,  // 243: v1.HaifyController.DeleteZFSSnapshot:input_type -> v1.DeleteZFSSnapshotRequest
-	29,  // 244: v1.HaifyController.ListZFSSnapshots:input_type -> v1.ListZFSSnapshotsRequest
-	31,  // 245: v1.HaifyController.RestoreZFSSnapshot:input_type -> v1.RestoreZFSSnapshotRequest
-	33,  // 246: v1.HaifyController.CloneZFSSnapshot:input_type -> v1.CloneZFSSnapshotRequest
-	35,  // 247: v1.HaifyController.CreateLvmSnapshot:input_type -> v1.CreateLvmSnapshotRequest
-	37,  // 248: v1.HaifyController.DeleteLvmSnapshot:input_type -> v1.DeleteLvmSnapshotRequest
-	39,  // 249: v1.HaifyController.ListLvmSnapshots:input_type -> v1.ListLvmSnapshotsRequest
-	41,  // 250: v1.HaifyController.RestoreLvmSnapshot:input_type -> v1.RestoreLvmSnapshotRequest
-	95,  // 251: v1.HaifyController.SetNFSExportQuota:input_type -> v1.SetNFSExportQuotaRequest
-	97,  // 252: v1.HaifyController.MoveReplica:input_type -> v1.MoveReplicaRequest
-	100, // 253: v1.HaifyController.PlanRebalance:input_type -> v1.PlanRebalanceRequest
-	102, // 254: v1.HaifyController.MarkNodeLost:input_type -> v1.MarkNodeLostRequest
-	104, // 255: v1.HaifyController.RestoreNode:input_type -> v1.RestoreNodeRequest
-	320, // 256: v1.HaifyController.DrainNode:input_type -> v1.DrainNodeRequest
-	328, // 257: v1.HaifyController.UndrainNode:input_type -> v1.UndrainNodeRequest
-	321, // 258: v1.HaifyController.ConvertPoolToThin:input_type -> v1.ConvertPoolToThinRequest
-	323, // 259: v1.HaifyController.AddPoolCache:input_type -> v1.AddPoolCacheRequest
-	325, // 260: v1.HaifyController.RemovePoolCache:input_type -> v1.RemovePoolCacheRequest
-	159, // 261: v1.HaifyController.ListAuditEvents:input_type -> v1.ListAuditEventsRequest
-	162, // 262: v1.HaifyController.ListControllerLogs:input_type -> v1.ListControllerLogsRequest
-	164, // 263: v1.HaifyController.CollectNodeDiagnostics:input_type -> v1.CollectNodeDiagnosticsRequest
-	169, // 264: v1.HaifyController.ListEvents:input_type -> v1.ListEventsRequest
-	211, // 265: v1.HaifyController.ListNotifyChannels:input_type -> v1.ListNotifyChannelsRequest
-	213, // 266: v1.HaifyController.SaveNotifyChannel:input_type -> v1.SaveNotifyChannelRequest
-	215, // 267: v1.HaifyController.DeleteNotifyChannel:input_type -> v1.DeleteNotifyChannelRequest
-	217, // 268: v1.HaifyController.TestNotifyChannel:input_type -> v1.TestNotifyChannelRequest
-	377, // 269: v1.HaifyController.RunInspection:input_type -> v1.RunInspectionRequest
-	379, // 270: v1.HaifyController.ListInspections:input_type -> v1.ListInspectionsRequest
-	381, // 271: v1.HaifyController.GetInspection:input_type -> v1.GetInspectionRequest
-	171, // 272: v1.HaifyController.RepairWanProxy:input_type -> v1.RepairWanProxyRequest
-	344, // 273: v1.HaifyController.DRFailback:input_type -> v1.DRFailbackRequest
-	342, // 274: v1.HaifyController.SetWanEndpoint:input_type -> v1.SetWanEndpointRequest
-	345, // 275: v1.HaifyController.VerifyResource:input_type -> v1.VerifyResourceRequest
-	173, // 276: v1.HaifyController.WatchEvents:input_type -> v1.WatchEventsRequest
-	355, // 277: v1.HaifyController.GetRbacWhoami:input_type -> v1.GetRbacWhoamiRequest
-	357, // 278: v1.HaifyController.ListRbacPolicies:input_type -> v1.ListRbacPoliciesRequest
-	361, // 279: v1.HaifyController.CreateRbacUser:input_type -> v1.CreateRbacUserRequest
-	363, // 280: v1.HaifyController.DeleteRbacUser:input_type -> v1.DeleteRbacUserRequest
-	365, // 281: v1.HaifyController.SetRbacUserRole:input_type -> v1.SetRbacUserRoleRequest
-	368, // 282: v1.HaifyController.ListApprovals:input_type -> v1.ListApprovalsRequest
-	370, // 283: v1.HaifyController.ApproveRequest:input_type -> v1.ApproveRequestRequest
-	372, // 284: v1.HaifyController.RejectRequest:input_type -> v1.RejectRequestRequest
-	384, // 285: v1.HaifyController.CreateApp:input_type -> v1.CreateAppRequest
-	386, // 286: v1.HaifyController.ListApps:input_type -> v1.ListAppsRequest
-	388, // 287: v1.HaifyController.GetAppStatus:input_type -> v1.GetAppStatusRequest
-	390, // 288: v1.HaifyController.DeleteApp:input_type -> v1.DeleteAppRequest
-	392, // 289: v1.HaifyController.FailoverApp:input_type -> v1.FailoverAppRequest
-	394, // 290: v1.HaifyController.SnapshotApp:input_type -> v1.SnapshotAppRequest
-	1,   // 291: v1.HaifyController.CreatePool:output_type -> v1.CreatePoolResponse
-	3,   // 292: v1.HaifyController.DeletePool:output_type -> v1.DeletePoolResponse
-	5,   // 293: v1.HaifyController.GetPool:output_type -> v1.GetPoolResponse
-	7,   // 294: v1.HaifyController.ListPools:output_type -> v1.ListPoolsResponse
-	398, // 295: v1.HaifyController.TrimPools:output_type -> v1.TrimPoolsResponse
-	401, // 296: v1.HaifyController.ListPoolDisks:output_type -> v1.ListPoolDisksResponse
-	405, // 297: v1.HaifyController.RemovePoolDisk:output_type -> v1.StorageJobResponse
-	405, // 298: v1.HaifyController.ReplacePoolDisk:output_type -> v1.StorageJobResponse
-	405, // 299: v1.HaifyController.MoveVolume:output_type -> v1.StorageJobResponse
-	408, // 300: v1.HaifyController.ListStorageJobs:output_type -> v1.ListStorageJobsResponse
-	9,   // 301: v1.HaifyController.AddDiskToPool:output_type -> v1.AddDiskToPoolResponse
-	44,  // 302: v1.HaifyController.RegisterNode:output_type -> v1.RegisterNodeResponse
-	48,  // 303: v1.HaifyController.UnregisterNode:output_type -> v1.UnregisterNodeResponse
-	46,  // 304: v1.HaifyController.SetNodeLabels:output_type -> v1.SetNodeLabelsResponse
-	332, // 305: v1.HaifyController.SetNodeAddress:output_type -> v1.SetNodeAddressResponse
-	50,  // 306: v1.HaifyController.GetNode:output_type -> v1.GetNodeResponse
-	52,  // 307: v1.HaifyController.ListNodes:output_type -> v1.ListNodesResponse
-	55,  // 308: v1.HaifyController.HealthCheck:output_type -> v1.HealthCheckResponse
-	59,  // 309: v1.HaifyController.CreateResource:output_type -> v1.CreateResourceResponse
-	61,  // 310: v1.HaifyController.AdoptResource:output_type -> v1.AdoptResourceResponse
-	63,  // 311: v1.HaifyController.DeleteResource:output_type -> v1.DeleteResourceResponse
-	65,  // 312: v1.HaifyController.GetResource:output_type -> v1.GetResourceResponse
-	67,  // 313: v1.HaifyController.ListResources:output_type -> v1.ListResourcesResponse
-	70,  // 314: v1.HaifyController.CreateResourceProfile:output_type -> v1.CreateResourceProfileResponse
-	72,  // 315: v1.HaifyController.GetResourceProfile:output_type -> v1.GetResourceProfileResponse
-	74,  // 316: v1.HaifyController.ListResourceProfiles:output_type -> v1.ListResourceProfilesResponse
-	76,  // 317: v1.HaifyController.DeleteResourceProfile:output_type -> v1.DeleteResourceProfileResponse
-	335, // 318: v1.HaifyController.SetResourceProfileOptions:output_type -> v1.SetResourceProfileOptionsResponse
-	337, // 319: v1.HaifyController.AdjustResourceProfile:output_type -> v1.AdjustResourceProfileResponse
-	339, // 320: v1.HaifyController.GetResourceProfileMaxSize:output_type -> v1.GetResourceProfileMaxSizeResponse
-	341, // 321: v1.HaifyController.SetResourceProfile:output_type -> v1.SetResourceProfileResponse
-	78,  // 322: v1.HaifyController.AddVolume:output_type -> v1.AddVolumeResponse
-	84,  // 323: v1.HaifyController.RemoveVolume:output_type -> v1.RemoveVolumeResponse
-	86,  // 324: v1.HaifyController.CreateResourceSnapshot:output_type -> v1.CreateResourceSnapshotResponse
-	88,  // 325: v1.HaifyController.ListResourceSnapshots:output_type -> v1.ListResourceSnapshotsResponse
-	90,  // 326: v1.HaifyController.RollbackResourceSnapshot:output_type -> v1.RollbackResourceSnapshotResponse
-	92,  // 327: v1.HaifyController.DeleteResourceSnapshot:output_type -> v1.DeleteResourceSnapshotResponse
-	107, // 328: v1.HaifyController.RenameResource:output_type -> v1.RenameResourceResponse
-	109, // 329: v1.HaifyController.ResizeVolume:output_type -> v1.ResizeVolumeResponse
-	80,  // 330: v1.HaifyController.UpdateResourceOptions:output_type -> v1.UpdateResourceOptionsResponse
-	82,  // 331: v1.HaifyController.RepairResource:output_type -> v1.RepairResourceResponse
-	111, // 332: v1.HaifyController.ResourceStatus:output_type -> v1.ResourceStatusResponse
-	113, // 333: v1.HaifyController.SetPrimary:output_type -> v1.SetPrimaryResponse
-	115, // 334: v1.HaifyController.SetSecondary:output_type -> v1.SetSecondaryResponse
-	117, // 335: v1.HaifyController.SetDualPrimary:output_type -> v1.SetDualPrimaryResponse
-	119, // 336: v1.HaifyController.AttachDisklessClient:output_type -> v1.AttachDisklessClientResponse
-	121, // 337: v1.HaifyController.DetachDisklessClient:output_type -> v1.DetachDisklessClientResponse
-	123, // 338: v1.HaifyController.CreateFilesystem:output_type -> v1.CreateFilesystemResponse
-	125, // 339: v1.HaifyController.MountResource:output_type -> v1.MountResourceResponse
-	127, // 340: v1.HaifyController.UnmountResource:output_type -> v1.UnmountResourceResponse
-	141, // 341: v1.HaifyController.MakeHa:output_type -> v1.MakeHaResponse
-	151, // 342: v1.HaifyController.EvictHa:output_type -> v1.EvictHaResponse
-	94,  // 343: v1.HaifyController.SetHaPreferredNodes:output_type -> v1.SetHaPreferredNodesResponse
-	144, // 344: v1.HaifyController.SetTiebreaker:output_type -> v1.SetTiebreakerResponse
-	352, // 345: v1.HaifyController.SetupReplicationTLS:output_type -> v1.ReplicationTLSResponse
-	352, // 346: v1.HaifyController.GetReplicationTLSStatus:output_type -> v1.ReplicationTLSResponse
-	354, // 347: v1.HaifyController.SetResourceTLS:output_type -> v1.SetResourceTLSResponse
-	146, // 348: v1.HaifyController.AddDR:output_type -> v1.AddDRResponse
-	150, // 349: v1.HaifyController.AddReplica:output_type -> v1.AddReplicaResponse
-	149, // 350: v1.HaifyController.RemoveReplica:output_type -> v1.RemoveReplicaResponse
-	310, // 351: v1.HaifyController.DeleteHa:output_type -> v1.DeleteHaResponse
-	312, // 352: v1.HaifyController.GetHa:output_type -> v1.GetHaResponse
-	314, // 353: v1.HaifyController.ListHa:output_type -> v1.ListHaResponse
-	319, // 354: v1.HaifyController.GetHaStatus:output_type -> v1.GetHaStatusResponse
-	133, // 355: v1.HaifyController.ListResourceAgents:output_type -> v1.ListResourceAgentsResponse
-	136, // 356: v1.HaifyController.GetResourceAgentMetadata:output_type -> v1.GetResourceAgentMetadataResponse
-	138, // 357: v1.HaifyController.GetHaToml:output_type -> v1.GetHaTomlResponse
-	140, // 358: v1.HaifyController.SyncHaToml:output_type -> v1.SyncHaTomlResponse
-	153, // 359: v1.HaifyController.EnableSelfHa:output_type -> v1.EnableSelfHaResponse
-	155, // 360: v1.HaifyController.DisableSelfHa:output_type -> v1.DisableSelfHaResponse
-	157, // 361: v1.HaifyController.GetSelfHaStatus:output_type -> v1.GetSelfHaStatusResponse
-	181, // 362: v1.HaifyController.CreateSnapshot:output_type -> v1.CreateSnapshotResponse
-	183, // 363: v1.HaifyController.DeleteSnapshot:output_type -> v1.DeleteSnapshotResponse
-	185, // 364: v1.HaifyController.RestoreSnapshot:output_type -> v1.RestoreSnapshotResponse
-	189, // 365: v1.HaifyController.ListSnapshots:output_type -> v1.ListSnapshotsResponse
-	187, // 366: v1.HaifyController.PopulateVolume:output_type -> v1.PopulateVolumeResponse
-	198, // 367: v1.HaifyController.CreateSnapshotSchedule:output_type -> v1.CreateSnapshotScheduleResponse
-	200, // 368: v1.HaifyController.ListSnapshotSchedules:output_type -> v1.ListSnapshotSchedulesResponse
-	202, // 369: v1.HaifyController.DeleteSnapshotSchedule:output_type -> v1.DeleteSnapshotScheduleResponse
-	194, // 370: v1.HaifyController.FreezeSnapshotSchedule:output_type -> v1.FreezeSnapshotScheduleResponse
-	196, // 371: v1.HaifyController.UnfreezeSnapshotSchedule:output_type -> v1.UnfreezeSnapshotScheduleResponse
-	205, // 372: v1.HaifyController.AddBackupTarget:output_type -> v1.AddBackupTargetResponse
-	207, // 373: v1.HaifyController.ListBackupTargets:output_type -> v1.ListBackupTargetsResponse
-	209, // 374: v1.HaifyController.DeleteBackupTarget:output_type -> v1.DeleteBackupTargetResponse
-	222, // 375: v1.HaifyController.CreateBackup:output_type -> v1.CreateBackupResponse
-	224, // 376: v1.HaifyController.ListBackups:output_type -> v1.ListBackupsResponse
-	226, // 377: v1.HaifyController.RestoreBackup:output_type -> v1.RestoreBackupResponse
-	228, // 378: v1.HaifyController.DeleteBackup:output_type -> v1.DeleteBackupResponse
-	230, // 379: v1.HaifyController.ImportBackups:output_type -> v1.ImportBackupsResponse
-	233, // 380: v1.HaifyController.CreateBackupSchedule:output_type -> v1.CreateBackupScheduleResponse
-	235, // 381: v1.HaifyController.ListBackupSchedules:output_type -> v1.ListBackupSchedulesResponse
-	237, // 382: v1.HaifyController.DeleteBackupSchedule:output_type -> v1.DeleteBackupScheduleResponse
-	239, // 383: v1.HaifyController.RunBackupSchedule:output_type -> v1.RunBackupScheduleResponse
-	241, // 384: v1.HaifyController.CreateNFSGateway:output_type -> v1.CreateNFSGatewayResponse
-	243, // 385: v1.HaifyController.CreateISCSIGateway:output_type -> v1.CreateISCSIGatewayResponse
-	245, // 386: v1.HaifyController.CreateNVMeGateway:output_type -> v1.CreateNVMeGatewayResponse
-	247, // 387: v1.HaifyController.DeleteGateway:output_type -> v1.DeleteGatewayResponse
-	249, // 388: v1.HaifyController.GetGateway:output_type -> v1.GetGatewayResponse
-	251, // 389: v1.HaifyController.ListGateways:output_type -> v1.ListGatewaysResponse
-	253, // 390: v1.HaifyController.StartGateway:output_type -> v1.StartGatewayResponse
-	255, // 391: v1.HaifyController.StopGateway:output_type -> v1.StopGatewayResponse
-	259, // 392: v1.HaifyController.AddNFSExport:output_type -> v1.AddNFSExportResponse
-	261, // 393: v1.HaifyController.RemoveNFSExport:output_type -> v1.RemoveNFSExportResponse
-	263, // 394: v1.HaifyController.ListNFSExports:output_type -> v1.ListNFSExportsResponse
-	265, // 395: v1.HaifyController.CreateSMBGateway:output_type -> v1.CreateSMBGatewayResponse
-	268, // 396: v1.HaifyController.AddSMBShare:output_type -> v1.AddSMBShareResponse
-	270, // 397: v1.HaifyController.RemoveSMBShare:output_type -> v1.RemoveSMBShareResponse
-	272, // 398: v1.HaifyController.ListSMBShares:output_type -> v1.ListSMBSharesResponse
-	274, // 399: v1.HaifyController.SetSMBUser:output_type -> v1.SetSMBUserResponse
-	276, // 400: v1.HaifyController.RemoveSMBUser:output_type -> v1.RemoveSMBUserResponse
-	278, // 401: v1.HaifyController.ListSMBUsers:output_type -> v1.ListSMBUsersResponse
-	281, // 402: v1.HaifyController.AddISCSILUN:output_type -> v1.AddISCSILUNResponse
-	283, // 403: v1.HaifyController.RemoveISCSILUN:output_type -> v1.RemoveISCSILUNResponse
-	285, // 404: v1.HaifyController.ListISCSILUNs:output_type -> v1.ListISCSILUNsResponse
-	287, // 405: v1.HaifyController.AddISCSIInitiator:output_type -> v1.AddISCSIInitiatorResponse
-	289, // 406: v1.HaifyController.RemoveISCSIInitiator:output_type -> v1.RemoveISCSIInitiatorResponse
-	291, // 407: v1.HaifyController.ListISCSIInitiators:output_type -> v1.ListISCSIInitiatorsResponse
-	293, // 408: v1.HaifyController.SetISCSIChap:output_type -> v1.SetISCSIChapResponse
-	295, // 409: v1.HaifyController.GetISCSIChap:output_type -> v1.GetISCSIChapResponse
-	298, // 410: v1.HaifyController.AddNVMeNamespace:output_type -> v1.AddNVMeNamespaceResponse
-	300, // 411: v1.HaifyController.RemoveNVMeNamespace:output_type -> v1.RemoveNVMeNamespaceResponse
-	302, // 412: v1.HaifyController.ListNVMeNamespaces:output_type -> v1.ListNVMeNamespacesResponse
-	304, // 413: v1.HaifyController.AddNVMeHost:output_type -> v1.AddNVMeHostResponse
-	306, // 414: v1.HaifyController.RemoveNVMeHost:output_type -> v1.RemoveNVMeHostResponse
-	308, // 415: v1.HaifyController.ListNVMeHosts:output_type -> v1.ListNVMeHostsResponse
-	12,  // 416: v1.HaifyController.CreateZFSPool:output_type -> v1.CreateZFSPoolResponse
-	14,  // 417: v1.HaifyController.DeleteZFSPool:output_type -> v1.DeleteZFSPoolResponse
-	16,  // 418: v1.HaifyController.ListZFSpools:output_type -> v1.ListZFSPoolsResponse
-	18,  // 419: v1.HaifyController.CreateZFSDataset:output_type -> v1.CreateZFSDatasetResponse
-	20,  // 420: v1.HaifyController.CreateZFSVolume:output_type -> v1.CreateZFSVolumeResponse
-	22,  // 421: v1.HaifyController.ResizeZFSVolume:output_type -> v1.ResizeZFSVolumeResponse
-	24,  // 422: v1.HaifyController.DeleteZFSDataset:output_type -> v1.DeleteZFSDatasetResponse
-	26,  // 423: v1.HaifyController.CreateZFSSnapshot:output_type -> v1.CreateZFSSnapshotResponse
-	28,  // 424: v1.HaifyController.DeleteZFSSnapshot:output_type -> v1.DeleteZFSSnapshotResponse
-	30,  // 425: v1.HaifyController.ListZFSSnapshots:output_type -> v1.ListZFSSnapshotsResponse
-	32,  // 426: v1.HaifyController.RestoreZFSSnapshot:output_type -> v1.RestoreZFSSnapshotResponse
-	34,  // 427: v1.HaifyController.CloneZFSSnapshot:output_type -> v1.CloneZFSSnapshotResponse
-	36,  // 428: v1.HaifyController.CreateLvmSnapshot:output_type -> v1.CreateLvmSnapshotResponse
-	38,  // 429: v1.HaifyController.DeleteLvmSnapshot:output_type -> v1.DeleteLvmSnapshotResponse
-	40,  // 430: v1.HaifyController.ListLvmSnapshots:output_type -> v1.ListLvmSnapshotsResponse
-	42,  // 431: v1.HaifyController.RestoreLvmSnapshot:output_type -> v1.RestoreLvmSnapshotResponse
-	96,  // 432: v1.HaifyController.SetNFSExportQuota:output_type -> v1.SetNFSExportQuotaResponse
-	98,  // 433: v1.HaifyController.MoveReplica:output_type -> v1.MoveReplicaResponse
-	101, // 434: v1.HaifyController.PlanRebalance:output_type -> v1.PlanRebalanceResponse
-	103, // 435: v1.HaifyController.MarkNodeLost:output_type -> v1.MarkNodeLostResponse
-	105, // 436: v1.HaifyController.RestoreNode:output_type -> v1.RestoreNodeResponse
-	327, // 437: v1.HaifyController.DrainNode:output_type -> v1.DrainNodeResponse
-	329, // 438: v1.HaifyController.UndrainNode:output_type -> v1.UndrainNodeResponse
-	322, // 439: v1.HaifyController.ConvertPoolToThin:output_type -> v1.ConvertPoolToThinResponse
-	324, // 440: v1.HaifyController.AddPoolCache:output_type -> v1.AddPoolCacheResponse
-	326, // 441: v1.HaifyController.RemovePoolCache:output_type -> v1.RemovePoolCacheResponse
-	160, // 442: v1.HaifyController.ListAuditEvents:output_type -> v1.ListAuditEventsResponse
-	163, // 443: v1.HaifyController.ListControllerLogs:output_type -> v1.ListControllerLogsResponse
-	167, // 444: v1.HaifyController.CollectNodeDiagnostics:output_type -> v1.CollectNodeDiagnosticsResponse
-	170, // 445: v1.HaifyController.ListEvents:output_type -> v1.ListEventsResponse
-	212, // 446: v1.HaifyController.ListNotifyChannels:output_type -> v1.ListNotifyChannelsResponse
-	214, // 447: v1.HaifyController.SaveNotifyChannel:output_type -> v1.SaveNotifyChannelResponse
-	216, // 448: v1.HaifyController.DeleteNotifyChannel:output_type -> v1.DeleteNotifyChannelResponse
-	218, // 449: v1.HaifyController.TestNotifyChannel:output_type -> v1.TestNotifyChannelResponse
-	378, // 450: v1.HaifyController.RunInspection:output_type -> v1.RunInspectionResponse
-	380, // 451: v1.HaifyController.ListInspections:output_type -> v1.ListInspectionsResponse
-	382, // 452: v1.HaifyController.GetInspection:output_type -> v1.GetInspectionResponse
-	172, // 453: v1.HaifyController.RepairWanProxy:output_type -> v1.RepairWanProxyResponse
-	348, // 454: v1.HaifyController.DRFailback:output_type -> v1.DRFailbackResponse
-	343, // 455: v1.HaifyController.SetWanEndpoint:output_type -> v1.SetWanEndpointResponse
-	347, // 456: v1.HaifyController.VerifyResource:output_type -> v1.VerifyResourceResponse
-	168, // 457: v1.HaifyController.WatchEvents:output_type -> v1.Event
-	356, // 458: v1.HaifyController.GetRbacWhoami:output_type -> v1.GetRbacWhoamiResponse
-	360, // 459: v1.HaifyController.ListRbacPolicies:output_type -> v1.ListRbacPoliciesResponse
-	362, // 460: v1.HaifyController.CreateRbacUser:output_type -> v1.CreateRbacUserResponse
-	364, // 461: v1.HaifyController.DeleteRbacUser:output_type -> v1.DeleteRbacUserResponse
-	366, // 462: v1.HaifyController.SetRbacUserRole:output_type -> v1.SetRbacUserRoleResponse
-	369, // 463: v1.HaifyController.ListApprovals:output_type -> v1.ListApprovalsResponse
-	371, // 464: v1.HaifyController.ApproveRequest:output_type -> v1.ApproveRequestResponse
-	373, // 465: v1.HaifyController.RejectRequest:output_type -> v1.RejectRequestResponse
-	385, // 466: v1.HaifyController.CreateApp:output_type -> v1.CreateAppResponse
-	387, // 467: v1.HaifyController.ListApps:output_type -> v1.ListAppsResponse
-	389, // 468: v1.HaifyController.GetAppStatus:output_type -> v1.GetAppStatusResponse
-	391, // 469: v1.HaifyController.DeleteApp:output_type -> v1.DeleteAppResponse
-	393, // 470: v1.HaifyController.FailoverApp:output_type -> v1.FailoverAppResponse
-	395, // 471: v1.HaifyController.SnapshotApp:output_type -> v1.SnapshotAppResponse
-	291, // [291:472] is the sub-list for method output_type
-	110, // [110:291] is the sub-list for method input_type
-	110, // [110:110] is the sub-list for extension type_name
-	110, // [110:110] is the sub-list for extension extendee
-	0,   // [0:110] is the sub-list for field type_name
+	177, // 26: v1.ResourceStatusResponse.status:type_name -> v1.ResourceStatus
+	419, // 27: v1.SetResourceLabelsRequest.labels:type_name -> v1.SetResourceLabelsRequest.LabelsEntry
+	420, // 28: v1.SetResourceLabelsResponse.labels:type_name -> v1.SetResourceLabelsResponse.LabelsEntry
+	421, // 29: v1.OcfAgent.params:type_name -> v1.OcfAgent.ParamsEntry
+	130, // 30: v1.HaStartItem.ocf:type_name -> v1.OcfAgent
+	130, // 31: v1.MakeHaRequest.ocf_agents:type_name -> v1.OcfAgent
+	131, // 32: v1.MakeHaRequest.start_items:type_name -> v1.HaStartItem
+	133, // 33: v1.ListResourceAgentsResponse.agents:type_name -> v1.ResourceAgentInfo
+	136, // 34: v1.GetResourceAgentMetadataResponse.parameters:type_name -> v1.ResourceAgentParameter
+	160, // 35: v1.ListAuditEventsResponse.events:type_name -> v1.AuditEvent
+	422, // 36: v1.ControllerLogEntry.fields:type_name -> v1.ControllerLogEntry.FieldsEntry
+	163, // 37: v1.ListControllerLogsResponse.entries:type_name -> v1.ControllerLogEntry
+	167, // 38: v1.NodeDiagnostics.collectors:type_name -> v1.NodeCollectorOutput
+	168, // 39: v1.CollectNodeDiagnosticsResponse.nodes:type_name -> v1.NodeDiagnostics
+	423, // 40: v1.Event.details:type_name -> v1.Event.DetailsEntry
+	170, // 41: v1.ListEventsResponse.events:type_name -> v1.Event
+	181, // 42: v1.ResourceInfo.volumes:type_name -> v1.VolumeInfo
+	424, // 43: v1.ResourceInfo.node_states:type_name -> v1.ResourceInfo.NodeStatesEntry
+	425, // 44: v1.ResourceInfo.labels:type_name -> v1.ResourceInfo.LabelsEntry
+	426, // 45: v1.ResourceStatus.node_states:type_name -> v1.ResourceStatus.NodeStatesEntry
+	181, // 46: v1.ResourceStatus.volumes:type_name -> v1.VolumeInfo
+	427, // 47: v1.ResourceStatus.wan_proxy:type_name -> v1.ResourceStatus.WanProxyEntry
+	179, // 48: v1.ResourceStatus.wan_metrics:type_name -> v1.WANMetrics
+	178, // 49: v1.ResourceStatus.quorum:type_name -> v1.QuorumInfo
+	192, // 50: v1.ListSnapshotsResponse.snapshots:type_name -> v1.SnapshotInfo
+	193, // 51: v1.SnapshotScheduleInfo.keep:type_name -> v1.GFSRetention
+	193, // 52: v1.CreateSnapshotScheduleRequest.keep:type_name -> v1.GFSRetention
+	194, // 53: v1.ListSnapshotSchedulesResponse.schedules:type_name -> v1.SnapshotScheduleInfo
+	205, // 54: v1.ListBackupTargetsResponse.targets:type_name -> v1.BackupTargetInfo
+	428, // 55: v1.NotifyChannelInfo.headers:type_name -> v1.NotifyChannelInfo.HeadersEntry
+	212, // 56: v1.ListNotifyChannelsResponse.channels:type_name -> v1.NotifyChannelInfo
+	429, // 57: v1.SaveNotifyChannelRequest.headers:type_name -> v1.SaveNotifyChannelRequest.HeadersEntry
+	212, // 58: v1.SaveNotifyChannelResponse.channel:type_name -> v1.NotifyChannelInfo
+	221, // 59: v1.BackupInfo.volumes:type_name -> v1.BackupVolumeInfo
+	222, // 60: v1.CreateBackupResponse.backup:type_name -> v1.BackupInfo
+	222, // 61: v1.ListBackupsResponse.backups:type_name -> v1.BackupInfo
+	222, // 62: v1.RestoreBackupResponse.backup:type_name -> v1.BackupInfo
+	430, // 63: v1.ImportBackupsResponse.skipped:type_name -> v1.ImportBackupsResponse.SkippedEntry
+	193, // 64: v1.BackupScheduleInfo.keep:type_name -> v1.GFSRetention
+	193, // 65: v1.CreateBackupScheduleRequest.keep:type_name -> v1.GFSRetention
+	233, // 66: v1.CreateBackupScheduleResponse.schedule:type_name -> v1.BackupScheduleInfo
+	233, // 67: v1.ListBackupSchedulesResponse.schedules:type_name -> v1.BackupScheduleInfo
+	233, // 68: v1.RunBackupScheduleResponse.schedule:type_name -> v1.BackupScheduleInfo
+	431, // 69: v1.CreateNFSGatewayRequest.options:type_name -> v1.CreateNFSGatewayRequest.OptionsEntry
+	432, // 70: v1.CreateISCSIGatewayRequest.options:type_name -> v1.CreateISCSIGatewayRequest.OptionsEntry
+	433, // 71: v1.CreateNVMeGatewayRequest.options:type_name -> v1.CreateNVMeGatewayRequest.OptionsEntry
+	258, // 72: v1.GetGatewayResponse.gateway:type_name -> v1.GatewayInfo
+	258, // 73: v1.ListGatewaysResponse.gateways:type_name -> v1.GatewayInfo
+	434, // 74: v1.GatewayInfo.options:type_name -> v1.GatewayInfo.OptionsEntry
+	259, // 75: v1.ListNFSExportsResponse.exports:type_name -> v1.NFSExportInfo
+	268, // 76: v1.AddSMBShareRequest.share:type_name -> v1.SMBShareInfo
+	268, // 77: v1.ListSMBSharesResponse.shares:type_name -> v1.SMBShareInfo
+	281, // 78: v1.ListISCSILUNsResponse.luns:type_name -> v1.ISCSILUNInfo
+	298, // 79: v1.ListNVMeNamespacesResponse.namespaces:type_name -> v1.NVMeNamespaceInfo
+	317, // 80: v1.GetHaResponse.config:type_name -> v1.HaConfigInfo
+	317, // 81: v1.ListHaResponse.configs:type_name -> v1.HaConfigInfo
+	130, // 82: v1.HaConfigInfo.ocf_agents:type_name -> v1.OcfAgent
+	131, // 83: v1.HaConfigInfo.start_items:type_name -> v1.HaStartItem
+	318, // 84: v1.HaPromoterStatus.target:type_name -> v1.HaServiceStatus
+	318, // 85: v1.HaPromoterStatus.deps:type_name -> v1.HaServiceStatus
+	319, // 86: v1.GetHaStatusResponse.promoters:type_name -> v1.HaPromoterStatus
+	333, // 87: v1.SetNodeAddressRequest.moves:type_name -> v1.NodeAddressMove
+	435, // 88: v1.SetResourceProfileOptionsRequest.options:type_name -> v1.SetResourceProfileOptionsRequest.OptionsEntry
+	68,  // 89: v1.SetResourceProfileOptionsResponse.profile:type_name -> v1.ResourceProfile
+	335, // 90: v1.SetResourceProfileOptionsResponse.members:type_name -> v1.ProfileMemberResult
+	335, // 91: v1.AdjustResourceProfileResponse.members:type_name -> v1.ProfileMemberResult
+	348, // 92: v1.VerifyResourceResponse.peers:type_name -> v1.VerifyPeer
+	353, // 93: v1.ReplicationTLSResponse.nodes:type_name -> v1.NodeTLSInfo
+	360, // 94: v1.ListRbacPoliciesResponse.policies:type_name -> v1.RbacPolicy
+	361, // 95: v1.ListRbacPoliciesResponse.users:type_name -> v1.RbacUser
+	369, // 96: v1.ListApprovalsResponse.approvals:type_name -> v1.ApprovalInfo
+	369, // 97: v1.ApproveRequestResponse.approval:type_name -> v1.ApprovalInfo
+	369, // 98: v1.RejectRequestResponse.approval:type_name -> v1.ApprovalInfo
+	377, // 99: v1.InspectionReport.summary:type_name -> v1.InspectionSummary
+	376, // 100: v1.InspectionReport.checks:type_name -> v1.InspectionCheck
+	378, // 101: v1.RunInspectionResponse.report:type_name -> v1.InspectionReport
+	378, // 102: v1.ListInspectionsResponse.reports:type_name -> v1.InspectionReport
+	378, // 103: v1.GetInspectionResponse.report:type_name -> v1.InspectionReport
+	385, // 104: v1.CreateAppResponse.app:type_name -> v1.AppInfo
+	385, // 105: v1.ListAppsResponse.apps:type_name -> v1.AppInfo
+	385, // 106: v1.GetAppStatusResponse.app:type_name -> v1.AppInfo
+	399, // 107: v1.TrimPoolsResponse.results:type_name -> v1.TrimResultInfo
+	402, // 108: v1.ListPoolDisksResponse.disks:type_name -> v1.PoolDiskInfo
+	409, // 109: v1.ListStorageJobsResponse.jobs:type_name -> v1.StorageJobInfo
+	180, // 110: v1.ResourceInfo.NodeStatesEntry.value:type_name -> v1.NodeResourceState
+	180, // 111: v1.ResourceStatus.NodeStatesEntry.value:type_name -> v1.NodeResourceState
+	0,   // 112: v1.HaifyController.CreatePool:input_type -> v1.CreatePoolRequest
+	2,   // 113: v1.HaifyController.DeletePool:input_type -> v1.DeletePoolRequest
+	4,   // 114: v1.HaifyController.GetPool:input_type -> v1.GetPoolRequest
+	6,   // 115: v1.HaifyController.ListPools:input_type -> v1.ListPoolsRequest
+	398, // 116: v1.HaifyController.TrimPools:input_type -> v1.TrimPoolsRequest
+	401, // 117: v1.HaifyController.ListPoolDisks:input_type -> v1.ListPoolDisksRequest
+	404, // 118: v1.HaifyController.RemovePoolDisk:input_type -> v1.RemovePoolDiskRequest
+	405, // 119: v1.HaifyController.ReplacePoolDisk:input_type -> v1.ReplacePoolDiskRequest
+	406, // 120: v1.HaifyController.MoveVolume:input_type -> v1.MoveVolumeRequest
+	408, // 121: v1.HaifyController.ListStorageJobs:input_type -> v1.ListStorageJobsRequest
+	8,   // 122: v1.HaifyController.AddDiskToPool:input_type -> v1.AddDiskToPoolRequest
+	43,  // 123: v1.HaifyController.RegisterNode:input_type -> v1.RegisterNodeRequest
+	47,  // 124: v1.HaifyController.UnregisterNode:input_type -> v1.UnregisterNodeRequest
+	45,  // 125: v1.HaifyController.SetNodeLabels:input_type -> v1.SetNodeLabelsRequest
+	332, // 126: v1.HaifyController.SetNodeAddress:input_type -> v1.SetNodeAddressRequest
+	49,  // 127: v1.HaifyController.GetNode:input_type -> v1.GetNodeRequest
+	51,  // 128: v1.HaifyController.ListNodes:input_type -> v1.ListNodesRequest
+	54,  // 129: v1.HaifyController.HealthCheck:input_type -> v1.HealthCheckRequest
+	57,  // 130: v1.HaifyController.CreateResource:input_type -> v1.CreateResourceRequest
+	60,  // 131: v1.HaifyController.AdoptResource:input_type -> v1.AdoptResourceRequest
+	62,  // 132: v1.HaifyController.DeleteResource:input_type -> v1.DeleteResourceRequest
+	64,  // 133: v1.HaifyController.GetResource:input_type -> v1.GetResourceRequest
+	66,  // 134: v1.HaifyController.ListResources:input_type -> v1.ListResourcesRequest
+	69,  // 135: v1.HaifyController.CreateResourceProfile:input_type -> v1.CreateResourceProfileRequest
+	71,  // 136: v1.HaifyController.GetResourceProfile:input_type -> v1.GetResourceProfileRequest
+	73,  // 137: v1.HaifyController.ListResourceProfiles:input_type -> v1.ListResourceProfilesRequest
+	75,  // 138: v1.HaifyController.DeleteResourceProfile:input_type -> v1.DeleteResourceProfileRequest
+	336, // 139: v1.HaifyController.SetResourceProfileOptions:input_type -> v1.SetResourceProfileOptionsRequest
+	338, // 140: v1.HaifyController.AdjustResourceProfile:input_type -> v1.AdjustResourceProfileRequest
+	340, // 141: v1.HaifyController.GetResourceProfileMaxSize:input_type -> v1.GetResourceProfileMaxSizeRequest
+	342, // 142: v1.HaifyController.SetResourceProfile:input_type -> v1.SetResourceProfileRequest
+	77,  // 143: v1.HaifyController.AddVolume:input_type -> v1.AddVolumeRequest
+	83,  // 144: v1.HaifyController.RemoveVolume:input_type -> v1.RemoveVolumeRequest
+	85,  // 145: v1.HaifyController.CreateResourceSnapshot:input_type -> v1.CreateResourceSnapshotRequest
+	87,  // 146: v1.HaifyController.ListResourceSnapshots:input_type -> v1.ListResourceSnapshotsRequest
+	89,  // 147: v1.HaifyController.RollbackResourceSnapshot:input_type -> v1.RollbackResourceSnapshotRequest
+	91,  // 148: v1.HaifyController.DeleteResourceSnapshot:input_type -> v1.DeleteResourceSnapshotRequest
+	106, // 149: v1.HaifyController.RenameResource:input_type -> v1.RenameResourceRequest
+	108, // 150: v1.HaifyController.ResizeVolume:input_type -> v1.ResizeVolumeRequest
+	79,  // 151: v1.HaifyController.UpdateResourceOptions:input_type -> v1.UpdateResourceOptionsRequest
+	81,  // 152: v1.HaifyController.RepairResource:input_type -> v1.RepairResourceRequest
+	110, // 153: v1.HaifyController.ResourceStatus:input_type -> v1.ResourceStatusRequest
+	112, // 154: v1.HaifyController.SetPrimary:input_type -> v1.SetPrimaryRequest
+	114, // 155: v1.HaifyController.SetSecondary:input_type -> v1.SetSecondaryRequest
+	118, // 156: v1.HaifyController.SetDualPrimary:input_type -> v1.SetDualPrimaryRequest
+	120, // 157: v1.HaifyController.AttachDisklessClient:input_type -> v1.AttachDisklessClientRequest
+	122, // 158: v1.HaifyController.DetachDisklessClient:input_type -> v1.DetachDisklessClientRequest
+	116, // 159: v1.HaifyController.SetResourceLabels:input_type -> v1.SetResourceLabelsRequest
+	124, // 160: v1.HaifyController.CreateFilesystem:input_type -> v1.CreateFilesystemRequest
+	126, // 161: v1.HaifyController.MountResource:input_type -> v1.MountResourceRequest
+	128, // 162: v1.HaifyController.UnmountResource:input_type -> v1.UnmountResourceRequest
+	132, // 163: v1.HaifyController.MakeHa:input_type -> v1.MakeHaRequest
+	144, // 164: v1.HaifyController.EvictHa:input_type -> v1.EvictHaRequest
+	93,  // 165: v1.HaifyController.SetHaPreferredNodes:input_type -> v1.SetHaPreferredNodesRequest
+	145, // 166: v1.HaifyController.SetTiebreaker:input_type -> v1.SetTiebreakerRequest
+	351, // 167: v1.HaifyController.SetupReplicationTLS:input_type -> v1.SetupReplicationTLSRequest
+	352, // 168: v1.HaifyController.GetReplicationTLSStatus:input_type -> v1.GetReplicationTLSStatusRequest
+	355, // 169: v1.HaifyController.SetResourceTLS:input_type -> v1.SetResourceTLSRequest
+	147, // 170: v1.HaifyController.AddDR:input_type -> v1.AddDRRequest
+	149, // 171: v1.HaifyController.AddReplica:input_type -> v1.AddReplicaRequest
+	150, // 172: v1.HaifyController.RemoveReplica:input_type -> v1.RemoveReplicaRequest
+	311, // 173: v1.HaifyController.DeleteHa:input_type -> v1.DeleteHaRequest
+	313, // 174: v1.HaifyController.GetHa:input_type -> v1.GetHaRequest
+	315, // 175: v1.HaifyController.ListHa:input_type -> v1.ListHaRequest
+	320, // 176: v1.HaifyController.GetHaStatus:input_type -> v1.GetHaStatusRequest
+	134, // 177: v1.HaifyController.ListResourceAgents:input_type -> v1.ListResourceAgentsRequest
+	137, // 178: v1.HaifyController.GetResourceAgentMetadata:input_type -> v1.GetResourceAgentMetadataRequest
+	139, // 179: v1.HaifyController.GetHaToml:input_type -> v1.GetHaTomlRequest
+	141, // 180: v1.HaifyController.SyncHaToml:input_type -> v1.SyncHaTomlRequest
+	154, // 181: v1.HaifyController.EnableSelfHa:input_type -> v1.EnableSelfHaRequest
+	156, // 182: v1.HaifyController.DisableSelfHa:input_type -> v1.DisableSelfHaRequest
+	158, // 183: v1.HaifyController.GetSelfHaStatus:input_type -> v1.GetSelfHaStatusRequest
+	182, // 184: v1.HaifyController.CreateSnapshot:input_type -> v1.CreateSnapshotRequest
+	184, // 185: v1.HaifyController.DeleteSnapshot:input_type -> v1.DeleteSnapshotRequest
+	186, // 186: v1.HaifyController.RestoreSnapshot:input_type -> v1.RestoreSnapshotRequest
+	190, // 187: v1.HaifyController.ListSnapshots:input_type -> v1.ListSnapshotsRequest
+	188, // 188: v1.HaifyController.PopulateVolume:input_type -> v1.PopulateVolumeRequest
+	199, // 189: v1.HaifyController.CreateSnapshotSchedule:input_type -> v1.CreateSnapshotScheduleRequest
+	201, // 190: v1.HaifyController.ListSnapshotSchedules:input_type -> v1.ListSnapshotSchedulesRequest
+	203, // 191: v1.HaifyController.DeleteSnapshotSchedule:input_type -> v1.DeleteSnapshotScheduleRequest
+	195, // 192: v1.HaifyController.FreezeSnapshotSchedule:input_type -> v1.FreezeSnapshotScheduleRequest
+	197, // 193: v1.HaifyController.UnfreezeSnapshotSchedule:input_type -> v1.UnfreezeSnapshotScheduleRequest
+	206, // 194: v1.HaifyController.AddBackupTarget:input_type -> v1.AddBackupTargetRequest
+	208, // 195: v1.HaifyController.ListBackupTargets:input_type -> v1.ListBackupTargetsRequest
+	210, // 196: v1.HaifyController.DeleteBackupTarget:input_type -> v1.DeleteBackupTargetRequest
+	223, // 197: v1.HaifyController.CreateBackup:input_type -> v1.CreateBackupRequest
+	225, // 198: v1.HaifyController.ListBackups:input_type -> v1.ListBackupsRequest
+	227, // 199: v1.HaifyController.RestoreBackup:input_type -> v1.RestoreBackupRequest
+	229, // 200: v1.HaifyController.DeleteBackup:input_type -> v1.DeleteBackupRequest
+	231, // 201: v1.HaifyController.ImportBackups:input_type -> v1.ImportBackupsRequest
+	234, // 202: v1.HaifyController.CreateBackupSchedule:input_type -> v1.CreateBackupScheduleRequest
+	236, // 203: v1.HaifyController.ListBackupSchedules:input_type -> v1.ListBackupSchedulesRequest
+	238, // 204: v1.HaifyController.DeleteBackupSchedule:input_type -> v1.DeleteBackupScheduleRequest
+	240, // 205: v1.HaifyController.RunBackupSchedule:input_type -> v1.RunBackupScheduleRequest
+	242, // 206: v1.HaifyController.CreateNFSGateway:input_type -> v1.CreateNFSGatewayRequest
+	244, // 207: v1.HaifyController.CreateISCSIGateway:input_type -> v1.CreateISCSIGatewayRequest
+	246, // 208: v1.HaifyController.CreateNVMeGateway:input_type -> v1.CreateNVMeGatewayRequest
+	248, // 209: v1.HaifyController.DeleteGateway:input_type -> v1.DeleteGatewayRequest
+	250, // 210: v1.HaifyController.GetGateway:input_type -> v1.GetGatewayRequest
+	252, // 211: v1.HaifyController.ListGateways:input_type -> v1.ListGatewaysRequest
+	254, // 212: v1.HaifyController.StartGateway:input_type -> v1.StartGatewayRequest
+	256, // 213: v1.HaifyController.StopGateway:input_type -> v1.StopGatewayRequest
+	260, // 214: v1.HaifyController.AddNFSExport:input_type -> v1.AddNFSExportRequest
+	262, // 215: v1.HaifyController.RemoveNFSExport:input_type -> v1.RemoveNFSExportRequest
+	264, // 216: v1.HaifyController.ListNFSExports:input_type -> v1.ListNFSExportsRequest
+	266, // 217: v1.HaifyController.CreateSMBGateway:input_type -> v1.CreateSMBGatewayRequest
+	269, // 218: v1.HaifyController.AddSMBShare:input_type -> v1.AddSMBShareRequest
+	271, // 219: v1.HaifyController.RemoveSMBShare:input_type -> v1.RemoveSMBShareRequest
+	273, // 220: v1.HaifyController.ListSMBShares:input_type -> v1.ListSMBSharesRequest
+	275, // 221: v1.HaifyController.SetSMBUser:input_type -> v1.SetSMBUserRequest
+	277, // 222: v1.HaifyController.RemoveSMBUser:input_type -> v1.RemoveSMBUserRequest
+	279, // 223: v1.HaifyController.ListSMBUsers:input_type -> v1.ListSMBUsersRequest
+	282, // 224: v1.HaifyController.AddISCSILUN:input_type -> v1.AddISCSILUNRequest
+	284, // 225: v1.HaifyController.RemoveISCSILUN:input_type -> v1.RemoveISCSILUNRequest
+	286, // 226: v1.HaifyController.ListISCSILUNs:input_type -> v1.ListISCSILUNsRequest
+	288, // 227: v1.HaifyController.AddISCSIInitiator:input_type -> v1.AddISCSIInitiatorRequest
+	290, // 228: v1.HaifyController.RemoveISCSIInitiator:input_type -> v1.RemoveISCSIInitiatorRequest
+	292, // 229: v1.HaifyController.ListISCSIInitiators:input_type -> v1.ListISCSIInitiatorsRequest
+	294, // 230: v1.HaifyController.SetISCSIChap:input_type -> v1.SetISCSIChapRequest
+	296, // 231: v1.HaifyController.GetISCSIChap:input_type -> v1.GetISCSIChapRequest
+	299, // 232: v1.HaifyController.AddNVMeNamespace:input_type -> v1.AddNVMeNamespaceRequest
+	301, // 233: v1.HaifyController.RemoveNVMeNamespace:input_type -> v1.RemoveNVMeNamespaceRequest
+	303, // 234: v1.HaifyController.ListNVMeNamespaces:input_type -> v1.ListNVMeNamespacesRequest
+	305, // 235: v1.HaifyController.AddNVMeHost:input_type -> v1.AddNVMeHostRequest
+	307, // 236: v1.HaifyController.RemoveNVMeHost:input_type -> v1.RemoveNVMeHostRequest
+	309, // 237: v1.HaifyController.ListNVMeHosts:input_type -> v1.ListNVMeHostsRequest
+	11,  // 238: v1.HaifyController.CreateZFSPool:input_type -> v1.CreateZFSPoolRequest
+	13,  // 239: v1.HaifyController.DeleteZFSPool:input_type -> v1.DeleteZFSPoolRequest
+	15,  // 240: v1.HaifyController.ListZFSpools:input_type -> v1.ListZFSPoolsRequest
+	17,  // 241: v1.HaifyController.CreateZFSDataset:input_type -> v1.CreateZFSDatasetRequest
+	19,  // 242: v1.HaifyController.CreateZFSVolume:input_type -> v1.CreateZFSVolumeRequest
+	21,  // 243: v1.HaifyController.ResizeZFSVolume:input_type -> v1.ResizeZFSVolumeRequest
+	23,  // 244: v1.HaifyController.DeleteZFSDataset:input_type -> v1.DeleteZFSDatasetRequest
+	25,  // 245: v1.HaifyController.CreateZFSSnapshot:input_type -> v1.CreateZFSSnapshotRequest
+	27,  // 246: v1.HaifyController.DeleteZFSSnapshot:input_type -> v1.DeleteZFSSnapshotRequest
+	29,  // 247: v1.HaifyController.ListZFSSnapshots:input_type -> v1.ListZFSSnapshotsRequest
+	31,  // 248: v1.HaifyController.RestoreZFSSnapshot:input_type -> v1.RestoreZFSSnapshotRequest
+	33,  // 249: v1.HaifyController.CloneZFSSnapshot:input_type -> v1.CloneZFSSnapshotRequest
+	35,  // 250: v1.HaifyController.CreateLvmSnapshot:input_type -> v1.CreateLvmSnapshotRequest
+	37,  // 251: v1.HaifyController.DeleteLvmSnapshot:input_type -> v1.DeleteLvmSnapshotRequest
+	39,  // 252: v1.HaifyController.ListLvmSnapshots:input_type -> v1.ListLvmSnapshotsRequest
+	41,  // 253: v1.HaifyController.RestoreLvmSnapshot:input_type -> v1.RestoreLvmSnapshotRequest
+	95,  // 254: v1.HaifyController.SetNFSExportQuota:input_type -> v1.SetNFSExportQuotaRequest
+	97,  // 255: v1.HaifyController.MoveReplica:input_type -> v1.MoveReplicaRequest
+	100, // 256: v1.HaifyController.PlanRebalance:input_type -> v1.PlanRebalanceRequest
+	102, // 257: v1.HaifyController.MarkNodeLost:input_type -> v1.MarkNodeLostRequest
+	104, // 258: v1.HaifyController.RestoreNode:input_type -> v1.RestoreNodeRequest
+	322, // 259: v1.HaifyController.DrainNode:input_type -> v1.DrainNodeRequest
+	330, // 260: v1.HaifyController.UndrainNode:input_type -> v1.UndrainNodeRequest
+	323, // 261: v1.HaifyController.ConvertPoolToThin:input_type -> v1.ConvertPoolToThinRequest
+	325, // 262: v1.HaifyController.AddPoolCache:input_type -> v1.AddPoolCacheRequest
+	327, // 263: v1.HaifyController.RemovePoolCache:input_type -> v1.RemovePoolCacheRequest
+	161, // 264: v1.HaifyController.ListAuditEvents:input_type -> v1.ListAuditEventsRequest
+	164, // 265: v1.HaifyController.ListControllerLogs:input_type -> v1.ListControllerLogsRequest
+	166, // 266: v1.HaifyController.CollectNodeDiagnostics:input_type -> v1.CollectNodeDiagnosticsRequest
+	171, // 267: v1.HaifyController.ListEvents:input_type -> v1.ListEventsRequest
+	213, // 268: v1.HaifyController.ListNotifyChannels:input_type -> v1.ListNotifyChannelsRequest
+	215, // 269: v1.HaifyController.SaveNotifyChannel:input_type -> v1.SaveNotifyChannelRequest
+	217, // 270: v1.HaifyController.DeleteNotifyChannel:input_type -> v1.DeleteNotifyChannelRequest
+	219, // 271: v1.HaifyController.TestNotifyChannel:input_type -> v1.TestNotifyChannelRequest
+	379, // 272: v1.HaifyController.RunInspection:input_type -> v1.RunInspectionRequest
+	381, // 273: v1.HaifyController.ListInspections:input_type -> v1.ListInspectionsRequest
+	383, // 274: v1.HaifyController.GetInspection:input_type -> v1.GetInspectionRequest
+	173, // 275: v1.HaifyController.RepairWanProxy:input_type -> v1.RepairWanProxyRequest
+	346, // 276: v1.HaifyController.DRFailback:input_type -> v1.DRFailbackRequest
+	344, // 277: v1.HaifyController.SetWanEndpoint:input_type -> v1.SetWanEndpointRequest
+	347, // 278: v1.HaifyController.VerifyResource:input_type -> v1.VerifyResourceRequest
+	175, // 279: v1.HaifyController.WatchEvents:input_type -> v1.WatchEventsRequest
+	357, // 280: v1.HaifyController.GetRbacWhoami:input_type -> v1.GetRbacWhoamiRequest
+	359, // 281: v1.HaifyController.ListRbacPolicies:input_type -> v1.ListRbacPoliciesRequest
+	363, // 282: v1.HaifyController.CreateRbacUser:input_type -> v1.CreateRbacUserRequest
+	365, // 283: v1.HaifyController.DeleteRbacUser:input_type -> v1.DeleteRbacUserRequest
+	367, // 284: v1.HaifyController.SetRbacUserRole:input_type -> v1.SetRbacUserRoleRequest
+	370, // 285: v1.HaifyController.ListApprovals:input_type -> v1.ListApprovalsRequest
+	372, // 286: v1.HaifyController.ApproveRequest:input_type -> v1.ApproveRequestRequest
+	374, // 287: v1.HaifyController.RejectRequest:input_type -> v1.RejectRequestRequest
+	386, // 288: v1.HaifyController.CreateApp:input_type -> v1.CreateAppRequest
+	388, // 289: v1.HaifyController.ListApps:input_type -> v1.ListAppsRequest
+	390, // 290: v1.HaifyController.GetAppStatus:input_type -> v1.GetAppStatusRequest
+	392, // 291: v1.HaifyController.DeleteApp:input_type -> v1.DeleteAppRequest
+	394, // 292: v1.HaifyController.FailoverApp:input_type -> v1.FailoverAppRequest
+	396, // 293: v1.HaifyController.SnapshotApp:input_type -> v1.SnapshotAppRequest
+	1,   // 294: v1.HaifyController.CreatePool:output_type -> v1.CreatePoolResponse
+	3,   // 295: v1.HaifyController.DeletePool:output_type -> v1.DeletePoolResponse
+	5,   // 296: v1.HaifyController.GetPool:output_type -> v1.GetPoolResponse
+	7,   // 297: v1.HaifyController.ListPools:output_type -> v1.ListPoolsResponse
+	400, // 298: v1.HaifyController.TrimPools:output_type -> v1.TrimPoolsResponse
+	403, // 299: v1.HaifyController.ListPoolDisks:output_type -> v1.ListPoolDisksResponse
+	407, // 300: v1.HaifyController.RemovePoolDisk:output_type -> v1.StorageJobResponse
+	407, // 301: v1.HaifyController.ReplacePoolDisk:output_type -> v1.StorageJobResponse
+	407, // 302: v1.HaifyController.MoveVolume:output_type -> v1.StorageJobResponse
+	410, // 303: v1.HaifyController.ListStorageJobs:output_type -> v1.ListStorageJobsResponse
+	9,   // 304: v1.HaifyController.AddDiskToPool:output_type -> v1.AddDiskToPoolResponse
+	44,  // 305: v1.HaifyController.RegisterNode:output_type -> v1.RegisterNodeResponse
+	48,  // 306: v1.HaifyController.UnregisterNode:output_type -> v1.UnregisterNodeResponse
+	46,  // 307: v1.HaifyController.SetNodeLabels:output_type -> v1.SetNodeLabelsResponse
+	334, // 308: v1.HaifyController.SetNodeAddress:output_type -> v1.SetNodeAddressResponse
+	50,  // 309: v1.HaifyController.GetNode:output_type -> v1.GetNodeResponse
+	52,  // 310: v1.HaifyController.ListNodes:output_type -> v1.ListNodesResponse
+	55,  // 311: v1.HaifyController.HealthCheck:output_type -> v1.HealthCheckResponse
+	59,  // 312: v1.HaifyController.CreateResource:output_type -> v1.CreateResourceResponse
+	61,  // 313: v1.HaifyController.AdoptResource:output_type -> v1.AdoptResourceResponse
+	63,  // 314: v1.HaifyController.DeleteResource:output_type -> v1.DeleteResourceResponse
+	65,  // 315: v1.HaifyController.GetResource:output_type -> v1.GetResourceResponse
+	67,  // 316: v1.HaifyController.ListResources:output_type -> v1.ListResourcesResponse
+	70,  // 317: v1.HaifyController.CreateResourceProfile:output_type -> v1.CreateResourceProfileResponse
+	72,  // 318: v1.HaifyController.GetResourceProfile:output_type -> v1.GetResourceProfileResponse
+	74,  // 319: v1.HaifyController.ListResourceProfiles:output_type -> v1.ListResourceProfilesResponse
+	76,  // 320: v1.HaifyController.DeleteResourceProfile:output_type -> v1.DeleteResourceProfileResponse
+	337, // 321: v1.HaifyController.SetResourceProfileOptions:output_type -> v1.SetResourceProfileOptionsResponse
+	339, // 322: v1.HaifyController.AdjustResourceProfile:output_type -> v1.AdjustResourceProfileResponse
+	341, // 323: v1.HaifyController.GetResourceProfileMaxSize:output_type -> v1.GetResourceProfileMaxSizeResponse
+	343, // 324: v1.HaifyController.SetResourceProfile:output_type -> v1.SetResourceProfileResponse
+	78,  // 325: v1.HaifyController.AddVolume:output_type -> v1.AddVolumeResponse
+	84,  // 326: v1.HaifyController.RemoveVolume:output_type -> v1.RemoveVolumeResponse
+	86,  // 327: v1.HaifyController.CreateResourceSnapshot:output_type -> v1.CreateResourceSnapshotResponse
+	88,  // 328: v1.HaifyController.ListResourceSnapshots:output_type -> v1.ListResourceSnapshotsResponse
+	90,  // 329: v1.HaifyController.RollbackResourceSnapshot:output_type -> v1.RollbackResourceSnapshotResponse
+	92,  // 330: v1.HaifyController.DeleteResourceSnapshot:output_type -> v1.DeleteResourceSnapshotResponse
+	107, // 331: v1.HaifyController.RenameResource:output_type -> v1.RenameResourceResponse
+	109, // 332: v1.HaifyController.ResizeVolume:output_type -> v1.ResizeVolumeResponse
+	80,  // 333: v1.HaifyController.UpdateResourceOptions:output_type -> v1.UpdateResourceOptionsResponse
+	82,  // 334: v1.HaifyController.RepairResource:output_type -> v1.RepairResourceResponse
+	111, // 335: v1.HaifyController.ResourceStatus:output_type -> v1.ResourceStatusResponse
+	113, // 336: v1.HaifyController.SetPrimary:output_type -> v1.SetPrimaryResponse
+	115, // 337: v1.HaifyController.SetSecondary:output_type -> v1.SetSecondaryResponse
+	119, // 338: v1.HaifyController.SetDualPrimary:output_type -> v1.SetDualPrimaryResponse
+	121, // 339: v1.HaifyController.AttachDisklessClient:output_type -> v1.AttachDisklessClientResponse
+	123, // 340: v1.HaifyController.DetachDisklessClient:output_type -> v1.DetachDisklessClientResponse
+	117, // 341: v1.HaifyController.SetResourceLabels:output_type -> v1.SetResourceLabelsResponse
+	125, // 342: v1.HaifyController.CreateFilesystem:output_type -> v1.CreateFilesystemResponse
+	127, // 343: v1.HaifyController.MountResource:output_type -> v1.MountResourceResponse
+	129, // 344: v1.HaifyController.UnmountResource:output_type -> v1.UnmountResourceResponse
+	143, // 345: v1.HaifyController.MakeHa:output_type -> v1.MakeHaResponse
+	153, // 346: v1.HaifyController.EvictHa:output_type -> v1.EvictHaResponse
+	94,  // 347: v1.HaifyController.SetHaPreferredNodes:output_type -> v1.SetHaPreferredNodesResponse
+	146, // 348: v1.HaifyController.SetTiebreaker:output_type -> v1.SetTiebreakerResponse
+	354, // 349: v1.HaifyController.SetupReplicationTLS:output_type -> v1.ReplicationTLSResponse
+	354, // 350: v1.HaifyController.GetReplicationTLSStatus:output_type -> v1.ReplicationTLSResponse
+	356, // 351: v1.HaifyController.SetResourceTLS:output_type -> v1.SetResourceTLSResponse
+	148, // 352: v1.HaifyController.AddDR:output_type -> v1.AddDRResponse
+	152, // 353: v1.HaifyController.AddReplica:output_type -> v1.AddReplicaResponse
+	151, // 354: v1.HaifyController.RemoveReplica:output_type -> v1.RemoveReplicaResponse
+	312, // 355: v1.HaifyController.DeleteHa:output_type -> v1.DeleteHaResponse
+	314, // 356: v1.HaifyController.GetHa:output_type -> v1.GetHaResponse
+	316, // 357: v1.HaifyController.ListHa:output_type -> v1.ListHaResponse
+	321, // 358: v1.HaifyController.GetHaStatus:output_type -> v1.GetHaStatusResponse
+	135, // 359: v1.HaifyController.ListResourceAgents:output_type -> v1.ListResourceAgentsResponse
+	138, // 360: v1.HaifyController.GetResourceAgentMetadata:output_type -> v1.GetResourceAgentMetadataResponse
+	140, // 361: v1.HaifyController.GetHaToml:output_type -> v1.GetHaTomlResponse
+	142, // 362: v1.HaifyController.SyncHaToml:output_type -> v1.SyncHaTomlResponse
+	155, // 363: v1.HaifyController.EnableSelfHa:output_type -> v1.EnableSelfHaResponse
+	157, // 364: v1.HaifyController.DisableSelfHa:output_type -> v1.DisableSelfHaResponse
+	159, // 365: v1.HaifyController.GetSelfHaStatus:output_type -> v1.GetSelfHaStatusResponse
+	183, // 366: v1.HaifyController.CreateSnapshot:output_type -> v1.CreateSnapshotResponse
+	185, // 367: v1.HaifyController.DeleteSnapshot:output_type -> v1.DeleteSnapshotResponse
+	187, // 368: v1.HaifyController.RestoreSnapshot:output_type -> v1.RestoreSnapshotResponse
+	191, // 369: v1.HaifyController.ListSnapshots:output_type -> v1.ListSnapshotsResponse
+	189, // 370: v1.HaifyController.PopulateVolume:output_type -> v1.PopulateVolumeResponse
+	200, // 371: v1.HaifyController.CreateSnapshotSchedule:output_type -> v1.CreateSnapshotScheduleResponse
+	202, // 372: v1.HaifyController.ListSnapshotSchedules:output_type -> v1.ListSnapshotSchedulesResponse
+	204, // 373: v1.HaifyController.DeleteSnapshotSchedule:output_type -> v1.DeleteSnapshotScheduleResponse
+	196, // 374: v1.HaifyController.FreezeSnapshotSchedule:output_type -> v1.FreezeSnapshotScheduleResponse
+	198, // 375: v1.HaifyController.UnfreezeSnapshotSchedule:output_type -> v1.UnfreezeSnapshotScheduleResponse
+	207, // 376: v1.HaifyController.AddBackupTarget:output_type -> v1.AddBackupTargetResponse
+	209, // 377: v1.HaifyController.ListBackupTargets:output_type -> v1.ListBackupTargetsResponse
+	211, // 378: v1.HaifyController.DeleteBackupTarget:output_type -> v1.DeleteBackupTargetResponse
+	224, // 379: v1.HaifyController.CreateBackup:output_type -> v1.CreateBackupResponse
+	226, // 380: v1.HaifyController.ListBackups:output_type -> v1.ListBackupsResponse
+	228, // 381: v1.HaifyController.RestoreBackup:output_type -> v1.RestoreBackupResponse
+	230, // 382: v1.HaifyController.DeleteBackup:output_type -> v1.DeleteBackupResponse
+	232, // 383: v1.HaifyController.ImportBackups:output_type -> v1.ImportBackupsResponse
+	235, // 384: v1.HaifyController.CreateBackupSchedule:output_type -> v1.CreateBackupScheduleResponse
+	237, // 385: v1.HaifyController.ListBackupSchedules:output_type -> v1.ListBackupSchedulesResponse
+	239, // 386: v1.HaifyController.DeleteBackupSchedule:output_type -> v1.DeleteBackupScheduleResponse
+	241, // 387: v1.HaifyController.RunBackupSchedule:output_type -> v1.RunBackupScheduleResponse
+	243, // 388: v1.HaifyController.CreateNFSGateway:output_type -> v1.CreateNFSGatewayResponse
+	245, // 389: v1.HaifyController.CreateISCSIGateway:output_type -> v1.CreateISCSIGatewayResponse
+	247, // 390: v1.HaifyController.CreateNVMeGateway:output_type -> v1.CreateNVMeGatewayResponse
+	249, // 391: v1.HaifyController.DeleteGateway:output_type -> v1.DeleteGatewayResponse
+	251, // 392: v1.HaifyController.GetGateway:output_type -> v1.GetGatewayResponse
+	253, // 393: v1.HaifyController.ListGateways:output_type -> v1.ListGatewaysResponse
+	255, // 394: v1.HaifyController.StartGateway:output_type -> v1.StartGatewayResponse
+	257, // 395: v1.HaifyController.StopGateway:output_type -> v1.StopGatewayResponse
+	261, // 396: v1.HaifyController.AddNFSExport:output_type -> v1.AddNFSExportResponse
+	263, // 397: v1.HaifyController.RemoveNFSExport:output_type -> v1.RemoveNFSExportResponse
+	265, // 398: v1.HaifyController.ListNFSExports:output_type -> v1.ListNFSExportsResponse
+	267, // 399: v1.HaifyController.CreateSMBGateway:output_type -> v1.CreateSMBGatewayResponse
+	270, // 400: v1.HaifyController.AddSMBShare:output_type -> v1.AddSMBShareResponse
+	272, // 401: v1.HaifyController.RemoveSMBShare:output_type -> v1.RemoveSMBShareResponse
+	274, // 402: v1.HaifyController.ListSMBShares:output_type -> v1.ListSMBSharesResponse
+	276, // 403: v1.HaifyController.SetSMBUser:output_type -> v1.SetSMBUserResponse
+	278, // 404: v1.HaifyController.RemoveSMBUser:output_type -> v1.RemoveSMBUserResponse
+	280, // 405: v1.HaifyController.ListSMBUsers:output_type -> v1.ListSMBUsersResponse
+	283, // 406: v1.HaifyController.AddISCSILUN:output_type -> v1.AddISCSILUNResponse
+	285, // 407: v1.HaifyController.RemoveISCSILUN:output_type -> v1.RemoveISCSILUNResponse
+	287, // 408: v1.HaifyController.ListISCSILUNs:output_type -> v1.ListISCSILUNsResponse
+	289, // 409: v1.HaifyController.AddISCSIInitiator:output_type -> v1.AddISCSIInitiatorResponse
+	291, // 410: v1.HaifyController.RemoveISCSIInitiator:output_type -> v1.RemoveISCSIInitiatorResponse
+	293, // 411: v1.HaifyController.ListISCSIInitiators:output_type -> v1.ListISCSIInitiatorsResponse
+	295, // 412: v1.HaifyController.SetISCSIChap:output_type -> v1.SetISCSIChapResponse
+	297, // 413: v1.HaifyController.GetISCSIChap:output_type -> v1.GetISCSIChapResponse
+	300, // 414: v1.HaifyController.AddNVMeNamespace:output_type -> v1.AddNVMeNamespaceResponse
+	302, // 415: v1.HaifyController.RemoveNVMeNamespace:output_type -> v1.RemoveNVMeNamespaceResponse
+	304, // 416: v1.HaifyController.ListNVMeNamespaces:output_type -> v1.ListNVMeNamespacesResponse
+	306, // 417: v1.HaifyController.AddNVMeHost:output_type -> v1.AddNVMeHostResponse
+	308, // 418: v1.HaifyController.RemoveNVMeHost:output_type -> v1.RemoveNVMeHostResponse
+	310, // 419: v1.HaifyController.ListNVMeHosts:output_type -> v1.ListNVMeHostsResponse
+	12,  // 420: v1.HaifyController.CreateZFSPool:output_type -> v1.CreateZFSPoolResponse
+	14,  // 421: v1.HaifyController.DeleteZFSPool:output_type -> v1.DeleteZFSPoolResponse
+	16,  // 422: v1.HaifyController.ListZFSpools:output_type -> v1.ListZFSPoolsResponse
+	18,  // 423: v1.HaifyController.CreateZFSDataset:output_type -> v1.CreateZFSDatasetResponse
+	20,  // 424: v1.HaifyController.CreateZFSVolume:output_type -> v1.CreateZFSVolumeResponse
+	22,  // 425: v1.HaifyController.ResizeZFSVolume:output_type -> v1.ResizeZFSVolumeResponse
+	24,  // 426: v1.HaifyController.DeleteZFSDataset:output_type -> v1.DeleteZFSDatasetResponse
+	26,  // 427: v1.HaifyController.CreateZFSSnapshot:output_type -> v1.CreateZFSSnapshotResponse
+	28,  // 428: v1.HaifyController.DeleteZFSSnapshot:output_type -> v1.DeleteZFSSnapshotResponse
+	30,  // 429: v1.HaifyController.ListZFSSnapshots:output_type -> v1.ListZFSSnapshotsResponse
+	32,  // 430: v1.HaifyController.RestoreZFSSnapshot:output_type -> v1.RestoreZFSSnapshotResponse
+	34,  // 431: v1.HaifyController.CloneZFSSnapshot:output_type -> v1.CloneZFSSnapshotResponse
+	36,  // 432: v1.HaifyController.CreateLvmSnapshot:output_type -> v1.CreateLvmSnapshotResponse
+	38,  // 433: v1.HaifyController.DeleteLvmSnapshot:output_type -> v1.DeleteLvmSnapshotResponse
+	40,  // 434: v1.HaifyController.ListLvmSnapshots:output_type -> v1.ListLvmSnapshotsResponse
+	42,  // 435: v1.HaifyController.RestoreLvmSnapshot:output_type -> v1.RestoreLvmSnapshotResponse
+	96,  // 436: v1.HaifyController.SetNFSExportQuota:output_type -> v1.SetNFSExportQuotaResponse
+	98,  // 437: v1.HaifyController.MoveReplica:output_type -> v1.MoveReplicaResponse
+	101, // 438: v1.HaifyController.PlanRebalance:output_type -> v1.PlanRebalanceResponse
+	103, // 439: v1.HaifyController.MarkNodeLost:output_type -> v1.MarkNodeLostResponse
+	105, // 440: v1.HaifyController.RestoreNode:output_type -> v1.RestoreNodeResponse
+	329, // 441: v1.HaifyController.DrainNode:output_type -> v1.DrainNodeResponse
+	331, // 442: v1.HaifyController.UndrainNode:output_type -> v1.UndrainNodeResponse
+	324, // 443: v1.HaifyController.ConvertPoolToThin:output_type -> v1.ConvertPoolToThinResponse
+	326, // 444: v1.HaifyController.AddPoolCache:output_type -> v1.AddPoolCacheResponse
+	328, // 445: v1.HaifyController.RemovePoolCache:output_type -> v1.RemovePoolCacheResponse
+	162, // 446: v1.HaifyController.ListAuditEvents:output_type -> v1.ListAuditEventsResponse
+	165, // 447: v1.HaifyController.ListControllerLogs:output_type -> v1.ListControllerLogsResponse
+	169, // 448: v1.HaifyController.CollectNodeDiagnostics:output_type -> v1.CollectNodeDiagnosticsResponse
+	172, // 449: v1.HaifyController.ListEvents:output_type -> v1.ListEventsResponse
+	214, // 450: v1.HaifyController.ListNotifyChannels:output_type -> v1.ListNotifyChannelsResponse
+	216, // 451: v1.HaifyController.SaveNotifyChannel:output_type -> v1.SaveNotifyChannelResponse
+	218, // 452: v1.HaifyController.DeleteNotifyChannel:output_type -> v1.DeleteNotifyChannelResponse
+	220, // 453: v1.HaifyController.TestNotifyChannel:output_type -> v1.TestNotifyChannelResponse
+	380, // 454: v1.HaifyController.RunInspection:output_type -> v1.RunInspectionResponse
+	382, // 455: v1.HaifyController.ListInspections:output_type -> v1.ListInspectionsResponse
+	384, // 456: v1.HaifyController.GetInspection:output_type -> v1.GetInspectionResponse
+	174, // 457: v1.HaifyController.RepairWanProxy:output_type -> v1.RepairWanProxyResponse
+	350, // 458: v1.HaifyController.DRFailback:output_type -> v1.DRFailbackResponse
+	345, // 459: v1.HaifyController.SetWanEndpoint:output_type -> v1.SetWanEndpointResponse
+	349, // 460: v1.HaifyController.VerifyResource:output_type -> v1.VerifyResourceResponse
+	170, // 461: v1.HaifyController.WatchEvents:output_type -> v1.Event
+	358, // 462: v1.HaifyController.GetRbacWhoami:output_type -> v1.GetRbacWhoamiResponse
+	362, // 463: v1.HaifyController.ListRbacPolicies:output_type -> v1.ListRbacPoliciesResponse
+	364, // 464: v1.HaifyController.CreateRbacUser:output_type -> v1.CreateRbacUserResponse
+	366, // 465: v1.HaifyController.DeleteRbacUser:output_type -> v1.DeleteRbacUserResponse
+	368, // 466: v1.HaifyController.SetRbacUserRole:output_type -> v1.SetRbacUserRoleResponse
+	371, // 467: v1.HaifyController.ListApprovals:output_type -> v1.ListApprovalsResponse
+	373, // 468: v1.HaifyController.ApproveRequest:output_type -> v1.ApproveRequestResponse
+	375, // 469: v1.HaifyController.RejectRequest:output_type -> v1.RejectRequestResponse
+	387, // 470: v1.HaifyController.CreateApp:output_type -> v1.CreateAppResponse
+	389, // 471: v1.HaifyController.ListApps:output_type -> v1.ListAppsResponse
+	391, // 472: v1.HaifyController.GetAppStatus:output_type -> v1.GetAppStatusResponse
+	393, // 473: v1.HaifyController.DeleteApp:output_type -> v1.DeleteAppResponse
+	395, // 474: v1.HaifyController.FailoverApp:output_type -> v1.FailoverAppResponse
+	397, // 475: v1.HaifyController.SnapshotApp:output_type -> v1.SnapshotAppResponse
+	294, // [294:476] is the sub-list for method output_type
+	112, // [112:294] is the sub-list for method input_type
+	112, // [112:112] is the sub-list for extension type_name
+	112, // [112:112] is the sub-list for extension extendee
+	0,   // [0:112] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_v1_haify_proto_init() }
@@ -28824,18 +28969,18 @@ func file_api_proto_v1_haify_proto_init() {
 	if File_api_proto_v1_haify_proto != nil {
 		return
 	}
-	file_api_proto_v1_haify_proto_msgTypes[129].OneofWrappers = []any{
+	file_api_proto_v1_haify_proto_msgTypes[131].OneofWrappers = []any{
 		(*HaStartItem_SystemdUnit)(nil),
 		(*HaStartItem_Ocf)(nil),
 	}
-	file_api_proto_v1_haify_proto_msgTypes[197].OneofWrappers = []any{}
+	file_api_proto_v1_haify_proto_msgTypes[199].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_haify_proto_rawDesc), len(file_api_proto_v1_haify_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   432,
+			NumMessages:   436,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

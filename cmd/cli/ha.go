@@ -111,6 +111,13 @@ func haCreate() *cobra.Command {
 				return fmt.Errorf("failed to create HA config: %w", err)
 			}
 
+			if vm != "" {
+				if _, err := haifyClient.SetResourceLabels(ctx, resource,
+					map[string]string{client.LibvirtDomainLabel: vm}, nil); err != nil {
+					fmt.Printf("Warning: could not label %s with the guest: %v\n", resource, err)
+				}
+			}
+
 			fmt.Printf("HA configuration created successfully\n")
 			fmt.Printf("  Resource:  %s\n", resource)
 			fmt.Printf("  Config:    %s\n", configPath)

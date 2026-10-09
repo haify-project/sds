@@ -3,17 +3,17 @@ import { TONE_BG } from '@/components/status';
 import { cn } from '@/lib/utils';
 import { ExternalLink, Play, TriangleAlert } from 'lucide-react';
 import { replicationSummary, TONE_TEXT } from '../resources/replication';
+import { Badge } from '@/components/ui/badge';
 import {
   diskBytes,
   formatGiB,
   placementCell,
-  pveGuestUrl,
   runningOn,
   runsOnReplica,
+  type Guest,
+  type GuestDisk,
   type PlacementCell,
-  type PveDisk,
-  type PveGuest,
-} from './pve';
+} from './placement';
 
 // Guests down the side, nodes across the top: one row per disk, one cell per
 // node saying what that node holds of it. The column of the node a guest runs
@@ -26,7 +26,7 @@ export function PlacementMatrix({
   statusOf,
   addressOf,
 }: {
-  guests: PveGuest[];
+  guests: Guest[];
   nodes: string[];
   statusOf: Map<string, ResourceStatus | undefined>;
   addressOf: Map<string, string>;
@@ -48,7 +48,7 @@ export function PlacementMatrix({
             </tr>
           </thead>
           {guests.map((g) => (
-            <GuestRows key={g.vmid} guest={g} nodes={nodes} statusOf={statusOf} addressOf={addressOf} />
+            <GuestRows key={g.key} guest={g} nodes={nodes} statusOf={statusOf} addressOf={addressOf} />
           ))}
         </table>
       </div>
@@ -63,7 +63,7 @@ function GuestRows({
   statusOf,
   addressOf,
 }: {
-  guest: PveGuest;
+  guest: Guest;
   nodes: string[];
   statusOf: Map<string, ResourceStatus | undefined>;
   addressOf: Map<string, string>;
@@ -71,7 +71,8 @@ function GuestRows({
   const node = runningOn(guest, statusOf);
   const local = runsOnReplica(guest, node);
   const linkNode = node ?? guest.disks[0]?.resource.nodes[0];
-  const linkAddr = linkNode ? addressOf.get(linkNode) : undefined;
+  const linkAddr = guest.link && linkNode ? addressOf.get(linkNode) : undefined;
+  const href = guest.link && linkAddr ? guest.link.url(linkAddr) : undefined;
   const lane = (n: string) => (n === node ? 'bg-primary/[0.07]' : '');
 
   return (
@@ -79,17 +80,20 @@ function GuestRows({
       <tr>
         <td colSpan={2} className="sticky left-0 z-10 bg-card px-4 pt-3.5 pb-1.5 sm:static">
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-            <span className="font-medium">
-              {guest.template ? 'Template' : 'VM'} <span className="font-mono tabular-nums">{guest.vmid}</span>
-            </span>
+            <span className="font-medium">{guest.title}</span>
+            {guest.ha ? (
+              <Badge variant="outline" className="h-5 px-1.5 text-[11px] font-normal" title="Restarted on another replica when its node fails">
+                HA
+              </Badge>
+            ) : null}
             <GuestState guest={guest} node={node} local={local} />
-            {linkAddr ? (
+            {href ? (
               <a
                 className="text-primary sm:hidden"
-                href={pveGuestUrl(linkAddr, guest.vmid)}
+                href={href}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Open in Proxmox VE"
+                aria-label={guest.link?.label}
               >
                 <ExternalLink className="h-3 w-3" />
               </a>
@@ -104,14 +108,14 @@ function GuestRows({
           </td>
         ))}
         <td className="hidden px-4 pt-3.5 pb-1.5 text-right sm:table-cell">
-          {linkAddr ? (
+          {href ? (
             <a
               className="inline-flex items-center gap-1 text-xs whitespace-nowrap text-primary hover:underline"
-              href={pveGuestUrl(linkAddr, guest.vmid)}
+              href={href}
               target="_blank"
               rel="noreferrer"
             >
-              Open in Proxmox VE
+              {guest.link?.label}
               <ExternalLink className="h-3 w-3" />
             </a>
           ) : null}
@@ -131,7 +135,7 @@ function GuestRows({
   );
 }
 
-function GuestState({ guest, node, local }: { guest: PveGuest; node?: string; local: boolean }) {
+function GuestState({ guest, node, local }: { guest: Guest; node?: string; local: boolean }) {
   if (!node) return guest.template ? null : <span className="text-xs text-muted-foreground">stopped</span>;
   if (local)
     return (
@@ -154,7 +158,7 @@ function DiskRow({
   lane,
   last,
 }: {
-  disk: PveDisk;
+  disk: GuestDisk;
   status?: ResourceStatus;
   nodes: string[];
   lane: (n: string) => string;
@@ -168,7 +172,7 @@ function DiskRow({
     <tr>
       <td className={cn('sticky left-0 z-10 bg-card py-1.5 pr-2 pl-5 sm:static sm:pr-3 sm:pl-7', pad)}>
         <div className="font-mono text-[13px] whitespace-nowrap" title={disk.resource.name}>
-          {disk.volume}
+          {disk.label}
         </div>
         <div className="text-xs whitespace-nowrap sm:hidden">
           <span className="font-mono text-muted-foreground tabular-nums">{size}</span>

@@ -49,6 +49,7 @@ const TwinPage = lazy(() =>
 const ProxmoxPage = lazy(() =>
   import('./pages/ProxmoxPage').then((m) => ({ default: m.ProxmoxPage })),
 );
+const KvmPage = lazy(() => import('./pages/KvmPage').then((m) => ({ default: m.KvmPage })));
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );
@@ -85,6 +86,7 @@ function App() {
               <Route path="pools" element={<PoolsPage />} />
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="proxmox" element={<ProxmoxPage />} />
+              <Route path="kvm" element={<KvmPage />} />
               {/* Profiles moved under Resources; keep the old path working
                   rather than 404ing links and bookmarks that already exist. */}
               <Route

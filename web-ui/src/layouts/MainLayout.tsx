@@ -19,10 +19,12 @@ import {
   BellRing,
   Rotate3d,
   Monitor,
+  Cpu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import { isPveManaged } from '@/pages/proxmox/pve';
+import { libvirtDomainOf } from '@/pages/guests/libvirt';
 import { UserMenu } from '@/components/UserMenu';
 import { NotificationBell } from '@/components/NotificationBell';
 
@@ -75,7 +77,7 @@ type NavItem = {
   href: string;
   icon: typeof LayoutDashboard;
   /** An integration's page, listed only once the cluster has its disks. */
-  integration?: 'pve';
+  integration?: 'pve' | 'libvirt';
 };
 
 // Two groups, because the destinations answer two different questions:
@@ -93,6 +95,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { name: 'Gateways', href: '/gateways', icon: Network },
       { name: 'HA', href: '/ha', icon: ShieldCheck },
       { name: 'Proxmox VE', href: '/proxmox', icon: Monitor, integration: 'pve' },
+      { name: 'KVM', href: '/kvm', icon: Cpu, integration: 'libvirt' },
     ],
   },
   {
@@ -134,9 +137,11 @@ function SidebarContent({
 }) {
   // Same query key as the Resources page, so this costs no extra request.
   const { data: resources } = useQuery({ queryKey: ['resources'], queryFn: () => api.getResources() });
-  const integrations = new Set<NavItem['integration']>(
-    (resources?.resources ?? []).some(isPveManaged) ? ['pve'] : [],
-  );
+  const all = resources?.resources ?? [];
+  const integrations = new Set<NavItem['integration']>([
+    ...(all.some(isPveManaged) ? (['pve'] as const) : []),
+    ...(all.some((r) => libvirtDomainOf(r)) ? (['libvirt'] as const) : []),
+  ]);
   return (
     <div
       className={cn(

@@ -60,6 +60,7 @@ func resourceCommand() *cobra.Command {
 	cmd.AddCommand(resourceDiskless())
 	cmd.AddCommand(resourceSnapshot())
 	cmd.AddCommand(resourceRepair())
+	cmd.AddCommand(resourceLabel())
 	cmd.AddCommand(resourceTLSCommand())
 	cmd.AddCommand(resourceProfileCommand())
 	cmd.AddCommand(resourceSetProfile())

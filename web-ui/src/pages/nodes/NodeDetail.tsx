@@ -1,5 +1,8 @@
 import { Loader2, Check, X } from 'lucide-react';
-import { type Node } from '@/services/api';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { api, type Node } from '@/services/api';
+import { LabelsEditor } from '@/components/LabelsEditor';
 import { cn } from '@/lib/utils';
 import { TONE_BG, toneOf, type StatusTone } from '@/components/status';
 import { formatLastSeen, type HealthResult } from './health';
@@ -122,8 +125,24 @@ export function NodeDetail({
                 <Fact label="Version" value={node.version || '-'} />
                 <Fact label="Last seen" value={formatLastSeen(node.lastSeen)} />
               </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="eyebrow">Labels</div>
+                <NodeLabels node={node} />
+              </div>
     </div>
   );
+}
+
+/** A node's labels; host=, rack= and the like decide where replicas may go. */
+function NodeLabels({ node }: { node: Node }) {
+  const queryClient = useQueryClient();
+  const save = useMutation({
+    mutationFn: (changes: Record<string, string>) => api.setNodeLabels(node.name, changes),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+    onError: (e: Error) => toast.error(`Labels of ${node.name} not saved: ${e.message}`),
+  });
+  return <LabelsEditor labels={node.labels} onSave={(c) => save.mutate(c)} saving={save.isPending} />;
 }
 
 /** One prerequisite: whether it is there, and what version answered. The tick

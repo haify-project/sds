@@ -52,6 +52,8 @@ STATE_DIR = "/run/haify-libvirt"
 REACTOR_DIR = "/etc/drbd-reactor.d"
 BY_RES = re.compile(r"^/dev/drbd/by-res/([A-Za-z0-9_.-]+)/(\d+)$")
 DEVICE_WAIT = 30  # seconds for /dev/drbd/by-res/... to appear after a promote
+# Marks the resources a guest's disks are on; the web UI lists guests by it.
+DOMAIN_LABEL = "haify.libvirt/domain"
 
 
 class HookError(Exception):
@@ -256,7 +258,21 @@ def promote(ctl, node, domain, resource):
             close_window(ctl, resource)
         raise
     log(f"{domain}: {resource} Primary on {node}")
+    label(ctl, domain, resource, info)
     return opened
+
+
+def label(ctl, domain, resource, info):
+    """Records on the resource which guest uses it. Best effort: a missing
+    label costs the web UI a row, never the guest its start."""
+    labels = info.get("resource", info).get("labels") or {}
+    if labels.get(DOMAIN_LABEL) == domain:
+        return
+    try:
+        ctl.request("POST", f"/v1/resources/{resource}/labels",
+                    {"resource": resource, "labels": {DOMAIN_LABEL: domain}})
+    except HookError as e:
+        log(f"{domain}: could not label {resource} with the guest: {e}")
 
 
 def promote_locally(domain, resource, why):

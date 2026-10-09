@@ -68,6 +68,11 @@ type nodeLabelsIn struct {
 	Replace bool              `json:"replace,omitempty" jsonschema:"replace all labels instead of merging"`
 }
 
+type resourceLabelsIn struct {
+	Resource string            `json:"resource"`
+	Labels   map[string]string `json:"labels" jsonschema:"key/value labels to set; a key with an empty value is removed"`
+}
+
 type convertThinIn struct {
 	Node string `json:"node"`
 	Pool string `json:"pool" jsonschema:"LVM volume group to rebuild as a thin pool"`
@@ -341,6 +346,18 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 				verb = "replaced on"
 			}
 			return nil, ok(fmt.Sprintf("%d label(s) %s %s", len(in.Labels), verb, in.Node)), nil
+		})
+
+	addWrite(s, srv, writeTool("haify_resource_set_labels", "Set resource labels",
+		"Set key/value labels on a resource, merged into the ones it has; a key with an empty value is "+
+			"removed. Integrations mark what runs on a resource this way (haify.libvirt/domain, "+
+			"haify.pve/managed-by, haify.csi/managed-by)."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceLabelsIn) (*mcp.CallToolResult, opResult, error) {
+			after, err := s.client.SetResourceLabels(ctx, in.Resource, in.Labels, nil)
+			if err != nil {
+				return nil, opResult{}, err
+			}
+			return nil, ok(fmt.Sprintf("%s now has %d label(s)", in.Resource, len(after))), nil
 		})
 
 	if c, supported := s.client.(interface {

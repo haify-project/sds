@@ -23,9 +23,11 @@ def domain(*devs):
 class FakeController:
     """Answers like haify-controller's REST gateway and records every call."""
 
-    def __init__(self, nodes=("k1", "k2"), clients=(), primary_on=None, fail=None, unreachable=False):
+    def __init__(self, nodes=("k1", "k2"), clients=(), primary_on=None, fail=None, unreachable=False,
+                 labels=None):
         self.calls = []
         self.nodes, self.clients, self.primary_on = list(nodes), list(clients), primary_on
+        self.labels = labels if labels is not None else {hook.DOMAIN_LABEL: "vm1"}
         self.fail = fail or {}
         self.unreachable = unreachable
 
@@ -42,7 +44,8 @@ class FakeController:
                 states["h-" + self.primary_on] = {"role": "Primary", "node": self.primary_on}
             return {"success": True, "status": {"nodeStates": states}}
         if method == "GET":
-            return {"success": True, "resource": {"nodes": self.nodes, "disklessClients": self.clients}}
+            return {"success": True, "resource": {"nodes": self.nodes, "disklessClients": self.clients,
+                                                  "labels": self.labels}}
         return {"success": True}
 
     def posts(self):
@@ -97,6 +100,18 @@ class Start(HookTest):
         self.handle(ctl, "prepare", "begin")
         self.assertEqual(ctl.posts(), [("/v1/resources/vm1/primary",
                                         {"resource": "vm1", "node": "k2", "quorumGuarded": True})])
+
+    def test_the_resource_is_labelled_with_its_guest(self):
+        ctl = FakeController(labels={"team": "a"})
+        self.handle(ctl, "prepare", "begin")
+        self.assertEqual(ctl.posts()[-1], ("/v1/resources/vm1/labels",
+                                           {"resource": "vm1", "labels": {"haify.libvirt/domain": "vm1"}}))
+
+    def test_a_failed_label_does_not_fail_the_start(self):
+        ctl = FakeController(labels={}, fail={("POST", "/labels"): "denied"})
+        self.handle(ctl, "prepare", "begin")
+        self.assertIn(("/v1/resources/vm1/primary", {"resource": "vm1", "node": "k2", "quorumGuarded": True}),
+                      ctl.posts())
 
     def test_a_host_without_a_replica_attaches_first(self):
         ctl = FakeController(nodes=["k1", "k3"])

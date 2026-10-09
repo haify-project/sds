@@ -162,7 +162,7 @@ func TestToolRegistration(t *testing.T) {
 		"haify_resource_add_replica", "haify_resource_remove_replica",
 		"haify_resource_attach_diskless", "haify_resource_detach_diskless",
 		"haify_resource_set_tiebreaker", "haify_resource_add_dr", "haify_wan_repair",
-		"haify_node_drain", "haify_node_undrain", "haify_node_set_labels",
+		"haify_node_drain", "haify_node_undrain", "haify_node_set_labels", "haify_resource_set_labels",
 		"haify_pool_convert_thin",
 		"haify_ha_get_toml", "haify_ha_promoter_status",
 		"haify_ocf_agent_list", "haify_ocf_agent_metadata",

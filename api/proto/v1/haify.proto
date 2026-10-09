@@ -164,6 +164,12 @@ service HaifyController {
   rpc DetachDisklessClient(DetachDisklessClientRequest) returns (DetachDisklessClientResponse) {
     option (google.api.http) = { delete: "/v1/resources/{resource}/diskless-clients/{node}"; };
   }
+  // Labels on a resource: the keys in labels are set, then the keys in remove
+  // are deleted. Integrations mark what they run on a resource this way, e.g.
+  // haify.libvirt/domain=<guest>.
+  rpc SetResourceLabels(SetResourceLabelsRequest) returns (SetResourceLabelsResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/labels"; body: "*"; };
+  }
   rpc CreateFilesystem(CreateFilesystemRequest) returns (CreateFilesystemResponse) {
     option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/filesystem"; body: "*"; };
   }
@@ -1555,6 +1561,20 @@ message SetSecondaryResponse {
 // The toggle is applied at RUNTIME only (drbdadm net-options) and never written
 // into the .res file, so a reboot or `drbdadm adjust` restores single-primary
 // on its own.
+message SetResourceLabelsRequest {
+  string resource = 1;
+  // Set or replace these keys; a key with an empty value is removed.
+  map<string, string> labels = 2;
+  repeated string remove = 3;
+}
+
+message SetResourceLabelsResponse {
+  bool success = 1;
+  string message = 2;
+  // The resource's labels afterwards.
+  map<string, string> labels = 3;
+}
+
 message SetDualPrimaryRequest {
   string resource = 1;
   // enable=true is strict: WAN (protocol A / async) resources are REFUSED,

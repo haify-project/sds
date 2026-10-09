@@ -4385,6 +4385,45 @@
         ]
       }
     },
+    "/v1/resources/{resource}/labels": {
+      "post": {
+        "summary": "Labels on a resource: the keys in labels are set, then the keys in remove\nare deleted. Integrations mark what they run on a resource this way, e.g.\nhaify.libvirt/domain=\u003cguest\u003e.",
+        "operationId": "HaifyController_SetResourceLabels",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetResourceLabelsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/HaifyControllerSetResourceLabelsBody"
+            }
+          }
+        ],
+        "tags": [
+          "HaifyController"
+        ]
+      }
+    },
     "/v1/resources/{resource}/move-replica": {
       "post": {
         "operationId": "HaifyController_MoveReplica",
@@ -7003,8 +7042,7 @@
           },
           "description": "nodes limits an enable to these participants — a live migration's source\nand target, the two ends of the only connection that will carry two\nPrimaries. Empty enables it on every participant. Disabling always covers\nevery participant."
         }
-      },
-      "description": "SetDualPrimary toggles DRBD's allow-two-primaries for a resource. It exists\nfor the live-migration hand-off in the Proxmox VE storage plugin, where the\nsource and target hypervisor both hold the disk open for a moment.\n\nThe toggle is applied at RUNTIME only (drbdadm net-options) and never written\ninto the .res file, so a reboot or `drbdadm adjust` restores single-primary\non its own."
+      }
     },
     "HaifyControllerSetHaPreferredNodesBody": {
       "type": "object",
@@ -7084,6 +7122,25 @@
           "description": "quorum_guarded requests a SAFE hard-failover promote: the controller tries\na normal (non-forced) promote first and only escalates to `drbdadm primary\n--force` if the target node currently holds DRBD quorum (majority). If the\nnode lacks quorum the promote is REFUSED (forcing without quorum could\nsplit-brain). When set, `force` is ignored. Used by the CSI node plugin so\na Pod rescheduled after a hard node failure promotes the survivor iff it is\nsafe to do so."
         }
       }
+    },
+    "HaifyControllerSetResourceLabelsBody": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Set or replace these keys; a key with an empty value is removed."
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "SetDualPrimary toggles DRBD's allow-two-primaries for a resource. It exists\nfor the live-migration hand-off in the Proxmox VE storage plugin, where the\nsource and target hypervisor both hold the disk open for a moment.\n\nThe toggle is applied at RUNTIME only (drbdadm net-options) and never written\ninto the .res file, so a reboot or `drbdadm adjust` restores single-primary\non its own."
     },
     "HaifyControllerSetResourceProfileBody": {
       "type": "object",
@@ -11985,6 +12042,24 @@
         },
         "enabled": {
           "type": "boolean"
+        }
+      }
+    },
+    "v1SetResourceLabelsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The resource's labels afterwards."
         }
       }
     },

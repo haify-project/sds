@@ -119,6 +119,12 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 				return nil, opResult{}, err
 			}
 			parts := []string{fmt.Sprintf("HA config for %s created (%s)", in.Resource, configPath)}
+			if in.VM != "" {
+				if _, err := s.client.SetResourceLabels(ctx, in.Resource,
+					map[string]string{client.LibvirtDomainLabel: in.VM}, nil); err != nil {
+					parts = append(parts, "the resource could not be labelled with the guest: "+err.Error())
+				}
+			}
 			if in.VIP != "" {
 				parts = append(parts, "VIP "+in.VIP)
 			}

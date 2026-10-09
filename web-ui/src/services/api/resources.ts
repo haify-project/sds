@@ -212,4 +212,11 @@ export const resourcesApi = (request: RequestFn) => ({
       method: 'POST',
       body: JSON.stringify({ node }),
     }),
+
+  /** Merges labels into the resource's; a key with an empty value is removed. */
+  setResourceLabels: (resource: string, labels: Record<string, string>) =>
+    request<ApiResponse & { labels?: Record<string, string> }>(
+      `/resources/${encodeURIComponent(resource)}/labels`,
+      { method: 'POST', body: JSON.stringify({ resource, labels }) },
+    ),
 });

@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { api, Resource } from '../../services/api';
 import { cn } from '@/lib/utils';
 import { toneOf } from '@/components/status';
 import { RoleChip } from '@/components/RoleChip';
+import { LabelsEditor } from '@/components/LabelsEditor';
 import { TopologyView } from '@/components/TopologyView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -317,53 +319,30 @@ export function ResourceDetail({
 
       <TopologyView resource={resource} status={status} />
 
-      {(resource.profile || Object.keys(resource.labels ?? {}).length > 0) && (
-        <section>
-          <h4 className="eyebrow mb-2.5">Metadata</h4>
-          <ResourceMetadata resource={resource} />
-        </section>
-      )}
+      <section>
+        <h4 className="eyebrow mb-2.5">Labels</h4>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {resource.profile ? (
+            <Badge variant="outline" className="max-w-48 truncate font-normal">
+              profile: {resource.profile}
+            </Badge>
+          ) : null}
+          <ResourceLabels resource={resource} />
+        </div>
+      </section>
     </div>
   );
 }
 
-function ResourceMetadata({
-  resource,
-  compact = false,
-}: {
-  resource: Resource;
-  compact?: boolean;
-}) {
-  const labels = Object.entries(resource.labels ?? {}).sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
-  if (!resource.profile && labels.length === 0) return null;
-
-  const visibleLabels = compact ? labels.slice(0, 3) : labels;
-  const allLabels = labels.map(([key, value]) => `${key}=${value}`).join(', ');
-
-  return (
-    <div className="flex max-w-full flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-      {resource.profile && (
-        <Badge variant="outline" className="max-w-48 truncate font-normal">
-          profile: {resource.profile}
-        </Badge>
-      )}
-      {visibleLabels.map(([key, value]) => (
-        <Badge
-          key={key}
-          variant="secondary"
-          className="max-w-48 truncate font-mono font-normal"
-          title={`${key}=${value}`}
-        >
-          {key}={value}
-        </Badge>
-      ))}
-      {compact && labels.length > visibleLabels.length && (
-        <Badge variant="secondary" title={allLabels}>
-          +{labels.length - visibleLabels.length}
-        </Badge>
-      )}
-    </div>
-  );
+/** A resource's labels. Integrations keep theirs here too (haify.pve/,
+ *  haify.csi/, haify.libvirt/); removing one of those unhooks the resource
+ *  from the integration's page, not from the integration. */
+function ResourceLabels({ resource }: { resource: Resource }) {
+  const queryClient = useQueryClient();
+  const save = useMutation({
+    mutationFn: (changes: Record<string, string>) => api.setResourceLabels(resource.name, changes),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['resources'] }),
+    onError: (e: Error) => toast.error(`Labels of ${resource.name} not saved: ${e.message}`),
+  });
+  return <LabelsEditor labels={resource.labels} onSave={(c) => save.mutate(c)} saving={save.isPending} />;
 }

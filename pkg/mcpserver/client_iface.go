@@ -105,6 +105,7 @@ type ControllerClient interface {
 	ListNVMeHosts(ctx context.Context, resource string) ([]string, error)
 
 	// HA
+	SetResourceLabels(ctx context.Context, resource string, set map[string]string, remove []string) (map[string]string, error)
 	MakeHa(ctx context.Context, resource string, services []string, mountPoint, fsType, vip string, ocfAgents []*haifypb.OcfAgent, startItems []*haifypb.HaStartItem) (string, error)
 	ListHa(ctx context.Context) ([]*haifypb.HaConfigInfo, error)
 	GetHa(ctx context.Context, resource string) (*haifypb.HaConfigInfo, error)

@@ -66,6 +66,7 @@ const (
 	HaifyController_SetDualPrimary_FullMethodName            = "/v1.HaifyController/SetDualPrimary"
 	HaifyController_AttachDisklessClient_FullMethodName      = "/v1.HaifyController/AttachDisklessClient"
 	HaifyController_DetachDisklessClient_FullMethodName      = "/v1.HaifyController/DetachDisklessClient"
+	HaifyController_SetResourceLabels_FullMethodName         = "/v1.HaifyController/SetResourceLabels"
 	HaifyController_CreateFilesystem_FullMethodName          = "/v1.HaifyController/CreateFilesystem"
 	HaifyController_MountResource_FullMethodName             = "/v1.HaifyController/MountResource"
 	HaifyController_UnmountResource_FullMethodName           = "/v1.HaifyController/UnmountResource"
@@ -268,6 +269,10 @@ type HaifyControllerClient interface {
 	SetDualPrimary(ctx context.Context, in *SetDualPrimaryRequest, opts ...grpc.CallOption) (*SetDualPrimaryResponse, error)
 	AttachDisklessClient(ctx context.Context, in *AttachDisklessClientRequest, opts ...grpc.CallOption) (*AttachDisklessClientResponse, error)
 	DetachDisklessClient(ctx context.Context, in *DetachDisklessClientRequest, opts ...grpc.CallOption) (*DetachDisklessClientResponse, error)
+	// Labels on a resource: the keys in labels are set, then the keys in remove
+	// are deleted. Integrations mark what they run on a resource this way, e.g.
+	// haify.libvirt/domain=<guest>.
+	SetResourceLabels(ctx context.Context, in *SetResourceLabelsRequest, opts ...grpc.CallOption) (*SetResourceLabelsResponse, error)
 	CreateFilesystem(ctx context.Context, in *CreateFilesystemRequest, opts ...grpc.CallOption) (*CreateFilesystemResponse, error)
 	MountResource(ctx context.Context, in *MountResourceRequest, opts ...grpc.CallOption) (*MountResourceResponse, error)
 	UnmountResource(ctx context.Context, in *UnmountResourceRequest, opts ...grpc.CallOption) (*UnmountResourceResponse, error)
@@ -1012,6 +1017,16 @@ func (c *haifyControllerClient) DetachDisklessClient(ctx context.Context, in *De
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DetachDisklessClientResponse)
 	err := c.cc.Invoke(ctx, HaifyController_DetachDisklessClient_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *haifyControllerClient) SetResourceLabels(ctx context.Context, in *SetResourceLabelsRequest, opts ...grpc.CallOption) (*SetResourceLabelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetResourceLabelsResponse)
+	err := c.cc.Invoke(ctx, HaifyController_SetResourceLabels_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2433,6 +2448,10 @@ type HaifyControllerServer interface {
 	SetDualPrimary(context.Context, *SetDualPrimaryRequest) (*SetDualPrimaryResponse, error)
 	AttachDisklessClient(context.Context, *AttachDisklessClientRequest) (*AttachDisklessClientResponse, error)
 	DetachDisklessClient(context.Context, *DetachDisklessClientRequest) (*DetachDisklessClientResponse, error)
+	// Labels on a resource: the keys in labels are set, then the keys in remove
+	// are deleted. Integrations mark what they run on a resource this way, e.g.
+	// haify.libvirt/domain=<guest>.
+	SetResourceLabels(context.Context, *SetResourceLabelsRequest) (*SetResourceLabelsResponse, error)
 	CreateFilesystem(context.Context, *CreateFilesystemRequest) (*CreateFilesystemResponse, error)
 	MountResource(context.Context, *MountResourceRequest) (*MountResourceResponse, error)
 	UnmountResource(context.Context, *UnmountResourceRequest) (*UnmountResourceResponse, error)
@@ -2853,6 +2872,9 @@ func (UnimplementedHaifyControllerServer) AttachDisklessClient(context.Context, 
 }
 func (UnimplementedHaifyControllerServer) DetachDisklessClient(context.Context, *DetachDisklessClientRequest) (*DetachDisklessClientResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DetachDisklessClient not implemented")
+}
+func (UnimplementedHaifyControllerServer) SetResourceLabels(context.Context, *SetResourceLabelsRequest) (*SetResourceLabelsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetResourceLabels not implemented")
 }
 func (UnimplementedHaifyControllerServer) CreateFilesystem(context.Context, *CreateFilesystemRequest) (*CreateFilesystemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateFilesystem not implemented")
@@ -4119,6 +4141,24 @@ func _HaifyController_DetachDisklessClient_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HaifyControllerServer).DetachDisklessClient(ctx, req.(*DetachDisklessClientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HaifyController_SetResourceLabels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetResourceLabelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HaifyControllerServer).SetResourceLabels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HaifyController_SetResourceLabels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HaifyControllerServer).SetResourceLabels(ctx, req.(*SetResourceLabelsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6722,6 +6762,10 @@ var HaifyController_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DetachDisklessClient",
 			Handler:    _HaifyController_DetachDisklessClient_Handler,
+		},
+		{
+			MethodName: "SetResourceLabels",
+			Handler:    _HaifyController_SetResourceLabels_Handler,
 		},
 		{
 			MethodName: "CreateFilesystem",

@@ -7,6 +7,7 @@ export interface Node {
   state: string;
   lastSeen: string;
   version: string;
+  labels?: Record<string, string>;
 }
 
 export interface NodesResponse extends ApiResponse {
@@ -41,4 +42,11 @@ export const nodesApi = (request: RequestFn) => ({
 
   healthCheck: (node: string) =>
     request<ApiResponse & { health: HealthInfo }>(`/nodes/${node}/health`),
+
+  /** Merges labels into the node's; a key with an empty value is removed. */
+  setNodeLabels: (node: string, labels: Record<string, string>) =>
+    request<ApiResponse & { node: Node }>(`/nodes/${encodeURIComponent(node)}/labels`, {
+      method: 'POST',
+      body: JSON.stringify({ node, labels }),
+    }),
 });
