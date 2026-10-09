@@ -94,7 +94,10 @@ export function ResourcesPage() {
   // `haify resource profile`.
   const tab = params.get('tab') === 'profiles' ? 'profiles' : 'resources';
 
-  const [query, setQuery] = useState('');
+  // ?q=<name> opens the page filtered to a resource with it expanded: the
+  // link other consoles (Horizon, Proxmox VE) use to point at one resource.
+  const linked = params.get('q') ?? '';
+  const [query, setQuery] = useState(linked);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -102,7 +105,7 @@ export function ResourcesPage() {
   // below `md` a resource is a card and above it a table row, and state held in
   // either would be a second copy that disagrees with the other. Several may be
   // open at once, which is the whole point of an inline panel over a modal.
-  const [expanded, setExpanded] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<string[]>(linked ? [linked] : []);
   const [dialog, setDialog] = useState<{ resource: string; kind: RowDialog } | null>(
     null,
   );

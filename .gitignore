@@ -76,3 +76,4 @@ public/
 
 # Python bytecode (deploy/libvirt tests, docs-site hooks)
 __pycache__/
+*.egg-info/

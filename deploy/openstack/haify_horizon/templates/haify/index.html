@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Haify" %}{% endblock %}
+
+{% block main %}
+{% if not haify_error %}
+<p class="text-muted">
+  {% blocktrans with h=haify_counts.healthy s=haify_counts.syncing d=haify_counts.degraded %}{{ h }} healthy, {{ s }} syncing, {{ d }} degraded{% endblocktrans %}{% if haify_counts.unknown %}, {% blocktrans with u=haify_counts.unknown %}{{ u }} not reported{% endblocktrans %}{% endif %}.
+  {% if haify_ui %}<a href="{{ haify_ui }}/resources" target="_blank" rel="noopener">{% trans "Open Haify" %}</a>{% endif %}
+</p>
+{% endif %}
+<h3>{% trans "Volumes" %}</h3>
+{{ volumes_table.render }}
+<h3>{% trans "Nodes" %}</h3>
+{{ nodes_table.render }}
+{% endblock %}

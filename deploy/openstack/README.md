@@ -1,4 +1,10 @@
-# OpenStack Cinder
+# OpenStack
+
+Two pieces, in one Python package:
+
+- `haify_cinder`, a Cinder volume driver;
+- `haify_horizon`, a Horizon plugin that shows where each volume's replicas
+  are ([below](#horizon)).
 
 `haify_cinder` is a Cinder volume driver. A Cinder volume is a Haify
 resource, replicated by DRBD across the storage nodes, and a compute host
@@ -103,6 +109,49 @@ openstack volume type create haify --property volume_backend_name=haify
 A volume from a snapshot, and a clone, need an LVM pool. On ZFS they are
 refused.
 
+cinder-volume starts even when the controller does not answer, for example
+while Self-HA is moving it. The backend reports itself down until the
+controller answers, and an operation in that window fails with the reason.
+
+The driver and the plugin reach the controller directly, never through
+`http_proxy`. The controller is on the storage network, and urllib does not
+honour CIDR ranges in `no_proxy`.
+
+## Horizon
+
+The plugin adds two things for admins:
+
+- A **Haify** panel under Admin › Volume, with two tables:
+  - each Cinder volume on Haify: the instance it is attached to, the node it
+    is Primary on, every replica with its state, and whether it is healthy,
+    syncing or degraded;
+  - each node: its pool's room, and how many replicas, tiebreakers, diskless
+    clients and Primaries it holds.
+- A **Replication** tab on the details of a Haify volume. It shows the
+  volume's members and their roles, disk states and sync progress, the
+  snapshots on the replicas under their Cinder names, the resource's labels,
+  and a link that opens the resource in Haify's web UI.
+
+Project users see neither.
+
+On each Horizon host, into Horizon's Python environment:
+
+```bash
+pip install ./deploy/openstack
+cp "$(python -c 'import haify_horizon, os; print(os.path.dirname(haify_horizon.__file__))')/enabled/_2225_admin_haify_panel.py" \
+   /path/to/openstack_dashboard/local/enabled/
+cat > /path/to/openstack_dashboard/local/local_settings.d/_90_haify.py <<'EOF'
+HAIFY_CONTROLLER = "192.168.1.10,192.168.1.11"
+HAIFY_POOL = "pool0"                          # as haify_pool
+HAIFY_UI_URL = "http://192.168.1.10:3376"     # optional: links into Haify
+# HAIFY_TOKEN_FILE, HAIFY_RESOURCE_PREFIX ("cinder-"), HAIFY_BACKENDS (["haify"])
+EOF
+systemctl reload apache2
+```
+
+The panel asks the controller for the volumes' statuses eight at a time.
+Without the controller it says so and lists nothing.
+
 ## Tested
 
 Setup:
@@ -137,6 +186,21 @@ Results:
   refused): Nova rolled back, the destination was made Secondary again and the
   window closed. The guest kept running on the source.
 
+- **Horizon.**
+  - The panel and the tab showed the replicas, roles and health that Haify
+    reported.
+  - A replica taken down showed its volume as degraded, and as healthy again
+    once it came back.
+  - An LVM volume had no tab and was not listed.
+  - The demo user had no panel; opening its URL directly returned 403.
+  - With the controller stopped, both pages showed the reason instead of an
+    error page.
+  - The links to the volume, the instance, the snapshot and Haify's UI opened
+    the right page.
+- **cinder-volume restarted while the controller was stopped.** The driver
+  initialized. Once the controller was back, a volume was created and deleted
+  without restarting cinder-volume.
+
 Live migration needs SSH from root on each compute host to the user in
 `live_migration_uri` on the others: Nova migrates peer to peer, so it is
 libvirt's daemon, running as root, that connects.
@@ -148,4 +212,6 @@ python3 -m unittest discover -s deploy/openstack/tests -p 'test_*.py'
 ```
 
 The tests replace the controller with a fake and stub the few Cinder modules
-the driver imports, so they run without an OpenStack install.
+the driver imports, so they run without an OpenStack install. With Django
+installed they also compile the plugin's templates; `make ci` runs them that
+way.

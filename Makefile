@@ -149,8 +149,13 @@ ci: ui-ensure
 	@go test -race -count=1 ./...
 	@echo "==> python tests (libvirt hook)"
 	@python3 -m unittest discover -s deploy/libvirt -p 'test_*.py'
-	@echo "==> python tests (Cinder driver)"
-	@python3 -m unittest discover -s deploy/openstack/tests -p 'test_*.py'
+	@echo "==> python tests (Cinder driver, Horizon plugin)"
+	@# With Django when uv can provide it, so the plugin's templates compile.
+	@if command -v uv >/dev/null; then \
+		uv run --quiet --with django python -m unittest discover -s deploy/openstack/tests -p 'test_*.py'; \
+	else \
+		python3 -m unittest discover -s deploy/openstack/tests -p 'test_*.py'; \
+	fi
 	@echo "==> govulncheck"
 	@# Scanned with the newest Go, as CI's vuln job is: a standard library
 	@# finding is fixed by upgrading Go, and a local Go a patch release behind

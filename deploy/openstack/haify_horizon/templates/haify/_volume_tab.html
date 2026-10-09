@@ -1,0 +1,65 @@
+{% load i18n %}
+<div class="detail">
+  {% if error %}
+  <div class="alert alert-warning">{% blocktrans %}The Haify controller did not describe {{ resource_name }}: {{ error }}{% endblocktrans %}</div>
+  {% else %}
+  <dl class="dl-horizontal">
+    <dt>{% trans "Haify resource" %}</dt>
+    <dd>{{ resource_name }}{% if ui_link %} · <a href="{{ ui_link }}" target="_blank" rel="noopener">{% trans "Open in Haify" %}</a>{% endif %}</dd>
+    <dt>{% trans "Health" %}</dt>
+    <dd>{{ health|capfirst }} ({{ health_detail }})</dd>
+    <dt>{% trans "Primary on" %}</dt>
+    <dd>{{ primary|join:", "|default:_("none: not attached anywhere") }}</dd>
+    <dt>{% trans "Replication" %}</dt>
+    <dd>{% trans "Protocol" %} {{ resource.protocol }}, {% trans "port" %} {{ resource.port }}</dd>
+    {% if resource.quorumRisk %}
+    <dt>{% trans "Quorum" %}</dt>
+    <dd class="text-warning">{% trans "Two copies and no tiebreaker: losing either one suspends I/O." %}</dd>
+    {% endif %}
+    {% if resource.faultDomainRisk %}
+    <dt>{% trans "Fault domain" %}</dt>
+    <dd class="text-warning">{% blocktrans with d=resource.faultDomainRisk %}Losing {{ d }} loses every copy or the quorum.{% endblocktrans %}</dd>
+    {% endif %}
+  </dl>
+
+  <h4>{% trans "Members" %}</h4>
+  <hr class="header_rule">
+  <table class="table table-condensed table-striped">
+    <thead><tr><th>{% trans "Node" %}</th><th>{% trans "Kind" %}</th><th>{% trans "Role" %}</th><th>{% trans "Disk" %}</th><th>{% trans "In sync" %}</th></tr></thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td>{{ m.node }}</td><td>{{ m.kind }}</td><td>{{ m.role }}</td><td>{{ m.disk }}</td>
+        <td>{% if m.kind == "replica" %}{{ m.sync|floatformat:0 }}%{% else %}-{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h4>{% trans "Snapshots on the replicas" %}</h4>
+  <hr class="header_rule">
+  {% if snapshots %}
+  <table class="table table-condensed table-striped">
+    <thead><tr><th>{% trans "Cinder snapshot" %}</th><th>{% trans "Haify snapshot" %}</th></tr></thead>
+    <tbody>
+      {% for s in snapshots %}
+      <tr>
+        <td>{% if s.id %}<a href="{% url 'horizon:admin:snapshots:detail' s.id %}">{{ s.name }}</a>{% else %}<em>{% trans "not a Cinder snapshot" %}</em>{% endif %}</td>
+        <td>{{ s.haify }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>{% trans "None." %}</p>
+  {% endif %}
+
+  {% if labels %}
+  <h4>{% trans "Labels" %}</h4>
+  <hr class="header_rule">
+  <table class="table table-condensed">
+    <tbody>{% for k, v in labels %}<tr><td>{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% endif %}
+</div>

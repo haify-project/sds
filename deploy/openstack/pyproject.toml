@@ -5,9 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "haify-cinder"
 version = "1.0.0"
-description = "OpenStack Cinder volume driver for Haify (DRBD) storage"
+description = "OpenStack Cinder volume driver and Horizon plugin for Haify (DRBD) storage"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 
 [tool.setuptools]
-packages = ["haify_cinder"]
+packages = ["haify_cinder", "haify_horizon"]
+
+[tool.setuptools.package-data]
+haify_horizon = ["templates/haify/*.html", "enabled/*.py"]
