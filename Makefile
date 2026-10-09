@@ -152,7 +152,12 @@ ci: ui-ensure
 	@echo "==> python tests (Cinder driver)"
 	@python3 -m unittest discover -s deploy/openstack/tests -p 'test_*.py'
 	@echo "==> govulncheck"
-	@go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+	@# Scanned with the newest Go, as CI's vuln job is: a standard library
+	@# finding is fixed by upgrading Go, and a local Go a patch release behind
+	@# would fail here on advisories CI no longer reports. Falls back to the
+	@# local Go when go.dev cannot be reached.
+	@latest=$$(curl -fsS -m 10 'https://go.dev/VERSION?m=text' 2>/dev/null | head -1); \
+		GOTOOLCHAIN=$${latest:-local} go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 	@echo "==> web-ui build"
 	@npm --prefix web-ui run build --silent >/dev/null
 	@echo "CI pipeline passed"
