@@ -241,32 +241,63 @@ func (rm *ResourceManager) DetachDisklessClient(ctx context.Context, resource, n
 	_, _ = rm.deployment.DRBDDown(ctx, []string{ip}, resource)
 	_, _ = rm.deployment.Exec(ctx, []string{ip}, "sudo rm -f "+resPath)
 
+	adjust := fmt.Sprintf("sudo drbdadm adjust %s", resource)
 	newConfig, err := removeDisklessClientBlock(originalConfig, node)
 	if err == errDisklessNotPresent {
-		// Not in the config — just make sure it is out of the record.
+		// Not in the config: an earlier detach wrote it out and then failed.
+		// The replicas may still hold a connection to the client until they
+		// are adjusted to that config, so adjust them before forgetting it.
+		if err := rm.execAllSuccess(ctx, hosts, adjust, "adjust the replicas after diskless client detach"); err != nil {
+			return err
+		}
 		return rm.forgetDisklessClient(ctx, dbRes, node)
 	}
 	if err != nil {
 		return fmt.Errorf("build config without diskless client: %w", err)
 	}
 
-	remaining := onHostNames(parseOnBlocks(newConfig))
-	remainingHosts := make([]string, 0, len(remaining))
-	for _, n := range remaining {
-		remainingHosts = append(remainingHosts, rm.controller.ResolveHost(n))
-	}
-	if _, err := rm.deployment.DistributeConfig(ctx, remainingHosts, newConfig, resPath); err != nil {
+	// The replicas must take the new config: they hold the data and the
+	// connection to the client. The other diskless participants (clients and
+	// tiebreakers) are adjusted too, but one that cannot be reached must not
+	// keep a client from being detached: the usual reason to detach one is
+	// that its machine is gone, and often another went with it.
+	if _, err := rm.deployment.DistributeConfig(ctx, hosts, newConfig, resPath); err != nil {
 		return fmt.Errorf("distribute config without diskless client: %w", err)
 	}
-	if err := rm.execAllSuccess(ctx, remainingHosts,
-		fmt.Sprintf("sudo drbdadm adjust %s", resource),
-		"adjust peers after diskless client detach"); err != nil {
+	if err := rm.execAllSuccess(ctx, hosts, adjust, "adjust the replicas after diskless client detach"); err != nil {
 		return err
 	}
+	rm.updateOtherParticipants(ctx, resource, resPath, newConfig, hosts)
 
 	rm.controller.logger.Info("Diskless client detached",
 		zap.String("resource", resource), zap.String("node", node))
 	return rm.forgetDisklessClient(ctx, dbRes, node)
+}
+
+// updateOtherParticipants writes config to the participants of resource that
+// are not among replicas, and adjusts them. Failures are logged, not
+// returned; the next config change or a repair reaches a node that was down.
+func (rm *ResourceManager) updateOtherParticipants(ctx context.Context, resource, resPath, config string, replicas []string) {
+	isReplica := make(map[string]bool, len(replicas))
+	for _, h := range replicas {
+		isReplica[h] = true
+	}
+	var others []string
+	for _, n := range onHostNames(parseOnBlocks(config)) {
+		if h := rm.controller.ResolveHost(n); !isReplica[h] {
+			others = append(others, h)
+		}
+	}
+	for _, h := range others {
+		_, derr := rm.deployment.DistributeConfig(ctx, []string{h}, config, resPath)
+		if derr == nil {
+			derr = rm.execAllSuccess(ctx, []string{h}, "sudo drbdadm adjust "+resource, "adjust "+resource)
+		}
+		if derr != nil {
+			rm.controller.logger.Warn("Could not update a diskless participant after a client detach",
+				zap.String("resource", resource), zap.String("host", h), zap.Error(derr))
+		}
+	}
 }
 
 // recordDisklessClient persists node into the resource's DisklessClients set.
