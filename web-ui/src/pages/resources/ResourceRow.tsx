@@ -4,7 +4,7 @@ import { TONE_BG, TONE_SOFT } from '@/components/status';
 import { StatusTickCell } from '@/components/StatusTick';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { isCsiManaged, TONE_TEXT, type Replication, totalGbOf } from './replication';
+import { managerOf, TONE_TEXT, type Replication, totalGbOf } from './replication';
 import { type RowDialog } from './types';
 import { ResourceDetail } from './ResourceDetail';
 import { ResourceActionsMenu } from './ResourceActionsMenu';
@@ -105,17 +105,18 @@ export function NodeChips({ chips, wrap = false }: { chips: NodeChip[]; wrap?: b
 }
 
 /** The qualifiers that follow the name. Extracted because the row and the card
- *  both show them, and a resource that is CSI-managed in one view and not in
+ *  both show them, and a resource that is Kubernetes-managed in one view and not in
  *  the other would be a lie in whichever view the operator happened to read. */
 export function ResourceChips({ resource }: { resource: Resource }) {
+  const manager = managerOf(resource);
   return (
     <>
-      {isCsiManaged(resource) && (
+      {manager && (
         <span
           className="rounded-[4px] bg-accent px-1.5 py-0.5 text-[11.5px] text-accent-foreground"
-          title="Provisioned by the Kubernetes CSI driver. Its lifecycle belongs to Kubernetes — delete the PersistentVolumeClaim instead of removing it here."
+          title={manager.about}
         >
-          kubernetes
+          {manager.chip}
         </span>
       )}
       {resource.wanMode && (

@@ -17,12 +17,13 @@ export function DeleteResourceDialog({
   open,
   onOpenChange,
   resourceName,
-  csiManaged = false,
+  deleteWarning,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   resourceName: string;
-  csiManaged?: boolean;
+  /** Set when another system manages the resource: why not to delete it here. */
+  deleteWarning?: string;
 }) {
   const queryClient = useQueryClient();
 
@@ -45,12 +46,9 @@ export function DeleteResourceDialog({
             This removes the DRBD resource and destroys all backing volumes and
             their data on every node. This action cannot be undone.
           </AlertDialogDescription>
-          {csiManaged && (
+          {deleteWarning && (
             <AlertDialogDescription className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
-              This volume was provisioned by the Kubernetes CSI driver. Deleting
-              it here leaves the PersistentVolume that still references it
-              stranded, and Kubernetes will not recreate the data. Delete the
-              PersistentVolumeClaim instead and let the driver clean up.
+              {deleteWarning}
             </AlertDialogDescription>
           )}
         </AlertDialogHeader>

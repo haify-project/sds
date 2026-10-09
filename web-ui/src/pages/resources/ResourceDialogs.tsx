@@ -1,7 +1,7 @@
 import { Resource } from '../../services/api';
 import { SnapshotsDialog } from '@/components/SnapshotsDialog';
 import { type NodeOpt, type PoolOpt, type RowDialog } from './types';
-import { isCsiManaged } from './replication';
+import { managerOf } from './replication';
 import { EditOptionsDialog } from './EditOptionsDialog';
 import { ScheduleDialog } from './ScheduleDialog';
 import { AddDRDialog, DRFailoverDialog } from './DisasterRecoveryDialogs';
@@ -87,7 +87,7 @@ export function ResourceDialogs({
         open={kind === 'delete'}
         onOpenChange={(o) => (o ? onSelect('delete') : close())}
         resourceName={resource.name}
-        csiManaged={isCsiManaged(resource)}
+        deleteWarning={managerOf(resource)?.deleteWarning}
       />
     </>
   );

@@ -13,14 +13,55 @@ const SYNC_REPLICATION_STATES = new Set([
   'WFBitMapT',
 ]);
 
-// csiManagedLabel is stamped on every resource the Kubernetes CSI driver
-// provisions (see pkg/csi CreateVolume). Such a volume's lifecycle belongs to
-// Kubernetes: deleting it here strands the PersistentVolume that still
-// references it, so the UI marks it and warns before a manual delete.
-const csiManagedLabel = 'haify.csi/managed-by';
+/** The system whose volume a resource is, when one manages its lifecycle. */
+export interface ResourceManager {
+  /** Shown as a chip on the resource. */
+  chip: string;
+  /** What the chip's tooltip says. */
+  about: string;
+  /** Why deleting the resource here is wrong, and what to do instead. */
+  deleteWarning: string;
+}
 
-export function isCsiManaged(resource: Resource): boolean {
-  return resource.labels?.[csiManagedLabel] === 'csi';
+// Each integration stamps its label on every resource it creates. Deleting
+// such a resource here leaves that system holding a volume whose data is gone,
+// so the UI marks it and warns before a manual delete.
+const MANAGERS: { label: string; value: string; manager: ResourceManager }[] = [
+  {
+    label: 'haify.csi/managed-by',
+    value: 'csi',
+    manager: {
+      chip: 'kubernetes',
+      about: 'Provisioned by the Kubernetes CSI driver. Delete the PersistentVolumeClaim instead of removing it here.',
+      deleteWarning:
+        'This volume was provisioned by the Kubernetes CSI driver. Deleting it here leaves the PersistentVolume that still references it stranded, and Kubernetes will not recreate the data. Delete the PersistentVolumeClaim instead and let the driver clean up.',
+    },
+  },
+  {
+    label: 'haify.pve/managed-by',
+    value: 'pve',
+    manager: {
+      chip: 'proxmox',
+      about: 'A Proxmox VE disk. Remove it from its guest in Proxmox VE instead of here.',
+      deleteWarning:
+        'This is a Proxmox VE disk. Deleting it here leaves its guest pointing at a disk whose data is gone. Remove the disk from the guest in Proxmox VE instead.',
+    },
+  },
+  {
+    label: 'haify.openstack/managed-by',
+    value: 'cinder',
+    manager: {
+      chip: 'openstack',
+      about: 'An OpenStack Cinder volume. Delete it with Cinder instead of here.',
+      deleteWarning:
+        'This is an OpenStack Cinder volume. Deleting it here leaves Cinder, and any instance it is attached to, with a volume whose data is gone. Delete it with Cinder (openstack volume delete) instead.',
+    },
+  },
+];
+
+export function managerOf(resource: Resource): ResourceManager | null {
+  for (const m of MANAGERS) if (resource.labels?.[m.label] === m.value) return m.manager;
+  return null;
 }
 
 // The text colour that pairs with each tone. `TONE_SOFT` carries a fill with it,
