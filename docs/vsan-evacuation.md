@@ -98,8 +98,8 @@ node.
   largest wave, plus headroom. ESXi often stores disks thin on an NFS
   datastore, which then needs less, but plan for the provisioned size **[verify]**.
   Do not let it fill up in the middle of a wave.
-- **Final disks on `sds0`**: each disk's provisioned size, **rounded up to a
-  whole GiB** (the plugin allocates whole GiB; see [Sizes](#sizes-exact-by-default)).
+- **Final disks on `sds0`**: each disk's provisioned size, byte for byte (see
+  [Sizes](#sizes-exact-by-default)).
 - **Per storage node** during a wave: staging size + the final size of every
   VM imported so far. On a thin pool, written data is what counts, but an
   overcommitted thin pool that fills up stops writes on every volume in it;
@@ -335,7 +335,8 @@ After the window:
 
 - **vSAN disks cannot be imported directly**, which is why the staging
   datastore exists; a VM already on a VMFS or NFS datastore can skip steps 1-3.
-- **Whole-GiB sizes and online Move Disk**: see [Sizes](#sizes-exact-by-default).
+- **A storage set to `exactsize 0`** cannot take an online Move Disk or a vzdump
+  restore: see [Sizes](#sizes-exact-by-default).
 - **Windows guests** need the VirtIO drivers before cut-over, or the SATA
   workaround.
 - **Storage vMotion loads the network** and the staging resource's
