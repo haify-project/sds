@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -65,11 +67,18 @@ func haCreate() *cobra.Command {
 	var mountPoint string
 	var fsType string
 	var vip string
+	var vm string
 
 	cmd := &cobra.Command{
 		Use:   "create <resource>",
 		Short: "Create HA configuration for a resource",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a drbd-reactor promoter for a resource: its mount, services and virtual IP\n" +
+			"start on the node where the resource is Primary, and on another replica when that\n" +
+			"node fails.\n\n" +
+			"--vm runs a libvirt guest instead: define it under that name on every diskful\n" +
+			"replica first (virsh define, autostart off), with its disks on\n" +
+			"/dev/drbd/by-res/<resource>/<volume>.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
 
@@ -88,7 +97,16 @@ func haCreate() *cobra.Command {
 				serviceList = strings.Split(services, ",")
 			}
 
-			configPath, err := haifyClient.MakeHa(ctx, resource, serviceList, mountPoint, fsType, vip, nil, nil)
+			var agents []*haifypb.OcfAgent
+			if vm != "" {
+				agent, err := client.VirtualDomainAgent(vm)
+				if err != nil {
+					return err
+				}
+				agents = append(agents, agent)
+			}
+
+			configPath, err := haifyClient.MakeHa(ctx, resource, serviceList, mountPoint, fsType, vip, agents, nil)
 			if err != nil {
 				return fmt.Errorf("failed to create HA config: %w", err)
 			}
@@ -105,6 +123,9 @@ func haCreate() *cobra.Command {
 			if vip != "" {
 				fmt.Printf("  VIP:       %s\n", vip)
 			}
+			if vm != "" {
+				fmt.Printf("  VM:        %s (libvirt)\n", vm)
+			}
 			fmt.Printf("\nConfiguration distributed to all nodes and drbd-reactor reloaded\n")
 
 			return nil
@@ -115,6 +136,7 @@ func haCreate() *cobra.Command {
 	cmd.Flags().StringVar(&mountPoint, "mount", "", "Mount point for filesystem")
 	cmd.Flags().StringVar(&fsType, "fstype", "ext4", "Filesystem type (ext4, xfs, etc.)")
 	cmd.Flags().StringVar(&vip, "vip", "", "Virtual IP (CIDR, e.g., 192.168.1.100/24)")
+	cmd.Flags().StringVar(&vm, "vm", "", "libvirt guest to run where the resource is Primary (defined on every replica)")
 
 	return cmd
 }

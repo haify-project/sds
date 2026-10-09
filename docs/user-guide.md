@@ -1419,6 +1419,17 @@ haify ha delete db
 `ha create` makes a filesystem of `--fstype` on the device when it finds none,
 and refuses when a `--services` unit is missing on any of the resource's nodes.
 
+`--vm <guest>` runs a libvirt guest instead of services: define it under that
+name, with the same UUID, on every diskful replica (autostart off), with its
+disks on `/dev/drbd/by-res/<resource>/<volume>`. When the node running it
+fails, another replica restarts it. Starting, stopping and live-migrating
+guests by hand with `virsh` is the libvirt hook's job; both are described in
+`deploy/libvirt/README.md`.
+
+```bash
+haify ha create web1 --vm web1
+```
+
 `ha create` and the gateways put a drbd-reactor promoter on the resource, so
 they refuse a resource whose Primary something else decides, which the promoter
 would fight for the role: a Proxmox VM disk (labelled `haify.pve/managed-by=pve`

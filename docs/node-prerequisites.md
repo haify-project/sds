@@ -24,6 +24,15 @@ Package names are Ubuntu 24.04's. Installation order and controller setup:
 
 Install from LINBIT's repositories or source builds.
 
+**With the DKMS module, install the kernel headers metapackage**
+(`linux-headers-amd64` on Debian, `linux-headers-generic` on Ubuntu), not just
+the headers of the running kernel. A routine upgrade installs a newer kernel;
+without its headers DKMS builds nothing for it, and after the next reboot the
+distribution's own DRBD 8.4 module loads instead. drbd-utils then rejects every
+resource file (`Parse error: 'an option keyword' expected, but got
+'auto-promote'`) and the node rejoins nothing. `dkms status drbd` lists the
+kernels a module was built for; `cat /proc/drbd` must say `version: 9.x`.
+
 **Keep drbd-utils and drbd-reactor versions matched.** drbd-reactor parses
 `drbdsetup status --json <res>`. A drbd-utils too old for the reactor emits JSON
 it cannot parse; reactor logs `IGNORING resource '<res>': expected ',' or '}' at
@@ -82,7 +91,8 @@ systemctl is-enabled haify-drbd-up.service   # enabled
 ## 2. OCF resource agents (gateway nodes)
 
 ```bash
-sudo apt-get install -y resource-agents-extra
+sudo apt-get install -y resource-agents-extra   # Ubuntu
+sudo apt-get install -y resource-agents         # Debian, and EL (dnf)
 ```
 
 Ubuntu 24.04's `resource-agents-base` has `IPaddr2` and the iSCSI agents but not

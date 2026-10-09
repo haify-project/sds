@@ -22,6 +22,7 @@ BRANCH = "main"
 EXTERNAL = {
     "deploy/k8s/README.md": "kubernetes.md",
     "deploy/proxmox/README.md": "proxmox.md",
+    "deploy/libvirt/README.md": "libvirt.md",
     "deploy/monitoring/README.md": "monitoring.md",
     "README_cn.md": "zh.md",
 }

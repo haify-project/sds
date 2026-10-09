@@ -6,6 +6,9 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/client"
 )
 
 // ---- input/output types ----
@@ -16,6 +19,7 @@ type haCreateIn struct {
 	Mount    string   `json:"mount,omitempty" jsonschema:"mount point managed by the HA config, e.g. /mnt/data"`
 	FsType   string   `json:"fs_type,omitempty" jsonschema:"filesystem type for the mount (default ext4)"`
 	Services []string `json:"services,omitempty" jsonschema:"systemd services started on the active node, e.g. [\"mysql\"]"`
+	VM       string   `json:"vm,omitempty" jsonschema:"libvirt guest to run on the active node instead; it must already be defined under this name on every diskful replica (virsh define, autostart off), with its disks on /dev/drbd/by-res/<resource>/<volume>"`
 }
 
 type haResourceIn struct {
@@ -94,13 +98,23 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 
 	addWrite(s, srv, writeTool("haify_ha_create", "Create HA config",
 		"Make a DRBD resource highly available via drbd-reactor: on the active node the resource is promoted, "+
-			"mounted, the VIP is brought up, and services are started. Failover is automatic."),
+			"mounted, the VIP is brought up, and services are started. Failover is automatic. With vm, the "+
+			"active node runs that libvirt guest (ocf:heartbeat:VirtualDomain), restarted on another replica "+
+			"when its node fails."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haCreateIn) (*mcp.CallToolResult, opResult, error) {
 			fsType := in.FsType
 			if fsType == "" && in.Mount != "" {
 				fsType = "ext4"
 			}
-			configPath, err := s.client.MakeHa(ctx, in.Resource, in.Services, in.Mount, fsType, in.VIP, nil, nil)
+			var agents []*haifypb.OcfAgent
+			if in.VM != "" {
+				agent, err := client.VirtualDomainAgent(in.VM)
+				if err != nil {
+					return nil, opResult{}, err
+				}
+				agents = append(agents, agent)
+			}
+			configPath, err := s.client.MakeHa(ctx, in.Resource, in.Services, in.Mount, fsType, in.VIP, agents, nil)
 			if err != nil {
 				return nil, opResult{}, err
 			}

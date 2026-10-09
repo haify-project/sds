@@ -67,6 +67,7 @@ nav:
   - Integrations:
       - Kubernetes (CSI): kubernetes.md
       - Proxmox VE: proxmox.md
+      - KVM (libvirt): libvirt.md
       - Evacuating VMware vSAN: vsan-evacuation.md
       - Prometheus and Grafana: monitoring.md
       - AI assistants (MCP): mcp.md

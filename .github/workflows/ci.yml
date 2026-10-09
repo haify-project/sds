@@ -72,6 +72,9 @@ jobs:
       - name: Test
         run: go test -race -count=1 ./...
 
+      - name: Test the libvirt hook
+        run: python3 -m unittest discover -s deploy/libvirt -p 'test_*.py'
+
   vulncheck:
     name: Vulnerability scan
     runs-on: ubuntu-latest
