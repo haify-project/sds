@@ -304,7 +304,10 @@ func (rm *ResourceManager) PromoteForNode(ctx context.Context, resource, node st
 		rm.controller.logger.Warn("Node holds DRBD quorum; force-promoting for hard failover",
 			zap.String("resource", resource), zap.String("node", node))
 		if fErr := rm.SetPrimary(ctx, resource, node, true); fErr != nil {
-			return fmt.Errorf("force-promote %s on %s (quorum held): %w", resource, node, fErr)
+			// The first failure is usually the one that explains both: a peer
+			// that has the device open refuses the forced promote as well.
+			return fmt.Errorf("promote %s on %s failed: %v; forcing it (the node holds quorum) failed too: %w",
+				resource, node, err, fErr)
 		}
 		return nil
 	}

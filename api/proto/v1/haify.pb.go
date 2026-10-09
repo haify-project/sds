@@ -641,8 +641,16 @@ type PoolInfo struct {
 	HasVdo             bool    `protobuf:"varint,25,opt,name=has_vdo,json=hasVdo,proto3" json:"has_vdo,omitempty"`
 	VdoPhysicalPercent float64 `protobuf:"fixed64,26,opt,name=vdo_physical_percent,json=vdoPhysicalPercent,proto3" json:"vdo_physical_percent,omitempty"`
 	VdoSavingPercent   float64 `protobuf:"fixed64,27,opt,name=vdo_saving_percent,json=vdoSavingPercent,proto3" json:"vdo_saving_percent,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// What new volumes are carved from. On a pool with a thin pool in it that is
+	// the thin pool: capacity_bytes is its size and available_bytes what its data
+	// has not used. The volume group around it is nearly all allocated to it, so
+	// total_*/free_* (which always describe the volume group or ZFS pool) read
+	// near-full however empty the thin pool is. Elsewhere both equal
+	// total_bytes/free_bytes. Zero when the controller could not measure them.
+	CapacityBytes  uint64 `protobuf:"varint,28,opt,name=capacity_bytes,json=capacityBytes,proto3" json:"capacity_bytes,omitempty"`
+	AvailableBytes uint64 `protobuf:"varint,29,opt,name=available_bytes,json=availableBytes,proto3" json:"available_bytes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PoolInfo) Reset() {
@@ -860,6 +868,20 @@ func (x *PoolInfo) GetVdoPhysicalPercent() float64 {
 func (x *PoolInfo) GetVdoSavingPercent() float64 {
 	if x != nil {
 		return x.VdoSavingPercent
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetCapacityBytes() uint64 {
+	if x != nil {
+		return x.CapacityBytes
+	}
+	return 0
+}
+
+func (x *PoolInfo) GetAvailableBytes() uint64 {
+	if x != nil {
+		return x.AvailableBytes
 	}
 	return 0
 }
@@ -25943,7 +25965,7 @@ const file_api_proto_v1_haify_proto_rawDesc = "" +
 	"\x04node\x18\x03 \x01(\tR\x04node\"K\n" +
 	"\x15AddDiskToPoolResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xb4\a\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x84\b\n" +
 	"\bPoolInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
@@ -25976,7 +25998,9 @@ const file_api_proto_v1_haify_proto_rawDesc = "" +
 	"\x0ecompress_ratio\x18\x18 \x01(\x01R\rcompressRatio\x12\x17\n" +
 	"\ahas_vdo\x18\x19 \x01(\bR\x06hasVdo\x120\n" +
 	"\x14vdo_physical_percent\x18\x1a \x01(\x01R\x12vdoPhysicalPercent\x12,\n" +
-	"\x12vdo_saving_percent\x18\x1b \x01(\x01R\x10vdoSavingPercent\"\x98\x01\n" +
+	"\x12vdo_saving_percent\x18\x1b \x01(\x01R\x10vdoSavingPercent\x12%\n" +
+	"\x0ecapacity_bytes\x18\x1c \x01(\x04R\rcapacityBytes\x12'\n" +
+	"\x0favailable_bytes\x18\x1d \x01(\x04R\x0eavailableBytes\"\x98\x01\n" +
 	"\x14CreateZFSPoolRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x14\n" +

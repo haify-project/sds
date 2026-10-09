@@ -11021,6 +11021,15 @@
         "vdoSavingPercent": {
           "type": "number",
           "format": "double"
+        },
+        "capacityBytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "What new volumes are carved from. On a pool with a thin pool in it that is\nthe thin pool: capacity_bytes is its size and available_bytes what its data\nhas not used. The volume group around it is nearly all allocated to it, so\ntotal_*/free_* (which always describe the volume group or ZFS pool) read\nnear-full however empty the thin pool is. Elsewhere both equal\ntotal_bytes/free_bytes. Zero when the controller could not measure them."
+        },
+        "availableBytes": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },

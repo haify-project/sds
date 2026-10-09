@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,11 +49,12 @@ type poolOut struct {
 	TotalGB uint64   `json:"total_gb" jsonschema:"volume group size; not the thin pool's"`
 	FreeGB  uint64   `json:"free_gb" jsonschema:"UNALLOCATED extents in the volume group. Structurally zero for any pool Haify created, whatever its utilisation. Judge fullness from thin_data_percent, not from this"`
 	Devices []string `json:"devices,omitempty"`
-	// Thin is the pool type recorded when the pool was created, which is not a
-	// reliable test for whether a thin pool exists today: a group adopted or
-	// converted later reports false while holding one. thin_pool_lv is the
-	// live answer.
-	Thin        bool   `json:"thin" jsonschema:"the recorded pool type; thin_pool_lv is the authoritative signal"`
+	// CapacityGB and AvailableGB are what new volumes are carved from: the
+	// thin pool when the group holds one, else the group itself.
+	CapacityGB  float64 `json:"capacity_gb" jsonschema:"size of what new volumes are carved from: the thin pool if there is one, else the pool"`
+	AvailableGB float64 `json:"available_gb" jsonschema:"room left for new volumes and their writes; judge fullness from this"`
+	// Thin is true when the group holds a thin pool now, or was created as one.
+	Thin        bool   `json:"thin" jsonschema:"the pool holds a thin pool (over-provisioned: available_gb is not a cap on a new volume's size)"`
 	Compression string `json:"compression,omitempty"`
 	// CompressRatio is what ZFS compression achieves on the pool (1.85 =
 	// 1.85x); omitted when unknown.
@@ -196,6 +198,8 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 					Node:            p.Node,
 					TotalGB:         p.TotalGb,
 					FreeGB:          p.FreeGb,
+					CapacityGB:      gib(p.CapacityBytes),
+					AvailableGB:     gib(p.AvailableBytes),
 					Devices:         p.Devices,
 					Thin:            p.Thin,
 					Compression:     p.Compression,
@@ -282,4 +286,9 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			}
 			return nil, ok(detail), nil
 		})
+}
+
+// gib renders a byte count in GiB, to two decimals.
+func gib(b uint64) float64 {
+	return math.Round(float64(b)/(1<<30)*100) / 100
 }

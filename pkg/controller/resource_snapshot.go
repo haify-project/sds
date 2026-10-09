@@ -213,6 +213,7 @@ func (rm *ResourceManager) RollbackResourceSnapshot(ctx context.Context, resourc
 	if err := rm.assertSnapshotOnEveryReplica(ctx, targets, hosts, name); err != nil {
 		return err
 	}
+	grown := rm.volumesGrownSinceSnapshot(ctx, targets, hosts[0], name)
 	all := append(append([]string(nil), hosts...), rm.disklessParticipantHosts(ctx, resource)...)
 	if err := rm.execAllSuccess(ctx, all, "sudo drbdadm down "+resource, "take "+resource+" down for the rollback"); err != nil {
 		return err
@@ -229,10 +230,16 @@ func (rm *ResourceManager) RollbackResourceSnapshot(ctx context.Context, resourc
 			break
 		}
 	}
+	if rollbackErr == nil {
+		rollbackErr = rm.clearGrownSizes(ctx, resource, grown)
+	}
 	// Up again whatever happened: a replica left down is worse than one left
 	// at the wrong point, which DRBD can still resync.
 	if err := rm.execAllSuccess(ctx, all, "sudo drbdadm up "+resource, "bring "+resource+" up after the rollback"); err != nil && rollbackErr == nil {
 		rollbackErr = err
+	}
+	if rollbackErr == nil {
+		rollbackErr = rm.growBack(ctx, resource, hosts, grown)
 	}
 	return rollbackErr
 }

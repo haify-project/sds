@@ -94,7 +94,9 @@ func pbPoolInfo(p *PoolInfo) *haifypb.PoolInfo {
 		Compression:   p.Compression,
 		CompressRatio: p.CompressRatio,
 	}
+	out.CapacityBytes, out.AvailableBytes = poolAllocatable(p)
 	if u := p.ThinUsage; u != nil {
+		out.Thin = out.Thin || (u.PoolLV != "" && u.SizeBytes > 0)
 		out.ThinPoolLv = u.PoolLV
 		out.ThinSizeBytes = u.SizeBytes
 		out.ThinDataPercent = u.DataPercent
@@ -117,6 +119,16 @@ func pbPoolInfo(p *PoolInfo) *haifypb.PoolInfo {
 		out.CacheDegraded = c.Degraded
 	}
 	return out
+}
+
+// poolAllocatable is the size and the room left of what new volumes on p are
+// carved from: its thin pool when it has one, else the pool itself.
+func poolAllocatable(p *PoolInfo) (capacity, available uint64) {
+	if u := p.ThinUsage; u != nil && u.PoolLV != "" && u.SizeBytes > 0 {
+		used := min(max(u.DataPercent, 0), 100)
+		return u.SizeBytes, uint64(float64(u.SizeBytes) * (100 - used) / 100)
+	}
+	return p.TotalBytes, p.FreeBytes
 }
 
 func (s *Server) ListPools(ctx context.Context, req *haifypb.ListPoolsRequest) (*haifypb.ListPoolsResponse, error) {

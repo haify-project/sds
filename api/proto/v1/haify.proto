@@ -879,6 +879,15 @@ message PoolInfo {
   bool has_vdo = 25;
   double vdo_physical_percent = 26;
   double vdo_saving_percent = 27;
+
+  // What new volumes are carved from. On a pool with a thin pool in it that is
+  // the thin pool: capacity_bytes is its size and available_bytes what its data
+  // has not used. The volume group around it is nearly all allocated to it, so
+  // total_*/free_* (which always describe the volume group or ZFS pool) read
+  // near-full however empty the thin pool is. Elsewhere both equal
+  // total_bytes/free_bytes. Zero when the controller could not measure them.
+  uint64 capacity_bytes = 28;
+  uint64 available_bytes = 29;
 }
 
 // ZFS messages

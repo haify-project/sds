@@ -131,3 +131,26 @@ func TestLocalNodeHasQuorum(t *testing.T) {
 	_, err = localNodeHasQuorum("")
 	require.Error(t, err)
 }
+
+// When the forced promote fails as well, the error still carries why the
+// normal one failed: that is the reason both did (here, a peer has the device
+// open), and the forced attempt's own message does not say it.
+func TestPromoteForNode_ForceFailureKeepsFirstReason(t *testing.T) {
+	dep := &fakeDeploymentClient{
+		drbdPrimaryFunc: func(_ context.Context, host, resource string, force bool) (*deployment.HostResult, error) {
+			if !force {
+				return &deployment.HostResult{Host: host, Success: false, Output: "Held open by qemu on peer os2"}, nil
+			}
+			return &deployment.HostResult{Host: host, Success: false, Output: "State change failed: (-10)"}, nil
+		},
+		drbdStatusJSONFunc: func(_ context.Context, hosts []string, resource string) (*deployment.ExecResult, error) {
+			return successExecResult(hosts, jsonStatusWithQuorum(resource, true)), nil
+		},
+	}
+	ctrl := newBasicTestController(dep)
+
+	err := ctrl.resources.PromoteForNode(context.Background(), "data", "node1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Held open by qemu on peer os2")
+	assert.Contains(t, err.Error(), "State change failed: (-10)")
+}
