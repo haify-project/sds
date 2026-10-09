@@ -213,8 +213,18 @@ sds: sds0
 `shared 1` is what makes PVE treat the disk as reachable from every node, so
 live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 
-The dialog has every option below; the controller list is fixed once the
-storage exists. PVE has no way for a storage plugin to add itself to its
+The dialog has every option below. On **Add** it fills in the controller list
+with the cluster nodes' addresses, and **Pool** lists the sds volume groups
+this node holds; the controller list is fixed once the storage exists.
+
+Each sds storage's page (a node → the storage) has an **SDS** tab: every disk
+with the nodes holding a replica and their state, the node the guest runs on,
+and whether the replicas are in step, read from that node's own DRBD every 10
+seconds. The plugin adds these as `sds-*` fields to the volumes PVE's storage
+content API returns, so `pvesh get /nodes/<node>/storage/<id>/content` shows
+them too.
+
+PVE has no way for a storage plugin to add itself to its
 interface, so the plugin adds `sds-storage.js` to the page template
 (`/usr/share/pve-manager/index.html.tpl`, one script tag after
 `pvemanagerlib.js`), and an apt hook (`/etc/apt/apt.conf.d/90sds-pve-gui`) adds
@@ -388,6 +398,12 @@ ha-manager rules add node-affinity sds-vm-100 --resources vm:100 \
 ha-manager groupadd sds-pve1-pve2 --nodes pve1:2,pve2:2,pve3:1
 ha-manager set vm:100 --group sds-pve1-pve2
 ```
+
+In the web interface, **Datacenter → HA** shows each HA guest's replica nodes
+(a warning sign when it runs on a node without one), and **Prefer nodes with
+SDS replicas** writes such a non-strict rule, `sds-vm-<id>`, for every HA guest
+with disks on sds, or updates it (PVE 9; on PVE 8 the column only). A rule takes effect at once: a guest
+running on another node is migrated to a replica node right away.
 
 Guests whose disks share replica nodes can share a rule or group. A guest
 whose disks sit on different replica pairs prefers the nodes common to all of

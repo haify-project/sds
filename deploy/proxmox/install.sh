@@ -20,7 +20,7 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Custom/ as a storage plugin, so they must not sit next to SDSPlugin.pm.
 HELPER_DIR="$PLUGIN_DIR/SDS"
 HELPER_SRC_DIR="$SRC_DIR/PVE/Storage/Custom/SDS"
-HELPER_NAMES=(Activation.pm Api.pm Capacity.pm Client.pm Migration.pm Naming.pm Snapshots.pm Templates.pm Token.pm)
+HELPER_NAMES=(Activation.pm Api.pm Capacity.pm Client.pm Inventory.pm Migration.pm Naming.pm Snapshots.pm Templates.pm Token.pm)
 
 # The web interface's dialog for the sds storage type (gui/), and what keeps
 # it loaded across pve-manager upgrades.

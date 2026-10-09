@@ -26,6 +26,7 @@ use PVE::Storage::Custom::SDS::Activation qw(activate deactivate controller_unre
 use PVE::Storage::Custom::SDS::Templates ();
 use PVE::Storage::Custom::SDS::Api qw(negotiate_apiver);
 use PVE::Storage::Custom::SDS::Token ();
+use PVE::Storage::Custom::SDS::Inventory ();
 use PVE::Storage::Custom::SDS::Snapshots ();
 
 use base qw(PVE::Storage::Plugin);
@@ -113,7 +114,7 @@ sub properties {
             type        => 'string',
         },
         onnoquorum => {
-            description => "What a new volume does when its node loses quorum or every UpToDate copy: suspend-io (default) freezes the guest's I/O until it is back, io-error fails it.",
+            description => "What a new volume does when its node loses quorum or every UpToDate replica: suspend-io (default) freezes the guest's I/O until it is back, io-error fails it.",
             type        => 'string',
             enum        => [ 'suspend-io', 'io-error' ],
         },
@@ -194,7 +195,7 @@ sub _backing_volume_target {
     my $replicas = $info->{nodes} // [];
     die "resource '$resname' has no diskful nodes to snapshot on\n" if !@$replicas;
 
-    # Prefer the Primary: its data is the copy the guest is actually writing.
+    # Prefer the Primary: its data is the replica the guest is actually writing.
     my $node   = $replicas->[0];
     my $status = eval { $class->_get_status($scfg, $resname) };
     if ($status) {
@@ -357,6 +358,9 @@ sub list_images {
 
     my $res_list = $res->{resources} // [];
     my $result   = [];
+    # Placement and live state for the web interface (SDS/Inventory.pm).
+    my $states   = PVE::Storage::Custom::SDS::Inventory::local_states();
+    my $self     = _nodename();
 
     for my $info (@$res_list) {
         my ($volname, $owner) = volname_from_resource($scfg, $info->{name} // '');
@@ -377,6 +381,7 @@ sub list_images {
             format => 'raw',
             size   => $size,
             vmid   => $owner,
+            %{ PVE::Storage::Custom::SDS::Inventory::fields($info, $states->{ $info->{name} }, $self) },
         };
     }
 
@@ -433,7 +438,7 @@ sub status {
     my $res    = $client->request('GET', '/v1/pools');
 
     # Thin pools report the thin pool's own size and usage, and the smallest
-    # node's copy bounds the storage: see SDS/Capacity.pm.
+    # node's replica bounds the storage: see SDS/Capacity.pm.
     my ($total, $free) = pool_capacity($res->{pools}, $scfg->{sdspool}, $scfg->{storagetype});
 
     return ($total, $free, $total - $free, 1);
