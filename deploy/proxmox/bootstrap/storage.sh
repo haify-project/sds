@@ -193,10 +193,11 @@ prepare_devices() {
 }
 
 # pool_on <pools output> <node>: true when the bootstrap pool exists there.
-# The controller stores LVM pools with an sds_ prefix (vg0 -> sds_vg0).
+# The controller stores LVM pools with an sds_ prefix (vg0 -> sds_vg0), and
+# its pool list names a node by address, not by name.
 pool_on() {
-	printf '%s\n' "$1" | awk -F'\t' -v a="$POOL" -v b="sds_${POOL#sds_}" -v n="$2" \
-		'($1 == a || $1 == b) && $2 == n { found = 1 } END { exit !found }'
+	printf '%s\n' "$1" | awk -F'\t' -v a="$POOL" -v b="sds_${POOL#sds_}" -v n="$2" -v ip="$(node_ip "$2")" \
+		'($1 == a || $1 == b) && ($2 == n || $2 == ip) { found = 1 } END { exit !found }'
 }
 
 create_pools() {

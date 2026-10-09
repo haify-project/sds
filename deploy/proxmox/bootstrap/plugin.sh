@@ -72,7 +72,8 @@ step_storage_cfg() {
 	step 8 "add storage '$STOREID' to /etc/pve/storage.cfg"
 	local existing controllers
 	# storage.cfg is cluster-wide (pmxcfs), so one node's view is everyone's.
-	existing=$(check_on "$LOCAL_NODE" "awk '/^[a-z][a-z0-9]*: / { sub(/:\$/, \"\", \$1); print \$1, \$2 }' /etc/pve/storage.cfg" || true)
+	# A cluster that never had a storage added has no storage.cfg at all.
+	existing=$(check_on "$LOCAL_NODE" "test ! -f /etc/pve/storage.cfg || awk '/^[a-z][a-z0-9]*: / { sub(/:\$/, \"\", \$1); print \$1, \$2 }' /etc/pve/storage.cfg" || true)
 	case "$(printf '%s\n' "$existing" | awk -v id="$STOREID" '$2 == id { print $1 }')" in
 		"") ;;
 		sds)

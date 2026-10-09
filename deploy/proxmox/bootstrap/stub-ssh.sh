@@ -67,7 +67,14 @@ case "$cmd" in
 		# missing_packages: fresh nodes miss every package asked about.
 		if fresh; then printf '%s\n' "$cmd" | grep -o 'echo [a-z0-9.+-]*' | cut -d' ' -f2; fi
 		;;
-	*/sys/module/drbd/version*) fresh && exit 1; echo 9.2.12 ;;
+	*/sys/module/drbd/refcnt*) echo "${STUB_DRBD_USE:-0 0}" ;;
+	*/sys/module/drbd/version*)
+		# STUB_DRBD_VERSION: a module already loaded on a fresh node (the
+		# kernel's in-tree 8.4, pulled in while the packages installed).
+		if [ -n "${STUB_DRBD_VERSION:-}" ]; then echo "$STUB_DRBD_VERSION"; exit 0; fi
+		fresh && exit 1
+		echo 9.2.12
+		;;
 	"test -f /etc/drbd-reactor.toml") answer 1 0 ;;
 	*"snippets"*"/etc/drbd-reactor.toml"*) answer 1 0 ;;
 	*"systemctl is-enabled --quiet drbd-reactor"*) answer 1 0 ;;

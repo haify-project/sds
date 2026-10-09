@@ -71,7 +71,8 @@ done_state() {
 	local i nodes="" pools="" sep=""
 	for i in $(seq 1 "$1"); do
 		nodes+="$sep{\"name\":\"pve$i\",\"address\":\"10.0.0.1$i\",\"state\":\"online\"}"
-		pools+="$sep{\"name\":\"sds_vg0\",\"node\":\"pve$i\",\"type\":\"thin_pool\"}"
+		# The controller's pool list names a node by its address.
+		pools+="$sep{\"name\":\"sds_vg0\",\"node\":\"10.0.0.1$i\",\"type\":\"thin_pool\"}"
 		sep=","
 	done
 	export STUB_NODES_JSON="$nodes" STUB_POOLS_JSON="$pools"
@@ -360,6 +361,18 @@ if [ -r "$T/sds-controller_1.2.3_amd64.deb" ]; then
 else
 	echo "skip: dpkg-deb unavailable, .deb case not run"
 fi
+
+case_start "an unused in-tree DRBD 8.4 is swapped for the DKMS module"
+STUB_DRBD_VERSION=8.4.11 run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
+expect_rc 0
+expect_count 3 "DRBD 8.4.11 is loaded but unused"
+expect_count 3 "rmmod drbd"
+
+case_start "a DRBD 8.4 in use stops the run"
+STUB_DRBD_VERSION=8.4.11 STUB_DRBD_USE="1 0" run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
+expect_rc 1
+expect_out "DRBD 8.4.11 is loaded and in use"
+expect_no_out "replacing it with the DKMS module"
 
 case_start "missing binaries are reported before anything runs"
 SDS_BIN_DIR_SAVE="$T/sdsbin"

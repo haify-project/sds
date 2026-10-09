@@ -122,7 +122,17 @@ ensure_drbd9_loaded() {
 			return 0
 			;;
 		"") ;;
-		*) die "$node: DRBD $ver is loaded; sds needs 9. Stop anything using it, 'rmmod drbd', and rerun with --from-step 2" ;;
+		*)
+			# Installing the packages loads the in-tree 8.4 before the DKMS
+			# build lands (drbd-utils' udev rules on a fresh node), so an
+			# 8.4 that nothing uses is swapped for 9 here. One with devices
+			# configured or held open is someone's, and is left alone.
+			if [ "$(check_on "$node" "echo \$(cat /sys/module/drbd/refcnt) \$(grep -cE '^ *[0-9]+:' /proc/drbd)" || true)" != "0 0" ]; then
+				die "$node: DRBD $ver is loaded and in use; sds needs 9. Stop what uses it, 'rmmod drbd', and rerun with --from-step 2"
+			fi
+			note "$node: DRBD $ver is loaded but unused: replacing it with the DKMS module"
+			run_on "$node" "rmmod drbd"
+			;;
 	esac
 	run_on "$node" "modprobe drbd"
 	[ "$DRY_RUN" = 1 ] && return 0
