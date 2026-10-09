@@ -383,6 +383,23 @@ is a DRBD tiebreaker for sds and a QDevice for corosync — both roles, since a
 QDevice alone gives DRBD no quorum vote. It is usually not a PVE node at all;
 when it is one, give it the lowest priority.
 
+## Thin pools and Discard
+
+On a thin pool, give each disk **Discard** (`discard=on`; the checkbox under
+the disk's Advanced options). Without it QEMU drops the guest's TRIM, so space
+a guest frees inside its filesystem stays allocated in the pool on every
+replica. With it, a guest `fstrim` reaches every replica's thin pool through
+DRBD, diskless clients included:
+
+```bash
+qm set 103 --scsi0 sds0:vm-103-disk-0,discard=on
+```
+
+Measured on a 3-node PVE 9.2 cluster: one `fstrim` in a guest that had deleted
+3 GiB took its replicas' pools from 79% to 41% and from 68% to 42%. The
+controller's daily trim (`[storage.thin] trim_schedule`) covers filesystems
+SDS mounts itself, not guest disks; Discard is what covers those.
+
 ## I/O limits
 
 PVE limits a VM disk's I/O itself: the disk options `mbps_rd`, `mbps_wr`,
