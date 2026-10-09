@@ -74,6 +74,8 @@ jobs:
 
       - name: Test the libvirt hook
         run: python3 -m unittest discover -s deploy/libvirt -p 'test_*.py'
+      - name: Test the Cinder driver
+        run: python3 -m unittest discover -s deploy/openstack/tests -p 'test_*.py'
 
   vulncheck:
     name: Vulnerability scan

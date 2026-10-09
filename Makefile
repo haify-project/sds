@@ -149,6 +149,8 @@ ci: ui-ensure
 	@go test -race -count=1 ./...
 	@echo "==> python tests (libvirt hook)"
 	@python3 -m unittest discover -s deploy/libvirt -p 'test_*.py'
+	@echo "==> python tests (Cinder driver)"
+	@python3 -m unittest discover -s deploy/openstack/tests -p 'test_*.py'
 	@echo "==> govulncheck"
 	@go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 	@echo "==> web-ui build"

@@ -351,7 +351,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	addWrite(s, srv, writeTool("haify_resource_set_labels", "Set resource labels",
 		"Set key/value labels on a resource, merged into the ones it has; a key with an empty value is "+
 			"removed. Integrations mark what runs on a resource this way (haify.libvirt/domain, "+
-			"haify.pve/managed-by, haify.csi/managed-by)."),
+			"haify.pve/managed-by, haify.csi/managed-by, haify.openstack/managed-by)."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceLabelsIn) (*mcp.CallToolResult, opResult, error) {
 			after, err := s.client.SetResourceLabels(ctx, in.Resource, in.Labels, nil)
 			if err != nil {

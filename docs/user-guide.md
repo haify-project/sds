@@ -539,8 +539,8 @@ haify resource label db app=            # trailing = deletes the label
 ```
 
 Integrations keep their own there: `haify.pve/managed-by` (Proxmox VE),
-`haify.csi/managed-by` (Kubernetes) and `haify.libvirt/domain` (KVM), which is
-how the web UI finds each one's guests.
+`haify.csi/managed-by` (Kubernetes), `haify.openstack/managed-by` (Cinder) and
+`haify.libvirt/domain` (KVM), which is how the web UI finds each one's guests.
 
 **Storage type** follows the pool automatically for LVM — a thin pool gets a
 thin volume without your having to say so. ZFS is the exception and must be

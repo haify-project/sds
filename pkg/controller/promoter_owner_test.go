@@ -57,4 +57,5 @@ func TestExternallyPromoted(t *testing.T) {
 	assert.Empty(t, externallyPromoted("pve-100-0", map[string]string{pveManagedByLabel: "other"}),
 		"an explicit label wins over the name")
 	assert.Equal(t, "Proxmox VE", externallyPromoted("disk", map[string]string{pveManagedByLabel: "pve"}))
+	assert.Equal(t, "OpenStack Cinder", externallyPromoted("os-0d6f", map[string]string{cinderManagedByLabel: "cinder"}))
 }

@@ -16,6 +16,8 @@ import (
 //     starts the VM on, and moved by PVE live migration and PVE HA;
 //   - a CSI volume is made Primary by the CSI node plugin on the node the pod
 //     is scheduled to;
+//   - a Cinder volume is made Primary by the OpenStack driver on the compute
+//     host Nova runs the instance on, and moved by Nova live migration;
 //   - a resource with diskless clients is used from nodes the promoter never
 //     runs on (the Proxmox plugin attaches one where a VM runs without a local
 //     replica).
@@ -29,6 +31,8 @@ const (
 	pveManagedByLabel = "haify.pve/managed-by"
 	// csiManagedByLabel marks a resource the CSI driver created.
 	csiManagedByLabel = "haify.csi/managed-by"
+	// cinderManagedByLabel marks a resource the OpenStack Cinder driver created.
+	cinderManagedByLabel = "haify.openstack/managed-by"
 )
 
 // pveDefaultNameRe matches what the Proxmox plugin names a volume under its
@@ -44,6 +48,8 @@ func externallyPromoted(name string, labels map[string]string) string {
 		return "Proxmox VE"
 	case labels[csiManagedByLabel] == "csi":
 		return "the CSI driver"
+	case labels[cinderManagedByLabel] == "cinder":
+		return "OpenStack Cinder"
 	}
 	return ""
 }

@@ -217,7 +217,7 @@ Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
 | `cmd/*`          | Entry points, see the binaries table above                                             |
 | `api/proto/v1`   | gRPC/REST protocol definitions (`haify.proto`) and generated code                        |
 | `web-ui`         | React web UI; `make build` copies `web-ui/dist` into `ui/dist`, which `ui/ui.go` embeds |
-| `deploy/`        | Kubernetes manifests (`k8s`), Proxmox plugin (`proxmox`), Prometheus/Grafana (`monitoring`) |
+| `deploy/`        | Kubernetes manifests (`k8s`), Proxmox plugin (`proxmox`), libvirt hook (`libvirt`), Cinder driver (`openstack`), Prometheus/Grafana (`monitoring`) |
 
 ## Gateway Implementation Details
 
