@@ -25,7 +25,7 @@ assistants, through [`haify-mcp`](mcp.md).
 9. [Backups — the only copy that survives losing the cluster](#9-backups--the-only-copy-that-survives-losing-the-cluster)
 10. [Gateways — exporting to clients](#10-gateways--exporting-to-clients)
 11. [High availability](#11-high-availability)
-12. [Database applications](#12-database-applications)
+12. [Database and object-store applications](#12-database-and-object-store-applications)
 13. [Cross-site replication (WAN DR)](#13-cross-site-replication-wan-dr)
 14. [Storage tiering](#14-storage-tiering)
 15. [Encryption](#15-encryption)
@@ -2245,7 +2245,7 @@ The manifests are in `deploy/k8s` (see its README); the CSI section of
 [deployment-guide.md](deployment-guide.md) covers installation.
 
 A database on Kubernetes with its data on a Haify volume — the counterpart of
-[`haify app`](#12-database-applications) — is one MCP call: `haify-mcp k8s` serves
+[`haify app`](#12-database-and-object-store-applications) — is one MCP call: `haify-mcp k8s` serves
 `haify_k8s_app_create`, `haify_k8s_app_list` and `haify_k8s_app_delete`
 ([mcp.md](mcp.md#kubernetes-tools)). Deleting keeps the volume claim and the
 password secret unless `delete_data` is set, and creating the app again with
