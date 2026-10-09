@@ -34,6 +34,9 @@ use PVE::Storage::Custom::SDS::Migration qw(assert_live_migration);
 use Exporter qw(import);
 our @EXPORT_OK = qw(activate deactivate controller_unreachable local_device_path);
 
+# Test seam: present while the DRBD module is loaded on this node.
+our $DRBD_PROC = '/proc/drbd';
+
 # Test seam: runs a command on this node and returns (exit code, output with
 # stderr folded in).
 our $RUN = sub {

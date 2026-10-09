@@ -384,11 +384,38 @@ sub volume_size_info {
 
     my ($vtype, $name) = $class->parse_volname($volname);
     my $resname = sds_resource_name($scfg, $name);
-    my $info    = $class->_get_resource($scfg, $resname);
+    my $info    = eval { $class->_get_resource($scfg, $resname) };
+    if (my $err = $@) {
+        # PVE asks the size when it starts a guest, so a volume that is up
+        # here answers from its device when the controller cannot.
+        my $size = controller_unreachable($err) ? _local_device_bytes($resname) : undef;
+        die $err if !$size;
+        return wantarray ? ($size, 'raw', 0, undef) : $size;
+    }
 
     my $size = ($info->{volumes} && @{ $info->{volumes} }) ? volume_size_bytes($info->{volumes}[0]) : 0;
 
     return wantarray ? ($size, 'raw', 0, undef) : $size;
+}
+
+# Test seams: where the kernel publishes block device sizes, and how a
+# by-res link is resolved to its /dev/drbdN.
+our $SYSFS_BLOCK = '/sys/class/block';
+our $RESOLVE     = sub { return Cwd::abs_path($_[0]) };
+
+# The size of a volume's DRBD device on this node, read from sysfs (which
+# needs no open, so a Secondary answers too), or undef when it is not up here.
+sub _local_device_bytes {
+    my ($resname) = @_;
+    my $local = local_device_path($resname);
+    return undef if !$DEVICE_CHECK->($local);
+    my $dev = $RESOLVE->($local) // return undef;
+    $dev =~ s{^.*/}{};
+    open(my $fh, '<', "$SYSFS_BLOCK/$dev/size") or return undef;
+    my $sectors = <$fh>;
+    close($fh);
+    return undef if !defined($sectors) || $sectors !~ m/^(\d+)/ || !$1;
+    return $1 * 512;
 }
 
 # ---------------------------------------------------------------------------
@@ -412,9 +439,13 @@ sub activate_storage {
     my ($class, $storeid, $scfg, $cache) = @_;
 
     # Fail fast with the controller's own message rather than letting every
-    # later call fail one at a time.
-    my $client = $class->_client($scfg);
-    $client->request('GET', '/v1/resources');
+    # later call fail one at a time. An unreachable controller is not that
+    # failure: see check_connection.
+    eval { $class->_client($scfg)->request('GET', '/v1/resources') };
+    if (my $err = $@) {
+        die $err if !_usable_without_controller($err);
+        warn "sds: controller unreachable; only volumes already set up on this node can be used\n";
+    }
 
     return 1;
 }
@@ -424,16 +455,22 @@ sub deactivate_storage {
     return 1;
 }
 
+# PVE asks this before activating any volume, and refuses to start a guest on
+# a storage that says no. With the controller unreachable the volumes this
+# node already has are still DRBD devices it can promote (SDS/Activation.pm),
+# so the storage counts as online while DRBD is loaded here; anything that
+# needs the controller (a new disk, a snapshot) still fails, with its message.
 sub check_connection {
     my ($class, $storeid, $scfg) = @_;
 
-    my $ok = eval {
-        my $client = $class->_client($scfg);
-        $client->request('GET', '/v1/resources');
-        1;
-    };
+    my $ok = eval { $class->_client($scfg)->request('GET', '/v1/resources'); 1 };
+    return 1 if $ok;
+    return _usable_without_controller($@) ? 1 : 0;
+}
 
-    return $ok ? 1 : 0;
+sub _usable_without_controller {
+    my ($err) = @_;
+    return controller_unreachable($err) && -e $PVE::Storage::Custom::SDS::Activation::DRBD_PROC;
 }
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ use PVEStub;
 use MockClient;
 use File::Path qw(make_path);
 use File::Temp qw(tempdir);
-use Test::More tests => 23;
+use Test::More tests => 31;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -149,6 +149,43 @@ is_deeply(\@ran, [ 'drbdadm secondary pve-100-0', 'drbdadm net-options --allow-t
 %answers = ('drbdadm secondary pve-100-0' => [ 11, "State change failed: (-12) Device is held open by someone\n" ]);
 eval { $P->deactivate_volume('sds0', $scfg, 'vm-100-disk-0') };
 like($@, qr/demoting pve-100-0 on this node failed too: State change failed/, 'a refused demote is an error');
+
+# --- the storage stays online without the controller --------------------------
+#
+# PVE asks check_connection and activate_storage before it activates any
+# volume, so the fallback above is only reachable if these let it through.
+
+my $drbd_proc = File::Temp->new;
+$PVE::Storage::Custom::SDS::Activation::DRBD_PROC = $drbd_proc->filename;
+setup('GET /v1/resources' => $UNREACHABLE);
+is($P->check_connection('sds0', $scfg), 1, 'online while DRBD is loaded here, controller or not');
+{
+    my $warned = '';
+    local $SIG{__WARN__} = sub { $warned .= $_[0] };
+    ok(eval { $P->activate_storage('sds0', $scfg, {}); 1 }, 'activate_storage lets the guest start');
+    like($warned, qr/controller unreachable; only volumes already set up on this node/, 'and says what still works');
+}
+$PVE::Storage::Custom::SDS::Activation::DRBD_PROC = '/nonexistent/drbd';
+is($P->check_connection('sds0', $scfg), 0, 'offline when DRBD is not loaded either');
+ok(!eval { $P->activate_storage('sds0', $scfg, {}); 1 }, 'and activate_storage fails');
+setup('GET /v1/resources' => "sds controller error (HTTP 403): forbidden\n");
+$PVE::Storage::Custom::SDS::Activation::DRBD_PROC = $drbd_proc->filename;
+is($P->check_connection('sds0', $scfg), 0, 'a controller that answers and refuses is not papered over');
+
+# PVE reads a disk's size when it starts the guest: a volume up here answers
+# from its device.
+my $sysfs = tempdir(CLEANUP => 1);
+make_path("$sysfs/drbd1000");
+open(my $szfh, '>', "$sysfs/drbd1000/size") or die $!;
+print $szfh "41943040\n";
+close($szfh);
+$PVE::Storage::Custom::SDSPlugin::SYSFS_BLOCK = $sysfs;
+$PVE::Storage::Custom::SDSPlugin::RESOLVE = sub { return '/dev/drbd1000' };
+setup('GET /v1/resources/pve-100-0' => $UNREACHABLE);
+is(scalar $P->volume_size_info($scfg, 'sds0', 'vm-100-disk-0'), 41943040 * 512, 'size from sysfs without the controller');
+$device_up = 0;
+ok(!eval { $P->volume_size_info($scfg, 'sds0', 'vm-100-disk-0'); 1 }, 'and an error when the volume is not up here');
+$device_up = 1;
 
 # --- new volumes suspend I/O on lost quorum -----------------------------------
 
