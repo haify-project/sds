@@ -11,7 +11,7 @@ use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 use PVEStub;
 use MockClient;
 use JSON::PP ();
-use Test::More tests => 36;
+use Test::More tests => 38;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -36,6 +36,7 @@ my ($create) = $mock->calls_for('POST', '/v1/resources');
 ok($create, 'a resource was created');
 is($create->{payload}{name}, 'pve-100-0', 'resource name derived from the volume');
 is($create->{payload}{sizeGb}, 20, '20 GiB requested in KiB becomes 20 GB');
+is($create->{payload}{sizeBytes}, 20971520 * 1024, 'and the device is exactly that by default');
 is($create->{payload}{pool}, 'vg0', 'pool from storage.cfg');
 is_deeply($create->{payload}{nodes}, [ 'n1', 'n2' ], 'explicit node list is split and trimmed');
 ok(!exists $create->{payload}{replicas}, 'replicas is not sent when nodes are explicit');
@@ -164,16 +165,23 @@ is($avail, 0, "storagetype lvm reports the group's free extents");
 
 # --- resize -----------------------------------------------------------------
 
+my $gib_scfg = { %$base_scfg, exactsize => 0 };
 with_mock();
-my $newsize = $P->volume_resize($base_scfg, 'sds0', 'vm-100-disk-0', 32 * 1073741824, 1);
+my $newsize = $P->volume_resize($gib_scfg, 'sds0', 'vm-100-disk-0', 32 * 1073741824, 1);
 my ($patch) = $mock->calls_for('PATCH', '/v1/resources/pve-100-0/volumes/0');
 is($patch->{payload}{sizeGb}, 32, 'resize converts bytes to whole GB');
 is($newsize, 32 * 1073741824, 'returns the size actually allocated');
 
 # --- exactsize ----------------------------------------------------------------
 #
-# Online Move Disk needs a target of the source's exact size; whole GiB is
-# not it.
+# A vzdump restore and an online Move Disk both need a target of the source's
+# exact size; whole GiB is not it, so exact is the default and `exactsize 0`
+# the way out.
+
+with_mock();
+$P->alloc_image('sds0', $gib_scfg, 100, 'raw', 'vm-100-disk-0', 10 * 1048576 + 3);
+($create) = $mock->calls_for('POST', '/v1/resources');
+ok(!exists $create->{payload}{sizeBytes}, 'exactsize 0 rounds up to whole GiB');
 
 my $exact_scfg = { %$base_scfg, exactsize => 1 };
 with_mock();

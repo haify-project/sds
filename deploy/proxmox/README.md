@@ -225,7 +225,7 @@ live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 | `resourceprefix` | Prefix for generated resource names (default `pve`). Give each PVE cluster its own when several share one sds cluster: VM ids are only unique within a PVE cluster |
 | `apitoken` | Bearer token when sds `[auth]`/`[rbac]` is enabled. `storage.cfg` is readable cluster-wide, so use a token scoped to what the plugin needs rather than an admin token |
 | `onnoquorum` | What a new disk does when its node loses quorum or every UpToDate copy: `suspend-io` (default; the guest's I/O freezes and carries on when quorum returns) or `io-error` (the guest sees I/O errors and typically remounts read-only). Applies to disks created from then on; change an existing one with `sds resource set-options <resource> --drbd-options on-no-quorum=<value>,on-no-data-accessible=<value>` |
-| `exactsize` | `1` gives each new or resized disk exactly the size PVE asks for, rounded up to a 512-byte sector, instead of the next whole GiB (the backing volume is still allocated in GiB; the DRBD device is capped at the exact size). Needed for online Move Disk onto this storage, which refuses a target that is not byte-for-byte the source's size. Default `0` |
+| `exactsize` | `1` (the default) gives each new or resized disk exactly the size PVE asks for, rounded up to a 512-byte sector (the backing volume is still allocated in GiB; the DRBD device is capped at the exact size). `0` rounds up to the next whole GiB instead, and then restoring a vzdump backup and online Move Disk onto this storage both fail: they refuse a disk that is not byte-for-byte the source's size. Default `1` |
 
 Standard PVE options `nodes`, `disable`, `content`, `shared` and `bwlimit` are
 also accepted. `content` may be `images` and `rootdir`; the only format is
@@ -237,7 +237,7 @@ also accepted. `content` may be `images` and `rootdir`; the only format is
 | --- | --- |
 | one VM disk `vm-<vmid>-disk-<n>` | one DRBD resource `<prefix>-<vmid>-<n>` |
 | another volume of the VM: `vm-<vmid>-cloudinit`, `vm-<vmid>-state-<snap>` (a snapshot's RAM), `vm-<vmid>-fleece-<n>` (backup fleecing) | one DRBD resource `<prefix>-<vmid>-<name>` |
-| `alloc_image` | `POST /v1/resources` (size rounded up to whole GiB, or exact with `exactsize`; protocol C) |
+| `alloc_image` | `POST /v1/resources` (the exact size PVE asks for, or whole GiB with `exactsize 0`; protocol C) |
 | `free_image` | `DELETE /v1/resources/<res>` (cascade teardown) |
 | `list_images` | `GET /v1/resources`, filtered by `<prefix>-` |
 | `activate_volume` | `POST .../diskless-clients` if this node is not in the resource, then a quorum-guarded `POST .../primary` |
@@ -402,7 +402,7 @@ top.
   and made of letters, digits, `_` and `-` (at most 64), and
   `base-<vmid>-disk-<n>`; PVE's own names all fit.
 - **Snapshot access** only on a node holding a replica, and only for LVM.
-- **Whole-gigabyte allocation** unless `exactsize` is set.
+- **Whole-gigabyte allocation** with `exactsize 0`, which vzdump restore and Move Disk cannot use.
 - **WAN resources are refused for dual-primary**, so a guest cannot live-migrate
   across a WAN-replicated (asynchronous) resource.
 

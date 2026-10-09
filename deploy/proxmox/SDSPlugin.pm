@@ -122,10 +122,11 @@ sub properties {
             enum        => [ 'suspend-io', 'io-error' ],
         },
         exactsize => {
-            description => "Give each new or resized disk exactly the size PVE asks for, instead of rounding up to whole GiB. "
-                . "Needed for online Move Disk onto this storage, which requires a target of the source's exact size.",
+            description => "Give each new or resized disk exactly the size PVE asks for (the default). 0 rounds up to "
+                . "whole GiB instead, which breaks restoring a vzdump backup and online Move Disk onto this storage: "
+                . "both need a disk of the source's exact size.",
             type    => 'boolean',
-            default => 0,
+            default => 1,
         },
     };
 }
@@ -275,6 +276,12 @@ sub clone_image {
     return PVE::Storage::Custom::SDS::Templates::clone_image($class, $scfg, $storeid, $volname, $vmid, $snap);
 }
 
+# Exact sizes unless storage.cfg says `exactsize 0`.
+sub exact_size {
+    my ($scfg) = @_;
+    return !defined($scfg->{exactsize}) || $scfg->{exactsize} ? 1 : 0;
+}
+
 # ---------------------------------------------------------------------------
 # Allocation
 # ---------------------------------------------------------------------------
@@ -313,9 +320,10 @@ sub alloc_image {
         # fight it for the role, and not to alarm on a stopped VM's disk.
         labels => { 'sds.pve/managed-by' => 'pve' },
     };
-    # PVE passes KiB; with exactsize the device is exactly that, rather than
-    # the next whole GiB, so a disk moved here online matches its source.
-    $payload->{sizeBytes}   = $size * 1024         if $scfg->{exactsize};
+    # PVE passes KiB, and the device is exactly that rather than the next whole
+    # GiB: a vzdump restore and an online Move Disk both refuse a disk that is
+    # not byte-for-byte the source's size.
+    $payload->{sizeBytes}   = $size * 1024         if exact_size($scfg);
     $payload->{pool}        = $scfg->{sdspool}     if $scfg->{sdspool};
     $payload->{storageType} = $scfg->{storagetype} if $scfg->{storagetype};
 
@@ -507,7 +515,7 @@ sub volume_resize {
     my $sizegb  = bytes_to_gb($size);
     my $client  = $class->_client($scfg);
 
-    if ($scfg->{exactsize}) {
+    if (exact_size($scfg)) {
         $client->request('PATCH', "/v1/resources/$resname/volumes/0",
             { resource => $resname, volumeId => 0, sizeBytes => $size });
         # The controller rounds up to a whole 512-byte sector.

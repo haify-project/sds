@@ -184,19 +184,27 @@ func (rm *ResourceManager) GetResource(ctx context.Context, name string) (*Resou
 
 	if len(info.Volumes) == 0 && len(dbVolumes) > 0 {
 		for _, volume := range dbVolumes {
-			info.Volumes = append(info.Volumes, &ResourceVolumeInfo{
-				VolumeID:      uint32(volume.VolumeID),
-				Device:        fmt.Sprintf("/dev/drbd/by-res/%s/%d", name, volume.VolumeID),
-				SizeGB:        uint64(max(volume.SizeGB, 0)),
-				SizeBytes:     uint64(max(volume.SizeBytes, 0)),
-				Pool:          volume.Pool,
-				BackingVolume: volume.VolumeName,
-				Encrypted:     dbRes.Encrypted && luksIsMapperPath(volume.Device),
-			})
+			info.Volumes = append(info.Volumes, volumeInfoFromRecord(dbRes, volume))
 		}
 	}
 
 	return info, nil
+}
+
+// volumeInfoFromRecord is a volume as the API reports it, from its database
+// record. Getting one resource and listing them all both use it: the list
+// once dropped the exact size, and Proxmox, which rescans by listing, then
+// recorded every exactly-sized disk as its whole GiB.
+func volumeInfoFromRecord(res *database.Resource, volume *database.Volume) *ResourceVolumeInfo {
+	return &ResourceVolumeInfo{
+		VolumeID:      uint32(volume.VolumeID),
+		Device:        fmt.Sprintf("/dev/drbd/by-res/%s/%d", res.Name, volume.VolumeID),
+		SizeGB:        uint64(max(volume.SizeGB, 0)),
+		SizeBytes:     uint64(max(volume.SizeBytes, 0)),
+		Pool:          volume.Pool,
+		BackingVolume: volume.VolumeName,
+		Encrypted:     res.Encrypted && luksIsMapperPath(volume.Device),
+	}
 }
 
 // ListResources lists all resources from database with live status
@@ -226,14 +234,7 @@ func (rm *ResourceManager) ListResources(ctx context.Context) ([]*ResourceInfo, 
 		var volumes []*ResourceVolumeInfo
 		if dbVolumes, err := rm.controller.db.ListVolumes(ctx, dbRes.Name); err == nil {
 			for _, volume := range dbVolumes {
-				volumes = append(volumes, &ResourceVolumeInfo{
-					VolumeID:      uint32(volume.VolumeID),
-					Device:        fmt.Sprintf("/dev/drbd/by-res/%s/%d", dbRes.Name, volume.VolumeID),
-					SizeGB:        uint64(max(volume.SizeGB, 0)),
-					Pool:          volume.Pool,
-					BackingVolume: volume.VolumeName,
-					Encrypted:     dbRes.Encrypted && luksIsMapperPath(volume.Device),
-				})
+				volumes = append(volumes, volumeInfoFromRecord(dbRes, volume))
 			}
 		}
 

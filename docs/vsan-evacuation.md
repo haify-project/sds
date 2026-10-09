@@ -247,15 +247,13 @@ Either way the disk is created through the plugin's `alloc_image`: one DRBD
 resource per disk, named `<resourceprefix>-<vmid>-<n>` (`pve-101-0` with the
 default prefix).
 
-### Sizes: whole GiB and online Move Disk
+### Sizes: exact by default
 
-The plugin rounds every new disk **up to a whole GiB** by default. A VMware
-disk whose size is not a whole number of GiB arrives slightly larger: the guest
-sees unused space at the end, which is harmless. But **online Move Disk needs
-byte-exact sizes**, so a disk whose size is not a whole number of GiB cannot be
-moved live *onto* `sds0`: importing it to another storage first and moving it
-live afterwards fails. If your plugin version supports the `exactsize` storage
-option, enable it before importing or moving, so disks keep their exact size.
+The plugin gives every new disk **exactly the size PVE asks for**, so a VMware
+disk whose size is not a whole number of GiB arrives byte for byte, and online
+Move Disk and vzdump restore onto `sds0` both work: each refuses a disk that is
+not the source's exact size. A storage set to `exactsize 0` rounds disks up to
+whole GiB instead, and loses both.
 
 **Verify:**
 
