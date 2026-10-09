@@ -6,7 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // Observability tools: what the cluster DID, not just what it is.
@@ -103,17 +103,17 @@ func rfc3339(ms int64) string {
 
 // registerObservabilityTools adds event, audit, and controller-log tools.
 func (s *Server) registerObservabilityTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_event_list", "List cluster events",
+	addRead(s, srv, readOnlyTool("haify_event_list", "List cluster events",
 		"List operational notifications the controller has raised: replicas going degraded, a resource's Primary "+
 			"moving, a node becoming unreachable, WAN replication breaking, a thin pool filling up. Each event has "+
 			"a severity and a status (firing when a condition starts, resolved when it clears), so a firing event "+
 			"with no matching resolved is still outstanding. This is the tool to reach for when asked what went "+
 			"wrong or what changed — the other tools only show the cluster's current shape. "+
-			"pool.* events carry the pool name in resource and the node in node; pair them with sds_pool_list for "+
+			"pool.* events carry the pool name in resource and the node in node; pair them with haify_pool_list for "+
 			"the current percentages, since an outstanding event says a threshold was crossed, not where the pool "+
 			"is now. Requires [alert] enabled in controller.toml."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in eventListIn) (*mcp.CallToolResult, eventListOut, error) {
-			resp, err := s.client.ListEvents(ctx, &sdspb.ListEventsRequest{
+			resp, err := s.client.ListEvents(ctx, &haifypb.ListEventsRequest{
 				Limit:       in.Limit,
 				MinSeverity: in.MinSeverity,
 				Types:       in.Types,
@@ -144,12 +144,12 @@ func (s *Server) registerObservabilityTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_audit_list", "List audit trail",
+	addRead(s, srv, readOnlyTool("haify_audit_list", "List audit trail",
 		"List who called which management RPC, when, from where, and whether it was allowed. Persisted on the "+
 			"controller's replicated volume, so the history follows the controller across a failover. Use "+
 			"failures_only to find rejected or errored calls."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in auditListIn) (*mcp.CallToolResult, auditListOut, error) {
-			resp, err := s.client.ListAuditEvents(ctx, &sdspb.ListAuditEventsRequest{
+			resp, err := s.client.ListAuditEvents(ctx, &haifypb.ListAuditEventsRequest{
 				Limit:        in.Limit,
 				Method:       in.Method,
 				Target:       in.Target,
@@ -178,12 +178,12 @@ func (s *Server) registerObservabilityTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_log_list", "Read controller logs",
+	addRead(s, srv, readOnlyTool("haify_log_list", "Read controller logs",
 		"Read recent lines from the active controller's own log ring. Deliberately not persisted: it describes what "+
 			"a running controller is doing right now, and once the controller has relocated its old node's output "+
-			"belongs to a different process. For durable history use sds_audit_list."),
+			"belongs to a different process. For durable history use haify_audit_list."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in logListIn) (*mcp.CallToolResult, logListOut, error) {
-			resp, err := s.client.ListControllerLogs(ctx, &sdspb.ListControllerLogsRequest{
+			resp, err := s.client.ListControllerLogs(ctx, &haifypb.ListControllerLogsRequest{
 				Limit:    in.Limit,
 				Level:    in.MinLevel,
 				Contains: in.Contains,
@@ -229,9 +229,9 @@ type notifyChannelListOut struct {
 // There is deliberately no tool for CREATING a channel. A bot URL is a bearer
 // credential — anyone holding it can post into the channel — and anything
 // passed as a tool argument is recorded in the conversation that passed it.
-// The same rule keeps sds_backup_target_add out of the tool list.
+// The same rule keeps haify_backup_target_add out of the tool list.
 func (s *Server) registerNotifyTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_notify_channel_list", "List alert notification channels",
+	addRead(s, srv, readOnlyTool("haify_notify_channel_list", "List alert notification channels",
 		"List where this cluster's alerts are delivered — Feishu, Slack, WeCom, DingTalk or a plain webhook. "+
 			"Use this when asked whether anyone would be told about a problem: a cluster with alerting enabled "+
 			"and no enabled channel raises events that nobody receives. Bot URLs are returned; signing secrets "+
@@ -251,7 +251,7 @@ func (s *Server) registerNotifyTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_notify_channel_test", "Send a test alert to one channel",
+	addWrite(s, srv, writeTool("haify_notify_channel_test", "Send a test alert to one channel",
 		"Deliver one synthetic message to a single channel and report what the service actually said. This is the "+
 			"only way to know a channel works: Feishu, WeCom and DingTalk answer HTTP 200 for a message they "+
 			"refused and put the reason in the body, so a wrong bot URL or a missing signature looks like success "+

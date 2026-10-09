@@ -91,7 +91,7 @@ func TestFieldsAndLoggerNameAreCaptured(t *testing.T) {
 	log := loggerWith(ring, zapcore.DebugLevel).
 		Named("audit").
 		With(zap.String("component", "selfha"))
-	log.Info("Found active node", zap.String("node", "sds-e"), zap.Int("attempt", 2))
+	log.Info("Found active node", zap.String("node", "haify-e"), zap.Int("attempt", 2))
 
 	entries, _ := ring.List(Filter{})
 	require.Len(t, entries, 1)
@@ -99,7 +99,7 @@ func TestFieldsAndLoggerNameAreCaptured(t *testing.T) {
 	assert.Equal(t, "audit", e.Logger)
 	assert.Equal(t, "info", e.Level)
 	assert.Equal(t, "selfha", e.Fields["component"])
-	assert.Equal(t, "sds-e", e.Fields["node"])
+	assert.Equal(t, "haify-e", e.Fields["node"])
 	assert.Equal(t, "2", e.Fields["attempt"])
 }
 

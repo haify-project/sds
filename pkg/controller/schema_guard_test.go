@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
@@ -19,7 +19,7 @@ import (
 // loss, so it is asserted from the outside rather than trusted to stay wired.
 func TestNewRefusesToStartOnNewerSchema(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "sds.db")
+	path := filepath.Join(dir, "haify.db")
 
 	// Build a valid database, then stamp it with a version from the future.
 	// The bucket and key are spelled out rather than imported because they are

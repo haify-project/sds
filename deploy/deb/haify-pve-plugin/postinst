@@ -1,0 +1,63 @@
+#!/bin/sh
+# postinst for haify-pve-plugin: what deploy/proxmox/install.sh does after it
+# has copied the modules into place.
+#
+# Every PVE daemon that loads storage plugins in-process is restarted for a
+# new or changed module to take effect (install.sh explains why the HA ones
+# matter most). Restarting them does not disturb running guests. try-restart
+# leaves stopped daemons stopped.
+
+set -e
+
+PLUGIN=/usr/share/perl5/PVE/Storage/Custom/HaifyPlugin.pm
+SHARE=/usr/share/haify-pve-plugin
+
+restart_pve() {
+    if [ -d /run/systemd/system ]; then
+        systemctl try-restart pvedaemon pveproxy pvestatd pvescheduler pve-ha-crm pve-ha-lrm || true
+    fi
+}
+
+case "$1" in
+configure)
+    # A module that does not compile takes pvedaemon down with it on restart,
+    # so check before restarting. On failure the daemons keep running the
+    # previous plugin from memory and the package is left unconfigured, which
+    # apt reports; do not restart them until a fixed version is installed.
+    if ! perl -c "$PLUGIN" >/dev/null 2>&1; then
+        echo "ERROR: $PLUGIN does not compile on this node; the PVE daemons were NOT restarted:" >&2
+        perl -c "$PLUGIN" >&2 || true
+        exit 1
+    fi
+
+    # Keep the host's LVM off the DRBD devices that carry guest disks (see
+    # lvm-filter.sh). A failure is a warning, as in install.sh: the plugin
+    # works without the filter until a guest with LVM inside its disk runs here.
+    # HAIFY_SKIP_LVM_FILTER=1 leaves lvm.conf to the operator.
+    if [ "${HAIFY_SKIP_LVM_FILTER:-0}" != "1" ]; then
+        if ! "$SHARE/lvm-filter.sh"; then
+            echo "WARNING: the LVM filter was not added; a guest's LVM inside its disk can be activated on this host." >&2
+            echo "  Fix it and run $SHARE/lvm-filter.sh again (check: $SHARE/lvm-filter.sh --check)." >&2
+        fi
+    fi
+
+    # The haify type in the web interface's storage dialogs (gui-patch.sh).
+    "$SHARE/gui-patch.sh" || echo "WARNING: Haify was not added to the web interface's storage dialogs" >&2
+
+    restart_pve
+
+    if [ -z "$2" ]; then
+        echo "Next: check this node with $SHARE/preflight.sh <controller>, then add an"
+        echo "'haify:' entry to /etc/pve/storage.cfg (cluster-wide, once). Every option is in"
+        echo "/usr/share/doc/haify-pve-plugin/storage.cfg.example."
+    fi
+    ;;
+abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+*)
+    echo "postinst called with unknown argument '$1'" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

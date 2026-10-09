@@ -10,12 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/haify/pkg/client"
 )
 
 // notifySecretEnvVar carries a DingTalk signing secret, for the same reason
-// SDS_BACKUP_SECRET exists: a flag would put it in shell history and in argv.
-const notifySecretEnvVar = "SDS_NOTIFY_SECRET"
+// HAIFY_BACKUP_SECRET exists: a flag would put it in shell history and in argv.
+const notifySecretEnvVar = "HAIFY_NOTIFY_SECRET"
 
 func notifyCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -45,7 +45,7 @@ func notifyListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return err
 			}
@@ -102,14 +102,14 @@ LEAVES THE STORED SECRET ALONE, so changing a threshold does not silently
 unsign the channel; --clear-secret removes it.
 
 Examples:
-  sds channel add --name oncall --kind feishu \
+  haify channel add --name oncall --kind feishu \
       --url https://open.feishu.cn/open-apis/bot/v2/hook/xxxx --min-severity warning
 
-  sds channel add --name pager --kind slack \
+  haify channel add --name pager --kind slack \
       --url https://hooks.slack.com/services/T00/B00/xxxx --min-severity critical
 
   export ` + notifySecretEnvVar + `=SECxxxx
-  sds channel add --name ops --kind dingtalk \
+  haify channel add --name ops --kind dingtalk \
       --url 'https://oapi.dingtalk.com/robot/send?access_token=xxxx'`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if name == "" || url == "" {
@@ -129,7 +129,7 @@ Examples:
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return err
 			}
@@ -141,7 +141,7 @@ Examples:
 				return err
 			}
 			fmt.Printf("Notification channel %q saved (%s)\n", ch.Name, ch.Kind)
-			fmt.Printf("Send a test message with: sds channel test %s\n", ch.Name)
+			fmt.Printf("Send a test message with: haify channel test %s\n", ch.Name)
 			return nil
 		},
 	}
@@ -171,7 +171,7 @@ func notifyDeleteCommand() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return err
 			}
@@ -203,7 +203,7 @@ channels nor appears in the event history.`,
 		RunE: func(_ *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return err
 			}

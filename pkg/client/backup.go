@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // Off-cluster backup shipping. See pkg/backup for what this is and is not:
@@ -12,7 +12,7 @@ import (
 
 // AddBackupTarget stores (or replaces) a backup repository. The secret in req
 // is write-only server-side and is never returned by any other call.
-func (c *SDSClient) AddBackupTarget(ctx context.Context, req *sdspb.AddBackupTargetRequest) error {
+func (c *HaifyClient) AddBackupTarget(ctx context.Context, req *haifypb.AddBackupTargetRequest) error {
 	resp, err := c.client.AddBackupTarget(ctx, req)
 	if err != nil {
 		return err
@@ -24,8 +24,8 @@ func (c *SDSClient) AddBackupTarget(ctx context.Context, req *sdspb.AddBackupTar
 }
 
 // ListBackupTargets returns every backup target, without their secrets.
-func (c *SDSClient) ListBackupTargets(ctx context.Context) ([]*sdspb.BackupTargetInfo, error) {
-	resp, err := c.client.ListBackupTargets(ctx, &sdspb.ListBackupTargetsRequest{})
+func (c *HaifyClient) ListBackupTargets(ctx context.Context) ([]*haifypb.BackupTargetInfo, error) {
+	resp, err := c.client.ListBackupTargets(ctx, &haifypb.ListBackupTargetsRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +36,8 @@ func (c *SDSClient) ListBackupTargets(ctx context.Context) ([]*sdspb.BackupTarge
 }
 
 // DeleteBackupTarget removes a backup target definition.
-func (c *SDSClient) DeleteBackupTarget(ctx context.Context, name string, force bool) error {
-	resp, err := c.client.DeleteBackupTarget(ctx, &sdspb.DeleteBackupTargetRequest{Name: name, Force: force})
+func (c *HaifyClient) DeleteBackupTarget(ctx context.Context, name string, force bool) error {
+	resp, err := c.client.DeleteBackupTarget(ctx, &haifypb.DeleteBackupTargetRequest{Name: name, Force: force})
 	if err != nil {
 		return err
 	}
@@ -50,8 +50,8 @@ func (c *SDSClient) DeleteBackupTarget(ctx context.Context, name string, force b
 // CreateBackup ships a crash-consistent copy of a resource to a target:
 // incremental on the last backup when it can be, full when full is set or it
 // cannot.
-func (c *SDSClient) CreateBackup(ctx context.Context, resource, target, node string, full bool) (*sdspb.BackupInfo, error) {
-	resp, err := c.client.CreateBackup(ctx, &sdspb.CreateBackupRequest{
+func (c *HaifyClient) CreateBackup(ctx context.Context, resource, target, node string, full bool) (*haifypb.BackupInfo, error) {
+	resp, err := c.client.CreateBackup(ctx, &haifypb.CreateBackupRequest{
 		Resource: resource, Target: target, Node: node, Full: full,
 	})
 	if err != nil {
@@ -64,8 +64,8 @@ func (c *SDSClient) CreateBackup(ctx context.Context, resource, target, node str
 }
 
 // ListBackups returns backup records, newest first. Empty filters match all.
-func (c *SDSClient) ListBackups(ctx context.Context, resource, target string) ([]*sdspb.BackupInfo, error) {
-	resp, err := c.client.ListBackups(ctx, &sdspb.ListBackupsRequest{Resource: resource, Target: target})
+func (c *HaifyClient) ListBackups(ctx context.Context, resource, target string) ([]*haifypb.BackupInfo, error) {
+	resp, err := c.client.ListBackups(ctx, &haifypb.ListBackupsRequest{Resource: resource, Target: target})
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +76,8 @@ func (c *SDSClient) ListBackups(ctx context.Context, resource, target string) ([
 }
 
 // RestoreBackup writes a completed backup back into a resource.
-func (c *SDSClient) RestoreBackup(ctx context.Context, id, resource, node string) (*sdspb.BackupInfo, error) {
-	resp, err := c.client.RestoreBackup(ctx, &sdspb.RestoreBackupRequest{
+func (c *HaifyClient) RestoreBackup(ctx context.Context, id, resource, node string) (*haifypb.BackupInfo, error) {
+	resp, err := c.client.RestoreBackup(ctx, &haifypb.RestoreBackupRequest{
 		Id: id, Resource: resource, Node: node,
 	})
 	if err != nil {
@@ -90,8 +90,8 @@ func (c *SDSClient) RestoreBackup(ctx context.Context, id, resource, node string
 }
 
 // DeleteBackup removes a backup's objects and its record.
-func (c *SDSClient) DeleteBackup(ctx context.Context, id, node string, force bool) error {
-	resp, err := c.client.DeleteBackup(ctx, &sdspb.DeleteBackupRequest{Id: id, Node: node, Force: force})
+func (c *HaifyClient) DeleteBackup(ctx context.Context, id, node string, force bool) error {
+	resp, err := c.client.DeleteBackup(ctx, &haifypb.DeleteBackupRequest{Id: id, Node: node, Force: force})
 	if err != nil {
 		return err
 	}
@@ -102,14 +102,14 @@ func (c *SDSClient) DeleteBackup(ctx context.Context, id, node string, force boo
 }
 
 // ImportBackups rebuilds backup records from the manifests on a target.
-func (c *SDSClient) ImportBackups(ctx context.Context, target, node string) (*sdspb.ImportBackupsResponse, error) {
+func (c *HaifyClient) ImportBackups(ctx context.Context, target, node string) (*haifypb.ImportBackupsResponse, error) {
 	return c.ImportBackupsAsOf(ctx, target, node, "")
 }
 
 // ImportBackupsAsOf is ImportBackups reading the target as it was at asOf
 // (RFC3339); empty reads it as it is.
-func (c *SDSClient) ImportBackupsAsOf(ctx context.Context, target, node, asOf string) (*sdspb.ImportBackupsResponse, error) {
-	resp, err := c.client.ImportBackups(ctx, &sdspb.ImportBackupsRequest{Target: target, Node: node, AsOf: asOf})
+func (c *HaifyClient) ImportBackupsAsOf(ctx context.Context, target, node, asOf string) (*haifypb.ImportBackupsResponse, error) {
+	resp, err := c.client.ImportBackups(ctx, &haifypb.ImportBackupsRequest{Target: target, Node: node, AsOf: asOf})
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (c *SDSClient) ImportBackupsAsOf(ctx context.Context, target, node, asOf st
 }
 
 // CreateBackupSchedule creates or replaces the schedule backing resource up to target.
-func (c *SDSClient) CreateBackupSchedule(ctx context.Context, req *sdspb.CreateBackupScheduleRequest) (*sdspb.BackupScheduleInfo, error) {
+func (c *HaifyClient) CreateBackupSchedule(ctx context.Context, req *haifypb.CreateBackupScheduleRequest) (*haifypb.BackupScheduleInfo, error) {
 	resp, err := c.client.CreateBackupSchedule(ctx, req)
 	if err != nil {
 		return nil, err
@@ -132,8 +132,8 @@ func (c *SDSClient) CreateBackupSchedule(ctx context.Context, req *sdspb.CreateB
 }
 
 // ListBackupSchedules returns every backup schedule.
-func (c *SDSClient) ListBackupSchedules(ctx context.Context) ([]*sdspb.BackupScheduleInfo, error) {
-	resp, err := c.client.ListBackupSchedules(ctx, &sdspb.ListBackupSchedulesRequest{})
+func (c *HaifyClient) ListBackupSchedules(ctx context.Context) ([]*haifypb.BackupScheduleInfo, error) {
+	resp, err := c.client.ListBackupSchedules(ctx, &haifypb.ListBackupSchedulesRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +144,8 @@ func (c *SDSClient) ListBackupSchedules(ctx context.Context) ([]*sdspb.BackupSch
 }
 
 // DeleteBackupSchedule stops a schedule; its backups stay.
-func (c *SDSClient) DeleteBackupSchedule(ctx context.Context, name string) error {
-	resp, err := c.client.DeleteBackupSchedule(ctx, &sdspb.DeleteBackupScheduleRequest{Name: name})
+func (c *HaifyClient) DeleteBackupSchedule(ctx context.Context, name string) error {
+	resp, err := c.client.DeleteBackupSchedule(ctx, &haifypb.DeleteBackupScheduleRequest{Name: name})
 	if err != nil {
 		return err
 	}
@@ -156,8 +156,8 @@ func (c *SDSClient) DeleteBackupSchedule(ctx context.Context, name string) error
 }
 
 // RunBackupSchedule runs a schedule now and waits for the backup.
-func (c *SDSClient) RunBackupSchedule(ctx context.Context, name string) (*sdspb.BackupScheduleInfo, error) {
-	resp, err := c.client.RunBackupSchedule(ctx, &sdspb.RunBackupScheduleRequest{Name: name})
+func (c *HaifyClient) RunBackupSchedule(ctx context.Context, name string) (*haifypb.BackupScheduleInfo, error) {
+	resp, err := c.client.RunBackupSchedule(ctx, &haifypb.RunBackupScheduleRequest{Name: name})
 	if err != nil {
 		return nil, err
 	}

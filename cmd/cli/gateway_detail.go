@@ -19,13 +19,13 @@ func gatewayGet() *cobra.Command {
 				return fmt.Errorf("--resource is required")
 			}
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			gw, err := sdsClient.GetGateway(cmd.Context(), resource)
+			gw, err := haifyClient.GetGateway(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to get gateway: %w", err)
 			}
@@ -65,13 +65,13 @@ func gatewayStatus() *cobra.Command {
 				return fmt.Errorf("--resource is required")
 			}
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			gw, err := sdsClient.GetGateway(cmd.Context(), resource)
+			gw, err := haifyClient.GetGateway(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to get gateway status: %w", err)
 			}

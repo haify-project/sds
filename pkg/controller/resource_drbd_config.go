@@ -249,7 +249,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 				fmt.Fprintf(&config, "        address   %s:%d;\n", ip, port)
 			}
 		} else if wan != nil {
-			// WAN: route through the local per-resource sds-proxy on loopback
+			// WAN: route through the local per-resource haify-proxy on loopback
 			// instead of the peer's real IP. The DR node binds `port` (the
 			// acceptor dials it there); the primary binds `port+9` and connects
 			// out to `port` = the local dialer's drbd_listen. Both addresses are

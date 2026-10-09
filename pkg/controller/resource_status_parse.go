@@ -170,7 +170,7 @@ func parseNodeStatesFromStatus(output string, nodeAddresses []string) map[string
 		}
 
 		// A peer that is not Connected prints exactly one line and no role:
-		//   "  sds-e connection:Connecting"
+		//   "  haify-e connection:Connecting"
 		// Recording it is the whole point — see ResourceNodeState.Connection.
 		// It also resets currentNode, because the line carries no role and the
 		// next peer-disk line (if any) is not this peer's.

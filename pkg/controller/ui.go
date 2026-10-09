@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/haify-project/sds/ui"
+	"github.com/haify-project/haify/ui"
 	"go.uber.org/zap"
 )
 
@@ -27,8 +27,8 @@ const uiNotBuiltPage = `<!DOCTYPE html>
 <html><head><title>Haify — UI not built</title></head>
 <body style="font-family:sans-serif;max-width:40em;margin:4em auto">
 <h1>Web UI not built</h1>
-<p>This <code>sds-controller</code> was compiled without the web UI assets.
-The API and <code>sds</code> are unaffected.</p>
+<p>This <code>haify-controller</code> was compiled without the web UI assets.
+The API and <code>haify</code> are unaffected.</p>
 <p>To include the UI, build with <code>make build</code> (which compiles
 <code>web-ui/</code> and embeds it), then restart the controller.</p>
 </body></html>
@@ -36,7 +36,7 @@ The API and <code>sds</code> are unaffected.</p>
 
 // defaultRESTPort is where the grpc-gateway REST API listens when
 // [server] rest_port is unset, and defaultAIPort where the optional AI Copilot
-// (cmd/sds-ai) does. The UI proxies
+// (cmd/haify-ai) does. The UI proxies
 // to both on loopback so a single published port serves the whole app.
 // defaultGRPCPort is the fallback when the config leaves Server.Port unset.
 const defaultGRPCPort = 3374

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"go.uber.org/zap"
 )
 
@@ -153,8 +153,8 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 				fields := strings.Fields(line)
 				if len(fields) >= 4 {
 					poolName := fields[0]
-					// Only show Haify-managed pools (with sds_ prefix)
-					if !strings.HasPrefix(poolName, "sds_") {
+					// Only show Haify-managed pools (with haify_ prefix)
+					if !strings.HasPrefix(poolName, "haify_") {
 						continue
 					}
 					key := normalizedHost + "/" + poolName

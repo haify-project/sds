@@ -1,31 +1,31 @@
 # Repository Guidelines
 
-Haify is a Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`sds-controller`), a CLI (`sds`, installed with an `sds-cli` link), a Kubernetes CSI driver, an MCP server (`sds-mcp`) and an AI Copilot backend (`sds-ai`). `CLAUDE.md` has the architecture and the gateway package's layout.
+Haify is a Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`haify-controller`), a CLI (`haify`, installed with an `haify-cli` link), a Kubernetes CSI driver, an MCP server (`haify-mcp`) and an AI Copilot backend (`haify-ai`). `CLAUDE.md` has the architecture and the gateway package's layout.
 
 ## Project Structure
 
 ```
-sds/
+haify/
 ├── cmd/              # Entry points: controller, cli, mcp, csi-controller, csi-node,
-│                     #   service-ip (Linux only), sds-ai (its own Go module)
+│                     #   service-ip (Linux only), haify-ai (its own Go module)
 ├── pkg/
 │   ├── controller/   # Controller and gRPC server: pools, resources, snapshots, nodes, HA, Self-HA, WAN, backups
 │   ├── deployment/   # Command execution on storage nodes over SSH (wraps dispatch)
 │   ├── gateway/      # NFS / iSCSI / NVMe-oF gateways (drbd-reactor promoter configs)
 │   ├── database/     # BoltDB persistence
 │   ├── config/       # controller.toml loading (viper)
-│   ├── client/       # gRPC client used by the CLI, sds-mcp and CSI
+│   ├── client/       # gRPC client used by the CLI, haify-mcp and CSI
 │   ├── mcpserver/    # MCP tools and runbooks (runbooks/*.md, embedded)
-│   ├── mcpauth/      # Tokens and OAuth for `sds-mcp serve`
+│   ├── mcpauth/      # Tokens and OAuth for `haify-mcp serve`
 │   ├── csi/          # Kubernetes CSI driver
-│   ├── k8sapp/       # Databases on Kubernetes backed by Haify volumes (`sds-mcp k8s`, sds_k8s_* tools)
+│   ├── k8sapp/       # Databases on Kubernetes backed by Haify volumes (`haify-mcp k8s`, haify_k8s_* tools)
 │   ├── alert/        # Health detector: cluster state to events
 │   ├── event/        # Notification bus, history, webhook delivery
 │   ├── triage/       # Turns recorded events into a short problem list
-│   ├── inspect/      # Cluster inspection checks behind `sds inspect`
+│   ├── inspect/      # Cluster inspection checks behind `haify inspect`
 │   ├── backup/       # Off-cluster backups (S3, SMB, WebDAV)
 │   ├── drbdtls/      # CA for encrypted DRBD replication
-│   ├── wanproxy/     # sds-proxy pair for WAN replication
+│   ├── wanproxy/     # haify-proxy pair for WAN replication
 │   ├── serviceip/    # Floating IP and gratuitous ARP for service-ip
 │   ├── rbac/         # Casbin-backed authorization
 │   ├── metrics/      # Prometheus metrics
@@ -36,7 +36,7 @@ sds/
 ├── ui/               # go:embed wrapper for the built web UI (ui/dist)
 ├── configs/          # controller.toml.example and systemd units
 ├── deploy/           # k8s (CSI manifests), monitoring (Prometheus/Grafana), proxmox (storage plugin)
-├── ai/               # Knowledge base build for sds-ai
+├── ai/               # Knowledge base build for haify-ai
 ├── scripts/          # Proto generation, deployment, file-size check, CSI smoke test
 └── docs/             # User guide, deployment guide, node prerequisites, MCP, design notes
 ```
@@ -46,7 +46,7 @@ Tests live next to the code as `*_test.go`.
 ## Build, Test, and Development Commands
 
 ```bash
-make build          # web UI build + sync, then bin/sds-controller, bin/sds, bin/sds-mcp,
+make build          # web UI build + sync, then bin/haify-controller, bin/haify, bin/haify-mcp,
                     #   bin/service-ip (GOOS=linux), bin/csi-controller, bin/csi-node
 make test           # go test -v ./...
 make ci             # what CI runs: file size, gofmt -l, vet, golangci-lint (also as GOOS=linux),
@@ -57,8 +57,8 @@ make lint           # golangci-lint with output truncation turned off
 make proto          # regenerate gRPC code from api/proto/v1/
 make clean          # remove bin/ and ui/dist
 
-# sds-ai is a separate module and not part of make build
-cd cmd/sds-ai && go build -o ../../bin/sds-ai .
+# haify-ai is a separate module and not part of make build
+cd cmd/haify-ai && go build -o ../../bin/haify-ai .
 
 # Run locally (copy configs/controller.toml.example to configs/controller.toml first)
 make run-controller # go run ./cmd/controller --config configs/controller.toml
@@ -100,6 +100,6 @@ Run `make ci` before pushing. CI checks plain `gofmt -l`, not the stricter `gofm
 
 ## Configuration and Secrets
 
-- The controller config is `/etc/sds/controller.toml`; start from `configs/controller.toml.example`. Default gRPC port: 3374.
-- API tokens resolve in order: `--token` flag → `SDS_TOKEN` env → `~/.sds/token` → `/etc/sds/token`.
+- The controller config is `/etc/haify/controller.toml`; start from `configs/controller.toml.example`. Default gRPC port: 3374.
+- API tokens resolve in order: `--token` flag → `HAIFY_TOKEN` env → `~/.haify/token` → `/etc/haify/token`.
 - Never commit real tokens, SSH keys or credentials.

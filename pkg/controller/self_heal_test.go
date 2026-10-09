@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A node going offline is dated, and the date is cleared when it answers.
@@ -136,7 +136,7 @@ func TestRebalanceNeverMovesToAFullerPool(t *testing.T) {
 // MoveReplica refuse it, so a plan that named it could never run.
 func TestSelectAdditionalReplicasPassesOverBarredNodes(t *testing.T) {
 	ctx := context.Background()
-	ctrl := newPlacementTestCluster(t, "  sds_vg0|214748364800|214748364800|/dev/vdb", "")
+	ctrl := newPlacementTestCluster(t, "  haify_vg0|214748364800|214748364800|/dev/vdb", "")
 
 	got, err := ctrl.resources.selectAdditionalReplicas(ctx, "vg0", 10, 1, nil, nil, nil, nil)
 	if err != nil || join(got) != "n1" {

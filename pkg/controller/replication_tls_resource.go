@@ -29,7 +29,7 @@ func (rm *ResourceManager) SetResourceTLS(ctx context.Context, resource string, 
 		return 0, err
 	}
 	if info.WANMode {
-		return 0, fmt.Errorf("%s replicates off-site through sds-proxy, which already runs mutual TLS; DRBD TLS is for the local links", resource)
+		return 0, fmt.Errorf("%s replicates off-site through haify-proxy, which already runs mutual TLS; DRBD TLS is for the local links", resource)
 	}
 	members := tlsMembers(info)
 	if on {
@@ -123,7 +123,7 @@ func (rm *ResourceManager) cycleLink(ctx context.Context, resource, a, b string,
 			return nil
 		}
 		if state == "StandAlone" || time.Now().After(deadline) {
-			return fmt.Errorf("the %s link of %s did not come back with tls=%v (it is %s); see `journalctl -u tlshd` on both nodes, then `sds resource repair %s`",
+			return fmt.Errorf("the %s link of %s did not come back with tls=%v (it is %s); see `journalctl -u tlshd` on both nodes, then `haify resource repair %s`",
 				a+"–"+b, resource, on, orUnknown(state), resource)
 		}
 		select {
@@ -175,11 +175,11 @@ func (rm *ResourceManager) assertNewMemberTLS(ctx context.Context, resource, nod
 		return nil
 	}
 	res, err := rm.deployment.Exec(ctx, hosts[:1],
-		fmt.Sprintf("grep -Eq '^[[:space:]]*tls[[:space:]]+yes;' /etc/drbd.d/%s.res && echo SDS_TLS=yes; true", resource))
+		fmt.Sprintf("grep -Eq '^[[:space:]]*tls[[:space:]]+yes;' /etc/drbd.d/%s.res && echo HAIFY_TLS=yes; true", resource))
 	if err != nil || res == nil {
 		return nil
 	}
-	if _, ok := tlsField(hostOutput(res, hosts[0]), "SDS_TLS"); !ok {
+	if _, ok := tlsField(hostOutput(res, hosts[0]), "HAIFY_TLS"); !ok {
 		return nil
 	}
 	if err := rm.assertTLSReady(ctx, []string{node}); err != nil {

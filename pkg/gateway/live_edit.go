@@ -52,17 +52,17 @@ import (
 const pendingSuffix = ".pending"
 
 // targetStateMarker starts the line the target-state probe prints.
-const targetStateMarker = "sds-gateway-target"
+const targetStateMarker = "haify-gateway-target"
 
 // pendingHookScript installs the drop-in that renames a pending gateway config
 // into place before drbd-reactor starts (after a reboot or a restart, when the
 // gateway's units are written from the .toml anyway). A stopped gateway's
 // pending copy becomes its .toml.disabled.
 const pendingHookScript = `d=/etc/systemd/system/drbd-reactor.service.d
-f=$d/50-sds-pending-gateway-config.conf
+f=$d/50-haify-pending-gateway-config.conf
 want=$(cat <<'EOF'
 [Service]
-ExecStartPre=-/bin/sh -c 'for p in /etc/drbd-reactor.d/sds-*.toml.pending; do [ -e "$$p" ] || continue; f="$${p%%.pending}"; if [ -e "$$f.disabled" ] && [ ! -e "$$f" ]; then mv -f "$$p" "$$f.disabled"; else mv -f "$$p" "$$f"; fi; done'
+ExecStartPre=-/bin/sh -c 'for p in /etc/drbd-reactor.d/haify-*.toml.pending; do [ -e "$$p" ] || continue; f="$${p%%.pending}"; if [ -e "$$f.disabled" ] && [ ! -e "$$f" ]; then mv -f "$$p" "$$f.disabled"; else mv -f "$$p" "$$f"; fi; done'
 EOF
 )
 [ "$(cat "$f" 2>/dev/null)" = "$want" ] && exit 0
@@ -108,11 +108,11 @@ func (e *liveEdit) script() string {
 	fmt.Fprintf(&b, `systemctl is-active --quiet %s || { echo "$(hostname): gateway %s is no longer running here" >&2; exit 3; }
 put() {
   mkdir -p "$1" || exit 1
-  printf '%%s' "$2" | base64 -d > "$1/reactor.conf.sds-new" || exit 1
+  printf '%%s' "$2" | base64 -d > "$1/reactor.conf.haify-new" || exit 1
   # drbd-reactor's snippet monitor reads a target drop-in newer than its last
   # reload as "reload required" - advice that would restart this gateway.
-  if [ -n "$3" ] && [ -e "$1/reactor.conf" ]; then touch -r "$1/reactor.conf" "$1/reactor.conf.sds-new"; fi
-  mv -f "$1/reactor.conf.sds-new" "$1/reactor.conf" || exit 1
+  if [ -n "$3" ] && [ -e "$1/reactor.conf" ]; then touch -r "$1/reactor.conf" "$1/reactor.conf.haify-new"; fi
+  mv -f "$1/reactor.conf.haify-new" "$1/reactor.conf" || exit 1
 }
 `, shq(target), p.Resource)
 	for i, u := range p.Units {
@@ -230,7 +230,7 @@ func (m *Manager) editRunningGateway(ctx context.Context, resource, pluginID, ol
 		zap.Int("units_added", len(edit.diff.Added)), zap.Int("units_removed", len(edit.diff.Removed)),
 		zap.Int("units_changed", len(edit.diff.Changed)))
 
-	if strings.HasPrefix(pluginID, "sds-nfs-") {
+	if strings.HasPrefix(pluginID, "haify-nfs-") {
 		m.prepareNFSNode(ctx, run, "")
 	}
 	if err := m.runScript(ctx, []string{primary}, pendingHookScript); err != nil {
@@ -255,7 +255,7 @@ func (m *Manager) editRunningGateway(ctx context.Context, resource, pluginID, ol
 	if err := m.runScript(ctx, []string{primary}, edit.script()); err != nil {
 		return fmt.Errorf("gateway %s: the edited config is saved on every node, but applying it to the gateway running on %s failed: %w. "+
 			"The running gateway may still have some of its previous settings; a failover uses the edited config. "+
-			"To apply it now, restart the gateway (sds gateway stop %s, then sds gateway start %s), which interrupts its clients",
+			"To apply it now, restart the gateway (haify gateway stop %s, then haify gateway start %s), which interrupts its clients",
 			resource, primary, err, resource, resource)
 	}
 	return nil

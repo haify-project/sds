@@ -43,7 +43,7 @@ type ReplicaState struct {
 // ReplicationSnapshot is one complete reading of DRBD replication.
 type ReplicationSnapshot struct {
 	// Resources is every resource the controller knows about, whether or not
-	// any of its replicas could be read. Each becomes an sds_drbd_resource_up
+	// any of its replicas could be read. Each becomes an haify_drbd_resource_up
 	// series, which is how "nothing answered for this resource" is expressed:
 	// its replica series simply do not exist, and resource_up is 0.
 	Resources []string
@@ -59,7 +59,7 @@ type ReplicationSnapshot struct {
 // DRBD's role, disk state and replication state are enumerations, and there are
 // two usual ways to export one. This exports only the value currently held, as
 // a series carrying that value as a label with a constant 1 — so
-// `sds_drbd_disk_state{state!="UpToDate"} == 1` finds every unhealthy replica,
+// `haify_drbd_disk_state{state!="UpToDate"} == 1` finds every unhealthy replica,
 // and `count by (state)` gives the cluster's distribution.
 //
 // The alternative — a 0/1 series for every value of the enum — allows

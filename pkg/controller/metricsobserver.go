@@ -7,9 +7,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/alert"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/metrics"
+	"github.com/haify-project/haify/pkg/alert"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/metrics"
 )
 
 // metricsObserver turns one health poll into Prometheus series.
@@ -28,7 +28,7 @@ import (
 // gauges exactly as they were rather than zeroing them, because a zero is
 // indistinguishable from a healthy idle cluster and this whole change exists to
 // stop /metrics from claiming things it does not know. Staleness is exported
-// instead, as sds_controller_last_observation_timestamp_seconds.
+// instead, as haify_controller_last_observation_timestamp_seconds.
 type metricsObserver struct {
 	metrics *metrics.Metrics
 	// gateways is read straight from the local database rather than from the
@@ -109,7 +109,7 @@ func (o *metricsObserver) observeResources(res alert.ResourceObservation) {
 		// A resource whose nodes could not be reached contributes no replica
 		// series at all. That is deliberate: an unreachable replica has no disk
 		// state, and inventing one — healthy or failed — is worse than the gap.
-		// sds_drbd_resource_up goes to 0 for it, which is the signal that the
+		// haify_drbd_resource_up goes to 0 for it, which is the signal that the
 		// missing series are missing because nothing answered.
 		for node, state := range item.NodeStates {
 			snap.Replicas = append(snap.Replicas, metrics.ReplicaState{

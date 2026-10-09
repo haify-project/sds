@@ -9,7 +9,7 @@ import (
 )
 
 // Inspection reports, keyed by a sequence number that is also the report id
-// an operator types (`sds inspect show 42`). Records are the reports' JSON as
+// an operator types (`haify inspect show 42`). Records are the reports' JSON as
 // pkg/inspect encodes them; this package does not interpret them. They live
 // on the metadata volume so the history, and the growth trends computed from
 // it, survive a Self-HA failover.

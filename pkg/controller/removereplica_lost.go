@@ -152,7 +152,7 @@ func (rm *ResourceManager) assertLostRemovable(ctx context.Context, resource str
 		return fmt.Errorf(
 			"the surviving replicas of %s have no quorum without %s. That is the state in which another partition could "+
 				"still hold the data, so its vote is not dropped blind; give the survivors a quorum first "+
-				"(`sds ha set-tiebreaker %s <node>` works with %s down), then remove it", resource, lost.drbdName, resource, lost.drbdName)
+				"(`haify ha set-tiebreaker %s <node>` works with %s down), then remove it", resource, lost.drbdName, resource, lost.drbdName)
 	}
 	return nil
 }
@@ -214,6 +214,6 @@ func (rm *ResourceManager) forgetPeer(ctx context.Context, resource, peerID, pee
 // which names peers that no longer know it.
 func LostReplicaCleanup(resource, node string) string {
 	return fmt.Sprintf("if %[2]s ever comes back, before it rejoins run there: drbdadm down %[1]s; "+
-		"rm /etc/drbd.d/%[1]s.res /etc/drbd-reactor.d/sds-*-%[1]s.toml*; and delete its volumes for %[1]s",
+		"rm /etc/drbd.d/%[1]s.res /etc/drbd-reactor.d/haify-*-%[1]s.toml*; and delete its volumes for %[1]s",
 		resource, node)
 }

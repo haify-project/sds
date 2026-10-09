@@ -10,7 +10,7 @@ import (
 
 // ZFS holds on locked scheduled snapshots.
 //
-// sds refuses to delete a locked snapshot (snapshot_lock.go), but a ZFS
+// haify refuses to delete a locked snapshot (snapshot_lock.go), but a ZFS
 // snapshot can also be destroyed on the node itself — by a cleanup script, a
 // `zfs destroy -r` of the dataset, an operator in a hurry. A hold makes ZFS
 // itself refuse ("dataset is busy") until it is released. Root can release
@@ -18,10 +18,10 @@ import (
 // attacker with root; the S3 Object Lock backups are that.
 //
 // The schedule places the hold when it takes a snapshot under a lock, and
-// sds releases it right before it deletes the snapshot once the lock has
+// haify releases it right before it deletes the snapshot once the lock has
 // passed (retention, or `zfs snapshot delete`).
 
-const zfsLockHoldTag = "sds-lock"
+const zfsLockHoldTag = "haify-lock"
 
 // zfsSnapshotRef is "<dataset>@<name>" checked for what a ZFS name may
 // contain, so it can go into a command line unquoted.
@@ -55,14 +55,14 @@ func (c *Controller) holdLockedZFSSnapshot(ctx context.Context, host, snapshot s
 		}
 	}
 	if err != nil {
-		// The snapshot is still locked by sds; only the node-side guard is
+		// The snapshot is still locked by haify; only the node-side guard is
 		// missing.
 		c.logger.Warn("Could not place the ZFS hold on a locked snapshot",
 			zap.String("host", host), zap.String("snapshot", snapshot), zap.Error(err))
 	}
 }
 
-// releaseZFSLockHold lifts the lock hold before sds deletes a snapshot whose
+// releaseZFSLockHold lifts the lock hold before haify deletes a snapshot whose
 // lock has passed. A snapshot without the hold is fine.
 func (c *Controller) releaseZFSLockHold(ctx context.Context, host, snapshot string) {
 	ref, err := zfsSnapshotRef(snapshot)

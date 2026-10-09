@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 func TestWithThinResyncDefaults(t *testing.T) {
@@ -17,7 +17,7 @@ func TestWithThinResyncDefaults(t *testing.T) {
 		t.Fatalf("a thick pool must not get discards during resync: %v", got)
 	}
 
-	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "sds_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
+	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "haify_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
 		t.Fatalf("save pool: %v", err)
 	}
 	in := map[string]string{"net/max-buffers": "8000"}
@@ -47,7 +47,7 @@ func TestParseResourceConfigVolumesIgnoresTheDiskOptionsBlock(t *testing.T) {
 	cfg := `resource r5 {
     volume 0 {
         device    minor 4;
-        disk      /dev/sds_tp/r5_data;
+        disk      /dev/haify_tp/r5_data;
         meta-disk internal;
         disk {
             rs-discard-granularity 65536;
@@ -60,7 +60,7 @@ func TestParseResourceConfigVolumesIgnoresTheDiskOptionsBlock(t *testing.T) {
 }
 `
 	vols := parseResourceConfigVolumes(cfg)
-	if len(vols) != 1 || vols[0].DiskPath != "/dev/sds_tp/r5_data" || vols[0].Minor != 4 {
+	if len(vols) != 1 || vols[0].DiskPath != "/dev/haify_tp/r5_data" || vols[0].Minor != 4 {
 		t.Fatalf("got %+v", vols)
 	}
 }

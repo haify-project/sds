@@ -18,9 +18,9 @@ use MockClient;
 use JSON::PP qw(encode_json);
 use Test::More tests => 24;
 
-require "$FindBin::Bin/../SDSPlugin.pm";
-my $P  = 'PVE::Storage::Custom::SDSPlugin';
-my $RC = 'PVE::Storage::Custom::SDS::Client';
+require "$FindBin::Bin/../HaifyPlugin.pm";
+my $P  = 'PVE::Storage::Custom::HaifyPlugin';
+my $RC = 'PVE::Storage::Custom::Haify::Client';
 
 # --- a fake HTTP::Tiny ------------------------------------------------------
 
@@ -140,14 +140,14 @@ my $mock = MockClient->new(routes => {
     'GET /v1/resources/pve-100-0'        => $info,
     'GET /v1/resources/pve-100-0/status' => $status,
 });
-$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
+$PVE::Storage::Custom::HaifyPlugin::CLIENT_FACTORY = sub { return $mock };
 
 my $scfg = { controller => 'c' };
 $PVEStub::NODENAME = 'pve1';    # a compute-only hypervisor: holds no replica
 
 # A snapshot is a resource snapshot, on every replica at once, so the
 # hypervisor — usually holding no replica — never needs to be the one it runs on.
-$P->volume_snapshot($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
+$P->volume_snapshot($scfg, 'haify0', 'vm-100-disk-0', 'before-upgrade');
 my ($snap_call) = $mock->calls_for('POST', '/v1/resources/pve-100-0/snapshots');
 ok($snap_call, 'snapshot is a resource snapshot');
 is($snap_call->{payload}{name}, 'before-upgrade', 'named as PVE named it');
@@ -156,14 +156,14 @@ is($snap_call->{payload}{name}, 'before-upgrade', 'named as PVE named it');
 my $mock2 = MockClient->new(routes => {
     'GET /v1/resources/pve-100-0/snapshots' => { names => [ 'new-style' ] },
 });
-$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock2 };
-$P->volume_snapshot_rollback($scfg, 'sds0', 'vm-100-disk-0', 'new-style');
+$PVE::Storage::Custom::HaifyPlugin::CLIENT_FACTORY = sub { return $mock2 };
+$P->volume_snapshot_rollback($scfg, 'haify0', 'vm-100-disk-0', 'new-style');
 ok($mock2->called('POST', '/v1/resources/pve-100-0/snapshots/new-style/rollback'),
     'a resource snapshot rolls back every replica together');
 
-$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
+$PVE::Storage::Custom::HaifyPlugin::CLIENT_FACTORY = sub { return $mock };
 
-$P->volume_snapshot_rollback($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
+$P->volume_snapshot_rollback($scfg, 'haify0', 'vm-100-disk-0', 'before-upgrade');
 ok($mock->called('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots/before-upgrade/restore'),
     'rollback restores the named snapshot');
 
@@ -172,32 +172,32 @@ ok($mock->called('POST', '/v1/volumes/vg0/pve-100-0_00/snapshots/before-upgrade/
 # Found on real hardware: DELETE carries no body, so grpc-gateway can only take
 # the node from a QUERY parameter. Without it the controller failed with
 # "failed to delete snapshot: []" — it had no host to run on.
-$P->volume_snapshot_delete($scfg, 'sds0', 'vm-100-disk-0', 'before-upgrade');
+$P->volume_snapshot_delete($scfg, 'haify0', 'vm-100-disk-0', 'before-upgrade');
 ok($mock->called('DELETE', '/v1/volumes/vg0/pve-100-0_00/snapshots/before-upgrade?node=n2'),
     'snapshot delete passes the node as a query parameter');
 
-is(PVE::Storage::Custom::SDSPlugin::_uri_escape('node a/b'), 'node%20a%2Fb', 'query values are escaped');
+is(PVE::Storage::Custom::HaifyPlugin::_uri_escape('node a/b'), 'node%20a%2Fb', 'query values are escaped');
 
 # A resource with no recorded backing volume must fail loudly rather than
 # building a nonsense path like "/v1/volumes///snapshots".
 $mock = MockClient->new(routes => {
     'GET /v1/resources/pve-100-0' => { resource => { name => 'pve-100-0', volumes => [ { volumeId => 0 } ] } },
 });
-$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
-eval { $P->volume_snapshot_delete($scfg, 'sds0', 'vm-100-disk-0', 'snap') };
+$PVE::Storage::Custom::HaifyPlugin::CLIENT_FACTORY = sub { return $mock };
+eval { $P->volume_snapshot_delete($scfg, 'haify0', 'vm-100-disk-0', 'snap') };
 like($@, qr/no backing volume/, 'a missing backing volume is an explicit error');
 
 # Opening a snapshot read-only (vzdump's snapshot mode) works where a replica
 # is, and says where to go elsewhere.
 $mock = MockClient->new(routes => { 'GET /v1/resources/pve-100-0' => $info });
-$PVE::Storage::Custom::SDSPlugin::CLIENT_FACTORY = sub { return $mock };
-eval { $P->path($scfg, 'vm-100-disk-0', 'sds0', 'before-upgrade') };
+$PVE::Storage::Custom::HaifyPlugin::CLIENT_FACTORY = sub { return $mock };
+eval { $P->path($scfg, 'vm-100-disk-0', 'haify0', 'before-upgrade') };
 like($@, qr/on its replica nodes \(n1 n2\), not on pve1/, 'a node without a replica has no snapshot to open');
 $PVEStub::NODENAME = 'n1';
-is($P->path($scfg, 'vm-100-disk-0', 'sds0', 'before-upgrade'), '/dev/vg0/pve-100-0_00_snap_before-upgrade',
+is($P->path($scfg, 'vm-100-disk-0', 'haify0', 'before-upgrade'), '/dev/vg0/pve-100-0_00_snap_before-upgrade',
     "a replica node opens its own copy of the snapshot");
 my @ran;
-local $PVE::Storage::Custom::SDS::Activation::RUN = sub { push @ran, join(' ', @_); return (0, '') };
-$P->activate_volume('sds0', $scfg, 'vm-100-disk-0', 'before-upgrade');
+local $PVE::Storage::Custom::Haify::Activation::RUN = sub { push @ran, join(' ', @_); return (0, '') };
+$P->activate_volume('haify0', $scfg, 'vm-100-disk-0', 'before-upgrade');
 is($ran[0], 'lvchange -ay -K vg0/pve-100-0_00_snap_before-upgrade', 'activated despite the skip flag');
 $PVEStub::NODENAME = 'pve1';

@@ -349,7 +349,7 @@ func knownHostsScript(forget []string, entries string) string {
 		fmt.Fprintf(&b, "ssh-keygen -R %q -f \"$f\" >/dev/null 2>&1\n", a)
 	}
 	if entries != "" {
-		fmt.Fprintf(&b, "cat >> \"$f\" <<'SDS_KNOWN_HOSTS'\n%sSDS_KNOWN_HOSTS\n", entries)
+		fmt.Fprintf(&b, "cat >> \"$f\" <<'HAIFY_KNOWN_HOSTS'\n%sHAIFY_KNOWN_HOSTS\n", entries)
 	}
 	b.WriteString("rm -f \"$f.old\"\n")
 	return b.String()
@@ -360,7 +360,7 @@ func hostsFileScript(hostname, address string) string {
 	return fmt.Sprintf(`f=/etc/hosts
 awk -v new=%[1]q -v name=%[2]q '
 $1 !~ /^127\./ && $1 !~ /:/ { for (i = 2; i <= NF; i++) if ($i == name) { $1 = new; break } }
-!seen[$0]++ { print }' "$f" > "$f.sds-new" && cat "$f.sds-new" > "$f" && rm -f "$f.sds-new"
+!seen[$0]++ { print }' "$f" > "$f.haify-new" && cat "$f.haify-new" > "$f" && rm -f "$f.haify-new"
 `, address, hostname)
 }
 

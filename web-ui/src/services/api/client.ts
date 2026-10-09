@@ -17,7 +17,7 @@ export interface ApiResponse<T = unknown> {
 // in localStorage; on a 401/403 the registered prompt handler (a proper
 // dialog mounted by the app shell) asks for a token once and the request is
 // retried — no separate login page is needed for this single-admin model.
-const TOKEN_STORAGE_KEY = 'sds_api_token';
+const TOKEN_STORAGE_KEY = 'haify_api_token';
 
 export function getApiToken(): string {
   return localStorage.getItem(TOKEN_STORAGE_KEY) ?? '';

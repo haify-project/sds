@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -44,11 +44,11 @@ func nfsCreate() *cobra.Command {
 			}
 
 			// Create Haify client
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Create NFS gateway
 			req := &v1.CreateNFSGatewayRequest{
@@ -63,7 +63,7 @@ func nfsCreate() *cobra.Command {
 				req.FsType = "ext4"
 			}
 
-			resp, err := sdsClient.CreateNFSGateway(ctx, req)
+			resp, err := haifyClient.CreateNFSGateway(ctx, req)
 			if err != nil {
 				return fmt.Errorf("failed to create NFS gateway: %w", err)
 			}
@@ -78,7 +78,7 @@ func nfsCreate() *cobra.Command {
 			fmt.Printf("  Export Path:  %s\n", exportPath)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
 			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. Check gateway status: sds gateway list\n")
+			fmt.Printf("  1. Check gateway status: haify gateway list\n")
 			fmt.Printf("  2. Mount on client: sudo mount -t nfs %s:%s /mnt\n", gatewayServiceHost(serviceIP), gatewayExportDirectory(resource, exportPath))
 
 			return nil
@@ -105,13 +105,13 @@ func nfsList() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			gateways, err := sdsClient.ListGateways(ctx)
+			gateways, err := haifyClient.ListGateways(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list gateways: %w", err)
 			}

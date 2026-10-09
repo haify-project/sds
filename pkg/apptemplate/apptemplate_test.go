@@ -101,8 +101,8 @@ func TestPromoterConfigStartsTheServiceIPLast(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Contains(t, cfg, "[promoter.resources.res1]")
-			fs := strings.Index(cfg, `"ocf:heartbeat:Filesystem fs_app device=/dev/drbd/by-res/res1/0 directory=/var/lib/sds-app/orders fstype=ext4`)
-			unit := strings.Index(cfg, `"sds-app-orders.service"`)
+			fs := strings.Index(cfg, `"ocf:heartbeat:Filesystem fs_app device=/dev/drbd/by-res/res1/0 directory=/var/lib/haify-app/orders fstype=ext4`)
+			unit := strings.Index(cfg, `"haify-app-orders.service"`)
 			vip := strings.Index(cfg, `"ocf:heartbeat:IPaddr2 service_ip ip=10.0.0.50 cidr_netmask=24"`)
 			require.True(t, fs >= 0 && unit >= 0 && vip >= 0, cfg)
 			assert.Less(t, fs, unit, "the volume is mounted before the database starts")
@@ -125,12 +125,12 @@ func TestUnit(t *testing.T) {
 		user     string
 		probeHas string
 	}{
-		{Postgres, "", "ExecStart=/usr/lib/postgresql/16/bin/postgres -D /var/lib/sds-app/orders/data", "postgres",
-			"/usr/lib/postgresql/16/bin/pg_isready -q -h /run/sds-app-orders -p 5432"},
-		{MySQL, "mariadb", "ExecStart=/usr/sbin/mariadbd --defaults-file=/var/lib/sds-app/orders/conf/my.cnf", "mysql",
-			"/usr/bin/mariadb-admin --defaults-extra-file=/var/lib/sds-app/orders/sds/client.cnf ping"},
-		{Redis, "", "ExecStart=/usr/bin/redis-server /var/lib/sds-app/orders/conf/redis.conf", "redis",
-			`REDISCLI_AUTH="$$(cat /var/lib/sds-app/orders/sds/password)" /usr/bin/redis-cli -s /run/sds-app-orders/redis.sock ping`},
+		{Postgres, "", "ExecStart=/usr/lib/postgresql/16/bin/postgres -D /var/lib/haify-app/orders/data", "postgres",
+			"/usr/lib/postgresql/16/bin/pg_isready -q -h /run/haify-app-orders -p 5432"},
+		{MySQL, "mariadb", "ExecStart=/usr/sbin/mariadbd --defaults-file=/var/lib/haify-app/orders/conf/my.cnf", "mysql",
+			"/usr/bin/mariadb-admin --defaults-extra-file=/var/lib/haify-app/orders/haify/client.cnf ping"},
+		{Redis, "", "ExecStart=/usr/bin/redis-server /var/lib/haify-app/orders/conf/redis.conf", "redis",
+			`REDISCLI_AUTH="$$(cat /var/lib/haify-app/orders/haify/password)" /usr/bin/redis-cli -s /run/haify-app-orders/redis.sock ping`},
 	}
 	for _, tc := range tests {
 		t.Run(string(tc.engine), func(t *testing.T) {
@@ -138,8 +138,8 @@ func TestUnit(t *testing.T) {
 			unit := Unit(s, binariesFor(tc.engine, tc.flavor))
 			assert.Contains(t, unit, tc.exec+"\n")
 			assert.Contains(t, unit, "User="+tc.user+"\nGroup="+tc.user+"\n")
-			assert.Contains(t, unit, "RuntimeDirectory=sds-app-orders\n")
-			assert.Contains(t, unit, "ExecStartPre=/bin/sh -c 'mountpoint -q /var/lib/sds-app/orders'")
+			assert.Contains(t, unit, "RuntimeDirectory=haify-app-orders\n")
+			assert.Contains(t, unit, "ExecStartPre=/bin/sh -c 'mountpoint -q /var/lib/haify-app/orders'")
 			assert.Contains(t, unit, "ExecStartPost=+/bin/sh -c '")
 			assert.Contains(t, unit, tc.probeHas, "the unit waits for the database to answer")
 			assert.NotContains(t, unit, "[Install]", "only the promoter may start the unit")
@@ -158,7 +158,7 @@ func TestHealthCommand(t *testing.T) {
 	assert.Contains(t, HealthCommand(specFor(t, MySQL), binariesFor(MySQL, "mysql")), "mysqladmin --defaults-extra-file=")
 	assert.Contains(t, HealthCommand(specFor(t, MySQL), binariesFor(MySQL, "mysql")), " ping")
 	redis := HealthCommand(specFor(t, Redis), binariesFor(Redis, ""))
-	assert.Contains(t, redis, "redis-cli -s /run/sds-app-orders/redis.sock ping")
+	assert.Contains(t, redis, "redis-cli -s /run/haify-app-orders/redis.sock ping")
 	assert.Contains(t, redis, "grep -qx PONG")
 	assert.NotContains(t, redis, " -a ", "a password on the command line is visible in ps")
 }
@@ -181,7 +181,7 @@ func TestScriptsParse(t *testing.T) {
 		s.Vector = v.vector
 		b := binariesFor(v.engine, v.flavor)
 		scripts := map[string]string{
-			"init":   InitScript(s, b, DataDevice("res1", 0), "/root/.sds-app/orders.pw"),
+			"init":   InitScript(s, b, DataDevice("res1", 0), "/root/.haify-app/orders.pw"),
 			"freeze": FreezeForSnapshot(s, b),
 			"thaw":   ThawAfterSnapshot(s, b),
 			"probe":  ProbeScript(s),
@@ -200,7 +200,7 @@ func TestScriptsParse(t *testing.T) {
 }
 
 func TestInitScript(t *testing.T) {
-	const staged = "/home/sds/.sds-app/orders.pw"
+	const staged = "/home/haify/.haify-app/orders.pw"
 	dev := DataDevice("res1", 0)
 
 	pg := specFor(t, Postgres)
@@ -214,7 +214,7 @@ func TestInitScript(t *testing.T) {
 	assert.Contains(t, script, "state=reused", "a volume already holding the app is kept")
 	assert.Contains(t, script, "/usr/lib/postgresql/16/bin/initdb -D \"$M/data\" -U postgres --pwfile=")
 	assert.Contains(t, script, "CREATE EXTENSION IF NOT EXISTS vector")
-	assert.Contains(t, script, "unix_socket_directories = '/run/sds-app-orders'")
+	assert.Contains(t, script, "unix_socket_directories = '/run/haify-app-orders'")
 	assert.Contains(t, script, `-o "-c listen_addresses=''"`, "the smoke test listens on no network")
 	assert.Less(t, strings.Index(script, "mount -t ext4"), strings.Index(script, "initdb"))
 
@@ -224,7 +224,7 @@ func TestInitScript(t *testing.T) {
 	maria := InitScript(specFor(t, MySQL), binariesFor(MySQL, "mariadb"), dev, staged)
 	assert.Contains(t, maria, "/usr/bin/mariadb-install-db --defaults-file=")
 	assert.Contains(t, maria, "ALTER USER 'root'@'localhost' IDENTIFIED BY '$pw'")
-	assert.Contains(t, maria, `"$M/sds/client.cnf"`)
+	assert.Contains(t, maria, `"$M/haify/client.cnf"`)
 	mysql := InitScript(specFor(t, MySQL), binariesFor(MySQL, "mysql"), dev, staged)
 	assert.Contains(t, mysql, "/usr/sbin/mysqld --defaults-file=\"$M/conf/my.cnf\" --initialize-insecure")
 	assert.NotContains(t, mysql, "install-db")
@@ -242,27 +242,27 @@ func TestFreezeArmsTheWatchdogBeforeFreezing(t *testing.T) {
 		step   string
 	}{
 		{Postgres, "", "-Atqc CHECKPOINT"},
-		{MySQL, "mysql", "FLUSH TABLES WITH READ LOCK; SELECT SLEEP(60) AS sds_app_freeze"},
+		{MySQL, "mysql", "FLUSH TABLES WITH READ LOCK; SELECT SLEEP(60) AS haify_app_freeze"},
 		{Redis, "", "BGSAVE SCHEDULE"},
 	} {
 		t.Run(string(tc.engine), func(t *testing.T) {
 			s := specFor(t, tc.engine)
 			b := binariesFor(tc.engine, tc.flavor)
 			script := FreezeForSnapshot(s, b)
-			arm := strings.Index(script, "systemd-run --unit=sds-app-thaw-orders --collect --quiet --on-active=60 /bin/bash /run/sds-app-orders-thaw.sh")
+			arm := strings.Index(script, "systemd-run --unit=haify-app-thaw-orders --collect --quiet --on-active=60 /bin/bash /run/haify-app-orders-thaw.sh")
 			step := strings.Index(script, tc.step)
-			freeze := strings.Index(script, "fsfreeze -f /var/lib/sds-app/orders")
+			freeze := strings.Index(script, "fsfreeze -f /var/lib/haify-app/orders")
 			require.True(t, arm >= 0 && step >= 0 && freeze >= 0, script)
 			assert.Less(t, arm, step, "the watchdog is armed before the database is touched")
 			assert.Less(t, step, freeze)
-			assert.Contains(t, script, "fsfreeze -u /var/lib/sds-app/orders", "the thaw steps are written for the watchdog")
+			assert.Contains(t, script, "fsfreeze -u /var/lib/haify-app/orders", "the thaw steps are written for the watchdog")
 
 			thaw := ThawAfterSnapshot(s, b)
-			assert.Contains(t, thaw, "systemctl stop sds-app-thaw-orders.timer")
-			assert.Contains(t, thaw, "fsfreeze -u /var/lib/sds-app/orders")
+			assert.Contains(t, thaw, "systemctl stop haify-app-thaw-orders.timer")
+			assert.Contains(t, thaw, "fsfreeze -u /var/lib/haify-app/orders")
 			if tc.engine == MySQL {
 				assert.Contains(t, thaw, `KILL $id`, "the lock session is killed, not left sleeping")
-				assert.Contains(t, thaw, "systemctl stop sds-app-lock-orders.service")
+				assert.Contains(t, thaw, "systemctl stop haify-app-lock-orders.service")
 			}
 		})
 	}
@@ -270,7 +270,7 @@ func TestFreezeArmsTheWatchdogBeforeFreezing(t *testing.T) {
 
 func TestStatusScript(t *testing.T) {
 	script := StatusScript(specFor(t, Postgres), binariesFor(Postgres, ""))
-	assert.Contains(t, script, "systemctl is-active sds-app-orders.service")
+	assert.Contains(t, script, "systemctl is-active haify-app-orders.service")
 	assert.Contains(t, script, "health=ok")
 }
 

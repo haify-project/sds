@@ -23,10 +23,10 @@ PASS=0
 FAIL=0
 
 # ---------------------------------------------------------------------------
-# Fixture: stub commands, a fake /etc/pve, fake sds binaries
+# Fixture: stub commands, a fake /etc/pve, fake haify binaries
 # ---------------------------------------------------------------------------
 
-mkdir -p "$T/bin" "$T/pve/nodes/pve1" "$T/sdsbin" "$T/tmp"
+mkdir -p "$T/bin" "$T/pve/nodes/pve1" "$T/haifybin" "$T/tmp"
 ln -s "$HERE/stub-ssh.sh" "$T/bin/ssh"
 cat > "$T/bin/scp" <<'EOF'
 #!/bin/bash
@@ -48,9 +48,9 @@ cat > "$T/bin/hostname" <<'EOF'
 echo pve1
 EOF
 chmod +x "$T/bin/scp" "$T/bin/pvecm" "$T/bin/hostname"
-for f in sds-controller service-ip sds; do
-	printf '#!/bin/sh\necho %s\n' "$f" > "$T/sdsbin/$f"
-	chmod +x "$T/sdsbin/$f"
+for f in haify-controller service-ip haify; do
+	printf '#!/bin/sh\necho %s\n' "$f" > "$T/haifybin/$f"
+	chmod +x "$T/haifybin/$f"
 done
 : > "$T/pve/nodes/pve1/ssh_known_hosts"
 
@@ -72,7 +72,7 @@ done_state() {
 	for i in $(seq 1 "$1"); do
 		nodes+="$sep{\"name\":\"pve$i\",\"address\":\"10.0.0.1$i\",\"state\":\"online\"}"
 		# The controller's pool list names a node by its address.
-		pools+="$sep{\"name\":\"sds_vg0\",\"node\":\"10.0.0.1$i\",\"type\":\"thin_pool\"}"
+		pools+="$sep{\"name\":\"haify_vg0\",\"node\":\"10.0.0.1$i\",\"type\":\"thin_pool\"}"
 		sep=","
 	done
 	export STUB_NODES_JSON="$nodes" STUB_POOLS_JSON="$pools"
@@ -86,7 +86,7 @@ run_bootstrap() {
 	rm -f "$T/ssh.log" "$T/unhandled"
 	RC=0
 	env PATH="$T/bin:$PATH" TMPDIR="$T/tmp" STUB_DIR="$T" STUB_MODE="$mode" \
-		SDS_PVE_DIR="$T/pve" SDS_BIN_DIR="$T/sdsbin" SDS_CONFIG_DIR="$REPO_ROOT/configs" \
+		HAIFY_PVE_DIR="$T/pve" HAIFY_BIN_DIR="$T/haifybin" HAIFY_CONFIG_DIR="$REPO_ROOT/configs" \
 		STUB_PLUGIN_SRC="$PROXMOX_DIR" STUB_VOTES="${STUB_VOTES:-3}" \
 		"$BOOTSTRAP" "$@" > "$T/out" 2>&1 || RC=$?
 }
@@ -139,17 +139,17 @@ expect_count 3 "apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::O
 expect_count 3 "modprobe drbd"
 expect_count 3 "systemctl enable --now drbd-reactor"
 expect_count 3 "-> /root/.dispatch/config.toml (mode 0600)"
-expect_count 3 "sdsbin/sds-controller -> /opt/sds/bin/sds-controller (mode 0755)"
-expect_count 3 "-> /etc/sds/controller.toml (mode 0644)"
-expect_count 1 "systemctl enable --now sds-controller"
-expect_out "[dry-run] pve1         systemctl enable --now sds-controller"
-expect_out "sds node register --name pve2 --address 10.0.0.12"
-expect_count 3 "sds node register"
-expect_out "sds pool create --name vg0 --type lvm-thin --nodes pve3 --devices /dev/sdb"
-expect_out "sds ha self enable --vip 10.0.0.250/24 --pool vg0 --nodes pve1,pve2,pve3"
+expect_count 3 "haifybin/haify-controller -> /opt/haify/bin/haify-controller (mode 0755)"
+expect_count 3 "-> /etc/haify/controller.toml (mode 0644)"
+expect_count 1 "systemctl enable --now haify-controller"
+expect_out "[dry-run] pve1         systemctl enable --now haify-controller"
+expect_out "haify node register --name pve2 --address 10.0.0.12"
+expect_count 3 "haify node register"
+expect_out "haify pool create --name vg0 --type lvm-thin --nodes pve3 --devices /dev/sdb"
+expect_out "haify ha self enable --vip 10.0.0.250/24 --pool vg0 --nodes pve1,pve2,pve3"
 expect_count 3 "./preflight.sh 10.0.0.11,10.0.0.12,10.0.0.13"
 expect_count 3 "./install.sh"
-expect_out "pvesm add sds sds0 --controller 10.0.0.11,10.0.0.12,10.0.0.13 --sdspool vg0 --replicas 2 --storagetype lvm-thin --content images,rootdir --shared 1"
+expect_out "pvesm add haify haify0 --controller 10.0.0.11,10.0.0.12,10.0.0.13 --haifypool vg0 --replicas 2 --storagetype lvm-thin --content images,rootdir --shared 1"
 expect_out "OK: corosync has an odd number of votes (3)"
 expect_out "dkms status drbd"
 expect_out "nothing was changed"
@@ -169,7 +169,7 @@ expect_out "controller already running on pve1"
 expect_out "Self-HA"
 expect_out "already enabled"
 expect_out "plugin already installed and current"
-expect_out "storage 'sds0' (type sds) already present"
+expect_out "storage 'haify0' (type haify) already present"
 
 case_start "rerun finds the controller where Self-HA moved it"
 STUB_ACTIVE_CONTROLLER=pve3 run_bootstrap "done" --dry-run "${DEV[@]}" --vip 10.0.0.250/24
@@ -189,11 +189,11 @@ run_bootstrap fresh --dry-run --vip 10.0.0.250/24 --storage-nodes pve1,pve2 \
 	--node-devices pve1=/dev/sdb --node-devices pve2=/dev/nvme1n1,/dev/nvme2n1
 expect_rc 0
 expect_out "--nodes pve2 --devices /dev/nvme1n1,/dev/nvme2n1"
-expect_out "sds ha self enable --vip 10.0.0.250/24 --pool vg0 --nodes pve1,pve2"
+expect_out "haify ha self enable --vip 10.0.0.250/24 --pool vg0 --nodes pve1,pve2"
 expect_out "--controller 10.0.0.11,10.0.0.12 "
 expect_count 2 "-> /root/.dispatch/config.toml"
 # pve3 holds no disk but still gets DRBD, registration and the plugin.
-expect_out "sds node register --name pve3 --address 10.0.0.13"
+expect_out "haify node register --name pve3 --address 10.0.0.13"
 expect_out "[dry-run] pve3         modprobe drbd"
 
 case_start "a disk with partitions is refused without --force-wipe"
@@ -211,7 +211,7 @@ STUB_DEVICE_VERDICT="wipeable: carries LVM2_member " run_bootstrap fresh --dry-r
 expect_rc 0
 # shellcheck disable=SC2016 # the remote command's text, matched literally
 expect_count 3 'wipefs -a "$r"'
-expect_out "sds pool create --name vg0"
+expect_out "haify pool create --name vg0"
 
 case_start "a mounted disk is refused even with --force-wipe"
 STUB_DEVICE_VERDICT="in-use: mounted at /var/lib/vz" run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24 --force-wipe
@@ -257,7 +257,7 @@ expect_rc 0
 expect_out "skipped (--no-self-ha)"
 expect_count 1 "-> /root/.dispatch/config.toml"
 expect_out "--controller 10.0.0.11 "
-expect_no_out "sds ha self enable"
+expect_no_out "haify ha self enable"
 
 case_start "PVE 9 uses the proxmox-9 suite"
 STUB_PVE_MAJOR=9 run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
@@ -277,7 +277,7 @@ if [ "$(id -u)" -eq 0 ]; then
 	run_bootstrap "done" --yes "${DEV[@]}" --vip 10.0.0.250/24
 	expect_rc 0
 	expect_clean_stubs
-	expect_out "Storage sds0 is available on every node"
+	expect_out "Storage haify0 is available on every node"
 else
 	echo "skip: not root, the real-run case needs root"
 fi
@@ -295,7 +295,7 @@ members 1 1
 STUB_VOTES=2 run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
 expect_rc 0
 expect_out "MISSING: corosync has 2 votes and no QDevice"
-expect_out "MISSING: replicas=2 and only 2 sds node(s)"
+expect_out "MISSING: replicas=2 and only 2 haify node(s)"
 expect_no_out "pvecm qdevice setup 10"
 
 case_start "two-node cluster with a QDevice"
@@ -329,7 +329,7 @@ STUB_VOTES=2 run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
 expect_rc 0
 expect_out "falling back to pvecm nodes"
 expect_out "pve2  10.0.0.12"
-expect_out "sds node register --name pve2 --address 10.0.0.12"
+expect_out "haify node register --name pve2 --address 10.0.0.12"
 rm -f "$T/pve/corosync.conf"
 
 case_start "--from-step 8 only adds the storage"
@@ -337,27 +337,27 @@ members 1 1 1
 run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24 --from-step 8
 expect_rc 0
 expect_count 1 "[dry-run]"
-expect_out "pvesm add sds sds0"
+expect_out "pvesm add haify haify0"
 
 case_start "a storage ID taken by another type is refused"
-STUB_STORAGE_EXTRA="nfs sds0" run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24 --from-step 8
+STUB_STORAGE_EXTRA="nfs haify0" run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24 --from-step 8
 expect_rc 1
 expect_out "already exists with another type"
 
 case_start "controller from a .deb"
 mkdir -p "$T/deb/DEBIAN"
-printf 'Package: sds-controller\nVersion: 1.2.3\nArchitecture: amd64\nMaintainer: test <test@example.com>\nDescription: test\n' \
+printf 'Package: haify-controller\nVersion: 1.2.3\nArchitecture: amd64\nMaintainer: test <test@example.com>\nDescription: test\n' \
 	> "$T/deb/DEBIAN/control"
-dpkg-deb --build "$T/deb" "$T/sds-controller_1.2.3_amd64.deb" >/dev/null 2>&1 || true
-if [ -r "$T/sds-controller_1.2.3_amd64.deb" ]; then
-	SDS_CONTROLLER_DEB="$T/sds-controller_1.2.3_amd64.deb" run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
+dpkg-deb --build "$T/deb" "$T/haify-controller_1.2.3_amd64.deb" >/dev/null 2>&1 || true
+if [ -r "$T/haify-controller_1.2.3_amd64.deb" ]; then
+	HAIFY_CONTROLLER_DEB="$T/haify-controller_1.2.3_amd64.deb" run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
 	expect_rc 0
-	expect_count 3 "apt-get install -y /tmp/sds-controller_1.2.3_amd64.deb"
-	expect_no_out "/opt/sds/bin/sds-controller"
-	SDS_CONTROLLER_DEB="$T/sds-controller_1.2.3_amd64.deb" STUB_DEB_VERSION=1.2.3 \
+	expect_count 3 "apt-get install -y /tmp/haify-controller_1.2.3_amd64.deb"
+	expect_no_out "/opt/haify/bin/haify-controller"
+	HAIFY_CONTROLLER_DEB="$T/haify-controller_1.2.3_amd64.deb" STUB_DEB_VERSION=1.2.3 \
 		run_bootstrap "done" --dry-run "${DEV[@]}" --vip 10.0.0.250/24
 	expect_rc 0
-	expect_out "sds-controller 1.2.3 already installed"
+	expect_out "haify-controller 1.2.3 already installed"
 else
 	echo "skip: dpkg-deb unavailable, .deb case not run"
 fi
@@ -375,13 +375,13 @@ expect_out "DRBD 8.4.11 is loaded and in use"
 expect_no_out "replacing it with the DKMS module"
 
 case_start "missing binaries are reported before anything runs"
-SDS_BIN_DIR_SAVE="$T/sdsbin"
-mv "$T/sdsbin/sds" "$T/sds.away"
+HAIFY_BIN_DIR_SAVE="$T/haifybin"
+mv "$T/haifybin/haify" "$T/haify.away"
 run_bootstrap fresh --dry-run "${DEV[@]}" --vip 10.0.0.250/24
 expect_rc 1
-expect_out "sdsbin/sds not found"
+expect_out "haifybin/haify not found"
 expect_no_out "[dry-run]"
-mv "$T/sds.away" "$SDS_BIN_DIR_SAVE/sds"
+mv "$T/haify.away" "$HAIFY_BIN_DIR_SAVE/haify"
 
 echo
 echo "bootstrap tests: $PASS passed, $FAIL failed"

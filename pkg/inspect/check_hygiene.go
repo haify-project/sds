@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// sdsLVName matches the backing volumes Haify creates — <res>_data, <res>_volN,
+// haifyLVName matches the backing volumes Haify creates — <res>_data, <res>_volN,
 // <res>_state[N] — and scheduled snapshots of them. Backup snapshots (_bk_)
 // are judged by the backups area, against the backup records.
-var sdsLVName = regexp.MustCompile(`^(.+)_(data|vol[0-9]+|state[0-9]*)(_sched_.+)?$`)
+var haifyLVName = regexp.MustCompile(`^(.+)_(data|vol[0-9]+|state[0-9]*)(_sched_.+)?$`)
 
 // checkHygiene lists what deleted resources left behind: DRBD configs and
 // logical volumes for resources the database no longer has. It only lists;
@@ -44,7 +44,7 @@ func checkHygiene(in *Input) []Check {
 			if !managedVG(lv.VG) || strings.Contains(lv.Name, "_bk_") {
 				continue
 			}
-			m := sdsLVName.FindStringSubmatch(lv.Name)
+			m := haifyLVName.FindStringSubmatch(lv.Name)
 			if m == nil || known[m[1]] {
 				continue
 			}

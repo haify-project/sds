@@ -6,9 +6,9 @@ see [deployment-guide.md](deployment-guide.md) to build one and
 [node-prerequisites.md](node-prerequisites.md) for what each node needs
 installed.
 
-Every command here is `sds`, which talks to the controller over gRPC on
+Every command here is `haify`, which talks to the controller over gRPC on
 port 3374. The same operations are available in the web UI and, for AI
-assistants, through [`sds-mcp`](mcp.md).
+assistants, through [`haify-mcp`](mcp.md).
 
 ---
 
@@ -81,27 +81,27 @@ them is a backup:
 ## 2. Talking to the cluster
 
 ```bash
-sds node list                          # against 127.0.0.1:3374
-sds -c 192.0.2.250:3374 node list      # against a remote controller
+haify node list                          # against 127.0.0.1:3374
+haify -c 192.0.2.250:3374 node list      # against a remote controller
 ```
 
 With Self-HA enabled the controller moves between nodes; point `-c` at the
 floating VIP rather than at a node, so it never goes stale:
 
 ```bash
-sds ha self status                     # prints the VIP and the active node
-sds -c 192.0.2.250:3374 node list      # 192.0.2.250 = that VIP
+haify ha self status                     # prints the VIP and the active node
+haify -c 192.0.2.250:3374 node list      # 192.0.2.250 = that VIP
 ```
 
 If the cluster has RBAC or token auth on, supply a token with `--token`, the
-`SDS_TOKEN` environment variable, or a file at `~/.sds/token` or
-`/etc/sds/token` (checked in that order).
+`HAIFY_TOKEN` environment variable, or a file at `~/.haify/token` or
+`/etc/haify/token` (checked in that order).
 
 If the controller serves TLS, connect with `--tls`, adding `--tls-ca` when its
 certificate is not signed by a CA in the system trust store, and
 `--tls-cert`/`--tls-key` when it requires client certificates. Each flag has an
-environment variable (`SDS_TLS`, `SDS_TLS_CA`, `SDS_TLS_CERT`, `SDS_TLS_KEY`,
-`SDS_TLS_SERVER_NAME`, `SDS_TLS_INSECURE`).
+environment variable (`HAIFY_TLS`, `HAIFY_TLS_CA`, `HAIFY_TLS_CERT`, `HAIFY_TLS_KEY`,
+`HAIFY_TLS_SERVER_NAME`, `HAIFY_TLS_INSECURE`).
 
 Commands that change state on the nodes wait minutes for the controller (most
 up to 10, backups and pool rebuilds longer); listings and status give up after
@@ -111,8 +111,8 @@ so check with the matching `list` or `status` before running it again.
 Two commands worth knowing before anything else:
 
 ```bash
-sds health-check          # can the controller reach every node, and is the stack installed
-sds resource status <name>  # everything about one resource: roles, disks, replication
+haify health-check          # can the controller reach every node, and is the stack installed
+haify resource status <name>  # everything about one resource: roles, disks, replication
 ```
 
 ---
@@ -120,16 +120,16 @@ sds resource status <name>  # everything about one resource: roles, disks, repli
 ## 3. Nodes
 
 ```bash
-sds node register --name node1 --address 192.0.2.11
-sds node list
-sds node get node1
+haify node register --name node1 --address 192.0.2.11
+haify node list
+haify node get node1
 ```
 
 `--address` is the management IP Haify uses for SSH. If replication should run
 over a different network — a dedicated 10G link, say — name it separately:
 
 ```bash
-sds node register --name node1 --address 192.0.2.11 \
+haify node register --name node1 --address 192.0.2.11 \
     --replication-address 10.0.0.11
 ```
 
@@ -137,12 +137,12 @@ sds node register --name node1 --address 192.0.2.11 \
 replicas apart, or together:
 
 ```bash
-sds node label node1 rack=A zone=east
-sds node label node1 rack=          # trailing = deletes the label
-sds node label node1 zone=west --replace   # drop every other label
+haify node label node1 rack=A zone=east
+haify node label node1 rack=          # trailing = deletes the label
+haify node label node1 zone=west --replace   # drop every other label
 ```
 
-`sds.tiebreaker=false` keeps a node from ever being picked as a resource's
+`haify.tiebreaker=false` keeps a node from ever being picked as a resource's
 quorum tiebreaker — set it on an off-site DR node, which is not on the
 replication network.
 
@@ -150,8 +150,8 @@ replication network.
 once the node answers on the new address:
 
 ```bash
-sds node set-address node1 192.0.2.21
-sds node set-address node1 192.0.2.21 --replication-address 10.0.0.21
+haify node set-address node1 192.0.2.21
+haify node set-address node1 192.0.2.21 --replication-address 10.0.0.21
 ```
 
 It checks the new address reaches the same machine, then moves the node in the
@@ -166,7 +166,7 @@ only by their old addresses, and when two nodes trade addresses the configs
 pass through a state with both on one.
 
 ```bash
-sds node set-address node1=192.0.2.21 node2=192.0.2.22 node3=192.0.2.23
+haify node set-address node1=192.0.2.21 node2=192.0.2.22 node3=192.0.2.23
 ```
 
 If every node moved, the controller cannot start at all: its database lives on
@@ -178,10 +178,10 @@ chain of `sed` substitutions breaks when two nodes trade addresses:
 # on every node, with each node's old → new address
 perl -pi -e 'my %m = ("192.0.2.11" => "192.0.2.21", "192.0.2.12" => "192.0.2.22",
                       "192.0.2.13" => "192.0.2.23");
-             s/\b(\d+\.\d+\.\d+\.\d+)(?=:)/exists $m{$1} ? $m{$1} : $1/ge' /etc/drbd.d/sds-meta.res
-drbdadm adjust sds-meta
+             s/\b(\d+\.\d+\.\d+\.\d+)(?=:)/exists $m{$1} ? $m{$1} : $1/ge' /etc/drbd.d/haify-meta.res
+drbdadm adjust haify-meta
 # once the controller is up on its VIP:
-sds node set-address node1=192.0.2.21 node2=192.0.2.22 node3=192.0.2.23
+haify node set-address node1=192.0.2.21 node2=192.0.2.22 node3=192.0.2.23
 ```
 
 `resource repair <resource>` also writes the registry's addresses into a
@@ -192,9 +192,9 @@ down) is fixed by repairing it afterwards.
 Primary there to another replica — do this before maintenance, not after:
 
 ```bash
-sds node drain node1
+haify node drain node1
 # ... reboot, replace a disk, upgrade ...
-sds node undrain node1
+haify node undrain node1
 ```
 
 A `maintenance` node gets no new replicas or tiebreakers (`resource create`,
@@ -203,8 +203,8 @@ re-registration until `undrain`. Undrain moves nothing back.
 
 How each Primary moves:
 
-- **HA resources, gateways, sds-meta** go through drbd-reactor's eviction,
-  the same as `sds ha evict`; drbd-reactor picks the new node.
+- **HA resources, gateways, haify-meta** go through drbd-reactor's eviction,
+  the same as `haify ha evict`; drbd-reactor picks the new node.
 - **Everything else** is demoted, then promoted on the first replica in the
   resource's node list that is diskful, `UpToDate`, connected, and neither
   drained, offline, nor a WAN resource's DR node. If that promote fails, the
@@ -217,7 +217,7 @@ names each one it left, with the reason. The node stays drained either way.
 Unregistering is for a node that is never coming back:
 
 ```bash
-sds node unregister node4
+haify node unregister node4
 ```
 
 It refuses while anything still uses the node, and names each resource and its
@@ -241,15 +241,15 @@ A pool is the storage a node contributes. Three kinds (and a fourth, thin on
 VDO, below):
 
 ```bash
-sds pool create --name data-pool --type lvm      --nodes node1,node2 --devices /dev/sdb
-sds pool create --name thin-pool --type lvm-thin --nodes node1,node2 --devices /dev/sdc
-sds pool create --name tank      --type zfs      --nodes node1,node2 --devices /dev/sdd
-sds pool list
-sds pool get --name thin-pool --node node1
+haify pool create --name data-pool --type lvm      --nodes node1,node2 --devices /dev/sdb
+haify pool create --name thin-pool --type lvm-thin --nodes node1,node2 --devices /dev/sdc
+haify pool create --name tank      --type zfs      --nodes node1,node2 --devices /dev/sdd
+haify pool list
+haify pool get --name thin-pool --node node1
 ```
 
-On the nodes the volume group (or zpool) is named with an `sds_` prefix —
-`thin-pool` becomes `sds_thin-pool`. Commands accept either form except
+On the nodes the volume group (or zpool) is named with an `haify_` prefix —
+`thin-pool` becomes `haify_thin-pool`. Commands accept either form except
 `pool convert-thin`, which takes the prefixed name.
 
 A ZFS pool compresses: OpenZFS 2.2 and later default to `lz4`.
@@ -270,7 +270,7 @@ the blocks that diverge.
 Converting later is possible but is a rebuild, one node at a time:
 
 ```bash
-sds pool convert-thin --node node1 --pool sds_data-pool
+haify pool convert-thin --node node1 --pool haify_data-pool
 ```
 
 It destroys that node's copy and resyncs it in full from the peers. The resource
@@ -281,7 +281,7 @@ is already running, or if this is one of only two diskful copies.
 Growing a pool:
 
 ```bash
-sds pool add --pool data-pool --nodes node1 --devices /dev/sde
+haify pool add --pool data-pool --nodes node1 --devices /dev/sde
 ```
 
 The disk joins the volume group. If the group holds a thin pool, that pool is
@@ -294,7 +294,7 @@ straight away.
 their health from SMART or the NVMe health log:
 
 ```bash
-sds pool disks                     # every node; --pool, --node to narrow
+haify pool disks                     # every node; --pool, --node to narrow
 ```
 
 The health is `ok`, `warn` (an NVMe drive past 90% of its rated endurance or
@@ -310,9 +310,9 @@ Taking a disk out moves its data to the group's other disks first (`pvmove`),
 while the pool stays in use, and only then drops it from the pool:
 
 ```bash
-sds pool remove-disk  --pool data-pool --node node1 --disk /dev/sdc
-sds pool replace-disk --pool data-pool --node node1 --disk /dev/sdc --new-disk /dev/sdf
-sds pool jobs                      # what is running; --all includes finished ones
+haify pool remove-disk  --pool data-pool --node node1 --disk /dev/sdc
+haify pool replace-disk --pool data-pool --node node1 --disk /dev/sdc --new-disk /dev/sdf
+haify pool jobs                      # what is running; --all includes finished ones
 ```
 
 `remove-disk` is refused when the other disks have no room for what this one
@@ -329,7 +329,7 @@ replica fewer. Three things in `[storage.thin]` prevent that:
 - **Trim.** Every day (`trim_schedule`, `30 2 * * *` by default) the controller
   runs `fstrim` on every mounted DRBD filesystem, on the node serving it. The
   discards reach every replica, so each node's thin pool gets back the blocks the
-  filesystem freed. To trim now, run `sds pool trim` (`--node` for one node). Each run
+  filesystem freed. To trim now, run `haify pool trim` (`--node` for one node). Each run
   raises `pool.trimmed` with how much was discarded.
 - **No zeros from resyncs.** A resync onto a thin volume writes every block it
   copies, holes included, unless DRBD knows the device can discard. Resources
@@ -355,7 +355,7 @@ Deleting a pool is per node, and an LVM pool that still holds any volume is
 refused; the freed disks have their PV labels wiped:
 
 ```bash
-sds pool delete --name data-pool --node node1
+haify pool delete --name data-pool --node node1
 ```
 
 **Thin pools on VDO (`--type lvm-thin-vdo`).** The thin pool's data area sits
@@ -365,7 +365,7 @@ It suits data that repeats — VM images built from the same template, backups,
 logs.
 
 ```bash
-sds pool create --name dedup --type lvm-thin-vdo --nodes node1,node2 --devices /dev/sdf
+haify pool create --name dedup --type lvm-thin-vdo --nodes node1,node2 --devices /dev/sdf
 ```
 
 Each node needs the dm-vdo kernel module (kernel 6.9 or later, or kmod-kvdo on
@@ -422,7 +422,7 @@ max_resources = 50
 ```
 
 ```bash
-sds resource create --name a1 --size 100G --label project=team-a ...
+haify resource create --name a1 --size 100G --label project=team-a ...
 ```
 
 ---
@@ -432,7 +432,7 @@ sds resource create --name a1 --size 100G --label project=team-a ...
 The minimum:
 
 ```bash
-sds resource create --name db --size 100G --port 7000 --nodes node1,node2
+haify resource create --name db --size 100G --port 7000 --nodes node1,node2
 ```
 
 That creates a 100 GiB replicated device on two nodes, adds a diskless
@@ -448,8 +448,8 @@ default). With no spare node the resource is created without one and
 **Placement.** Omit `--nodes` and Haify picks by free space:
 
 ```bash
-sds resource create --name db --size 100G --port 7000 --replicas 2
-sds resource create --name db --size 100G --port 7000 --replicas 3 \
+haify resource create --name db --size 100G --port 7000 --replicas 2
+haify resource create --name db --size 100G --port 7000 --replicas 3 \
     --replicas-on-same zone --do-not-place-with web
 ```
 
@@ -465,9 +465,9 @@ in one rack — should not hold two copies of the same data. Tell Haify which
 nodes share a machine with a `host` label:
 
 ```bash
-sds node label node1 host=hv1
-sds node label node2 host=hv1
-sds node label node3 host=hv2
+haify node label node1 host=hv1
+haify node label node2 host=hv1
+haify node label node3 host=hv2
 ```
 
 Automatic placement, `resource profile adjust` and the CSI driver then put
@@ -489,23 +489,23 @@ before. `--replicas-on-different host` makes the spread a hard requirement.
 reaches every member:
 
 ```bash
-sds resource profile create --name db-tier --pool thin-pool --protocol C --replicas 2 \
+haify resource profile create --name db-tier --pool thin-pool --protocol C --replicas 2 \
     --replicas-on-different host --drbd-options net/max-buffers=4000
-sds resource create --name db --size 100G --port 7000 --profile db-tier
-sds resource set-profile legacy-db db-tier      # attach an existing resource
-sds resource list --profile db-tier             # the members
-sds resource profile get db-tier                # settings and members
+haify resource create --name db --size 100G --port 7000 --profile db-tier
+haify resource set-profile legacy-db db-tier      # attach an existing resource
+haify resource list --profile db-tier             # the members
+haify resource profile get db-tier                # settings and members
 
 # one change, every member: saved on the profile, applied to each resource
-sds resource profile set-options db-tier --drbd-options net/max-buffers=8000
+haify resource profile set-options db-tier --drbd-options net/max-buffers=8000
 
 # after raising --replicas, or for a member attached with fewer copies:
-sds resource profile adjust db-tier --dry-run   # what would change
-sds resource profile adjust db-tier             # apply options, add missing replicas
+haify resource profile adjust db-tier --dry-run   # what would change
+haify resource profile adjust db-tier             # apply options, add missing replicas
 
-sds resource profile max-size db-tier           # largest volume a new member could get
-sds resource profile list
-sds resource profile delete db-tier
+haify resource profile max-size db-tier           # largest volume a new member could get
+haify resource profile list
+haify resource profile delete db-tier
 ```
 
 A flag given to `resource create` overrides the profile's value for that
@@ -518,8 +518,8 @@ take them out first with `resource set-profile <resource> --none`.
 **DRBD options** can be set at creation or changed later:
 
 ```bash
-sds resource create --name db ... --drbd-options on-no-quorum=suspend-io
-sds resource set-options db --drbd-options disk/c-max-rate=200M,net/max-buffers=8000
+haify resource create --name db ... --drbd-options on-no-quorum=suspend-io
+haify resource set-options db --drbd-options disk/c-max-rate=200M,net/max-buffers=8000
 ```
 
 Keys take the form `section/key`; a bare key goes to the resource-level
@@ -543,9 +543,9 @@ A fresh resource is a raw block device, Secondary everywhere. Promote it on one
 node, put a filesystem on it there and mount it:
 
 ```bash
-sds resource primary db node1                       # <resource> <node>
-sds resource fs db 0 ext4 --node node1              # <resource> <volume-id> <fstype>
-sds resource mount db 0 /mnt/db --node node1        # <resource> <volume-id> <mount-path>
+haify resource primary db node1                       # <resource> <node>
+haify resource fs db 0 ext4 --node node1              # <resource> <volume-id> <fstype>
+haify resource mount db 0 /mnt/db --node node1        # <resource> <volume-id> <mount-path>
 ```
 
 Volume ids start at 0. A single-volume resource is always volume `0`. `fs` runs
@@ -556,8 +556,8 @@ it does not add an fstab entry, so the mount does not survive a reboot.
 To give it back:
 
 ```bash
-sds resource unmount db 0 --node node1
-sds resource secondary db node1
+haify resource unmount db 0 --node node1
+haify resource secondary db node1
 ```
 
 `promote`/`demote` are the same as `primary`/`secondary`; `primary --force`
@@ -570,9 +570,9 @@ declare it as HA instead and let drbd-reactor do the mounting. See
 To see what you have:
 
 ```bash
-sds resource list
-sds resource get db         # port, protocol, nodes, tiebreaker, volumes, profile, labels
-sds resource status db      # roles, disk states, replication, per node
+haify resource list
+haify resource get db         # port, protocol, nodes, tiebreaker, volumes, profile, labels
+haify resource status db      # roles, disk states, replication, per node
 ```
 
 Read `status` like this: exactly one node should be `Primary`, every node's disk
@@ -583,11 +583,11 @@ covered in [When something is wrong](#21-when-something-is-wrong).
 reads and writes over the DRBD network:
 
 ```bash
-sds resource diskless attach db node3
-sds resource primary db node3        # after unmounting and demoting elsewhere
-sds resource mount db 0 /mnt/db --node node3
+haify resource diskless attach db node3
+haify resource primary db node3        # after unmounting and demoting elsewhere
+haify resource mount db 0 /mnt/db --node node3
 # ... later: unmount and demote on node3, then
-sds resource diskless detach db node3
+haify resource diskless detach db node3
 ```
 
 Useful for a compute node that needs the data but has no disks to spare. It is
@@ -598,8 +598,8 @@ resource's tiebreaker turns it into a client; it keeps its quorum vote.
 target hypervisor both hold the disk open during the hand-off.
 
 ```bash
-sds resource dual-primary db on
-sds resource dual-primary db off
+haify resource dual-primary db on
+haify resource dual-primary db off
 ```
 
 It is not a way to use one volume from two machines — an ordinary filesystem
@@ -612,7 +612,7 @@ first, unmounts it, takes it down on every node, and deletes its backing
 volumes. It does not ask for confirmation:
 
 ```bash
-sds resource delete db
+haify resource delete db
 ```
 
 There is no force option, and none is needed: a node that fails to take the
@@ -630,22 +630,22 @@ All of these run on a live resource.
 # more capacity: <resource> <volume-id> <size>. Refused when a replica's pool
 # cannot hold the growth: the new area is written to every replica, and a full
 # thin pool drops the disk (--ignore-free-space overrides).
-sds resource resize-volume db 0 200G
+haify resource resize-volume db 0 200G
 
 # another local replica (refused if the node's pool has less free space than
 # the volume: the sync writes all of it; --ignore-free-space overrides)
-sds resource add-replica db --node node3
+haify resource add-replica db --node node3
 
 # take one out; the node's volume for it is deleted
-sds resource remove-replica db --node node3 --yes
+haify resource remove-replica db --node node3 --yes
 
 # more volumes in the same resource (--volume is the backing volume's name in
 # the pool); remove-volume takes the volume id
-sds resource add-volume db --volume db_logs --size 50G --pool thin-pool
-sds resource remove-volume db 1
+haify resource add-volume db --volume db_logs --size 50G --pool thin-pool
+haify resource remove-volume db 1
 
 # move a volume to another pool, e.g. onto new disks or from thick to thin
-sds resource move-volume db --volume 0 --pool fast
+haify resource move-volume db --volume 0 --pool fast
 ```
 
 `move-volume` rebuilds the volume in the target pool one node at a time,
@@ -658,7 +658,7 @@ duration. The pool must exist on every node holding a replica, and the resource
 needs at least two diskful replicas. It is refused for an encrypted resource,
 while one of its replicas is being moved to another node, and while a snapshot
 is locked. It runs as a
-job (`sds pool jobs`) that resumes after a controller restart. A failed job can
+job (`haify pool jobs`) that resumes after a controller restart. A failed job can
 be started again and continues from the nodes not yet moved. The volume's
 snapshots on the old pool are deleted with it, so take a backup first if you
 need them.
@@ -693,7 +693,7 @@ survivors (`drbdsetup forget-peer`), which an add-replica later needs.
 node. When it never will, use `--lost`:
 
 ```bash
-sds resource remove-replica db --node node3 --lost --yes
+haify resource remove-replica db --node node3 --lost --yes
 ```
 
 Nothing runs on node3. The survivors (and the tiebreaker and clients) get the
@@ -704,11 +704,11 @@ unless the survivors still hold quorum and an UpToDate copy without it. One
 remaining diskful copy is enough, since node3's is already lost — add a
 replica afterwards. node3 keeps its volume and its old config: if it ever
 comes back, run `drbdadm down db` there and delete
-`/etc/drbd.d/db.res`, its `sds-*-db.toml` promoters and its volume before it
+`/etc/drbd.d/db.res`, its `haify-*-db.toml` promoters and its volume before it
 rejoins anything.
 
 If the survivors lost quorum with it — two replicas and no tiebreaker — give
-them one first: `sds ha set-tiebreaker db <node>` works with a member that is
+them one first: `haify ha set-tiebreaker db <node>` works with a member that is
 gone (no SSH, and no survivor connected to it), skipping it. Then remove it
 with `--lost`.
 
@@ -724,7 +724,7 @@ or gave a DR node a promoter.
 **Adopting** an existing DRBD resource that Haify did not create:
 
 ```bash
-sds resource adopt legacy-vol --nodes node1,node2
+haify resource adopt legacy-vol --nodes node1,node2
 ```
 
 Adopting reads the live `/etc/drbd.d/<name>.res` and records what it finds; it
@@ -735,8 +735,8 @@ the config when omitted; `--protocol` defaults to C.
 is config-only: nothing resyncs and a promoted resource keeps serving.
 
 ```bash
-sds ha set-tiebreaker db --node node4
-sds ha set-tiebreaker db --remove       # drop it, accepting the quorum risk
+haify ha set-tiebreaker db --node node4
+haify ha set-tiebreaker db --remove       # drop it, accepting the quorum risk
 ```
 
 **Adding a replica while a member is away.** `add-replica` rewrites every
@@ -751,7 +751,7 @@ the new replica is added; the removal follows by itself, and resumes after a
 controller restart or failover. A Primary is not moved: drain the node first.
 
 ```bash
-sds resource move-replica db --from node2 --to node4
+haify resource move-replica db --from node2 --to node4
 ```
 
 **Rebalancing** is by plan, never on its own: each move is a full sync (1 TB
@@ -762,8 +762,8 @@ metadata, WAN resources and CSI volumes (a PersistentVolume's node affinity is
 fixed when it is created), saying so.
 
 ```bash
-sds rebalance                  # the plan; nothing changes
-sds rebalance --apply          # run it, one move at a time
+haify rebalance                  # the plan; nothing changes
+haify rebalance --apply          # run it, one move at a time
 ```
 
 **Preferred nodes** for an HA resource order where drbd-reactor starts it:
@@ -774,7 +774,7 @@ which is a failover of its own. It is a preference, not a fence: DRBD quorum,
 not this, is what prevents split brain.
 
 ```bash
-sds ha set-preferred db --nodes node1,node2 --policy start-only
+haify ha set-preferred db --nodes node1,node2 --policy start-only
 ```
 
 ### Self-healing
@@ -785,15 +785,15 @@ itself, and with `"dry-run"` it decides the same and only says what it would
 do (`node.evicted` events). It acts only when all of this holds:
 
 - the node has been offline for `after_minutes` (default 60; the time is kept
-  across controller failovers, and `sds node list` shows it);
+  across controller failovers, and `haify node list` shows it);
 - at most `max_offline_percent` (default 34) of the nodes are offline, and the
   controller reaches a majority — otherwise it may be the one cut off;
 - for each resource, the `--lost` guard above: the node does not answer over
   SSH, no surviving member is connected to it over DRBD, and the survivors
   hold quorum and an UpToDate copy;
-- the node is not drained and not labelled `sds.io/auto-evict=false`, and the
+- the node is not drained and not labelled `haify.io/auto-evict=false`, and the
   resource is not the controller's own metadata, not WAN-replicated and not
-  labelled `sds.io/auto-evict=false`.
+  labelled `haify.io/auto-evict=false`.
 
 It replaces one replica at a time and waits for its sync before the next. The
 new replica goes where placement would put it. When the node holds no replica
@@ -801,13 +801,13 @@ any more it is **evicted**: it gets no new replicas, and when it comes back it
 still holds old configs and volumes. Then:
 
 ```bash
-sds node restore node3 --dry-run   # what would be deleted on it
-sds node restore node3             # delete it, and let it take replicas again
-sds node lost node3                # or: it is not coming back
+haify node restore node3 --dry-run   # what would be deleted on it
+haify node restore node3             # delete it, and let it take replicas again
+haify node lost node3                # or: it is not coming back
 ```
 
 `node restore` takes down, on that node only, every resource it is no longer a
-member of, and deletes its config, promoter configs and the volumes sds named
+member of, and deletes its config, promoter configs and the volumes haify named
 after it. `node lost` removes every replica the node still holds the `--lost`
 way and keeps it evicted. Both are on the two-person approval list.
 
@@ -819,10 +819,10 @@ Snapshots live in the same pool as the resource. They are instant and cheap on a
 thin pool, and they are **not a backup** — losing the pool loses both.
 
 ```bash
-sds resource snapshot create --resource db --name before-upgrade
-sds resource snapshot list --resource db
-sds resource snapshot restore --resource db --name before-upgrade
-sds resource snapshot delete --resource db --name before-upgrade
+haify resource snapshot create --resource db --name before-upgrade
+haify resource snapshot list --resource db
+haify resource snapshot restore --resource db --name before-upgrade
+haify resource snapshot delete --resource db --name before-upgrade
 ```
 
 A manual snapshot is taken on **one node** — `--node`, by default the
@@ -845,10 +845,10 @@ once, with I/O suspended across them for the moment it takes (a systemd timer
 on each node resumes it after a minute whatever happens to the controller):
 
 ```bash
-sds resource snapshot replicated create   --resource db --name before-upgrade
-sds resource snapshot replicated list     --resource db
-sds resource snapshot replicated rollback --resource db --name before-upgrade
-sds resource snapshot replicated delete   --resource db --name before-upgrade
+haify resource snapshot replicated create   --resource db --name before-upgrade
+haify resource snapshot replicated list     --resource db
+haify resource snapshot replicated rollback --resource db --name before-upgrade
+haify resource snapshot replicated delete   --resource db --name before-upgrade
 ```
 
 Each copy carries its replica's DRBD metadata, so a rollback — which needs the
@@ -860,19 +860,19 @@ by volume.
 **Exact sizes and renaming.** `resource create --size 10737418752 --exact-size`
 makes the device exactly that many bytes (rounded up to a 512-byte sector)
 instead of whole GiB; the backing volume is still allocated in GiB and the
-DRBD device capped. A resize keeps it exact. `sds resource rename <old> <new>`
+DRBD device capped. A resize keeps it exact. `haify resource rename <old> <new>`
 renames a resource that is not Primary anywhere and that no HA config,
 gateway, schedule, backup or snapshot refers to.
 
 **Scheduled snapshots** with grandfather-father-son retention:
 
 ```bash
-sds resource snapshot schedule create --resource db \
+haify resource snapshot schedule create --resource db \
     --cron "0 * * * *" \
     --keep-hourly 24 --keep-daily 7 --keep-weekly 4 --keep-monthly 6
 
-sds resource snapshot schedule list
-sds resource snapshot schedule delete --resource db
+haify resource snapshot schedule list
+haify resource snapshot schedule delete --resource db
 ```
 
 A resource has at most one schedule; `create` on a resource that already has one
@@ -903,12 +903,12 @@ what fills a thin pool fast, and the oldest snapshots are the clean ones from
 before the attack. A schedule can lock what it takes:
 
 ```bash
-sds resource snapshot schedule create --resource db \
+haify resource snapshot schedule create --resource db \
     --cron "0 * * * *" --keep-hourly 24 --keep-daily 7 --lock-days 14
 ```
 
 Until a scheduled snapshot is `--lock-days` old (measured from the time in its
-name), sds does not delete it — not retention, not the near-full rule, not
+name), haify does not delete it — not retention, not the near-full rule, not
 `snapshot delete`, and not a ZFS `restore` that would roll back past it. While
 any snapshot of the resource is locked, the schedule cannot be deleted, the
 resource or one of its volumes cannot be deleted (not even with `--force`), and
@@ -917,9 +917,9 @@ the lock can be raised but not lowered. Replacing the schedule without
 and takes it again under the same name, so its lock is unchanged; a locked
 thick snapshot cannot be restored until its lock passes. The limit is 365 days.
 
-On ZFS, each locked snapshot also carries a `sds-lock` hold, so `zfs destroy`
+On ZFS, each locked snapshot also carries a `haify-lock` hold, so `zfs destroy`
 on the node — a cleanup script, a `zfs destroy -r` of the dataset — fails too
-until sds releases the hold when the lock has passed. Root can `zfs release`
+until haify releases the hold when the lock has passed. Root can `zfs release`
 it; it guards against mistakes, not against root.
 
 Locks are judged by the time the controller has counted since it started, not
@@ -930,25 +930,25 @@ answer) to end the locks early changes nothing, and raises a
 The cost is space: size the pool for `--lock-days` of change. A pool past the
 near-full line with nothing left but locked snapshots is not relieved; it
 raises a critical `pool.snapshots_locked` event, and if it fills, that
-replica's writes fail. And the lock binds sds and its API, not root on a
+replica's writes fail. And the lock binds haify and its API, not root on a
 storage node, who can `lvremove` anything — for that, back up to a target with
 S3 Object Lock (see [Backups](#9-backups--the-only-copy-that-survives-losing-the-cluster)).
 
 **Freezing a schedule.** A frozen schedule keeps taking snapshots but removes
 none — not by retention, not to relieve a full pool — and every scheduled
 snapshot of the resource is locked until the freeze ends: it cannot be deleted
-through sds, nor the schedule or resource deleted. A freeze can be extended,
+through haify, nor the schedule or resource deleted. A freeze can be extended,
 not shortened, except by `unfreeze`, which needs a second person under
 [two-person approval](#17-access-control).
 
 ```bash
-sds resource snapshot schedule freeze --resource db --hours 72 --reason "investigating"
-sds resource snapshot schedule unfreeze --resource db
+haify resource snapshot schedule freeze --resource db --hours 72 --reason "investigating"
+haify resource snapshot schedule unfreeze --resource db
 ```
 
 **Write anomalies.** Encrypting a volume rewrites it as fast as the disks
 allow. With `[alert] enabled`, the health poll reads how much DRBD wrote to the
-answering node's disk (also exported as `sds_drbd_written_bytes`), and each
+answering node's disk (also exported as `haify_drbd_written_bytes`), and each
 resource learns its usual write rate, overall and by hour of the week; resync
 traffic is left out. Once it has learned (30 normal polls), a rate
 `[alert.write_anomaly] factor` times the usual (default 5) and at least
@@ -979,14 +979,14 @@ before anything is snapshotted.
 your shell history:
 
 ```bash
-export SDS_BACKUP_SECRET='...'
-sds backup target add --name offsite --kind s3 \
-    --bucket sds-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
+export HAIFY_BACKUP_SECRET='...'
+haify backup target add --name offsite --kind s3 \
+    --bucket haify-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
 
-sds backup target add --name nas --kind smb \
+haify backup target add --name nas --kind smb \
     --host nas.example.com --share backups --user backupuser --secret-file -
 
-sds backup target list        # secrets are never returned
+haify backup target list        # secrets are never returned
 ```
 
 An SMB host may carry a non-standard port (`--host nas.example.com:4450`).
@@ -994,10 +994,10 @@ An SMB host may carry a non-standard port (`--host nas.example.com:4450`).
 **Take and restore a backup:**
 
 ```bash
-sds backup create --resource db --target offsite
-sds backup list
-sds backup restore <backup-id> --node node1
-sds backup delete <backup-id>
+haify backup create --resource db --target offsite
+haify backup list
+haify backup restore <backup-id> --node node1
+haify backup delete <backup-id>
 ```
 
 **Incremental after the first.** The first backup of a resource to a target is
@@ -1008,8 +1008,8 @@ volume took 20 s and 161 MB as a full backup, and 4.5 s and 26 MB for the next
 one after 26 MB of changes.
 
 ```bash
-sds backup create --resource db --target offsite          # incremental when it can be
-sds backup create --resource db --target offsite --full   # start a new chain
+haify backup create --resource db --target offsite          # incremental when it can be
+haify backup create --resource db --target offsite --full   # start a new chain
 ```
 
 A backup falls back to full, and says why in the controller log, when there is
@@ -1048,11 +1048,11 @@ with a full one. A schedule must keep at least one tier; `--disabled` saves it
 without running it.
 
 ```bash
-sds backup schedule create --resource db --target offsite \
+haify backup schedule create --resource db --target offsite \
     --cron "30 18 * * *" --keep-daily 7 --keep-weekly 4 --keep-monthly 3
-sds backup schedule list          # last run, the backup it made or why it failed, next run
-sds backup schedule run db@offsite   # run now, retention included, and wait
-sds backup schedule delete db@offsite   # its backups stay
+haify backup schedule list          # last run, the backup it made or why it failed, next run
+haify backup schedule run db@offsite   # run now, retention included, and wait
+haify backup schedule delete db@offsite   # its backups stay
 ```
 
 The cron is in the controller's time zone — usually UTC on a server. A run
@@ -1069,11 +1069,11 @@ target. `backup import` reads them and rebuilds the records, incremental chains
 included:
 
 ```bash
-sds node register ...                       # a rebuilt cluster: nodes first
-sds backup target add --name offsite ...    # same bucket and --prefix as before
-sds backup import --target offsite
-sds resource create --name db --size 20G ...   # at least as large as the backup
-sds backup restore <backup-id> --resource db
+haify node register ...                       # a rebuilt cluster: nodes first
+haify backup target add --name offsite ...    # same bucket and --prefix as before
+haify backup import --target offsite
+haify resource create --name db --size 20G ...   # at least as large as the backup
+haify backup restore <backup-id> --resource db
 ```
 
 Importing twice records nothing twice. A backup whose images are not all on the
@@ -1083,14 +1083,14 @@ images are raw block data, so a backup restores onto another architecture or
 pool type: a chain taken from an arm64 node's thin pool restores onto a thick
 LVM volume on x86.
 
-**Immutable backups: S3 Object Lock.** Whoever holds the cluster — a stolen sds
+**Immutable backups: S3 Object Lock.** Whoever holds the cluster — a stolen haify
 token, root on a storage node — can delete ordinary backups, and ransomware
 does that first. A locked target stores every object under S3 Object Lock, so
-until its date neither sds nor anyone using sds's keys can delete or overwrite
+until its date neither haify nor anyone using haify's keys can delete or overwrite
 it:
 
 ```bash
-sds backup target add --name vault --kind s3 --bucket sds-vault \
+haify backup target add --name vault --kind s3 --bucket haify-vault \
     --endpoint https://s3.example.com --user AKIAEXAMPLE \
     --lock-mode compliance --lock-days 30
 ```
@@ -1126,10 +1126,10 @@ sds backup target add --name vault --kind s3 --bucket sds-vault \
   versions:
 
   ```bash
-  sds backup import --target vault --as-of 2026-10-01T00:00:00Z
+  haify backup import --target vault --as-of 2026-10-01T00:00:00Z
   ```
 
-**The keys decide whether any of this holds.** sds's S3 credentials are on the
+**The keys decide whether any of this holds.** haify's S3 credentials are on the
 storage nodes, so assume an attacker has them. They need only:
 
 ```json
@@ -1140,7 +1140,7 @@ storage nodes, so assume an attacker has them. They need only:
     "Action": ["s3:PutObject", "s3:PutObjectRetention", "s3:GetObject",
                "s3:GetObjectVersion", "s3:GetObjectRetention", "s3:DeleteObject",
                "s3:ListBucket", "s3:ListBucketVersions"],
-    "Resource": ["arn:aws:s3:::sds-vault", "arn:aws:s3:::sds-vault/*"]
+    "Resource": ["arn:aws:s3:::haify-vault", "arn:aws:s3:::haify-vault/*"]
   }]
 }
 ```
@@ -1153,8 +1153,8 @@ layer stops:
 
 | Attacker holds | Object Lock (compliance) | Object Lock (governance) |
 | --- | --- | --- |
-| an sds token or admin account | stopped | stopped |
-| root on a storage node (and so sds's S3 keys) | stopped | stopped, if the keys lack the bypass permission |
+| an haify token or admin account | stopped | stopped |
+| root on a storage node (and so haify's S3 keys) | stopped | stopped, if the keys lack the bypass permission |
 | root on the controller | stopped | same as above |
 | the object store account itself | stopped | not stopped |
 
@@ -1183,22 +1183,22 @@ the resource — clients keep talking to a floating service IP.
 
 ```bash
 # NFS
-sds gateway nfs create --resource data --service-ip 192.0.2.200/24 \
+haify gateway nfs create --resource data --service-ip 192.0.2.200/24 \
     --export-path /data --allowed-ips 192.0.2.0/24
 
 # iSCSI
-sds gateway iscsi create --resource blk \
-    --iqn iqn.2026-01.com.example:sds.blk --service-ip 192.0.2.201/24
+haify gateway iscsi create --resource blk \
+    --iqn iqn.2026-01.com.example:haify.blk --service-ip 192.0.2.201/24
 
 # NVMe-oF
-sds gateway nvme create --resource fast \
-    --nqn nqn.2026-01.com.example:sds.fast --service-ip 192.0.2.202/24
+haify gateway nvme create --resource fast \
+    --nqn nqn.2026-01.com.example:haify.fast --service-ip 192.0.2.202/24
 ```
 
 Creation checks that the OCF agents and tools the chain needs are installed on
 the resource's diskful nodes (see below), formats the state volume (and, for NFS, the exported volume)
 when it carries no filesystem, writes the promoter config
-(`/etc/drbd-reactor.d/sds-<type>-<resource>.toml`) to the resource's diskful
+(`/etc/drbd-reactor.d/haify-<type>-<resource>.toml`) to the resource's diskful
 nodes only, and reloads drbd-reactor there. A gateway needs a small
 cluster-private state volume (volume 0) beside the exported data; a
 single-volume resource gets one added automatically (`[gateway]
@@ -1207,27 +1207,27 @@ auto_state_volume`, default on, `state_volume_size_gb` default 1).
 Managing a live gateway:
 
 ```bash
-sds gateway list                       # or: gateway nfs|iscsi|nvme list; read from the nodes
-sds gateway get --resource data
-sds gateway status --resource data
-sds gateway stop  --resource data      # demote and stop, config kept
-sds gateway start --resource data
-sds gateway delete --resource data
+haify gateway list                       # or: gateway nfs|iscsi|nvme list; read from the nodes
+haify gateway get --resource data
+haify gateway status --resource data
+haify gateway stop  --resource data      # demote and stop, config kept
+haify gateway start --resource data
+haify gateway delete --resource data
 ```
 
 Per-protocol details:
 
 ```bash
-sds gateway nfs export add|list|remove ...      # extra exports on an NFS gateway
-sds gateway nfs export quota --resource data --path team-a --size 500G
+haify gateway nfs export add|list|remove ...      # extra exports on an NFS gateway
+haify gateway nfs export quota --resource data --path team-a --size 500G
                                                     # cap an export directory (0 removes)
-sds gateway nfs mount --resource data --target /mnt/data --mkdir --sudo
+haify gateway nfs mount --resource data --target /mnt/data --mkdir --sudo
                                                     # mount it on this machine
-sds gateway iscsi lun add|list|remove ...       # LUNs
-sds gateway iscsi chap get|set ...              # one-way CHAP only; mutual CHAP is not supported
-sds gateway iscsi initiator add|list|remove ... # initiator allow-list
-sds gateway nvme namespace add|list|remove ...  # namespaces
-sds gateway nvme host add|list|remove ...       # host allow-list
+haify gateway iscsi lun add|list|remove ...       # LUNs
+haify gateway iscsi chap get|set ...              # one-way CHAP only; mutual CHAP is not supported
+haify gateway iscsi initiator add|list|remove ... # initiator allow-list
+haify gateway nvme namespace add|list|remove ...  # namespaces
+haify gateway nvme host add|list|remove ...       # host allow-list
 ```
 
 An export directory's quota is an ext4 project quota on the gateway's
@@ -1281,16 +1281,16 @@ starts a new one, and Haify promoters are written with
 whole gateway on that node and lets every node race to promote it again.
 Haify therefore never reloads drbd-reactor on the node running the gateway for
 an edit: that node keeps the `.toml` its drbd-reactor loaded and gets the
-edited one as `sds-<type>-<res>.toml.pending`, which drbd-reactor ignores.
+edited one as `haify-<type>-<res>.toml.pending`, which drbd-reactor ignores.
 The unit drop-ins in `/run/systemd/system` are rewritten to the edited chain,
 so a unit restart or a later failback uses it, and a drop-in on
-`drbd-reactor.service` (`50-sds-pending-gateway-config.conf`) moves the
+`drbd-reactor.service` (`50-haify-pending-gateway-config.conf`) moves the
 `.pending` file into place before drbd-reactor next starts; the next edit made
 while another node runs the gateway replaces it too. **Do not run
 `systemctl reload drbd-reactor` on the running node by hand to "pick up" a
 gateway edit** — it restarts the gateway. If the live step fails, the command
 says so: the config is saved everywhere and a failover uses it, and
-`sds gateway stop` then `sds gateway start` applies it now (interrupting
+`haify gateway stop` then `haify gateway start` applies it now (interrupting
 clients).
 
 Target and initiator IQNs (at `iscsi create` and `initiator add`) and host
@@ -1334,11 +1334,11 @@ install; no config is written.
 A workgroup SMB server per resource: standalone Samba, local users, no domain.
 
 ```bash
-sds gateway smb create --resource files --service-ip 192.0.2.210/24 [--workgroup OFFICE]
-sds gateway smb user set alice --resource files          # prompts; or --password-stdin
-sds gateway smb share add public --resource files --path public
-sds gateway smb share list --resource files
-sds gateway smb user list --resource files
+haify gateway smb create --resource files --service-ip 192.0.2.210/24 [--workgroup OFFICE]
+haify gateway smb user set alice --resource files          # prompts; or --password-stdin
+haify gateway smb share add public --resource files --path public
+haify gateway smb share list --resource files
+haify gateway smb user list --resource files
 ```
 
 Clients connect to `\\192.0.2.210\files` (the first share is named after the
@@ -1353,9 +1353,9 @@ gateway with `--valid-users` on the first share, or remove the first share and
 add shares side by side:
 
 ```bash
-sds gateway smb share remove files --resource files
-sds gateway smb share add public   --resource files --path public
-sds gateway smb share add projects --resource files --path projects --valid-users alice,bob
+haify gateway smb share remove files --resource files
+haify gateway smb share add public   --resource files --path public
+haify gateway smb share add projects --resource files --path projects --valid-users alice,bob
 ```
 
 `share add` checks only the share being added; shares nested before this check
@@ -1374,11 +1374,11 @@ How it is built, and what that means:
   macOS do so on their own), and an application holding a file open across the
   switch sees the error a server restart would cause. Writes acknowledged
   before the switch are on both replicas (protocol C).
-- **One smbd per gateway**, `sds-smbd@<resource>.service`, bound to the service
+- **One smbd per gateway**, `haify-smbd@<resource>.service`, bound to the service
   IP only, so several SMB gateways can run on one node. The distribution's own
   `smbd` must not run on gateway nodes (it holds port 445 on every address);
   creation refuses while it does: `systemctl disable --now smbd nmbd`.
-- **Files are owned by one account, `sds-smb`,** on every share. Access is per
+- **Files are owned by one account, `haify-smb`,** on every share. Access is per
   share — `--valid-users`, `--read-only` — not per-user Unix permissions. Each
   SMB user also gets a local account (Samba requires one), created with the
   same uid on every node by the unit before smbd starts; a node where that uid
@@ -1405,15 +1405,15 @@ before this ordered the VIP ahead of the services; they keep that order until
 recreated.)
 
 ```bash
-sds ha create db \
+haify ha create db \
     --vip 192.0.2.210/24 \
     --mount /var/lib/postgresql \
     --fstype ext4 \
     --services postgresql.service
 
-sds ha list
-sds ha status db
-sds ha delete db
+haify ha list
+haify ha status db
+haify ha delete db
 ```
 
 `ha create` makes a filesystem of `--fstype` on the device when it finds none,
@@ -1421,14 +1421,14 @@ and refuses when a `--services` unit is missing on any of the resource's nodes.
 
 `ha create` and the gateways put a drbd-reactor promoter on the resource, so
 they refuse a resource whose Primary something else decides, which the promoter
-would fight for the role: a Proxmox VM disk (labelled `sds.pve/managed-by=pve`
+would fight for the role: a Proxmox VM disk (labelled `haify.pve/managed-by=pve`
 by the plugin, or named `pve-<vmid>-...` from before it labelled them), a CSI
-volume (`sds.csi/managed-by=csi`), and a resource with diskless clients.
+volume (`haify.csi/managed-by=csi`), and a resource with diskless clients.
 
 Move it deliberately — for maintenance, or to test that failover works:
 
 ```bash
-sds ha evict db
+haify ha evict db
 ```
 
 **Test your failover before you need it.** Evicting is the polite path; pulling
@@ -1441,25 +1441,25 @@ everything else: its database lives on a replicated resource, and a VIP follows
 whichever node is running it.
 
 ```bash
-sds ha self enable --vip 192.0.2.250/24 --pool thin-pool
-sds ha self status
-sds ha self disable --node node1     # back to a plain service on node1
+haify ha self enable --vip 192.0.2.250/24 --pool thin-pool
+haify ha self status
+haify ha self disable --node node1     # back to a plain service on node1
 ```
 
-`enable` creates the `sds-meta` resource (1 GB on DRBD port 7999 by default;
+`enable` creates the `haify-meta` resource (1 GB on DRBD port 7999 by default;
 `--size`, `--port`, `--nodes` change that), copies the running controller
 binary, its config and its systemd unit to the other nodes, and hands the
 controller to drbd-reactor. The binary goes to the path the unit's `ExecStart`
-names. A node of another architecture gets `sds-controller-<goarch>` from beside
+names. A node of another architecture gets `haify-controller-<goarch>` from beside
 the running binary instead; without one, `enable` refuses that node before
 changing anything. The controller restarts during the handoff, so the
 command's connection drops; follow it with `ha self status` against the VIP.
-`disable` copies the database back to the named node and leaves `sds-meta` in
-place for you to delete. `sds ha evict sds-meta` moves the controller to
+`disable` copies the database back to the named node and leaves `haify-meta` in
+place for you to delete. `haify ha evict haify-meta` moves the controller to
 another node.
 
 Point clients at the VIP afterwards. Other services can be made to ride along —
-`[self_ha] extra_services = ["sds-ai.service"]` in `controller.toml` starts and
+`[self_ha] extra_services = ["haify-ai.service"]` in `controller.toml` starts and
 stops the AI Copilot with the controller.
 
 ---
@@ -1474,7 +1474,7 @@ stops the AI Copilot with the controller.
 > it has yet run on a real DRBD cluster under drbd-reactor. Before you rely on
 > it, test on yours — the list is at the end of this section.
 
-`sds app` runs one database instance — PostgreSQL (optionally with pgvector),
+`haify app` runs one database instance — PostgreSQL (optionally with pgvector),
 MySQL or MariaDB, or Redis — on a resource's DRBD volume, the way `ha create`
 runs a service and a gateway runs an export. drbd-reactor mounts the volume,
 starts the database and raises a service IP on the node where the resource is
@@ -1484,19 +1484,19 @@ DRBD, and clients find it at the service IP wherever it runs.
 
 ```bash
 # A resource with two diskful replicas (give it quorum: a third replica or a tiebreaker)
-sds resource create --name orders --port 7010 --size 20G --nodes node1,node2 --pool pool0
+haify resource create --name orders --port 7010 --size 20G --nodes node1,node2 --pool pool0
 
-sds app create --name orders --engine postgres --service-ip 192.0.2.220/24
-sds app create --name embeddings --engine postgres --vector --resource emb --service-ip 192.0.2.221/24
-sds app create --name sessions --engine redis --port 6380 --service-ip 192.0.2.222/24
-sds app create --name shop --engine mysql --service-ip 192.0.2.223/24
+haify app create --name orders --engine postgres --service-ip 192.0.2.220/24
+haify app create --name embeddings --engine postgres --vector --resource emb --service-ip 192.0.2.221/24
+haify app create --name sessions --engine redis --port 6380 --service-ip 192.0.2.222/24
+haify app create --name shop --engine mysql --service-ip 192.0.2.223/24
 
-sds app list
-sds app status orders
-sds app failover orders                            # planned switchover
-sds app snapshot orders --snapshot before-upgrade
-sds app delete orders                              # stops it; the resource and data stay
-sds app delete orders --delete-data --yes          # and deletes the resource
+haify app list
+haify app status orders
+haify app failover orders                            # planned switchover
+haify app snapshot orders --snapshot before-upgrade
+haify app delete orders                              # stops it; the resource and data stay
+haify app delete orders --delete-data --yes          # and deletes the resource
 ```
 
 `--resource` defaults to the app's name; `--port` to 5432, 3306 or 6379.
@@ -1525,7 +1525,7 @@ sds app delete orders --delete-data --yes          # and deletes the resource
    database once without network access to prove it runs, stops it and
    unmounts.
 4. **Hands it to drbd-reactor**: demotes the resource, writes
-   `sds-app-<name>.service` and the promoter `/etc/drbd-reactor.d/sds-app-<name>.toml`
+   `haify-app-<name>.service` and the promoter `/etc/drbd-reactor.d/haify-app-<name>.toml`
    to every diskful replica, and reloads drbd-reactor, which starts it. The
    chain is the mount, then the database, then the service IP **last**: the
    unit counts as started only once the database answers its health probe
@@ -1554,30 +1554,30 @@ Everything the database needs to start lives on the volume, so it fails over
 with the data:
 
 ```
-/var/lib/sds-app/<name>/          the volume, mounted on the node running the app
+/var/lib/haify-app/<name>/          the volume, mounted on the node running the app
   data/                           the data directory
-  conf/                           postgresql.sds.conf + pg_hba.conf, my.cnf, or redis.conf
-  sds/password                    the generated password (root only, 0600)
-  sds/client.cnf                  mysql: credentials for the health probe and the snapshot lock
-/etc/systemd/system/sds-app-<name>.service   on every replica; never enable or start it by hand
-/etc/drbd-reactor.d/sds-app-<name>.toml      the promoter, on every replica
-/run/sds-app-<name>/              sockets and pid files, while it runs
+  conf/                           postgresql.haify.conf + pg_hba.conf, my.cnf, or redis.conf
+  haify/password                    the generated password (root only, 0600)
+  haify/client.cnf                  mysql: credentials for the health probe and the snapshot lock
+/etc/systemd/system/haify-app-<name>.service   on every replica; never enable or start it by hand
+/etc/drbd-reactor.d/haify-app-<name>.toml      the promoter, on every replica
+/run/haify-app-<name>/              sockets and pid files, while it runs
 ```
 
 Tune the engine in its config on the volume, on the node running it. For
 PostgreSQL, edit `data/postgresql.conf`; the few settings Haify relies on (port,
-listen address, socket directory, `hba_file`) are in `conf/postgresql.sds.conf`,
+listen address, socket directory, `hba_file`) are in `conf/postgresql.haify.conf`,
 included last. Apply a change the engine's own way (`SELECT pg_reload_conf()`,
-`SET GLOBAL`, `CONFIG SET`) or with `sds app failover`, which restarts it on
+`SET GLOBAL`, `CONFIG SET`) or with `haify app failover`, which restarts it on
 another replica. Do not restart the unit by hand: drbd-reactor treats a stopped
 unit as a failure and fails the app over.
 
 **Credentials.** PostgreSQL's `postgres` superuser, MySQL's `root` (local and
 `'root'@'%'`) and Redis's `requirepass` get a generated 32-character password.
-`sds app create` prints it once; afterwards it exists only in
-`/var/lib/sds-app/<name>/sds/password`, readable by root on the node running the
+`haify app create` prints it once; afterwards it exists only in
+`/var/lib/haify-app/<name>/haify/password`, readable by root on the node running the
 app. It never appears in a command line or a log: it reaches the node over the
-SSH stream as a 0600 file. The MCP tool `sds_app_create` does not return it.
+SSH stream as a 0600 file. The MCP tool `haify_app_create` does not return it.
 
 ### Failover
 
@@ -1604,38 +1604,38 @@ raises the service IP.
   replica or a diskless tiebreaker) so a node cut off from the others loses
   quorum and stops writing instead of running a second copy.
 
-`sds app failover` is the planned version, through `drbd-reactorctl evict`; it
-fails when no other replica took over. `sds node drain` and `sds ha evict
+`haify app failover` is the planned version, through `drbd-reactorctl evict`; it
+fails when no other replica took over. `haify node drain` and `haify ha evict
 <resource>` move an app the same way.
 
-A replica added later (`sds resource add-replica`) gets the unit and promoter
+A replica added later (`haify resource add-replica`) gets the unit and promoter
 once it passes the same checks against what the app was created with — engine
 path, version, uid and gid — and nothing otherwise; `add-replica` then fails
-saying what differs, and `sds resource repair <resource>` places them once it
+saying what differs, and `haify resource repair <resource>` places them once it
 is fixed. A replica removed loses them.
 
 ### Snapshots
 
-`sds app snapshot` freezes the database on its node (see the table), takes a
+`haify app snapshot` freezes the database on its node (see the table), takes a
 [replicated snapshot](#8-snapshots) of every volume on every replica, and thaws.
 Before freezing anything, the node arms a transient systemd timer
-(`sds-app-thaw-<name>`) that thaws the database after 60 seconds by itself, so a
+(`haify-app-thaw-<name>`) that thaws the database after 60 seconds by itself, so a
 controller that dies mid-snapshot cannot leave it frozen. Writes stall for the
 seconds the snapshot takes; reads continue. An app that is not running is
 snapshotted without a freeze.
 
-To go back to a snapshot: `sds app delete <name>` (the data stays), `sds
+To go back to a snapshot: `haify app delete <name>` (the data stays), `haify
 resource snapshot replicated rollback --resource <res> --name <snap>`, then
-`sds app create` again with the same name, engine and resource — it finds the
+`haify app create` again with the same name, engine and resource — it finds the
 data and keeps it.
 
 ### Not yet validated on a real cluster
 
 Test these on your own nodes before production use:
 
-- drbd-reactor running the chain — `Filesystem`, `sds-app-<name>.service` with
+- drbd-reactor running the chain — `Filesystem`, `haify-app-<name>.service` with
   its wait for the database, `IPaddr2` — and taking it down cleanly;
-- failover by power-off and by `sds app failover`, and the recovery time;
+- failover by power-off and by `haify app failover`, and the recovery time;
 - MySQL (as opposed to MariaDB) initialization through `mysqld
   --initialize-insecure`, which has only been unit-tested;
 - `--vector` (pgvector) installation;
@@ -1643,7 +1643,7 @@ Test these on your own nodes before production use:
   controller mid-snapshot);
 - SELinux on EL (`create` labels the data with `chcon`, best effort) and
   AppArmor on Ubuntu, whose MySQL profile confines `mysqld` to `/var/lib/mysql`;
-- placement on an added replica, and `sds node drain` of a node running an app.
+- placement on an added replica, and `haify node drain` of a node running an app.
 
 ---
 
@@ -1657,12 +1657,12 @@ A resync across the WAN compares SHA-256 checksums before sending a block
 (`csums-alg sha256`), so blocks both sites already hold cross the link as a
 checksum, not as data. Resync speed follows DRBD's dynamic controller; to cap
 it for a group of resources, set it on their profile:
-`sds resource profile set-options <profile> --drbd-options disk/c-max-rate=20M`.
+`haify resource profile set-options <profile> --drbd-options disk/c-max-rate=20M`.
 WAN resources created before this default can get it with
-`sds resource set-options <name> --drbd-options net/csums-alg=sha256`.
+`haify resource set-options <name> --drbd-options net/csums-alg=sha256`.
 
 ```bash
-sds resource create --name db --size 100G --port 7000 \
+haify resource create --name db --size 100G --port 7000 \
     --nodes node1,node2 \
     --wan --dr-node dr1 --dr-endpoint dr.example.com
 ```
@@ -1676,10 +1676,10 @@ A resource that is already running gets its DR replica in place, while it keeps
 serving:
 
 ```bash
-sds resource add-dr db --dr-node dr1 --dr-endpoint dr.example.com
+haify resource add-dr db --dr-node dr1 --dr-endpoint dr.example.com
 ```
 
-The DR node joins over one `sds-proxy` leg per primary-site replica, with
+The DR node joins over one `haify-proxy` leg per primary-site replica, with
 protocol A and pull-ahead, and does not vote: quorum stays with the primary
 site.
 
@@ -1687,8 +1687,8 @@ When the DR site's address changes, or the primary should dial out from
 another interface:
 
 ```bash
-sds wan set-endpoint db --dr-endpoint dr2.example.com
-sds wan set-endpoint db --egress-address 203.0.113.20     # or --clear-egress
+haify wan set-endpoint db --dr-endpoint dr2.example.com
+haify wan set-endpoint db --egress-address 203.0.113.20     # or --clear-egress
 ```
 
 The tunnels are rebuilt on the new address at once. A new endpoint that does
@@ -1701,8 +1701,8 @@ DR is manual on purpose — an automatic cross-site promotion during a network
 partition is how you get two live copies:
 
 ```bash
-sds resource dr-failover db          # prints what it will do
-sds resource dr-failover db --yes    # force-promotes the DR node
+haify resource dr-failover db          # prints what it will do
+haify resource dr-failover db --yes    # force-promotes the DR node
 ```
 
 Writes still buffered in the WAN link when the primary site died are lost.
@@ -1711,7 +1711,7 @@ Mount the volumes on the DR node and resume there.
 Coming back is `dr-failback`, run repeatedly until it says done:
 
 ```bash
-sds resource dr-failback db --wait 30m
+haify resource dr-failback db --wait 30m
 ```
 
 It reconnects the primary-site nodes, **discarding what they wrote after the
@@ -1724,8 +1724,8 @@ Each primary-site node gets its own tunnel ("leg"). If a node is renumbered or
 removed, its leg can be left behind:
 
 ```bash
-sds wan repair db --dry-run     # show the plan, touch nothing
-sds wan repair db
+haify wan repair db --dry-run     # show the plan, touch nothing
+haify wan repair db
 ```
 
 It converges, so running it on a healthy resource reports nothing to do. It
@@ -1739,13 +1739,13 @@ Put an SSD in front of a thin pool, and every volume in the pool reads and
 writes through it (lvmcache).
 
 ```bash
-sds pool add-cache --node node1 --pool thin-pool --device /dev/nvme0n1
-sds pool remove-cache --node node1 --pool thin-pool
+haify pool add-cache --node node1 --pool thin-pool --device /dev/nvme0n1
+haify pool remove-cache --node node1 --pool thin-pool
 ```
 
 The device is consumed whole and must be free — no filesystem signature, no
 partitions in use, not already a PV — and at least 4 GiB. A pool takes one
-cache. `sds pool get` shows the cache and how much of a writeback cache is
+cache. `haify pool get` shows the cache and how much of a writeback cache is
 dirty.
 
 **Writethrough is the default. `--mode writeback` must be asked for by name**,
@@ -1768,7 +1768,7 @@ through.
 the stack is DRBD → LUKS → LVM.
 
 ```bash
-sds resource create --name secrets --size 50G --port 7010 \
+haify resource create --name secrets --size 50G --port 7010 \
     --nodes node1,node2 --encrypt
 ```
 
@@ -1776,12 +1776,12 @@ Understand exactly what this does and does not do:
 
 - **At rest only.** DRBD sits above the crypt layer, so replication traffic
   between nodes is plaintext. Encrypt it with replication TLS, below.
-- **Each node generates and keeps its own key** under `/etc/sds/luks`, root-only.
+- **Each node generates and keeps its own key** under `/etc/haify/luks`, root-only.
   Nothing is sent anywhere and there is no central escrow. Lose a node's key and
   that replica is gone — the others are unaffected.
 - **It cannot be enabled later.** Decide at creation.
 - LVM pools only.
-- **Backups are plaintext.** `sds backup` reads each snapshot through a
+- **Backups are plaintext.** `haify backup` reads each snapshot through a
   temporary read-only LUKS mapping on the node it backs up from, so the image
   holds the volume's data and restores onto any replica. The key stays on the
   node, which means the target receives plaintext: protect it with the target's
@@ -1794,11 +1794,11 @@ TLS: the kernel asks `tlshd` (package `ktls-utils`) to do the handshake, then
 encrypts in place. Install `ktls-utils` on every node, then:
 
 ```bash
-sds replication-tls setup            # every node: key, certificate, tlshd
-sds replication-tls status           # READY per node, or what is missing
-sds resource tls db on               # encrypt every connection of db
-sds resource status db               # each peer shows "tls"
-sds resource tls db off
+haify replication-tls setup            # every node: key, certificate, tlshd
+haify replication-tls status           # READY per node, or what is missing
+haify resource tls db on               # encrypt every connection of db
+haify resource status db               # each peer shows "tls"
+haify resource tls db off
 ```
 
 `setup` has each node make its own key, signs a certificate for it with the
@@ -1815,7 +1815,7 @@ days before one expires.
   links took about 15 s under a continuous write load, with no failed write.
 - **A failed handshake is not retried.** DRBD leaves that link StandAlone and
   the switch stops, naming it. Fix the node (`journalctl -u tlshd`), then
-  `sds resource repair <resource>`.
+  `haify resource repair <resource>`.
 - **New members must be ready.** Adding a replica, a diskless client or a
   tiebreaker to an encrypted resource is refused on a node that is not.
 - **The CA joins the system trust store**, because `tlshd` before ktls-utils
@@ -1823,7 +1823,7 @@ days before one expires.
   against that store will accept a certificate it issued; it only ever issues
   replication certificates.
 - **Not for WAN resources.** Their off-site leg already runs mutual TLS through
-  `sds-proxy`.
+  `haify-proxy`.
 
 ---
 
@@ -1875,10 +1875,10 @@ receiver can pair an alert with its recovery instead of reading the recovery as
 a new fault.
 
 ```bash
-sds event list --resource db --min-severity warning
-sds event watch --min-severity critical
-sds event watch --type resource.failover --json
-sds event watch --replay          # retained history first, then live
+haify event list --resource db --min-severity warning
+haify event watch --min-severity critical
+haify event watch --type resource.failover --json
+haify event watch --replay          # retained history first, then live
 ```
 
 `event list` and `event watch` take `--resource`, `--type`, `--min-severity`
@@ -1892,19 +1892,19 @@ A chat service will not accept an arbitrary JSON document, so a channel has a
 unnoticed.
 
 ```bash
-sds channel add --name oncall --kind feishu \
+haify channel add --name oncall --kind feishu \
     --url https://open.feishu.cn/open-apis/bot/v2/hook/xxxx --min-severity warning
 
-sds channel add --name pager --kind slack \
+haify channel add --name pager --kind slack \
     --url https://hooks.slack.com/services/T00/B00/xxxx --min-severity critical
 
-export SDS_NOTIFY_SECRET=SECxxxx        # DingTalk 加签, never a flag
-sds channel add --name ops --kind dingtalk \
+export HAIFY_NOTIFY_SECRET=SECxxxx        # DingTalk 加签, never a flag
+haify channel add --name ops --kind dingtalk \
     --url 'https://oapi.dingtalk.com/robot/send?access_token=xxxx'
 
-sds channel test oncall             # reports what the service itself said
-sds channel list
-sds channel delete ops
+haify channel test oncall             # reports what the service itself said
+haify channel list
+haify channel delete ops
 ```
 
 `--type` limits a channel to some event types
@@ -1940,29 +1940,29 @@ The controller serves Prometheus metrics at `http://<controller>:9433/metrics`
 `port` default 9433). The cluster gauges below are fed by the health poll, so
 they stay empty unless `[alert] enabled = true`; the controller logs a warning
 at startup when it is not. Besides the API's own request counts and latencies
-(`sds_controller_grpc_requests_total`, `sds_controller_grpc_request_duration_seconds`)
-and the counts `sds_controller_resources{state}`, `sds_controller_nodes{state}`
-and `sds_controller_gateways{type,state}`:
+(`haify_controller_grpc_requests_total`, `haify_controller_grpc_request_duration_seconds`)
+and the counts `haify_controller_resources{state}`, `haify_controller_nodes{state}`
+and `haify_controller_gateways{type,state}`:
 
 | Metric | Labels | Meaning |
 | --- | --- | --- |
-| `sds_drbd_role`, `sds_drbd_disk_state`, `sds_drbd_replication_state` | resource, node, role/state | 1 for the state each replica holds now |
-| `sds_drbd_quorum` | resource, node | 0 when the node that answered has lost quorum |
-| `sds_drbd_resource_up` | resource | 0 when no node answered for the resource |
-| `sds_drbd_resync_completed_ratio` | resource, node | 1 when in sync |
-| `sds_drbd_out_of_sync_bytes` | resource, node | data DRBD has marked as differing |
-| `sds_drbd_connection_tls` | resource, node | 1 when that connection is encrypted |
-| `sds_controller_node_reachable` | node | 0 when the controller cannot reach it |
-| `sds_controller_pool_thin_used_percent` | pool, node, kind | thin pool data/metadata use |
-| `sds_controller_storage_capacity_bytes` | pool, node, state | total/used/free |
-| `sds_controller_alerts_firing` | type, severity | conditions raised now |
-| `sds_controller_backup_last_success_timestamp_seconds` | resource, target | newest completed backup |
-| `sds_controller_backup_last_shipped_bytes` | resource, target, kind | what it carried |
-| `sds_controller_resource_fault_domain_risk` | resource, domain | 1 when one domain's loss takes it down |
-| `sds_controller_last_observation_timestamp_seconds` | source | when each source last answered |
+| `haify_drbd_role`, `haify_drbd_disk_state`, `haify_drbd_replication_state` | resource, node, role/state | 1 for the state each replica holds now |
+| `haify_drbd_quorum` | resource, node | 0 when the node that answered has lost quorum |
+| `haify_drbd_resource_up` | resource | 0 when no node answered for the resource |
+| `haify_drbd_resync_completed_ratio` | resource, node | 1 when in sync |
+| `haify_drbd_out_of_sync_bytes` | resource, node | data DRBD has marked as differing |
+| `haify_drbd_connection_tls` | resource, node | 1 when that connection is encrypted |
+| `haify_controller_node_reachable` | node | 0 when the controller cannot reach it |
+| `haify_controller_pool_thin_used_percent` | pool, node, kind | thin pool data/metadata use |
+| `haify_controller_storage_capacity_bytes` | pool, node, state | total/used/free |
+| `haify_controller_alerts_firing` | type, severity | conditions raised now |
+| `haify_controller_backup_last_success_timestamp_seconds` | resource, target | newest completed backup |
+| `haify_controller_backup_last_shipped_bytes` | resource, target, kind | what it carried |
+| `haify_controller_resource_fault_domain_risk` | resource, domain | 1 when one domain's loss takes it down |
+| `haify_controller_last_observation_timestamp_seconds` | source | when each source last answered |
 
 A series nobody observed is absent rather than zero: a replica that stopped
-answering has no `sds_drbd_disk_state`, and `sds_drbd_resource_up` says why.
+answering has no `haify_drbd_disk_state`, and `haify_drbd_resource_up` says why.
 `deploy/monitoring/prometheus-rules.yml` has alerting rules on these
 (controller down, stale observations, unreachable node, lost quorum, unreadable
 resource, replica not UpToDate, out of sync, thin pool near full and full,
@@ -1980,11 +1980,11 @@ status (`pass`, `warn`, `fail`, or `error` when the check itself could not
 run), the evidence, and the command that fixes it.
 
 ```bash
-sds inspect run                         # now; waits for the report
-sds inspect run --area alerts,nodes     # only some areas
-sds inspect list
-sds inspect show                        # newest; or: sds inspect show 42
-sds inspect show latest --json
+haify inspect run                         # now; waits for the report
+haify inspect run --area alerts,nodes     # only some areas
+haify inspect list
+haify inspect show                        # newest; or: haify inspect show 42
+haify inspect show latest --json
 ```
 
 Each node is probed once over SSH per run; a node that does not answer is a
@@ -1992,13 +1992,13 @@ Each node is probed once over SSH per run; a node that does not answer is a
 
 | Area | Checks |
 | ---- | ------ |
-| resources | a resource under `sds ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a primary-site diskful node (warn), present on a diskless one (warn: it works as a diskless Primary, over the network) or present on a WAN resource's DR node (warn: it could fail over to the asynchronous copy unasked) |
+| resources | a resource under `haify ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a primary-site diskful node (warn), present on a diskless one (warn: it works as a diskless Primary, over the network) or present on a WAN resource's DR node (warn: it could fail over to the asynchronous copy unasked) |
 | gateways | every gateway not `stopped` has exactly one Primary; its promoter config on every diskful node (warn when missing, and when present on a diskless node) |
-| nodes | SSH reachable; clock skew against the controller (warn > 2 s, fail > 30 s; SSH latency is not counted), NTP synchronised; root filesystem (warn ≥ 85 %, fail ≥ 95 %); the registered address present on an interface (a public address answering as the registered host is taken as NAT, not drift), and the address answering as the registered host; drbd module loaded; drbd-reactor running; DRBD module, drbd-utils, drbd-reactor and `sds-controller` binary the same on every node, the binary compared only between nodes of one architecture (a differing binary fails under Self-HA); `/etc/hosts` mapping a node name to an address it is not registered at |
+| nodes | SSH reachable; clock skew against the controller (warn > 2 s, fail > 30 s; SSH latency is not counted), NTP synchronised; root filesystem (warn ≥ 85 %, fail ≥ 95 %); the registered address present on an interface (a public address answering as the registered host is taken as NAT, not drift), and the address answering as the registered host; drbd module loaded; drbd-reactor running; DRBD module, drbd-utils, drbd-reactor and `haify-controller` binary the same on every node, the binary compared only between nodes of one architecture (a differing binary fails under Self-HA); `/etc/hosts` mapping a node name to an address it is not registered at |
 | pools | thin pool data and metadata against `[alert] pool_near_full_percent` / `pool_full_percent`; growth since the previous report, warn when full within 14 days, fail within 3; on a thick pool, free space below the copy-on-write area a snapshot of a volume reserves (20 % of it, at least 256 MiB), naming the volumes whose snapshots and backups will fail (warn); each disk under a pool, by SMART or the NVMe health log: warn on wear past 90 %, media errors, reallocated or pending sectors, fail on a failed SMART verdict, an NVMe critical warning or uncorrectable sectors (`disk.health`; no check without `smartctl`) |
 | backups | each enabled backup schedule: last run failed, target missing, last success older than 1.5 cron intervals (warn) or 3 (fail); snapshot schedules not run for 1.5 / 3 intervals; schedules enabled while `[schedule] enabled = false`; `_bk_` snapshots no backup record refers to |
 | alerts | `[alert]` enabled; at least one enabled channel; each channel's last deliveries succeeded; every warning or critical raised in the last 24 h was accepted by a channel that delivered it. No test message is sent |
-| selfha | at least two UpToDate copies of `sds-meta`; its promoter config active on every diskful candidate (and noted on a diskless one); exactly one `sds-controller` active, on the `sds-meta` Primary; a controller binary on every candidate |
+| selfha | at least two UpToDate copies of `haify-meta`; its promoter config active on every diskful candidate (and noted on a diskless one); exactly one `haify-controller` active, on the `haify-meta` Primary; a controller binary on every candidate |
 | tls | API server certificate, replication CA and every node's replication certificate: warn under 30 days, fail under 7 or expired |
 | hygiene | `/etc/drbd.d/*.res` and Haify-named volumes (`<res>_data`, `<res>_volN`, `<res>_state*`, `_sched_` snapshots) of resources the controller no longer has. Listed, never deleted |
 
@@ -2011,14 +2011,14 @@ notify_min = "warn"       # default; pass | warn | fail
 ```
 
 The schedule rides the snapshot scheduler, so it runs on the active controller
-only and only while `[schedule] enabled = true`; `sds inspect run` works either
+only and only while `[schedule] enabled = true`; `haify inspect run` works either
 way. Each run publishes one `inspection.completed` event when its worst finding
 is at least `notify_min`: severity `critical` for a fail, `warning` for a warn
 or error, `info` otherwise, with the counts and the first failing items in the
 message. It goes to notification channels like any alert, so it needs
 `[alert] enabled = true`; a channel filtered to `warning` hears from the
-inspection only when it found something. `sds-mcp` exposes the same as
-`sds_inspect_run` and `sds_inspect_report`.
+inspection only when it found something. `haify-mcp` exposes the same as
+`haify_inspect_run` and `haify_inspect_report`.
 
 Channel delivery results (last success, last failure and its error, events
 given up on) are recorded per channel as alerts are delivered; that record is
@@ -2052,12 +2052,12 @@ read; an admin can do everything. `[[rbac.policies]]` entries (`role`,
 `object`, `action`, either may be `*`) add grants or define further roles.
 
 ```bash
-sds rbac whoami                          # your identity and role
-sds rbac policies                        # effective roles and assignments (admin only)
-sds rbac user add --name alice --role operator   # prints a generated token once
-sds rbac user add --name ci --role viewer --user-token <16+ chars>   # set the token yourself
-sds rbac user set-role alice viewer
-sds rbac user remove alice
+haify rbac whoami                          # your identity and role
+haify rbac policies                        # effective roles and assignments (admin only)
+haify rbac user add --name alice --role operator   # prints a generated token once
+haify rbac user add --name ci --role viewer --user-token <16+ chars>   # set the token yourself
+haify rbac user set-role alice viewer
+haify rbac user remove alice
 ```
 
 Users added this way are kept in the controller database. Users declared in
@@ -2065,7 +2065,7 @@ Users added this way are kept in the controller database. Users declared in
 the API, so an admin always remains. The `rbac` commands use the gRPC API
 like every other command, so `--token` and the TLS options below apply to them.
 
-Tokens come from `--token`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`.
+Tokens come from `--token`, `HAIFY_TOKEN`, `~/.haify/token` or `/etc/haify/token`.
 
 **Two-person approval.** A role says what a user may do, and an admin may do
 everything — so one stolen admin token could delete the backup target, the
@@ -2081,11 +2081,11 @@ ttl_minutes = 60     # how long a request waits, and how long an approved call m
 ```
 
 ```bash
-$ sds backup target remove offsite                 # alice
+$ haify backup target remove offsite                 # alice
 Error: DeleteBackupTarget needs a second person's approval: request 3f9a1c2b7d10 is pending ...
-$ sds approval list                                # bob
-$ sds approval approve 3f9a1c2b7d10                # bob; alice cannot approve her own
-$ sds backup target remove offsite                 # alice again: runs, once
+$ haify approval list                                # bob
+$ haify approval approve 3f9a1c2b7d10                # bob; alice cannot approve her own
+$ haify backup target remove offsite                 # alice again: runs, once
 ```
 
 The approval covers the method and its exact arguments, so approving the
@@ -2120,14 +2120,14 @@ bearer token, and the web UI proxies to it over a pinned loopback connection).
 REST clients such as the Proxmox plugin then use `https://`. Clients:
 
 ```bash
-sds --tls-ca /etc/sds/ca.crt node list                 # verify against this CA
-sds --tls-cert me.crt --tls-key me.key --tls-ca ca.crt node list   # mutual TLS
+haify --tls-ca /etc/haify/ca.crt node list                 # verify against this CA
+haify --tls-cert me.crt --tls-key me.key --tls-ca ca.crt node list   # mutual TLS
 ```
 
 `--tls` alone verifies against the system trust store; `--tls-server-name`
 overrides the name checked; `--tls-insecure` encrypts without verifying. Each
-has an environment variable (`SDS_TLS`, `SDS_TLS_CA`, `SDS_TLS_CERT`,
-`SDS_TLS_KEY`, `SDS_TLS_SERVER_NAME`, `SDS_TLS_INSECURE`).
+has an environment variable (`HAIFY_TLS`, `HAIFY_TLS_CA`, `HAIFY_TLS_CERT`,
+`HAIFY_TLS_KEY`, `HAIFY_TLS_SERVER_NAME`, `HAIFY_TLS_INSECURE`).
 
 **Audit.** Every state-changing API call is recorded with caller, target,
 outcome and latency in the controller database (`[audit] enabled`, default
@@ -2144,14 +2144,14 @@ cluster as it is written:
 ```toml
 [audit]
 syslog = "tls://logs.example.com:6514"   # or tcp://host:514, udp://host:514
-syslog_ca = "/etc/sds/logs-ca.pem"       # tls only; empty = system roots
-webhook_url = "https://audit.example.com/sds"
+syslog_ca = "/etc/haify/logs-ca.pem"       # tls only; empty = system roots
+webhook_url = "https://audit.example.com/haify"
 webhook_token = "..."                    # sent as Authorization: Bearer
 ```
 
 Syslog gets one RFC 5424 message per entry, facility 13 ("log audit"),
 newline-framed over TCP. The webhook gets each batch as a JSON POST,
-`{"source": "sds-controller", "records": [{"seq": N, "event": {...}}]}`. Either
+`{"source": "haify-controller", "records": [{"seq": N, "event": {...}}]}`. Either
 is sent in order and from where it last left off: each destination's position
 is kept with the trail, so a destination that was down gets everything when it
 is back, and a controller that takes over after a failover carries on where
@@ -2174,8 +2174,8 @@ gets its storage promoted on the new one.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: sds
-provisioner: sds.csi.liliang-cn.com
+  name: haify
+provisioner: haify.csi.liliang-cn.com
 parameters:
   pool: thin-pool
   replicas: "2"
@@ -2200,13 +2200,13 @@ The manifests are in `deploy/k8s` (see its README); the CSI section of
 [deployment-guide.md](deployment-guide.md) covers installation.
 
 A database on Kubernetes with its data on a Haify volume — the counterpart of
-[`sds app`](#12-database-applications) — is one MCP call: `sds-mcp k8s` serves
-`sds_k8s_app_create`, `sds_k8s_app_list` and `sds_k8s_app_delete`
+[`haify app`](#12-database-applications) — is one MCP call: `haify-mcp k8s` serves
+`haify_k8s_app_create`, `haify_k8s_app_list` and `haify_k8s_app_delete`
 ([mcp.md](mcp.md#kubernetes-tools)). Deleting keeps the volume claim and the
 password secret unless `delete_data` is set, and creating the app again with
 the same name and template runs it on them.
 
-**Proxmox VE** has the counterpart: a storage plugin (type `sds`) that backs VM
+**Proxmox VE** has the counterpart: a storage plugin (type `haify`) that backs VM
 disks with Haify resources over the controller's REST API. It is in
 `deploy/proxmox`, with its requirements and install steps in that README.
 `deploy/proxmox/bootstrap.sh`, run on one PVE node, does those steps for an
@@ -2218,8 +2218,8 @@ controller, node registration, the pool, Self-HA, the plugin and the
 
 ## 19. The AI Copilot
 
-`sds-ai` is an optional service that answers questions about the cluster in the
-web UI's Copilot sidebar. It reaches the cluster through `sds-mcp`: every
+`haify-ai` is an optional service that answers questions about the cluster in the
+web UI's Copilot sidebar. It reaches the cluster through `haify-mcp`: every
 read-only tool, plus a fixed list of day-to-day writes (creating pools,
 resources, profiles, gateways, HA configs, snapshots and backups; adding disks,
 caches, volumes, replicas and DR; attaching and detaching diskless clients;
@@ -2228,19 +2228,19 @@ undrain; verify; WAN repair and endpoint changes), each of which waits in the
 chat panel until the operator approves that call with its arguments shown.
 Deleting, restoring, unmounting, changing roles, evicting, draining and
 stopping are not available to it at all; it proposes them and the operator runs
-them from the UI. It listens on `127.0.0.1:7634` by default (`SDS_AI_ADDR`;
-any non-loopback address requires a token in `SDS_AI_TOKEN` or
-`/etc/sds/token`); the web UI proxies `/ai/*` to port 7634 on its own node.
+them from the UI. It listens on `127.0.0.1:7634` by default (`HAIFY_AI_ADDR`;
+any non-loopback address requires a token in `HAIFY_AI_TOKEN` or
+`/etc/haify/token`); the web UI proxies `/ai/*` to port 7634 on its own node.
 
 Two things determine how useful it is:
 
 - **Its knowledge base.** Check what it has: `GET /ai/kb/list`. A near-empty one
   makes it fall back on the model's own memory, which for a specific question
   about your cluster is how you get a confident wrong answer. Feed it with
-  `POST /ai/kb/ingest` (a directory on the node running `sds-ai`) or
+  `POST /ai/kb/ingest` (a directory on the node running `haify-ai`) or
   `POST /ai/kb/doc` (one document). `GET /ai/kb/doctor` checks that retrieval
   over the index still returns results.
-- **The embedder matching the index.** `SDS_AI_EMB_DIM` (default 768) must
+- **The embedder matching the index.** `HAIFY_AI_EMB_DIM` (default 768) must
   equal the width the index was built at. Change the embedder to one of a different width and every
   search silently returns nothing — no error, just no results. `/ai/kb/list`
   reports the width read back from the index, which is how you check.
@@ -2255,16 +2255,16 @@ and every question starts from nothing.
 **Before a node reboot**
 
 ```bash
-sds node drain node1
+haify node drain node1
 # ... work ...
-sds node undrain node1
-sds resource status <each affected resource>   # wait for UpToDate everywhere
+haify node undrain node1
+haify resource status <each affected resource>   # wait for UpToDate everywhere
 ```
 
 **Growing a volume**
 
 ```bash
-sds resource resize-volume db 0 200G
+haify resource resize-volume db 0 200G
 # then grow the filesystem on the Primary
 ssh <primary> sudo resize2fs /dev/drbd<minor>
 ```
@@ -2279,19 +2279,19 @@ replica back, and wait for the resync to finish before touching the next node.
 ```bash
 # build for the nodes, not for the machine you build on
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 make build
-scp bin/sds-controller <node>:/tmp/
-ssh <node> "sudo systemctl stop sds-controller && \
-  sudo install -m 0755 /tmp/sds-controller /opt/sds/bin/sds-controller && \
-  sudo systemctl start sds-controller"
+scp bin/haify-controller <node>:/tmp/
+ssh <node> "sudo systemctl stop haify-controller && \
+  sudo install -m 0755 /tmp/haify-controller /opt/haify/bin/haify-controller && \
+  sudo systemctl start haify-controller"
 ```
 
-`/opt/sds/bin` is where the shipped unit file runs it from; copy to whatever
-path your unit's `ExecStart` names (`systemctl cat sds-controller`). Set
+`/opt/haify/bin` is where the shipped unit file runs it from; copy to whatever
+path your unit's `ExecStart` names (`systemctl cat haify-controller`). Set
 `GOARCH` to the nodes' architecture (`arm64` for aarch64).
 
 With Self-HA on, do not stop or restart the controller by hand: drbd-reactor manages it, and stopping it is an unplanned failover.
 Replace the binary on every standby node first, then
-`sds ha evict sds-meta` to move the controller onto one of them, then
+`haify ha evict haify-meta` to move the controller onto one of them, then
 replace it on the node it left.
 
 **Checking that replicas really hold the same data**
@@ -2300,9 +2300,9 @@ Every replica can say `UpToDate` and still differ — a disk that returned the
 wrong block, a write that never reached one copy. Only reading both finds it:
 
 ```bash
-sds resource verify db --wait 30m     # compare every replica with the Primary
-sds resource verify db                # still running? run it again to follow it
-sds resource verify db --resync       # make the copies identical
+haify resource verify db --wait 30m     # compare every replica with the Primary
+haify resource verify db                # still running? run it again to follow it
+haify resource verify db --resync       # make the copies identical
 ```
 
 DRBD records what may differ in an out-of-sync bitmap. A verify **adds** to it
@@ -2323,17 +2323,17 @@ off). Marked blocks raise `resource.out_of_sync`; clearing them is left to you.
 Resources on thin pools resync with `rs-discard-granularity`, so a full resync
 (a new replica, a failback) keeps the target thin instead of allocating every
 block. Resources created before this was a default can get it with
-`sds resource set-options <name> --drbd-options disk/rs-discard-granularity=65536`.
+`haify resource set-options <name> --drbd-options disk/rs-discard-granularity=65536`.
 
 **Checking a cluster you have not looked at in a while**
 
 ```bash
-sds health-check
-sds resource list
-sds event list --min-severity warning
-sds backup schedule list # did the last scheduled backup fail?
-sds backup list          # when was the newest 'completed' one?
-sds channel test <each>  # would you actually be told?
+haify health-check
+haify resource list
+haify event list --min-severity warning
+haify backup schedule list # did the last scheduled backup fail?
+haify backup list          # when was the newest 'completed' one?
+haify channel test <each>  # would you actually be told?
 ```
 
 ---
@@ -2343,15 +2343,15 @@ sds channel test <each>  # would you actually be told?
 Start here:
 
 ```bash
-sds resource status <name>
-sds event list --resource <name>
+haify resource status <name>
+haify event list --resource <name>
 ssh <node> sudo drbdadm status <name>
 ssh <node> sudo journalctl -u drbd-reactor -n 50
 ```
 
 ### Reading the status
 
-`sds resource status` prints one line per node, `role=… disk=… repl=…`;
+`haify resource status` prints one line per node, `role=… disk=… repl=…`;
 `drbdadm status` on a node prints the same states as `role:`, `disk:`,
 `peer-disk:` and `replication:`, plus `quorum:no` when the node has lost it.
 
@@ -2387,8 +2387,8 @@ still cannot be promoted — which is what stops this from becoming a split brai
 **A resource is stuck `Inconsistent` after creation.** A fresh DRBD device needs
 one copy declared authoritative. `resource create` does this itself; if it was
 interrupted before that step, promote once by hand with
-`sds resource primary <res> <node> --force`, then
-`sds resource secondary <res> <node>`.
+`haify resource primary <res> <node> --force`, then
+`haify resource secondary <res> <node>`.
 
 **`StandAlone` after a split brain.** Two copies diverged. Decide which one is
 authoritative — Haify will not guess — then discard the other's changes and
@@ -2411,15 +2411,15 @@ every operation fails with an empty error; clear the stale key and restart the
 controller.
 
 **Nothing is alerting.** Check three things in order: `[alert] enabled = true`,
-at least one channel in `sds channel list` that is not muted (or a webhook
-under `[alert]`), and `sds channel test` on each of them.
+at least one channel in `haify channel list` that is not muted (or a webhook
+under `[alert]`), and `haify channel test` on each of them.
 
 ### Getting more detail
 
 ```bash
-sds event watch                # follow live
-sds rbac whoami                # "permission denied" that should not be
-journalctl -u sds-controller -f    # on the controller node
+haify event watch                # follow live
+haify rbac whoami                # "permission denied" that should not be
+journalctl -u haify-controller -f    # on the controller node
 ```
 
 On the REST API (`[server] rest_port`, default 3375, with the same token): `GET /v1/logs` returns the
@@ -2429,7 +2429,7 @@ collectors on the nodes (`{"nodes": [...], "collectors": [...]}`, both
 defaulting to all) — DRBD status, config and kernel state, kernel errors, the
 drbd-reactor, promoter and Haify journals, failed units, storage, mounts —
 without anyone logging in. The web UI's Logs page shows the first two;
-`sds-mcp` has all three (`sds_log_list`, `sds_audit_list`, `sds_diagnose`).
+`haify-mcp` has all three (`haify_log_list`, `haify_audit_list`, `haify_diagnose`).
 
 [Known failure modes](deployment-guide.md#13-known-failure-modes) in the
 deployment guide lists the failures that are hardest to diagnose.

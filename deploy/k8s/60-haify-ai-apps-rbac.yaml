@@ -1,0 +1,62 @@
+# Lets the Haify Copilot (haify-ai) create databases on Haify volumes through the
+# haify_k8s_app_create tool (served by `haify-mcp k8s`). haify-ai runs outside the
+# cluster, next to haify-controller, and reaches the API server with this
+# ServiceAccount's token (kubeconfig in HAIFY_AI_KUBECONFIG); see
+# deploy/k8s/README.md.
+#
+# It can create the four objects an app is made of and read enough to report
+# on them. It cannot update or delete anything: an app is removed by an
+# operator, not by the Copilot.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: haify-ai
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: haify-ai
+  namespace: haify-ai
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: haify-ai-token
+  namespace: haify-ai
+  annotations:
+    kubernetes.io/service-account.name: haify-ai
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: haify-ai-apps
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources: ["secrets", "persistentvolumeclaims", "services"]
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources: ["pods", "persistentvolumes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "create"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: haify-ai-apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: haify-ai-apps
+subjects:
+  - kind: ServiceAccount
+    name: haify-ai
+    namespace: haify-ai

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +20,7 @@ func wanCommand() *cobra.Command {
 }
 
 func wanSetEndpointCommand() *cobra.Command {
-	var req sdspb.SetWanEndpointRequest
+	var req haifypb.SetWanEndpointRequest
 	cmd := &cobra.Command{
 		Use:   "set-endpoint <resource> [--dr-endpoint <address>] [--egress-address <ip> | --clear-egress]",
 		Short: "Change where a WAN resource reaches its DR site, and rebuild its tunnels there",
@@ -32,12 +32,12 @@ func wanSetEndpointCommand() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			req.Name = args[0]
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			resp, err := sdsClient.SetWanEndpoint(cmd.Context(), &req)
+			defer closeClient(haifyClient)
+			resp, err := haifyClient.SetWanEndpoint(cmd.Context(), &req)
 			if err != nil {
 				return err
 			}
@@ -69,7 +69,7 @@ func wanRepairCommand() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -82,7 +82,7 @@ func wanRepairCommand() *cobra.Command {
 
 			out := cmd.OutOrStdout()
 			// Writes to the command's own output stream are best-effort. The only ways
-			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// they fail are a closed pipe (`haify ... | head`) or a full disk, neither of
 			// which this command can report anywhere the operator is still looking, and
 			// treating them as errors would report a successful operation as failed.
 			_, _ = fmt.Fprintln(out, "Expected legs:")

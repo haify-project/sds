@@ -8,44 +8,44 @@ func TestClassify(t *testing.T) {
 		object string
 		action string
 	}{
-		{"/v1.SDSController/CreatePool", "pool", ActWrite},
-		{"/v1.SDSController/ListPools", "pool", ActRead},
-		{"/v1.SDSController/AddDiskToPool", "pool", ActWrite},
-		{"/v1.SDSController/CreateZFSSnapshot", "snapshot", ActWrite},
-		{"/v1.SDSController/ListSnapshots", "snapshot", ActRead},
-		{"/v1.SDSController/CreateNFSGateway", "gateway", ActWrite},
-		{"/v1.SDSController/AddNVMeNamespace", "gateway", ActWrite},
-		{"/v1.SDSController/ListGateways", "gateway", ActRead},
-		{"/v1.SDSController/SetSMBUser", "gateway", ActWrite},
-		{"/v1.SDSController/ListSMBShares", "gateway", ActRead},
-		{"/v1.SDSController/EnableSelfHa", "ha", ActWrite},
-		{"/v1.SDSController/GetSelfHaStatus", "ha", ActRead},
-		{"/v1.SDSController/RegisterNode", "node", ActWrite},
-		{"/v1.SDSController/ListNodes", "node", ActRead},
-		{"/v1.SDSController/CreateResource", "resource", ActWrite},
+		{"/v1.HaifyController/CreatePool", "pool", ActWrite},
+		{"/v1.HaifyController/ListPools", "pool", ActRead},
+		{"/v1.HaifyController/AddDiskToPool", "pool", ActWrite},
+		{"/v1.HaifyController/CreateZFSSnapshot", "snapshot", ActWrite},
+		{"/v1.HaifyController/ListSnapshots", "snapshot", ActRead},
+		{"/v1.HaifyController/CreateNFSGateway", "gateway", ActWrite},
+		{"/v1.HaifyController/AddNVMeNamespace", "gateway", ActWrite},
+		{"/v1.HaifyController/ListGateways", "gateway", ActRead},
+		{"/v1.HaifyController/SetSMBUser", "gateway", ActWrite},
+		{"/v1.HaifyController/ListSMBShares", "gateway", ActRead},
+		{"/v1.HaifyController/EnableSelfHa", "ha", ActWrite},
+		{"/v1.HaifyController/GetSelfHaStatus", "ha", ActRead},
+		{"/v1.HaifyController/RegisterNode", "node", ActWrite},
+		{"/v1.HaifyController/ListNodes", "node", ActRead},
+		{"/v1.HaifyController/CreateResource", "resource", ActWrite},
 		// Rewrites and adjusts the config on every node: a write, not a read,
 		// however much it sounds like maintenance.
-		{"/v1.SDSController/RepairResource", "resource", ActWrite},
-		{"/v1.SDSController/ResourceStatus", "resource", ActRead},
-		{"/v1.SDSController/SetPrimary", "resource", ActWrite},
+		{"/v1.HaifyController/RepairResource", "resource", ActWrite},
+		{"/v1.HaifyController/ResourceStatus", "resource", ActRead},
+		{"/v1.HaifyController/SetPrimary", "resource", ActWrite},
 		// Off-cluster backups must not fall through to "system", where an
 		// operator has read only: the feature would then be unusable by
 		// anyone but admin, and nothing would say so.
-		{"/v1.SDSController/CreateBackup", "backup", ActWrite},
-		{"/v1.SDSController/RestoreBackup", "backup", ActWrite},
-		{"/v1.SDSController/AddBackupTarget", "backup", ActWrite},
-		{"/v1.SDSController/ListBackups", "backup", ActRead},
-		{"/v1.SDSController/ListBackupTargets", "backup", ActRead},
+		{"/v1.HaifyController/CreateBackup", "backup", ActWrite},
+		{"/v1.HaifyController/RestoreBackup", "backup", ActWrite},
+		{"/v1.HaifyController/AddBackupTarget", "backup", ActWrite},
+		{"/v1.HaifyController/ListBackups", "backup", ActRead},
+		{"/v1.HaifyController/ListBackupTargets", "backup", ActRead},
 		// Database applications are their own object; SnapshotApp is not a
 		// "snapshot" and the approval methods are not apps.
-		{"/v1.SDSController/CreateApp", "app", ActWrite},
-		{"/v1.SDSController/ListApps", "app", ActRead},
-		{"/v1.SDSController/GetAppStatus", "app", ActRead},
-		{"/v1.SDSController/DeleteApp", "app", ActWrite},
-		{"/v1.SDSController/FailoverApp", "app", ActWrite},
-		{"/v1.SDSController/SnapshotApp", "app", ActWrite},
-		{"/v1.SDSController/ListApprovals", "approval", ActRead},
-		{"/v1.SDSController/ApproveRequest", "approval", ActApprove},
+		{"/v1.HaifyController/CreateApp", "app", ActWrite},
+		{"/v1.HaifyController/ListApps", "app", ActRead},
+		{"/v1.HaifyController/GetAppStatus", "app", ActRead},
+		{"/v1.HaifyController/DeleteApp", "app", ActWrite},
+		{"/v1.HaifyController/FailoverApp", "app", ActWrite},
+		{"/v1.HaifyController/SnapshotApp", "app", ActWrite},
+		{"/v1.HaifyController/ListApprovals", "approval", ActRead},
+		{"/v1.HaifyController/ApproveRequest", "approval", ActApprove},
 	}
 	for _, c := range cases {
 		obj, act := Classify(c.method)
@@ -148,7 +148,7 @@ func TestInvalidInputs(t *testing.T) {
 // may run one, exactly as it may list the reports.
 func TestInspectionRPCsAreReads(t *testing.T) {
 	for _, m := range []string{"RunInspection", "ListInspections", "GetInspection"} {
-		object, action := Classify("/v1.SDSController/" + m)
+		object, action := Classify("/v1.HaifyController/" + m)
 		if object != "system" || action != ActRead {
 			t.Errorf("%s: got %s/%s, want system/%s", m, object, action, ActRead)
 		}
@@ -170,7 +170,7 @@ func TestNotifyChannelRPCsAreSystemScoped(t *testing.T) {
 		{"DeleteNotifyChannel", ActWrite},
 		{"TestNotifyChannel", ActWrite},
 	} {
-		object, action := Classify("/v1.SDSController/" + tc.method)
+		object, action := Classify("/v1.HaifyController/" + tc.method)
 		if object != "system" {
 			t.Errorf("%s: object = %q, want system", tc.method, object)
 		}
@@ -191,7 +191,7 @@ func TestApprovalRight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	obj, act := Classify("/v1.SDSController/ApproveRequest")
+	obj, act := Classify("/v1.HaifyController/ApproveRequest")
 	if obj != "approval" || act != ActApprove {
 		t.Fatalf("ApproveRequest classified as %s:%s", obj, act)
 	}

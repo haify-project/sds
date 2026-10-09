@@ -1,6 +1,6 @@
 // Package k8sapp creates databases on Kubernetes whose data lives on a Haify
-// volume. sds-mcp exposes it as the sds_k8s_app_create, sds_k8s_app_list and
-// sds_k8s_app_delete tools.
+// volume. haify-mcp exposes it as the haify_k8s_app_create, haify_k8s_app_list and
+// haify_k8s_app_delete tools.
 package k8sapp
 
 import (
@@ -53,9 +53,9 @@ import (
 
 const (
 	managedByKey    = "app.kubernetes.io/managed-by"
-	managedByValue  = "sds"
-	templateKey     = "sds.io/app-template"
-	sdsDriverName   = "sds.csi.liliang-cn.com"
+	managedByValue  = "haify"
+	templateKey     = "haify.io/app-template"
+	haifyDriverName = "haify.csi.liliang-cn.com"
 	failoverSeconds = int64(30)
 	defaultSize     = "5Gi"
 	defaultNS       = "default"
@@ -292,7 +292,7 @@ func (m *Manager) storageClassFor(ctx context.Context, want string) (string, err
 	}
 	var local, remote []string
 	for _, sc := range list.Items {
-		if sc.Provisioner != sdsDriverName {
+		if sc.Provisioner != haifyDriverName {
 			if sc.Name == want {
 				return "", fmt.Errorf("storage class %q is served by %s, not Haify", want, sc.Provisioner)
 			}

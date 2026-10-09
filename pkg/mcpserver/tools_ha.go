@@ -56,7 +56,7 @@ type selfHaDisableIn struct {
 
 // registerHATools adds HA failover and controller self-HA tools.
 func (s *Server) registerHATools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_ha_list", "List HA configs",
+	addRead(s, srv, readOnlyTool("haify_ha_list", "List HA configs",
 		"List all drbd-reactor HA configurations managed by Haify."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, haListOut, error) {
 			configs, err := s.client.ListHa(ctx)
@@ -76,7 +76,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_ha_status", "HA config status",
+	addRead(s, srv, readOnlyTool("haify_ha_status", "HA config status",
 		"Show the HA configuration of one resource: VIP, mount point, and managed services."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haResourceIn) (*mcp.CallToolResult, haConfigOut, error) {
 			c, err := s.client.GetHa(ctx, in.Resource)
@@ -92,7 +92,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 			}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_ha_create", "Create HA config",
+	addWrite(s, srv, writeTool("haify_ha_create", "Create HA config",
 		"Make a DRBD resource highly available via drbd-reactor: on the active node the resource is promoted, "+
 			"mounted, the VIP is brought up, and services are started. Failover is automatic."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haCreateIn) (*mcp.CallToolResult, opResult, error) {
@@ -114,13 +114,13 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 			return nil, ok(strings.Join(parts, ", ")), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_ha_evict", "Evict HA resource",
+	addWrite(s, srv, destructiveTool("haify_ha_evict", "Evict HA resource",
 		"Planned switchover of one HA resource: its active node stops the services and another node takes over. "+
-			"It moves exactly the resource named and nothing else on the node — sds-meta is the controller with its "+
-			"VIP and the AI Copilot, any other name is that resource's own service. For sds-meta the call returns as "+
+			"It moves exactly the resource named and nothing else on the node — haify-meta is the controller with its "+
+			"VIP and the AI Copilot, any other name is that resource's own service. For haify-meta the call returns as "+
 			"soon as the switchover is launched, and when this server runs in the same chain (as Haify sets it up) it "+
 			"moves too: expect this connection to drop for several seconds, which is not a failure; check "+
-			"sds_ha_promoter_status for where it landed. For any other resource the call returns once another node "+
+			"haify_ha_promoter_status for where it landed. For any other resource the call returns once another node "+
 			"has taken over, and fails if none did. Never stop or restart a drbd-reactor-managed service by hand "+
 			"instead: the promoter treats that as a fault and fails the resource over."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haResourceIn) (*mcp.CallToolResult, opResult, error) {
@@ -130,7 +130,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("resource %s evicted from its active node", in.Resource)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_ha_delete", "Delete HA config",
+	addWrite(s, srv, destructiveTool("haify_ha_delete", "Delete HA config",
 		"Remove the drbd-reactor HA configuration of a resource. Running services are stopped; "+
 			"the DRBD resource and its data are kept."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haResourceIn) (*mcp.CallToolResult, opResult, error) {
@@ -140,7 +140,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("HA config for %s deleted", in.Resource)), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_self_ha_status", "Controller self-HA status",
+	addRead(s, srv, readOnlyTool("haify_self_ha_status", "Controller self-HA status",
 		"Show whether the Haify controller itself runs highly available and which node is active."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, selfHaStatusOut, error) {
 			st, err := s.client.GetSelfHaStatus(ctx)
@@ -156,7 +156,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 			}, nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_self_ha_enable", "Enable controller self-HA",
+	addWrite(s, srv, destructiveTool("haify_self_ha_enable", "Enable controller self-HA",
 		"Make the Haify controller itself highly available: creates a small DRBD resource for the controller "+
 			"database, distributes the controller to all nodes, and hands management to drbd-reactor behind a VIP. "+
 			"The controller restarts during the handoff — reconnect to the VIP afterwards."),
@@ -177,7 +177,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 				resource, vip)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_self_ha_disable", "Disable controller self-HA",
+	addWrite(s, srv, destructiveTool("haify_self_ha_disable", "Disable controller self-HA",
 		"Revert the controller to standalone mode on one node. The controller restarts during the handoff."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in selfHaDisableIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.DisableSelfHa(ctx, in.Node); err != nil {

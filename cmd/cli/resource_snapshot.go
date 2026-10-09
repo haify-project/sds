@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -70,13 +70,13 @@ keeps its lock.`,
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			keep := &sdspb.GFSRetention{
+			keep := &haifypb.GFSRetention{
 				Hourly:  int32(hourly),
 				Daily:   int32(daily),
 				Weekly:  int32(weekly),
@@ -87,7 +87,7 @@ keeps its lock.`,
 			if cmd.Flags().Changed("lock-days") {
 				lock = &lockDays
 			}
-			if err := sdsClient.CreateSnapshotScheduleLocked(ctx, resource, cronExpr, keep, !disabled, lock); err != nil {
+			if err := haifyClient.CreateSnapshotScheduleLocked(ctx, resource, cronExpr, keep, !disabled, lock); err != nil {
 				return fmt.Errorf("failed to create snapshot schedule: %w", err)
 			}
 			fmt.Printf("Snapshot schedule for %q created (cron=%q)\n", resource, cronExpr)
@@ -113,13 +113,13 @@ func resourceSnapshotScheduleList() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			schedules, err := sdsClient.ListSnapshotSchedules(ctx)
+			schedules, err := haifyClient.ListSnapshotSchedules(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list snapshot schedules: %w", err)
 			}
@@ -173,13 +173,13 @@ func resourceSnapshotScheduleDelete() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.DeleteSnapshotSchedule(ctx, name); err != nil {
+			if err := haifyClient.DeleteSnapshotSchedule(ctx, name); err != nil {
 				return fmt.Errorf("failed to delete snapshot schedule: %w", err)
 			}
 			fmt.Printf("Snapshot schedule %q deleted\n", name)
@@ -220,11 +220,11 @@ func resourceSnapshotDelete() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			if storageType == "zfs" {
 				// ZFS snapshot
@@ -234,7 +234,7 @@ func resourceSnapshotDelete() *cobra.Command {
 				// pkg/deployment/deployment.go ZFSDestroySnapshot: "sudo zfs destroy %s"
 				// So it needs FULL path.
 				snapshotPath := fmt.Sprintf("%s/%s_data@%s", pool, resource, snapshotName)
-				err = sdsClient.DeleteZFSSnapshot(ctx, snapshotPath, node)
+				err = haifyClient.DeleteZFSSnapshot(ctx, snapshotPath, node)
 				if err != nil {
 					return fmt.Errorf("failed to delete ZFS snapshot: %w", err)
 				}
@@ -242,7 +242,7 @@ func resourceSnapshotDelete() *cobra.Command {
 			} else {
 				// LVM snapshot
 				// Pass pool as VG name
-				err = sdsClient.DeleteLvmSnapshot(ctx, pool, snapshotName, node)
+				err = haifyClient.DeleteLvmSnapshot(ctx, pool, snapshotName, node)
 				if err != nil {
 					return fmt.Errorf("failed to delete LVM snapshot: %w", err)
 				}
@@ -293,16 +293,16 @@ func resourceSnapshotCreate() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			if storageType == "zfs" {
 				// ZFS snapshot: pool/resource_data@snapshot
 				dataset := fmt.Sprintf("%s/%s_data", pool, resource)
-				err = sdsClient.CreateZFSSnapshot(ctx, dataset, snapshotName, node)
+				err = haifyClient.CreateZFSSnapshot(ctx, dataset, snapshotName, node)
 				if err != nil {
 					return fmt.Errorf("failed to create ZFS snapshot: %w", err)
 				}
@@ -314,7 +314,7 @@ func resourceSnapshotCreate() *cobra.Command {
 				}
 				lvName := fmt.Sprintf("%s_data", resource)
 				// Pass pool as the VG name (first argument)
-				err = sdsClient.CreateLvmSnapshot(ctx, pool, lvName, snapshotName, node, size)
+				err = haifyClient.CreateLvmSnapshot(ctx, pool, lvName, snapshotName, node, size)
 				if err != nil {
 					return fmt.Errorf("failed to create LVM snapshot: %w", err)
 				}
@@ -361,16 +361,16 @@ func resourceSnapshotList() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			if storageType == "zfs" {
 				// ZFS snapshots
 				dataset := fmt.Sprintf("%s/%s_data", pool, resource)
-				snapshots, err := sdsClient.ListZFSSnapshots(ctx, dataset, node)
+				snapshots, err := haifyClient.ListZFSSnapshots(ctx, dataset, node)
 				if err != nil {
 					return fmt.Errorf("failed to list ZFS snapshots: %w", err)
 				}
@@ -387,7 +387,7 @@ func resourceSnapshotList() *cobra.Command {
 			} else {
 				// LVM snapshots. The pool is the volume group; resource is what
 				// narrows the group's snapshots down to this one's volumes.
-				snapshots, err := sdsClient.ListLvmSnapshots(ctx, pool, node, resource)
+				snapshots, err := haifyClient.ListLvmSnapshots(ctx, pool, node, resource)
 				if err != nil {
 					return fmt.Errorf("failed to list LVM snapshots: %w", err)
 				}
@@ -452,16 +452,16 @@ func resourceSnapshotRestore() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			if storageType == "zfs" {
 				// ZFS rollback
 				dataset := fmt.Sprintf("%s/%s_data", pool, resource)
-				err = sdsClient.RestoreZFSSnapshot(ctx, dataset, snapshotName, node)
+				err = haifyClient.RestoreZFSSnapshot(ctx, dataset, snapshotName, node)
 				if err != nil {
 					return fmt.Errorf("failed to restore ZFS snapshot: %w", err)
 				}
@@ -469,14 +469,14 @@ func resourceSnapshotRestore() *cobra.Command {
 			} else {
 				// LVM snapshot restore (merge)
 				// Pass pool as VG name
-				err = sdsClient.RestoreLvmSnapshot(ctx, pool, snapshotName, node)
+				err = haifyClient.RestoreLvmSnapshot(ctx, pool, snapshotName, node)
 				if err != nil {
 					return fmt.Errorf("failed to restore LVM snapshot: %w", err)
 				}
 				fmt.Printf("LVM snapshot '%s' restored for resource '%s' on node '%s'\n", snapshotName, resource, node)
 				fmt.Println("Note: The snapshot has been merged back into the original volume. The resource's")
 				fmt.Println("other replicas are resyncing from this node; until that finishes it has one")
-				fmt.Printf("complete copy. Follow it with: sds resource status %s\n", resource)
+				fmt.Printf("complete copy. Follow it with: haify resource status %s\n", resource)
 			}
 
 			return nil
@@ -503,7 +503,7 @@ func resourceSnapshotRestore() *cobra.Command {
 func snapshotTarget(resource, pool, node string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 	defer cancel()
-	c, err := newSDSClient()
+	c, err := newHaifyClient()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to connect to controller: %w", err)
 	}
@@ -515,7 +515,7 @@ func snapshotTarget(resource, pool, node string) (string, string, error) {
 	if pool == "" {
 		for _, v := range info.GetVolumes() {
 			if v.GetPool() != "" {
-				pool = strings.TrimPrefix(v.GetPool(), "sds_")
+				pool = strings.TrimPrefix(v.GetPool(), "haify_")
 				break
 			}
 		}

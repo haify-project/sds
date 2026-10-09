@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/event"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // ==================== NOTIFICATION CHANNELS ====================
@@ -17,13 +17,13 @@ import (
 // target RPCs for the same reasons: a channel's signing secret is write-only,
 // and a change takes effect immediately rather than at the next restart.
 
-func (s *Server) ListNotifyChannels(ctx context.Context, _ *sdspb.ListNotifyChannelsRequest) (*sdspb.ListNotifyChannelsResponse, error) {
+func (s *Server) ListNotifyChannels(ctx context.Context, _ *haifypb.ListNotifyChannelsRequest) (*haifypb.ListNotifyChannelsResponse, error) {
 	kinds := make([]string, 0, len(event.Kinds()))
 	for _, k := range event.Kinds() {
 		kinds = append(kinds, string(k))
 	}
 	if s.ctrl.db == nil {
-		return &sdspb.ListNotifyChannelsResponse{
+		return &haifypb.ListNotifyChannelsResponse{
 			Success: false,
 			Message: "notification channels require the controller database",
 			Kinds:   kinds,
@@ -31,27 +31,27 @@ func (s *Server) ListNotifyChannels(ctx context.Context, _ *sdspb.ListNotifyChan
 	}
 	channels, err := s.ctrl.db.ListNotifyChannels(ctx)
 	if err != nil {
-		return &sdspb.ListNotifyChannelsResponse{Success: false, Message: err.Error(), Kinds: kinds}, nil
+		return &haifypb.ListNotifyChannelsResponse{Success: false, Message: err.Error(), Kinds: kinds}, nil
 	}
-	out := make([]*sdspb.NotifyChannelInfo, 0, len(channels))
+	out := make([]*haifypb.NotifyChannelInfo, 0, len(channels))
 	for _, c := range channels {
 		out = append(out, notifyChannelInfo(c))
 	}
-	return &sdspb.ListNotifyChannelsResponse{
+	return &haifypb.ListNotifyChannelsResponse{
 		Success: true, Message: "Notification channels listed successfully",
 		Channels: out, Kinds: kinds,
 	}, nil
 }
 
-func (s *Server) SaveNotifyChannel(ctx context.Context, req *sdspb.SaveNotifyChannelRequest) (*sdspb.SaveNotifyChannelResponse, error) {
+func (s *Server) SaveNotifyChannel(ctx context.Context, req *haifypb.SaveNotifyChannelRequest) (*haifypb.SaveNotifyChannelResponse, error) {
 	if s.ctrl.db == nil {
-		return &sdspb.SaveNotifyChannelResponse{
+		return &haifypb.SaveNotifyChannelResponse{
 			Success: false, Message: "notification channels require the controller database",
 		}, nil
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return &sdspb.SaveNotifyChannelResponse{Success: false, Message: "a channel name is required"}, nil
+		return &haifypb.SaveNotifyChannelResponse{Success: false, Message: "a channel name is required"}, nil
 	}
 
 	ch := &database.NotifyChannel{
@@ -84,52 +84,52 @@ func (s *Server) SaveNotifyChannel(ctx context.Context, req *sdspb.SaveNotifyCha
 	// cannot work is a channel that silently is not alerting, and the moment to
 	// find that out is while someone is looking at the form.
 	if _, err := webhookConfigFor(ch); err != nil {
-		return &sdspb.SaveNotifyChannelResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.SaveNotifyChannelResponse{Success: false, Message: err.Error()}, nil
 	}
 
 	if err := s.ctrl.db.SaveNotifyChannel(ctx, ch); err != nil {
-		return &sdspb.SaveNotifyChannelResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.SaveNotifyChannelResponse{Success: false, Message: err.Error()}, nil
 	}
 	if err := s.ctrl.reloadNotifyChannels(ctx); err != nil {
-		return &sdspb.SaveNotifyChannelResponse{
+		return &haifypb.SaveNotifyChannelResponse{
 			Success: false,
 			Message: fmt.Sprintf("channel %q was saved but could not be activated: %v", name, err),
 			Channel: notifyChannelInfo(ch),
 		}, nil
 	}
-	return &sdspb.SaveNotifyChannelResponse{
+	return &haifypb.SaveNotifyChannelResponse{
 		Success: true,
 		Message: fmt.Sprintf("Notification channel %q saved", name),
 		Channel: notifyChannelInfo(ch),
 	}, nil
 }
 
-func (s *Server) DeleteNotifyChannel(ctx context.Context, req *sdspb.DeleteNotifyChannelRequest) (*sdspb.DeleteNotifyChannelResponse, error) {
+func (s *Server) DeleteNotifyChannel(ctx context.Context, req *haifypb.DeleteNotifyChannelRequest) (*haifypb.DeleteNotifyChannelResponse, error) {
 	if s.ctrl.db == nil {
-		return &sdspb.DeleteNotifyChannelResponse{
+		return &haifypb.DeleteNotifyChannelResponse{
 			Success: false, Message: "notification channels require the controller database",
 		}, nil
 	}
 	if _, err := s.ctrl.db.GetNotifyChannel(ctx, req.Name); err != nil {
-		return &sdspb.DeleteNotifyChannelResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.DeleteNotifyChannelResponse{Success: false, Message: err.Error()}, nil
 	}
 	if err := s.ctrl.db.DeleteNotifyChannel(ctx, req.Name); err != nil {
-		return &sdspb.DeleteNotifyChannelResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.DeleteNotifyChannelResponse{Success: false, Message: err.Error()}, nil
 	}
 	if err := s.ctrl.reloadNotifyChannels(ctx); err != nil {
-		return &sdspb.DeleteNotifyChannelResponse{
+		return &haifypb.DeleteNotifyChannelResponse{
 			Success: false,
 			Message: fmt.Sprintf("channel %q was deleted but delivery could not be reloaded: %v", req.Name, err),
 		}, nil
 	}
-	return &sdspb.DeleteNotifyChannelResponse{
+	return &haifypb.DeleteNotifyChannelResponse{
 		Success: true, Message: fmt.Sprintf("Notification channel %q deleted", req.Name),
 	}, nil
 }
 
-func (s *Server) TestNotifyChannel(ctx context.Context, req *sdspb.TestNotifyChannelRequest) (*sdspb.TestNotifyChannelResponse, error) {
+func (s *Server) TestNotifyChannel(ctx context.Context, req *haifypb.TestNotifyChannelRequest) (*haifypb.TestNotifyChannelResponse, error) {
 	if s.ctrl.notify == nil {
-		return &sdspb.TestNotifyChannelResponse{
+		return &haifypb.TestNotifyChannelResponse{
 			Success: false,
 			Message: "notifications are disabled on this controller ([alert] enabled = false)",
 		}, nil
@@ -141,17 +141,17 @@ func (s *Server) TestNotifyChannel(ctx context.Context, req *sdspb.TestNotifyCha
 	defer cancel()
 
 	if err := s.ctrl.notify.Test(ctx, req.Name); err != nil {
-		return &sdspb.TestNotifyChannelResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.TestNotifyChannelResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.TestNotifyChannelResponse{
+	return &haifypb.TestNotifyChannelResponse{
 		Success: true,
 		Message: fmt.Sprintf("Test message accepted by %q", req.Name),
 	}, nil
 }
 
 // notifyChannelInfo renders a stored channel for the API, without its secret.
-func notifyChannelInfo(c *database.NotifyChannel) *sdspb.NotifyChannelInfo {
-	info := &sdspb.NotifyChannelInfo{
+func notifyChannelInfo(c *database.NotifyChannel) *haifypb.NotifyChannelInfo {
+	info := &haifypb.NotifyChannelInfo{
 		Name: c.Name, Kind: c.Kind, Url: c.URL,
 		MinSeverity: c.MinSeverity, Types: c.Types, Headers: c.Headers,
 		Enabled: c.Enabled, HasSecret: c.Secret != "",

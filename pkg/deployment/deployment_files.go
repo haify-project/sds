@@ -158,7 +158,7 @@ func (c *Client) DistributeConfig(ctx context.Context, hosts []string, content, 
 			// Transfer via base64 so binary content survives intact. A single
 			// `echo <base64>` breaks for large files: one shell argument is
 			// capped at MAX_ARG_STRLEN (128 KiB on Linux), so a multi-MB binary
-			// (e.g. the sds-proxy WAN binary) fails with "Argument list too long"
+			// (e.g. the haify-proxy WAN binary) fails with "Argument list too long"
 			// and the file is never written. Small content keeps the fast single
 			// command; large content is streamed in sub-128 KiB base64 chunks.
 			encoded := base64.StdEncoding.EncodeToString(fileContent)
@@ -233,7 +233,7 @@ func (c *Client) DistributeSecret(ctx context.Context, hosts []string, content, 
 	// Stage the payload in a private directory on the controller. A 0600 file
 	// inside a 0700 directory is never readable by another local user, not even
 	// between os.MkdirTemp and os.WriteFile.
-	dir, err := os.MkdirTemp("", "sds-secret-")
+	dir, err := os.MkdirTemp("", "haify-secret-")
 	if err != nil {
 		return nil, fmt.Errorf("DistributeSecret: stage secret: %w", err)
 	}
@@ -372,7 +372,7 @@ func (c *Client) InstallFile(ctx context.Context, hosts []string, localPath, rem
 	}
 
 	if len(remoteHosts) > 0 {
-		staged := ".sds-install-" + filepath.Base(remotePath)
+		staged := ".haify-install-" + filepath.Base(remotePath)
 		copyResult, err := c.dispatch.Copy(ctx, remoteHosts, localPath, staged, dispatch.WithCopyMode(0700))
 		if err != nil {
 			return nil, fmt.Errorf("InstallFile: copy to %v: %w", remoteHosts, err)
@@ -421,7 +421,7 @@ const maxInlineB64Len = 100 * 1024
 // writeRemoteFileChunked writes base64-encoded content to remotePath on host by
 // streaming it in sub-128 KiB chunks (each a single safe argument), then decoding
 // once server-side. This is what lets DistributeConfig ship multi-MB binaries
-// (e.g. sds-proxy) that overflow a single-argument echo. base64's alphabet
+// (e.g. haify-proxy) that overflow a single-argument echo. base64's alphabet
 // (A-Za-z0-9+/=) contains no single-quote, so each chunk is quote-safe.
 func (c *Client) writeRemoteFileChunked(ctx context.Context, host, remotePath, encoded string) error {
 	tmp := remotePath + ".b64.part"
@@ -446,11 +446,11 @@ func (c *Client) writeRemoteFileChunked(ctx context.Context, host, remotePath, e
 	}
 	// Decode beside the target and rename it into place. Writing through the
 	// target — what this used to do — fails with "Text file busy" when it is a
-	// running executable: every re-push of the sds-proxy binary to a node
+	// running executable: every re-push of the haify-proxy binary to a node
 	// whose proxy was up. A rename replaces a busy file, and leaves the target
 	// whole if anything before it fails. The new file takes the old one's mode
 	// and owner, as writing into it did.
-	next := remotePath + ".sds-new"
+	next := remotePath + ".haify-new"
 	cmd := fmt.Sprintf("sudo sh -c 'base64 -d %[1]s > %[2]s && { [ ! -e %[3]s ] || { chmod --reference=%[3]s %[2]s && chown --reference=%[3]s %[2]s; }; } && mv -f %[2]s %[3]s && rm -f %[1]s'",
 		tmp, next, remotePath)
 	if r, err := c.Exec(ctx, []string{host}, cmd); err != nil {

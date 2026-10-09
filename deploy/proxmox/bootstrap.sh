@@ -8,7 +8,7 @@
 #   2  adds the LINBIT repository; installs kernel headers, drbd-dkms,
 #      drbd-utils, drbd-reactor, sudo; loads DRBD 9; starts drbd-reactor
 #   3  writes the controller's dispatch SSH config
-#   4  installs sds-controller (package or binaries) and controller.toml
+#   4  installs haify-controller (package or binaries) and controller.toml
 #   5  starts the controller, registers every node under its PVE name, and
 #      creates the pool on the given devices
 #   6  enables controller Self-HA (two or more storage nodes)
@@ -50,7 +50,7 @@ Storage:
   --node-devices N=DEVS   Different disk(s) on node N (repeatable), e.g. pve3=/dev/nvme1n1
   --storage-nodes N,N     Nodes that get the pool (default: every member). The others run
                           guests as diskless DRBD clients and can be quorum tiebreakers.
-  --pool NAME             sds pool name (default: vg0; the volume group is sds_vg0)
+  --pool NAME             haify pool name (default: vg0; the volume group is haify_vg0)
   --pool-type TYPE        lvm-thin (default; snapshots) or lvm
   --force-wipe            Wipe partition tables and signatures from the devices first.
                           A disk that is mounted or in use is refused regardless.
@@ -61,7 +61,7 @@ Controller:
   --no-self-ha            Run the controller on one node only (a single point of failure)
 
 PVE storage:
-  --storage-id ID         storage.cfg ID (default: sds0)
+  --storage-id ID         storage.cfg ID (default: haify0)
   --replicas N            Copies of each disk (default: 2, or 1 with one storage node)
 
 Run control:
@@ -72,15 +72,15 @@ Run control:
   -h, --help              This text
 
 Environment:
-  SDS_CONTROLLER_DEB      sds-controller_<ver>_<arch>.deb to install instead of binaries
-  SDS_BIN_DIR             Directory with linux sds-controller, service-ip, sds
+  HAIFY_CONTROLLER_DEB      haify-controller_<ver>_<arch>.deb to install instead of binaries
+  HAIFY_BIN_DIR             Directory with linux haify-controller, service-ip, haify
                           (default: $REPO_ROOT/bin)
-  SDS_CONFIG_DIR          Directory with sds-controller.service, service-ip@.service,
+  HAIFY_CONFIG_DIR          Directory with haify-controller.service, service-ip@.service,
                           controller.toml.example (default: $REPO_ROOT/configs)
-  SDS_PLUGIN_DEB          Storage plugin .deb to install instead of running install.sh
-  SDS_LINBIT_REPO         Whole APT source line for DRBD (default: LINBIT public, proxmox-<major>)
-  SDS_LINBIT_KEY_URL      Signing key URL (default: $LINBIT_KEY_URL)
-  SDS_LINBIT_KEY_FINGERPRINT  Refuse the key unless its fingerprint matches
+  HAIFY_PLUGIN_DEB          Storage plugin .deb to install instead of running install.sh
+  HAIFY_LINBIT_REPO         Whole APT source line for DRBD (default: LINBIT public, proxmox-<major>)
+  HAIFY_LINBIT_KEY_URL      Signing key URL (default: $LINBIT_KEY_URL)
+  HAIFY_LINBIT_KEY_FINGERPRINT  Refuse the key unless its fingerprint matches
 EOF
 }
 
@@ -97,7 +97,7 @@ POOL_TYPE=lvm-thin
 FORCE_WIPE=0
 VIP=""
 NO_SELF_HA=0
-STOREID=sds0
+STOREID=haify0
 REPLICAS=""
 ASSUME_YES=0
 FROM_STEP=1
@@ -132,10 +132,10 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-CONTROLLER_DEB=${SDS_CONTROLLER_DEB:-}
-PLUGIN_DEB=${SDS_PLUGIN_DEB:-}
-BIN_DIR=${SDS_BIN_DIR:-$REPO_ROOT/bin}
-CONFIG_DIR=${SDS_CONFIG_DIR:-$REPO_ROOT/configs}
+CONTROLLER_DEB=${HAIFY_CONTROLLER_DEB:-}
+PLUGIN_DEB=${HAIFY_PLUGIN_DEB:-}
+BIN_DIR=${HAIFY_BIN_DIR:-$REPO_ROOT/bin}
+CONFIG_DIR=${HAIFY_CONFIG_DIR:-$REPO_ROOT/configs}
 
 case "$FROM_STEP" in [1-9]) ;; *) die "--from-step takes 1-9" ;; esac
 case "$POOL_TYPE" in
@@ -144,13 +144,13 @@ case "$POOL_TYPE" in
 esac
 [[ "$POOL" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die "--pool '$POOL': use letters, digits, '_', '.', '-'"
 [[ "$STOREID" =~ ^[A-Za-z][A-Za-z0-9_.-]*$ ]] || die "--storage-id '$STOREID' is not a valid PVE storage ID"
-[ -n "$PLUGIN_DEB" ] && { [ -r "$PLUGIN_DEB" ] || die "SDS_PLUGIN_DEB=$PLUGIN_DEB is not readable"; }
+[ -n "$PLUGIN_DEB" ] && { [ -r "$PLUGIN_DEB" ] || die "HAIFY_PLUGIN_DEB=$PLUGIN_DEB is not readable"; }
 
 if [ "$DRY_RUN" = 0 ] && [ "$(id -u)" -ne 0 ]; then
 	die "run as root (or try --dry-run)"
 fi
 
-WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/sds-bootstrap.XXXXXX")
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/haify-bootstrap.XXXXXX")
 CURRENT_STEP=0
 
 # on_exit removes the scratch files and, after a failure, says where to pick
@@ -292,7 +292,7 @@ run_step() {
 # Resuming past step 5: the controller may meanwhile run elsewhere (Self-HA).
 if [ "$FROM_STEP" -gt 5 ] && ! locate_controller && [ "$DRY_RUN" = 0 ]; then
 	CURRENT_STEP=5
-	die "no sds-controller is running on any node"
+	die "no haify-controller is running on any node"
 fi
 
 run_step 2 step_drbd

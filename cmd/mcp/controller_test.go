@@ -16,13 +16,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/haify/pkg/client"
 )
 
 // clearTLSEnv keeps a developer's shell profile out of the test.
 func clearTLSEnv(t *testing.T) {
 	t.Helper()
-	for _, k := range []string{"SDS_TLS", "SDS_TLS_CA", "SDS_TLS_CERT", "SDS_TLS_KEY", "SDS_TLS_SERVER_NAME", "SDS_TLS_INSECURE"} {
+	for _, k := range []string{"HAIFY_TLS", "HAIFY_TLS_CA", "HAIFY_TLS_CERT", "HAIFY_TLS_KEY", "HAIFY_TLS_SERVER_NAME", "HAIFY_TLS_INSECURE"} {
 		t.Setenv(k, "")
 	}
 }
@@ -35,7 +35,7 @@ func writeTestCA(t *testing.T) string {
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "sds-mcp test CA"},
+		Subject:               pkix.Name{CommonName: "haify-mcp test CA"},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(time.Hour),
 		IsCA:                  true,
@@ -68,10 +68,10 @@ func TestStdioFlagsMatchTheCLI(t *testing.T) {
 	clearTLSEnv(t)
 	conn := parseConn(t, "", "--controller", "ctl:3374", "--token", "tok",
 		"--tls-ca", "/ca.pem", "--tls-cert", "/c.pem", "--tls-key", "/k.pem",
-		"--tls-server-name", "sds.example", "--tls-insecure")
+		"--tls-server-name", "haify.example", "--tls-insecure")
 
 	want := client.TLSOptions{CACert: "/ca.pem", ClientCert: "/c.pem", ClientKey: "/k.pem",
-		ServerName: "sds.example", Insecure: true}
+		ServerName: "haify.example", Insecure: true}
 	if conn.addr != "ctl:3374" || conn.token != "tok" || conn.tls != want {
 		t.Fatalf("parsed %+v", conn)
 	}
@@ -101,8 +101,8 @@ func TestServeFlagsArePrefixed(t *testing.T) {
 
 func TestTLSFromEnvironment(t *testing.T) {
 	clearTLSEnv(t)
-	t.Setenv("SDS_TLS_CA", "/env-ca.pem")
-	t.Setenv("SDS_TLS_SERVER_NAME", "env-name")
+	t.Setenv("HAIFY_TLS_CA", "/env-ca.pem")
+	t.Setenv("HAIFY_TLS_SERVER_NAME", "env-name")
 
 	got := client.ResolveTLS(parseConn(t, "").tls)
 	if !got.Active() || got.CACert != "/env-ca.pem" || got.ServerName != "env-name" {
@@ -129,13 +129,13 @@ func TestDialBuildsTLSCredentials(t *testing.T) {
 		t.Fatalf("flag CA not used: %v", err)
 	}
 
-	t.Setenv("SDS_TLS_CA", bogus)
+	t.Setenv("HAIFY_TLS_CA", bogus)
 	_, err = parseConn(t, "controller-").dial()
 	if err == nil || !strings.Contains(err.Error(), "no PEM certificate") {
 		t.Fatalf("env CA not used: %v", err)
 	}
 
-	t.Setenv("SDS_TLS_CA", "")
+	t.Setenv("HAIFY_TLS_CA", "")
 	c, err := parseConn(t, "", "--tls-ca", writeTestCA(t)).dial()
 	if err != nil {
 		t.Fatalf("valid CA: %v", err)

@@ -86,11 +86,11 @@ func Headline(r *Report, max int) string {
 	if more > 0 {
 		line += fmt.Sprintf("; and %d more", more)
 	}
-	return line + ". Details: sds inspect show " + r.ID
+	return line + ". Details: haify inspect show " + r.ID
 }
 
 // managedVG reports whether a volume group is a Haify pool.
-func managedVG(vg string) bool { return strings.HasPrefix(vg, "sds_") }
+func managedVG(vg string) bool { return strings.HasPrefix(vg, "haify_") }
 
 func pass(id string, area Area, msg string, args ...any) Check {
 	return Check{ID: id, Area: area, Status: StatusPass, Message: fmt.Sprintf(msg, args...)}

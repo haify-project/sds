@@ -35,7 +35,7 @@ func haSelfEnable() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "enable",
 		Short: "Make the Haify controller highly available on its own DRBD + drbd-reactor machinery",
-		Long: `Provisions a small DRBD resource (sds-meta) for the controller database,
+		Long: `Provisions a small DRBD resource (haify-meta) for the controller database,
 distributes the controller to all nodes, and hands management over to
 drbd-reactor: the node holding the DRBD Primary mounts the database, brings
 up the VIP, and runs the controller. On node failure the controller fails
@@ -43,7 +43,7 @@ over automatically.
 
 The current controller restarts under reactor management during the handoff,
 so this command's connection drops by design. Track progress with
-'sds ha self status' (against the VIP) or the handoff log on the node.`,
+'haify ha self status' (against the VIP) or the handoff log on the node.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if vip == "" {
 				return fmt.Errorf("--vip is required (CIDR, e.g. 192.168.1.50/24)")
@@ -56,18 +56,18 @@ so this command's connection drops by design. Track progress with
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			var nodeList []string
 			if nodes != "" {
 				nodeList = strings.Split(nodes, ",")
 			}
 
-			resource, handoffLog, err := sdsClient.EnableSelfHa(ctx, vip, pool, sizeGB, port, nodeList)
+			resource, handoffLog, err := haifyClient.EnableSelfHa(ctx, vip, pool, sizeGB, port, nodeList)
 			if err != nil {
 				return fmt.Errorf("failed to enable self-HA: %w", err)
 			}
@@ -78,7 +78,7 @@ so this command's connection drops by design. Track progress with
 			fmt.Printf("  Handoff log: %s (on the controller node)\n", handoffLog)
 			fmt.Printf("\nThe controller is restarting under drbd-reactor management.\n")
 			vipAddr := strings.Split(vip, "/")[0]
-			fmt.Printf("Verify with:  sds -c %s:3374 ha self status\n", vipAddr)
+			fmt.Printf("Verify with:  haify -c %s:3374 ha self status\n", vipAddr)
 
 			return nil
 		},
@@ -101,13 +101,13 @@ func haSelfStatus() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			status, err := sdsClient.GetSelfHaStatus(ctx)
+			status, err := haifyClient.GetSelfHaStatus(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get self-HA status: %w", err)
 			}
@@ -126,7 +126,7 @@ func haSelfStatus() *cobra.Command {
 			} else {
 				fmt.Printf("  Active node: unknown\n")
 			}
-			fmt.Printf("\nDetails: sds ha status %s\n", status.Resource)
+			fmt.Printf("\nDetails: haify ha status %s\n", status.Resource)
 
 			return nil
 		},
@@ -141,8 +141,8 @@ func haSelfDisable() *cobra.Command {
 		Short: "Revert the controller to standalone operation on one node",
 		Long: `Removes drbd-reactor management of the controller, copies the database
 back to the node-local path on the given node, and re-enables the controller
-as a normal systemd service there. The sds-meta resource is kept and can be
-removed afterwards with 'sds resource delete sds-meta'.
+as a normal systemd service there. The haify-meta resource is kept and can be
+removed afterwards with 'haify resource delete haify-meta'.
 
 The managed controller stops during this operation, so this command's
 connection drops by design.`,
@@ -154,19 +154,19 @@ connection drops by design.`,
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.DisableSelfHa(ctx, node); err != nil {
+			if err := haifyClient.DisableSelfHa(ctx, node); err != nil {
 				return fmt.Errorf("failed to disable self-HA: %w", err)
 			}
 
 			fmt.Printf("Self-HA disable started\n")
 			fmt.Printf("  Controller will restart standalone on: %s\n", node)
-			fmt.Printf("\nVerify with:  sds -c %s:3374 ha self status\n", node)
+			fmt.Printf("\nVerify with:  haify -c %s:3374 ha self status\n", node)
 
 			return nil
 		},

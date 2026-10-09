@@ -9,19 +9,19 @@ Haify 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-rea
 
 | 网关 | 创建命令 | 配置文件 |
 | ---- | -------- | -------- |
-| NFS | `sds gateway nfs create` | `/etc/drbd-reactor.d/sds-nfs-<resource>.toml` |
-| iSCSI | `sds gateway iscsi create` | `/etc/drbd-reactor.d/sds-iscsi-<resource>.toml` |
-| NVMe-oF | `sds gateway nvme create` | `/etc/drbd-reactor.d/sds-nvmeof-<resource>.toml` |
+| NFS | `haify gateway nfs create` | `/etc/drbd-reactor.d/haify-nfs-<resource>.toml` |
+| iSCSI | `haify gateway iscsi create` | `/etc/drbd-reactor.d/haify-iscsi-<resource>.toml` |
+| NVMe-oF | `haify gateway nvme create` | `/etc/drbd-reactor.d/haify-nvmeof-<resource>.toml` |
 
-（`sds ha create` 生成的通用 HA 配置是 `sds-ha-<resource>.toml`，不属于网关。）
+（`haify ha create` 生成的通用 HA 配置是 `haify-ha-<resource>.toml`，不属于网关。）
 
 - 配置只写到该资源的 **diskful 副本节点**；其他受管节点（包括 tiebreaker）上的同名配置会被移除。
   diskless 节点也能被 DRBD 9 提升为 Primary，若它也有 promoter，就会在没有数据副本的机器上跑整条网关链。
 - 写完后在这些节点上执行 `systemctl reload drbd-reactor`（失败则 restart）。
-- `sds gateway stop --resource <r>` 先把配置改名为 `.toml.disabled` 并 reload，再停
+- `haify gateway stop --resource <r>` 先把配置改名为 `.toml.disabled` 并 reload，再停
   `drbd-services@<r>.target`。只停 target 不够：reactor 几秒内就会重新提升并拉起整条链。
   `gateway start` 把文件改回 `.toml` 并 reload。
-- `sds gateway delete --resource <r>` 先执行 stop，再在所有受管节点上删除 `.toml`、`.toml.disabled`、`.toml.pending` 并 reload。
+- `haify gateway delete --resource <r>` 先执行 stop，再在所有受管节点上删除 `.toml`、`.toml.disabled`、`.toml.pending` 并 reload。
 - 增删 LUN / initiator / CHAP / namespace / host / NFS export 是对这份配置的读-改-写：从资源的
   diskful 节点读取（controller 本机的 `/etc/drbd-reactor.d` 不参与），任一节点有 `.toml` 就以它为准，
   只有 `.toml.disabled` 时网关处于停止状态，改动写回 `.toml.disabled`、不会顺带启动网关。
@@ -41,7 +41,7 @@ reload 时配置没变的 plugin 原样保留，变了的就把旧 plugin 停掉
 
 - **运行网关的节点**（`drbd-services@<r>.target` 为 active 的那个）：**不 reload drbd-reactor**。
   `.toml` 保持 reactor 已加载的版本（之后任何原因的 reload 都不会动这个网关），新配置写成
-  `sds-<type>-<r>.toml.pending`（reactor 只读 `*.toml`）。同时：
+  `haify-<type>-<r>.toml.pending`（reactor 只读 `*.toml`）。同时：
   - 把 reactor 按新配置会生成的 drop-in（`/run/systemd/system/ocf.rs@<agent>_<r>.service.d/reactor.conf`
     和 `drbd-services@<r>.target.d/reactor.conf`）原样写好并 `daemon-reload`，这样单元被 systemd 重启
     或日后切回本节点时用的都是新链；target 的 drop-in 保留原 mtime，免得 snippet monitor 提示 reload。
@@ -51,7 +51,7 @@ reload 时配置没变的 plugin 原样保留，变了的就把旧 plugin 停掉
     `targetcli`（先建 ACL 再关 demo mode、最后删 ACL；删 ACL 会断开该 initiator 的会话），NVMe host 用
     configfs 的 `allowed_hosts` 软链（已建立的连接不会被断开，重连时才校验）。无法在线应用的改动
     （如去掉 CHAP、改 portal）在写任何东西之前就拒绝。
-  - 在 `drbd-reactor.service` 上装一个 drop-in（`50-sds-pending-gateway-config.conf`，`ExecStartPre`），
+  - 在 `drbd-reactor.service` 上装一个 drop-in（`50-haify-pending-gateway-config.conf`，`ExecStartPre`），
     reactor 下次启动（重启/开机）前把 `.toml.pending` 改名为 `.toml`。
 - **其他 diskful 节点**：写 `.toml`、删掉残留的 `.pending`、reload drbd-reactor。网关不在这些节点上运行，
   新 plugin 看到 Primary 在别处就不会去启动（`try_initial_target_start`），reload 只是重新生成单元，
@@ -62,8 +62,8 @@ reload 时配置没变的 plugin 原样保留，变了的就把旧 plugin 停掉
 
 `gateway stop` 会把 `.toml.pending` 变成 `.toml.disabled`；`gateway delete` 和移除 promoter 时一并删除。
 **不要为了"让改动生效"在运行节点上手动 `systemctl reload drbd-reactor`**——那会重启整个网关。
-在线应用失败时命令会报错：配置已在所有节点保存、故障转移会用它；要立刻生效就 `sds gateway stop` 再
-`sds gateway start`（会中断客户端）。
+在线应用失败时命令会报错：配置已在所有节点保存、故障转移会用它；要立刻生效就 `haify gateway stop` 再
+`haify gateway start`（会中断客户端）。
 
 ## 创建前的检查
 
@@ -84,7 +84,7 @@ NVMe-oF 随后加载 `nvmet` 和传输对应的模块（`nvmet-tcp` 或 `nvmet-r
 
 ## cluster-private 卷
 
-每个网关需要一个小的状态卷，挂在 `/var/lib/sds-gateway/<resource>`（NFS 的
+每个网关需要一个小的状态卷，挂在 `/var/lib/haify-gateway/<resource>`（NFS 的
 `nfs_shared_infodir` 是其下的 `nfs/`）。资源只有一个卷时，controller 自动追加名为
 `<resource>_state<N>` 的卷，由 `controller.toml` 控制：
 
@@ -98,7 +98,7 @@ state_volume_size_gb = 1     # 默认
 把用户数据放在卷 0（`<resource>_data`），状态卷是后追加的。没有 `_state` 卷的资源按
 linstor 布局处理（卷 0 是状态卷，其余是数据）。
 
-旧版本把状态卷挂在 `/var/lib/sds/<resource>`，会被 controller Self-HA 的挂载点遮住。
+旧版本把状态卷挂在 `/var/lib/haify/<resource>`，会被 controller Self-HA 的挂载点遮住。
 对已停止的网关执行 `gateway start` 时会自动改到新路径。
 
 ## 生成的配置
@@ -128,32 +128,32 @@ drbd-reactor 按 `start` 顺序启动，**逆序**停止。不再使用 portbloc
 
 ```toml
 start = [
-  "ocf:heartbeat:Filesystem fs_cluster_private device=<状态卷> directory=/var/lib/sds-gateway/data fstype=ext4 run_fsck=no",
+  "ocf:heartbeat:Filesystem fs_cluster_private device=<状态卷> directory=/var/lib/haify-gateway/data fstype=ext4 run_fsck=no",
   "ocf:heartbeat:Filesystem fs_export device=<数据卷> directory=/data fstype=ext4 run_fsck=no",
-  "ocf:heartbeat:nfsserver nfsserver nfs_ip=192.168.1.200 nfs_shared_infodir=/var/lib/sds-gateway/data/nfs nfs_server_scope=192.168.1.200",
+  "ocf:heartbeat:nfsserver nfsserver nfs_ip=192.168.1.200 nfs_shared_infodir=/var/lib/haify-gateway/data/nfs nfs_server_scope=192.168.1.200",
   "ocf:heartbeat:exportfs export_0 directory=/data fsid=<uuid> clientspec=0.0.0.0/0.0.0.0 options=rw,all_squash,anonuid=0,anongid=0",
   "ocf:heartbeat:IPaddr2 service_ip ip=192.168.1.200 cidr_netmask=24",
 ]
 ```
 
-- `--export-path`：绝对路径原样使用（拒绝 `/`、`/etc`、`/usr`、`/var/lib/sds` 等系统目录）；
+- `--export-path`：绝对路径原样使用（拒绝 `/`、`/etc`、`/usr`、`/var/lib/haify` 等系统目录）；
   相对路径放在 `/srv/gateway-exports/<resource>/` 下；不给时就是 `/srv/gateway-exports/<resource>`。
 - `--allowed-ips` 每项生成一行 `exportfs`（`export_0`、`export_1`…）；不给时 `0.0.0.0/0.0.0.0`。
 - `--fs-type` 默认 `ext4`。
 - service IP 放在最后，停止时最先摘掉：客户端只看到服务器不响应并重试，而不是在
   unexport 与摘 IP 之间被拒绝。因此 nfsserver 启动时 IP 尚未存在，controller 在 NFS 节点上设置
-  `net.ipv4.ip_nonlocal_bind=1`（`/etc/sysctl.d/90-sds-nfs-gateway.conf`），让 sm-notify
+  `net.ipv4.ip_nonlocal_bind=1`（`/etc/sysctl.d/90-haify-nfs-gateway.conf`），让 sm-notify
   能绑定 service IP；并给 `fsidd`、`nfsdcld` 加 `PartOf=nfs-server.service`，否则它们占住
   `/var/lib/nfs`，umount 失败，网关切走后切不回来。
-- 后续增删导出：`sds gateway nfs export add|list|remove`。
+- 后续增删导出：`haify gateway nfs export add|list|remove`。
 
 ### iSCSI
 
 ```toml
 start = [
-  "ocf:heartbeat:Filesystem fs_cluster_private device=<状态卷> directory=/var/lib/sds-gateway/r0 fstype=ext4 run_fsck=no",
-  "ocf:heartbeat:iSCSITarget target iqn=iqn.2024-01.com.example:sds.r0 portals=192.168.1.100:3260 allowed_initiators= implementation=lio-t",
-  "ocf:heartbeat:iSCSILogicalUnit lu1 target_iqn=iqn.2024-01.com.example:sds.r0 lun=1 path=<数据卷> product_id=<serial> scsi_sn=<serial> implementation=lio-t",
+  "ocf:heartbeat:Filesystem fs_cluster_private device=<状态卷> directory=/var/lib/haify-gateway/r0 fstype=ext4 run_fsck=no",
+  "ocf:heartbeat:iSCSITarget target iqn=iqn.2024-01.com.example:haify.r0 portals=192.168.1.100:3260 allowed_initiators= implementation=lio-t",
+  "ocf:heartbeat:iSCSILogicalUnit lu1 target_iqn=iqn.2024-01.com.example:haify.r0 lun=1 path=<数据卷> product_id=<serial> scsi_sn=<serial> implementation=lio-t",
   "ocf:heartbeat:IPaddr2 service_ip0 ip=192.168.1.100 cidr_netmask=24",
 ]
 ```
@@ -168,24 +168,24 @@ start = [
 - `--allowed-initiators` 以空格连接写入 `allowed_initiators`；为空表示不限制。
 - service IP 放在最后：否则停止时 LUN 先被删而 portal 仍可达，initiator 收到
   "LUN not supported" 硬错误，客户端文件系统变只读。
-- 后续管理：`sds gateway iscsi lun|initiator|chap ...`。
+- 后续管理：`haify gateway iscsi lun|initiator|chap ...`。
 
 ### NVMe-oF
 
 ```toml
 start = [
-  "ocf:heartbeat:Filesystem fs_cluster_private device=<状态卷> directory=/var/lib/sds-gateway/db fstype=ext4 run_fsck=no",
+  "ocf:heartbeat:Filesystem fs_cluster_private device=<状态卷> directory=/var/lib/haify-gateway/db fstype=ext4 run_fsck=no",
   "ocf:heartbeat:IPaddr2 service_ip ip=192.168.1.150 cidr_netmask=24",
-  "ocf:heartbeat:nvmet-subsystem subsys nqn=nqn.2024-01.com.example:sds.db serial=<serial>",
-  "ocf:heartbeat:nvmet-namespace ns_1 nqn=nqn.2024-01.com.example:sds.db namespace_id=1 backing_path=<数据卷> uuid=<uuid> nguid=<uuid>",
-  "ocf:heartbeat:nvmet-port port nqns=nqn.2024-01.com.example:sds.db addr=192.168.1.150 type=tcp",
+  "ocf:heartbeat:nvmet-subsystem subsys nqn=nqn.2024-01.com.example:haify.db serial=<serial>",
+  "ocf:heartbeat:nvmet-namespace ns_1 nqn=nqn.2024-01.com.example:haify.db namespace_id=1 backing_path=<数据卷> uuid=<uuid> nguid=<uuid>",
+  "ocf:heartbeat:nvmet-port port nqns=nqn.2024-01.com.example:haify.db addr=192.168.1.150 type=tcp",
 ]
 ```
 
 - `serial` 是 `sha256(NQN)` 前 8 字节的十六进制。namespace 从 1 编号；`uuid`/`nguid`
   在创建时随机生成一次，之后只从配置文件读回。
 - `--transport`：`tcp`（默认）或 `rdma`，写入 `type=`。监听端口 4420。
-- 后续管理：`sds gateway nvme namespace|host ...`。
+- 后续管理：`haify gateway nvme namespace|host ...`。
 
 ## 排障
 
@@ -194,7 +194,7 @@ drbd-reactorctl status                              # promoter 与各 OCF 单元
 systemctl status drbd-services@<resource>.target
 journalctl -u drbd-reactor -n 100
 drbdadm status <resource>
-sds gateway status --resource <resource>
+haify gateway status --resource <resource>
 ```
 
 资源名含 `-` 时 systemd 单元名里写作 `\x2d`，例如 `drbd-services@nfs\x2ddata.target`。

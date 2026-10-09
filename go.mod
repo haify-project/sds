@@ -1,4 +1,4 @@
-module github.com/haify-project/sds
+module github.com/haify-project/haify
 
 go 1.26.0
 

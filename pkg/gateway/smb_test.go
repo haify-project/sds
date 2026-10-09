@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -25,12 +25,12 @@ func TestCreateSMBGateway(t *testing.T) {
 	require.True(t, resp.Success, resp.Message)
 	assert.Contains(t, resp.Message, `\\10.0.0.50\files`)
 
-	cfg := dep.Configs["/etc/drbd-reactor.d/sds-smb-files.toml"]
+	cfg := dep.Configs["/etc/drbd-reactor.d/haify-smb-files.toml"]
 	require.NotEmpty(t, cfg)
-	assert.Equal(t, []string{"node1", "node2"}, dep.ConfigHosts["/etc/drbd-reactor.d/sds-smb-files.toml"],
+	assert.Equal(t, []string{"node1", "node2"}, dep.ConfigHosts["/etc/drbd-reactor.d/haify-smb-files.toml"],
 		"the promoter goes to the diskful replicas only")
 	ip := strings.Index(cfg, "IPaddr2 service_ip ip=10.0.0.50 cidr_netmask=24")
-	unit := strings.Index(cfg, `"sds-smbd@files.service"`)
+	unit := strings.Index(cfg, `"haify-smbd@files.service"`)
 	share := strings.Index(cfg, "fs_share")
 	require.True(t, ip > 0 && unit > 0 && share > 0, cfg)
 	assert.Less(t, share, ip)
@@ -40,8 +40,8 @@ func TestCreateSMBGateway(t *testing.T) {
 	assert.Equal(t, []string{"node1", "node2"}, findScript(t, dep, smbUnitPath).hosts)
 	seed := findScript(t, dep, "shares.conf")
 	assert.Equal(t, []string{"node1"}, seed.hosts)
-	// alice holds 61000 on node1, so sds-smb gets the next free id.
-	assert.Contains(t, seed.script, "sds-smb:61001")
+	// alice holds 61000 on node1, so haify-smb gets the next free id.
+	assert.Contains(t, seed.script, "haify-smb:61001")
 	assert.Contains(t, seed.script, "mount /dev/drbd")
 }
 
@@ -66,9 +66,9 @@ func TestSMBGlobalConfig(t *testing.T) {
 		"workgroup = OFFICE",
 		"interfaces = 10.0.0.50/24",
 		"bind interfaces only = yes",
-		"passdb backend = tdbsam:/var/lib/sds-gateway/files/smb/private/passdb.tdb",
-		"lock directory = /var/lib/sds-gateway/files/smb/lock",
-		"include = /var/lib/sds-gateway/files/smb/shares.conf",
+		"passdb backend = tdbsam:/var/lib/haify-gateway/files/smb/private/passdb.tdb",
+		"lock directory = /var/lib/haify-gateway/files/smb/lock",
+		"include = /var/lib/haify-gateway/files/smb/shares.conf",
 	} {
 		assert.Contains(t, conf, want)
 	}
@@ -78,7 +78,7 @@ func TestSMBGlobalConfig(t *testing.T) {
 func TestSMBShareValidateAndRoundTrip(t *testing.T) {
 	bad := []SMBShare{
 		{Name: "global"}, {Name: "a b"}, {Name: "ok", Path: "../etc"},
-		{Name: "ok", Path: "/abs"}, {Name: "ok", ValidUsers: []string{"sds-smb"}},
+		{Name: "ok", Path: "/abs"}, {Name: "ok", ValidUsers: []string{"haify-smb"}},
 	}
 	for _, sh := range bad {
 		assert.Error(t, sh.validate(), "%+v", sh)
@@ -93,7 +93,7 @@ func TestSMBShareValidateAndRoundTrip(t *testing.T) {
 	got := parseSMBShares("files", renderSMBShares("files", shares))
 	assert.Equal(t, shares, got)
 	assert.Contains(t, shares[1].section("files"), "path = /srv/gateway-exports/files/projects/a")
-	assert.Contains(t, shares[1].section("files"), "force user = sds-smb")
+	assert.Contains(t, shares[1].section("files"), "force user = haify-smb")
 }
 
 func TestPickUID(t *testing.T) {
@@ -123,14 +123,14 @@ func TestPickUID(t *testing.T) {
 	uid, err = pickUID("bob", map[string]string{
 		"n1": "x:x:61000:1::/:/bin/false\n---\n",
 		"n2": "---\ng:x:61001:\n",
-	}, map[string]int{"sds-smb": 61002})
+	}, map[string]int{"haify-smb": 61002})
 	require.NoError(t, err)
 	assert.Equal(t, 61003, uid)
 }
 
 func TestGatewayTypesCoverSMB(t *testing.T) {
-	assert.Contains(t, promoterConfigPaths("r", ".disabled"), "/etc/drbd-reactor.d/sds-smb-r.toml.disabled")
-	gw, live := parseGatewayConfigName("sds-smb-r.toml")
+	assert.Contains(t, promoterConfigPaths("r", ".disabled"), "/etc/drbd-reactor.d/haify-smb-r.toml.disabled")
+	gw, live := parseGatewayConfigName("haify-smb-r.toml")
 	require.NotNil(t, gw)
 	assert.True(t, live)
 	assert.Equal(t, "smb", gw.Type)
@@ -171,7 +171,7 @@ func TestAddSMBShareOnServingNode(t *testing.T) {
 	run := findScript(t, dep, "reload-config")
 	assert.Equal(t, []string{"node2"}, run.hosts)
 	assert.Contains(t, run.script, "mkdir -p '/srv/gateway-exports/files/p'")
-	assert.Contains(t, run.script, "chown sds-smb:sds-smb")
+	assert.Contains(t, run.script, "chown haify-smb:haify-smb")
 }
 
 // A share restricted to some users must not lie inside a share that lets in

@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Listing LVM snapshots. The bug this covers: the lvs command carried a literal
@@ -35,7 +35,7 @@ func snapshotDeployment(out string) *fakeDeploymentClient {
 func TestListLvmSnapshotsParsesEveryColumn(t *testing.T) {
 	ctrl := newBasicTestController(snapshotDeployment(realLvsOutput))
 
-	snaps, err := ctrl.storage.ListLvmSnapshots(context.Background(), "sds_sdspool", "node-e", "")
+	snaps, err := ctrl.storage.ListLvmSnapshots(context.Background(), "haify_haifypool", "node-e", "")
 	require.NoError(t, err)
 	require.Len(t, snaps, 3)
 
@@ -56,16 +56,16 @@ func TestListLvmSnapshotsSurfacesAFailedCommand(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 
-	_, err := ctrl.storage.ListLvmSnapshots(context.Background(), "sds_sdspool", "node-e", "")
+	_, err := ctrl.storage.ListLvmSnapshots(context.Background(), "haify_haifypool", "node-e", "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "sds_sdspool")
+	assert.Contains(t, err.Error(), "haify_haifypool")
 }
 
 func TestListLvmSnapshotsToleratesShortAndBlankLines(t *testing.T) {
 	out := "\n  openclaw_data_sched_20260809T130000Z|6442450944|2026-08-09 13:00:02 +0000|openclaw_data\n  truncated|123\n"
 	ctrl := newBasicTestController(snapshotDeployment(out))
 
-	snaps, err := ctrl.storage.ListLvmSnapshots(context.Background(), "sds_sdspool", "node-e", "")
+	snaps, err := ctrl.storage.ListLvmSnapshots(context.Background(), "haify_haifypool", "node-e", "")
 	require.NoError(t, err)
 	require.Len(t, snaps, 1)
 }
@@ -99,13 +99,13 @@ func TestListLvmSnapshotsFiltersByResource(t *testing.T) {
 
 	ctx := context.Background()
 	require.NoError(t, db.SaveVolume(ctx, &database.Volume{
-		ResourceName: "openclaw", VolumeName: "openclaw_data", VolumeID: 0, Pool: "sds_sdspool",
+		ResourceName: "openclaw", VolumeName: "openclaw_data", VolumeID: 0, Pool: "haify_haifypool",
 	}))
 	require.NoError(t, db.SaveVolume(ctx, &database.Volume{
-		ResourceName: "other", VolumeName: "other_data", VolumeID: 0, Pool: "sds_sdspool",
+		ResourceName: "other", VolumeName: "other_data", VolumeID: 0, Pool: "haify_haifypool",
 	}))
 
-	snaps, err := ctrl.storage.ListLvmSnapshots(ctx, "sds_sdspool", "node-e", "openclaw")
+	snaps, err := ctrl.storage.ListLvmSnapshots(ctx, "haify_haifypool", "node-e", "openclaw")
 	require.NoError(t, err)
 	require.Len(t, snaps, 2)
 	for _, s := range snaps {
@@ -114,13 +114,13 @@ func TestListLvmSnapshotsFiltersByResource(t *testing.T) {
 
 	// A different resource must yield a different list, which is the whole
 	// point of the flag.
-	snaps, err = ctrl.storage.ListLvmSnapshots(ctx, "sds_sdspool", "node-e", "other")
+	snaps, err = ctrl.storage.ListLvmSnapshots(ctx, "haify_haifypool", "node-e", "other")
 	require.NoError(t, err)
 	require.Len(t, snaps, 1)
 	assert.Equal(t, "other_data", snaps[0].Origin)
 
 	// And an empty resource still lists the whole group.
-	snaps, err = ctrl.storage.ListLvmSnapshots(ctx, "sds_sdspool", "node-e", "")
+	snaps, err = ctrl.storage.ListLvmSnapshots(ctx, "haify_haifypool", "node-e", "")
 	require.NoError(t, err)
 	assert.Len(t, snaps, 3)
 }
@@ -132,7 +132,7 @@ func TestListLvmSnapshotsRejectsAnUnknownResource(t *testing.T) {
 	db := newTestDB(t)
 	ctrl.db = db
 
-	_, err := ctrl.storage.ListLvmSnapshots(context.Background(), "sds_sdspool", "node-e", "nope")
+	_, err := ctrl.storage.ListLvmSnapshots(context.Background(), "haify_haifypool", "node-e", "nope")
 	require.Error(t, err)
 }
 
@@ -142,7 +142,7 @@ func TestListLvmSnapshotsWithoutADatabaseRefusesToFilter(t *testing.T) {
 	// naming one resource is what the old code did.
 	ctrl := newBasicTestController(snapshotDeployment(realLvsOutput))
 
-	_, err := ctrl.storage.ListLvmSnapshots(context.Background(), "sds_sdspool", "node-e", "openclaw")
+	_, err := ctrl.storage.ListLvmSnapshots(context.Background(), "haify_haifypool", "node-e", "openclaw")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "openclaw")
 }

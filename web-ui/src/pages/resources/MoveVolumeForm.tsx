@@ -44,8 +44,8 @@ export function MoveVolumeForm({
   const [target, setTarget] = useState('');
   const [confirming, setConfirming] = useState(false);
 
-  // Pool names may or may not carry the sds_ prefix on the node.
-  const bare = (name?: string) => (name ?? '').replace(/^sds_/, '');
+  // Pool names may or may not carry the haify_ prefix on the node.
+  const bare = (name?: string) => (name ?? '').replace(/^haify_/, '');
   const candidates = Array.from(new Set(pools.map((p) => p.name))).filter(
     (name) =>
       bare(name) !== bare(volume.pool) && replicaNodes.every((n) => pools.some((p) => p.name === name && p.node === n)),

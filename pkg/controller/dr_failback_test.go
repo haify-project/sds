@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	pb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

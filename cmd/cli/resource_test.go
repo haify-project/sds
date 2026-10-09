@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +45,7 @@ func TestResourceCommand_ProfileCRUDCommands(t *testing.T) {
 }
 
 func TestFormatResourceProfile_SortsMapAndSliceFields(t *testing.T) {
-	profile := &sdspb.ResourceProfile{
+	profile := &haifypb.ResourceProfile{
 		Name:                "production",
 		Protocol:            "C",
 		StorageType:         "lvm-thin",

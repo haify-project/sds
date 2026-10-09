@@ -91,7 +91,7 @@ export function ResourcesPage() {
   // Profiles live here rather than in their own nav entry: they are templates
   // for resources and do nothing on their own, so they belong beside the things
   // they create. It also matches the CLI, where the command has always been
-  // `sds resource profile`.
+  // `haify resource profile`.
   const tab = params.get('tab') === 'profiles' ? 'profiles' : 'resources';
 
   const [query, setQuery] = useState('');

@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/client"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/client"
 )
 
 // The RBAC commands go through the gRPC API like every other command, so they
@@ -19,10 +19,10 @@ import (
 // wire in clear even on a TLS cluster.
 
 // withRBACClient dials the controller and runs fn with a bounded context.
-func withRBACClient(fn func(ctx context.Context, c *client.SDSClient) error) error {
+func withRBACClient(fn func(ctx context.Context, c *client.HaifyClient) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	c, err := newSDSClient()
+	c, err := newHaifyClient()
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func rbacUserAddCommand() *cobra.Command {
 			if name == "" || role == "" {
 				return fmt.Errorf("--name and --role are required")
 			}
-			return withRBACClient(func(ctx context.Context, c *client.SDSClient) error {
+			return withRBACClient(func(ctx context.Context, c *client.HaifyClient) error {
 				token, err := c.CreateRbacUser(ctx, name, role, userToken)
 				if err != nil {
 					return err
@@ -87,7 +87,7 @@ func rbacUserRemoveCommand() *cobra.Command {
 		Short: "Remove a user",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRBACClient(func(ctx context.Context, c *client.SDSClient) error {
+			return withRBACClient(func(ctx context.Context, c *client.HaifyClient) error {
 				if err := c.DeleteRbacUser(ctx, args[0]); err != nil {
 					return err
 				}
@@ -104,7 +104,7 @@ func rbacUserSetRoleCommand() *cobra.Command {
 		Short: "Change a user's role",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRBACClient(func(ctx context.Context, c *client.SDSClient) error {
+			return withRBACClient(func(ctx context.Context, c *client.HaifyClient) error {
 				if err := c.SetRbacUserRole(ctx, args[0], args[1]); err != nil {
 					return err
 				}
@@ -120,7 +120,7 @@ func rbacWhoamiCommand() *cobra.Command {
 		Use:   "whoami",
 		Short: "Show the identity and role of your API token",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRBACClient(func(ctx context.Context, c *client.SDSClient) error {
+			return withRBACClient(func(ctx context.Context, c *client.HaifyClient) error {
 				res, err := c.RbacWhoami(ctx)
 				if err != nil {
 					return err
@@ -143,7 +143,7 @@ func rbacPoliciesCommand() *cobra.Command {
 		Use:   "policies",
 		Short: "Show effective roles and user assignments (admin only)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRBACClient(func(ctx context.Context, c *client.SDSClient) error {
+			return withRBACClient(func(ctx context.Context, c *client.HaifyClient) error {
 				res, err := c.ListRbacPolicies(ctx)
 				if err != nil {
 					return err
@@ -160,9 +160,9 @@ func rbacPoliciesCommand() *cobra.Command {
 }
 
 // printRBACPolicies writes the user and policy tables. Writes to stdout are
-// best-effort: they fail only on a closed pipe (`sds ... | head`) or a full
+// best-effort: they fail only on a closed pipe (`haify ... | head`) or a full
 // disk, and reporting either would turn a successful read into an error.
-func printRBACPolicies(users []*sdspb.RbacUser, policies []*sdspb.RbacPolicy) {
+func printRBACPolicies(users []*haifypb.RbacUser, policies []*haifypb.RbacPolicy) {
 	fmt.Println("Users")
 	uw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 	_, _ = fmt.Fprintln(uw, "  NAME\tROLE")

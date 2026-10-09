@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	pb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // gRPC handlers for storage upkeep: trimming, disks, and storage jobs.
@@ -43,7 +43,7 @@ func (s *Server) RemovePoolDisk(ctx context.Context, req *pb.RemovePoolDiskReque
 		return &pb.StorageJobResponse{Success: false, Message: err.Error()}, nil
 	}
 	return &pb.StorageJobResponse{Success: true, JobId: id,
-		Message: fmt.Sprintf("moving the data off %s; it leaves the pool when that is done (sds pool jobs)", req.Disk)}, nil
+		Message: fmt.Sprintf("moving the data off %s; it leaves the pool when that is done (haify pool jobs)", req.Disk)}, nil
 }
 
 func (s *Server) ReplacePoolDisk(ctx context.Context, req *pb.ReplacePoolDiskRequest) (*pb.StorageJobResponse, error) {
@@ -55,7 +55,7 @@ func (s *Server) ReplacePoolDisk(ctx context.Context, req *pb.ReplacePoolDiskReq
 		return &pb.StorageJobResponse{Success: false, Message: err.Error()}, nil
 	}
 	return &pb.StorageJobResponse{Success: true, JobId: id,
-		Message: fmt.Sprintf("moving the data from %s to %s; %s leaves the pool when that is done (sds pool jobs)", req.OldDisk, req.NewDisk, req.OldDisk)}, nil
+		Message: fmt.Sprintf("moving the data from %s to %s; %s leaves the pool when that is done (haify pool jobs)", req.OldDisk, req.NewDisk, req.OldDisk)}, nil
 }
 
 func (s *Server) MoveVolume(ctx context.Context, req *pb.MoveVolumeRequest) (*pb.StorageJobResponse, error) {
@@ -64,7 +64,7 @@ func (s *Server) MoveVolume(ctx context.Context, req *pb.MoveVolumeRequest) (*pb
 		return &pb.StorageJobResponse{Success: false, Message: err.Error()}, nil
 	}
 	return &pb.StorageJobResponse{Success: true, JobId: id,
-		Message: fmt.Sprintf("moving volume %d of %s to %s one node at a time; it keeps serving meanwhile (sds pool jobs)",
+		Message: fmt.Sprintf("moving volume %d of %s to %s one node at a time; it keeps serving meanwhile (haify pool jobs)",
 			req.VolumeId, req.Resource, normalizeManagedName(req.Pool))}, nil
 }
 

@@ -8,36 +8,36 @@ import (
 	"os"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
 const (
 	// DriverName is the CSI driver name (reverse-DNS, used in CSIDriver object).
-	DriverName = "sds.csi.liliang-cn.com"
+	DriverName = "haify.csi.liliang-cn.com"
 	// DriverVersion is reported via Identity.GetPluginInfo.
 	DriverVersion = "0.1.0"
 	// TopologyKeyNode segments a volume to the node(s) holding a replica.
 	TopologyKeyNode = DriverName + "/node"
 )
 
-// SDSBackend is the subset of the sds-controller gRPC client the CSI driver
-// uses. *client.SDSClient satisfies it directly; tests use a fake.
-type SDSBackend interface {
+// HaifyBackend is the subset of the haify-controller gRPC client the CSI driver
+// uses. *client.HaifyClient satisfies it directly; tests use a fake.
+type HaifyBackend interface {
 	CreateResourceWithPoolAndType(ctx context.Context, name string, port uint32, nodes []string, protocol string, sizeGB uint32, pool, storageType string, drbdOptions map[string]string) error
-	GetResource(ctx context.Context, name string) (*sdspb.ResourceInfo, error)
+	GetResource(ctx context.Context, name string) (*haifypb.ResourceInfo, error)
 	// ListResources returns every resource the controller manages. ListVolumes
 	// and ListSnapshots filter it down to the ones this driver created.
-	ListResources(ctx context.Context) ([]*sdspb.ResourceInfo, error)
+	ListResources(ctx context.Context) ([]*haifypb.ResourceInfo, error)
 	DeleteResource(ctx context.Context, name string) error
-	ListNodes(ctx context.Context) ([]*sdspb.NodeInfo, error)
+	ListNodes(ctx context.Context) ([]*haifypb.NodeInfo, error)
 	// ListPools returns every storage pool known to the controller (one entry
 	// per node hosting the pool). CreateVolume uses it to keep replica
 	// placement pool-aware: a volume only lands on nodes that actually have the
 	// requested backing pool.
-	ListPools(ctx context.Context) ([]*sdspb.PoolInfo, error)
-	RegisterNode(ctx context.Context, name, address string) (*sdspb.NodeInfo, error)
+	ListPools(ctx context.Context) ([]*haifypb.PoolInfo, error)
+	RegisterNode(ctx context.Context, name, address string) (*haifypb.NodeInfo, error)
 	SetPrimary(ctx context.Context, resource, node string, force bool) error
 	// PromoteForNode performs a quorum-guarded promote for hard-failover: the
 	// controller tries a normal promote and only force-promotes if this node
@@ -59,7 +59,7 @@ type SDSBackend interface {
 	// ListSnapshots returns the snapshots of a backing volume on one node. The
 	// CSI driver uses it to make CreateSnapshot idempotent and, walking every
 	// volume's replica nodes, to answer the ListSnapshots RPC.
-	ListSnapshots(ctx context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error)
+	ListSnapshots(ctx context.Context, volume, node string) ([]*haifypb.SnapshotInfo, error)
 	// PopulateVolume copies sourceDevice into an already-created, still-empty
 	// resource, on a node that holds one of its replicas. It backs
 	// restore-from-snapshot and volume cloning.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // n builds a placement node with optional labels for terse test tables.
@@ -169,9 +169,9 @@ const testThinPoolBytes = 100 << 30 // 100GiB of thin pool data space
 // and the utilisation carries the only usable figure.
 func thinPoolInfo(dataPct, metaPct float64) *PoolInfo {
 	return &PoolInfo{
-		Name: "sds_vg0", Type: "vg", Node: "n1", TotalGB: 100, FreeGB: 0,
+		Name: "haify_vg0", Type: "vg", Node: "n1", TotalGB: 100, FreeGB: 0,
 		ThinUsage: &PoolThinInfo{
-			PoolLV:      "sds_vg0_thin",
+			PoolLV:      "haify_vg0_thin",
 			SizeBytes:   testThinPoolBytes,
 			DataPercent: dataPct,
 			MetaPercent: metaPct,
@@ -221,7 +221,7 @@ func TestPoolPlacementCapacity_ThinRejectsWhenExhausted(t *testing.T) {
 }
 
 func TestPoolPlacementCapacity_ThickVolumeGroupUnchanged(t *testing.T) {
-	thick := &PoolInfo{Name: "sds_vg0", Type: "vg", Node: "n1", TotalGB: 100, FreeGB: 40}
+	thick := &PoolInfo{Name: "haify_vg0", Type: "vg", Node: "n1", TotalGB: 100, FreeGB: 40}
 	c := poolPlacementCapacity(thick, false)
 	if !c.known || c.thin || c.freeGB != 40 {
 		t.Fatalf("thick group should report its own free space: %+v", c)
@@ -235,7 +235,7 @@ func TestPoolPlacementCapacity_ThickVolumeGroupUnchanged(t *testing.T) {
 
 	// A genuinely full group stays a rejection: unlike a thin pool, zero free
 	// extents in a thick group is a measurement, not an artefact.
-	if poolPlacementCapacity(&PoolInfo{Name: "sds_vg0", FreeGB: 0}, false).admits(1) {
+	if poolPlacementCapacity(&PoolInfo{Name: "haify_vg0", FreeGB: 0}, false).admits(1) {
 		t.Error("full thick group must be rejected")
 	}
 }
@@ -243,10 +243,10 @@ func TestPoolPlacementCapacity_ThickVolumeGroupUnchanged(t *testing.T) {
 func TestPoolPlacementCapacity_UnknownIsNotFull(t *testing.T) {
 	// Three ways a pool can fail to describe its room. None may reject.
 	cases := map[string]poolCapacity{
-		"thin pool recorded but not reported": poolPlacementCapacity(&PoolInfo{Name: "sds_vg0", FreeGB: 0}, true),
-		"pool flagged thin by the database":   poolPlacementCapacity(&PoolInfo{Name: "sds_vg0", FreeGB: 0, Thin: true}, false),
+		"thin pool recorded but not reported": poolPlacementCapacity(&PoolInfo{Name: "haify_vg0", FreeGB: 0}, true),
+		"pool flagged thin by the database":   poolPlacementCapacity(&PoolInfo{Name: "haify_vg0", FreeGB: 0, Thin: true}, false),
 		"utilisation without a pool size": poolPlacementCapacity(&PoolInfo{
-			Name: "sds_vg0", ThinUsage: &PoolThinInfo{PoolLV: "sds_vg0_thin"},
+			Name: "haify_vg0", ThinUsage: &PoolThinInfo{PoolLV: "haify_vg0_thin"},
 		}, false),
 	}
 	for name, c := range cases {
@@ -266,7 +266,7 @@ func TestPoolPlacementCapacity_UnknownIsNotFull(t *testing.T) {
 
 // vgsLineNoFreeExtents is what a thin pool's volume group reports: the pool LV
 // holds every extent, so vg_free is zero and stays zero.
-const vgsLineNoFreeExtents = "  sds_vg0|107390828544|0|/dev/vdb"
+const vgsLineNoFreeExtents = "  haify_vg0|107390828544|0|/dev/vdb"
 
 // newPlacementTestCluster builds a two-node controller whose pool listing is
 // driven by the given vgs and lvs reports, with both nodes registered online.
@@ -288,7 +288,7 @@ func TestSelectPlacementNodes_EmptyThinClusterHasCandidates(t *testing.T) {
 	// answered "insufficient capacity". The requested size is larger than the
 	// pool on purpose — thin volumes are allowed to be.
 	ctrl := newPlacementTestCluster(t, vgsLineNoFreeExtents,
-		"  sds_vg0|sds_vg0_thin|thin-pool|107374182400|0.00|0.50|twi-aotz--")
+		"  haify_vg0|haify_vg0_thin|thin-pool|107374182400|0.00|0.50|twi-aotz--")
 
 	got, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 500, 2, nil, nil, nil)
 	if err != nil {
@@ -318,7 +318,7 @@ func TestSelectPlacementNodes_ThinRanksByUtilisation(t *testing.T) {
 					pct = "90.00"
 				}
 				res.Hosts[h] = &deployment.HostResult{Host: h, Success: true,
-					Output: "  sds_vg0|sds_vg0_thin|thin-pool|107374182400|" + pct + "|1.00|twi-aotz--"}
+					Output: "  haify_vg0|haify_vg0_thin|thin-pool|107374182400|" + pct + "|1.00|twi-aotz--"}
 			}
 			return res, nil
 		},
@@ -341,7 +341,7 @@ func TestSelectPlacementNodes_ThinRanksByUtilisation(t *testing.T) {
 
 func TestSelectPlacementNodes_ExhaustedThinPoolIsRejected(t *testing.T) {
 	ctrl := newPlacementTestCluster(t, vgsLineNoFreeExtents,
-		"  sds_vg0|sds_vg0_thin|thin-pool|107374182400|97.00|3.00|twi-aotz--")
+		"  haify_vg0|haify_vg0_thin|thin-pool|107374182400|97.00|3.00|twi-aotz--")
 
 	_, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 1, 1, nil, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "insufficient capacity") {
@@ -351,7 +351,7 @@ func TestSelectPlacementNodes_ExhaustedThinPoolIsRejected(t *testing.T) {
 
 func TestSelectPlacementNodes_ThickVolumeGroupUnchanged(t *testing.T) {
 	// 200 GiB free, no thin pool in the group: the old hard limit still applies.
-	const thickVGS = "  sds_vg0|214748364800|214748364800|/dev/vdb"
+	const thickVGS = "  haify_vg0|214748364800|214748364800|/dev/vdb"
 	ctrl := newPlacementTestCluster(t, thickVGS, "")
 
 	got, _, err := ctrl.resources.selectPlacementNodes(context.Background(), "vg0", 200, 2, nil, nil, nil)
@@ -378,7 +378,7 @@ func TestSelectPlacementNodes_UnreadableThinPoolStillPlaces(t *testing.T) {
 	}
 
 	if err := ctrl.db.SavePool(context.Background(), &database.Pool{
-		Name: "sds_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb",
+		Name: "haify_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb",
 	}); err != nil {
 		t.Fatalf("save pool: %v", err)
 	}

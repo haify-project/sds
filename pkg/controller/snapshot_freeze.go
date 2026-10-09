@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Freezing a snapshot schedule.
@@ -18,7 +18,7 @@ import (
 // them out, and a thin pool filling with the rewritten blocks makes the
 // scheduler remove the oldest. A freeze stops both. A frozen schedule keeps
 // taking snapshots and removes none, and until the freeze ends every
-// scheduled snapshot of the resource is locked against deletion through sds
+// scheduled snapshot of the resource is locked against deletion through haify
 // and the schedule and resource cannot be deleted (snapshot_lock.go).
 //
 // The write-anomaly detector freezes a schedule when it fires

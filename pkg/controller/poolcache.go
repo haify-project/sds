@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Storage tiering: an SSD in front of a slow LVM pool, via lvmcache. Reading
@@ -36,7 +36,7 @@ import (
 const (
 	// cacheVolName is the LV the fast device is carved into, mirroring
 	// thinPoolName. LVM renames it to "<name>_cvol" once it is attached.
-	cacheVolName = "sdscache"
+	cacheVolName = "haifycache"
 
 	cacheModeWritethrough = "writethrough"
 	cacheModeWriteback    = "writeback"
@@ -181,7 +181,7 @@ func (sm *StorageManager) AddPoolCache(ctx context.Context, node, poolName, devi
 		// See the per-pool decision at the top of this file: a thick pool has no
 		// single LV to cache.
 		return nil, fmt.Errorf("%s on %s is not a thin pool, so it has no single volume to cache; "+
-			"convert it first with `sds pool convert-thin --node %s --pool %s`",
+			"convert it first with `haify pool convert-thin --node %s --pool %s`",
 			poolName, node, node, poolName)
 	}
 

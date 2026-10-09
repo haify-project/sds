@@ -1,0 +1,32 @@
+#!/bin/sh
+# prerm for haify-controller.
+#
+# Removing the package stops nothing. Stopping the controller is a decision
+# about the whole cluster (under Self-HA it is a failover, and without it the
+# cluster loses its control plane), so it is left to the operator, who is told
+# what is still running. Guests and exported storage do not depend on the
+# controller process: DRBD and drbd-reactor keep serving them either way.
+
+set -e
+
+case "$1" in
+remove|deconfigure)
+    if [ -d /run/systemd/system ] && systemctl is-active --quiet haify-controller; then
+        echo "WARNING: haify-controller is running and is left running from the removed binary." >&2
+        echo "  Stop it when appropriate: systemctl stop haify-controller" >&2
+    fi
+    if [ -f /etc/drbd-reactor.d/haify-ha-haify-meta.toml ]; then
+        echo "WARNING: this node takes part in controller Self-HA: drbd-reactor will try to" >&2
+        echo "  start haify-controller here at the next failover. Disable Self-HA first" >&2
+        echo "  (haify ha self disable), or keep the package installed on every Self-HA node." >&2
+    fi
+    ;;
+upgrade|failed-upgrade)
+    ;;
+*)
+    echo "prerm called with unknown argument '$1'" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

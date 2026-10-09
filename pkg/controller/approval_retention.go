@@ -6,8 +6,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Replacing a schedule is held back only when it weakens one.
@@ -23,7 +23,7 @@ import (
 // the call lowers what an existing schedule keeps.
 var conditionalApproval = map[string]func(ctx context.Context, db *database.DB, req proto.Message) bool{
 	"CreateSnapshotSchedule": func(ctx context.Context, db *database.DB, req proto.Message) bool {
-		r, ok := req.(*sdspb.CreateSnapshotScheduleRequest)
+		r, ok := req.(*haifypb.CreateSnapshotScheduleRequest)
 		if !ok {
 			return true
 		}
@@ -34,7 +34,7 @@ var conditionalApproval = map[string]func(ctx context.Context, db *database.DB, 
 		return keepsLess(gfsFromProto(r.Keep), old.Keep)
 	},
 	"CreateBackupSchedule": func(ctx context.Context, db *database.DB, req proto.Message) bool {
-		r, ok := req.(*sdspb.CreateBackupScheduleRequest)
+		r, ok := req.(*haifypb.CreateBackupScheduleRequest)
 		if !ok {
 			return true
 		}

@@ -176,7 +176,7 @@ func (rm *ResourceManager) RemoveReplicaOptions(ctx context.Context, resource, n
 	if len(diskless) > 0 {
 		if err := rm.execAllSuccess(ctx, diskless, fmt.Sprintf("sudo drbdadm adjust %s", resource),
 			"adjust the diskless members"); err != nil {
-			rm.controller.logger.Warn("A diskless member still lists the removed replica; run `sds resource repair` once it answers",
+			rm.controller.logger.Warn("A diskless member still lists the removed replica; run `haify resource repair` once it answers",
 				zap.String("resource", resource), zap.Error(err))
 		}
 	}
@@ -210,7 +210,7 @@ func (rm *ResourceManager) RemoveReplicaOptions(ctx context.Context, resource, n
 	// Its promoter would otherwise outlive its copy of the data.
 	if err := rm.SyncPromoters(ctx, resource, node); err != nil {
 		return fmt.Errorf("replica removed from %s, but the resource's promoters could not be updated: %w; "+
-			"run `sds resource repair %s`", node, err, resource)
+			"run `haify resource repair %s`", node, err, resource)
 	}
 
 	rm.controller.logger.Info("Replica removed",
@@ -253,7 +253,7 @@ func (rm *ResourceManager) assertNotPrimary(ctx context.Context, resource, node 
 			return fmt.Errorf("could not read the role of %s on %s; refusing to remove a replica blind", resource, node)
 		}
 		if strings.EqualFold(role, "Primary") {
-			return fmt.Errorf("%s is Primary on %s; move it first (sds ha evict, or resource secondary)", resource, node)
+			return fmt.Errorf("%s is Primary on %s; move it first (haify ha evict, or resource secondary)", resource, node)
 		}
 	}
 	return nil

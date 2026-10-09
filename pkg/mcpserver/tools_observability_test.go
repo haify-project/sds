@@ -7,7 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // obsClient implements only the observability slice of ControllerClient.
@@ -18,18 +18,18 @@ import (
 type obsClient struct {
 	ControllerClient
 
-	eventReq *sdspb.ListEventsRequest
-	auditReq *sdspb.ListAuditEventsRequest
-	logReq   *sdspb.ListControllerLogsRequest
+	eventReq *haifypb.ListEventsRequest
+	auditReq *haifypb.ListAuditEventsRequest
+	logReq   *haifypb.ListControllerLogsRequest
 }
 
-func (c *obsClient) ListEvents(_ context.Context, req *sdspb.ListEventsRequest) (*sdspb.ListEventsResponse, error) {
+func (c *obsClient) ListEvents(_ context.Context, req *haifypb.ListEventsRequest) (*haifypb.ListEventsResponse, error) {
 	c.eventReq = req
-	return &sdspb.ListEventsResponse{
+	return &haifypb.ListEventsResponse{
 		Success:   true,
 		Published: 7,
 		Dropped:   1,
-		Events: []*sdspb.Event{{
+		Events: []*haifypb.Event{{
 			Id: 7, Type: "resource.failover", Severity: "warning", Status: "firing",
 			Resource: "vmstore", Node: "orange2",
 			Message:         "resource vmstore failed over: Primary moved from orange1 to orange2",
@@ -39,11 +39,11 @@ func (c *obsClient) ListEvents(_ context.Context, req *sdspb.ListEventsRequest) 
 	}, nil
 }
 
-func (c *obsClient) ListAuditEvents(_ context.Context, req *sdspb.ListAuditEventsRequest) (*sdspb.ListAuditEventsResponse, error) {
+func (c *obsClient) ListAuditEvents(_ context.Context, req *haifypb.ListAuditEventsRequest) (*haifypb.ListAuditEventsResponse, error) {
 	c.auditReq = req
-	return &sdspb.ListAuditEventsResponse{
+	return &haifypb.ListAuditEventsResponse{
 		Success: true, Total: 42,
-		Events: []*sdspb.AuditEvent{{
+		Events: []*haifypb.AuditEvent{{
 			TimestampUnixMs: 1786105730000, Method: "EvictHa", User: "ops", Target: "vmstore",
 			Result: "PermissionDenied", Granted: false, LatencyMs: 3, Node: "orange2",
 			Error: "administrator role required",
@@ -51,11 +51,11 @@ func (c *obsClient) ListAuditEvents(_ context.Context, req *sdspb.ListAuditEvent
 	}, nil
 }
 
-func (c *obsClient) ListControllerLogs(_ context.Context, req *sdspb.ListControllerLogsRequest) (*sdspb.ListControllerLogsResponse, error) {
+func (c *obsClient) ListControllerLogs(_ context.Context, req *haifypb.ListControllerLogsRequest) (*haifypb.ListControllerLogsResponse, error) {
 	c.logReq = req
-	return &sdspb.ListControllerLogsResponse{
+	return &haifypb.ListControllerLogsResponse{
 		Success: true, Node: "orange2", Truncated: true,
-		Entries: []*sdspb.ControllerLogEntry{{
+		Entries: []*haifypb.ControllerLogEntry{{
 			TimestampUnixMs: 1786105730000, Level: "warn", Logger: "alert",
 			Caller: "alert/alert.go:1", Message: "list nodes failed",
 		}},
@@ -85,7 +85,7 @@ func TestEventListTool(t *testing.T) {
 	session := connect(t, mock, false)
 
 	var out eventListOut
-	callJSON(t, session, "sds_event_list", map[string]any{
+	callJSON(t, session, "haify_event_list", map[string]any{
 		"min_severity": "warning",
 		"resource":     "vmstore",
 		"since_id":     3,
@@ -124,7 +124,7 @@ func TestAuditListTool(t *testing.T) {
 	session := connect(t, mock, false)
 
 	var out auditListOut
-	callJSON(t, session, "sds_audit_list", map[string]any{"failures_only": true}, &out)
+	callJSON(t, session, "haify_audit_list", map[string]any{"failures_only": true}, &out)
 
 	if mock.auditReq == nil || !mock.auditReq.FailuresOnly {
 		t.Fatalf("failures_only not forwarded: %+v", mock.auditReq)
@@ -146,7 +146,7 @@ func TestLogListTool(t *testing.T) {
 	session := connect(t, mock, false)
 
 	var out logListOut
-	callJSON(t, session, "sds_log_list", map[string]any{"min_level": "warn", "contains": "nodes"}, &out)
+	callJSON(t, session, "haify_log_list", map[string]any{"min_level": "warn", "contains": "nodes"}, &out)
 
 	if mock.logReq == nil {
 		t.Fatal("ListControllerLogs was never called")
@@ -171,14 +171,14 @@ func TestObservabilityToolsSurviveReadOnly(t *testing.T) {
 	session := connect(t, &obsClient{}, true)
 	tools := listTools(t, session)
 
-	for _, want := range []string{"sds_event_list", "sds_audit_list", "sds_log_list"} {
+	for _, want := range []string{"haify_event_list", "haify_audit_list", "haify_log_list"} {
 		if _, found := tools[want]; !found {
 			t.Errorf("%s must remain available in read-only mode", want)
 		}
 	}
 	for _, unwanted := range []string{
-		"sds_resource_remove_replica", "sds_node_drain", "sds_zfs_pool_delete",
-		"sds_pool_convert_thin", "sds_ha_sync_toml", "sds_wan_repair",
+		"haify_resource_remove_replica", "haify_node_drain", "haify_zfs_pool_delete",
+		"haify_pool_convert_thin", "haify_ha_sync_toml", "haify_wan_repair",
 	} {
 		if _, found := tools[unwanted]; found {
 			t.Errorf("%s mutates and must be absent in read-only mode", unwanted)

@@ -19,7 +19,7 @@ func TestBackupScheduleFailingLateAndTargetMissing(t *testing.T) {
 		{Name: "f@s3", Target: "s3", Cron: "0 2 * * *", Enabled: false},
 	}
 	checks := checkBackups(in)
-	if c := only(t, checks, "backups.schedule_failing"); c.Subject != "a@s3" || c.Fix != "sds backup schedule run a@s3" {
+	if c := only(t, checks, "backups.schedule_failing"); c.Subject != "a@s3" || c.Fix != "haify backup schedule run a@s3" {
 		t.Errorf("got %+v", c)
 	}
 	late := find(checks, "backups.schedule_late")
@@ -65,12 +65,12 @@ func TestSchedulerOffAndLateSnapshots(t *testing.T) {
 func TestLeftoverBackupSnapshots(t *testing.T) {
 	in := cluster()
 	in.Probes["n1"].LVs = []LV{
-		{VG: "sds_pool0", Name: "vm_data_bk_20260901T020000Z", Segtype: "thin"},
-		{VG: "sds_pool0", Name: "vm_data_bk_20260902T020000Z", Segtype: "thin"},
+		{VG: "haify_pool0", Name: "vm_data_bk_20260901T020000Z", Segtype: "thin"},
+		{VG: "haify_pool0", Name: "vm_data_bk_20260902T020000Z", Segtype: "thin"},
 	}
-	in.Backups.BaseSnapshots["sds_pool0/vm_data_bk_20260902T020000Z"] = true
+	in.Backups.BaseSnapshots["haify_pool0/vm_data_bk_20260902T020000Z"] = true
 	c := only(t, checkBackups(in), "backups.leftover_base_snapshot")
-	if c.Fix != "ssh 10.0.0.1 sudo lvremove -y sds_pool0/vm_data_bk_20260901T020000Z" {
+	if c.Fix != "ssh 10.0.0.1 sudo lvremove -y haify_pool0/vm_data_bk_20260901T020000Z" {
 		t.Errorf("got %+v", c)
 	}
 	in.Backups.Running = true

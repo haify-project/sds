@@ -14,14 +14,14 @@ func TestResolveTokenPriority(t *testing.T) {
 	assert.Equal(t, "explicit-token", ResolveToken("explicit-token"))
 
 	// 2. Env variable
-	t.Setenv("SDS_TOKEN", "env-token")
+	t.Setenv("HAIFY_TOKEN", "env-token")
 	assert.Equal(t, "env-token", ResolveToken(""))
 
 	// 3. User home token file
-	t.Setenv("SDS_TOKEN", "")
+	t.Setenv("HAIFY_TOKEN", "")
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
-	tokenDir := filepath.Join(tmpHome, ".sds")
+	tokenDir := filepath.Join(tmpHome, ".haify")
 	require.NoError(t, os.MkdirAll(tokenDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(tokenDir, "token"), []byte(" home-token \n"), 0600))
 

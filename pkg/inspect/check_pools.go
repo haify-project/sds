@@ -51,7 +51,7 @@ func checkPools(in *Input) []Check {
 			if trend != "" {
 				ev = append(ev, trend)
 			}
-			fix := fmt.Sprintf("sds pool add --pool %s --nodes %s --devices <new-device>", strings.TrimPrefix(lv.VG, "sds_"), node)
+			fix := fmt.Sprintf("haify pool add --pool %s --nodes %s --devices <new-device>", strings.TrimPrefix(lv.VG, "haify_"), node)
 			for _, dim := range []struct {
 				id, what string
 				pct      float64

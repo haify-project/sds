@@ -15,9 +15,9 @@ import { Skeleton } from '@/components/ui/skeleton';
  * Settings — currently the Copilot's model, and nothing else.
  *
  * The page exists because changing which LLM answers used to mean editing an
- * environment file on whichever node was active and restarting sds-ai. That
- * restart is not a restart: sds-ai.service is in the drbd-reactor promoter's
- * start list for sds-meta, so stopping it demotes the resource and moves the
+ * environment file on whichever node was active and restarting haify-ai. That
+ * restart is not a restart: haify-ai.service is in the drbd-reactor promoter's
+ * start list for haify-meta, so stopping it demotes the resource and moves the
  * VIP, the controller and the Copilot to another node. Renaming a model cost a
  * control-plane outage.
  *
@@ -113,8 +113,8 @@ function CopilotModelCard({
               <p className="font-medium">Read-only</p>
               <p className="mt-0.5 text-muted-foreground">
                 No bearer token is configured, and this form accepts an API key. Set{' '}
-                <code className="font-mono">SDS_AI_TOKEN</code> or write{' '}
-                <code className="font-mono">/etc/sds/token</code>, then restart the
+                <code className="font-mono">HAIFY_AI_TOKEN</code> or write{' '}
+                <code className="font-mono">/etc/haify/token</code>, then restart the
                 Copilot.
               </p>
             </div>

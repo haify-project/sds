@@ -15,7 +15,7 @@ import (
 
 // managedPrefix marks the volume groups Haify manages; the node's own (its
 // root VG, a hypervisor's) are not pools and are left alone.
-const managedPrefix = "sds_"
+const managedPrefix = "haify_"
 
 // DiskProbeScript prints one line per physical volume of a Haify pool:
 // pv|vg|size|used|disk|<base64 smartctl json, or NOSMARTCTL>. The disk is the
@@ -191,7 +191,7 @@ func checkDisks(in *Input) []Check {
 		out = append(out, Check{ID: "disk.health", Area: AreaPools, Subject: d.Node + ":" + d.Device, Status: st,
 			Message:  fmt.Sprintf("%s (pool %s on %s) is failing: %s", d.Device, d.Pool, d.Node, d.Detail),
 			Evidence: []string{strings.TrimSpace(d.Model + " " + d.Serial)},
-			Fix: fmt.Sprintf("move its data to a healthy disk while it still reads: sds pool replace-disk --pool %s --node %s --disk %s --new-disk <device>",
+			Fix: fmt.Sprintf("move its data to a healthy disk while it still reads: haify pool replace-disk --pool %s --node %s --disk %s --new-disk <device>",
 				d.Pool, d.Node, d.PV)})
 	}
 	if failing == 0 {

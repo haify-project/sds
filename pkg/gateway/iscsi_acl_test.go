@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -23,7 +23,7 @@ func TestAddAndListInitiators(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:          "resource",
-		Iqn:               "iqn.2024-01.com.example:sds.resource",
+		Iqn:               "iqn.2024-01.com.example:haify.resource",
 		ServiceIp:         "192.168.1.200/24",
 		AllowedInitiators: []string{"iqn.2024-01.com.example:init-a"},
 	}
@@ -31,7 +31,7 @@ func TestAddAndListInitiators(t *testing.T) {
 	require.NoError(t, err)
 	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-iscsi-resource"), config)
 
 	ctx := context.Background()
 	err = iscsiManager.AddInitiator(ctx, "resource", "iqn.2024-01.com.example:init-b")
@@ -51,14 +51,14 @@ func TestSetAndGetCHAP(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "resource",
-		Iqn:       "iqn.2024-01.com.example:sds.resource",
+		Iqn:       "iqn.2024-01.com.example:haify.resource",
 		ServiceIp: "192.168.1.200/24",
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-iscsi-resource"), config)
 
 	ctx := context.Background()
 	err = iscsiManager.SetCHAP(ctx, "resource", "user", "pass", false)

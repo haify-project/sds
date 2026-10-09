@@ -9,9 +9,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/wanproxy"
 )
 
 // AddDR attaches an asynchronous off-site replica to a resource that is already
@@ -24,7 +24,7 @@ import (
 // data means an outage and a restore.
 //
 // Everything here is additive. The existing replicas keep their synchronous
-// mesh and their addresses; the DR joins through one sds-proxy leg per replica
+// mesh and their addresses; the DR joins through one haify-proxy leg per replica
 // (DRBD 9 is a full mesh, so a failover inside the primary site must not land
 // on a node with no path to the DR). The mounted filesystem is never touched,
 // so a promoted resource keeps serving throughout.

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const managedNamePrefix = "sds_"
+const managedNamePrefix = "haify_"
 
 func normalizeManagedName(name string) string {
 	name = strings.TrimSpace(name)

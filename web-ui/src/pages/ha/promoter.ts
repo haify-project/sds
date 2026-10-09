@@ -27,8 +27,8 @@ export type PromoterView = {
  * The promoter's start[], preferring what is deployed over what is configured.
  *
  * Composing it from the config is what this used to do, and the comment said it
- * could not disagree with the TOML. It can: `sds-meta` on this cluster starts
- * four units and the controller's config lists one service, because sds-ai was
+ * could not disagree with the TOML. It can: `haify-meta` on this cluster starts
+ * four units and the controller's config lists one service, because haify-ai was
  * added to the promoter without going back through the controller. A card built
  * from the config alone told an operator that three things move on a failover
  * when four do — and the missing one was the Copilot.

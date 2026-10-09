@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 func TestParseLaSizeSectors(t *testing.T) {
@@ -16,9 +16,9 @@ func TestParseLaSizeSectors(t *testing.T) {
 	assert.Zero(t, parseLaSizeSectors(""), "no DRBD metadata on the source")
 	assert.Zero(t, parseLaSizeSectors("garbage"))
 
-	cmd := sourceDataBytesCmd("/dev/sds_vg0/pve-base-100-0_data")
-	assert.Contains(t, cmd, "drbdmeta --force 1048575 v09 /dev/sds_vg0/pve-base-100-0_data internal dump-md")
-	assert.Contains(t, cmd, "lvchange -ay -K sds_vg0/pve-base-100-0_data", "a snapshot source is activated first")
+	cmd := sourceDataBytesCmd("/dev/haify_vg0/pve-base-100-0_data")
+	assert.Contains(t, cmd, "drbdmeta --force 1048575 v09 /dev/haify_vg0/pve-base-100-0_data internal dump-md")
+	assert.Contains(t, cmd, "lvchange -ay -K haify_vg0/pve-base-100-0_data", "a snapshot source is activated first")
 }
 
 // The source's data region decides the copy, and a target smaller than it is
@@ -39,7 +39,7 @@ func TestFitTargetToSource(t *testing.T) {
 		}
 		ctrl := newBasicTestController(dep)
 		got, err := ctrl.snapshots.fitTargetToSource(context.Background(), "pve-101-0", 0, "10.0.0.1",
-			"/dev/drbd/by-res/pve-101-0/0", "/dev/sds_vg0/pve-base-100-0_data")
+			"/dev/drbd/by-res/pve-101-0/0", "/dev/haify_vg0/pve-base-100-0_data")
 		var cmds []string
 		for _, c := range dep.execCalls {
 			cmds = append(cmds, c.cmd)

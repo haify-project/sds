@@ -57,7 +57,7 @@ func (rm *ResourceManager) repairStaleConfigs(node string) {
 			continue
 		}
 		if err := rm.RepairResourceConfig(ctx, r.Name); err != nil {
-			rm.controller.logger.Warn("Node is back but its config of the resource could not be repaired; run `sds resource repair`",
+			rm.controller.logger.Warn("Node is back but its config of the resource could not be repaired; run `haify resource repair`",
 				zap.String("node", node), zap.String("resource", r.Name), zap.Error(err))
 			continue
 		}

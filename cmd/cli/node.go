@@ -9,7 +9,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -40,14 +40,14 @@ func nodeList() *cobra.Command {
 			ctx := cmd.Context()
 
 			// Create Haify client
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// List nodes
-			nodes, err := sdsClient.ListNodes(ctx)
+			nodes, err := haifyClient.ListNodes(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list nodes: %w", err)
 			}
@@ -60,7 +60,7 @@ func nodeList() *cobra.Command {
 			// Print nodes in table format
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 			// Writes to the command's own output stream are best-effort. The only ways
-			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// they fail are a closed pipe (`haify ... | head`) or a full disk, neither of
 			// which this command can report anywhere the operator is still looking, and
 			// treating them as errors would report a successful operation as failed.
 			_, _ = fmt.Fprintln(w, "NAME\tADDRESS\tSTATE\tVERSION")
@@ -104,13 +104,13 @@ func nodeGet() *cobra.Command {
 			nodeRef := args[0]
 
 			// Create Haify client
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			foundNode, err := sdsClient.GetNode(ctx, nodeRef)
+			foundNode, err := haifyClient.GetNode(ctx, nodeRef)
 			if err != nil {
 				return fmt.Errorf("failed to get node: %w", err)
 			}
@@ -157,13 +157,13 @@ func nodeLabel() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			node, err := sdsClient.SetNodeLabels(ctx, nodeRef, labels, replace)
+			node, err := haifyClient.SetNodeLabels(ctx, nodeRef, labels, replace)
 			if err != nil {
 				return fmt.Errorf("failed to set node labels: %w", err)
 			}
@@ -218,14 +218,14 @@ func nodeRegister() *cobra.Command {
 			ctx := cmd.Context()
 
 			// Create Haify client
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Register node
-			node, err := sdsClient.RegisterNodeWithReplicationAddress(ctx, name, address, replicationAddress)
+			node, err := haifyClient.RegisterNodeWithReplicationAddress(ctx, name, address, replicationAddress)
 			if err != nil {
 				return fmt.Errorf("failed to register node: %w", err)
 			}
@@ -271,26 +271,26 @@ role so you can move or remove them first.`,
 				ref = args[0]
 			}
 			if ref == "" {
-				return fmt.Errorf("name the node to unregister: sds node unregister <name|address>")
+				return fmt.Errorf("name the node to unregister: haify node unregister <name|address>")
 			}
 
 			ctx := cmd.Context()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// The controller removes nodes by address; every other node command
 			// takes a name, so resolve one here rather than make the operator
 			// look the address up.
-			node, err := sdsClient.GetNode(ctx, ref)
+			node, err := haifyClient.GetNode(ctx, ref)
 			if err != nil {
 				return fmt.Errorf("failed to find node %q: %w", ref, err)
 			}
 
-			if err := sdsClient.UnregisterNode(ctx, node.Address); err != nil {
+			if err := haifyClient.UnregisterNode(ctx, node.Address); err != nil {
 				return fmt.Errorf("failed to unregister node: %w", err)
 			}
 
@@ -317,13 +317,13 @@ func nodeDrain() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			moved, err := sdsClient.DrainNode(ctx, node)
+			moved, err := haifyClient.DrainNode(ctx, node)
 			if err != nil {
 				for _, r := range moved {
 					fmt.Printf("  moved: %s\n", r)
@@ -339,7 +339,7 @@ func nodeDrain() *cobra.Command {
 					fmt.Printf("  - %s\n", r)
 				}
 			}
-			fmt.Printf("  Node is now in maintenance mode. Run \"sds node undrain %s\" when ready.\n", node)
+			fmt.Printf("  Node is now in maintenance mode. Run \"haify node undrain %s\" when ready.\n", node)
 			return nil
 		},
 	}
@@ -355,13 +355,13 @@ func nodeUndrain() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.UndrainNode(ctx, node); err != nil {
+			if err := haifyClient.UndrainNode(ctx, node); err != nil {
 				return fmt.Errorf("undrain failed: %w", err)
 			}
 
@@ -395,7 +395,7 @@ func nodeSetAddress() *cobra.Command {
 			"known only by their old addresses.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var moves []*sdspb.NodeAddressMove
+			var moves []*haifypb.NodeAddressMove
 			if strings.Contains(args[0], "=") {
 				if replication != "" {
 					return fmt.Errorf("--replication-address goes with the single-node form")
@@ -405,21 +405,21 @@ func nodeSetAddress() *cobra.Command {
 					if !ok || node == "" || addr == "" {
 						return fmt.Errorf("%q is not node=address", a)
 					}
-					moves = append(moves, &sdspb.NodeAddressMove{Node: node, Address: addr})
+					moves = append(moves, &haifypb.NodeAddressMove{Node: node, Address: addr})
 				}
 			} else if len(args) != 2 {
 				return fmt.Errorf("give <node> <new-address>, or node=address pairs")
 			}
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			var resp *sdspb.SetNodeAddressResponse
+			defer closeClient(haifyClient)
+			var resp *haifypb.SetNodeAddressResponse
 			if moves != nil {
-				resp, err = sdsClient.SetNodeAddresses(cmd.Context(), moves)
+				resp, err = haifyClient.SetNodeAddresses(cmd.Context(), moves)
 			} else {
-				resp, err = sdsClient.SetNodeAddress(cmd.Context(), args[0], args[1], replication)
+				resp, err = haifyClient.SetNodeAddress(cmd.Context(), args[0], args[1], replication)
 			}
 			if err != nil {
 				return err

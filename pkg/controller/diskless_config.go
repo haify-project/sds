@@ -12,7 +12,7 @@ type onBlock struct {
 	name   string
 	nodeID int
 	// loopback is true when the stanza's address is 127.0.0.1, which marks a
-	// node reachable only through an sds-proxy WAN leg (the DR site, or the
+	// node reachable only through an haify-proxy WAN leg (the DR site, or the
 	// primary of a single-replica WAN resource). Such a node is wired by an
 	// explicit `connection` section and must never be put in a connection-mesh:
 	// the mesh would pair it with every other host on that host's LAN address,

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // volumeHealth judges a volume from the controller's view of its DRBD
@@ -22,7 +22,7 @@ import (
 // ones pkg/alert applies, including the one that took a production split brain to
 // learn — a peer whose link is down carries no disk state at all, so the
 // connection has to be checked before anything else.
-func volumeHealth(r *sdspb.ResourceInfo) (abnormal bool, message string) {
+func volumeHealth(r *haifypb.ResourceInfo) (abnormal bool, message string) {
 	abnormal, message, _ = volumeHealthDetail(r)
 	return abnormal, message
 }
@@ -31,7 +31,7 @@ func volumeHealth(r *sdspb.ResourceInfo) (abnormal bool, message string) {
 // resync in progress. A resync heals itself, and the first one a volume ever
 // runs — the initial sync of a replica that has never held data — is not news
 // at all; the reporter uses this to stay quiet about it.
-func volumeHealthDetail(r *sdspb.ResourceInfo) (abnormal bool, message string, onlyResync bool) {
+func volumeHealthDetail(r *haifypb.ResourceInfo) (abnormal bool, message string, onlyResync bool) {
 	if r == nil {
 		return true, "volume not found", false
 	}
@@ -67,7 +67,7 @@ func volumeHealthDetail(r *sdspb.ResourceInfo) (abnormal bool, message string, o
 // replicaProblem describes what is wrong with one replica, or "" when nothing
 // is. expectedDiskless marks a tiebreaker or diskless client, for which having no
 // local disk is the healthy steady state.
-func replicaProblem(st *sdspb.NodeResourceState, expectedDiskless bool) string {
+func replicaProblem(st *haifypb.NodeResourceState, expectedDiskless bool) string {
 	if c := st.GetConnection(); c != "" && !strings.EqualFold(c, "Connected") {
 		if strings.EqualFold(c, "StandAlone") {
 			return "disconnected (StandAlone; DRBD does not reconnect it by itself, often a split brain)"
@@ -104,7 +104,7 @@ func replicaProblem(st *sdspb.NodeResourceState, expectedDiskless bool) string {
 // as "this node is full" and stops placing Pods there, so a pool that is merely
 // unreported must not be published as empty — and a thin pool that is genuinely
 // full must be.
-func poolCapacity(p *sdspb.PoolInfo) (uint64, bool) {
+func poolCapacity(p *haifypb.PoolInfo) (uint64, bool) {
 	if p.GetThinPoolLv() != "" && p.GetThinSizeBytes() > 0 {
 		used := float64(p.GetThinSizeBytes()) * p.GetThinDataPercent() / 100
 		if free := float64(p.GetThinSizeBytes()) - used; free > 0 {

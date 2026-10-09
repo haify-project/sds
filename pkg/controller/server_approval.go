@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/rbac"
+	pb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/rbac"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

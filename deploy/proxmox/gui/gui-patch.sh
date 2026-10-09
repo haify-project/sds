@@ -1,5 +1,5 @@
 #!/bin/sh
-# Loads sds-storage.js into the Proxmox VE web interface, or with --remove
+# Loads haify-storage.js into the Proxmox VE web interface, or with --remove
 # stops loading it.
 #
 # PVE gives storage plugins no way into its interface, so this adds one script
@@ -8,9 +8,9 @@
 # runs this again afterwards. Running it twice changes nothing.
 set -e
 
-TPL=${SDS_PVE_INDEX_TPL:-/usr/share/pve-manager/index.html.tpl}
-MARK='<!-- sds-storage -->'
-TAG='<script type="text/javascript" src="/pve2/js/sds-storage.js?ver=[% version %]"></script>'
+TPL=${HAIFY_PVE_INDEX_TPL:-/usr/share/pve-manager/index.html.tpl}
+MARK='<!-- haify-storage -->'
+TAG='<script type="text/javascript" src="/pve2/js/haify-storage.js?ver=[% version %]"></script>'
 
 [ -f "$TPL" ] || exit 0
 

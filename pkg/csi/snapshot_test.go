@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -17,13 +17,13 @@ import (
 // seedSnapshotSource registers a resource whose volume 0 has a backing volume,
 // which is what CreateSnapshot needs to locate the LV to snapshot.
 func seedSnapshotSource(b *fakeBackend, name string, nodes ...string) {
-	b.resources[name] = &sdspb.ResourceInfo{
+	b.resources[name] = &haifypb.ResourceInfo{
 		Name:  name,
 		Nodes: nodes,
-		Volumes: []*sdspb.VolumeInfo{{
+		Volumes: []*haifypb.VolumeInfo{{
 			VolumeId:      0,
 			SizeGb:        2,
-			Pool:          "sds_vg0",
+			Pool:          "haify_vg0",
 			BackingVolume: name + "_data",
 		}},
 	}
@@ -63,11 +63,11 @@ func TestCreateSnapshotTakesSnapshotOnReplicaNode(t *testing.T) {
 	assert.NotNil(t, snap.GetCreationTime())
 
 	// The ID must carry the node, so a later delete targets the right replica.
-	assert.Equal(t, "pvc_abc/n1/sdssnap_snapshot_xyz", snap.GetSnapshotId())
+	assert.Equal(t, "pvc_abc/n1/haifysnap_snapshot_xyz", snap.GetSnapshotId())
 
 	// The backend was asked to snapshot the backing LV on a diskful node.
 	require.Len(t, b.snapCreated, 1)
-	assert.Equal(t, "sds_vg0/pvc_abc_data/sdssnap_snapshot_xyz@n1", b.snapCreated[0])
+	assert.Equal(t, "haify_vg0/pvc_abc_data/haifysnap_snapshot_xyz@n1", b.snapCreated[0])
 }
 
 // Regression: LVM refuses any LV whose name starts with "snapshot"
@@ -131,10 +131,10 @@ func TestCreateSnapshotValidation(t *testing.T) {
 func TestCreateSnapshotRejectsSourceWithoutBackingVolume(t *testing.T) {
 	b := newFakeBackend("n1")
 	// A resource with no recorded backing volume cannot be snapshotted.
-	b.resources["pvc_bad"] = &sdspb.ResourceInfo{
+	b.resources["pvc_bad"] = &haifypb.ResourceInfo{
 		Name:    "pvc_bad",
 		Nodes:   []string{"n1"},
-		Volumes: []*sdspb.VolumeInfo{{VolumeId: 0, SizeGb: 1}},
+		Volumes: []*haifypb.VolumeInfo{{VolumeId: 0, SizeGb: 1}},
 	}
 	s := newTestController(b)
 
@@ -174,7 +174,7 @@ func TestDeleteSnapshotRemovesFromRecordedNode(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, b.snapDeleted, 1)
-	assert.Equal(t, "sds_vg0/pvc_abc_data/sdssnap_snapshot_xyz@n1", b.snapDeleted[0])
+	assert.Equal(t, "haify_vg0/pvc_abc_data/haifysnap_snapshot_xyz@n1", b.snapDeleted[0])
 }
 
 func TestDeleteSnapshotIsIdempotent(t *testing.T) {

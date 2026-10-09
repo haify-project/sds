@@ -46,23 +46,23 @@ jobs:
         run: |
           mkdir -p dist
           VERSION=${GITHUB_REF#refs/tags/}
-          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-controller ./cmd/controller
-          go build -ldflags "-s -w" -o dist/sds ./cmd/cli
-          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/sds-mcp ./cmd/mcp
+          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/haify-controller ./cmd/controller
+          go build -ldflags "-s -w" -o dist/haify ./cmd/cli
+          go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/haify-mcp ./cmd/mcp
           go build -ldflags "-s -w" -o dist/service-ip ./cmd/service-ip
-          cp configs/service-ip@.service configs/sds-controller.service configs/controller.toml.example dist/
-          chmod +x dist/sds-controller dist/sds dist/sds-mcp dist/service-ip
+          cp configs/service-ip@.service configs/haify-controller.service configs/controller.toml.example dist/
+          chmod +x dist/haify-controller dist/haify dist/haify-mcp dist/service-ip
 
       - name: Create archive
         run: |
           cd dist
-          tar -czf sds-linux-amd64.tar.gz sds-controller sds sds-mcp service-ip \
-            service-ip@.service sds-controller.service controller.toml.example
-          sha256sum sds-linux-amd64.tar.gz > sds-linux-amd64.tar.gz.sha256
+          tar -czf haify-linux-amd64.tar.gz haify-controller haify haify-mcp service-ip \
+            service-ip@.service haify-controller.service controller.toml.example
+          sha256sum haify-linux-amd64.tar.gz > haify-linux-amd64.tar.gz.sha256
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/sds-linux-amd64.tar.gz
-            dist/sds-linux-amd64.tar.gz.sha256
+            dist/haify-linux-amd64.tar.gz
+            dist/haify-linux-amd64.tar.gz.sha256

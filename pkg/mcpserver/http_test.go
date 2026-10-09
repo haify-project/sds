@@ -12,8 +12,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/mcpauth"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/mcpauth"
 )
 
 type bearerTransport struct {
@@ -47,8 +47,8 @@ func startRemote(t *testing.T, maxRole mcpauth.Role, public string) *remoteEnv {
 	addr := l.Addr().String()
 	_ = l.Close()
 
-	mock := &mockClient{listNodesFn: func(context.Context) ([]*sdspb.NodeInfo, error) {
-		return []*sdspb.NodeInfo{{Name: "n1"}}, nil
+	mock := &mockClient{listNodesFn: func(context.Context) ([]*haifypb.NodeInfo, error) {
+		return []*haifypb.NodeInfo{{Name: "n1"}}, nil
 	}}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -102,26 +102,26 @@ func TestRemoteRolesGetDifferentToolSets(t *testing.T) {
 	read, operate, admin := mk("r", mcpauth.RoleRead), mk("o", mcpauth.RoleOperate), mk("a", mcpauth.RoleAdmin)
 
 	rt := e.tools(t, read)
-	if _, ok := rt["sds_node_list"]; !ok {
+	if _, ok := rt["haify_node_list"]; !ok {
 		t.Fatal("a read token must see the read tools")
 	}
-	if _, ok := rt["sds_pool_create"]; ok {
+	if _, ok := rt["haify_pool_create"]; ok {
 		t.Fatal("a read token was given a write tool")
 	}
 
 	ot := e.tools(t, operate)
-	if _, ok := ot["sds_pool_create"]; !ok {
+	if _, ok := ot["haify_pool_create"]; !ok {
 		t.Fatal("an operate token must see the everyday write tools")
 	}
-	if _, ok := ot["sds_pool_delete"]; ok {
+	if _, ok := ot["haify_pool_delete"]; ok {
 		t.Fatal("an operate token was given a destructive tool")
 	}
-	if _, ok := ot["sds_resource_delete"]; ok {
+	if _, ok := ot["haify_resource_delete"]; ok {
 		t.Fatal("an operate token was given a destructive tool")
 	}
 
 	at := e.tools(t, admin)
-	for _, name := range []string{"sds_node_list", "sds_pool_create", "sds_pool_delete", "sds_resource_delete"} {
+	for _, name := range []string{"haify_node_list", "haify_pool_create", "haify_pool_delete", "haify_resource_delete"} {
 		if _, ok := at[name]; !ok {
 			t.Fatalf("an admin token is missing %s", name)
 		}
@@ -136,10 +136,10 @@ func TestRemoteRolesGetDifferentToolSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if res, err := s.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_pool_delete"}); err == nil && (res == nil || !res.IsError) {
+	if res, err := s.CallTool(t.Context(), &mcp.CallToolParams{Name: "haify_pool_delete"}); err == nil && (res == nil || !res.IsError) {
 		t.Fatal("a read token deleted a pool by naming the tool")
 	}
-	res, err := s.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_node_list"})
+	res, err := s.CallTool(t.Context(), &mcp.CallToolParams{Name: "haify_node_list"})
 	if err != nil || res.IsError {
 		t.Fatalf("a read token could not call a read tool: %v %+v", err, res)
 	}
@@ -161,7 +161,7 @@ func TestRemoteRefusesMissingBadAndRevokedTokens(t *testing.T) {
 		t.Fatalf("WWW-Authenticate must point at the resource metadata, got %q", h)
 	}
 
-	if _, err := e.session(t, "sdsmcp_not_a_token"); err == nil {
+	if _, err := e.session(t, "haifymcp_not_a_token"); err == nil {
 		t.Fatal("a bad token connected")
 	}
 
@@ -199,7 +199,7 @@ func TestRemoteMaxRoleCapsTokens(t *testing.T) {
 	e := startRemote(t, mcpauth.RoleRead, "")
 	secret, _, _ := e.store.Create("admin-but-capped", mcpauth.RoleAdmin, 0)
 	tools := e.tools(t, secret)
-	if _, ok := tools["sds_pool_create"]; ok {
+	if _, ok := tools["haify_pool_create"]; ok {
 		t.Fatal("--max-role read let an admin token write")
 	}
 }
@@ -244,10 +244,10 @@ func TestAdminListenerIsNotCappedAndHasNoOAuth(t *testing.T) {
 		}
 	}
 	secret, _, _ := store.Create("ops", mcpauth.RoleAdmin, 0)
-	if _, ok := (&remoteEnv{url: "http://" + capped, store: store}).tools(t, secret)["sds_ha_evict"]; ok {
+	if _, ok := (&remoteEnv{url: "http://" + capped, store: store}).tools(t, secret)["haify_ha_evict"]; ok {
 		t.Fatal("the capped listener exposed a destructive tool")
 	}
-	if _, ok := (&remoteEnv{url: "http://" + admin, store: store}).tools(t, secret)["sds_ha_evict"]; !ok {
+	if _, ok := (&remoteEnv{url: "http://" + admin, store: store}).tools(t, secret)["haify_ha_evict"]; !ok {
 		t.Fatal("the admin listener did not give an admin token its destructive tools")
 	}
 	r, err := http.Get("http://" + admin + "/oauth/register")
@@ -285,16 +285,16 @@ func (r *repairingClient) RepairResource(_ context.Context, name string) error {
 func TestRepairToolIsWriteAndRegisteredWhenTheClientCanRepair(t *testing.T) {
 	rc := &repairingClient{mockClient: &mockClient{}}
 	read := listTools(t, connect(t, rc, true))
-	if _, ok := read["sds_resource_repair"]; ok {
+	if _, ok := read["haify_resource_repair"]; ok {
 		t.Fatal("a read-only server offers a repair")
 	}
 	all := connect(t, rc, false)
 	tools := listTools(t, all)
-	tool, ok := tools["sds_resource_repair"]
+	tool, ok := tools["haify_resource_repair"]
 	if !ok || tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
 		t.Fatalf("repair must exist and be marked non-destructive: %+v", tool)
 	}
-	res, err := all.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_resource_repair", Arguments: map[string]any{"name": "db"}})
+	res, err := all.CallTool(t.Context(), &mcp.CallToolParams{Name: "haify_resource_repair", Arguments: map[string]any{"name": "db"}})
 	if err != nil || res.IsError || len(rc.repaired) != 1 || rc.repaired[0] != "db" {
 		t.Fatalf("call: %v %+v repaired=%v", err, res, rc.repaired)
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// InspectConfig controls the scheduled cluster inspection (`sds inspect`).
+// InspectConfig controls the scheduled cluster inspection (`haify inspect`).
 //
 // The schedule rides the snapshot scheduler's cron, so it only runs on the
 // active controller and only while [schedule] enabled is true. A manual run

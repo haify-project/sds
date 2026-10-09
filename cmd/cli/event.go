@@ -14,7 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 func eventCommand() *cobra.Command {
@@ -57,13 +57,13 @@ func eventListCommand() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(c)
 
-			resp, err := c.ListEvents(ctx, &sdspb.ListEventsRequest{
+			resp, err := c.ListEvents(ctx, &haifypb.ListEventsRequest{
 				Limit:       limit,
 				MinSeverity: f.minSeverity,
 				Types:       f.types,
@@ -83,7 +83,7 @@ func eventListCommand() *cobra.Command {
 			}
 			if resp.Dropped > 0 {
 				// Writes to the command's own output stream are best-effort. The only ways
-				// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+				// they fail are a closed pipe (`haify ... | head`) or a full disk, neither of
 				// which this command can report anywhere the operator is still looking, and
 				// treating them as errors would report a successful operation as failed.
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
@@ -115,7 +115,7 @@ func eventWatchCommand() *cobra.Command {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -126,14 +126,14 @@ func eventWatchCommand() *cobra.Command {
 			if replay {
 				sinceID = 0
 			} else if sinceID == 0 {
-				resp, err := c.ListEvents(ctx, &sdspb.ListEventsRequest{Limit: 1})
+				resp, err := c.ListEvents(ctx, &haifypb.ListEventsRequest{Limit: 1})
 				if err != nil {
 					return err
 				}
 				sinceID = resp.Published
 			}
 
-			stream, err := c.WatchEvents(ctx, &sdspb.WatchEventsRequest{
+			stream, err := c.WatchEvents(ctx, &haifypb.WatchEventsRequest{
 				MinSeverity: f.minSeverity,
 				Types:       f.types,
 				Resource:    f.resource,
@@ -172,7 +172,7 @@ func eventWatchCommand() *cobra.Command {
 	return cmd
 }
 
-func printEvent(w io.Writer, e *sdspb.Event, asJSON bool) {
+func printEvent(w io.Writer, e *haifypb.Event, asJSON bool) {
 	if asJSON {
 		body, err := json.Marshal(map[string]any{
 			"id":        e.Id,

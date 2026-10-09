@@ -42,14 +42,14 @@ func TestRestoreFromSnapshotPopulatesNewVolume(t *testing.T) {
 	s := newTestController(b)
 
 	// The snapshot lives on n3.
-	resp, err := s.CreateVolume(context.Background(), restoreReq("pvc-new", "pvc_src/n3/sdssnap_s1"))
+	resp, err := s.CreateVolume(context.Background(), restoreReq("pvc-new", "pvc_src/n3/haifysnap_s1"))
 	require.NoError(t, err)
 
 	vol := resp.GetVolume()
 	assert.Equal(t, "pvc_new", vol.GetVolumeId())
 	// The response must echo the content source back per the CSI spec.
 	require.NotNil(t, vol.GetContentSource())
-	assert.Equal(t, "pvc_src/n3/sdssnap_s1", vol.GetContentSource().GetSnapshot().GetSnapshotId())
+	assert.Equal(t, "pvc_src/n3/haifysnap_s1", vol.GetContentSource().GetSnapshot().GetSnapshotId())
 
 	// The new volume must be placed on the node that holds the snapshot, so the
 	// copy can run locally.
@@ -58,7 +58,7 @@ func TestRestoreFromSnapshotPopulatesNewVolume(t *testing.T) {
 
 	// And it must actually have been filled from the snapshot device.
 	require.Len(t, b.populated, 1)
-	assert.Equal(t, "pvc_new/0<-/dev/sds_vg0/sdssnap_s1@n3", b.populated[0])
+	assert.Equal(t, "pvc_new/0<-/dev/haify_vg0/haifysnap_s1@n3", b.populated[0])
 }
 
 func TestRestoreRejectsUnknownSnapshot(t *testing.T) {
@@ -84,7 +84,7 @@ func TestRestoreRollsBackWhenPopulateFails(t *testing.T) {
 	b.populateErr = errors.New("dd: input/output error")
 	s := newTestController(b)
 
-	_, err := s.CreateVolume(context.Background(), restoreReq("pvc-new", "pvc_src/n1/sdssnap_s1"))
+	_, err := s.CreateVolume(context.Background(), restoreReq("pvc-new", "pvc_src/n1/haifysnap_s1"))
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err))
 
@@ -105,7 +105,7 @@ func TestCloneSnapshotsSourceForConsistency(t *testing.T) {
 	// backing store directly, or the copy could be torn.
 	require.Len(t, b.snapCreated, 1, "clone must snapshot the source first")
 	require.Len(t, b.populated, 1)
-	assert.Contains(t, b.populated[0], "sdssnap_clone", "clone must copy from the temporary snapshot")
+	assert.Contains(t, b.populated[0], "haifysnap_clone", "clone must copy from the temporary snapshot")
 
 	// The temporary snapshot is not left behind.
 	assert.Len(t, b.snapDeleted, 1, "the temporary clone snapshot must be cleaned up")
@@ -129,7 +129,7 @@ func TestRestoreFailsWhenSourceNodeCannotHostReplica(t *testing.T) {
 	b.onlyPoolOnNodes("n1", "n2")
 	s := newTestController(b)
 
-	_, err := s.CreateVolume(context.Background(), restoreReq("pvc-new", "pvc_src/n3/sdssnap_s1"))
+	_, err := s.CreateVolume(context.Background(), restoreReq("pvc-new", "pvc_src/n3/haifysnap_s1"))
 	require.Error(t, err)
 	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
 	assert.Empty(t, b.populated)
@@ -161,7 +161,7 @@ func TestRestoreRejectsTargetSmallerThanSource(t *testing.T) {
 	seedSnapshotSource(b, "pvc_src", "n1", "n2") // 2 GiB
 	s := newTestController(b)
 
-	_, err := s.CreateVolume(context.Background(), withSize(restoreReq("pvc-new", "pvc_src/n1/sdssnap_s1"), 1))
+	_, err := s.CreateVolume(context.Background(), withSize(restoreReq("pvc-new", "pvc_src/n1/haifysnap_s1"), 1))
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 	assert.Contains(t, err.Error(), "smaller than source volume")
@@ -190,7 +190,7 @@ func TestRestoreAcceptsEqualSize(t *testing.T) {
 	seedSnapshotSource(b, "pvc_src", "n1", "n2") // 2 GiB
 	s := newTestController(b)
 
-	_, err := s.CreateVolume(context.Background(), withSize(restoreReq("pvc-new", "pvc_src/n1/sdssnap_s1"), 2))
+	_, err := s.CreateVolume(context.Background(), withSize(restoreReq("pvc-new", "pvc_src/n1/haifysnap_s1"), 2))
 	require.NoError(t, err)
 	require.Len(t, b.populated, 1)
 }

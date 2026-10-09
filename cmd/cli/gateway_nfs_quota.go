@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/util"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/util"
 )
 
 func nfsExportQuota() *cobra.Command {
@@ -32,8 +32,8 @@ gateway nodes need the quota package (setquota).`,
 			if err != nil {
 				return fmt.Errorf("invalid --size %q: %w", size, err)
 			}
-			return withController(2*time.Minute, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-				r, err := c.SetNFSExportQuota(ctx, &sdspb.SetNFSExportQuotaRequest{Resource: resource, ExportPath: path, SizeBytes: bytes})
+			return withController(2*time.Minute, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+				r, err := c.SetNFSExportQuota(ctx, &haifypb.SetNFSExportQuotaRequest{Resource: resource, ExportPath: path, SizeBytes: bytes})
 				if err != nil {
 					return err
 				}

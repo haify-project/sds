@@ -22,8 +22,8 @@ func (execOnlyDeployment) Exec(context.Context, []string, string) error { return
 // the controller's own /etc/drbd-reactor.d contains.
 func TestListGatewaysReadsTheNodes(t *testing.T) {
 	dep := &MockDeploymentClient{HostOutputs: map[string]string{
-		"node1": "sds-nfs-data.toml\nsds-ha-db.toml\nother.toml\nsds-iscsi-blk.toml.disabled\nsds-nvmeof-fast.toml.disabled\n",
-		"node2": "sds-iscsi-blk.toml.disabled\nsds-nvmeof-fast.toml\nsds-nfs-my-share.toml\n",
+		"node1": "haify-nfs-data.toml\nhaify-ha-db.toml\nother.toml\nhaify-iscsi-blk.toml.disabled\nhaify-nvmeof-fast.toml.disabled\n",
+		"node2": "haify-iscsi-blk.toml.disabled\nhaify-nvmeof-fast.toml\nhaify-nfs-my-share.toml\n",
 		// node3 did not answer.
 	}}
 	m := New(nil, dep, zap.NewNop(), []string{"node1", "node2", "node3"})
@@ -65,7 +65,7 @@ func TestListGatewaysErrors(t *testing.T) {
 }
 
 func TestGetGatewayFromNodes(t *testing.T) {
-	dep := &MockDeploymentClient{HostOutputs: map[string]string{"node1": "sds-nfs-data.toml\n"}}
+	dep := &MockDeploymentClient{HostOutputs: map[string]string{"node1": "haify-nfs-data.toml\n"}}
 	m := New(nil, dep, zap.NewNop(), []string{"node1"})
 
 	gw, err := m.GetGateway(context.Background(), "data")
@@ -78,12 +78,12 @@ func TestGetGatewayFromNodes(t *testing.T) {
 
 func TestParseGatewayConfigName(t *testing.T) {
 	for name, want := range map[string]bool{
-		"sds-nfs-data.toml":            true,
-		"sds-nvmeof-a-b.toml.disabled": true,
-		"sds-ha-data.toml":             false,
-		"sds-nfs-.toml":                false,
-		"sds-nfs-data.conf":            false,
-		"nfs-data.toml":                false,
+		"haify-nfs-data.toml":            true,
+		"haify-nvmeof-a-b.toml.disabled": true,
+		"haify-ha-data.toml":             false,
+		"haify-nfs-.toml":                false,
+		"haify-nfs-data.conf":            false,
+		"nfs-data.toml":                  false,
 	} {
 		gw, _ := parseGatewayConfigName(name)
 		assert.Equal(t, want, gw != nil, name)

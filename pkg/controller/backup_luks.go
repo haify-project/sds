@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Backups of encrypted resources.
@@ -60,7 +60,7 @@ func backupSnapshotSource(pool, backing, snap string, encrypted bool) (setup, cl
 	// device-mapper name is capped at 127 bytes and an LV name is not, and a
 	// temporary name needs to be unique, not legible.
 	sum := sha256.Sum256([]byte(pool + "/" + snap))
-	mapping := "sdsbk_" + hex.EncodeToString(sum[:8])
+	mapping := "haifybk_" + hex.EncodeToString(sum[:8])
 
 	// The key is only ever handed to cryptsetup as a file, as everywhere else.
 	// dmsetup masks the key in the table it prints, and only the offset field

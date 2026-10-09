@@ -13,12 +13,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
-	"github.com/haify-project/sds/pkg/inspect"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
+	"github.com/haify-project/haify/pkg/inspect"
 )
 
 // probeOutput is what inspect.ProbeScript prints on a node holding blk
@@ -28,7 +28,7 @@ func probeOutput(host, addr string) string {
 	return strings.Join([]string{
 		"probe=1", "hostname=" + host, "now=" + strconv.FormatInt(time.Now().Unix(), 10) + ".0", "rootfs=30",
 		"addr=" + addr, "drbd_kmod=9.2.12", "drbd_utils=9.29.0",
-		"reactor=1.5.0", "reactor_active=active", "reactor_conf=sds-iscsi-blk.toml",
+		"reactor=1.5.0", "reactor_active=active", "reactor_conf=haify-iscsi-blk.toml",
 		"lvs=", "drbd=" + base64.StdEncoding.EncodeToString([]byte(drbd)), "end=1",
 	}, "\n")
 }
@@ -187,25 +187,25 @@ func TestInspectionRPCs(t *testing.T) {
 	srv := NewServer(ctrl)
 	ctx := context.Background()
 
-	resp, err := srv.GetInspection(ctx, &sdspb.GetInspectionRequest{Id: "latest"})
+	resp, err := srv.GetInspection(ctx, &haifypb.GetInspectionRequest{Id: "latest"})
 	require.NoError(t, err)
 	assert.False(t, resp.Success)
-	assert.Contains(t, resp.Message, "sds inspect run")
+	assert.Contains(t, resp.Message, "haify inspect run")
 
-	run, err := srv.RunInspection(ctx, &sdspb.RunInspectionRequest{Areas: []string{"gateways", "nodes"}})
+	run, err := srv.RunInspection(ctx, &haifypb.RunInspectionRequest{Areas: []string{"gateways", "nodes"}})
 	require.NoError(t, err)
 	require.True(t, run.Success, run.Message)
 	assert.Equal(t, []string{"gateways", "nodes"}, run.Report.Areas)
 	assert.NotEmpty(t, run.Report.Checks)
 	assert.Equal(t, "fail", run.Report.Checks[0].Status)
 
-	list, err := srv.ListInspections(ctx, &sdspb.ListInspectionsRequest{})
+	list, err := srv.ListInspections(ctx, &haifypb.ListInspectionsRequest{})
 	require.NoError(t, err)
 	require.Len(t, list.Reports, 1)
 	assert.Empty(t, list.Reports[0].Checks, "listings omit the checks")
 	assert.Equal(t, run.Report.Summary.Fail, list.Reports[0].Summary.Fail)
 
-	bad, err := srv.RunInspection(ctx, &sdspb.RunInspectionRequest{Areas: []string{"everything"}})
+	bad, err := srv.RunInspection(ctx, &haifypb.RunInspectionRequest{Areas: []string{"everything"}})
 	require.NoError(t, err)
 	assert.False(t, bad.Success)
 }

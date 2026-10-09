@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Deploy Haify Controller - first time install or update.
 #
-# Self-HA aware: when the controller is managed by drbd-reactor (the sds-meta
+# Self-HA aware: when the controller is managed by drbd-reactor (the haify-meta
 # resource exists), the binary is pushed to every node but the service is only
-# restarted on the active (sds-meta Primary) node -- standby nodes are left for
+# restarted on the active (haify-meta Primary) node -- standby nodes are left for
 # reactor to manage and are NOT systemctl-enabled (that would fail on their
 # DRBD dependency). Without Self-HA it enables and restarts the controller on
 # EVERY given host, each with its own database: list only the controller host
 # there (use --cli-only for the others).
 #
-# Copies configs/controller.toml.example to /etc/sds/controller.toml on hosts
+# Copies configs/controller.toml.example to /etc/haify/controller.toml on hosts
 # that have none; edit it afterwards.
 
 set -e
@@ -23,13 +23,13 @@ fi
 # Configuration
 HOSTS=""
 CONTROLLER_PORT=3374
-SERVICE_FILE="./configs/sds-controller.service"
+SERVICE_FILE="./configs/haify-controller.service"
 CONFIG_FILE="./configs/controller.toml.example"
-REMOTE_BASE="/opt/sds"
-REMOTE_CONTROLLER="${REMOTE_BASE}/bin/sds-controller"
-REMOTE_CLI="/usr/local/bin/sds"
-REMOTE_SERVICE="/etc/systemd/system/sds-controller.service"
-REMOTE_CONFIG="/etc/sds/controller.toml"
+REMOTE_BASE="/opt/haify"
+REMOTE_CONTROLLER="${REMOTE_BASE}/bin/haify-controller"
+REMOTE_CLI="/usr/local/bin/haify"
+REMOTE_SERVICE="/etc/systemd/system/haify-controller.service"
+REMOTE_CONFIG="/etc/haify/controller.toml"
 
 # Build target: the build host is often not what the nodes are (e.g.
 # macOS/arm64), and the nodes need not all be one architecture. With --build
@@ -115,7 +115,7 @@ if [ "$BUILD" = true ]; then
         log_step "Building binaries for ${TARGET_OS}/${arch}..."
         GOOS="$TARGET_OS" GOARCH="$arch" CGO_ENABLED=0 make build 2>&1 | tail -3
         mkdir -p "bin/${TARGET_OS}-${arch}"
-        cp bin/sds-controller bin/sds "bin/${TARGET_OS}-${arch}/"
+        cp bin/haify-controller bin/haify "bin/${TARGET_OS}-${arch}/"
     done
 fi
 
@@ -129,8 +129,8 @@ bin_dir() {
 # fine and then fails to start, under Self-HA at the worst moment.
 for host in ${HOSTS//,/ }; do
     dir=$(bin_dir "$host")
-    for b in sds-controller sds; do
-        [ "$CLI_ONLY" = true ] && [ "$b" = sds-controller ] && continue
+    for b in haify-controller haify; do
+        [ "$CLI_ONLY" = true ] && [ "$b" = haify-controller ] && continue
         got=$(elf_goarch "$dir/$b")
         if [ "$got" != "${HOST_ARCH[$host]}" ]; then
             echo "error: $dir/$b is built for $got but $host is ${HOST_ARCH[$host]}; run with --build" >&2
@@ -148,18 +148,18 @@ for host in ${HOSTS//,/ }; do
     log_step "Copying to $host..."
 
     if [ "$CLI_ONLY" = false ]; then
-        ssh "$host" "sudo mkdir -p /etc/sds /opt/sds/bin /var/log/sds /var/lib/sds"
-        scp -q "$(bin_dir "$host")/sds-controller" "$host:/tmp/sds-controller"
-        ssh "$host" "sudo install -m755 /tmp/sds-controller $REMOTE_CONTROLLER && rm -f /tmp/sds-controller"
+        ssh "$host" "sudo mkdir -p /etc/haify /opt/haify/bin /var/log/haify /var/lib/haify"
+        scp -q "$(bin_dir "$host")/haify-controller" "$host:/tmp/haify-controller"
+        ssh "$host" "sudo install -m755 /tmp/haify-controller $REMOTE_CONTROLLER && rm -f /tmp/haify-controller"
     fi
 
-    scp -q "$(bin_dir "$host")/sds" "$host:/tmp/sds"
-    ssh "$host" "sudo install -m755 /tmp/sds $REMOTE_CLI && sudo ln -sf sds /usr/local/bin/sds-cli && rm -f /tmp/sds"
+    scp -q "$(bin_dir "$host")/haify" "$host:/tmp/haify"
+    ssh "$host" "sudo install -m755 /tmp/haify $REMOTE_CLI && sudo ln -sf haify /usr/local/bin/haify-cli && rm -f /tmp/haify"
 
     if [ "$CLI_ONLY" = false ]; then
         if [ -f "$SERVICE_FILE" ]; then
-            scp -q "$SERVICE_FILE" "$host:/tmp/sds-controller.service"
-            ssh "$host" "sudo mv /tmp/sds-controller.service $REMOTE_SERVICE && sudo systemctl daemon-reload"
+            scp -q "$SERVICE_FILE" "$host:/tmp/haify-controller.service"
+            ssh "$host" "sudo mv /tmp/haify-controller.service $REMOTE_SERVICE && sudo systemctl daemon-reload"
         fi
         # Copy config only if absent (never clobber an existing config).
         if [ -f "$CONFIG_FILE" ] && ! ssh "$host" "test -f $REMOTE_CONFIG"; then
@@ -181,12 +181,12 @@ if [ "$CLI_ONLY" = true ]; then
 fi
 
 # Phase 2: detect self-HA and restart appropriately.
-# If sds-meta exists, the controller is reactor-managed -> restart only the
+# If haify-meta exists, the controller is reactor-managed -> restart only the
 # active (Primary) node; standby nodes are driven by reactor on failover.
 ACTIVE_NODE=""
 SELF_HA=false
 for host in ${HOSTS//,/ }; do
-    role=$(ssh "$host" "sudo -n drbdadm role sds-meta 2>/dev/null" || true)
+    role=$(ssh "$host" "sudo -n drbdadm role haify-meta 2>/dev/null" || true)
     if [ -n "$role" ]; then
         SELF_HA=true
         [ "$role" = "Primary" ] && ACTIVE_NODE="$host"
@@ -195,23 +195,23 @@ done
 
 if [ "$SELF_HA" = true ]; then
     if [ -z "$ACTIVE_NODE" ]; then
-        log_warn "Self-HA detected but no sds-meta Primary among the given hosts; not restarting."
-        log_warn "Restart the active controller node manually: ssh <active> sudo systemctl restart sds-controller"
+        log_warn "Self-HA detected but no haify-meta Primary among the given hosts; not restarting."
+        log_warn "Restart the active controller node manually: ssh <active> sudo systemctl restart haify-controller"
     else
         # Restarting a promoter-managed unit in place fails its dependency and
-        # makes drbd-reactor fail sds-meta over anyway, unplanned. Every node
+        # makes drbd-reactor fail haify-meta over anyway, unplanned. Every node
         # has the new binary now, so hand the controller over instead: evict
-        # sds-meta (detached, as `sds ha evict sds-meta` does) and wait for
+        # haify-meta (detached, as `haify ha evict haify-meta` does) and wait for
         # another node to run it.
-        log_step "Self-HA cluster: moving the controller off $ACTIVE_NODE (evict sds-meta)..."
-        ssh "$ACTIVE_NODE" "sudo systemd-run --unit=sds-selfha-evict --collect drbd-reactorctl evict sds-ha-sds-meta" >/dev/null
+        log_step "Self-HA cluster: moving the controller off $ACTIVE_NODE (evict haify-meta)..."
+        ssh "$ACTIVE_NODE" "sudo systemd-run --unit=haify-selfha-evict --collect drbd-reactorctl evict haify-ha-haify-meta" >/dev/null
         NEW_ACTIVE=""
         for _ in $(seq 1 60); do
             sleep 2
             for host in ${HOSTS//,/ }; do
                 [ "$host" = "$ACTIVE_NODE" ] && continue
-                if [ "$(ssh "$host" "sudo -n drbdadm role sds-meta 2>/dev/null")" = "Primary" ] &&
-                    ssh "$host" "systemctl is-active -q sds-controller.service"; then
+                if [ "$(ssh "$host" "sudo -n drbdadm role haify-meta 2>/dev/null")" = "Primary" ] &&
+                    ssh "$host" "systemctl is-active -q haify-controller.service"; then
                     NEW_ACTIVE="$host"
                     break 2
                 fi
@@ -221,13 +221,13 @@ if [ "$SELF_HA" = true ]; then
             log_info "Controller now runs on $NEW_ACTIVE with the new binary."
             ACTIVE_NODE="$NEW_ACTIVE"
         else
-            log_warn "No other node took over sds-meta within 120s; check: sds ha self status"
+            log_warn "No other node took over haify-meta within 120s; check: haify ha self status"
         fi
     fi
 else
     for host in ${HOSTS//,/ }; do
         log_step "Enabling + restarting controller on $host..."
-        ssh "$host" "sudo systemctl enable sds-controller.service && sudo systemctl restart sds-controller.service"
+        ssh "$host" "sudo systemctl enable haify-controller.service && sudo systemctl restart haify-controller.service"
     done
 fi
 
@@ -238,16 +238,16 @@ log_info "Service Status:"
 log_info "=========================================="
 if [ "$SELF_HA" = true ] && [ -n "$ACTIVE_NODE" ]; then
     echo "[$ACTIVE_NODE (active)]"
-    ssh "$ACTIVE_NODE" "sudo systemctl status sds-controller.service --no-pager" 2>/dev/null | head -n 8
+    ssh "$ACTIVE_NODE" "sudo systemctl status haify-controller.service --no-pager" 2>/dev/null | head -n 8
 else
     for host in ${HOSTS//,/ }; do
         echo "[$host]"
-        ssh "$host" "sudo systemctl status sds-controller.service --no-pager" 2>/dev/null | head -n 8
+        ssh "$host" "sudo systemctl status haify-controller.service --no-pager" 2>/dev/null | head -n 8
         echo ""
     done
 fi
 
 log_info "✓ Deployment completed!"
-log_info "Database: /var/lib/sds/sds.db (BoltDB)"
-log_info "Logs: journalctl -u sds-controller.service -f"
-log_info "Test: sds -c <HOST>:$CONTROLLER_PORT pool list"
+log_info "Database: /var/lib/haify/haify.db (BoltDB)"
+log_info "Logs: journalctl -u haify-controller.service -f"
+log_info "Test: haify -c <HOST>:$CONTROLLER_PORT pool list"

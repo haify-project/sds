@@ -35,7 +35,7 @@ func checkBackups(in *Input) []Check {
 	if !b.SchedulerEnabled && enabled > 0 {
 		out = append(out, Check{ID: "backups.scheduler_off", Area: AreaBackups, Status: StatusFail,
 			Message: fmt.Sprintf("%s enabled but [schedule] enabled = false, so none of them runs", plural(enabled, "schedule is", "schedules are")),
-			Fix:     "set [schedule] enabled = true in /etc/sds/controller.toml and restart sds-controller"})
+			Fix:     "set [schedule] enabled = true in /etc/haify/controller.toml and restart haify-controller"})
 	}
 	scheds := append([]BackupSchedule(nil), b.Schedules...)
 	sort.Slice(scheds, func(i, j int) bool { return scheds[i].Name < scheds[j].Name })
@@ -58,7 +58,7 @@ func checkBackups(in *Input) []Check {
 		if c, ok := lateness(in.Now, s.Cron, base); ok && c.Status != StatusPass {
 			c.ID, c.Subject = "backups.snapshot_schedule_late", s.Name
 			c.Message = fmt.Sprintf("snapshot schedule %q (%s) %s %s; %s", s.Name, s.Cron, what, base.UTC().Format(time.RFC3339), c.Message)
-			c.Fix = "journalctl -u sds-controller | grep -i 'snapshot schedule'"
+			c.Fix = "journalctl -u haify-controller | grep -i 'snapshot schedule'"
 			out = append(out, c)
 		}
 	}
@@ -78,13 +78,13 @@ func backupScheduleChecks(in *Input, s BackupSchedule) []Check {
 	if !in.Backups.Targets[s.Target] {
 		out = append(out, Check{ID: "backups.target_missing", Area: AreaBackups, Subject: s.Name, Status: StatusFail,
 			Message: fmt.Sprintf("schedule %s ships to target %q, which does not exist; every run fails", s.Name, s.Target),
-			Fix:     fmt.Sprintf("sds backup target add --name %s --kind <s3|smb|webdav> <target flags>", s.Target)})
+			Fix:     fmt.Sprintf("haify backup target add --name %s --kind <s3|smb|webdav> <target flags>", s.Target)})
 	}
 	if s.LastError != "" {
 		out = append(out, Check{ID: "backups.schedule_failing", Area: AreaBackups, Subject: s.Name, Status: StatusFail,
 			Message:  "the last scheduled backup failed: " + s.LastError,
 			Evidence: []string{"last run " + stamp(s.LastRun), "last success " + stamp(s.LastSuccess)},
-			Fix:      "sds backup schedule run " + s.Name})
+			Fix:      "haify backup schedule run " + s.Name})
 		return out
 	}
 	base, what := s.LastSuccess, "last success"
@@ -92,7 +92,7 @@ func backupScheduleChecks(in *Input, s BackupSchedule) []Check {
 		base, what = s.CreatedAt, "no successful run since it was created"
 	}
 	if c, ok := lateness(in.Now, s.Cron, base); ok && c.Status != StatusPass {
-		c.ID, c.Subject, c.Fix = "backups.schedule_late", s.Name, "sds backup schedule run "+s.Name
+		c.ID, c.Subject, c.Fix = "backups.schedule_late", s.Name, "haify backup schedule run "+s.Name
 		c.Message = fmt.Sprintf("backup schedule %s (%s): %s %s; %s", s.Name, s.Cron, what, stamp(base), c.Message)
 		out = append(out, c)
 	}

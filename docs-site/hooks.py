@@ -15,7 +15,7 @@ import re
 
 from mkdocs.structure.files import File
 
-REPO_URL = "https://github.com/haify-project/sds"
+REPO_URL = "https://github.com/haify-project/haify"
 BRANCH = "main"
 
 # Repository path -> site page path, for documents outside docs/.

@@ -12,32 +12,32 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/haify-project/sds/pkg/k8sapp"
+	"github.com/haify-project/haify/pkg/k8sapp"
 )
 
-func sdsKube() *fake.Clientset {
+func haifyKube() *fake.Clientset {
 	return fake.NewClientset(&storagev1.StorageClass{
-		ObjectMeta:  metav1.ObjectMeta{Name: "sds-drbd"},
-		Provisioner: "sds.csi.liliang-cn.com",
+		ObjectMeta:  metav1.ObjectMeta{Name: "haify-drbd"},
+		Provisioner: "haify.csi.liliang-cn.com",
 	})
 }
 
-// The bare-metal server carries no Kubernetes tools, and the sds-k8s server
+// The bare-metal server carries no Kubernetes tools, and the haify-k8s server
 // nothing but.
 func TestKubernetesToolsAreTheirOwnServer(t *testing.T) {
 	bare := toolNames(t, New(&mockExtraClient{}, zap.NewNop(), Options{}))
 	for name := range bare {
-		assert.NotContains(t, name, "sds_k8s_")
+		assert.NotContains(t, name, "haify_k8s_")
 	}
-	k8s := toolNames(t, NewK8s(k8sapp.NewManagerFor(sdsKube()), zap.NewNop(), Options{}))
-	assert.Equal(t, map[string]bool{"sds_k8s_app_list": true, "sds_k8s_app_create": true, "sds_k8s_app_delete": true}, k8s)
+	k8s := toolNames(t, NewK8s(k8sapp.NewManagerFor(haifyKube()), zap.NewNop(), Options{}))
+	assert.Equal(t, map[string]bool{"haify_k8s_app_list": true, "haify_k8s_app_create": true, "haify_k8s_app_delete": true}, k8s)
 
-	ro := toolNames(t, NewK8s(k8sapp.NewManagerFor(sdsKube()), zap.NewNop(), Options{ReadOnly: true}))
-	assert.Equal(t, map[string]bool{"sds_k8s_app_list": true}, ro)
+	ro := toolNames(t, NewK8s(k8sapp.NewManagerFor(haifyKube()), zap.NewNop(), Options{ReadOnly: true}))
+	assert.Equal(t, map[string]bool{"haify_k8s_app_list": true}, ro)
 }
 
 func TestAppCreateThroughTheTool(t *testing.T) {
-	kube := sdsKube()
+	kube := haifyKube()
 	s := NewK8s(k8sapp.NewManagerFor(kube), zap.NewNop(), Options{})
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
@@ -48,7 +48,7 @@ func TestAppCreateThroughTheTool(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = session.Close() }()
 
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "sds_k8s_app_create",
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "haify_k8s_app_create",
 		Arguments: map[string]any{"template": "mysql", "name": "orders", "size": "2Gi"}})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "%v", res.Content)
@@ -58,13 +58,13 @@ func TestAppCreateThroughTheTool(t *testing.T) {
 	assert.Equal(t, "mysql:8.4", dep.Spec.Template.Spec.Containers[0].Image)
 
 	// A second create is refused rather than replacing the app.
-	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "sds_k8s_app_create",
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "haify_k8s_app_create",
 		Arguments: map[string]any{"template": "mysql", "name": "orders"}})
 	require.NoError(t, err)
 	assert.True(t, res.IsError)
 
 	// Deleted without delete_data, the data stays for the next create.
-	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "sds_k8s_app_delete",
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "haify_k8s_app_delete",
 		Arguments: map[string]any{"name": "orders"}})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "%v", res.Content)

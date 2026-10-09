@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +13,7 @@ import (
 func newAttachFake(reports ...string) *fakeDeploymentClient {
 	return &fakeDeploymentClient{
 		lvThinPoolInFunc: func(context.Context, string, string) (string, error) {
-			return "sds_sdspool_thin", nil
+			return "haify_haifypool_thin", nil
 		},
 		probeBlockDeviceFunc: func(_ context.Context, host, _ string) (*deployment.ExecResult, error) {
 			return freeDeviceProbe([]string{host}), nil
@@ -27,17 +27,17 @@ func TestAttachesAWritethroughCacheByDefault(t *testing.T) {
 	var mode, cacheVol, lv string
 	dep.lvConvertToCacheFunc = func(_ context.Context, hosts []string, vg, l, cv, m string) (*deployment.ExecResult, error) {
 		lv, cacheVol, mode = l, cv, m
-		assert.Equal(t, "sds_sdspool", vg)
+		assert.Equal(t, "haify_haifypool", vg)
 		return successExecResult(hosts, ""), nil
 	}
 	ctrl := cacheTestController(t, dep)
 
-	info, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	info, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.NoError(t, err)
 	assert.Equal(t, "writethrough", mode, "an unstated mode must never become writeback")
 	assert.Equal(t, cacheVolName, cacheVol)
 	// The cache goes in front of the pool, not in front of one volume.
-	assert.Equal(t, "sds_sdspool_thin", lv)
+	assert.Equal(t, "haify_haifypool_thin", lv)
 	assert.Equal(t, "writethrough", info.Mode)
 	assert.Equal(t, "/dev/nvme0n1", info.Device)
 }
@@ -51,7 +51,7 @@ func TestAttachesWritebackOnlyWhenAskedForByName(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	info, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "writeback")
+	info, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "writeback")
 	require.NoError(t, err)
 	assert.Equal(t, "writeback", mode)
 	assert.Equal(t, "writeback", info.Mode)
@@ -59,7 +59,7 @@ func TestAttachesWritebackOnlyWhenAskedForByName(t *testing.T) {
 
 func TestRefusesAnUnknownCacheMode(t *testing.T) {
 	ctrl := cacheTestController(t, newAttachFake(""))
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "wb")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "wb")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown cache mode")
 }
@@ -71,7 +71,7 @@ func TestRefusesToCacheAThickPool(t *testing.T) {
 	dep.lvThinPoolInFunc = func(context.Context, string, string) (string, error) { return "", nil }
 	ctrl := cacheTestController(t, dep)
 
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "convert-thin")
 }
@@ -82,7 +82,7 @@ func TestRefusesToCacheAZFSPool(t *testing.T) {
 	ctrl := cacheTestController(t, newAttachFake(""))
 	ctrl.db = newTestDB(t)
 	ctx := context.Background()
-	require.NoError(t, ctrl.db.SavePool(ctx, &database.Pool{Name: "sds_tank", Type: "zfs", Node: "node-a"}))
+	require.NoError(t, ctrl.db.SavePool(ctx, &database.Pool{Name: "haify_tank", Type: "zfs", Node: "node-a"}))
 
 	_, err := ctrl.storage.AddPoolCache(ctx, "node-a", "tank", "/dev/nvme0n1", "")
 	require.Error(t, err)
@@ -95,7 +95,7 @@ func TestRefusesToCacheAPoolThatAlreadyHasOne(t *testing.T) {
 	dep := newAttachFake(cachedThinPoolReport("writeback", "Cwi-aoC---"))
 	ctrl := cacheTestController(t, dep)
 
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already cached")
 }
@@ -108,7 +108,7 @@ func TestRefusesADeviceTheNodeSaysIsInUse(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "vg_root")
 }
@@ -132,17 +132,17 @@ func TestUndoesAPartialAttach(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Insufficient free space")
-	assert.Equal(t, "sds_sdspool/"+cacheVolName, removed)
+	assert.Equal(t, "haify_haifypool/"+cacheVolName, removed)
 	assert.Equal(t, "/dev/nvme0n1", released)
 }
 
 func TestReportsAnAttachThatLeftNoCacheBehind(t *testing.T) {
 	// lvconvert exited zero, but the pool still has no cache.
 	ctrl := cacheTestController(t, newAttachFake("", ""))
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no cache")
 }
@@ -152,7 +152,7 @@ func TestReportsAnAttachThatLeftNoCacheBehind(t *testing.T) {
 // believing writes are durable when they are not.
 func TestReportsACacheAttachedInTheWrongMode(t *testing.T) {
 	ctrl := cacheTestController(t, newAttachFake("", cachedThinPoolReport("writeback", "Cwi-aoC---")))
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "writeback")
 	assert.Contains(t, err.Error(), "writethrough")
@@ -164,11 +164,11 @@ func TestReportsACacheAttachedInTheWrongMode(t *testing.T) {
 func TestRefusesToAttachWhenTheCacheStateCannotBeRead(t *testing.T) {
 	dep := newAttachFake("")
 	dep.lvsCacheReportFunc = func(_ context.Context, hosts []string, _ string) (*deployment.ExecResult, error) {
-		return failedResult(hosts, "  Volume group sds_sdspool not found"), nil
+		return failedResult(hosts, "  Volume group haify_haifypool not found"), nil
 	}
 	ctrl := cacheTestController(t, dep)
 
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -180,14 +180,14 @@ func TestRefusesToAttachWhenTheDeviceCannotBeProbed(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "/dev/nvme0n1", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "/dev/nvme0n1", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lsblk")
 }
 
 func TestRefusesToAttachWithoutADevice(t *testing.T) {
 	ctrl := cacheTestController(t, newAttachFake(""))
-	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "sdspool", "  ", "")
+	_, err := ctrl.storage.AddPoolCache(context.Background(), "node-a", "haifypool", "  ", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "required")
 }

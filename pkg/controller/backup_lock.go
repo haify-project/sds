@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/haify-project/sds/pkg/backup"
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/backup"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Backups on a target with S3 Object Lock (pkg/backup/lock.go).
@@ -60,7 +60,7 @@ func lockedChainRefusal(spec backup.TargetSpec, parent *database.Backup, started
 // verifyLocks proves every object of a locked backup really is locked until
 // its date. Some S3-compatible servers accept the lock headers and store the
 // object unlocked; that backup would look immutable and be deletable by
-// anyone with sds's keys, so it is failed instead.
+// anyone with haify's keys, so it is failed instead.
 func verifyLocks(ctx context.Context, sess backup.Session, rec *database.Backup, objects []string) error {
 	if rec.LockMode == "" {
 		return nil
@@ -111,7 +111,7 @@ func assertDeletable(b *database.Backup, force bool, now time.Time) (touchObject
 		return true, nil
 	}
 	if !force {
-		return false, fmt.Errorf("backup %q is locked (%s) until %s and cannot be deleted before then, by sds or anyone using its credentials; "+
+		return false, fmt.Errorf("backup %q is locked (%s) until %s and cannot be deleted before then, by haify or anyone using its credentials; "+
 			"--force drops only the record and leaves the locked objects on the target", b.ID, b.LockMode,
 			b.RetainUntil.UTC().Format(time.RFC3339))
 	}

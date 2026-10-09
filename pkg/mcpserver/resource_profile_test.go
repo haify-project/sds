@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,16 +14,16 @@ import (
 
 type profileMockClient struct {
 	mockClient
-	profiles       map[string]*sdspb.ResourceProfile
+	profiles       map[string]*haifypb.ResourceProfile
 	profileErr     error
 	deletedProfile string
-	createRequest  *sdspb.CreateResourceRequest
+	createRequest  *haifypb.CreateResourceRequest
 	operations     []string
 }
 
-func (m *profileMockClient) RegisterNode(_ context.Context, name, address string) (*sdspb.NodeInfo, error) {
+func (m *profileMockClient) RegisterNode(_ context.Context, name, address string) (*haifypb.NodeInfo, error) {
 	m.operations = append(m.operations, "register:"+name)
-	return &sdspb.NodeInfo{Name: name, Address: address, State: "online"}, nil
+	return &haifypb.NodeInfo{Name: name, Address: address, State: "online"}, nil
 }
 
 func (m *profileMockClient) DeletePool(_ context.Context, name, node string) error {
@@ -81,7 +81,7 @@ func (m *profileMockClient) SetSecondary(_ context.Context, resource, node strin
 	return nil
 }
 
-func (m *profileMockClient) CreateResourceProfile(_ context.Context, profile *sdspb.ResourceProfile) (*sdspb.ResourceProfile, error) {
+func (m *profileMockClient) CreateResourceProfile(_ context.Context, profile *haifypb.ResourceProfile) (*haifypb.ResourceProfile, error) {
 	if m.profileErr != nil {
 		return nil, m.profileErr
 	}
@@ -89,7 +89,7 @@ func (m *profileMockClient) CreateResourceProfile(_ context.Context, profile *sd
 	return profile, nil
 }
 
-func (m *profileMockClient) GetResourceProfile(_ context.Context, name string) (*sdspb.ResourceProfile, error) {
+func (m *profileMockClient) GetResourceProfile(_ context.Context, name string) (*haifypb.ResourceProfile, error) {
 	if m.profileErr != nil {
 		return nil, m.profileErr
 	}
@@ -100,11 +100,11 @@ func (m *profileMockClient) GetResourceProfile(_ context.Context, name string) (
 	return profile, nil
 }
 
-func (m *profileMockClient) ListResourceProfiles(context.Context) ([]*sdspb.ResourceProfile, error) {
+func (m *profileMockClient) ListResourceProfiles(context.Context) ([]*haifypb.ResourceProfile, error) {
 	if m.profileErr != nil {
 		return nil, m.profileErr
 	}
-	out := make([]*sdspb.ResourceProfile, 0, len(m.profiles))
+	out := make([]*haifypb.ResourceProfile, 0, len(m.profiles))
 	for _, profile := range m.profiles {
 		out = append(out, profile)
 	}
@@ -120,7 +120,7 @@ func (m *profileMockClient) DeleteResourceProfile(_ context.Context, name string
 	return nil
 }
 
-func (m *profileMockClient) CreateResourceRequest(_ context.Context, req *sdspb.CreateResourceRequest) error {
+func (m *profileMockClient) CreateResourceRequest(_ context.Context, req *haifypb.CreateResourceRequest) error {
 	if m.profileErr != nil {
 		return m.profileErr
 	}
@@ -138,18 +138,18 @@ func decodeStructured[T any](t *testing.T, result *mcp.CallToolResult) T {
 }
 
 func TestResourceProfileToolsCRUD(t *testing.T) {
-	mock := &profileMockClient{profiles: map[string]*sdspb.ResourceProfile{}}
+	mock := &profileMockClient{profiles: map[string]*haifypb.ResourceProfile{}}
 	session := connect(t, mock, false)
 	tools := listTools(t, session)
 	for _, name := range []string{
-		"sds_resource_profile_create", "sds_resource_profile_get",
-		"sds_resource_profile_list", "sds_resource_profile_delete",
+		"haify_resource_profile_create", "haify_resource_profile_get",
+		"haify_resource_profile_list", "haify_resource_profile_delete",
 	} {
 		assert.Contains(t, tools, name)
 	}
 
 	createdResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_resource_profile_create",
+		Name: "haify_resource_profile_create",
 		Arguments: map[string]any{
 			"name": "production", "protocol": "C", "storage_type": "lvm-thin",
 			"pool": "fast", "replicas": 3,
@@ -168,13 +168,13 @@ func TestResourceProfileToolsCRUD(t *testing.T) {
 	assert.Equal(t, "8000", created.DrbdOptions["net/max-buffers"])
 
 	getResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_resource_profile_get", Arguments: map[string]any{"name": "production"},
+		Name: "haify_resource_profile_get", Arguments: map[string]any{"name": "production"},
 	})
 	require.NoError(t, err)
 	require.False(t, getResult.IsError)
 	assert.Equal(t, "fast", decodeStructured[resourceProfileOut](t, getResult).Pool)
 
-	listResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_resource_profile_list"})
+	listResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "haify_resource_profile_list"})
 	require.NoError(t, err)
 	require.False(t, listResult.IsError)
 	listed := decodeStructured[resourceProfileListOut](t, listResult)
@@ -182,7 +182,7 @@ func TestResourceProfileToolsCRUD(t *testing.T) {
 	assert.Equal(t, "production", listed.Profiles[0].Name)
 
 	deleteResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_resource_profile_delete", Arguments: map[string]any{"name": "production"},
+		Name: "haify_resource_profile_delete", Arguments: map[string]any{"name": "production"},
 	})
 	require.NoError(t, err)
 	require.False(t, deleteResult.IsError)
@@ -192,16 +192,16 @@ func TestResourceProfileToolsCRUD(t *testing.T) {
 
 func TestResourceProfileToolsErrors(t *testing.T) {
 	mock := &profileMockClient{
-		profiles:   map[string]*sdspb.ResourceProfile{},
+		profiles:   map[string]*haifypb.ResourceProfile{},
 		profileErr: errors.New("profile store unavailable"),
 	}
 	session := connect(t, mock, false)
 
 	for _, call := range []*mcp.CallToolParams{
-		{Name: "sds_resource_profile_create", Arguments: map[string]any{"name": "production"}},
-		{Name: "sds_resource_profile_get", Arguments: map[string]any{"name": "production"}},
-		{Name: "sds_resource_profile_list"},
-		{Name: "sds_resource_profile_delete", Arguments: map[string]any{"name": "production"}},
+		{Name: "haify_resource_profile_create", Arguments: map[string]any{"name": "production"}},
+		{Name: "haify_resource_profile_get", Arguments: map[string]any{"name": "production"}},
+		{Name: "haify_resource_profile_list"},
+		{Name: "haify_resource_profile_delete", Arguments: map[string]any{"name": "production"}},
 	} {
 		result, err := session.CallTool(t.Context(), call)
 		require.NoError(t, err)
@@ -210,11 +210,11 @@ func TestResourceProfileToolsErrors(t *testing.T) {
 }
 
 func TestResourceCreateUsesMetadataAwareRequest(t *testing.T) {
-	mock := &profileMockClient{profiles: map[string]*sdspb.ResourceProfile{}}
+	mock := &profileMockClient{profiles: map[string]*haifypb.ResourceProfile{}}
 	session := connect(t, mock, false)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_resource_create",
+		Name: "haify_resource_create",
 		Arguments: map[string]any{
 			"name": "data", "port": 7001, "nodes": []string{"n1", "n2"}, "profile": "production",
 			"labels":  map[string]string{"app": "postgres"},
@@ -237,7 +237,7 @@ func TestResourceCreateUsesMetadataAwareRequest(t *testing.T) {
 func TestResourceCreateRejectsMetadataOnLegacyClient(t *testing.T) {
 	session := connect(t, &mockClient{}, false)
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_resource_create",
+		Name: "haify_resource_create",
 		Arguments: map[string]any{
 			"name": "data", "port": 7001, "nodes": []string{"n1"}, "profile": "production",
 		},
@@ -251,18 +251,18 @@ func TestProfileOutNil(t *testing.T) {
 }
 
 func TestResourceMutationTools(t *testing.T) {
-	mock := &profileMockClient{profiles: map[string]*sdspb.ResourceProfile{}}
+	mock := &profileMockClient{profiles: map[string]*haifypb.ResourceProfile{}}
 	session := connect(t, mock, false)
 	calls := []*mcp.CallToolParams{
-		{Name: "sds_resource_add_volume", Arguments: map[string]any{"resource": "data", "volume": "logs", "pool": "fast", "size_gb": 10}},
-		{Name: "sds_resource_set_options", Arguments: map[string]any{"resource": "data", "options": map[string]string{"net/max-buffers": "8000"}}},
-		{Name: "sds_resource_remove_volume", Arguments: map[string]any{"resource": "data", "volume_id": 1}},
-		{Name: "sds_resource_resize_volume", Arguments: map[string]any{"resource": "data", "volume_id": 0, "size_gb": 20}},
-		{Name: "sds_resource_create_filesystem", Arguments: map[string]any{"resource": "data", "volume_id": 0, "node": "n1", "fstype": "xfs"}},
-		{Name: "sds_resource_mount", Arguments: map[string]any{"resource": "data", "volume_id": 0, "path": "/data", "node": "n1"}},
-		{Name: "sds_resource_unmount", Arguments: map[string]any{"resource": "data", "volume_id": 0, "node": "n1"}},
-		{Name: "sds_resource_set_role", Arguments: map[string]any{"resource": "data", "node": "n1", "role": "primary"}},
-		{Name: "sds_resource_set_role", Arguments: map[string]any{"resource": "data", "node": "n1", "role": "secondary"}},
+		{Name: "haify_resource_add_volume", Arguments: map[string]any{"resource": "data", "volume": "logs", "pool": "fast", "size_gb": 10}},
+		{Name: "haify_resource_set_options", Arguments: map[string]any{"resource": "data", "options": map[string]string{"net/max-buffers": "8000"}}},
+		{Name: "haify_resource_remove_volume", Arguments: map[string]any{"resource": "data", "volume_id": 1}},
+		{Name: "haify_resource_resize_volume", Arguments: map[string]any{"resource": "data", "volume_id": 0, "size_gb": 20}},
+		{Name: "haify_resource_create_filesystem", Arguments: map[string]any{"resource": "data", "volume_id": 0, "node": "n1", "fstype": "xfs"}},
+		{Name: "haify_resource_mount", Arguments: map[string]any{"resource": "data", "volume_id": 0, "path": "/data", "node": "n1"}},
+		{Name: "haify_resource_unmount", Arguments: map[string]any{"resource": "data", "volume_id": 0, "node": "n1"}},
+		{Name: "haify_resource_set_role", Arguments: map[string]any{"resource": "data", "node": "n1", "role": "primary"}},
+		{Name: "haify_resource_set_role", Arguments: map[string]any{"resource": "data", "node": "n1", "role": "secondary"}},
 	}
 	for _, call := range calls {
 		result, err := session.CallTool(t.Context(), call)
@@ -273,9 +273,9 @@ func TestResourceMutationTools(t *testing.T) {
 	assert.Contains(t, mock.operations, "mount:data:ext4")
 
 	for _, call := range []*mcp.CallToolParams{
-		{Name: "sds_resource_set_options", Arguments: map[string]any{"resource": "data", "options": map[string]string{}}},
-		{Name: "sds_resource_set_role", Arguments: map[string]any{"resource": "data", "node": "n1", "role": "invalid"}},
-		{Name: "sds_resource_create", Arguments: map[string]any{"name": "data", "port": 7001}},
+		{Name: "haify_resource_set_options", Arguments: map[string]any{"resource": "data", "options": map[string]string{}}},
+		{Name: "haify_resource_set_role", Arguments: map[string]any{"resource": "data", "node": "n1", "role": "invalid"}},
+		{Name: "haify_resource_create", Arguments: map[string]any{"name": "data", "port": 7001}},
 	} {
 		result, err := session.CallTool(t.Context(), call)
 		require.NoError(t, err)
@@ -284,13 +284,13 @@ func TestResourceMutationTools(t *testing.T) {
 }
 
 func TestClusterMutationTools(t *testing.T) {
-	mock := &profileMockClient{profiles: map[string]*sdspb.ResourceProfile{}}
+	mock := &profileMockClient{profiles: map[string]*haifypb.ResourceProfile{}}
 	session := connect(t, mock, false)
 	calls := []*mcp.CallToolParams{
-		{Name: "sds_node_register", Arguments: map[string]any{"name": "n1", "address": "10.0.0.1"}},
-		{Name: "sds_node_unregister", Arguments: map[string]any{"address": "10.0.0.1"}},
-		{Name: "sds_pool_delete", Arguments: map[string]any{"name": "fast", "node": "n1"}},
-		{Name: "sds_pool_add_disk", Arguments: map[string]any{"pool": "fast", "nodes": []string{"n1", "n2"}, "devices": []string{"/dev/sdb", "/dev/sdc"}}},
+		{Name: "haify_node_register", Arguments: map[string]any{"name": "n1", "address": "10.0.0.1"}},
+		{Name: "haify_node_unregister", Arguments: map[string]any{"address": "10.0.0.1"}},
+		{Name: "haify_pool_delete", Arguments: map[string]any{"name": "fast", "node": "n1"}},
+		{Name: "haify_pool_add_disk", Arguments: map[string]any{"pool": "fast", "nodes": []string{"n1", "n2"}, "devices": []string{"/dev/sdb", "/dev/sdc"}}},
 	}
 	for _, call := range calls {
 		result, err := session.CallTool(t.Context(), call)
@@ -302,9 +302,9 @@ func TestClusterMutationTools(t *testing.T) {
 	assert.Contains(t, mock.operations, "add-disk:fast:n2:/dev/sdc")
 
 	for _, call := range []*mcp.CallToolParams{
-		{Name: "sds_pool_create", Arguments: map[string]any{"name": "fast", "type": "unknown", "nodes": []string{"n1"}, "devices": []string{"/dev/sdb"}}},
-		{Name: "sds_pool_create", Arguments: map[string]any{"name": "fast", "type": "lvm"}},
-		{Name: "sds_pool_add_disk", Arguments: map[string]any{"pool": "fast"}},
+		{Name: "haify_pool_create", Arguments: map[string]any{"name": "fast", "type": "unknown", "nodes": []string{"n1"}, "devices": []string{"/dev/sdb"}}},
+		{Name: "haify_pool_create", Arguments: map[string]any{"name": "fast", "type": "lvm"}},
+		{Name: "haify_pool_add_disk", Arguments: map[string]any{"pool": "fast"}},
 	} {
 		result, err := session.CallTool(t.Context(), call)
 		require.NoError(t, err)
@@ -315,21 +315,21 @@ func TestClusterMutationTools(t *testing.T) {
 func TestGatewayActionValidation(t *testing.T) {
 	session := connect(t, &mockExtraClient{}, false)
 	calls := []*mcp.CallToolParams{
-		{Name: "sds_nfs_exports", Arguments: map[string]any{"resource": "gw", "action": "add"}},
-		{Name: "sds_nfs_exports", Arguments: map[string]any{"resource": "gw", "action": "remove"}},
-		{Name: "sds_nfs_exports", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
-		{Name: "sds_iscsi_luns", Arguments: map[string]any{"resource": "gw", "action": "add", "lun": 1}},
-		{Name: "sds_iscsi_luns", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
-		{Name: "sds_iscsi_initiators", Arguments: map[string]any{"resource": "gw", "action": "add"}},
-		{Name: "sds_iscsi_initiators", Arguments: map[string]any{"resource": "gw", "action": "remove"}},
-		{Name: "sds_iscsi_initiators", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
-		{Name: "sds_iscsi_chap", Arguments: map[string]any{"resource": "gw", "action": "set"}},
-		{Name: "sds_iscsi_chap", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
-		{Name: "sds_nvme_namespaces", Arguments: map[string]any{"resource": "gw", "action": "add"}},
-		{Name: "sds_nvme_namespaces", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
-		{Name: "sds_nvme_hosts", Arguments: map[string]any{"resource": "gw", "action": "add"}},
-		{Name: "sds_nvme_hosts", Arguments: map[string]any{"resource": "gw", "action": "remove"}},
-		{Name: "sds_nvme_hosts", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
+		{Name: "haify_nfs_exports", Arguments: map[string]any{"resource": "gw", "action": "add"}},
+		{Name: "haify_nfs_exports", Arguments: map[string]any{"resource": "gw", "action": "remove"}},
+		{Name: "haify_nfs_exports", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
+		{Name: "haify_iscsi_luns", Arguments: map[string]any{"resource": "gw", "action": "add", "lun": 1}},
+		{Name: "haify_iscsi_luns", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
+		{Name: "haify_iscsi_initiators", Arguments: map[string]any{"resource": "gw", "action": "add"}},
+		{Name: "haify_iscsi_initiators", Arguments: map[string]any{"resource": "gw", "action": "remove"}},
+		{Name: "haify_iscsi_initiators", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
+		{Name: "haify_iscsi_chap", Arguments: map[string]any{"resource": "gw", "action": "set"}},
+		{Name: "haify_iscsi_chap", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
+		{Name: "haify_nvme_namespaces", Arguments: map[string]any{"resource": "gw", "action": "add"}},
+		{Name: "haify_nvme_namespaces", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
+		{Name: "haify_nvme_hosts", Arguments: map[string]any{"resource": "gw", "action": "add"}},
+		{Name: "haify_nvme_hosts", Arguments: map[string]any{"resource": "gw", "action": "remove"}},
+		{Name: "haify_nvme_hosts", Arguments: map[string]any{"resource": "gw", "action": "invalid"}},
 	}
 	for _, call := range calls {
 		result, err := session.CallTool(t.Context(), call)

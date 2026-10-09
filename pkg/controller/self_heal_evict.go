@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Auto-evict ([self_heal] auto_evict).
@@ -27,22 +27,22 @@ import (
 //   - for each resource, the lost-replica guard holds (removereplica_lost.go):
 //     the node does not answer over SSH, no surviving member's DRBD is
 //     connected to it, and the survivors have quorum and an UpToDate copy;
-//   - the node is not in maintenance, not labelled sds.io/auto-evict=false,
+//   - the node is not in maintenance, not labelled haify.io/auto-evict=false,
 //     and the resource is not the controller's own metadata, not WAN-replicated
-//     and not labelled sds.io/auto-evict=false.
+//     and not labelled haify.io/auto-evict=false.
 //
 // It replaces one replica at a time — the new one is a full sync — and waits
 // for that sync before the next. It never touches a Primary: the node it
 // evicts is the dead one. Once nothing refers to the node it is marked
-// evicted and gets no new replicas until `sds node restore` cleans what it
-// still holds, or `sds node lost` says it will not come back.
+// evicted and gets no new replicas until `haify node restore` cleans what it
+// still holds, or `haify node lost` says it will not come back.
 //
 // "dry-run" decides exactly the same and announces each step as a
 // node.evicted event at info severity, changing nothing.
 
 const (
 	autoEvictInterval = time.Minute
-	autoEvictOptOut   = "sds.io/auto-evict"
+	autoEvictOptOut   = "haify.io/auto-evict"
 )
 
 type autoEvictor struct {
@@ -192,7 +192,7 @@ func (e *autoEvictor) evictOne(ctx context.Context, n *NodeInfo) bool {
 		}
 		if err := rm.AddReplica(ctx, r.Name, picked[0]); err != nil {
 			e.publish(r.Name, event.SeverityCritical, fmt.Sprintf("%s's replica of %s was removed, but the new one on %s "+
-				"failed: %v; add one with `sds resource add-replica %s --node <node>`", n.Name, r.Name, picked[0], err, r.Name))
+				"failed: %v; add one with `haify resource add-replica %s --node <node>`", n.Name, r.Name, picked[0], err, r.Name))
 			return true
 		}
 		e.mu.Lock()
@@ -204,7 +204,7 @@ func (e *autoEvictor) evictOne(ctx context.Context, n *NodeInfo) bool {
 	if remaining == 0 && !e.c.config.SelfHeal.DryRun() {
 		if err := e.c.nodes.SetNodeState(ctx, n.Address, NodeStateEvicted); err == nil {
 			e.publish("", event.SeverityWarning, fmt.Sprintf("%s holds no replica any more and is evicted: run "+
-				"`sds node restore %s` when it is back, or `sds node lost %s` if it will not be", n.Name, n.Name, n.Name))
+				"`haify node restore %s` when it is back, or `haify node lost %s` if it will not be", n.Name, n.Name, n.Name))
 		}
 	}
 	return false

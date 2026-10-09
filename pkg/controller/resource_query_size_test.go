@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Listing reports a volume's exact size just as getting it does: Proxmox
@@ -19,7 +19,7 @@ func TestListResourcesReportsExactSize(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "pve-103-0", Port: 7007, Nodes: "n1,n2", Protocol: "C", Replicas: 2}))
 	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "pve-103-0", VolumeName: "pve-103-0_data",
-		VolumeID: 0, Pool: "sds_vg0", SizeGB: 6, SizeBytes: 5371715584}))
+		VolumeID: 0, Pool: "haify_vg0", SizeGB: 6, SizeBytes: 5371715584}))
 
 	list, err := ctrl.resources.ListResources(ctx)
 	require.NoError(t, err)

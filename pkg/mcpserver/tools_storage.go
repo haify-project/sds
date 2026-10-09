@@ -7,7 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/haify-project/sds/pkg/util"
+	"github.com/haify-project/haify/pkg/util"
 )
 
 // Storage upkeep: the disks under the pools, trimming, and the long jobs that
@@ -56,13 +56,13 @@ type poolTrimOut struct {
 type poolRemoveDiskIn struct {
 	Pool string `json:"pool" jsonschema:"pool name"`
 	Node string `json:"node" jsonschema:"node the disk is in"`
-	Disk string `json:"disk" jsonschema:"the device as sds_pool_disks lists it"`
+	Disk string `json:"disk" jsonschema:"the device as haify_pool_disks lists it"`
 }
 
 type poolReplaceDiskIn struct {
 	Pool    string `json:"pool" jsonschema:"pool name"`
 	Node    string `json:"node" jsonschema:"node the disk is in"`
-	Disk    string `json:"disk" jsonschema:"the disk to replace, as sds_pool_disks lists it"`
+	Disk    string `json:"disk" jsonschema:"the disk to replace, as haify_pool_disks lists it"`
 	NewDisk string `json:"new_disk" jsonschema:"an empty disk on the same node to move its data to"`
 }
 
@@ -73,7 +73,7 @@ type moveVolumeIn struct {
 }
 
 type jobStartOut struct {
-	JobID  string `json:"job_id" jsonschema:"follow it with sds_storage_jobs"`
+	JobID  string `json:"job_id" jsonschema:"follow it with haify_storage_jobs"`
 	Detail string `json:"detail"`
 }
 
@@ -105,7 +105,7 @@ func unixRFC3339(sec int64) string {
 
 // registerStorageTools adds disk, trim and storage job tools.
 func (s *Server) registerStorageTools(srv *mcp.Server) {
-	addReadWithin(s, srv, readOnlyTool("sds_pool_disks", "List disks and their health",
+	addReadWithin(s, srv, readOnlyTool("haify_pool_disks", "List disks and their health",
 		"List the disks under the storage pools on every node, with their size, how much of each is allocated, and "+
 			"their health from SMART or the NVMe health log (wear, reallocated or pending sectors, media errors, the "+
 			"drive's own verdict). Use it before replacing or removing a disk, and when a disk.health event or "+
@@ -125,7 +125,7 @@ func (s *Server) registerStorageTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_storage_jobs", "List storage jobs",
+	addRead(s, srv, readOnlyTool("haify_storage_jobs", "List storage jobs",
 		"List the long storage jobs: disks being emptied or replaced, volumes moving between pools. Running jobs "+
 			"by default. A job runs on its node and survives a controller restart; poll this until it is done or failed."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in storageJobsIn) (*mcp.CallToolResult, storageJobsOut, error) {
@@ -141,7 +141,7 @@ func (s *Server) registerStorageTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_pool_trim", "Trim thin pools",
+	addWrite(s, srv, writeTool("haify_pool_trim", "Trim thin pools",
 		"Run fstrim now on every mounted DRBD filesystem, on the node serving it. The discards reach every replica, "+
 			"so each node's thin pool gets back the blocks the filesystem freed. Use it when a thin pool is fuller "+
 			"than its volumes' contents explain. The controller already does this daily ([storage.thin] trim_schedule)."),
@@ -164,10 +164,10 @@ func (s *Server) registerStorageTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_pool_remove_disk", "Remove a disk from a pool",
+	addWrite(s, srv, writeTool("haify_pool_remove_disk", "Remove a disk from a pool",
 		"Move a disk's data onto the pool's other disks (pvmove, while the pool stays in use), then take it out of "+
-			"the pool. Refused when the other disks lack room, and for a pool's only disk (use sds_pool_replace_disk). "+
-			"Returns a job id; follow it with sds_storage_jobs."),
+			"the pool. Refused when the other disks lack room, and for a pool's only disk (use haify_pool_replace_disk). "+
+			"Returns a job id; follow it with haify_storage_jobs."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in poolRemoveDiskIn) (*mcp.CallToolResult, jobStartOut, error) {
 			resp, err := s.client.RemovePoolDisk(ctx, in.Pool, in.Node, in.Disk)
 			if err != nil {
@@ -176,9 +176,9 @@ func (s *Server) registerStorageTools(srv *mcp.Server) {
 			return nil, jobStartOut{JobID: resp.JobId, Detail: resp.Message}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_pool_replace_disk", "Replace a disk in a pool",
+	addWrite(s, srv, writeTool("haify_pool_replace_disk", "Replace a disk in a pool",
 		"Replace a failing or too-small disk: the new disk joins the pool, the old one's data moves to it, and the "+
-			"old disk leaves the pool. The pool stays in use throughout. Returns a job id; follow it with sds_storage_jobs."),
+			"old disk leaves the pool. The pool stays in use throughout. Returns a job id; follow it with haify_storage_jobs."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in poolReplaceDiskIn) (*mcp.CallToolResult, jobStartOut, error) {
 			resp, err := s.client.ReplacePoolDisk(ctx, in.Pool, in.Node, in.Disk, in.NewDisk)
 			if err != nil {
@@ -188,12 +188,12 @@ func (s *Server) registerStorageTools(srv *mcp.Server) {
 		})
 
 	// Destructive: the volume's snapshots on the old pool are deleted with it.
-	addWrite(s, srv, destructiveTool("sds_resource_move_volume", "Move a volume to another pool",
+	addWrite(s, srv, destructiveTool("haify_resource_move_volume", "Move a volume to another pool",
 		"Move a resource's volume to another pool, one node at a time (secondaries first): detach, create the new "+
 			"backing volume, full resync from the peers, delete the old one. The resource keeps serving; a Primary "+
 			"reads and writes over the network while its own disk is rebuilt. The volume's snapshots in the old pool "+
 			"are DELETED — confirm with the user and offer a backup first. Needs two or more diskful replicas; refused "+
-			"for encrypted resources and while snapshots are locked. Returns a job id; follow it with sds_storage_jobs."),
+			"for encrypted resources and while snapshots are locked. Returns a job id; follow it with haify_storage_jobs."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in moveVolumeIn) (*mcp.CallToolResult, jobStartOut, error) {
 			resp, err := s.client.MoveVolume(ctx, in.Resource, in.Volume, in.Pool)
 			if err != nil {

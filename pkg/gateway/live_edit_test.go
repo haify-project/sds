@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -63,7 +63,7 @@ func assertNoReloadOn(t *testing.T, dep *MockDeploymentClient, host string) {
 
 func TestEditRunningISCSIInitiatorAppliesOnPrimaryOnly(t *testing.T) {
 	cfg := testISCSIConfig(t, "iqn.2024-01.com.example:blk")
-	m, dep := liveCluster(t, cfg, "sds-iscsi-blk")
+	m, dep := liveCluster(t, cfg, "haify-iscsi-blk")
 	iscsi := NewISCSIManager(m)
 
 	require.NoError(t, iscsi.AddInitiator(context.Background(), "blk", "iqn.2024-01.com.example:host-b"))
@@ -76,7 +76,7 @@ func TestEditRunningISCSIInitiatorAppliesOnPrimaryOnly(t *testing.T) {
 	primary := onHost(dep, "node2")
 	assert.Contains(t, primary, `targetcli "$t/acls" create "$i" add_mapped_luns=true`)
 	assert.Contains(t, primary, "want='iqn.2024-01.com.example:host-b'")
-	assert.Contains(t, primary, "50-sds-pending-gateway-config.conf", "the pending-config hook is installed")
+	assert.Contains(t, primary, "50-haify-pending-gateway-config.conf", "the pending-config hook is installed")
 	assert.Contains(t, primary, "systemctl daemon-reload")
 	assert.NotContains(t, primary, "systemctl start 'ocf.rs@", "no unit is started for an ACL change")
 	assert.NotContains(t, primary, "systemctl stop 'ocf.rs@", "no unit is stopped for an ACL change")
@@ -112,7 +112,7 @@ func TestEditStoppedGatewayTouchesNothingLive(t *testing.T) {
 
 func TestEditRunningGatewayNowhereWritesAndReloads(t *testing.T) {
 	cfg := testISCSIConfig(t, "iqn.2024-01.com.example:blk")
-	m, dep := liveCluster(t, cfg, "sds-iscsi-blk")
+	m, dep := liveCluster(t, cfg, "haify-iscsi-blk")
 	dep.TargetStates = map[string]string{"node2": "inactive", "node3": "failed"}
 
 	require.NoError(t, NewISCSIManager(m).AddInitiator(context.Background(), "blk", "iqn.2024-01.com.example:host-b"))
@@ -128,7 +128,7 @@ func TestEditRunningGatewayRefusedWhileSettling(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := testISCSIConfig(t, "iqn.2024-01.com.example:blk")
-			m, dep := liveCluster(t, cfg, "sds-iscsi-blk")
+			m, dep := liveCluster(t, cfg, "haify-iscsi-blk")
 			dep.TargetStates = states
 			err := NewISCSIManager(m).AddInitiator(context.Background(), "blk", "iqn.2024-01.com.example:host-b")
 			require.Error(t, err)
@@ -140,19 +140,19 @@ func TestEditRunningGatewayRefusedWhileSettling(t *testing.T) {
 
 func TestEditRunningGatewayLiveFailureIsReported(t *testing.T) {
 	cfg := testISCSIConfig(t, "iqn.2024-01.com.example:blk")
-	m, dep := liveCluster(t, cfg, "sds-iscsi-blk")
+	m, dep := liveCluster(t, cfg, "haify-iscsi-blk")
 	dep.ScriptErr = map[string]error{"add_mapped_luns": errors.New("exit status 1")}
 
 	err := NewISCSIManager(m).AddInitiator(context.Background(), "blk", "iqn.2024-01.com.example:host-b")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "saved on every node")
 	assert.Contains(t, err.Error(), "node2")
-	assert.Contains(t, err.Error(), "sds gateway stop blk")
+	assert.Contains(t, err.Error(), "haify gateway stop blk")
 }
 
 func TestEditRunningISCSILUNStartsAndStopsOnlyThatUnit(t *testing.T) {
 	cfg := testISCSIConfig(t, "iqn.2024-01.com.example:blk")
-	m, dep := liveCluster(t, cfg, "sds-iscsi-blk")
+	m, dep := liveCluster(t, cfg, "haify-iscsi-blk")
 	iscsi := NewISCSIManager(m)
 
 	require.NoError(t, iscsi.AddLUN(context.Background(), "blk", 2, "/dev/drbd5"))
@@ -178,7 +178,7 @@ func TestEditRunningNVMeHostsAndNamespaces(t *testing.T) {
 		Resource: "blk", Nqn: "nqn.2024-01.com.example:blk", ServiceIp: "192.168.1.150/24",
 	}, sip, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	m, dep := liveCluster(t, cfg, "sds-nvmeof-blk")
+	m, dep := liveCluster(t, cfg, "haify-nvmeof-blk")
 	nvme = NewNVMeManager(m)
 
 	require.NoError(t, nvme.AddHost(context.Background(), "blk", "nqn.2014-08.org.nvmexpress:uuid:3c1e4a0e-8f2b-4c6d-9e1a-2b3c4d5e6f70"))
@@ -201,7 +201,7 @@ func TestEditRunningNFSExportStartsItsUnit(t *testing.T) {
 		Resource: "blk", ServiceIp: "192.168.1.200/24", ExportPath: "/srv/blk",
 	}, sip, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	m, dep := liveCluster(t, cfg, "sds-nfs-blk")
+	m, dep := liveCluster(t, cfg, "haify-nfs-blk")
 	nfs = NewNFSManager(m)
 
 	require.NoError(t, nfs.AddNFSExport(context.Background(), "blk", "/srv/blk/sub", 0, "10.0.0.0/8", ""))
@@ -218,7 +218,7 @@ func TestPendingConfigIsTheRunningNodesCopy(t *testing.T) {
 		"node3": {blkPath: edited},
 	}}
 	m := New(blkResources(), dep, zap.NewNop(), []string{"node2", "node3"})
-	cfg, err := m.readGatewayConfig(context.Background(), "blk", "sds-iscsi-blk")
+	cfg, err := m.readGatewayConfig(context.Background(), "blk", "haify-iscsi-blk")
 	require.NoError(t, err)
 	assert.Equal(t, edited, cfg.content)
 	assert.False(t, cfg.disabled)

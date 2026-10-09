@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 	"go.uber.org/zap"
 )
 
@@ -147,7 +147,7 @@ func normalizeDeviceList(devices []string) []string {
 // defaultedPoolType resolves an omitted pool type from the controller's
 // configuration.
 //
-// The policy belongs here rather than in a client. It used to live in sds,
+// The policy belongs here rather than in a client. It used to live in haify,
 // which substituted "lvm-thin" before the request ever left the process — so the
 // CLI created thin pools while every other caller that omitted the type (the
 // REST gateway, MCP, the web UI) reached normalizeLVMPoolType with an empty

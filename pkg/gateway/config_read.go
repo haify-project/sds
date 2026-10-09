@@ -28,7 +28,7 @@ import (
 
 // configDumpMarker starts every line the dump script prints, so the parser can
 // pick them out of whatever else sudo or the login shell writes.
-const configDumpMarker = "sds-gateway-config"
+const configDumpMarker = "haify-gateway-config"
 
 // disabledSuffix marks a stopped gateway's config: drbd-reactor ignores it.
 const disabledSuffix = ".disabled"

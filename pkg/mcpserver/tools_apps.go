@@ -7,14 +7,14 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/k8sapp"
+	"github.com/haify-project/haify/pkg/k8sapp"
 )
 
-// The Kubernetes (CSI) tools are a separate MCP server, sds-k8s, from the
+// The Kubernetes (CSI) tools are a separate MCP server, haify-k8s, from the
 // bare-metal ones: they talk to a Kubernetes API server rather than the Haify
 // controller, need a kubeconfig the bare-metal server has no use for, and act
 // on Kubernetes objects. Keeping them apart lets a client mount either one, and
-// every tool here is named sds_k8s_* so the model can tell which side a call
+// every tool here is named haify_k8s_* so the model can tell which side a call
 // lands on.
 
 // AppManager creates, lists and deletes databases on Kubernetes backed by Haify
@@ -42,10 +42,10 @@ type appDeleteIn struct {
 
 type appListOut struct {
 	Apps      []k8sapp.Status `json:"apps"`
-	Templates []string        `json:"templates" jsonschema:"applications sds_k8s_app_create can run"`
+	Templates []string        `json:"templates" jsonschema:"applications haify_k8s_app_create can run"`
 }
 
-// NewK8s builds the sds-k8s server. AllowWrite and ReadOnly mean the same as
+// NewK8s builds the haify-k8s server. AllowWrite and ReadOnly mean the same as
 // on the bare-metal server.
 func NewK8s(apps AppManager, logger *zap.Logger, opts Options) *Server {
 	s := New(nil, logger, opts)
@@ -55,7 +55,7 @@ func NewK8s(apps AppManager, logger *zap.Logger, opts Options) *Server {
 
 func (s *Server) k8sMCPServer() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
-		Name:    "sds-k8s",
+		Name:    "haify-k8s",
 		Title:   "Haify on Kubernetes (CSI)",
 		Version: s.version,
 	}, nil)
@@ -65,8 +65,8 @@ func (s *Server) k8sMCPServer() *mcp.Server {
 
 // registerAppTools adds the Kubernetes application tools.
 func (s *Server) registerAppTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_k8s_app_list", "List Haify-backed apps",
-		"List databases on Kubernetes created by sds_k8s_app_create: namespace, name, template, "+
+	addRead(s, srv, readOnlyTool("haify_k8s_app_list", "List Haify-backed apps",
+		"List databases on Kubernetes created by haify_k8s_app_create: namespace, name, template, "+
 			"whether it is ready, the node it runs on, its Service address and the DRBD resource "+
 			"holding its data. Also lists the templates available."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, appListOut, error) {
@@ -77,7 +77,7 @@ func (s *Server) registerAppTools(srv *mcp.Server) {
 			return nil, appListOut{Apps: apps, Templates: k8sapp.Templates()}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_k8s_app_create", "Create an HA database on Kubernetes",
+	addWrite(s, srv, writeTool("haify_k8s_app_create", "Create an HA database on Kubernetes",
 		"Run MySQL or PostgreSQL on Kubernetes with its data on a Haify volume: DRBD keeps a "+
 			"replica on two nodes and a tiebreaker on a third. One database pod; if its node fails, "+
 			"Kubernetes restarts it on the other replica node after about 30 seconds plus the "+
@@ -100,12 +100,12 @@ func (s *Server) registerAppTools(srv *mcp.Server) {
 			return nil, ok(created.Message), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_k8s_app_delete", "Delete a Haify-backed app",
-		"Delete a database created by sds_k8s_app_create: its Deployment and Service. The volume claim "+
+	addWrite(s, srv, destructiveTool("haify_k8s_app_delete", "Delete a Haify-backed app",
+		"Delete a database created by haify_k8s_app_create: its Deployment and Service. The volume claim "+
 			"<name>-data and the secret <name>-auth are kept, so creating the app again with the same name and "+
 			"template runs it on the same data with the same password, unless delete_data is set, which deletes "+
 			"them too (and with them the data, as the StorageClass's reclaim policy decides). Only objects "+
-			"sds_k8s_app_create made are deleted; anything else of the same name is left alone."),
+			"haify_k8s_app_create made are deleted; anything else of the same name is left alone."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in appDeleteIn) (*mcp.CallToolResult, opResult, error) {
 			deleted, err := s.apps.Delete(ctx, k8sapp.DeleteRequest{Name: in.Name, Namespace: in.Namespace,
 				DeleteData: in.DeleteData})

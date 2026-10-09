@@ -24,7 +24,7 @@ func TestGatewayWithNoPrimaryAndNoUpToDateReplicaFails(t *testing.T) {
 	view(in, "n1", "blk", "Secondary", "Outdated", conn("n2", 1, "Connected", "Secondary", up("Outdated")))
 	view(in, "n2", "blk", "Secondary", "Outdated", conn("n1", 0, "Connected", "Secondary", up("Outdated")))
 	for _, n := range []string{"n1", "n2"} {
-		in.Probes[n].ReactorConf = []string{"sds-iscsi-blk.toml"}
+		in.Probes[n].ReactorConf = []string{"haify-iscsi-blk.toml"}
 	}
 
 	c := only(t, checkGateways(in), "gateway.no_primary")
@@ -50,7 +50,7 @@ func TestGatewayNoPrimaryWithUpToDateReplicaRestartsTheGateway(t *testing.T) {
 	view(in, "n1", "nfs1", "Secondary", "UpToDate", conn("n2", 1, "Connected", "Secondary", up("UpToDate")))
 	view(in, "n2", "nfs1", "Secondary", "UpToDate", conn("n1", 0, "Connected", "Secondary", up("UpToDate")))
 	c := only(t, checkGateways(in), "gateway.no_primary")
-	if c.Fix != "sds gateway start --resource nfs1" {
+	if c.Fix != "haify gateway start --resource nfs1" {
 		t.Errorf("fix = %q", c.Fix)
 	}
 }
@@ -139,13 +139,13 @@ func TestHAResourceWithoutPrimaryAndRisks(t *testing.T) {
 	in.Resources = []Resource{{Name: "db", Diskful: []string{"n1", "n2"}, ServedBy: "ha", QuorumRisk: true, FaultDomainRisk: "host=pve1"}}
 	view(in, "n1", "db", "Secondary", "UpToDate", conn("n2", 1, "Connected", "Secondary", up("UpToDate")))
 	view(in, "n2", "db", "Secondary", "UpToDate", conn("n1", 0, "Connected", "Secondary", up("UpToDate")))
-	in.Probes["n1"].ReactorConf = []string{"sds-ha-db.toml"}
-	in.Probes["n3"].ReactorConf = []string{"sds-ha-db.toml"}
+	in.Probes["n1"].ReactorConf = []string{"haify-ha-db.toml"}
+	in.Probes["n3"].ReactorConf = []string{"haify-ha-db.toml"}
 	checks := checkResources(in)
 	if c := only(t, checks, "resource.no_primary"); c.Fix != "ssh 10.0.0.1 sudo systemctl restart drbd-reactor" {
 		t.Errorf("got %+v", c)
 	}
-	if c := only(t, checks, "resource.promoter_missing"); !strings.Contains(c.Fix, "ssh 10.0.0.1 sudo cat /etc/drbd-reactor.d/sds-ha-db.toml | ssh 10.0.0.2") {
+	if c := only(t, checks, "resource.promoter_missing"); !strings.Contains(c.Fix, "ssh 10.0.0.1 sudo cat /etc/drbd-reactor.d/haify-ha-db.toml | ssh 10.0.0.2") {
 		t.Errorf("fix should copy the config from n1 to n2: %q", c.Fix)
 	}
 	only(t, checks, "resource.quorum_risk")
@@ -159,10 +159,10 @@ func TestPromoterOnTiebreakerWarns(t *testing.T) {
 	healthy2(in, "share")
 	in.Gateways = []Gateway{{Resource: "share", Type: "nfs", Status: "started"}}
 	for _, n := range []string{"n1", "n2", "n3"} {
-		in.Probes[n].ReactorConf = []string{"sds-nfs-share.toml"}
+		in.Probes[n].ReactorConf = []string{"haify-nfs-share.toml"}
 	}
 	c := only(t, checkGateways(in), "gateway.promoter_on_diskless")
-	if c.Subject != "share@n3" || c.Status != StatusWarn || c.Fix != "sds gateway start --resource share" ||
+	if c.Subject != "share@n3" || c.Status != StatusWarn || c.Fix != "haify gateway start --resource share" ||
 		!strings.Contains(c.Message, "crosses the network") {
 		t.Errorf("got %+v", c)
 	}
@@ -174,7 +174,7 @@ func TestPrimarySeenOnlyThroughPeer(t *testing.T) {
 	delete(in.Probes, "n1")
 	in.ProbeErrors["n1"] = "timeout"
 	view(in, "n2", "db", "Secondary", "UpToDate", conn("n1", 0, "Connected", "Primary", up("UpToDate")))
-	in.Probes["n2"].ReactorConf = []string{"sds-ha-db.toml"}
+	in.Probes["n2"].ReactorConf = []string{"haify-ha-db.toml"}
 	if got := find(checkResources(in), "resource.no_primary"); len(got) != 0 {
 		t.Errorf("the Primary is visible from n2's connection: %s", dump(got))
 	}
@@ -187,17 +187,17 @@ func TestPromoterOnDRNodeWarnsAndItsAbsenceIsFine(t *testing.T) {
 	in := cluster()
 	in.Resources = []Resource{{Name: "db", Diskful: []string{"n1", "n2", "n3"}, DR: "n3", ServedBy: "ha"}}
 	view(in, "n1", "db", "Primary", "UpToDate")
-	in.Probes["n1"].ReactorConf = []string{"sds-ha-db.toml"}
-	in.Probes["n2"].ReactorConf = []string{"sds-ha-db.toml"}
+	in.Probes["n1"].ReactorConf = []string{"haify-ha-db.toml"}
+	in.Probes["n2"].ReactorConf = []string{"haify-ha-db.toml"}
 	for _, c := range checkResources(in) {
 		if c.ID == "resource.promoter_missing" || c.ID == "resource.promoter_on_dr" {
 			t.Errorf("a DR node without a promoter is how it should be: %+v", c)
 		}
 	}
 
-	in.Probes["n3"].ReactorConf = []string{"sds-ha-db.toml"}
+	in.Probes["n3"].ReactorConf = []string{"haify-ha-db.toml"}
 	c := only(t, checkResources(in), "resource.promoter_on_dr")
-	if c.Subject != "db@n3" || c.Status != StatusWarn || c.Fix != "sds resource repair db" {
+	if c.Subject != "db@n3" || c.Status != StatusWarn || c.Fix != "haify resource repair db" {
 		t.Errorf("got %+v", c)
 	}
 }

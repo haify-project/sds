@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 )
 
@@ -141,7 +141,7 @@ func (n *NVMeManager) CreateNVMeGateway(ctx context.Context, req *v1.CreateNVMeG
 	}
 
 	// Write configuration to all nodes
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", req.Resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", req.Resource)
 	if err := n.writeReactorConfig(ctx, req.Resource, pluginID, config); err != nil {
 		return &v1.CreateNVMeGatewayResponse{
 			Success: false,
@@ -284,7 +284,7 @@ func (n *NVMeManager) GetNVMeGatewayStatus(ctx context.Context, resource string)
 	}
 
 	// Check if the gateway config exists
-	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("sds-nvmeof-%s.toml", resource))
+	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("haify-nvmeof-%s.toml", resource))
 	if _, err := os.Stat(configPath); err != nil {
 		status["status"] = "not_configured"
 		return status, nil
@@ -307,7 +307,7 @@ func (n *NVMeManager) GetNVMeGatewayStatus(ctx context.Context, resource string)
 func (n *NVMeManager) DeleteNVMeGateway(ctx context.Context, resource string) error {
 	n.logger.Info("Deleting NVMe-oF gateway", zap.String("resource", resource))
 
-	configFile := fmt.Sprintf("sds-nvmeof-%s.toml", resource)
+	configFile := fmt.Sprintf("haify-nvmeof-%s.toml", resource)
 	configPath := filepath.Join(DrbdReactorConfigDir, configFile)
 
 	// Remove config from all nodes
@@ -380,6 +380,6 @@ test -d /sys/kernel/config/nvmet`, module, rdmaCheck)
 
 // generateNQN generates an NVMe qualified name for a given resource
 func generateNQN(resource string) string {
-	// Format: nqn.2024-01.com.example:sds.resource-name
-	return fmt.Sprintf("nqn.2024-01.com.example:sds.%s", resource)
+	// Format: nqn.2024-01.com.example:haify.resource-name
+	return fmt.Sprintf("nqn.2024-01.com.example:haify.%s", resource)
 }

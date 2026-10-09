@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 func replicationTLSCommand() *cobra.Command {
@@ -21,7 +21,7 @@ func replicationTLSCommand() *cobra.Command {
 Each node needs DRBD 9.2 or later, the kernel tls module and tlshd (package
 ktls-utils). "setup" gives every node a key made on the node, a certificate
 from this controller's replication CA, that CA in the system trust store, and a
-tlshd configured to use them. Then "sds resource tls <resource> on" moves a
+tlshd configured to use them. Then "haify resource tls <resource> on" moves a
 resource's connections over, one link at a time so the Primary keeps quorum.
 
 The replication CA joins each node's system trust store, so anything on the
@@ -38,7 +38,7 @@ func replicationTLSSetupCommand() *cobra.Command {
 		Use:   "setup",
 		Short: "Prepare nodes for encrypted replication (all nodes unless --nodes)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTLSNodes(func(ctx context.Context, c tlsNodeClient) ([]*sdspb.NodeTLSInfo, error) {
+			return runTLSNodes(func(ctx context.Context, c tlsNodeClient) ([]*haifypb.NodeTLSInfo, error) {
 				return c.SetupReplicationTLS(ctx, nodes)
 			})
 		},
@@ -53,7 +53,7 @@ func replicationTLSStatusCommand() *cobra.Command {
 		Use:   "status",
 		Short: "Show which nodes can carry an encrypted connection",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTLSNodes(func(ctx context.Context, c tlsNodeClient) ([]*sdspb.NodeTLSInfo, error) {
+			return runTLSNodes(func(ctx context.Context, c tlsNodeClient) ([]*haifypb.NodeTLSInfo, error) {
 				return c.ReplicationTLSStatus(ctx, nodes)
 			})
 		},
@@ -63,14 +63,14 @@ func replicationTLSStatusCommand() *cobra.Command {
 }
 
 type tlsNodeClient interface {
-	SetupReplicationTLS(ctx context.Context, nodes []string) ([]*sdspb.NodeTLSInfo, error)
-	ReplicationTLSStatus(ctx context.Context, nodes []string) ([]*sdspb.NodeTLSInfo, error)
+	SetupReplicationTLS(ctx context.Context, nodes []string) ([]*haifypb.NodeTLSInfo, error)
+	ReplicationTLSStatus(ctx context.Context, nodes []string) ([]*haifypb.NodeTLSInfo, error)
 }
 
-func runTLSNodes(call func(context.Context, tlsNodeClient) ([]*sdspb.NodeTLSInfo, error)) error {
+func runTLSNodes(call func(context.Context, tlsNodeClient) ([]*haifypb.NodeTLSInfo, error)) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	c, err := newSDSClient()
+	c, err := newHaifyClient()
 	if err != nil {
 		return fmt.Errorf("failed to connect to controller: %w", err)
 	}
@@ -105,7 +105,7 @@ func resourceTLSCommand() *cobra.Command {
 
 DRBD cannot change a live connection's transport, so each link is taken down
 and brought back on its own while the others keep quorum. Every node of the
-resource must be ready first (see "sds replication-tls status"). A link
+resource must be ready first (see "haify replication-tls status"). A link
 whose handshake fails is left StandAlone by DRBD and the switch stops there.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -119,7 +119,7 @@ whose handshake fails is left StandAlone by DRBD and the switch stops there.`,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

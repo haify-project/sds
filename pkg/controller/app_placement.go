@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/apptemplate"
+	"github.com/haify-project/haify/pkg/apptemplate"
 )
 
 // syncAppPlacement keeps an app's unit and promoter on exactly the diskful

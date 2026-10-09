@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -69,7 +69,7 @@ func TestNodeExpandVolume(t *testing.T) {
 	// Ensure GetResource returns device path
 	res, err := b.GetResource(context.Background(), "res1")
 	require.NoError(t, err)
-	res.Volumes = []*sdspb.VolumeInfo{{VolumeId: 0, Device: "/dev/drbd100"}}
+	res.Volumes = []*haifypb.VolumeInfo{{VolumeId: 0, Device: "/dev/drbd100"}}
 
 	m := &expandMounter{recordingMounter: *newRecordingMounter()}
 	node := newTestNode(b, m)

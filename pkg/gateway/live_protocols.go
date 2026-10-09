@@ -19,7 +19,7 @@ import (
 //
 // Anything else changed on a running unit is refused before any side effect:
 // there is no way to apply it without restarting the gateway, and that is the
-// operator's decision (sds gateway stop, then start), not an edit's.
+// operator's decision (haify gateway stop, then start), not an edit's.
 
 // Where the agents find the running targets; tests point them elsewhere.
 var (

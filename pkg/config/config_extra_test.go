@@ -196,7 +196,7 @@ func TestConfigSaveWithAllSections(t *testing.T) {
 			Port:          3374,
 		},
 		Database: DatabaseConfig{
-			Path: "/var/lib/sds/sds.db",
+			Path: "/var/lib/haify/haify.db",
 		},
 		TLS: TLSConfig{
 			Enabled: false,

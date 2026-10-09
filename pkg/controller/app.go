@@ -8,18 +8,18 @@ import (
 	"strings"
 	"sync"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/apptemplate"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/apptemplate"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
-// Database applications (`sds app`).
+// Database applications (`haify app`).
 //
 // An app is a single-instance database on one resource's DRBD volume, run by
 // a drbd-reactor promoter the way a gateway is: on the node where the
 // resource is Primary the promoter mounts the volume, starts
-// sds-app-<name>.service and raises the service IP, and when that node fails
+// haify-app-<name>.service and raises the service IP, and when that node fails
 // another replica does the same with every write DRBD acknowledged. It is
 // storage failover, not database replication.
 //
@@ -86,10 +86,10 @@ func appBinaries(a *database.App) apptemplate.Binaries {
 }
 
 // appInfo is an app as the API shows it.
-func appInfo(a *database.App) *sdspb.AppInfo {
+func appInfo(a *database.App) *haifypb.AppInfo {
 	spec := appSpec(a)
 	l := apptemplate.LayoutFor(a.Name)
-	return &sdspb.AppInfo{
+	return &haifypb.AppInfo{
 		Name:            a.Name,
 		Engine:          a.Engine,
 		Resource:        a.Resource,

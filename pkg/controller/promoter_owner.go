@@ -26,9 +26,9 @@ import (
 
 const (
 	// pveManagedByLabel marks a resource the Proxmox plugin created.
-	pveManagedByLabel = "sds.pve/managed-by"
+	pveManagedByLabel = "haify.pve/managed-by"
 	// csiManagedByLabel marks a resource the CSI driver created.
-	csiManagedByLabel = "sds.csi/managed-by"
+	csiManagedByLabel = "haify.csi/managed-by"
 )
 
 // pveDefaultNameRe matches what the Proxmox plugin names a volume under its
@@ -37,7 +37,7 @@ const (
 var pveDefaultNameRe = regexp.MustCompile(`^pve-\d+-[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
 // externallyPromoted names the system that decides where a resource is
-// Primary, or "" when sds itself may.
+// Primary, or "" when haify itself may.
 func externallyPromoted(name string, labels map[string]string) string {
 	switch {
 	case labels[pveManagedByLabel] == "pve", labels[pveManagedByLabel] == "" && pveDefaultNameRe.MatchString(name):
@@ -69,7 +69,7 @@ func (c *Controller) assertPromoterAllowed(ctx context.Context, resource, what s
 	}
 	// drbd-reactor runs one promoter per resource; an app's is already there.
 	if app, err := c.db.GetAppByResource(ctx, resource); err == nil && app != nil {
-		return fmt.Errorf("%s is refused on %s: the %s app %s runs on it; delete the app first (sds app delete %s)",
+		return fmt.Errorf("%s is refused on %s: the %s app %s runs on it; delete the app first (haify app delete %s)",
 			what, resource, app.Engine, app.Name, app.Name)
 	}
 	return nil

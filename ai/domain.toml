@@ -1,11 +1,11 @@
 # Haify AI Copilot — steward domain config.
 #
-# Read by sds-ai (cmd/sds-ai, path from SDS_AI_DOMAIN, default ai/domain.toml)
+# Read by haify-ai (cmd/haify-ai, path from HAIFY_AI_DOMAIN, default ai/domain.toml)
 # and by ai/kb/build.sh (STEWARD_DOMAIN_FILE). Defines the Haify/DRBD persona, the
 # ontology vocabulary, destructive-command red-lines, and read-only probes.
-# Live cluster state comes from the `sds-mcp` tools (wired in cmd/sds-ai, not
+# Live cluster state comes from the `haify-mcp` tools (wired in cmd/haify-ai, not
 # from this file); knowledge grounding comes from the cluster's knowledge base
-# (SDS_AI_KNOWLEDGE_DB) and the shared one (SDS_AI_SHARED_KNOWLEDGE_DB).
+# (HAIFY_AI_KNOWLEDGE_DB) and the shared one (HAIFY_AI_SHARED_KNOWLEDGE_DB).
 
 name = "Haify storage/HA domain"
 title = "Haify Copilot"
@@ -18,19 +18,19 @@ Linux cluster.
 
 How you work:
 - Reason step by step (ReAct). When you need live cluster state, call the
-  read-only sds tools (they are strictly read-only: list/status/health). Do not
+  read-only haify tools (they are strictly read-only: list/status/health). Do not
   assume state you can observe.
 - Be efficient with tools. Prefer the LIST tools that return everything in one
-  call: `sds_ha_list` already returns every HA resource with its primary node,
+  call: `haify_ha_list` already returns every HA resource with its primary node,
   VIP, mount and status — call it ONCE for questions about HA resources. Do NOT
-  call `sds_ha_status`/`sds_resource_status` per-resource in a loop; only drill
+  call `haify_ha_status`/`haify_resource_status` per-resource in a loop; only drill
   into one resource when the list is insufficient for that specific resource.
   Never re-call a tool you already called with the same arguments.
 - What the knowledge base holds, so you know what is worth asking it for. Two
   parts, searched together: the Haify shared base, identical on every cluster —
   Haify's documentation, its source as a graph (files, functions, classes and
   their calls/imports edges across pkg/controller, pkg/gateway, pkg/csi, cmd/*
-  and the Proxmox plugin), the sds reference generated from
+  and the Proxmox plugin), the haify reference generated from
   the installed version's own --help, and the DRBD 9 manuals and LINBIT
   knowledge base; and this cluster's own notes — incidents on named machines
   and what was actually tried on them. The engine already requires searching
@@ -41,10 +41,10 @@ How you work:
   configs, and OCF start-list entries you observed.
 
 Proposing changes (guarded):
-- Day-to-day, non-destructive operations you run yourself with the sds write
+- Day-to-day, non-destructive operations you run yourself with the haify write
   tools you have (create, add, start, mount, grow, set options, snapshot) and
-  the sds_k8s_* tools for Kubernetes. The sds_* tools act on the bare-metal
-  cluster through the controller; the sds_k8s_* tools act on Kubernetes objects
+  the haify_k8s_* tools for Kubernetes. The haify_* tools act on the bare-metal
+  cluster through the controller; the haify_k8s_* tools act on Kubernetes objects
   (Deployments, PVCs) whose volumes Haify provides through CSI. Anything that deletes, restores, evicts, drains or stops is
   not in your toolset: for those, call the
   `suggest_action` tool with a structured proposal (action, params, reason,
@@ -57,9 +57,9 @@ Proposing changes (guarded):
     - "snapshot.create" params: {volume, snapshotName, node}
   Propose exactly ONE action per turn unless asked for more; do not duplicate it.
 
-Databases on Kubernetes (sds_k8s_app_create):
+Databases on Kubernetes (haify_k8s_app_create):
 - When someone asks for a highly available MySQL or PostgreSQL "container" or
-  "database", call `sds_k8s_app_create` directly; it is not a suggest_action. Pass
+  "database", call `haify_k8s_app_create` directly; it is not a suggest_action. Pass
   only what they specified (template is "mysql" or "postgres"; name, namespace,
   size and storage_class are optional). It never overwrites: an existing app is
   an error, which you report rather than work around.
@@ -69,7 +69,7 @@ Databases on Kubernetes (sds_k8s_app_create):
   database's start-up, with every committed write intact. It is storage
   failover, not database replication, so the database is briefly down.
 - Afterwards give the connection address (<name>.<namespace>.svc and port) and
-  say the password is in the Secret <name>-auth. `sds_k8s_app_list` shows where each
+  say the password is in the Secret <name>-auth. `haify_k8s_app_list` shows where each
   app runs and which DRBD resource holds its data.
 
 Safety (non-negotiable):
@@ -224,14 +224,14 @@ repos = []
 # the chain and calling the rest drift would report real data as broken.
 
 # A drbd-reactor promoter config promotes a DRBD resource to Primary, and so
-# does an operator running `sds ha evict` — 16 such edges are in the graph.
+# does an operator running `haify ha evict` — 16 such edges are in the graph.
 # The OCFAgent runs underneath and does not promote anything itself.
 [[relation]]
 name = "promotes"
-# The graph disagreed with the first version of this and was right: `drbd-promote@sds-meta`
-# promotes sds-meta, `Node: node1` promotes sds-meta, and drbd-reactor promotes resources.
+# The graph disagreed with the first version of this and was right: `drbd-promote@haify-meta`
+# promotes haify-meta, `Node: node1` promotes haify-meta, and drbd-reactor promotes resources.
 # That is the language DRBD itself uses. SystemdService stays on the from end only —
-# a promoter starting sds-ai.service is its start list, which `contains` already says.
+# a promoter starting haify-ai.service is its start list, which `contains` already says.
 from = ["PromoterConfig", "CLICommand", "Node", "SystemdService", "Package"]
 to   = ["DRBDResource", "Volume"]
 
@@ -405,38 +405,38 @@ reason = "wipe-md/create-md rewrites DRBD metadata; can lose the replica"
 # Destructive Haify control verbs. These map to controller operations that delete
 # managed objects — recoverable only from backups/snapshots, so flag before approve.
 [[red_lines]]
-id = "sds-pool-delete"
+id = "haify-pool-delete"
 severity = "HIGH"
 pattern = '\bpool[._-]?delete\b'
 reason = "deleting a storage pool destroys its volumes"
 
 [[red_lines]]
-id = "sds-resource-delete"
+id = "haify-resource-delete"
 severity = "HIGH"
 pattern = '\bresource[._-]?delete\b'
 reason = "deleting a DRBD resource tears down replication and its backing volumes"
 
 [[red_lines]]
-id = "sds-ha-delete"
+id = "haify-ha-delete"
 severity = "HIGH"
 pattern = '\bha[._-]?delete\b'
 reason = "deleting an HA config removes the promoter and floating VIP failover"
 
 [[red_lines]]
-id = "sds-gateway-delete"
+id = "haify-gateway-delete"
 severity = "HIGH"
 pattern = '\bgateway[._-]?delete\b'
 reason = "deleting a gateway stops exporting the storage (NFS/iSCSI/NVMe-oF)"
 
 [[red_lines]]
-id = "sds-snapshot-delete"
+id = "haify-snapshot-delete"
 severity = "HIGH"
 pattern = '\bsnapshot[._-]?delete\b'
 reason = "deleting a snapshot discards a recovery point"
 
 # ---------------------------------------------------------------------------
 # Read-only probes (fallback situational awareness on the host running serve).
-# Primary cluster state comes from the sds-mcp read tools; these are extra.
+# Primary cluster state comes from the haify-mcp read tools; these are extra.
 # ---------------------------------------------------------------------------
 
 [[probes]]

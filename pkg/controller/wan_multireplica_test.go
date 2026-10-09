@@ -7,15 +7,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/wanproxy"
 )
 
 // registerWANNodes wires up a primary site plus a DR node.
 func registerWANNodes(ctrl *Controller) {
 	for _, n := range []struct{ name, addr, host string }{
-		{"node-a", "192.168.1.10", "sds-a"},
-		{"node-b", "192.168.1.11", "sds-b"},
-		{"node-dr", "203.0.113.7", "sds-dr"},
+		{"node-a", "192.168.1.10", "haify-a"},
+		{"node-b", "192.168.1.11", "haify-b"},
+		{"node-dr", "203.0.113.7", "haify-dr"},
 	} {
 		ctrl.nodes.nodes[n.addr] = &NodeInfo{
 			Name: n.name, Address: n.addr, Hostname: n.host, State: NodeStateOnline,
@@ -50,22 +50,22 @@ func TestGenerateDrbdConfigMultiReplicaWAN(t *testing.T) {
 	// the replicas on their host-stanza addresses, which cannot reach it.
 	meshLine := ""
 	for _, line := range strings.Split(cfg, "\n") {
-		if strings.Contains(line, "hosts") && strings.Contains(line, "sds-a") {
+		if strings.Contains(line, "hosts") && strings.Contains(line, "haify-a") {
 			meshLine = line
 			break
 		}
 	}
 	require.NotEmpty(t, meshLine, "expected a primary-site connection-mesh")
-	assert.Contains(t, meshLine, "sds-a")
-	assert.Contains(t, meshLine, "sds-b")
-	assert.NotContains(t, meshLine, "sds-dr", "the DR must not join the LAN mesh")
+	assert.Contains(t, meshLine, "haify-a")
+	assert.Contains(t, meshLine, "haify-b")
+	assert.NotContains(t, meshLine, "haify-dr", "the DR must not join the LAN mesh")
 
 	// One explicit WAN leg per primary, each on its own loopback pair so the
 	// two tunnels cannot collide on the DR, which terminates both.
-	assert.Contains(t, cfg, "host sds-a address 127.0.0.1:7400;", "primary binds leg port + bind offset")
-	assert.Contains(t, cfg, "host sds-dr address 127.0.0.1:7300;", "DR binds the leg port; the primary connects there via its dialer")
-	assert.Contains(t, cfg, "host sds-b address 127.0.0.1:7401;")
-	assert.Contains(t, cfg, "host sds-dr address 127.0.0.1:7301;")
+	assert.Contains(t, cfg, "host haify-a address 127.0.0.1:7400;", "primary binds leg port + bind offset")
+	assert.Contains(t, cfg, "host haify-dr address 127.0.0.1:7300;", "DR binds the leg port; the primary connects there via its dialer")
+	assert.Contains(t, cfg, "host haify-b address 127.0.0.1:7401;")
+	assert.Contains(t, cfg, "host haify-dr address 127.0.0.1:7301;")
 	assert.Equal(t, 2, strings.Count(cfg, "connection {"), "one connection per WAN leg")
 
 	// Each WAN leg is async regardless of the LAN protocol.

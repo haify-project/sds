@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 func TestHumanBytes(t *testing.T) {
@@ -44,7 +44,7 @@ func TestPrintWANMetricsSaysUnknownRatherThanZero(t *testing.T) {
 
 func TestPrintWANMetricsWarnsAboutTheLossWindow(t *testing.T) {
 	out := captureStdout(t, func() {
-		printWANMetrics(&sdspb.WANMetrics{
+		printWANMetrics(&haifypb.WANMetrics{
 			BufferUsedBytes:   1048576,
 			BufferCapBytes:    4294967296,
 			BufferFillPercent: 0.024,
@@ -74,7 +74,7 @@ func TestPrintWANMetricsWarnsAboutTheLossWindow(t *testing.T) {
 // only meaningful when non-zero.
 func TestPrintWANMetricsQuietWhenHealthy(t *testing.T) {
 	out := captureStdout(t, func() {
-		printWANMetrics(&sdspb.WANMetrics{
+		printWANMetrics(&haifypb.WANMetrics{
 			BufferUsedBytes: 0,
 			BufferCapBytes:  4294967296,
 			DrbdToWanBytes:  4096,

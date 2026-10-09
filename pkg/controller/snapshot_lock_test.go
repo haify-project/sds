@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 func snapAt(ts time.Time) string { return buildSnapName("data_data", ts) }
@@ -62,7 +62,7 @@ func lockedScheduleController(t *testing.T, dep *fakeDeploymentClient) *Controll
 	return ctrl
 }
 
-// With an sds token, deleting the snapshots, the schedule or the resource was
+// With an haify token, deleting the snapshots, the schedule or the resource was
 // as good as deleting the history. While anything is locked, none of it goes.
 func TestLockedSnapshotsResistTheAPI(t *testing.T) {
 	dep := &fakeDeploymentClient{}
@@ -131,7 +131,7 @@ func TestRelieveThinPoolKeepsLockedSnapshots(t *testing.T) {
 	}
 	ctrl := newBasicTestController(dep)
 	ctrl.events = event.NewBus(10)
-	vol := &ResourceVolumeInfo{Pool: "sds_pool", BackingVolume: "data_data", Device: "/dev/sds_pool/data_data"}
+	vol := &ResourceVolumeInfo{Pool: "haify_pool", BackingVolume: "data_data", Device: "/dev/haify_pool/data_data"}
 
 	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", "data", vol, 7*24*time.Hour)
 	assert.Equal(t, []string{snaps[0]}, removed, "only the snapshot past its lock may go")

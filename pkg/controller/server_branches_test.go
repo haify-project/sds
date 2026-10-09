@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -18,7 +18,7 @@ import (
 
 func TestControllerNewAndAccessors(t *testing.T) {
 	cfg := &config.Config{
-		Database: config.DatabaseConfig{Path: t.TempDir() + "/sds.db"},
+		Database: config.DatabaseConfig{Path: t.TempDir() + "/haify.db"},
 		Gateway:  config.GatewayConfig{AutoStateVolume: true, StateVolumeSizeGB: 2},
 	}
 	ctrl, err := New(cfg, zap.NewNop())
@@ -49,9 +49,9 @@ func TestServerProfileValidationAndConversions(t *testing.T) {
 	srv, _ := newServerWithNodes(t)
 	ctx := context.Background()
 
-	for _, req := range []*sdspb.CreateResourceProfileRequest{
+	for _, req := range []*haifypb.CreateResourceProfileRequest{
 		{},
-		{Profile: &sdspb.ResourceProfile{}},
+		{Profile: &haifypb.ResourceProfile{}},
 	} {
 		resp, err := srv.CreateResourceProfile(ctx, req)
 		require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestServerProfileValidationAndConversions(t *testing.T) {
 	assert.Nil(t, profileToProto(nil))
 	assert.Nil(t, profileFromProto(nil))
 
-	missing, err := srv.DeleteResourceProfile(ctx, &sdspb.DeleteResourceProfileRequest{Name: "missing"})
+	missing, err := srv.DeleteResourceProfile(ctx, &haifypb.DeleteResourceProfileRequest{Name: "missing"})
 	require.NoError(t, err)
 	assert.True(t, missing.Success, "deleting a missing profile is idempotent")
 
@@ -94,7 +94,7 @@ func TestServerSnapshotRestoreBranches(t *testing.T) {
 		}
 		defer func() { assert.True(t, merged, "the snapshot was never merged") }()
 		ctrl := newBasicTestController(dep)
-		resp, err := NewServer(ctrl).RestoreSnapshot(ctx, &sdspb.RestoreSnapshotRequest{Volume: "vg0/data", SnapshotName: "snap1", Node: "n1"})
+		resp, err := NewServer(ctrl).RestoreSnapshot(ctx, &haifypb.RestoreSnapshotRequest{Volume: "vg0/data", SnapshotName: "snap1", Node: "n1"})
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 	})
@@ -103,7 +103,7 @@ func TestServerSnapshotRestoreBranches(t *testing.T) {
 		dep := &fakeDeploymentClient{execFunc: func(context.Context, []string, string, ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			return nil, errors.New("ssh failed")
 		}}
-		resp, err := NewServer(newBasicTestController(dep)).RestoreSnapshot(ctx, &sdspb.RestoreSnapshotRequest{Volume: "vg0/data", SnapshotName: "snap1", Node: "n1"})
+		resp, err := NewServer(newBasicTestController(dep)).RestoreSnapshot(ctx, &haifypb.RestoreSnapshotRequest{Volume: "vg0/data", SnapshotName: "snap1", Node: "n1"})
 		require.NoError(t, err)
 		assert.False(t, resp.Success)
 		assert.Contains(t, resp.Message, "ssh failed")
@@ -117,7 +117,7 @@ func TestServerSnapshotRestoreBranches(t *testing.T) {
 			}
 			return result, nil
 		}}
-		resp, err := NewServer(newBasicTestController(dep)).RestoreSnapshot(ctx, &sdspb.RestoreSnapshotRequest{Volume: "data", SnapshotName: "snap1", Node: "n1"})
+		resp, err := NewServer(newBasicTestController(dep)).RestoreSnapshot(ctx, &haifypb.RestoreSnapshotRequest{Volume: "data", SnapshotName: "snap1", Node: "n1"})
 		require.NoError(t, err)
 		assert.False(t, resp.Success)
 	})
@@ -128,12 +128,12 @@ func TestServerDisklessHandlers(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "res1", Nodes: "n1,n2"}))
 
-	attach, err := srv.AttachDisklessClient(ctx, &sdspb.AttachDisklessClientRequest{Resource: "res1", Node: "n1"})
+	attach, err := srv.AttachDisklessClient(ctx, &haifypb.AttachDisklessClientRequest{Resource: "res1", Node: "n1"})
 	require.NoError(t, err)
 	assert.False(t, attach.Success)
 	assert.Contains(t, attach.Message, "diskful replica")
 
-	detach, err := srv.DetachDisklessClient(ctx, &sdspb.DetachDisklessClientRequest{Resource: "missing", Node: "n3"})
+	detach, err := srv.DetachDisklessClient(ctx, &haifypb.DetachDisklessClientRequest{Resource: "missing", Node: "n3"})
 	require.NoError(t, err)
 	assert.False(t, detach.Success)
 }
@@ -147,7 +147,7 @@ func TestServerSnapshotScheduleDetails(t *testing.T) {
 		Keep: database.GFSPolicy{Hourly: 6, Daily: 7}, LastRun: now,
 	}))
 
-	resp, err := srv.ListSnapshotSchedules(ctx, &sdspb.ListSnapshotSchedulesRequest{})
+	resp, err := srv.ListSnapshotSchedules(ctx, &haifypb.ListSnapshotSchedulesRequest{})
 	require.NoError(t, err)
 	require.True(t, resp.Success)
 	require.Len(t, resp.Schedules, 1)
@@ -160,26 +160,29 @@ func TestServerPreviouslyUntouchedErrorHandlers(t *testing.T) {
 	srv, _ := newServerWithNodes(t)
 	ctx := context.Background()
 
-	makeHa, err := srv.MakeHa(ctx, &sdspb.MakeHaRequest{
+	makeHa, err := srv.MakeHa(ctx, &haifypb.MakeHaRequest{
 		Resource:   "missing",
-		OcfAgents:  []*sdspb.OcfAgent{nil, {Provider: "heartbeat", Name: "IPaddr2", Instance: "vip"}},
-		StartItems: []*sdspb.HaStartItem{nil, {Item: &sdspb.HaStartItem_SystemdUnit{SystemdUnit: "postgresql.service"}}},
+		OcfAgents:  []*haifypb.OcfAgent{nil, {Provider: "heartbeat", Name: "IPaddr2", Instance: "vip"}},
+		StartItems: []*haifypb.HaStartItem{nil, {Item: &haifypb.HaStartItem_SystemdUnit{SystemdUnit: "postgresql.service"}}},
 	})
 	require.NoError(t, err)
 	assert.False(t, makeHa.Success)
 
 	for _, check := range []func() (bool, error){
-		func() (bool, error) { r, e := srv.EnableSelfHa(ctx, &sdspb.EnableSelfHaRequest{}); return r.Success, e },
 		func() (bool, error) {
-			r, e := srv.DisableSelfHa(ctx, &sdspb.DisableSelfHaRequest{})
+			r, e := srv.EnableSelfHa(ctx, &haifypb.EnableSelfHaRequest{})
 			return r.Success, e
 		},
 		func() (bool, error) {
-			r, e := srv.EvictHa(ctx, &sdspb.EvictHaRequest{Resource: "missing"})
+			r, e := srv.DisableSelfHa(ctx, &haifypb.DisableSelfHaRequest{})
 			return r.Success, e
 		},
 		func() (bool, error) {
-			r, e := srv.DeleteHa(ctx, &sdspb.DeleteHaRequest{Resource: "missing"})
+			r, e := srv.EvictHa(ctx, &haifypb.EvictHaRequest{Resource: "missing"})
+			return r.Success, e
+		},
+		func() (bool, error) {
+			r, e := srv.DeleteHa(ctx, &haifypb.DeleteHaRequest{Resource: "missing"})
 			return r.Success, e
 		},
 	} {
@@ -188,11 +191,11 @@ func TestServerPreviouslyUntouchedErrorHandlers(t *testing.T) {
 		assert.False(t, success)
 	}
 
-	_, err = srv.GetResourceAgentMetadata(ctx, &sdspb.GetResourceAgentMetadataRequest{Provider: "missing", Name: "missing"})
+	_, err = srv.GetResourceAgentMetadata(ctx, &haifypb.GetResourceAgentMetadataRequest{Provider: "missing", Name: "missing"})
 	assert.Error(t, err)
-	_, err = srv.GetHaToml(ctx, &sdspb.GetHaTomlRequest{Resource: "missing"})
+	_, err = srv.GetHaToml(ctx, &haifypb.GetHaTomlRequest{Resource: "missing"})
 	assert.Error(t, err)
-	syncResp, err := srv.SyncHaToml(ctx, &sdspb.SyncHaTomlRequest{Resource: "missing", Content: "[[promoter]]"})
+	syncResp, err := srv.SyncHaToml(ctx, &haifypb.SyncHaTomlRequest{Resource: "missing", Content: "[[promoter]]"})
 	require.NoError(t, err)
 	assert.False(t, syncResp.Success)
 }

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +44,7 @@ func TestResourceManagerMakeHaUsesResourceNodesOnly(t *testing.T) {
 
 	configPath, err := ctrl.resources.MakeHa(context.Background(), "res1", nil, "", "", "", nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "/etc/drbd-reactor.d/sds-ha-res1.toml", configPath)
+	assert.Equal(t, "/etc/drbd-reactor.d/haify-ha-res1.toml", configPath)
 	require.Len(t, dep.distributedConfigs, 1)
 	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, dep.distributedConfigs[0].hosts)
 }

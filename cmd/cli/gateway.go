@@ -35,13 +35,13 @@ func gatewayList() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			gateways, err := sdsClient.ListGateways(ctx)
+			gateways, err := haifyClient.ListGateways(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list gateways: %w", err)
 			}
@@ -82,14 +82,14 @@ func gatewayDelete() *cobra.Command {
 			}
 
 			// Create Haify client
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Delete gateway
-			err = sdsClient.DeleteGateway(ctx, resource)
+			err = haifyClient.DeleteGateway(ctx, resource)
 			if err != nil {
 				return fmt.Errorf("failed to delete gateway: %w", err)
 			}
@@ -122,13 +122,13 @@ This is typically handled automatically by drbd-reactor.`,
 				return fmt.Errorf("--resource is required")
 			}
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.StartGateway(ctx, resource)
+			err = haifyClient.StartGateway(ctx, resource)
 			if err != nil {
 				return fmt.Errorf("failed to start gateway: %w", err)
 			}
@@ -160,13 +160,13 @@ This is typically handled automatically by drbd-reactor.`,
 				return fmt.Errorf("--resource is required")
 			}
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.StopGateway(ctx, resource)
+			err = haifyClient.StopGateway(ctx, resource)
 			if err != nil {
 				return fmt.Errorf("failed to stop gateway: %w", err)
 			}

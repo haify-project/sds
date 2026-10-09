@@ -112,7 +112,7 @@ export function CreatePoolDialog({
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Will be prefixed with "sds_"
+                Will be prefixed with "haify_"
               </p>
             </div>
 

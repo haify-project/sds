@@ -58,8 +58,8 @@ func TestGenerateSerialFromIQN(t *testing.T) {
 		iqn          string
 		volumeNumber int
 	}{
-		{"iqn.2024-01.com.example:sds.data", 0},
-		{"iqn.2024-01.com.example:sds.data", 1},
+		{"iqn.2024-01.com.example:haify.data", 0},
+		{"iqn.2024-01.com.example:haify.data", 1},
 		{"iqn.2024-01.com.example:storage", 0},
 	}
 

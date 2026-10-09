@@ -149,7 +149,7 @@ func TestTLSConfigValidate(t *testing.T) {
 		},
 		{
 			name:    "legacy ca_cert is refused rather than ignored",
-			cfg:     TLSConfig{Enabled: true, CertFile: certFile, KeyFile: keyFile, LegacyCACert: "/etc/sds/ca.crt"},
+			cfg:     TLSConfig{Enabled: true, CertFile: certFile, KeyFile: keyFile, LegacyCACert: "/etc/haify/ca.crt"},
 			wantErr: "no longer read",
 		},
 		{
@@ -182,9 +182,9 @@ func TestTLSConfigValidate(t *testing.T) {
 // of bug as the section this replaces.
 func TestTLSConfigMutualTLS(t *testing.T) {
 	assert.False(t, TLSConfig{Enabled: true}.MutualTLS())
-	assert.False(t, TLSConfig{Enabled: false, ClientCAFile: "/etc/sds/ca.crt"}.MutualTLS(),
+	assert.False(t, TLSConfig{Enabled: false, ClientCAFile: "/etc/haify/ca.crt"}.MutualTLS(),
 		"a disabled section must not report mutual TLS")
-	assert.True(t, TLSConfig{Enabled: true, ClientCAFile: "/etc/sds/ca.crt"}.MutualTLS())
+	assert.True(t, TLSConfig{Enabled: true, ClientCAFile: "/etc/haify/ca.crt"}.MutualTLS())
 }
 
 // The whole config must fail to load, not just TLSConfig.Validate: the bug was

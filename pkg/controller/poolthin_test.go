@@ -14,16 +14,16 @@ func TestParseThinReportPicksOutThePool(t *testing.T) {
 	// One thin pool plus the volumes and snapshots living in it. Only the pool
 	// carries utilisation; everything else must be dropped rather than parsed
 	// as a 0% pool.
-	out := `  sds_sdspool|openclaw_data|thin|6442450944|100.00||Vwi-a-tz--
-  sds_sdspool|openclaw_data_sched_20260808T110000Z|thin|6442450944|||Vwi---tz-k
-  sds_sdspool|sdsthin|thin-pool|20937965568|45.50|8.23|twi-aotz--`
+	out := `  haify_haifypool|openclaw_data|thin|6442450944|100.00||Vwi-a-tz--
+  haify_haifypool|openclaw_data_sched_20260808T110000Z|thin|6442450944|||Vwi---tz-k
+  haify_haifypool|haifythin|thin-pool|20937965568|45.50|8.23|twi-aotz--`
 
 	byVG := parseThinReport(out)
 	require.Len(t, byVG, 1)
 
-	info := byVG["sds_sdspool"]
+	info := byVG["haify_haifypool"]
 	require.NotNil(t, info)
-	assert.Equal(t, "sdsthin", info.PoolLV)
+	assert.Equal(t, "haifythin", info.PoolLV)
 	assert.Equal(t, uint64(20937965568), info.SizeBytes)
 	assert.InDelta(t, 45.50, info.DataPercent, 0.001)
 	assert.InDelta(t, 8.23, info.MetaPercent, 0.001)
@@ -34,9 +34,9 @@ func TestParseThinReportDetectsOutOfDataSpace(t *testing.T) {
 	// The state that took node-a down on 2026-08-09. The 'D' in the health
 	// field is LVM's own verdict and is what the kernel acted on; a caller
 	// must not have to infer it from the percentage.
-	out := `  sds_sdspool|sdsthin|thin-pool|10468982784|100.00|14.00|twi-aotzD-`
+	out := `  haify_haifypool|haifythin|thin-pool|10468982784|100.00|14.00|twi-aotzD-`
 
-	info := parseThinReport(out)["sds_sdspool"]
+	info := parseThinReport(out)["haify_haifypool"]
 	require.NotNil(t, info)
 	assert.True(t, info.OutOfSpace)
 	assert.InDelta(t, 100.0, info.DataPercent, 0.001)
@@ -55,22 +55,22 @@ func TestParseThinReportIgnoresNoise(t *testing.T) {
 	// stream, and a truncated read leaves a short final line. Neither may
 	// abort the rows around them.
 	out := `  WARNING: You have not turned on protection against thin pools running out of space.
-  sds_sdspool|sdsthin|thin-pool|20937965568|45.50|8.23|twi-aotz--
-  sds_sdspool|trunc`
+  haify_haifypool|haifythin|thin-pool|20937965568|45.50|8.23|twi-aotz--
+  haify_haifypool|trunc`
 
-	info := parseThinReport(out)["sds_sdspool"]
+	info := parseThinReport(out)["haify_haifypool"]
 	require.NotNil(t, info)
 	assert.InDelta(t, 45.50, info.DataPercent, 0.001)
 }
 
 func TestParseThinReportSeparatesVolumeGroups(t *testing.T) {
-	out := `  sds_a|sdsthin|thin-pool|20937965568|30.78|6.91|twi-aotz--
-  sds_b|sdsthin|thin-pool|20937965568|46.55|8.26|twi-aotz--`
+	out := `  haify_a|haifythin|thin-pool|20937965568|30.78|6.91|twi-aotz--
+  haify_b|haifythin|thin-pool|20937965568|46.55|8.26|twi-aotz--`
 
 	byVG := parseThinReport(out)
 	require.Len(t, byVG, 2)
-	assert.InDelta(t, 30.78, byVG["sds_a"].DataPercent, 0.001)
-	assert.InDelta(t, 46.55, byVG["sds_b"].DataPercent, 0.001)
+	assert.InDelta(t, 30.78, byVG["haify_a"].DataPercent, 0.001)
+	assert.InDelta(t, 46.55, byVG["haify_b"].DataPercent, 0.001)
 }
 
 func TestParseThinReportKeepsTheFullestPoolInAGroup(t *testing.T) {
@@ -94,7 +94,7 @@ func TestParseThinReportInactivePoolReportsNoPercentages(t *testing.T) {
 	// An inactive pool leaves both percentage columns blank. That is absence
 	// of information, and it must not be mistaken for an empty pool — the
 	// caller distinguishes them by PoolThinInfo being present at all.
-	out := `  vg|sdsthin|thin-pool|10737418240|||twi---tz--`
+	out := `  vg|haifythin|thin-pool|10737418240|||twi---tz--`
 
 	info := parseThinReport(out)["vg"]
 	require.NotNil(t, info)

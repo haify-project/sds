@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // diagClient is the observability mock plus node collection, so a diagnose
@@ -14,19 +14,19 @@ import (
 type diagClient struct {
 	obsClient
 
-	collectReq   *sdspb.CollectNodeDiagnosticsRequest
+	collectReq   *haifypb.CollectNodeDiagnosticsRequest
 	collectErr   error
 	collectCalls int
-	nodes        []*sdspb.NodeDiagnostics
+	nodes        []*haifypb.NodeDiagnostics
 }
 
-func (c *diagClient) CollectNodeDiagnostics(_ context.Context, req *sdspb.CollectNodeDiagnosticsRequest) (*sdspb.CollectNodeDiagnosticsResponse, error) {
+func (c *diagClient) CollectNodeDiagnostics(_ context.Context, req *haifypb.CollectNodeDiagnosticsRequest) (*haifypb.CollectNodeDiagnosticsResponse, error) {
 	c.collectCalls++
 	c.collectReq = req
 	if c.collectErr != nil {
 		return nil, c.collectErr
 	}
-	return &sdspb.CollectNodeDiagnosticsResponse{
+	return &haifypb.CollectNodeDiagnosticsResponse{
 		Success:             true,
 		Nodes:               c.nodes,
 		AvailableCollectors: []string{"drbd_status", "storage"},
@@ -37,20 +37,20 @@ func (c *diagClient) CollectNodeDiagnostics(_ context.Context, req *sdspb.Collec
 // calls. pkg/triage proves the matcher; this proves the wiring — the node
 // collection reaches the analysis and the cause survives the trip out.
 func TestDiagnoseReturnsAKnownCauseWithItsSteps(t *testing.T) {
-	c := &diagClient{nodes: []*sdspb.NodeDiagnostics{{
-		Node: "sds-b", Address: "192.168.123.227", Reachable: true,
-		Collectors: []*sdspb.NodeCollectorOutput{{
+	c := &diagClient{nodes: []*haifypb.NodeDiagnostics{{
+		Node: "haify-b", Address: "192.168.123.227", Reachable: true,
+		Collectors: []*haifypb.NodeCollectorOutput{{
 			Collector: "drbd_status", Ok: true,
 			Lines: []string{
-				"sds-meta node-id:1 role:Primary suspended:no",
-				"  sds-d node-id:3 connection:Connecting role:Unknown",
+				"haify-meta node-id:1 role:Primary suspended:no",
+				"  haify-d node-id:3 connection:Connecting role:Unknown",
 			},
 		}},
 	}}}
 
 	session := connect(t, c, false)
 	var out diagnoseOut
-	callJSON(t, session, "sds_diagnose", map[string]any{}, &out)
+	callJSON(t, session, "haify_diagnose", map[string]any{}, &out)
 
 	var f *diagnoseFinding
 	for i := range out.Findings {
@@ -83,7 +83,7 @@ func TestDiagnoseSurvivesNodeCollectionFailing(t *testing.T) {
 	session := connect(t, c, false)
 
 	var out diagnoseOut
-	callJSON(t, session, "sds_diagnose", map[string]any{}, &out)
+	callJSON(t, session, "haify_diagnose", map[string]any{}, &out)
 
 	if out.Scanned.Events == 0 || out.Scanned.AuditEntries == 0 {
 		t.Errorf("the controller's own records were lost when node collection failed: %+v", out.Scanned)
@@ -100,7 +100,7 @@ func TestDiagnoseSkipNodesDoesNotReachOut(t *testing.T) {
 	session := connect(t, c, false)
 
 	var out diagnoseOut
-	callJSON(t, session, "sds_diagnose", map[string]any{"skip_nodes": true}, &out)
+	callJSON(t, session, "haify_diagnose", map[string]any{"skip_nodes": true}, &out)
 
 	if c.collectCalls != 0 {
 		t.Errorf("skip_nodes still collected from nodes (%d calls)", c.collectCalls)
@@ -118,7 +118,7 @@ func TestDiagnoseWindowReachesTheCollector(t *testing.T) {
 	session := connect(t, c, false)
 
 	var out diagnoseOut
-	callJSON(t, session, "sds_diagnose", map[string]any{"window_minutes": 360}, &out)
+	callJSON(t, session, "haify_diagnose", map[string]any{"window_minutes": 360}, &out)
 
 	if c.collectReq.GetSinceMinutes() != 360 {
 		t.Errorf("collector asked for %d minutes, caller said 360", c.collectReq.GetSinceMinutes())
@@ -136,7 +136,7 @@ func TestDiagnoseForwardsTheChosenCollectors(t *testing.T) {
 	session := connect(t, c, false)
 
 	var out diagnoseOut
-	callJSON(t, session, "sds_diagnose", map[string]any{"collectors": []any{"drbd_status"}}, &out)
+	callJSON(t, session, "haify_diagnose", map[string]any{"collectors": []any{"drbd_status"}}, &out)
 	if got := c.collectReq.GetCollectors(); len(got) != 1 || got[0] != "drbd_status" {
 		t.Errorf("collectors = %v, want [drbd_status]", got)
 	}

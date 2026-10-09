@@ -27,10 +27,10 @@ can read. Haify can provide that datastore itself, as an NFS export:
  vSAN datastore
      │  Storage vMotion (vCenter), VM keeps running
      ▼
- NFS datastore "sds-staging"  ◄── Haify NFS gateway (one resource, floating service IP)
+ NFS datastore "haify-staging"  ◄── Haify NFS gateway (one resource, floating service IP)
      │  PVE ESXi import wizard, or qm disk import
      ▼
- PVE storage "sds0" (type sds) ── one DRBD resource per guest disk
+ PVE storage "haify0" (type haify) ── one DRBD resource per guest disk
 ```
 
 The staging datastore is temporary. Once the last VM has been accepted on PVE,
@@ -61,7 +61,7 @@ What Haify deliberately leaves to PVE, because PVE already does it:
 | Backing up guests | PVE `vzdump` to Proxmox Backup Server |
 | Replicated disks, quorum, live migration without copying data | Haify |
 
-Do not put guest disks under `sds ha create` or a Haify gateway; the plugin's
+Do not put guest disks under `haify ha create` or a Haify gateway; the plugin's
 README explains why both refuse them.
 
 ## Prerequisites
@@ -69,10 +69,10 @@ README explains why both refuse them.
 - [ ] **PVE 8.2 or later** on every PVE node; source ESXi hosts **6.5 to 8.0**.
 - [ ] **A Haify cluster**, set up per the [deployment guide](deployment-guide.md):
       controller running, the two storage nodes and the tiebreaker registered,
-      a pool on both storage nodes. `sds node list`, `sds pool list`.
+      a pool on both storage nodes. `haify node list`, `haify pool list`.
 - [ ] **The Haify plugin on every PVE node** ([plugin README](../deploy/proxmox/README.md),
-      preferably the `sds-pve-plugin` package) and one `sds:` storage entry in
-      `/etc/pve/storage.cfg`, here called `sds0`, with `content images` and
+      preferably the `haify-pve-plugin` package) and one `haify:` storage entry in
+      `/etc/pve/storage.cfg`, here called `haify0`, with `content images` and
       `shared 1`. `preflight.sh` passes on every PVE node.
 - [ ] **NFS gateway packages on both storage nodes**: `resource-agents-extra`
       and `nfs-kernel-server` (deployment guide, section 2).
@@ -98,12 +98,12 @@ node.
   largest wave, plus headroom. ESXi often stores disks thin on an NFS
   datastore, which then needs less, but plan for the provisioned size **[verify]**.
   Do not let it fill up in the middle of a wave.
-- **Final disks on `sds0`**: each disk's provisioned size, byte for byte (see
+- **Final disks on `haify0`**: each disk's provisioned size, byte for byte (see
   [Sizes](#sizes-exact-by-default)).
 - **Per storage node** during a wave: staging size + the final size of every
   VM imported so far. On a thin pool, written data is what counts, but an
   overcommitted thin pool that fills up stops writes on every volume in it;
-  watch `sds pool list`.
+  watch `haify pool list`.
 
 Example: a wave of six VMs with 2 TiB provisioned in total, on two replicas.
 Staging 2.2 TiB, final disks 2 TiB: each storage node needs about 4.2 TiB free
@@ -113,7 +113,7 @@ reclaimed.
 Plan the network as well. Storage vMotion sends every block from ESXi to the
 gateway, and DRBD replicates each write to the second storage node; the
 import then reads it back from NFS and writes it again into a replicated
-`sds0` disk. The replication link is as much a bottleneck as the ESXi uplinks.
+`haify0` disk. The replication link is as much a bottleneck as the ESXi uplinks.
 
 ## Guest preparation
 
@@ -131,7 +131,7 @@ Do these on ESXi, before the VM's cut-over window:
 - **VMware snapshots**: delete or consolidate them first. This runbook has not
   been tried with VMs that carry snapshots **[verify]**.
 - **VMware templates**: the plugin has no templates or linked clones, so a
-  template becomes an ordinary VM on `sds0`, or goes to another PVE storage.
+  template becomes an ordinary VM on `haify0`, or goes to another PVE storage.
 
 Proxmox's "Migrate to Proxmox VE" guide covers the guest side (VMware Tools,
 drivers, network) in more depth.
@@ -143,11 +143,11 @@ gateway per resource; give the resource nothing else to do (no `ha create`, no
 manual mounts).
 
 ```bash
-sds resource create --name vsanstage --port 7100 --size 2300G \
+haify resource create --name vsanstage --port 7100 --size 2300G \
     --nodes stor1,stor2 --pool vg0
-sds resource status vsanstage
+haify resource status vsanstage
 
-sds gateway nfs create --resource vsanstage \
+haify gateway nfs create --resource vsanstage \
     --service-ip 192.0.2.60/24 --export-path /srv/vsan-staging \
     --allowed-ips 192.0.2.0/24
 ```
@@ -164,12 +164,12 @@ sds gateway nfs create --resource vsanstage \
 **Verify:**
 
 ```bash
-sds gateway status --resource vsanstage    # running, on which node
+haify gateway status --resource vsanstage    # running, on which node
 ssh <active node> sudo exportfs -v          # the export and its options
 ```
 
 Then test a switchover **before** any VM depends on the datastore: with the
-datastore mounted on ESXi (step 2) and empty, run `sds ha evict vsanstage`
+datastore mounted on ESXi (step 2) and empty, run `haify ha evict vsanstage`
 and check that ESXi still shows it accessible afterwards **[verify]**.
 
 ## Step 2: Mount it on ESXi
@@ -178,7 +178,7 @@ On every ESXi host that runs VMs of the wave (or once in vCenter: *New
 Datastore → NFS → NFS 3*, selecting the hosts):
 
 ```bash
-esxcli storage nfs add --host 192.0.2.60 --share /srv/vsan-staging --volume-name sds-staging
+esxcli storage nfs add --host 192.0.2.60 --share /srv/vsan-staging --volume-name haify-staging
 ```
 
 Use NFS 3. NFS 4.1 from ESXi against the gateway has not been tried **[verify]**.
@@ -186,7 +186,7 @@ Use NFS 3. NFS 4.1 from ESXi against the gateway has not been tried **[verify]**
 **Verify:**
 
 ```bash
-esxcli storage nfs list          # sds-staging: Accessible true, Mounted true, Read-Only false
+esxcli storage nfs list          # haify-staging: Accessible true, Mounted true, Read-Only false
 vmkping 192.0.2.60
 ```
 
@@ -194,18 +194,18 @@ and create and delete a folder in the datastore browser.
 
 ## Step 3: Storage vMotion off vSAN
 
-In vCenter: *VM → Migrate → Change storage only → sds-staging*, for each VM
-of the wave (PowerCLI: `Move-VM -VM <name> -Datastore sds-staging`). Running
+In vCenter: *VM → Migrate → Change storage only → haify-staging*, for each VM
+of the wave (PowerCLI: `Move-VM -VM <name> -Datastore haify-staging`). Running
 VMs keep running. Move a few at a time and avoid production hours: see the
 network note under [Capacity planning](#capacity-planning).
 
 **Verify:**
 
 - the migration task completed, and the VM's *Datastores* tab lists only
-  `sds-staging`;
+  `haify-staging`;
 - on the gateway's active node, `ls -la /srv/vsan-staging/<vm>/` shows the
   `.vmx` and `.vmdk` files;
-- `sds pool list` still has the room the rest of the wave needs.
+- `haify pool list` still has the room the rest of the wave needs.
 
 This step is fully reversible: Storage vMotion the VM back to vSAN.
 
@@ -216,14 +216,14 @@ is still changing. From here on, the VM's downtime runs.
 
 ### With the import wizard
 
-1. *Datacenter → Storage → Add → ESXi*: the ESXi host that has `sds-staging`
+1. *Datacenter → Storage → Add → ESXi*: the ESXi host that has `haify-staging`
    mounted, with its credentials.
 2. Select that storage, the VM, *Import*.
-3. Target storage **`sds0`**; format **raw** (the only format the plugin
+3. Target storage **`haify0`**; format **raw** (the only format the plugin
    supports). Check the CPU, memory, network bridge and disk bus the wizard
    proposes (SATA for a Windows VM without VirtIO drivers).
 4. Leave *live import* off for the first VMs. Read Proxmox's notes on live
-   import before relying on it, and rehearse it on `sds0` first **[verify]**.
+   import before relying on it, and rehearse it on `haify0` first **[verify]**.
 
 ### With qm disk import
 
@@ -237,7 +237,7 @@ mount -t nfs -o ro,vers=3 192.0.2.60:/srv/vsan-staging /mnt/vsan-staging
 
 qm create 101 --name app01 --memory 8192 --cores 4 --ostype l26 \
     --scsihw virtio-scsi-single --net0 virtio,bridge=vmbr0
-qm disk import 101 /mnt/vsan-staging/app01/app01.vmdk sds0 --format raw
+qm disk import 101 /mnt/vsan-staging/app01/app01.vmdk haify0 --format raw
 qm set 101 --scsi0 <volume id printed by the import> --boot order=scsi0
 ```
 
@@ -251,17 +251,17 @@ default prefix).
 
 The plugin gives every new disk **exactly the size PVE asks for**, so a VMware
 disk whose size is not a whole number of GiB arrives byte for byte, and online
-Move Disk and vzdump restore onto `sds0` both work: each refuses a disk that is
+Move Disk and vzdump restore onto `haify0` both work: each refuses a disk that is
 not the source's exact size. A storage set to `exactsize 0` rounds disks up to
 whole GiB instead, and loses both.
 
 **Verify:**
 
 ```bash
-qm config 101                              # disks on sds0, sizes as expected
-pvesm list sds0 --vmid 101
-sds resource list | grep pve-101-          # one resource per disk, on stor1 and stor2
-sds resource status pve-101-0              # UpToDate on both replicas
+qm config 101                              # disks on haify0, sizes as expected
+pvesm list haify0 --vmid 101
+haify resource list | grep pve-101-          # one resource per disk, on stor1 and stor2
+haify resource status pve-101-0              # UpToDate on both replicas
 ```
 
 ## Step 5: First boot and hand-over to PVE
@@ -284,9 +284,9 @@ wave:
 
 ```bash
 umount /mnt/vsan-staging                                   # on PVE, if mounted
-esxcli storage nfs remove --volume-name sds-staging         # on every ESXi host
-sds gateway delete --resource vsanstage
-sds resource delete vsanstage
+esxcli storage nfs remove --volume-name haify-staging         # on every ESXi host
+haify gateway delete --resource vsanstage
+haify resource delete vsanstage
 ```
 
 ## Rollback
@@ -298,7 +298,7 @@ step up to acceptance can be undone:
 | ------- | ------------ |
 | Step 1-2 | Unmount the datastore; delete the gateway and resource |
 | Step 3 (on staging, still running on ESXi) | Storage vMotion back to vSAN |
-| Step 4 (imported, not started in PVE) | `qm destroy <vmid>` (removes its `sds0` disks); power the VM on in vSphere |
+| Step 4 (imported, not started in PVE) | `qm destroy <vmid>` (removes its `haify0` disks); power the VM on in vSphere |
 | Step 5 (running in PVE) | Stop the PVE VM, power the vSphere VM on. **Anything written in PVE since the cut-over is lost**; there is no path back from PVE to vSphere in this runbook |
 
 Never run both copies at once: they would claim the same IP addresses, and
@@ -310,17 +310,17 @@ Days before:
 
 - [ ] Prerequisites done, gateway switchover tested (step 1), rehearsal VM
       migrated end to end.
-- [ ] Wave's VMs on `sds-staging` (step 3); `sds pool list` has room for their
+- [ ] Wave's VMs on `haify-staging` (step 3); `haify pool list` has room for their
       final disks.
 - [ ] VirtIO drivers in Windows guests; VMware snapshots consolidated.
 - [ ] Owners know the window, the acceptance checks and the rollback point.
-- [ ] `sds resource list` / `sds health-check`: every resource UpToDate on both
+- [ ] `haify resource list` / `haify health-check`: every resource UpToDate on both
       storage nodes; `pvecm status` quorate.
 
 In the window, per VM:
 
 - [ ] Shut down in vSphere.
-- [ ] Import to `sds0` (step 4) and verify disks and sizes.
+- [ ] Import to `haify0` (step 4) and verify disks and sizes.
 - [ ] First boot, network, guest agent (step 5).
 - [ ] Owner accepts, or roll back (table above).
 - [ ] HA and backup job added.
@@ -353,11 +353,11 @@ These steps follow from how the parts are documented to behave but have not
 been exercised end to end by the Haify project:
 
 1. ESXi keeps an NFS 3 datastore on the Haify gateway accessible across a
-   gateway switchover (`sds ha evict`), and through it a running Storage
+   gateway switchover (`haify ha evict`), and through it a running Storage
    vMotion.
 2. NFS 4.1 mounts from ESXi (this runbook uses NFS 3).
 3. How much staging space Storage vMotion actually uses (thin or provisioned).
-4. The PVE import wizard and live import writing to `sds0`, including a live
+4. The PVE import wizard and live import writing to `haify0`, including a live
    import that fails part-way.
 5. `qm disk import` from the descriptor `.vmdk` on a read-only NFS mount.
 6. VMs that carry VMware snapshots.

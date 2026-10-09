@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // clientTestPKI is a throwaway CA and the leaves it signs, generated per test
@@ -45,7 +45,7 @@ func newClientTestPKI(t *testing.T) *clientTestPKI {
 	now := time.Now().Add(-time.Minute)
 	caTmpl := &x509.Certificate{
 		SerialNumber:          clientTestSerial(t),
-		Subject:               pkix.Name{CommonName: "sdsent-test-ca"},
+		Subject:               pkix.Name{CommonName: "haifyent-test-ca"},
 		NotBefore:             now,
 		NotAfter:              now.Add(time.Hour),
 		IsCA:                  true,
@@ -66,11 +66,11 @@ func newClientTestPKI(t *testing.T) *clientTestPKI {
 	p.caFile = filepath.Join(dir, "ca.crt")
 	require.NoError(t, os.WriteFile(p.caFile, p.caPEM, 0o600))
 
-	certPEM, keyPEM := p.issue(t, "sds-controller.test", []string{"sds-controller.test"}, x509.ExtKeyUsageServerAuth)
+	certPEM, keyPEM := p.issue(t, "haify-controller.test", []string{"haify-controller.test"}, x509.ExtKeyUsageServerAuth)
 	p.server, err = tls.X509KeyPair(certPEM, keyPEM)
 	require.NoError(t, err)
 
-	clientCertPEM, clientKeyPEM := p.issue(t, "sds", nil, x509.ExtKeyUsageClientAuth)
+	clientCertPEM, clientKeyPEM := p.issue(t, "haify", nil, x509.ExtKeyUsageClientAuth)
 	p.certFile = filepath.Join(dir, "client.crt")
 	p.keyFile = filepath.Join(dir, "client.key")
 	require.NoError(t, os.WriteFile(p.certFile, clientCertPEM, 0o600))
@@ -125,7 +125,7 @@ func startTLSControllerStub(t *testing.T, p *clientTestPKI, requireClientCert bo
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)))
-	sdspb.RegisterSDSControllerServer(srv, &sdspb.UnimplementedSDSControllerServer{})
+	haifypb.RegisterHaifyControllerServer(srv, &haifypb.UnimplementedHaifyControllerServer{})
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 	return lis.Addr().String()
@@ -134,11 +134,11 @@ func startTLSControllerStub(t *testing.T, p *clientTestPKI, requireClientCert bo
 // reach makes one RPC and reports the transport-level outcome. A TLS failure
 // never gets as far as the handler, so an Unimplemented reply means the
 // handshake succeeded.
-func reach(t *testing.T, c *SDSClient) error {
+func reach(t *testing.T, c *HaifyClient) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := c.client.ListPools(ctx, &sdspb.ListPoolsRequest{})
+	_, err := c.client.ListPools(ctx, &haifypb.ListPoolsRequest{})
 	return err
 }
 
@@ -150,7 +150,7 @@ func TestClientStaysPlaintextByDefault(t *testing.T) {
 	pki := newClientTestPKI(t)
 	addr := startTLSControllerStub(t, pki, false)
 
-	c, err := NewSDSClient(addr)
+	c, err := NewHaifyClient(addr)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 
@@ -162,9 +162,9 @@ func TestClientConnectsWithTheCA(t *testing.T) {
 	pki := newClientTestPKI(t)
 	addr := startTLSControllerStub(t, pki, false)
 
-	c, err := NewSDSClient(addr, WithTLS(TLSOptions{
+	c, err := NewHaifyClient(addr, WithTLS(TLSOptions{
 		CACert:     pki.caFile,
-		ServerName: "sds-controller.test",
+		ServerName: "haify-controller.test",
 	}))
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
@@ -181,9 +181,9 @@ func TestClientRejectsAnUntrustedController(t *testing.T) {
 	other := newClientTestPKI(t)
 	addr := startTLSControllerStub(t, pki, false)
 
-	c, err := NewSDSClient(addr, WithTLS(TLSOptions{
+	c, err := NewHaifyClient(addr, WithTLS(TLSOptions{
 		CACert:     other.caFile,
-		ServerName: "sds-controller.test",
+		ServerName: "haify-controller.test",
 	}))
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
@@ -199,9 +199,9 @@ func TestClientMutualTLS(t *testing.T) {
 	pki := newClientTestPKI(t)
 	addr := startTLSControllerStub(t, pki, true)
 
-	withoutCert, err := NewSDSClient(addr, WithTLS(TLSOptions{
+	withoutCert, err := NewHaifyClient(addr, WithTLS(TLSOptions{
 		CACert:     pki.caFile,
-		ServerName: "sds-controller.test",
+		ServerName: "haify-controller.test",
 	}))
 	require.NoError(t, err)
 	defer func() { _ = withoutCert.Close() }()
@@ -210,11 +210,11 @@ func TestClientMutualTLS(t *testing.T) {
 	assert.NotContains(t, err.Error(), "Unimplemented",
 		"a controller requiring client certificates must not serve a client without one")
 
-	withCert, err := NewSDSClient(addr, WithTLS(TLSOptions{
+	withCert, err := NewHaifyClient(addr, WithTLS(TLSOptions{
 		CACert:     pki.caFile,
 		ClientCert: pki.certFile,
 		ClientKey:  pki.keyFile,
-		ServerName: "sds-controller.test",
+		ServerName: "haify-controller.test",
 	}))
 	require.NoError(t, err)
 	defer func() { _ = withCert.Close() }()
@@ -245,8 +245,8 @@ func TestClientCredentialsRejectHalfAKeyPair(t *testing.T) {
 }
 
 // A bad path must surface when the client is built, not on the first call.
-func TestNewSDSClientFailsOnUnusableTLSMaterial(t *testing.T) {
-	_, err := NewSDSClient("127.0.0.1:34871", WithTLS(TLSOptions{CACert: "/nonexistent/ca.crt"}))
+func TestNewHaifyClientFailsOnUnusableTLSMaterial(t *testing.T) {
+	_, err := NewHaifyClient("127.0.0.1:34871", WithTLS(TLSOptions{CACert: "/nonexistent/ca.crt"}))
 	require.ErrorContains(t, err, "read TLS CA")
 }
 
@@ -276,7 +276,7 @@ func TestResolveTLSPrefersExplicitOverEnvironment(t *testing.T) {
 	assert.True(t, got.Enabled)
 }
 
-// SDS_TLS=no must not read as "any non-empty value means on".
+// HAIFY_TLS=no must not read as "any non-empty value means on".
 func TestResolveTLSIgnoresANegativeEnvironmentValue(t *testing.T) {
 	t.Setenv(envTLS, "no")
 	t.Setenv(envTLSInsecure, "banana")

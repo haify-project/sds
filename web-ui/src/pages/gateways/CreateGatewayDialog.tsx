@@ -262,7 +262,7 @@ function CreateISCSIForm({
           className="font-mono"
           value={iqn}
           onChange={(e) => setIqn(e.target.value)}
-          placeholder="iqn.2024-01.com.example:sds.data"
+          placeholder="iqn.2024-01.com.example:haify.data"
           required
         />
       </div>
@@ -355,7 +355,7 @@ function CreateNVMeForm({
           className="font-mono"
           value={nqn}
           onChange={(e) => setNqn(e.target.value)}
-          placeholder="nqn.2024-01.com.example:sds.data"
+          placeholder="nqn.2024-01.com.example:haify.data"
           required
         />
       </div>

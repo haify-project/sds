@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 func (m *Monitor) checkNodes(ctx context.Context, sc *pollScope, obs *Observation) {

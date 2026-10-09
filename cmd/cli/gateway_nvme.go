@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -43,11 +43,11 @@ func nvmeCreate() *cobra.Command {
 			}
 
 			// Create Haify client
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Create NVMe-oF gateway
 			req := &v1.CreateNVMeGatewayRequest{
@@ -61,7 +61,7 @@ func nvmeCreate() *cobra.Command {
 				req.TransportType = "tcp"
 			}
 
-			resp, err := sdsClient.CreateNVMeGateway(ctx, req)
+			resp, err := haifyClient.CreateNVMeGateway(ctx, req)
 			if err != nil {
 				return fmt.Errorf("failed to create NVMe-oF gateway: %w", err)
 			}
@@ -75,7 +75,7 @@ func nvmeCreate() *cobra.Command {
 			fmt.Printf("  NQN:          %s\n", nqn)
 			fmt.Printf("  Service IP:   %s\n", serviceIP)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
-			fmt.Printf("\nCheck gateway status: sds gateway list\n")
+			fmt.Printf("\nCheck gateway status: haify gateway list\n")
 
 			return nil
 		},
@@ -100,13 +100,13 @@ func nvmeList() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			gateways, err := sdsClient.ListGateways(ctx)
+			gateways, err := haifyClient.ListGateways(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list gateways: %w", err)
 			}

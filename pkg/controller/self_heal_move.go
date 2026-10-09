@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Moving a replica.
@@ -51,7 +51,7 @@ func (rm *ResourceManager) MoveReplica(ctx context.Context, resource, from, to s
 	if info, err := rm.GetResource(ctx, resource); err == nil {
 		for node, st := range info.NodeStates {
 			if strings.EqualFold(st.Role, "Primary") && (node == from || rm.controller.ResolveHost(node) == rm.controller.ResolveHost(from)) {
-				return fmt.Errorf("%s is Primary on %s; move the role first (`sds node drain %s`)", resource, from, from)
+				return fmt.Errorf("%s is Primary on %s; move the role first (`haify node drain %s`)", resource, from, from)
 			}
 		}
 	}
@@ -98,7 +98,7 @@ func (rm *ResourceManager) finishMove(ctx context.Context, resource, from, to st
 		err := rm.RemoveReplica(ctx, resource, from)
 		if err != nil {
 			rm.moveEvent(resource, event.SeverityWarning, fmt.Sprintf("the new replica of %s on %s is in sync, but removing "+
-				"the one on %s failed: %v; remove it with `sds resource remove-replica %s --node %s`", resource, to, from, err, resource, from))
+				"the one on %s failed: %v; remove it with `haify resource remove-replica %s --node %s`", resource, to, from, err, resource, from))
 		} else {
 			rm.moveEvent(resource, event.SeverityInfo, fmt.Sprintf("the replica of %s moved from %s to %s", resource, from, to))
 		}

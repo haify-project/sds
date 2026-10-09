@@ -27,13 +27,13 @@ func iscsiLUNAdd() *cobra.Command {
 		Use:   "add --resource <name> --lun <id> --device <path>",
 		Short: "Add a LUN to an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.AddISCSILUN(cmd.Context(), resource, lun, device)
+			err = haifyClient.AddISCSILUN(cmd.Context(), resource, lun, device)
 			if err != nil {
 				return fmt.Errorf("failed to add iSCSI LUN: %w", err)
 			}
@@ -61,13 +61,13 @@ func iscsiLUNRemove() *cobra.Command {
 		Use:   "remove --resource <name> --lun <id>",
 		Short: "Remove a LUN from an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.RemoveISCSILUN(cmd.Context(), resource, lun)
+			err = haifyClient.RemoveISCSILUN(cmd.Context(), resource, lun)
 			if err != nil {
 				return fmt.Errorf("failed to remove iSCSI LUN: %w", err)
 			}
@@ -92,13 +92,13 @@ func iscsiLUNList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List LUNs on an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			luns, err := sdsClient.ListISCSILUNs(cmd.Context(), resource)
+			luns, err := haifyClient.ListISCSILUNs(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to list iSCSI LUNs: %w", err)
 			}
@@ -142,13 +142,13 @@ func iscsiInitiatorAdd() *cobra.Command {
 		Use:   "add --resource <name> --iqn <initiator>",
 		Short: "Allow an initiator on an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.AddISCSIInitiator(cmd.Context(), resource, initiator)
+			err = haifyClient.AddISCSIInitiator(cmd.Context(), resource, initiator)
 			if err != nil {
 				return fmt.Errorf("failed to add initiator: %w", err)
 			}
@@ -173,13 +173,13 @@ func iscsiInitiatorRemove() *cobra.Command {
 		Use:   "remove --resource <name> --iqn <initiator>",
 		Short: "Remove an initiator from an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.RemoveISCSIInitiator(cmd.Context(), resource, initiator)
+			err = haifyClient.RemoveISCSIInitiator(cmd.Context(), resource, initiator)
 			if err != nil {
 				return fmt.Errorf("failed to remove initiator: %w", err)
 			}
@@ -204,13 +204,13 @@ func iscsiInitiatorList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List initiators on an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			initiators, err := sdsClient.ListISCSIInitiators(cmd.Context(), resource)
+			initiators, err := haifyClient.ListISCSIInitiators(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to list initiators: %w", err)
 			}
@@ -253,13 +253,13 @@ func iscsiCHAPSet() *cobra.Command {
 		Use:   "set --resource <name> --username <user> --password <pass>",
 		Short: "Set one-way CHAP credentials on an iSCSI gateway (mutual CHAP is not supported)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.SetISCSIChap(cmd.Context(), resource, username, password, false)
+			err = haifyClient.SetISCSIChap(cmd.Context(), resource, username, password, false)
 			if err != nil {
 				return fmt.Errorf("failed to set CHAP: %w", err)
 			}
@@ -286,13 +286,13 @@ func iscsiCHAPGet() *cobra.Command {
 		Use:   "get --resource <name>",
 		Short: "Get CHAP credentials for an iSCSI gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			resp, err := sdsClient.GetISCSIChap(cmd.Context(), resource)
+			resp, err := haifyClient.GetISCSIChap(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to get CHAP: %w", err)
 			}

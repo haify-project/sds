@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -67,13 +67,13 @@ func TestPrereqScriptReportsMissingItems(t *testing.T) {
 		t.Skip("no sh")
 	}
 	script := prereqScript(gatewayPrereqs{
-		agents: []string{"sds-no-such-agent"},
-		tools:  []string{"sh", "sds-no-such-tool"},
+		agents: []string{"haify-no-such-agent"},
+		tools:  []string{"sh", "haify-no-such-tool"},
 	})
 	out, err := exec.Command("sh", "-c", script).CombinedOutput()
 	require.Error(t, err, "a missing agent and tool must fail the probe")
-	assert.Contains(t, string(out), "ocf:heartbeat:sds-no-such-agent")
-	assert.Contains(t, string(out), "sds-no-such-tool")
+	assert.Contains(t, string(out), "ocf:heartbeat:haify-no-such-agent")
+	assert.Contains(t, string(out), "haify-no-such-tool")
 	assert.NotContains(t, string(out), " sh ", "an installed tool is not reported")
 
 	out, err = exec.Command("sh", "-c", prereqScript(gatewayPrereqs{tools: []string{"sh"}})).CombinedOutput()
@@ -147,7 +147,7 @@ func TestCreateISCSIGatewayRefusesTgtAndIetBeforeAnySideEffect(t *testing.T) {
 		dep := &MockDeploymentClient{}
 		m := New(diskfulResources("blk"), dep, zap.NewNop(), []string{"node1", "node2"})
 		resp, err := NewISCSIManager(m).CreateISCSIGateway(context.Background(), &v1.CreateISCSIGatewayRequest{
-			Resource: "blk", Iqn: "iqn.2024-01.com.example:sds.blk", ServiceIp: "192.168.1.101/24",
+			Resource: "blk", Iqn: "iqn.2024-01.com.example:haify.blk", ServiceIp: "192.168.1.101/24",
 			Implementation: impl,
 		})
 		require.Error(t, err, impl)
@@ -162,7 +162,7 @@ func TestCreateISCSIGatewayChecksTargetcliAndPinsImplementation(t *testing.T) {
 	dep := &MockDeploymentClient{}
 	m := New(diskfulResources("blk"), dep, zap.NewNop(), []string{"node1", "node2", "tb"})
 	resp, err := NewISCSIManager(m).CreateISCSIGateway(context.Background(), &v1.CreateISCSIGatewayRequest{
-		Resource: "blk", Iqn: "iqn.2024-01.com.example:sds.blk", ServiceIp: "192.168.1.101/24",
+		Resource: "blk", Iqn: "iqn.2024-01.com.example:haify.blk", ServiceIp: "192.168.1.101/24",
 	})
 	require.NoError(t, err)
 	require.True(t, resp.Success, resp.Message)
@@ -173,7 +173,7 @@ func TestCreateISCSIGatewayChecksTargetcliAndPinsImplementation(t *testing.T) {
 	assert.NotContains(t, probe.script, "tgtadm")
 
 	// The LU agent must use the target's implementation, not its own guess.
-	config := dep.Configs["/etc/drbd-reactor.d/sds-iscsi-blk.toml"]
+	config := dep.Configs["/etc/drbd-reactor.d/haify-iscsi-blk.toml"]
 	for _, line := range strings.Split(config, "\n") {
 		if strings.Contains(line, "iSCSILogicalUnit") {
 			assert.Contains(t, line, "implementation=lio-t")
@@ -217,7 +217,7 @@ func TestCreateNVMeGatewayRDMALoadsNvmetRdmaOnDiskfulNodes(t *testing.T) {
 	dep := &MockDeploymentClient{}
 	m := New(diskfulResources("fast"), dep, zap.NewNop(), []string{"node1", "node2", "tb"})
 	resp, err := NewNVMeManager(m).CreateNVMeGateway(context.Background(), &v1.CreateNVMeGatewayRequest{
-		Resource: "fast", Nqn: "nqn.2024-01.com.example:sds.fast", ServiceIp: "192.168.1.102/24",
+		Resource: "fast", Nqn: "nqn.2024-01.com.example:haify.fast", ServiceIp: "192.168.1.102/24",
 		TransportType: "rdma",
 	})
 	require.NoError(t, err)
@@ -226,14 +226,14 @@ func TestCreateNVMeGatewayRDMALoadsNvmetRdmaOnDiskfulNodes(t *testing.T) {
 	mods := findScript(t, dep, "modprobe nvmet\n")
 	assert.Equal(t, []string{"node1", "node2"}, mods.hosts)
 	assert.Contains(t, mods.script, "modprobe nvmet-rdma")
-	assert.Contains(t, dep.Configs["/etc/drbd-reactor.d/sds-nvmeof-fast.toml"], "type=rdma")
+	assert.Contains(t, dep.Configs["/etc/drbd-reactor.d/haify-nvmeof-fast.toml"], "type=rdma")
 }
 
 func TestCreateNVMeGatewayRefusesFC(t *testing.T) {
 	dep := &MockDeploymentClient{}
 	m := New(diskfulResources("fast"), dep, zap.NewNop(), []string{"node1", "node2"})
 	_, err := NewNVMeManager(m).CreateNVMeGateway(context.Background(), &v1.CreateNVMeGatewayRequest{
-		Resource: "fast", Nqn: "nqn.2024-01.com.example:sds.fast", ServiceIp: "192.168.1.102/24",
+		Resource: "fast", Nqn: "nqn.2024-01.com.example:haify.fast", ServiceIp: "192.168.1.102/24",
 		TransportType: "fc",
 	})
 	require.Error(t, err)

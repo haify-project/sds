@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 func TestParseTrimOutput(t *testing.T) {
-	out := "/var/lib/sds-app/pg1|0|/var/lib/sds-app/pg1: 812.3 MiB (851771392 bytes) trimmed\n" +
+	out := "/var/lib/haify-app/pg1|0|/var/lib/haify-app/pg1: 812.3 MiB (851771392 bytes) trimmed\n" +
 		"/data\\x20dir|0|/data dir: 0 B (0 bytes) trimmed\n" +
 		"/mnt/stuck|124|\n"
 	res := parseTrimOutput("sdt1", out)
@@ -60,13 +60,13 @@ func TestCheckRemovable(t *testing.T) {
 }
 
 func TestDiskJobScript(t *testing.T) {
-	rm := diskJobScript(&database.StorageJob{ID: "j1", Kind: database.JobRemoveDisk, Pool: "sds_tp", Disk: "/dev/vdc"})
+	rm := diskJobScript(&database.StorageJob{ID: "j1", Kind: database.JobRemoveDisk, Pool: "haify_tp", Disk: "/dev/vdc"})
 	assert.Contains(t, rm, "pvmove -i 15 /dev/vdc ||")
-	assert.Contains(t, rm, "vgreduce sds_tp /dev/vdc")
-	assert.Contains(t, rm, "echo done > /var/lib/sds-jobs/j1.status")
+	assert.Contains(t, rm, "vgreduce haify_tp /dev/vdc")
+	assert.Contains(t, rm, "echo done > /var/lib/haify-jobs/j1.status")
 
-	rep := diskJobScript(&database.StorageJob{ID: "j2", Kind: database.JobReplaceDisk, Pool: "sds_r", Disk: "/dev/vdc", NewDisk: "/dev/vdd"})
-	assert.Contains(t, rep, "vgextend sds_r /dev/vdd")
+	rep := diskJobScript(&database.StorageJob{ID: "j2", Kind: database.JobReplaceDisk, Pool: "haify_r", Disk: "/dev/vdc", NewDisk: "/dev/vdd"})
+	assert.Contains(t, rep, "vgextend haify_r /dev/vdd")
 	assert.Contains(t, rep, "pvmove -i 15 /dev/vdc /dev/vdd")
 	assert.Less(t, strings.Index(rep, "vgextend"), strings.Index(rep, "pvmove"), "the new disk joins before anything moves to it")
 	assert.Less(t, strings.Index(rep, "pvmove"), strings.Index(rep, "vgreduce"), "the old disk leaves only once empty")

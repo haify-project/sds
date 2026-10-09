@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -55,12 +55,12 @@ func TestCreateEncryptedResourceBuildsContainersAndRecordsThem(t *testing.T) {
 	require.Len(t, vols, 1)
 	// The recorded device is what teardown and resize read back to decide what
 	// they are looking at, exactly as they already do for a zvol.
-	assert.Equal(t, "/dev/mapper/sds_sds_vg0_secret_data", vols[0].Device)
+	assert.Equal(t, "/dev/mapper/haify_haify_vg0_secret_data", vols[0].Device)
 
 	cfg, ok := findDistributedConfig(dep, "/etc/drbd.d/secret.res")
 	require.True(t, ok)
-	assert.Contains(t, cfg, "disk      /dev/mapper/sds_sds_vg0_secret_data;")
-	assert.NotContains(t, cfg, "/dev/sds_vg0/secret_data;",
+	assert.Contains(t, cfg, "disk      /dev/mapper/haify_haify_vg0_secret_data;")
+	assert.NotContains(t, cfg, "/dev/haify_vg0/secret_data;",
 		"DRBD pointed at the LV would write plaintext past the crypt layer")
 
 	// Each node built its own container; nothing was copied between them.
@@ -140,7 +140,7 @@ func TestCreateEncryptedResourceFailsIfTheBootUnitCannotBeInstalled(t *testing.T
 
 	// The rollback has to take the containers down too: an open container holds
 	// the LV, and a key left behind outlives what it was protecting.
-	assert.NotEqual(t, -1, execIndexOf(dep, "cryptsetup close sds_sds_vg0_secret_data"))
+	assert.NotEqual(t, -1, execIndexOf(dep, "cryptsetup close haify_haify_vg0_secret_data"))
 }
 
 // The same failure is survivable — and stays non-fatal — without encryption.
@@ -193,13 +193,13 @@ func TestDeleteEncryptedResourceDestroysTheKeysFirst(t *testing.T) {
 	dep.execCalls = nil
 	require.NoError(t, ctrl.resources.DeleteResource(ctx, "secret", false))
 
-	shred := execIndexOf(dep, "shred -u /etc/sds/luks/sds_sds_vg0_secret_data.key")
-	remove := execIndexOf(dep, "lvremove -f sds_vg0/secret_data")
+	shred := execIndexOf(dep, "shred -u /etc/haify/luks/haify_haify_vg0_secret_data.key")
+	remove := execIndexOf(dep, "lvremove -f haify_vg0/secret_data")
 	require.NotEqual(t, -1, shred, "the key must be destroyed, not merely unlinked")
 	require.NotEqual(t, -1, remove)
 	assert.Less(t, shred, remove,
 		"the key has to go before the extents that still hold the ciphertext")
-	assert.NotEqual(t, -1, execIndexOf(dep, "cryptsetup close sds_sds_vg0_secret_data"),
+	assert.NotEqual(t, -1, execIndexOf(dep, "cryptsetup close haify_haify_vg0_secret_data"),
 		"an open container holds the LV and lvremove would refuse")
 }
 
@@ -240,13 +240,13 @@ func TestAddVolumeInheritsEncryptionFromTheResource(t *testing.T) {
 
 	updated, ok := findDistributedConfig(dep, "/etc/drbd.d/secret.res")
 	require.True(t, ok)
-	assert.Contains(t, updated, "disk      /dev/mapper/sds_sds_vg0_secret_state1;")
+	assert.Contains(t, updated, "disk      /dev/mapper/haify_haify_vg0_secret_state1;")
 
 	vols, err := ctrl.db.ListVolumes(ctx, "secret")
 	require.NoError(t, err)
 	for _, v := range vols {
 		if v.VolumeName == "secret_state1" {
-			assert.Equal(t, "/dev/mapper/sds_sds_vg0_secret_state1", v.Device)
+			assert.Equal(t, "/dev/mapper/haify_haify_vg0_secret_state1", v.Device)
 		}
 	}
 }
@@ -287,6 +287,6 @@ func TestResizeEncryptedVolumeGrowsTheMappingToo(t *testing.T) {
 	assert.Less(t, cryptResize, drbdResize, "DRBD measures the mapping, not the LV")
 
 	// lvresize must address the LV; /dev/mapper/... is not an LV at all.
-	assert.Contains(t, dep.execCalls[lvresize].cmd, "/dev/sds_vg0/secret_data")
+	assert.Contains(t, dep.execCalls[lvresize].cmd, "/dev/haify_vg0/secret_data")
 	assert.NotContains(t, dep.execCalls[lvresize].cmd, "/dev/mapper/")
 }

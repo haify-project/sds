@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A locked schedule holds every ZFS snapshot it takes, so ZFS itself refuses
-// a destroy on the node; sds releases the hold only when it deletes a
+// a destroy on the node; haify releases the hold only when it deletes a
 // snapshot whose lock has passed.
 func TestLockedZFSSnapshotsAreHeld(t *testing.T) {
 	var cmds []string
@@ -29,13 +29,13 @@ func TestLockedZFSSnapshotsAreHeld(t *testing.T) {
 	ctrl.schedules.snapshotVolume(context.Background(), "n1", "n1", vol, ts)
 	ctrl.holdLockedZFSSnapshot(context.Background(), "n1", "tank/data_data@"+buildSnapName("data_data", ts))
 	require.NotEmpty(t, cmds)
-	assert.Equal(t, "sudo zfs hold sds-lock tank/data_data@"+buildSnapName("data_data", ts), cmds[len(cmds)-1])
+	assert.Equal(t, "sudo zfs hold haify-lock tank/data_data@"+buildSnapName("data_data", ts), cmds[len(cmds)-1])
 
 	cmds = nil
 	old := snapAt(time.Now().AddDate(0, 0, -8))
 	require.NoError(t, ctrl.storage.ZFSDeleteSnapshot(context.Background(), "tank/data_data@"+old, "n1"))
 	require.NotEmpty(t, cmds)
-	assert.Contains(t, cmds[0], "sudo zfs release sds-lock sds_tank/data_data@"+old, "the hold goes right before the delete")
+	assert.Contains(t, cmds[0], "sudo zfs release haify-lock haify_tank/data_data@"+old, "the hold goes right before the delete")
 }
 
 func TestZFSSnapshotRefRejectsShell(t *testing.T) {

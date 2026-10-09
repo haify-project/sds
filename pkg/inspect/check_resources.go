@@ -12,8 +12,8 @@ func checkResources(in *Input) []Check {
 	var unreadable []string
 	for _, r := range sortedResources(in) {
 		if r.ServedBy != "" && r.ServedBy != "self-ha" {
-			out = append(out, primaryCheck(in, r, AreaResources, "resource", "a `sds ha create` service", "")...)
-			out = append(out, promoterChecks(in, r, AreaResources, "resource", "sds-ha-"+r.Name+".toml", "")...)
+			out = append(out, primaryCheck(in, r, AreaResources, "resource", "a `haify ha create` service", "")...)
+			out = append(out, promoterChecks(in, r, AreaResources, "resource", "haify-ha-"+r.Name+".toml", "")...)
 		} else if prim, _ := primaries(in, r); len(prim) > 1 {
 			out = append(out, multiplePrimaries(r, AreaResources, "resource", prim))
 		}
@@ -33,7 +33,7 @@ func checkResources(in *Input) []Check {
 			out = append(out, Check{ID: "resource.quorum_risk", Area: AreaResources, Subject: r.Name, Status: StatusWarn,
 				Message:  "two diskful replicas and no tiebreaker: losing either node suspends I/O",
 				Evidence: []string{"diskful: " + strings.Join(r.Diskful, ", ")},
-				Fix:      fmt.Sprintf("sds ha set-tiebreaker %s --node <third-node>", r.Name)})
+				Fix:      fmt.Sprintf("haify ha set-tiebreaker %s --node <third-node>", r.Name)})
 		}
 	}
 	out = append(out, faultDomains(in)...)
@@ -83,7 +83,7 @@ func replicaChecks(in *Input, r Resource, n string, p *NodeProbe) []Check {
 	if v.quorumLost() {
 		out = append(out, Check{ID: "resource.quorum_lost", Area: AreaResources, Subject: subject, Status: StatusFail,
 			Message:  fmt.Sprintf("%s has lost quorum for %s; I/O there is suspended or failing", name, r.Name),
-			Evidence: ev, Fix: fmt.Sprintf("sds resource status %s", r.Name)})
+			Evidence: ev, Fix: fmt.Sprintf("haify resource status %s", r.Name)})
 	}
 	for _, c := range v.Connections {
 		peer := in.nodeName(c.Name)
@@ -149,7 +149,7 @@ func multiplePrimaries(r Resource, area Area, prefix string, prim []string) Chec
 	return Check{ID: prefix + ".multiple_primaries", Area: area, Subject: r.Name, Status: StatusWarn,
 		Message:  fmt.Sprintf("%d nodes are Primary at once; expected only during a live migration with dual-primary on", len(prim)),
 		Evidence: []string{"Primary on: " + strings.Join(prim, ", ")},
-		Fix:      fmt.Sprintf("sds resource dual-primary %s off", r.Name)}
+		Fix:      fmt.Sprintf("haify resource dual-primary %s off", r.Name)}
 }
 
 // primaries collects the Primary nodes of a resource from every view: a

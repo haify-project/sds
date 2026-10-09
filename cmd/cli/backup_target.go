@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // secretEnvVar is where `backup target add` reads the object-store secret from
@@ -21,7 +21,7 @@ import (
 // other user on the machine for as long as the command runs — which defeats the
 // care taken on the rest of the path, where the secret never enters a command
 // line on the controller or on any node.
-const secretEnvVar = "SDS_BACKUP_SECRET"
+const secretEnvVar = "HAIFY_BACKUP_SECRET"
 
 func backupTargetCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -60,18 +60,18 @@ inside the controller's 0600 database and, on the node that runs the transfer, a
 Examples:
   # S3-compatible object store
   export ` + secretEnvVar + `='...'
-  sds backup target add --name offsite --kind s3 \
-      --bucket sds-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
+  haify backup target add --name offsite --kind s3 \
+      --bucket haify-backups --endpoint https://s3.example.com --user AKIAEXAMPLE
 
   # SMB share on a NAS (the password is obscured for rclone automatically;
   # pass --secret-obscured if you would rather run 'rclone obscure' yourself)
-  sds backup target add --name nas --kind smb \
+  haify backup target add --name nas --kind smb \
       --host nas.lan --share backups --user backupuser --secret-file -
 
   # Immutable backups: S3 Object Lock, every backup locked for 30 days at least
   # (the bucket must be created with Object Lock; rclone 1.74+ on the nodes;
   # the key must not hold s3:BypassGovernanceRetention or s3:DeleteObjectVersion)
-  sds backup target add --name vault --kind s3 --bucket sds-vault \
+  haify backup target add --name vault --kind s3 --bucket haify-vault \
       --endpoint https://s3.example.com --user AKIAEXAMPLE \
       --lock-mode compliance --lock-days 30`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -88,13 +88,13 @@ Examples:
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(c)
 
-			if err := c.AddBackupTarget(ctx, &sdspb.AddBackupTargetRequest{
+			if err := c.AddBackupTarget(ctx, &haifypb.AddBackupTargetRequest{
 				Name: name, Kind: kind, Prefix: prefix,
 				Bucket: bucket, Endpoint: endpoint, Region: region,
 				Host: host, Share: share,
@@ -104,7 +104,7 @@ Examples:
 				return fmt.Errorf("failed to add backup target: %w", err)
 			}
 			// Writes to the command's own output stream are best-effort. The only ways
-			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// they fail are a closed pipe (`haify ... | head`) or a full disk, neither of
 			// which this command can report anywhere the operator is still looking, and
 			// treating them as errors would report a successful operation as failed.
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Backup target %q saved\n", name)
@@ -139,7 +139,7 @@ func backupTargetListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -179,7 +179,7 @@ it anyway, for a target whose storage is already gone.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

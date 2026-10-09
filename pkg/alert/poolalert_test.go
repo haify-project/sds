@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 type mockPoolLister struct {
@@ -22,7 +22,7 @@ func (m *mockPoolLister) GetPoolStatusList(context.Context) ([]PoolStatusInfo, e
 
 // poolAt builds a thin pool report at the given data utilisation.
 func poolAt(data float64) PoolStatusInfo {
-	return PoolStatusInfo{Name: "sds_sdspool", Node: "node-e", ThinPool: "sdsthin", DataPercent: data}
+	return PoolStatusInfo{Name: "haify_haifypool", Node: "node-e", ThinPool: "haifythin", DataPercent: data}
 }
 
 // poolHarness wires a monitor with only a pool lister. Resources is required by
@@ -61,7 +61,7 @@ func TestPoolNearFullFiresWarningOnceAndResolves(t *testing.T) {
 	assert.Equal(t, event.TypePoolDataNearFull, evts[0].Type)
 	assert.Equal(t, event.SeverityWarning, evts[0].Severity)
 	assert.Equal(t, event.StatusFiring, evts[0].Status)
-	assert.Equal(t, "sds_sdspool", evts[0].Resource)
+	assert.Equal(t, "haify_haifypool", evts[0].Resource)
 	assert.Equal(t, "node-e", evts[0].Node)
 	assert.Contains(t, evts[0].Message, "91.02")
 	assert.Equal(t, "91.02", evts[0].Details["percent"])
@@ -113,7 +113,7 @@ func TestPoolMetadataIsItsOwnCondition(t *testing.T) {
 	// so it can be critical while data is nearly empty. Reporting only data
 	// would miss the failure entirely.
 	mon, drain := poolHarness(t, &mockPoolLister{list: []PoolStatusInfo{{
-		Name: "sds_sdspool", Node: "node-b", ThinPool: "sdsthin",
+		Name: "haify_haifypool", Node: "node-b", ThinPool: "haifythin",
 		DataPercent: 12.00, MetaPercent: 96.50,
 	}}})
 
@@ -129,7 +129,7 @@ func TestPoolOutOfSpaceFiresRegardlessOfThresholds(t *testing.T) {
 	// LVM's own flag, not a threshold. This is the state node-a was in on
 	// 2026-08-09 when DRBD dropped its disk.
 	lister := &mockPoolLister{list: []PoolStatusInfo{{
-		Name: "sds_sdspool", Node: "node-a", ThinPool: "sdsthin",
+		Name: "haify_haifypool", Node: "node-a", ThinPool: "haifythin",
 		DataPercent: 100.00, MetaPercent: 14.00, OutOfSpace: true,
 	}}}
 	mon, drain := poolHarness(t, lister)
@@ -141,7 +141,7 @@ func TestPoolOutOfSpaceFiresRegardlessOfThresholds(t *testing.T) {
 
 	// Freeing space clears it, which is what the recovery on 2026-08-09 did.
 	lister.list = []PoolStatusInfo{{
-		Name: "sds_sdspool", Node: "node-a", ThinPool: "sdsthin",
+		Name: "haify_haifypool", Node: "node-a", ThinPool: "haifythin",
 		DataPercent: 61.56, MetaPercent: 11.28,
 	}}
 	mon.Poll(context.Background())
@@ -215,7 +215,7 @@ func TestPoolConvertedToThickSaysSoRatherThanDeleted(t *testing.T) {
 	require.Len(t, drain(), 1)
 
 	// Still listed, no longer thin.
-	lister.list = []PoolStatusInfo{{Name: "sds_sdspool", Node: "node-e"}}
+	lister.list = []PoolStatusInfo{{Name: "haify_haifypool", Node: "node-e"}}
 	mon.Poll(context.Background())
 	evts := drain()
 	require.Len(t, evts, 1)
@@ -224,11 +224,11 @@ func TestPoolConvertedToThickSaysSoRatherThanDeleted(t *testing.T) {
 }
 
 func TestPoolsOnDifferentNodesAreDistinctConditions(t *testing.T) {
-	// Every node in this cluster names its pool "sds_sdspool", so a key without
+	// Every node in this cluster names its pool "haify_haifypool", so a key without
 	// the node would collapse four pools into one alert.
 	mon, drain := poolHarness(t, &mockPoolLister{list: []PoolStatusInfo{
-		{Name: "sds_sdspool", Node: "node-b", ThinPool: "sdsthin", DataPercent: 97.0},
-		{Name: "sds_sdspool", Node: "node-e", ThinPool: "sdsthin", DataPercent: 98.0},
+		{Name: "haify_haifypool", Node: "node-b", ThinPool: "haifythin", DataPercent: 97.0},
+		{Name: "haify_haifypool", Node: "node-e", ThinPool: "haifythin", DataPercent: 98.0},
 	}})
 
 	mon.Poll(context.Background())

@@ -26,7 +26,7 @@ func placementFixture(nodeConfigs map[string]map[string]string) (*Manager, *Mock
 // is written to: on the node serving the gateway a rewrite plus reload stops
 // the whole gateway.
 func TestSyncPlacementInstallsTheGatewayOnANewReplicaOnly(t *testing.T) {
-	path := gatewayConfigPath("sds-nfs-data")
+	path := gatewayConfigPath("haify-nfs-data")
 	m, dep := placementFixture(map[string]map[string]string{
 		"n1": {path: placedNFS},
 		"n2": {path + pendingSuffix: placedNFS + "# edited\n", path: placedNFS},
@@ -57,7 +57,7 @@ func TestSyncPlacementInstallsTheGatewayOnANewReplicaOnly(t *testing.T) {
 
 // A stopped gateway stays stopped on the new replica.
 func TestSyncPlacementKeepsAStoppedGatewayStopped(t *testing.T) {
-	path := gatewayConfigPath("sds-iscsi-data")
+	path := gatewayConfigPath("haify-iscsi-data")
 	m, dep := placementFixture(map[string]map[string]string{
 		"n1": {path + disabledSuffix: placedNFS},
 		"n2": {path + disabledSuffix: placedNFS},
@@ -75,7 +75,7 @@ func TestSyncPlacementKeepsAStoppedGatewayStopped(t *testing.T) {
 
 // A newcomer that could not run the chain gets nothing.
 func TestSyncPlacementRefusesANodeMissingPrerequisites(t *testing.T) {
-	path := gatewayConfigPath("sds-nfs-data")
+	path := gatewayConfigPath("haify-nfs-data")
 	m, dep := placementFixture(map[string]map[string]string{
 		"n1": {path: placedNFS},
 		"n2": {path: placedNFS},

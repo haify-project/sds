@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/apptemplate"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/apptemplate"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 const appProbeOK = `server=/usr/lib/postgresql/16/bin/postgres
@@ -44,19 +44,19 @@ type appNodes struct {
 // appScriptKind names the generated script a command carries.
 func appScriptKind(script string) string {
 	switch {
-	case strings.Contains(script, "sds app create: initialize"):
+	case strings.Contains(script, "haify app create: initialize"):
 		return "init"
 	case strings.Contains(script, `echo "missing=$missing"`):
 		return "probe"
 	case strings.Contains(script, `echo "promoter=$f"`):
 		return "promoters"
-	case strings.Contains(script, "drbd-reactorctl evict sds-app-"):
+	case strings.Contains(script, "drbd-reactorctl evict haify-app-"):
 		return "evict"
 	case strings.Contains(script, `echo "removed=$had"`):
 		return "remove"
 	case strings.Contains(script, `echo "frozen=yes"`):
 		return "freeze"
-	case strings.Contains(script, "systemctl stop sds-app-thaw-"):
+	case strings.Contains(script, "systemctl stop haify-app-thaw-"):
 		return "thaw"
 	case strings.Contains(script, "health=ok"):
 		return "status"
@@ -71,8 +71,8 @@ func newAppTestController(t *testing.T, nodes *appNodes, resourceNodes string) (
 	dep := &fakeDeploymentClient{}
 	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 		res := successExecResult(hosts, "")
-		if strings.Contains(cmd, "SDS_HOME=") {
-			return successExecResult(hosts, "SDS_HOME=/home/sds\n"), nil
+		if strings.Contains(cmd, "HAIFY_HOME=") {
+			return successExecResult(hosts, "HAIFY_HOME=/home/haify\n"), nil
 		}
 		if !strings.HasPrefix(cmd, "echo ") || !strings.Contains(cmd, "| base64 -d |") {
 			return res, nil
@@ -164,7 +164,7 @@ func TestCreateAppInitializesAndInstallsThePromoter(t *testing.T) {
 	// initializes, and never in a command line.
 	require.Len(t, dep.distributedSecrets, 1)
 	assert.Equal(t, created.Password, dep.distributedSecrets[0].content)
-	assert.Equal(t, ".sds-app/orders.pw", dep.distributedSecrets[0].relPath)
+	assert.Equal(t, ".haify-app/orders.pw", dep.distributedSecrets[0].relPath)
 	assert.Equal(t, []string{"node1"}, dep.distributedSecrets[0].hosts)
 	for _, c := range dep.execCalls {
 		assert.NotContains(t, c.cmd, created.Password)
@@ -174,18 +174,18 @@ func TestCreateAppInitializesAndInstallsThePromoter(t *testing.T) {
 	}
 	init := nodes.scripts[len(nodes.scripts)-2] // init, then the reactor reload
 	require.Equal(t, "init", appScriptKind(init))
-	assert.Contains(t, init, "staged=/home/sds/.sds-app/orders.pw\n")
+	assert.Contains(t, init, "staged=/home/haify/.haify-app/orders.pw\n")
 	assert.Contains(t, init, "dev=/dev/drbd/by-res/res1/0\n")
 
 	// The unit, then the promoter, on both diskful replicas.
 	var unitAt, promoterAt = -1, -1
 	for i, d := range dep.distributedConfigs {
 		switch d.remotePath {
-		case "/etc/systemd/system/sds-app-orders.service":
+		case "/etc/systemd/system/haify-app-orders.service":
 			unitAt = i
 			assert.Equal(t, []string{"node1", "node2"}, d.hosts)
-			assert.Contains(t, d.content, "ExecStart=/usr/lib/postgresql/16/bin/postgres -D /var/lib/sds-app/orders/data")
-		case "/etc/drbd-reactor.d/sds-app-orders.toml":
+			assert.Contains(t, d.content, "ExecStart=/usr/lib/postgresql/16/bin/postgres -D /var/lib/haify-app/orders/data")
+		case "/etc/drbd-reactor.d/haify-app-orders.toml":
 			promoterAt = i
 			assert.Equal(t, []string{"node1", "node2"}, d.hosts)
 			assert.Contains(t, d.content, "[promoter.resources.res1]")
@@ -231,8 +231,8 @@ func TestCreateAppRefusals(t *testing.T) {
 		{name: "engine missing", nodes: &appNodes{probe: map[string]string{"node2": "missing= postgres user:postgres\n"}},
 			want: "node2 lacks postgres user:postgres"},
 		{name: "foreign promoter", nodes: &appNodes{promoters: map[string]string{
-			"node2": "promoter=/etc/drbd-reactor.d/sds-ha-res1.toml\n"}},
-			want: "node2:/etc/drbd-reactor.d/sds-ha-res1.toml"},
+			"node2": "promoter=/etc/drbd-reactor.d/haify-ha-res1.toml\n"}},
+			want: "node2:/etc/drbd-reactor.d/haify-ha-res1.toml"},
 		{name: "ha config", setup: func(t *testing.T, c *Controller) {
 			require.NoError(t, c.db.SaveHaConfig(context.Background(), &database.HaConfig{Resource: "res1"}))
 		}, want: "already has an HA config"},
@@ -299,7 +299,7 @@ func TestCreateAppInitFailureDemotesAndRecordsNothing(t *testing.T) {
 	// The staged password is removed even though the script may not have run.
 	cleaned := false
 	for _, c := range dep.execCalls {
-		cleaned = cleaned || strings.Contains(c.cmd, `rm -f "$HOME/.sds-app/orders.pw"`)
+		cleaned = cleaned || strings.Contains(c.cmd, `rm -f "$HOME/.haify-app/orders.pw"`)
 	}
 	assert.True(t, cleaned)
 }
@@ -307,7 +307,7 @@ func TestCreateAppInitFailureDemotesAndRecordsNothing(t *testing.T) {
 func TestCreateAppValidationIsInvalidArgument(t *testing.T) {
 	ctrl, _ := newAppTestController(t, &appNodes{}, "node1,node2")
 	s := NewServer(ctrl)
-	_, err := s.CreateApp(context.Background(), &sdspb.CreateAppRequest{Name: "Bad Name", Engine: "postgres",
+	_, err := s.CreateApp(context.Background(), &haifypb.CreateAppRequest{Name: "Bad Name", Engine: "postgres",
 		ServiceIp: "10.0.0.50/24"})
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -316,13 +316,13 @@ func TestCreateAppValidationIsInvalidArgument(t *testing.T) {
 		ServiceIP: "10.0.0.50/24"})
 	assert.True(t, errors.Is(err, apptemplate.ErrInvalid))
 
-	resp, err := s.CreateApp(context.Background(), &sdspb.CreateAppRequest{Name: "orders", Engine: "postgres",
+	resp, err := s.CreateApp(context.Background(), &haifypb.CreateAppRequest{Name: "orders", Engine: "postgres",
 		Resource: "res1", ServiceIp: "10.0.0.50/24"})
 	require.NoError(t, err)
 	require.True(t, resp.Success, resp.Message)
 	assert.Len(t, resp.Password, 32)
 	assert.Equal(t, "postgres", resp.App.AdminUser)
-	assert.Equal(t, "/var/lib/sds-app/orders/sds/password", resp.App.CredentialsFile)
+	assert.Equal(t, "/var/lib/haify-app/orders/haify/password", resp.App.CredentialsFile)
 	assert.Contains(t, resp.Message, "postgresql://postgres@10.0.0.50:5432/postgres")
 	assert.NotContains(t, resp.Message, resp.Password)
 }

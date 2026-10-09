@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"strings"
@@ -89,7 +89,7 @@ func TestSparseWritesOnlyOntoDiscardedThinReplicas(t *testing.T) {
 	ctrl.db = newTestDB(t)
 	ctx := context.Background()
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "r", Nodes: "n1,n2"}))
-	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeName: "r_data", Pool: "sds_tp", VolumeID: 0}))
+	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeName: "r_data", Pool: "haify_tp", VolumeID: 0}))
 	ctrl.hostsMap["n1"], ctrl.hostsMap["n2"] = "10.0.0.1", "10.0.0.2"
 	assert.True(t, ctrl.resources.zeroReadingReplicas(ctx, "r"))
 	thin["10.0.0.2"] = false

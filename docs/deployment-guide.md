@@ -15,18 +15,18 @@ adjust for other distros.
 ## 0. Architecture
 
 ```
-sds / web UI / sds-mcp / sds-ai
+haify / web UI / haify-mcp / haify-ai
         │  gRPC 3374 · REST 3375 · UI 3376 · metrics 9433
         ▼
-  sds-controller ──(dispatch over SSH)──►  storage nodes
+  haify-controller ──(dispatch over SSH)──►  storage nodes
         │                                   ├─ DRBD 9 (kernel) + drbd-utils
-        └─ BBolt DB /var/lib/sds/sds.db     ├─ drbd-reactor (promoters, HA)
+        └─ BBolt DB /var/lib/haify/haify.db     ├─ drbd-reactor (promoters, HA)
                                             ├─ LVM / ZFS pools
                                             └─ OCF agents (gateways)
 ```
 
-- **Control plane:** one `sds-controller` process with a BBolt database
-  (`[database] path`, default `/var/lib/sds/sds.db`). It drives every node over
+- **Control plane:** one `haify-controller` process with a BBolt database
+  (`[database] path`, default `/var/lib/haify/haify.db`). It drives every node over
   SSH through the `dispatch` library; there is no per-node Haify agent. Commands
   aimed at the controller's own address run locally without SSH.
 - **Listeners:** gRPC on `[server] port` (default `3374`); the REST gateway on
@@ -37,9 +37,9 @@ sds / web UI / sds-mcp / sds-ai
 - **Data plane:** DRBD 9 replicates block volumes; `drbd-reactor` promoters fail
   over mounts, VIPs and services; gateways (NFS / iSCSI / NVMe-oF) export a
   resource behind a floating service IP.
-- **Optional:** Kubernetes CSI driver, `sds-ai` Copilot, controller **Self-HA**
+- **Optional:** Kubernetes CSI driver, `haify-ai` Copilot, controller **Self-HA**
   (the controller floats on a DRBD-backed VIP), WAN replication (DRBD over a
-  per-resource `sds-proxy` pair), encrypted replication (kernel TLS), off-cluster
+  per-resource `haify-proxy` pair), encrypted replication (kernel TLS), off-cluster
   backups (rclone).
 
 Without Self-HA the controller can run on a storage node or on a separate host.
@@ -53,14 +53,14 @@ Requires Go 1.26 (`go.mod` pins toolchain `go1.26.8`) and Node.js for the web UI
 (CI uses Node 22).
 
 ```bash
-git clone https://github.com/haify-project/sds.git && cd sds
+git clone https://github.com/haify-project/haify.git && cd haify
 (cd web-ui && npm ci)
 make build
 ```
 
 `make build` builds the web UI, copies it into `ui/dist` (embedded into the
-controller via `go:embed`), and produces `bin/sds-controller`, `bin/sds`,
-`bin/sds-mcp`, `bin/service-ip` (always for Linux), `bin/csi-controller` and
+controller via `go:embed`), and produces `bin/haify-controller`, `bin/haify`,
+`bin/haify-mcp`, `bin/service-ip` (always for Linux), `bin/csi-controller` and
 `bin/csi-node` — all except `service-ip` for the build host's OS.
 
 For Linux nodes built on another OS or architecture, build the UI once and
@@ -68,32 +68,32 @@ cross-compile:
 
 ```bash
 make ui-sync
-for c in controller:sds-controller cli:sds mcp:sds-mcp service-ip:service-ip; do
+for c in controller:haify-controller cli:haify mcp:haify-mcp service-ip:service-ip; do
   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/${c#*:} ./cmd/${c%%:*}
 done
 # arm64 nodes: GOARCH=arm64
 ```
 
 A controller built without `make ui-sync` serves a placeholder page instead of
-the UI; the API and `sds` are unaffected. The same holds for `go install`, which
+the UI; the API and `haify` are unaffected. The same holds for `go install`, which
 builds without the UI:
 
 ```bash
-go install github.com/haify-project/sds/cmd/...@latest
+go install github.com/haify-project/haify/cmd/...@latest
 ```
 
 `go install` names each binary after its directory: `controller`, `cli` and
-`mcp` are `sds-controller`, `sds` and `sds-mcp`; rename them when installing.
+`mcp` are `haify-controller`, `haify` and `haify-mcp`; rename them when installing.
 Cross-compiled (`GOOS`/`GOARCH` set) they land in `$(go env GOPATH)/bin/linux_<arch>/`.
 
-Tagged releases on GitHub carry a linux/amd64 archive with `sds-controller`
-(UI included), `sds`, `sds-mcp`, `service-ip`, both unit files and
+Tagged releases on GitHub carry a linux/amd64 archive with `haify-controller`
+(UI included), `haify`, `haify-mcp`, `service-ip`, both unit files and
 `controller.toml.example`. `make deb` builds Debian packages instead
 (section 4).
 
 Other binaries:
-- `sds-ai` (`cmd/sds-ai`, its own Go module): `cd cmd/sds-ai && go build .`
-- `sds-proxy` (WAN transport): built from the separate `sds-proxy` repository.
+- `haify-ai` (`cmd/haify-ai`, its own Go module): `cd cmd/haify-ai && go build .`
+- `haify-proxy` (WAN transport): built from the separate `haify-proxy` repository.
 - CSI image: `Dockerfile.csi` (section 9).
 
 ---
@@ -143,7 +143,7 @@ On **every** node. Details and failure symptoms: `node-prerequisites.md`.
 6. **A data disk** per diskful node: a raw block device (`/dev/sdb`, `/dev/vdb`)
    with no filesystem or mount on it.
 
-`sds health-check` (after section 5) reports per node whether DRBD,
+`haify health-check` (after section 5) reports per node whether DRBD,
 drbd-reactor (installed and running) and the resource agents are present.
 
 ---
@@ -214,7 +214,7 @@ key_path = "/root/.ssh/id_ed25519"
 
 ### From the Debian package (Debian, Ubuntu)
 
-`make deb` builds `dist/sds-controller_<version>_amd64.deb` and `_arm64.deb`
+`make deb` builds `dist/haify-controller_<version>_amd64.deb` and `_arm64.deb`
 (plus the Proxmox plugin package, see `deploy/proxmox/README.md`) with plain
 `dpkg-deb`. It needs Go, `dpkg-deb` and the web UI's dependencies
 (`cd web-ui && npm ci`); `SKIP_UI_BUILD=1` embeds the UI already in `ui/dist`
@@ -223,40 +223,40 @@ with no tag gets `0.0~git<commits>.<sha>`. The script is
 `scripts/build-deb.sh`.
 
 ```bash
-sudo apt install ./sds-controller_*_amd64.deb
+sudo apt install ./haify-controller_*_amd64.deb
 ```
 
 | Path | What |
 | ---- | ---- |
-| `/opt/sds/bin/sds-controller`, `/opt/sds/bin/service-ip` | where the unit runs the controller from, and where the controller finds the `service-ip` it installs on HA nodes |
-| `/usr/bin/sds` (`sds-cli` links to it), `/usr/bin/sds-mcp` | the CLI and MCP server; `/opt/sds/bin/sds-mcp` links to the latter for `sds-mcp-http.service` and `sds-ai` |
-| `/lib/systemd/system/` | `sds-controller.service`, `service-ip@.service`, `sds-mcp-http.service` |
-| `/usr/share/doc/sds-controller/controller.toml.example` | the full example config |
+| `/opt/haify/bin/haify-controller`, `/opt/haify/bin/service-ip` | where the unit runs the controller from, and where the controller finds the `service-ip` it installs on HA nodes |
+| `/usr/bin/haify` (`haify-cli` links to it), `/usr/bin/haify-mcp` | the CLI and MCP server; `/opt/haify/bin/haify-mcp` links to the latter for `haify-mcp-http.service` and `haify-ai` |
+| `/lib/systemd/system/` | `haify-controller.service`, `service-ip@.service`, `haify-mcp-http.service` |
+| `/usr/share/doc/haify-controller/controller.toml.example` | the full example config |
 
 The package differs from the manual install below in three places:
 
-- **`sds` is `/usr/bin/sds`**, not `/usr/local/bin/sds`: `/usr/local` belongs
+- **`haify` is `/usr/bin/haify`**, not `/usr/local/bin/haify`: `/usr/local` belongs
   to the administrator. Remove copies left there by a manual install
-  (`/usr/local/bin/sds`, `sds-cli`, `sds-mcp`); they come first in `PATH`.
+  (`/usr/local/bin/haify`, `haify-cli`, `haify-mcp`); they come first in `PATH`.
   Unit files copied to `/etc/systemd/system/` by hand likewise override the
   packaged ones.
-- **The packaged `service-ip@.service` runs `/opt/sds/bin/service-ip`.** The
+- **The packaged `service-ip@.service` runs `/opt/haify/bin/service-ip`.** The
   controller still installs `/usr/local/bin/service-ip` and its own
   `/etc/systemd/system/service-ip@.service` on any HA node that lacks them,
   this one included, exactly as without the package.
-- **`/etc/sds/controller.toml` is created from the example only when that path
+- **`/etc/haify/controller.toml` is created from the example only when that path
   is unused** (mode 0600, as tokens go in it). It is not a conffile, so an
   upgrade never touches it.
 
 Installing never enables or starts the controller, and an upgrade never
 restarts it: one host per cluster runs it, or drbd-reactor does under
 Self-HA. After an upgrade, restart it yourself (`systemctl restart
-sds-controller`, or under Self-HA install the package on every node and then
-`sds ha evict sds-meta`). `apt remove` stops nothing; `apt purge` leaves
-`/etc/sds` and `/var/lib/sds` (the database) in place.
+haify-controller`, or under Self-HA install the package on every node and then
+`haify ha evict haify-meta`). `apt remove` stops nothing; `apt purge` leaves
+`/etc/haify` and `/var/lib/haify` (the database) in place.
 
 Self-HA replicates the controller's unit to the standbys as
-`/etc/systemd/system/sds-controller.service`; with no copy there it reads the
+`/etc/systemd/system/haify-controller.service`; with no copy there it reads the
 packaged one in `/lib/systemd/system/`, so nothing needs copying first.
 
 Then configure and start it as below ("Configure and start").
@@ -264,17 +264,17 @@ Then configure and start it as below ("Configure and start").
 ### By hand
 
 ```bash
-sudo install -d /opt/sds/bin /etc/sds
-sudo install -m 755 bin/sds-controller bin/service-ip /opt/sds/bin/
+sudo install -d /opt/haify/bin /etc/haify
+sudo install -m 755 bin/haify-controller bin/service-ip /opt/haify/bin/
 sudo install -m 755 bin/service-ip /usr/local/bin/service-ip
-sudo install -m 755 bin/sds /usr/local/bin/sds
-sudo ln -sf sds /usr/local/bin/sds-cli      # older scripts call it sds-cli
-sudo cp configs/sds-controller.service configs/service-ip@.service /etc/systemd/system/
+sudo install -m 755 bin/haify /usr/local/bin/haify
+sudo ln -sf haify /usr/local/bin/haify-cli      # older scripts call it haify-cli
+sudo cp configs/haify-controller.service configs/service-ip@.service /etc/systemd/system/
 ```
 
 ### Configure and start
 
-Minimal `/etc/sds/controller.toml`:
+Minimal `/etc/haify/controller.toml`:
 
 ```toml
 [server]
@@ -302,8 +302,8 @@ schedules together), `[audit]`, `[self_ha]`, `[alert]`, `[inspect]`, and
 commented `[auth]` / `[rbac]` blocks. API authentication is `[auth] enabled` +
 `token` (at least 16 characters) or `[rbac]` with per-user tokens.
 
-`configs/sds-controller.service` runs
-`/opt/sds/bin/sds-controller --config /etc/sds/controller.toml` as root with
+`configs/haify-controller.service` runs
+`/opt/haify/bin/haify-controller --config /etc/haify/controller.toml` as root with
 `Environment="HOME=/root"`. Keep the `HOME` line: systemd sets no `$HOME` for a
 system unit without it, and dispatch's default lookups (`~/.dispatch`,
 `~/.ssh/known_hosts`, default keys) then miss root's files; remote operations
@@ -312,13 +312,13 @@ on the controller's own node still work.
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now sds-controller
+sudo systemctl enable --now haify-controller
 ss -tlnp | grep -E ':(3374|3375|3376|9433)\b'
 ```
 
-`sds` talks to `127.0.0.1:3374` by default; use `--controller <host>:3374`
+`haify` talks to `127.0.0.1:3374` by default; use `--controller <host>:3374`
 (or `-c`) from elsewhere. With `[auth]` or `[rbac]` on, it reads the token from
-`--token`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`; with `[tls]` on,
+`--token`, `HAIFY_TOKEN`, `~/.haify/token` or `/etc/haify/token`; with `[tls]` on,
 pass `--tls-ca` (and `--tls-cert`/`--tls-key` for mutual TLS).
 
 ---
@@ -326,10 +326,10 @@ pass `--tls-ca` (and `--tls-cert`/`--tls-key` for mutual TLS).
 ## 5. Register nodes and create pools
 
 ```bash
-sds node register --name node1 --address <node1-ip>
-sds node register --name node2 --address <node2-ip>
-sds node register --name node3 --address <node3-ip>
-sds node list
+haify node register --name node1 --address <node1-ip>
+haify node register --name node2 --address <node2-ip>
+haify node register --name node3 --address <node3-ip>
+haify node list
 ```
 
 `--name` is a label of your choosing. Registration also records the node's real
@@ -341,19 +341,19 @@ typically a WAN/DR node whose public address is not configured on its own
 interface — needs:
 
 ```bash
-sds node label <dr-node> sds.tiebreaker=false
+haify node label <dr-node> haify.tiebreaker=false
 ```
 
 Without it a 2-node LAN resource can pull the DR node into its mesh and fail
 `drbdadm up` with `IP <addr> not found on this host`.
 
-Create a pool on each diskful node's data disk. The name gets an `sds_` prefix
-(`vg0` → VG `sds_vg0`); without `--type` the controller's
+Create a pool on each diskful node's data disk. The name gets an `haify_` prefix
+(`vg0` → VG `haify_vg0`); without `--type` the controller's
 `storage.default_pool_type` applies (thin pool by default):
 
 ```bash
-sds pool create --name vg0 --nodes node1,node2,node3 --devices /dev/sdb
-sds pool list
+haify pool create --name vg0 --nodes node1,node2,node3 --devices /dev/sdb
+haify pool list
 ```
 
 `--type lvm` builds a thick VG, `--type zfs` a zpool. A diskless tiebreaker node
@@ -364,8 +364,8 @@ needs no pool.
 ## 6. Create a replicated resource
 
 ```bash
-sds resource create --name data --port 7000 --nodes node1,node2 --size 10G --pool vg0
-sds resource status data
+haify resource create --name data --port 7000 --nodes node1,node2 --size 10G --pool vg0
+haify resource status data
 ```
 
 `--port` and `--size` are required. Omit `--nodes` to let the controller place
@@ -374,13 +374,13 @@ sds resource status data
 (default on) a 2-node resource gains a diskless tiebreaker on a third registered
 node, so one node loss keeps quorum. The controller also force-promotes once on
 create so the fresh resource has an UpToDate copy, and installs
-`sds-drbd-up.service` on its nodes so resources come back after a reboot.
+`haify-drbd-up.service` on its nodes so resources come back after a reboot.
 
 Filesystem and mount (volume id is positional):
 
 ```bash
-sds resource fs    data 0 ext4      --node node1
-sds resource mount data 0 /mnt/data --node node1
+haify resource fs    data 0 ext4      --node node1
+haify resource mount data 0 /mnt/data --node node1
 ```
 
 ---
@@ -394,25 +394,25 @@ it under `ha create`.
 
 ```bash
 # NFS
-sds gateway nfs create --resource share --service-ip 192.168.1.200/24 --export-path /share
+haify gateway nfs create --resource share --service-ip 192.168.1.200/24 --export-path /share
 
 # iSCSI (LIO)
-sds gateway iscsi create --resource lun1 \
-    --iqn iqn.2026-01.com.example:sds.lun1 --service-ip 192.168.1.100/24
+haify gateway iscsi create --resource lun1 \
+    --iqn iqn.2026-01.com.example:haify.lun1 --service-ip 192.168.1.100/24
 
 # NVMe-oF (TCP, port 4420)
-sds gateway nvme create --resource ns1 \
-    --nqn nqn.2026-01.com.example:sds.ns1 --service-ip 192.168.1.150/24
+haify gateway nvme create --resource ns1 \
+    --nqn nqn.2026-01.com.example:haify.ns1 --service-ip 192.168.1.150/24
 ```
 
 Creation checks the needed OCF agents, plus `rpc.nfsd`/`exportfs` for NFS and
 `targetcli` for iSCSI, on the resource's diskful nodes before writing anything, adds the cluster-private state volume
 when the resource has only one volume (`[gateway] auto_state_volume`), formats
-volumes that carry no filesystem, writes `/etc/drbd-reactor.d/sds-{nfs,iscsi,nvmeof}-<resource>.toml`
+volumes that carry no filesystem, writes `/etc/drbd-reactor.d/haify-{nfs,iscsi,nvmeof}-<resource>.toml`
 and reloads drbd-reactor. iSCSI runs on LIO only: `--implementation tgt` or
 `iet` is refused.
 
-Check with `sds gateway status --resource <r>` and, on the Primary,
+Check with `haify gateway status --resource <r>` and, on the Primary,
 `drbd-reactorctl status` and `ss -tlnp`.
 
 ---
@@ -422,7 +422,7 @@ Check with `sds gateway status --resource <r>` and, on the Primary,
 ### Per-resource HA
 
 ```bash
-sds ha create data --mount /mnt/data --fstype ext4 [--vip 192.168.1.210/24] [--services myapp.service]
+haify ha create data --mount /mnt/data --fstype ext4 [--vip 192.168.1.210/24] [--services myapp.service]
 ```
 
 drbd-reactor promotes the resource, mounts it, raises the VIP and starts the
@@ -433,43 +433,43 @@ refused).
 
 ### Controller Self-HA
 
-Puts the controller database on a DRBD resource `sds-meta` mounted at
-`/var/lib/sds`, and makes drbd-reactor run the controller and its VIP on the
+Puts the controller database on a DRBD resource `haify-meta` mounted at
+`/var/lib/haify`, and makes drbd-reactor run the controller and its VIP on the
 Primary.
 
 Before enabling:
-- the controller runs on a registered node, with `/etc/sds/controller.toml` and
+- the controller runs on a registered node, with `/etc/haify/controller.toml` and
   its unit in `/etc/systemd/system/` (or, from the Debian package,
   `/lib/systemd/system/`); the unit's `ExecStart` names the binary by
   absolute path;
 - every other node has the controller's architecture, or a build for its
-  architecture sits beside the running binary as `sds-controller-<goarch>`
-  (e.g. `/opt/sds/bin/sds-controller-arm64`); otherwise `enable` refuses that
+  architecture sits beside the running binary as `haify-controller-<goarch>`
+  (e.g. `/opt/haify/bin/haify-controller-arm64`); otherwise `enable` refuses that
   node before changing anything;
 - passwordless root SSH works between every pair of target nodes, and the
   dispatch key named in the dispatch config exists on each of them;
-- drbd-reactor is active on all of them, and `sds-controller` is not running on
+- drbd-reactor is active on all of them, and `haify-controller` is not running on
   any node but this one.
 
 ```bash
-sds ha self enable --pool vg0 --vip 192.168.1.250/24 [--nodes a,b,c] [--port 7999] [--size 1]
-sds -c 192.168.1.250:3374 ha self status
-sds ha evict sds-meta          # move the controller to another node
+haify ha self enable --pool vg0 --vip 192.168.1.250/24 [--nodes a,b,c] [--port 7999] [--size 1]
+haify -c 192.168.1.250:3374 ha self status
+haify ha evict haify-meta          # move the controller to another node
 ```
 
 `enable` copies the running controller binary (or the node's `-<goarch>` build)
 to the path the unit's `ExecStart` names on the other nodes, along with
-`controller.toml`, the dispatch config and the unit itself, disables `sds-controller` autostart on the standbys, and hands over to
+`controller.toml`, the dispatch config and the unit itself, disables `haify-controller` autostart on the standbys, and hands over to
 drbd-reactor; the command's own connection drops during the handoff. Use the VIP
 for everything afterwards (`<vip>:3374`, `http://<vip>:3376/`).
 
 To ship a new controller build: install it at the unit's `ExecStart` path on
 **every** node (`mv` the running file aside first; overwriting it in place fails
-with `Text file busy`), then `sds ha evict sds-meta` to restart it on another
-node. Restarting `sds-controller` on the active node also restarts the promoter
+with `Text file busy`), then `haify ha evict haify-meta` to restart it on another
+node. Restarting `haify-controller` on the active node also restarts the promoter
 target and fails over just the same.
 
-`[self_ha] extra_services = ["sds-ai.service"]` makes extra units follow the
+`[self_ha] extra_services = ["haify-ai.service"]` makes extra units follow the
 controller; it is read when `enable` writes the promoter config.
 
 ---
@@ -482,66 +482,66 @@ reached at an IP or VIP on port 3374.
 
 1. Build the image for the node architecture and import it on every node:
    ```bash
-   docker build -f Dockerfile.csi --platform linux/<arch> -t sds-csi:latest .
-   docker save sds-csi:latest -o sds-csi.tar
-   sudo k3s ctr images import sds-csi.tar      # or ctr -n k8s.io images import
+   docker build -f Dockerfile.csi --platform linux/<arch> -t haify-csi:latest .
+   docker save haify-csi:latest -o haify-csi.tar
+   sudo k3s ctr images import haify-csi.tar      # or ctr -n k8s.io images import
    ```
    Where `registry.k8s.io` is unreachable, pull the sidecars from a mirror,
    retag them to the names in `deploy/k8s/20-controller.yaml` and
    `30-node.yaml`, and import them the same way.
 
-2. Edit `deploy/k8s/00-sds-controller-endpoint.yaml` (the controller IP/VIP in
+2. Edit `deploy/k8s/00-haify-controller-endpoint.yaml` (the controller IP/VIP in
    the manual Endpoints) and the StorageClass `pool` in `40-storageclass.yaml`,
    then `kubectl apply -f deploy/k8s/`. `50-volumesnapshotclass.yaml` needs the
    snapshot CRDs (`deploy/k8s/README.md`).
 
-3. Smoke test: `scripts/csi-e2e.sh` (a PVC on StorageClass `sds-drbd` and a
+3. Smoke test: `scripts/csi-e2e.sh` (a PVC on StorageClass `haify-drbd` and a
    pod that writes to it; prints the node the pod landed on).
 
 Both plugin pods use `hostNetwork` with `dnsPolicy: ClusterFirstWithHostNet`, so
-they resolve the `sds-controller` Service through cluster DNS. Pods move between
+they resolve the `haify-controller` Service through cluster DNS. Pods move between
 replica nodes with their data; use a Deployment or StatefulSet and short
 `tolerationSeconds` for `node.kubernetes.io/unreachable` / `not-ready` to fail
 over faster than the 300 s default.
 
 ---
 
-## 10. AI Copilot (`sds-ai`, optional)
+## 10. AI Copilot (`haify-ai`, optional)
 
-Serves the web UI's Copilot. It runs `sds-mcp` as its tool backend and needs an
+Serves the web UI's Copilot. It runs `haify-mcp` as its tool backend and needs an
 OpenAI-compatible LLM and embedder.
 
-- Binaries on every node (it follows the controller): `/opt/sds/bin/sds-ai`,
-  `/opt/sds/bin/sds-mcp`.
-- Configuration on the Self-HA mount: `/var/lib/sds/ai/sds-ai.env` and
+- Binaries on every node (it follows the controller): `/opt/haify/bin/haify-ai`,
+  `/opt/haify/bin/haify-mcp`.
+- Configuration on the Self-HA mount: `/var/lib/haify/ai/haify-ai.env` and
   `domain.toml`. Environment:
   - `STEWARD_LLM_API_KEY`, `STEWARD_LLM_BASE_URL`, `STEWARD_LLM_MODEL`,
     `STEWARD_EMB_*` (the older `OPSPILOT_*`, `OPSDOCTOR_*`, `OSS_*` names are
     still read)
-  - `SDS_AI_KNOWLEDGE_DB` (required), `SDS_AI_EMB_DIM` (default 768)
-  - `SDS_AI_CONTROLLER` — default `127.0.0.1:3374`, the controller beside it
-  - `SDS_AI_MCP_CMD=/opt/sds/bin/sds-mcp` (default: `sds-mcp` on `PATH`)
-  - `SDS_AI_DOMAIN=/var/lib/sds/ai/domain.toml` (default `ai/domain.toml`,
+  - `HAIFY_AI_KNOWLEDGE_DB` (required), `HAIFY_AI_EMB_DIM` (default 768)
+  - `HAIFY_AI_CONTROLLER` — default `127.0.0.1:3374`, the controller beside it
+  - `HAIFY_AI_MCP_CMD=/opt/haify/bin/haify-mcp` (default: `haify-mcp` on `PATH`)
+  - `HAIFY_AI_DOMAIN=/var/lib/haify/ai/domain.toml` (default `ai/domain.toml`,
     relative to the working directory; the repository's copy is
     `ai/domain.toml`)
-  - `SDS_AI_KUBECONFIG` (optional): adds the `sds_k8s_*` tools
+  - `HAIFY_AI_KUBECONFIG` (optional): adds the `haify_k8s_*` tools
     (`deploy/k8s/README.md`)
-  - `SDS_AI_ADDR` — default `127.0.0.1:7634`, which is where the UI proxies
-    `/ai/`. On any non-loopback address sds-ai refuses to start without a token
-    (`SDS_AI_TOKEN`, `SDS_TOKEN`, `~/.sds/token` or `/etc/sds/token`).
-- `SDS_AI_EMB_DIM` must equal the dimension the index was built with. Switching
+  - `HAIFY_AI_ADDR` — default `127.0.0.1:7634`, which is where the UI proxies
+    `/ai/`. On any non-loopback address haify-ai refuses to start without a token
+    (`HAIFY_AI_TOKEN`, `HAIFY_TOKEN`, `~/.haify/token` or `/etc/haify/token`).
+- `HAIFY_AI_EMB_DIM` must equal the dimension the index was built with. Switching
   to an embedder of a different width means rebuilding the knowledge base;
   otherwise searches return nothing, without an error. `GET /ai/kb/list` shows
   the width read from the index.
 - Shared knowledge base: `make kb` (see `ai/kb/build.sh`) builds
-  `dist/kb/sds-kb.db` and its manifest `sds-kb.json`. Install both at
-  `/opt/sds/share/` on every node and set
-  `SDS_AI_SHARED_KNOWLEDGE_DB=/opt/sds/share/sds-kb.db`; it is searched
-  read-only next to `SDS_AI_KNOWLEDGE_DB`. Startup fails if the cluster's
+  `dist/kb/haify-kb.db` and its manifest `haify-kb.json`. Install both at
+  `/opt/haify/share/` on every node and set
+  `HAIFY_AI_SHARED_KNOWLEDGE_DB=/opt/haify/share/haify-kb.db`; it is searched
+  read-only next to `HAIFY_AI_KNOWLEDGE_DB`. Startup fails if the cluster's
   embedder model or dimension differs from the manifest's.
-- A systemd unit `sds-ai.service` (not shipped in this repository) with
-  `EnvironmentFile=/var/lib/sds/ai/sds-ai.env` and `WorkingDirectory` and
-  `HOME` set to `/var/lib/sds/ai`, installed on every node but left
+- A systemd unit `haify-ai.service` (not shipped in this repository) with
+  `EnvironmentFile=/var/lib/haify/ai/haify-ai.env` and `WorkingDirectory` and
+  `HOME` set to `/var/lib/haify/ai`, installed on every node but left
   **disabled**; list it in `[self_ha] extra_services` so the promoter starts it
   with the controller.
 - HTTP: `GET /ai/health`, `POST /ai/chat/stream`, `POST /ai/chat/approve`,
@@ -549,39 +549,39 @@ OpenAI-compatible LLM and embedder.
   `upload`, `ingest`, `refresh`, `purge`. Send the same `session_id` in each
   chat request to continue a conversation.
 
-`sds-mcp serve` exposes the same tools to remote MCP clients over HTTP with
-token auth (default `127.0.0.1:43871`); `configs/sds-mcp-http.service` is a
+`haify-mcp serve` exposes the same tools to remote MCP clients over HTTP with
+token auth (default `127.0.0.1:43871`); `configs/haify-mcp-http.service` is a
 reactor-managed unit for it. See [`mcp.md`](./mcp.md).
 
 ---
 
 ## 11. WAN replication (optional)
 
-Replicates a resource to a DR site over a per-resource `sds-proxy` pair
+Replicates a resource to a DR site over a per-resource `haify-proxy` pair
 (protocol A, mTLS). LAN resources are unaffected.
 
-- `sds-proxy` on the controller at `/usr/local/bin/sds-proxy` is pushed to the
+- `haify-proxy` on the controller at `/usr/local/bin/haify-proxy` is pushed to the
   WAN nodes; for nodes of another architecture place
-  `/usr/local/bin/sds-proxy-<amd64|arm64>` beside it. Without a matching binary
+  `/usr/local/bin/haify-proxy-<amd64|arm64>` beside it. Without a matching binary
   the controller assumes it is already installed on the node.
 - The DR node's WAN port must be reachable over TCP from the primary site.
 - The controller keeps the proxy CA under `[wan] pki_dir`
-  (default `/var/lib/sds/wanproxy-pki`).
+  (default `/var/lib/haify/wanproxy-pki`).
 
 ```bash
-sds resource create --name data --port 7000 --nodes site1 --pool vg0 --size 10G \
+haify resource create --name data --port 7000 --nodes site1 --pool vg0 --size 10G \
     --wan --dr-node site2 --dr-endpoint <site2-public-ip> [--wan-port 37901]
-sds resource status data
+haify resource status data
 ```
 
 `--wan-port 0` (default) picks a random port above 3000. Failover to the DR site
 is manual because replication is asynchronous:
 
 ```bash
-sds resource dr-failover data --yes
+haify resource dr-failover data --yes
 ```
 
-`sds wan set-endpoint` and `sds wan repair` change or rebuild the
+`haify wan set-endpoint` and `haify wan repair` change or rebuild the
 tunnels. Design: [`docs/design/wan-replication.md`](./design/wan-replication.md).
 
 ---
@@ -589,13 +589,13 @@ tunnels. Design: [`docs/design/wan-replication.md`](./design/wan-replication.md)
 ## 12. Verify
 
 ```bash
-sds node list
-sds health-check
-sds pool list
-sds resource list
-sds resource status <name>
-sds ha self status
-sds inspect run          # read-only cluster checks; [inspect] runs them daily
+haify node list
+haify health-check
+haify pool list
+haify resource list
+haify resource status <name>
+haify ha self status
+haify inspect run          # read-only cluster checks; [inspect] runs them daily
 grpcurl -plaintext <host>:3374 list
 curl -s http://<host>:3375/v1/nodes
 # UI: http://<host-or-VIP>:3376/
@@ -606,8 +606,8 @@ On a node:
 ```bash
 drbdadm status
 drbd-reactorctl status
-systemctl is-enabled sds-drbd-up.service
-journalctl -u sds-controller -f
+systemctl is-enabled haify-drbd-up.service
+journalctl -u haify-controller -f
 ```
 
 ---
@@ -627,6 +627,6 @@ journalctl -u sds-controller -f
 | `gateway nfs create` fails with `missing: rpc.nfsd exportfs` | `apt-get install nfs-kernel-server` (EL: `nfs-utils`) on the resource's diskful nodes. |
 | `gateway nvme create` fails loading `nvmet`/`nvmet-tcp` | `apt-get install linux-modules-extra-$(uname -r)`. |
 | `gateway nvme create --transport rdma` fails with `no RDMA device` | The node has no RDMA NIC (or soft-RoCE link) under `/sys/class/infiniband`. |
-| `pool add-cache` refuses with "not a thin pool" | Convert first: `sds pool convert-thin --node <n> --pool <p>`. |
+| `pool add-cache` refuses with "not a thin pool" | Convert first: `haify pool convert-thin --node <n> --pool <p>`. |
 | Backup fails: `rclone is required on <node>` | Install rclone on that node. |
 | Copilot cites documents unrelated to the question | The knowledge base is nearly empty; check `GET /ai/kb/list` and ingest content. |

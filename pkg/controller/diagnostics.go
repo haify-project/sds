@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/deployment"
+	pb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Node diagnostics: the records the controller does not keep.
@@ -120,11 +120,11 @@ var diagCollectors = []diagCollector{
 		},
 	},
 	{
-		Name: "sds_journal",
+		Name: "haify_journal",
 		What: "the Haify units' own journal — the controller and the Copilot as systemd saw them",
 		cmd: func(since, max int) string {
 			return fmt.Sprintf(
-				"journalctl -u sds-controller -u sds-ai --since '-%dmin' --no-pager -o short-iso 2>&1 | tail -n %d",
+				"journalctl -u haify-controller -u haify-ai --since '-%dmin' --no-pager -o short-iso 2>&1 | tail -n %d",
 				since, max+1)
 		},
 	},

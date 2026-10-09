@@ -7,8 +7,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/apptemplate"
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/apptemplate"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // List returns every app.
@@ -98,7 +98,7 @@ func (am *AppManager) Failover(ctx context.Context, name string) (string, string
 	}
 	if primary == "" {
 		return "", "", fmt.Errorf("app %s is not running anywhere (%s is Primary on no node); drbd-reactor starts it "+
-			"wherever it can, see sds app status %s", name, app.Resource, name)
+			"wherever it can, see haify app status %s", name, app.Resource, name)
 	}
 	from := am.nodeName(primary)
 	res, err := am.runAppScript(ctx, []string{primary}, apptemplate.EvictScript(name))

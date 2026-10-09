@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,9 +26,9 @@ func TestRemovesACacheAndReleasesItsDevice(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	require.NoError(t, ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool"))
+	require.NoError(t, ctrl.storage.RemovePoolCache(context.Background(), "node-a", "haifypool"))
 	// lvconvert takes the pool, not the internal sub-LV the cache is bolted to.
-	assert.Equal(t, "sds_sdspool_thin", uncachedLV)
+	assert.Equal(t, "haify_haifypool_thin", uncachedLV)
 	// Leaving the SSD in the group would make it free space that the next
 	// thin-pool extension would allocate pool data onto.
 	assert.Equal(t, "/dev/nvme0n1", releasedDevice)
@@ -36,7 +36,7 @@ func TestRemovesACacheAndReleasesItsDevice(t *testing.T) {
 
 func TestRefusesToRemoveACacheThatIsNotThere(t *testing.T) {
 	ctrl := cacheTestController(t, newDetachFake(""))
-	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool")
+	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "haifypool")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no cache")
 }
@@ -53,7 +53,7 @@ func TestRefusesToRemoveACacheThatCannotBeFlushed(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool")
+	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "haifypool")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--force")
 	assert.True(t, uncalled, "nothing may be detached when the flush is known to be impossible")
@@ -71,7 +71,7 @@ func TestDoesNotReportSuccessWhenTheCacheIsStillAttached(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool")
+	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "haifypool")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "still attached")
 	assert.False(t, released, "the device must not be pulled out from under a cache that is still there")
@@ -84,7 +84,7 @@ func TestReportsAFailedFlush(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool")
+	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "haifypool")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to flush cache")
 }
@@ -99,7 +99,7 @@ func TestReportsADeviceThatCouldNotBeReleased(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool")
+	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "haifypool")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "flushed and detached")
 	assert.Contains(t, err.Error(), "still in use")
@@ -109,8 +109,8 @@ func TestReportsADeviceThatCouldNotBeReleased(t *testing.T) {
 // the detach — the same end state as a vgreduce that failed, and reported the
 // same way rather than passed over.
 func TestReportsACacheDeviceItCouldNotIdentify(t *testing.T) {
-	anonymous := lvsLine("sds_sdspool", "[sds_sdspool_thin_tdata]", "Cwi-aoC---", "cache", "107374182400",
-		"writethrough", "1638400", "409600", "0", "1", "1", "1", "1", "sds_sdspool_thin_tdata_corig(0)")
+	anonymous := lvsLine("haify_haifypool", "[haify_haifypool_thin_tdata]", "Cwi-aoC---", "cache", "107374182400",
+		"writethrough", "1638400", "409600", "0", "1", "1", "1", "1", "haify_haifypool_thin_tdata_corig(0)")
 	dep := newDetachFake(anonymous, "")
 	var released bool
 	dep.vgReduceAndRemovePVFunc = func(_ context.Context, hosts []string, _, _ string) (*deployment.ExecResult, error) {
@@ -119,7 +119,7 @@ func TestReportsACacheDeviceItCouldNotIdentify(t *testing.T) {
 	}
 	ctrl := cacheTestController(t, dep)
 
-	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "sdspool")
+	err := ctrl.storage.RemovePoolCache(context.Background(), "node-a", "haifypool")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "vgreduce")
 	assert.False(t, released, "there is no device name to hand to vgreduce")

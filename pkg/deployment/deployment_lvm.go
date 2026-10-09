@@ -265,7 +265,7 @@ func (c *Client) LVRemoveSnapshot(ctx context.Context, hosts []string, vgName, s
 // but exited 5 because no such volume existed, so any caller that checked the
 // exit status threw away a perfectly good answer and reported no snapshots at
 // all. The scheduler survived it only because it reads output regardless of
-// exit status; `sds resource snapshot list` did not, and showed an empty list
+// exit status; `haify resource snapshot list` did not, and showed an empty list
 // on a pool holding 27 snapshots.
 //
 // origin names the volume each snapshot was taken from, which is what lets a

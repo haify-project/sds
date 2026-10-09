@@ -35,7 +35,7 @@ type controllerBinaryPlan struct {
 
 // planControllerBinary works out the binary placement for the standbys and
 // checks each one can execute what it will get. A standby whose architecture
-// differs from this controller's receives "sds-controller-<goarch>" from the
+// differs from this controller's receives "haify-controller-<goarch>" from the
 // running binary's directory when that file exists, and is refused otherwise.
 // It changes nothing, so enable calls it before any side effect.
 func (rm *ResourceManager) planControllerBinary(ctx context.Context, standbyAddrs []string) (*controllerBinaryPlan, error) {
@@ -78,7 +78,7 @@ func (rm *ResourceManager) planControllerBinary(ctx context.Context, standbyAddr
 			plan.sources[addr] = exe
 			continue
 		}
-		perArch := filepath.Join(filepath.Dir(exe), "sds-controller-"+arch)
+		perArch := filepath.Join(filepath.Dir(exe), "haify-controller-"+arch)
 		if fileExists(perArch) {
 			plan.sources[addr] = perArch
 			continue
@@ -88,9 +88,9 @@ func (rm *ResourceManager) planControllerBinary(ctx context.Context, standbyAddr
 	if len(refused) > 0 {
 		sort.Strings(refused)
 		return nil, fmt.Errorf("this controller is built for %s and %s cannot run it; place a build for that "+
-			"architecture at %s-<goarch> (e.g. sds-controller-arm64), or leave those nodes out with --nodes",
+			"architecture at %s-<goarch> (e.g. haify-controller-arm64), or leave those nodes out with --nodes",
 			unameMachine(runtime.GOARCH), strings.Join(refused, ", "),
-			filepath.Join(filepath.Dir(exe), "sds-controller"))
+			filepath.Join(filepath.Dir(exe), "haify-controller"))
 	}
 	return plan, nil
 }

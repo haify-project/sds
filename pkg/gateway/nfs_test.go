@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -251,7 +251,7 @@ func TestAddNFSExportUpdatesConfig(t *testing.T) {
 	require.NoError(t, err)
 	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-nfs-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-nfs-resource"), config)
 
 	ctx := context.Background()
 	err = nfsManager.AddNFSExport(ctx, "resource", "/backup", 99, "10.0.0.0/8", "ro")
@@ -261,25 +261,25 @@ func TestAddNFSExportUpdatesConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, exports)
 	// Absolute paths are honored verbatim under the new semantics.
-	assert.True(t, strings.Contains(mockDeployment.Configs[gatewayConfigPath("sds-nfs-resource")], "directory=/backup"))
+	assert.True(t, strings.Contains(mockDeployment.Configs[gatewayConfigPath("haify-nfs-resource")], "directory=/backup"))
 	assertServiceIPLast(t, config)
-	assertServiceIPLast(t, mockDeployment.Configs[gatewayConfigPath("sds-nfs-resource")])
+	assertServiceIPLast(t, mockDeployment.Configs[gatewayConfigPath("haify-nfs-resource")])
 }
 
 // An NFS gateway written with the service IP ahead of nfsserver is reordered
 // when it is started from stopped.
 func TestServiceIPLastScriptReordersLegacyNFSConfig(t *testing.T) {
 	legacy := `      start = [
-        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd1 directory=/var/lib/sds-gateway/n fstype=ext4 run_fsck=no",
+        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd1 directory=/var/lib/haify-gateway/n fstype=ext4 run_fsck=no",
         "ocf:heartbeat:IPaddr2 service_ip ip=10.0.0.9 cidr_netmask=24",
-        "ocf:heartbeat:nfsserver nfsserver nfs_ip=10.0.0.9 nfs_shared_infodir=/var/lib/sds-gateway/n/nfs nfs_server_scope=10.0.0.9",
+        "ocf:heartbeat:nfsserver nfsserver nfs_ip=10.0.0.9 nfs_shared_infodir=/var/lib/haify-gateway/n/nfs nfs_server_scope=10.0.0.9",
 
         "ocf:heartbeat:exportfs export_0 directory=/data fsid=1 clientspec=0.0.0.0/0.0.0.0 options=rw",
 
       ]
 `
 	dir := t.TempDir()
-	conf := filepath.Join(dir, "sds-nfs-n.toml.disabled")
+	conf := filepath.Join(dir, "haify-nfs-n.toml.disabled")
 	require.NoError(t, os.WriteFile(conf, []byte(legacy), 0644))
 	script := strings.ReplaceAll(serviceIPLastScript("n"), "/etc/drbd-reactor.d", dir)
 	out, err := exec.Command("/bin/sh", "-c", script).CombinedOutput()
@@ -305,7 +305,7 @@ func TestRemoveNFSExportUpdatesConfig(t *testing.T) {
 	require.NoError(t, err)
 	config, err := nfsManager.generateNFSGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-nfs-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-nfs-resource"), config)
 
 	ctx := context.Background()
 	err = nfsManager.RemoveNFSExport(ctx, "resource", "/data")
@@ -424,7 +424,7 @@ func TestResolveNFSExportPath(t *testing.T) {
 	assert.Error(t, err)
 	_, err = ResolveNFSExportPath("res1", "/etc/exports")
 	assert.Error(t, err)
-	_, err = ResolveNFSExportPath("res1", "/var/lib/sds/x")
+	_, err = ResolveNFSExportPath("res1", "/var/lib/haify/x")
 	assert.Error(t, err)
 }
 
@@ -460,5 +460,5 @@ func TestNFSClusterPrivatePath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Cluster private path should be under DefaultClusterPrivateMountPath
-	assert.True(t, strings.Contains(config, DefaultClusterPrivateMountPath) || strings.Contains(config, "/var/lib/sds"))
+	assert.True(t, strings.Contains(config, DefaultClusterPrivateMountPath) || strings.Contains(config, "/var/lib/haify"))
 }

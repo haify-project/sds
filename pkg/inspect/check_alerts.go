@@ -22,7 +22,7 @@ func checkAlerts(in *Input) []Check {
 	if !a.Enabled {
 		return []Check{{ID: "alerts.disabled", Area: AreaAlerts, Status: StatusWarn,
 			Message: "[alert] enabled = false: nothing watches cluster health between inspections, and nothing is delivered",
-			Fix:     "set [alert] enabled = true in /etc/sds/controller.toml and restart sds-controller"}}
+			Fix:     "set [alert] enabled = true in /etc/haify/controller.toml and restart haify-controller"}}
 	}
 	var out []Check
 	active := 0
@@ -34,7 +34,7 @@ func checkAlerts(in *Input) []Check {
 	if active == 0 {
 		out = append(out, Check{ID: "alerts.no_channel", Area: AreaAlerts, Status: StatusFail,
 			Message: "alerts are raised but no enabled notification channel exists; they reach nobody",
-			Fix:     "sds channel add --name <name> --kind <generic|feishu|slack|wecom|dingtalk> --url <webhook-url>"})
+			Fix:     "haify channel add --name <name> --kind <generic|feishu|slack|wecom|dingtalk> --url <webhook-url>"})
 	}
 	for _, t := range a.Targets {
 		switch {
@@ -109,12 +109,12 @@ func undelivered(a AlertInput) (Check, bool) {
 	return Check{ID: "alerts.undelivered", Area: AreaAlerts, Status: st,
 		Message:  fmt.Sprintf("%s raised since %s reached no one", plural(n, "alert", "alerts"), stamp(a.Since)),
 		Evidence: lost,
-		Fix:      "sds event list --min-severity warning"}, true
+		Fix:      "haify event list --min-severity warning"}, true
 }
 
 func notifyTestFix(name string) string {
 	if strings.HasPrefix(name, "config:") {
-		return "fix the [alert] webhook in /etc/sds/controller.toml and restart sds-controller"
+		return "fix the [alert] webhook in /etc/haify/controller.toml and restart haify-controller"
 	}
-	return "sds channel test " + name
+	return "haify channel test " + name
 }

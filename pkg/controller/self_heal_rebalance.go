@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Rebalancing, by plan.

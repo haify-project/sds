@@ -32,12 +32,12 @@ func findingByID(r Report, id string) (Finding, bool) {
 func TestSignatureCollapsesWhatVariesAndKeepsWhatNames(t *testing.T) {
 	same := []struct{ a, b string }{
 		{
-			"2026-09-06T09:15:01+0800 sds-b kernel: drbd sds-meta: IO error at offset 4096",
-			"2026-09-06T11:42:57+0800 sds-e kernel: drbd sds-meta: IO error at offset 917504",
+			"2026-09-06T09:15:01+0800 haify-b kernel: drbd haify-meta: IO error at offset 4096",
+			"2026-09-06T11:42:57+0800 haify-e kernel: drbd haify-meta: IO error at offset 917504",
 		},
 		{
-			"[Sat Sep  6 09:15:01 2026] drbd sds-meta/0 drbd3: connection lost",
-			"[Sat Sep  6 10:01:44 2026] drbd sds-meta/0 drbd3: connection lost",
+			"[Sat Sep  6 09:15:01 2026] drbd haify-meta/0 drbd3: connection lost",
+			"[Sat Sep  6 10:01:44 2026] drbd haify-meta/0 drbd3: connection lost",
 		},
 		{
 			"reactor[1234]: could not reach peer 192.168.123.227:7789",
@@ -67,13 +67,13 @@ func TestSignatureCollapsesWhatVariesAndKeepsWhatNames(t *testing.T) {
 	// field, and a rule loose enough to strip one there eats the subsystem
 	// name — after which every DRBD message and every ext4 message are one
 	// signature.
-	if got := Signature("[Sat Sep  6 09:15:01 2026] drbd sds-meta: connection lost"); !strings.Contains(got, "drbd") {
+	if got := Signature("[Sat Sep  6 09:15:01 2026] drbd haify-meta: connection lost"); !strings.Contains(got, "drbd") {
 		t.Errorf("dmesg subsystem name was eaten as a hostname: %q", got)
 	}
 	// And where there is one, two nodes reporting one fault are one signature —
 	// otherwise every cluster-wide problem arrives split in two.
-	a := Signature("2026-09-06T09:15:01+0800 sds-b kernel: drbd sds-meta: IO error")
-	b := Signature("2026-09-06T09:15:02+0800 sds-e kernel: drbd sds-meta: IO error")
+	a := Signature("2026-09-06T09:15:01+0800 haify-b kernel: drbd haify-meta: IO error")
+	b := Signature("2026-09-06T09:15:02+0800 haify-e kernel: drbd haify-meta: IO error")
 	if a != b {
 		t.Errorf("one fault on two nodes did not collapse:\n  %s\n  %s", a, b)
 	}
@@ -81,17 +81,17 @@ func TestSignatureCollapsesWhatVariesAndKeepsWhatNames(t *testing.T) {
 
 // ── phantom peer ────────────────────────────────────────────────────────
 
-const phantomStatus = `sds-meta node-id:1 role:Primary suspended:no
+const phantomStatus = `haify-meta node-id:1 role:Primary suspended:no
   volume:0 minor:3 disk:UpToDate quorum:yes
-  sds-e node-id:2 connection:Connected role:Secondary
-  sds-d node-id:3 connection:Connecting role:Unknown`
+  haify-e node-id:2 connection:Connected role:Secondary
+  haify-d node-id:3 connection:Connecting role:Unknown`
 
 func TestPhantomPeerIsAPeerTheRegistryDoesNotHave(t *testing.T) {
 	in := Input{
 		Window: time.Hour,
 		Nodes: []NodeReport{
-			node("sds-b", "drbd_status", strings.Split(phantomStatus, "\n")...),
-			{Node: "sds-e", Address: "sds-e", Reachable: true},
+			node("haify-b", "drbd_status", strings.Split(phantomStatus, "\n")...),
+			{Node: "haify-e", Address: "haify-e", Reachable: true},
 		},
 	}
 	f, ok := findingByID(Analyze(in), "phantom-peer")
@@ -101,12 +101,12 @@ func TestPhantomPeerIsAPeerTheRegistryDoesNotHave(t *testing.T) {
 	if f.Severity != SeverityCritical || !f.Known {
 		t.Errorf("severity=%s known=%v; a quorum that can never be met is critical and known", f.Severity, f.Known)
 	}
-	if f.Resource != "sds-meta" {
-		t.Errorf("resource = %q, want sds-meta from the un-indented line above the peer", f.Resource)
+	if f.Resource != "haify-meta" {
+		t.Errorf("resource = %q, want haify-meta from the un-indented line above the peer", f.Resource)
 	}
 	var hasForget bool
 	for _, a := range f.Advice {
-		if strings.Contains(a, "forget-peer sds-meta:sds-d") {
+		if strings.Contains(a, "forget-peer haify-meta:haify-d") {
 			hasForget = true
 		}
 	}
@@ -122,13 +122,13 @@ func TestPhantomPeerIsAPeerTheRegistryDoesNotHave(t *testing.T) {
 // phantom would tell an operator to forget-peer a node they are about to bring
 // back — the one piece of advice here that cannot be undone.
 func TestARegisteredNodeThatIsDownIsNotAPhantom(t *testing.T) {
-	status := `sds-meta node-id:1 role:Primary suspended:no
-  sds-e node-id:2 connection:Connecting role:Unknown`
+	status := `haify-meta node-id:1 role:Primary suspended:no
+  haify-e node-id:2 connection:Connecting role:Unknown`
 	in := Input{
 		Window: time.Hour,
 		Nodes: []NodeReport{
-			node("sds-b", "drbd_status", strings.Split(status, "\n")...),
-			{Node: "sds-e", Address: "sds-e", Reachable: true},
+			node("haify-b", "drbd_status", strings.Split(status, "\n")...),
+			{Node: "haify-e", Address: "haify-e", Reachable: true},
 		},
 	}
 	if f, ok := findingByID(Analyze(in), "phantom-peer"); ok {
@@ -139,11 +139,11 @@ func TestARegisteredNodeThatIsDownIsNotAPhantom(t *testing.T) {
 // An unregistered peer that is Connected is a registry that has fallen behind,
 // not a quorum fault: the vote is being cast.
 func TestAConnectedUnregisteredPeerIsNotAPhantom(t *testing.T) {
-	status := `sds-meta node-id:1 role:Primary suspended:no
+	status := `haify-meta node-id:1 role:Primary suspended:no
   node-c node-id:4 connection:Connected role:Secondary`
 	in := Input{
 		Window: time.Hour,
-		Nodes:  []NodeReport{node("sds-b", "drbd_status", strings.Split(status, "\n")...)},
+		Nodes:  []NodeReport{node("haify-b", "drbd_status", strings.Split(status, "\n")...)},
 	}
 	if _, ok := findingByID(Analyze(in), "phantom-peer"); ok {
 		t.Fatal("a Connected peer was reported as a phantom quorum vote")
@@ -160,7 +160,7 @@ func TestThinPoolReportsWhichDimensionIsFull(t *testing.T) {
 		"  LV       VG   LSize  Data%  Meta%",
 		"  thinpool vg0  80.00g 42.10  97.80",
 	}
-	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{node("sds-b", "storage", lvs...)}})
+	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{node("haify-b", "storage", lvs...)}})
 	if _, ok := findingByID(r, "thin-pool-data"); ok {
 		t.Error("data space is 42% full and was reported as a problem")
 	}
@@ -186,7 +186,7 @@ func TestAHealthyPoolIsNotAFinding(t *testing.T) {
 		"  thinpool vg0  80.00g 12.00  3.40",
 		"  data     vg0  10.00g              ",
 	}
-	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{node("sds-b", "storage", lvs...)}})
+	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{node("haify-b", "storage", lvs...)}})
 	for _, f := range r.Findings {
 		if strings.HasPrefix(f.ID, "thin-pool") {
 			t.Fatalf("a pool at 12%%/3.4%% was reported: %s", f.Title)
@@ -203,7 +203,7 @@ func TestUnplannedFailoverNeedsBothHalves(t *testing.T) {
 	at := time.Date(2026, 9, 5, 12, 30, 0, 0, time.UTC)
 	fo := Event{
 		Type: "resource.failover", Severity: "warning", Status: "info",
-		Resource: "sds-meta", Node: "sds-b", Message: "Primary moved from sds-b to sds-e", At: at,
+		Resource: "haify-meta", Node: "haify-b", Message: "Primary moved from haify-b to haify-e", At: at,
 	}
 
 	onlyEvent := Input{Window: time.Hour, Now: at, Events: []Event{fo}}
@@ -212,16 +212,16 @@ func TestUnplannedFailoverNeedsBothHalves(t *testing.T) {
 	}
 
 	withRestart := onlyEvent
-	withRestart.Nodes = []NodeReport{node("sds-b", "promoter_journal",
-		"2026-09-05T12:30:01+0000 sds-b systemd[1]: Stopping drbd-services@sds\\x2dmeta.target...")}
+	withRestart.Nodes = []NodeReport{node("haify-b", "promoter_journal",
+		"2026-09-05T12:30:01+0000 haify-b systemd[1]: Stopping drbd-services@haify\\x2dmeta.target...")}
 	f, ok := findingByID(Analyze(withRestart), "unplanned-failover")
 	if !ok {
 		t.Fatal("a failover paired with the target being stopped was not identified")
 	}
-	if !f.Known || f.Resource != "sds-meta" {
-		t.Errorf("known=%v resource=%q, want true and sds-meta", f.Known, f.Resource)
+	if !f.Known || f.Resource != "haify-meta" {
+		t.Errorf("known=%v resource=%q, want true and haify-meta", f.Known, f.Resource)
 	}
-	if !strings.Contains(strings.Join(f.Advice, "\n"), "ha evict sds-meta") {
+	if !strings.Contains(strings.Join(f.Advice, "\n"), "ha evict haify-meta") {
 		t.Errorf("advice does not name the supported way to move the role: %v", f.Advice)
 	}
 }
@@ -233,9 +233,9 @@ func TestARestartFarFromTheFailoverDoesNotExplainIt(t *testing.T) {
 	at := time.Date(2026, 9, 5, 12, 30, 0, 0, time.UTC)
 	in := Input{
 		Window: 6 * time.Hour, Now: at,
-		Events: []Event{{Type: "resource.failover", Resource: "sds-meta", Severity: "warning", At: at}},
-		Nodes: []NodeReport{node("sds-b", "promoter_journal",
-			"2026-09-05T08:00:00+0000 sds-b systemd[1]: Stopping drbd-services@sds\\x2dmeta.target...")},
+		Events: []Event{{Type: "resource.failover", Resource: "haify-meta", Severity: "warning", At: at}},
+		Nodes: []NodeReport{node("haify-b", "promoter_journal",
+			"2026-09-05T08:00:00+0000 haify-b systemd[1]: Stopping drbd-services@haify\\x2dmeta.target...")},
 	}
 	if _, ok := findingByID(Analyze(in), "unplanned-failover"); ok {
 		t.Fatal("a restart four hours earlier was used to explain the failover")
@@ -249,7 +249,7 @@ func TestARestartFarFromTheFailoverDoesNotExplainIt(t *testing.T) {
 func TestResolvedEventsAreNotCurrentProblems(t *testing.T) {
 	r := Analyze(Input{Window: time.Hour, Events: []Event{
 		{Type: "resource.degraded", Severity: "critical", Status: "resolved",
-			Resource: "sds-meta", Message: "replica back UpToDate"},
+			Resource: "haify-meta", Message: "replica back UpToDate"},
 	}})
 	if len(r.Findings) != 0 {
 		t.Fatalf("a resolved event was reported as a problem: %+v", r.Findings)
@@ -280,10 +280,10 @@ func TestRepeatedErrorsBecomeOneFindingWithACount(t *testing.T) {
 	var lines []string
 	for i := range 40 {
 		lines = append(lines, "2026-09-06T09:15:0"+string(rune('0'+i%10))+
-			"+0000 sds-b kernel: drbd sds-meta: I/O error on backing device, sector "+
+			"+0000 haify-b kernel: drbd haify-meta: I/O error on backing device, sector "+
 			string(rune('0'+i%10)))
 	}
-	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{node("sds-b", "drbd_kernel", lines...)}})
+	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{node("haify-b", "drbd_kernel", lines...)}})
 	if len(r.Findings) != 1 {
 		t.Fatalf("40 occurrences of one error became %d findings", len(r.Findings))
 	}
@@ -306,10 +306,10 @@ func TestKnownCausesRankFirstAndOrderIsStable(t *testing.T) {
 	in := Input{
 		Window: time.Hour,
 		Nodes: []NodeReport{
-			node("sds-b", "drbd_kernel",
-				"kernel: drbd sds-meta: Split-Brain detected, dropping connection!",
-				"kernel: drbd sds-meta: I/O error on backing device",
-				"kernel: drbd sds-meta: I/O error on backing device",
+			node("haify-b", "drbd_kernel",
+				"kernel: drbd haify-meta: Split-Brain detected, dropping connection!",
+				"kernel: drbd haify-meta: I/O error on backing device",
+				"kernel: drbd haify-meta: I/O error on backing device",
 			),
 		},
 	}
@@ -334,7 +334,7 @@ func TestKnownCausesRankFirstAndOrderIsStable(t *testing.T) {
 // fault.
 func TestAKnownModesLinesAreNotAlsoGrouped(t *testing.T) {
 	r := Analyze(Input{Window: time.Hour, Nodes: []NodeReport{
-		node("sds-b", "drbd_kernel", "kernel: drbd sds-meta: Split-Brain detected, dropping connection!"),
+		node("haify-b", "drbd_kernel", "kernel: drbd haify-meta: Split-Brain detected, dropping connection!"),
 	}})
 	if len(r.Findings) != 1 {
 		t.Fatalf("one split-brain line produced %d findings: %+v", len(r.Findings), r.Findings)
@@ -349,11 +349,11 @@ func TestACollectorThatRanNowhereIsReportedAsAGap(t *testing.T) {
 	in := Input{
 		Window: time.Hour,
 		Nodes: []NodeReport{
-			{Node: "sds-b", Reachable: true, Collectors: []CollectorOutput{
-				{Collector: "drbd_status", Ok: true, Lines: []string{"sds-meta node-id:1 role:Primary"}},
+			{Node: "haify-b", Reachable: true, Collectors: []CollectorOutput{
+				{Collector: "drbd_status", Ok: true, Lines: []string{"haify-meta node-id:1 role:Primary"}},
 				{Collector: "storage", Ok: false, Error: "lvs: not found"},
 			}},
-			{Node: "sds-e", Reachable: true, Collectors: []CollectorOutput{
+			{Node: "haify-e", Reachable: true, Collectors: []CollectorOutput{
 				{Collector: "drbd_status", Ok: true},
 				{Collector: "storage", Ok: false, Error: "lvs: not found"},
 			}},
@@ -371,31 +371,31 @@ func TestACollectorThatRanSomewhereIsNotAGap(t *testing.T) {
 	in := Input{
 		Window: time.Hour,
 		Nodes: []NodeReport{
-			{Node: "sds-b", Reachable: true, Collectors: []CollectorOutput{
+			{Node: "haify-b", Reachable: true, Collectors: []CollectorOutput{
 				{Collector: "reactor_journal", Ok: true, Lines: []string{"started"}}}},
 			{Node: "node-c", Reachable: true, Collectors: []CollectorOutput{
 				{Collector: "reactor_journal", Ok: false, Error: "unit not found"}}},
 		},
 	}
 	if got := Analyze(in).Scanned.FailedCollectors; len(got) != 0 {
-		t.Errorf("failed collectors = %v, want none: it ran on sds-b", got)
+		t.Errorf("failed collectors = %v, want none: it ran on haify-b", got)
 	}
 }
 
 func TestUnreachableNodeIsItsOwnFinding(t *testing.T) {
 	in := Input{Window: time.Hour, Nodes: []NodeReport{
-		{Node: "sds-e", Reachable: false, Error: "dial tcp: i/o timeout"},
+		{Node: "haify-e", Reachable: false, Error: "dial tcp: i/o timeout"},
 	}}
 	r := Analyze(in)
 	f, ok := findingByID(r, "node-unreachable")
 	if !ok {
 		t.Fatal("an unreachable node was not reported")
 	}
-	if !strings.Contains(f.Title, "sds-e") {
+	if !strings.Contains(f.Title, "haify-e") {
 		t.Errorf("title does not name the node: %q", f.Title)
 	}
 	if len(r.Scanned.Unreachable) != 1 {
-		t.Errorf("scanned.unreachable = %v, want [sds-e]", r.Scanned.Unreachable)
+		t.Errorf("scanned.unreachable = %v, want [haify-e]", r.Scanned.Unreachable)
 	}
 }
 
@@ -407,11 +407,11 @@ func TestAConfiguredPeerThatIsDownIsNotAPhantom(t *testing.T) {
 	in := Input{
 		Window: time.Hour,
 		Nodes: []NodeReport{
-			node("sds-b", "drbd_status", strings.Split(phantomStatus, "\n")...),
-			node("sds-e", "drbd_config_peers",
-				"/etc/drbd.d/sds-meta.res:    on sds-b {",
-				"/etc/drbd.d/sds-meta.res:    on sds-d {",
-				"/etc/drbd.d/sds-meta.res:    on sds-e {"),
+			node("haify-b", "drbd_status", strings.Split(phantomStatus, "\n")...),
+			node("haify-e", "drbd_config_peers",
+				"/etc/drbd.d/haify-meta.res:    on haify-b {",
+				"/etc/drbd.d/haify-meta.res:    on haify-d {",
+				"/etc/drbd.d/haify-meta.res:    on haify-e {"),
 		},
 	}
 	findings := Analyze(in)
@@ -430,9 +430,9 @@ func TestAConfiguredPeerThatIsDownIsNotAPhantom(t *testing.T) {
 
 	// The same peer with no configuration reported stays a phantom, but the
 	// advice says to check the configuration first.
-	in.Nodes[1] = NodeReport{Node: "sds-e", Address: "sds-e", Reachable: true}
+	in.Nodes[1] = NodeReport{Node: "haify-e", Address: "haify-e", Reachable: true}
 	f, ok = findingByID(Analyze(in), "phantom-peer")
-	if !ok || !strings.Contains(f.Advice[0], "/etc/drbd.d/sds-meta.res") {
+	if !ok || !strings.Contains(f.Advice[0], "/etc/drbd.d/haify-meta.res") {
 		t.Errorf("without configuration the advice must say to check it first: %v", f.Advice)
 	}
 }

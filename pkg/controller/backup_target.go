@@ -6,8 +6,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/backup"
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/backup"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Backup targets: the repositories backups are shipped to.

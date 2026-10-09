@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Locked scheduled snapshots.
@@ -15,14 +15,14 @@ import (
 // snapshots suddenly hold the whole volume's worth of old data and the pool
 // fills. Retention then had the worst possible answer: relieveThinPool deleted
 // the OLDEST scheduled snapshots first — the clean ones from before the attack
-// — and kept the newest two, taken after it. Anyone with an sds token could
+// — and kept the newest two, taken after it. Anyone with an haify token could
 // also simply delete the snapshots, the schedule or the resource.
 //
 // A schedule's lock_days locks the snapshots it takes: until a snapshot is
-// lock_days old, nothing sds does deletes it — not retention, not a full
+// lock_days old, nothing haify does deletes it — not retention, not a full
 // pool, not a person through the API — and the schedule and resource cannot
 // be deleted, nor the lock shortened, while any of its snapshots is locked.
-// The lock is measured from the time in the snapshot's own name, which sds
+// The lock is measured from the time in the snapshot's own name, which haify
 // wrote when it took it.
 //
 // What it is not: a lock against root on a storage node, who can lvremove
@@ -88,7 +88,7 @@ func (c *Controller) resourceOfBackingVolume(ctx context.Context, backing string
 }
 
 // assertSnapshotUnlocked refuses to delete or consume a locked scheduled
-// snapshot. Snapshots sds did not schedule carry no lock.
+// snapshot. Snapshots haify did not schedule carry no lock.
 func (c *Controller) assertSnapshotUnlocked(ctx context.Context, name string) error {
 	backing, _, ok := parseSnapName(name)
 	if !ok {

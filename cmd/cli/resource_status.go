@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +16,7 @@ import (
 // amount a DR failover would lose — the question status could not answer before
 // the proxy published these. When the snapshot is absent we say so rather than
 // print zeros, because a confident "0 lost" would be the worst possible lie here.
-func printWANMetrics(m *sdspb.WANMetrics) {
+func printWANMetrics(m *haifypb.WANMetrics) {
 	if m == nil {
 		fmt.Printf("    Replication lag: unknown (proxy published no metrics)\n")
 		return
@@ -75,13 +75,13 @@ func resourceStatus() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			status, err := sdsClient.ResourceStatus(ctx, resource)
+			status, err := haifyClient.ResourceStatus(ctx, resource)
 			if err != nil {
 				return fmt.Errorf("failed to get resource status: %w", err)
 			}
@@ -135,11 +135,11 @@ func resourceStatus() *cobra.Command {
 				}
 				fmt.Printf("    DR link:     %s (primary → %s)\n", reach, status.GetDrEndpoint())
 				for node, st := range status.GetWanProxy() {
-					fmt.Printf("    sds-proxy@%s: %s\n", node, st)
+					fmt.Printf("    haify-proxy@%s: %s\n", node, st)
 				}
 				printWANMetrics(status.GetWanMetrics())
 				fmt.Printf("    NOTE: the DR peer can lag (async). Failover is a manual DR action:\n")
-				fmt.Printf("          sds resource dr-failover %s\n", status.GetName())
+				fmt.Printf("          haify resource dr-failover %s\n", status.GetName())
 			}
 
 			return nil
@@ -163,12 +163,12 @@ func resourceVerify() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), wait+3*time.Minute)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			resp, err := sdsClient.VerifyResource(ctx, &sdspb.VerifyResourceRequest{
+			defer closeClient(haifyClient)
+			resp, err := haifyClient.VerifyResource(ctx, &haifypb.VerifyResourceRequest{
 				Name: args[0], Node: node, WaitSeconds: uint32(wait.Seconds()), Resync: resync,
 			})
 			if err != nil {

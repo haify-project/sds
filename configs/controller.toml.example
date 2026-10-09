@@ -7,8 +7,8 @@ port = 3374
 rest_port = 3375
 
 [database]
-# Database file path (default: /var/lib/sds/sds.db)
-path = "/var/lib/sds/sds.db"
+# Database file path (default: /var/lib/haify/haify.db)
+path = "/var/lib/haify/haify.db"
 
 [dispatch]
 # SSH configuration the controller uses to reach storage nodes.
@@ -21,10 +21,10 @@ config_path = "/root/.dispatch/config.toml"
 parallel = 10
 
 [wan]
-# Controller-side cache for the shared CA + leaf used by the sds-proxy mTLS link
-# (opt-in WAN replication only). Defaults to /var/lib/sds/wanproxy-pki, which
+# Controller-side cache for the shared CA + leaf used by the haify-proxy mTLS link
+# (opt-in WAN replication only). Defaults to /var/lib/haify/wanproxy-pki, which
 # only a root controller can create — point it somewhere writable otherwise.
-# pki_dir = "/var/lib/sds/wanproxy-pki"
+# pki_dir = "/var/lib/haify/wanproxy-pki"
 
 # Transport security for the gRPC API. The REST gateway and the web UI ride on
 # the same server through an in-process hop, so they follow automatically.
@@ -35,16 +35,16 @@ parallel = 10
 # NOTE: ca_cert / client_cert / client_key described a *client* and were never
 # read by anything. A config still carrying them is now rejected at startup —
 # replace them with cert_file/key_file below. The client-side spellings live on
-# as sds's --tls-ca / --tls-cert / --tls-key.
+# as haify's --tls-ca / --tls-cert / --tls-key.
 [tls]
 enabled = false
 # The certificate this controller presents, and its private key.
-# cert_file = "/etc/sds/certs/server.crt"
-# key_file = "/etc/sds/certs/server.key"
+# cert_file = "/etc/haify/certs/server.crt"
+# key_file = "/etc/haify/certs/server.key"
 # Setting a client CA is what turns on mutual TLS: clients must then present a
 # certificate signed by it, and one that is not gets no further than the
 # handshake. Leave it unset for server-only TLS.
-# client_ca_file = "/etc/sds/certs/client-ca.crt"
+# client_ca_file = "/etc/haify/certs/client-ca.crt"
 # Serve the REST gateway ([server] rest_port) over TLS too, with the same
 # certificate. Off by default: REST clients written for plain HTTP stop
 # working. Client certificates are never asked for on REST.
@@ -55,7 +55,7 @@ level = "info"  # debug, info, warn, error
 format = "json"  # json or text
 
 [storage]
-# What `pool create` builds when no --type is given, for every client: sds,
+# What `pool create` builds when no --type is given, for every client: haify,
 # the REST gateway, MCP and the web UI alike. Thin is the default because a
 # thick pool cannot hold a snapshot history — LVM reserves a fixed COW area per
 # snapshot (Haify takes 20% of the origin), so a 10 GiB pool holding a 6 GiB
@@ -74,7 +74,7 @@ verify_schedule = "0 3 1 * *"
 # drops the disk, so it is prevented rather than alerted on.
 [storage.thin]
 # fstrim every mounted DRBD filesystem on the node serving it (cron); the
-# discards reach every replica's pool. "" turns it off. `sds pool trim` runs it
+# discards reach every replica's pool. "" turns it off. `haify pool trim` runs it
 # now.
 trim_schedule = "30 2 * * *"
 # Share of a new thin pool's volume group left outside the pool, as room for
@@ -124,7 +124,7 @@ webhook_token = ""
 
 [self_ha]
 # Extra systemd units the Self-HA promoter starts with the controller, e.g.
-# ["sds-ai.service"]. Read when `sds ha self enable` writes the promoter.
+# ["haify-ai.service"]. Read when `haify ha self enable` writes the promoter.
 extra_services = []
 
 [metrics]
@@ -143,7 +143,7 @@ port = 3376
 # separate, optional concern: with no webhook configured the events are still
 # readable at GET /v1/events, streamed at GET /v1/events/watch, pushed to the
 # web UI's notification bell over GET /v1/events/stream, and followed with
-# `sds event watch`.
+# `haify event watch`.
 [alert]
 # The health poll: events, the storage and DRBD gauges in /metrics, the
 # write-anomaly guard and thin pool autoextend all read it. Nothing is sent
@@ -173,7 +173,7 @@ webhook_min_severity = "warning"   # info | warning | critical
 
 # Additional receivers, each with its own threshold.
 # [[alert.webhooks]]
-# url = "https://chat.example.com/hooks/sds"
+# url = "https://chat.example.com/hooks/haify"
 # min_severity = "info"
 # headers = { X-Token = "..." }
 
@@ -189,7 +189,7 @@ factor = 5.0
 min_mbps = 20.0
 freeze_hours = 168
 
-# Scheduled cluster inspection (`sds inspect`): read-only checks of what the
+# Scheduled cluster inspection (`haify inspect`): read-only checks of what the
 # alerts do not cover, stored as reports. Runs on the snapshot scheduler, so
 # only on the active controller and only while [schedule] enabled = true.
 [inspect]
@@ -202,7 +202,7 @@ notify_min = "warn"
 
 # API authentication. With [auth], one shared bearer token guards every call.
 # [rbac] replaces it with per-user tokens and roles (admin, operator, viewer);
-# users added later with `sds rbac` are kept in the database.
+# users added later with `haify rbac` are kept in the database.
 # [auth]
 # enabled = true
 # token = "<long random string>"
@@ -217,7 +217,7 @@ notify_min = "warn"
 # Two-person approval: deleting data or what protects it (backup targets,
 # backups, snapshots, schedules, resources, pools; restores; shortening a
 # schedule's retention; user and role changes) waits for a different user with the approve right (admin, or the
-# security-officer role) to run `sds approval approve <id>`. Needs [rbac].
+# security-officer role) to run `haify approval approve <id>`. Needs [rbac].
 # [rbac.approval]
 # enabled = true
 # ttl_minutes = 60

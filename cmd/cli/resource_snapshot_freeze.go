@@ -25,12 +25,12 @@ func resourceSnapshotScheduleFreeze() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			until, err := sdsClient.FreezeSnapshotSchedule(ctx, resource, hours, reason)
+			defer closeClient(haifyClient)
+			until, err := haifyClient.FreezeSnapshotSchedule(ctx, resource, hours, reason)
 			if err != nil {
 				return fmt.Errorf("failed to freeze snapshot schedule: %w", err)
 			}
@@ -55,12 +55,12 @@ func resourceSnapshotScheduleUnfreeze() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			if err := sdsClient.UnfreezeSnapshotSchedule(ctx, resource); err != nil {
+			defer closeClient(haifyClient)
+			if err := haifyClient.UnfreezeSnapshotSchedule(ctx, resource); err != nil {
 				return fmt.Errorf("failed to unfreeze snapshot schedule: %w", err)
 			}
 			fmt.Printf("Snapshot schedule of %q unfrozen\n", resource)

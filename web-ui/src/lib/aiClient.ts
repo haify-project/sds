@@ -19,10 +19,10 @@ import { getApiToken } from '@/services/api';
 
 // Same-origin: the controller's UI server proxies /ai to the Copilot backend,
 // so this works behind a reverse proxy where :7634 is not published. Override
-// with localStorage['sds.ai_base'] to point at a Copilot running elsewhere.
+// with localStorage['haify.ai_base'] to point at a Copilot running elsewhere.
 export function aiBase(): string {
   const override =
-    typeof localStorage !== 'undefined' ? localStorage.getItem('sds.ai_base') : null;
+    typeof localStorage !== 'undefined' ? localStorage.getItem('haify.ai_base') : null;
   if (override) return override.replace(/\/$/, '');
   return '';
 }
@@ -160,7 +160,7 @@ export async function streamChat(
   onEvent: (e: AIEvent) => void,
   signal?: AbortSignal,
 ): Promise<StreamChatResult> {
-  // The same token the REST calls use. sds-ai requires it whenever one is
+  // The same token the REST calls use. haify-ai requires it whenever one is
   // configured; without this the Copilot was the one part of the UI that
   // reached an unauthenticated endpoint, and its knowledge-base routes are
   // writable.
@@ -240,7 +240,7 @@ export async function decideApproval(id: string, approve: boolean, reason?: stri
 //
 // Which model answers, read and written while the Copilot runs. It used to take
 // an edit to the unit's environment file and a restart — and that restart is a
-// failover, because sds-ai is in the promoter's start list for sds-meta.
+// failover, because haify-ai is in the promoter's start list for haify-meta.
 
 export interface AIConfig {
   llmBaseUrl: string;

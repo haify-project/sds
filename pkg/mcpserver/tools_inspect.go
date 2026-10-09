@@ -6,7 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // inspectRunTimeout covers one SSH probe round to every node (bounded at 90s
@@ -21,7 +21,7 @@ type inspectCheckOut struct {
 	Message  string   `json:"message"`
 	Evidence []string `json:"evidence,omitempty" jsonschema:"what was seen, one fact per line"`
 	Fix      string   `json:"fix,omitempty" jsonschema:"the command that fixes it, as written; confirm with the user before running anything that changes data"`
-	Runbook  string   `json:"runbook,omitempty" jsonschema:"name of the sds_runbook entry covering the repair"`
+	Runbook  string   `json:"runbook,omitempty" jsonschema:"name of the haify_runbook entry covering the repair"`
 }
 
 type inspectReportOut struct {
@@ -45,7 +45,7 @@ type inspectRunIn struct {
 	Areas []string `json:"areas,omitempty" jsonschema:"only these areas: resources, gateways, nodes, pools, backups, alerts, selfha, tls, hygiene; empty for all"`
 }
 
-func reportOut(r *sdspb.InspectionReport) inspectReportOut {
+func reportOut(r *haifypb.InspectionReport) inspectReportOut {
 	s := r.GetSummary()
 	out := inspectReportOut{
 		ID: r.Id, Trigger: r.Trigger, StartedAt: rfc3339(r.StartedAtUnixMs), FinishedAt: rfc3339(r.FinishedAtUnixMs),
@@ -61,7 +61,7 @@ func reportOut(r *sdspb.InspectionReport) inspectReportOut {
 
 // registerInspectTools adds the cluster inspection tools.
 func (s *Server) registerInspectTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_inspect_report", "Read an inspection report",
+	addRead(s, srv, readOnlyTool("haify_inspect_report", "Read an inspection report",
 		"Read a stored cluster inspection report (the newest by default). The controller runs an inspection on a "+
 			"schedule (daily by default): deterministic checks of what the alert detector does not cover — a "+
 			"serving resource or gateway with no Primary, a replica stuck mid-handshake (WFBitMapS on one side), "+
@@ -82,12 +82,12 @@ func (s *Server) registerInspectTools(srv *mcp.Server) {
 			return nil, reportOut(r), nil
 		})
 
-	addReadWithin(s, srv, readOnlyTool("sds_inspect_run", "Inspect the cluster now",
-		"Run a cluster inspection now and return the report (see sds_inspect_report for what it checks). It changes "+
+	addReadWithin(s, srv, readOnlyTool("haify_inspect_run", "Inspect the cluster now",
+		"Run a cluster inspection now and return the report (see haify_inspect_report for what it checks). It changes "+
 			"nothing on the cluster: one read-only probe per node over SSH plus database reads, then the report is "+
 			"stored. Takes from seconds to a minute or two on a cluster with an unreachable node. Use it after a fix, "+
 			"to confirm the finding cleared, or when the stored report is old. Fails if an inspection is already "+
-			"running; read that one with sds_inspect_report afterwards."),
+			"running; read that one with haify_inspect_report afterwards."),
 		inspectRunTimeout,
 		func(ctx context.Context, _ *mcp.CallToolRequest, in inspectRunIn) (*mcp.CallToolResult, inspectReportOut, error) {
 			r, err := s.client.RunInspection(ctx, in.Areas)

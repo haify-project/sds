@@ -10,7 +10,7 @@ import (
 )
 
 func TestEventRecordsKeepTheNewestOldestFirst(t *testing.T) {
-	db, err := Open(&Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	db, err := Open(&Config{Path: filepath.Join(t.TempDir(), "haify.db")}, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}

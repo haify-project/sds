@@ -34,7 +34,7 @@
   <rect class="led" x="12" y="66" width="10" height="8" rx="4">{{ anim("width", *fill) }}</rect>
   <circle class="led" cx="74" cy="88" r="3.5"/>
   <text class="lbl" x="44" y="122" text-anchor="middle">server {{ n }}</text>
-  <text class="sds-hero-state" data-node="{{ n }}" x="44" y="139" text-anchor="middle">in sync</text>
+  <text class="haify-hero-state" data-node="{{ n }}" x="44" y="139" text-anchor="middle">in sync</text>
 </g>
 {%- endmacro -%}
 
@@ -63,7 +63,7 @@
 {%- endmacro -%}
 
 {%- macro scene() -%}
-<svg class="sds-ill sds-hero-scene" id="sds-hero-scene" viewBox="0 0 560 400" role="img" data-still="7"
+<svg class="haify-ill haify-hero-scene" id="haify-hero-scene" viewBox="0 0 560 400" role="img" data-still="7"
      aria-label="Files, virtual machines, containers and databases reach their storage through one address. Server 1 fails, server 2 takes over without losing data, and server 1 catches up when it returns.">
   <g>
     {{ app(12, "files", "M14 15 h8 l3 3 h11 v14 h-22 z") }}

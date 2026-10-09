@@ -62,7 +62,7 @@ export function AuthTokenDialog() {
           <DialogTitle>API token required</DialogTitle>
           <DialogDescription>
             The Haify controller has authentication enabled. Enter the API
-            token from <code className="font-mono">/etc/sds/token</code> on a
+            token from <code className="font-mono">/etc/haify/token</code> on a
             cluster node.
           </DialogDescription>
         </DialogHeader>

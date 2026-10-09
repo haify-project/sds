@@ -52,7 +52,7 @@ func unitRow(legID string, active bool) string {
 	if active {
 		state = "active running"
 	}
-	return "sds-proxy@" + legID + ".service loaded " + state + " Haify WAN replication proxy"
+	return "haify-proxy@" + legID + ".service loaded " + state + " Haify WAN replication proxy"
 }
 
 // openclawSpec mirrors the shape that exposed the bug in production: three
@@ -69,7 +69,7 @@ func openclawSpec() MultiSpec {
 }
 
 // The regression: a resource with more than one primary-site replica has one
-// systemd instance per leg, so a per-resource "sds-proxy@openclaw" check names
+// systemd instance per leg, so a per-resource "haify-proxy@openclaw" check names
 // a unit that exists on no node and reports a healthy WAN as entirely down.
 func TestStatusMultiSeesEveryLeg(t *testing.T) {
 	m := openclawSpec()
@@ -220,14 +220,14 @@ func TestStatusMultiValidates(t *testing.T) {
 
 func TestParseActiveUnits(t *testing.T) {
 	got := parseActiveUnits(strings.Join([]string{
-		"sds-proxy@a.service loaded active running Haify WAN replication proxy for a",
-		"sds-proxy@b.service loaded inactive dead Haify WAN replication proxy for b",
+		"haify-proxy@a.service loaded active running Haify WAN replication proxy for a",
+		"haify-proxy@b.service loaded inactive dead Haify WAN replication proxy for b",
 		"  ", // blank rows and legend leftovers must be ignored
 		"short row",
 	}, "\n"))
 
-	assert.True(t, got["sds-proxy@a.service"])
-	assert.False(t, got["sds-proxy@b.service"])
+	assert.True(t, got["haify-proxy@a.service"])
+	assert.False(t, got["haify-proxy@b.service"])
 	assert.Len(t, got, 2)
 }
 

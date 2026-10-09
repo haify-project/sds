@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // maxPeersProbe reads the bitmap-slot capacity DRBD baked into a resource's
@@ -80,13 +80,13 @@ func (rm *ResourceManager) assertBitmapSlotFree(ctx context.Context, hosts, node
 }
 
 // freeLoopbackPortProbe walks up from a starting port and prints the first one
-// the host is neither listening on nor has written into a DRBD or sds-proxy
+// the host is neither listening on nor has written into a DRBD or haify-proxy
 // config. Running listeners alone are not enough: a resource that is configured
 // but currently down would be skipped, and the collision would only appear the
 // next time it started.
 const freeLoopbackPortProbe = `for p in $(seq %[1]d %[2]d); do ` +
 	`ss -lnt "sport = :$p" 2>/dev/null | grep -q LISTEN && continue; ` +
-	`grep -qs "127\.0\.0\.1:$p" /etc/drbd.d/*.res /etc/sds-proxy/*.toml && continue; ` +
+	`grep -qs "127\.0\.0\.1:$p" /etc/drbd.d/*.res /etc/haify-proxy/*.toml && continue; ` +
 	`echo $p; break; done`
 
 // pickWANBindPorts chooses, for each primary, a loopback port its DRBD can bind

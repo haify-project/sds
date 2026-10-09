@@ -8,9 +8,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/backup"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/backup"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Off-cluster backup shipping. See pkg/backup for the backend trade-off; this
@@ -46,7 +46,7 @@ const (
 
 	// manifestObject is the self-describing index written alongside the images.
 	// It exists for the disaster the backups are for: when the Haify database is
-	// gone too, `sds backup import` rebuilds the backup records, chains
+	// gone too, `haify backup import` rebuilds the backup records, chains
 	// included, from these files alone (backup_import.go).
 	manifestObject = "manifest.json"
 
@@ -455,7 +455,7 @@ func (bm *BackupManager) renderManifest(rec *database.Backup, info *ResourceInfo
 		LockMode:   rec.LockMode,
 		Note: "Raw full images of each DRBD volume, bounded by the DRBD device size " +
 			"(smaller than the backing LV, whose tail holds DRBD metadata). Restore with " +
-			"`sds backup restore`, or by writing each image to a device of at least that size. " +
+			"`haify backup restore`, or by writing each image to a device of at least that size. " +
 			"An incremental holds only changed ranges: restore its parent chain down to the full " +
 			"backup first, then write each run of its gunzipped image at the offset its ranges list gives.",
 	}

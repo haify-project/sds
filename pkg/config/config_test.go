@@ -20,7 +20,7 @@ listen_address = "0.0.0.0"
 port = 3374
 
 [database]
-path = "/var/lib/sds/sds.db"
+path = "/var/lib/haify/haify.db"
 
 [log]
 level = "info"
@@ -47,7 +47,7 @@ port = 9433
 	assert.Equal(t, 3374, cfg.Server.Port)
 
 	// Verify database config
-	assert.Equal(t, "/var/lib/sds/sds.db", cfg.Database.Path)
+	assert.Equal(t, "/var/lib/haify/haify.db", cfg.Database.Path)
 
 	// Verify log config
 	assert.Equal(t, "info", cfg.Log.Level)
@@ -296,7 +296,7 @@ func TestLoadWithDatabaseConfig(t *testing.T) {
 
 	configContent := `
 [database]
-path = "/custom/path/sds.db"
+path = "/custom/path/haify.db"
 `
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	require.NoError(t, err)
@@ -305,7 +305,7 @@ path = "/custom/path/sds.db"
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.Equal(t, "/custom/path/sds.db", cfg.Database.Path)
+	assert.Equal(t, "/custom/path/haify.db", cfg.Database.Path)
 }
 
 // storage.default_pool_type now decides what an unspecified pool is for every

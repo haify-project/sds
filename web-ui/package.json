@@ -1,5 +1,5 @@
 {
-  "name": "@sds/web-ui",
+  "name": "@haify/web-ui",
   "version": "1.0.0",
   "description": "Haify Controller Web UI",
   "type": "module",

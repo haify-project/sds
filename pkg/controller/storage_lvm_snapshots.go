@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"go.uber.org/zap"
 )
 

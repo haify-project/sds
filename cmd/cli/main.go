@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/haify/pkg/client"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "sds",
+		Use:   "haify",
 		Short: "Haify CLI - Software Defined Storage Management",
 		// main prints the error, once.
 		SilenceErrors: true,
@@ -30,18 +30,18 @@ func main() {
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&controllerAddr, "controller", "c", "127.0.0.1:3374", "Controller address")
-	rootCmd.PersistentFlags().StringVar(&tokenFlag, "token", "", "API token (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
+	rootCmd.PersistentFlags().StringVar(&tokenFlag, "token", "", "API token (default: HAIFY_TOKEN env, ~/.haify/token, /etc/haify/token)")
 
 	// Transport security, matching the controller's [tls] section. Any of the
 	// material flags implies --tls, so an operator who points at a CA cannot
 	// end up talking plaintext to a TLS controller and reading the handshake
 	// error as an outage.
-	rootCmd.PersistentFlags().BoolVar(&tlsFlags.Enabled, "tls", false, "Connect over TLS (implied by --tls-ca/--tls-cert; env SDS_TLS)")
-	rootCmd.PersistentFlags().StringVar(&tlsFlags.CACert, "tls-ca", "", "CA bundle that signed the controller certificate (env SDS_TLS_CA; default: system trust store)")
-	rootCmd.PersistentFlags().StringVar(&tlsFlags.ClientCert, "tls-cert", "", "Client certificate, for a controller requiring mutual TLS (env SDS_TLS_CERT)")
-	rootCmd.PersistentFlags().StringVar(&tlsFlags.ClientKey, "tls-key", "", "Client private key (env SDS_TLS_KEY)")
-	rootCmd.PersistentFlags().StringVar(&tlsFlags.ServerName, "tls-server-name", "", "Name to verify against the controller certificate (env SDS_TLS_SERVER_NAME)")
-	rootCmd.PersistentFlags().BoolVar(&tlsFlags.Insecure, "tls-insecure", false, "Encrypt but do NOT verify the controller — accepts any certificate (env SDS_TLS_INSECURE)")
+	rootCmd.PersistentFlags().BoolVar(&tlsFlags.Enabled, "tls", false, "Connect over TLS (implied by --tls-ca/--tls-cert; env HAIFY_TLS)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.CACert, "tls-ca", "", "CA bundle that signed the controller certificate (env HAIFY_TLS_CA; default: system trust store)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.ClientCert, "tls-cert", "", "Client certificate, for a controller requiring mutual TLS (env HAIFY_TLS_CERT)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.ClientKey, "tls-key", "", "Client private key (env HAIFY_TLS_KEY)")
+	rootCmd.PersistentFlags().StringVar(&tlsFlags.ServerName, "tls-server-name", "", "Name to verify against the controller certificate (env HAIFY_TLS_SERVER_NAME)")
+	rootCmd.PersistentFlags().BoolVar(&tlsFlags.Insecure, "tls-insecure", false, "Encrypt but do NOT verify the controller — accepts any certificate (env HAIFY_TLS_INSECURE)")
 
 	rootCmd.AddCommand(poolCommand())
 	rootCmd.AddCommand(nodeCommand())

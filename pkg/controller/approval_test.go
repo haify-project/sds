@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/event"
-	"github.com/haify-project/sds/pkg/rbac"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/event"
+	"github.com/haify-project/haify/pkg/rbac"
 )
 
 func approvalFixture(t *testing.T) (*Server, *rbac.Engine) {
@@ -43,7 +43,7 @@ func as(user string) context.Context {
 // callThrough runs one call the way the server does: approval interceptor,
 // then a handler that records that it ran.
 func callThrough(g *approvalGate, ctx context.Context, method string, req any, ran *int) error {
-	_, err := approvalUnaryInterceptor(g)(ctx, req, &grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/" + method},
+	_, err := approvalUnaryInterceptor(g)(ctx, req, &grpc.UnaryServerInfo{FullMethod: "/v1.HaifyController/" + method},
 		func(context.Context, any) (any, error) { *ran++; return nil, nil })
 	return err
 }
@@ -63,7 +63,7 @@ func TestTwoPersonApproval(t *testing.T) {
 	srv, _ := approvalFixture(t)
 	g := srv.ctrl.approvals
 	ran := 0
-	del := &sdspb.DeleteBackupTargetRequest{Name: "offsite"}
+	del := &haifypb.DeleteBackupTargetRequest{Name: "offsite"}
 
 	id := pendingID(t, callThrough(g, as("alice"), "DeleteBackupTarget", del, &ran))
 	assert.Zero(t, ran)
@@ -71,19 +71,19 @@ func TestTwoPersonApproval(t *testing.T) {
 		"repeating it before approval finds the same request")
 	assert.Equal(t, event.TypeApprovalRequested, srv.ctrl.events.Recent(event.Filter{}, 0, 10)[0].Type)
 
-	resp, err := srv.ApproveRequest(as("alice"), &sdspb.ApproveRequestRequest{Id: id})
+	resp, err := srv.ApproveRequest(as("alice"), &haifypb.ApproveRequestRequest{Id: id})
 	require.NoError(t, err)
 	assert.False(t, resp.Success)
 	assert.Contains(t, resp.Message, "cannot be approved by the user who made it")
-	_, err = srv.ApproveRequest(as("olga"), &sdspb.ApproveRequestRequest{Id: id})
+	_, err = srv.ApproveRequest(as("olga"), &haifypb.ApproveRequestRequest{Id: id})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err), "an operator has no approve right")
 
-	resp, err = srv.ApproveRequest(as("bob"), &sdspb.ApproveRequestRequest{Id: id})
+	resp, err = srv.ApproveRequest(as("bob"), &haifypb.ApproveRequestRequest{Id: id})
 	require.NoError(t, err)
 	require.True(t, resp.Success, resp.Message)
 
 	// The approval is for that exact call, by that caller.
-	assert.Error(t, callThrough(g, as("alice"), "DeleteBackupTarget", &sdspb.DeleteBackupTargetRequest{Name: "other"}, &ran))
+	assert.Error(t, callThrough(g, as("alice"), "DeleteBackupTarget", &haifypb.DeleteBackupTargetRequest{Name: "other"}, &ran))
 	assert.Error(t, callThrough(g, as("bob"), "DeleteBackupTarget", del, &ran))
 	assert.Zero(t, ran)
 	require.NoError(t, callThrough(g, as("alice"), "DeleteBackupTarget", del, &ran))
@@ -92,31 +92,31 @@ func TestTwoPersonApproval(t *testing.T) {
 	assert.Equal(t, 1, ran)
 
 	// Calls off the list are untouched.
-	require.NoError(t, callThrough(g, as("olga"), "CreateBackup", &sdspb.CreateBackupRequest{Resource: "r"}, &ran))
+	require.NoError(t, callThrough(g, as("olga"), "CreateBackup", &haifypb.CreateBackupRequest{Resource: "r"}, &ran))
 }
 
 func TestApprovalExpiresAndRejects(t *testing.T) {
 	srv, _ := approvalFixture(t)
 	g := srv.ctrl.approvals
 	ran := 0
-	req := &sdspb.DeleteBackupRequest{Id: "b1"}
+	req := &haifypb.DeleteBackupRequest{Id: "b1"}
 	id := pendingID(t, callThrough(g, as("alice"), "DeleteBackup", req, &ran))
-	resp, err := srv.RejectRequest(as("bob"), &sdspb.RejectRequestRequest{Id: id})
+	resp, err := srv.RejectRequest(as("bob"), &haifypb.RejectRequestRequest{Id: id})
 	require.NoError(t, err)
 	require.True(t, resp.Success)
 	newID := pendingID(t, callThrough(g, as("alice"), "DeleteBackup", req, &ran))
 	assert.NotEqual(t, id, newID, "a rejected request is closed; asking again opens a new one")
 
 	g.now = func() time.Time { return time.Now().Add(2 * time.Hour) }
-	resp2, err := srv.ApproveRequest(as("bob"), &sdspb.ApproveRequestRequest{Id: newID})
+	resp2, err := srv.ApproveRequest(as("bob"), &haifypb.ApproveRequestRequest{Id: newID})
 	require.NoError(t, err)
 	assert.False(t, resp2.Success)
 	assert.Contains(t, resp2.Message, "expired")
 
-	list, err := srv.ListApprovals(as("bob"), &sdspb.ListApprovalsRequest{IncludeClosed: true})
+	list, err := srv.ListApprovals(as("bob"), &haifypb.ListApprovalsRequest{IncludeClosed: true})
 	require.NoError(t, err)
 	assert.Len(t, list.Approvals, 2)
-	open, _ := srv.ListApprovals(as("bob"), &sdspb.ListApprovalsRequest{})
+	open, _ := srv.ListApprovals(as("bob"), &haifypb.ListApprovalsRequest{})
 	assert.Empty(t, open.Approvals)
 }
 
@@ -132,7 +132,7 @@ func TestApprovalHoldsBackRESTUserChanges(t *testing.T) {
 }
 
 func TestMaskedRequestHidesSecrets(t *testing.T) {
-	out := maskedRequest(&sdspb.AddBackupTargetRequest{Name: "t", Secret: "s3cr3t", User: "k"})
+	out := maskedRequest(&haifypb.AddBackupTargetRequest{Name: "t", Secret: "s3cr3t", User: "k"})
 	assert.NotContains(t, out, "s3cr3t")
 	assert.Contains(t, out, `"name":"t"`)
 }
@@ -141,7 +141,7 @@ func TestMaskedRequestHidesSecrets(t *testing.T) {
 // destructive call unguarded without anyone noticing.
 func TestDefaultApprovalMethodsExist(t *testing.T) {
 	methods := map[string]bool{}
-	for _, m := range sdspb.SDSController_ServiceDesc.Methods {
+	for _, m := range haifypb.HaifyController_ServiceDesc.Methods {
 		methods[m.MethodName] = true
 	}
 	for _, m := range config.DefaultApprovalMethods {

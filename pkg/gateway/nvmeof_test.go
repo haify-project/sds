@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -45,7 +45,7 @@ func TestGenerateNVMeGatewayConfig(t *testing.T) {
 
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:      "data",
-		Nqn:           "nqn.2024-01.com.example:sds.data",
+		Nqn:           "nqn.2024-01.com.example:haify.data",
 		ServiceIp:     "192.168.1.150/24",
 		TransportType: "tcp",
 	}
@@ -95,7 +95,7 @@ func TestGenerateNVMeGatewayConfigMultipleNamespaces(t *testing.T) {
 
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:      "data",
-		Nqn:           "nqn.2024-01.com.example:sds.multi-ns",
+		Nqn:           "nqn.2024-01.com.example:haify.multi-ns",
 		ServiceIp:     "10.0.0.50/24",
 		TransportType: "tcp",
 	}
@@ -136,7 +136,7 @@ func TestGenerateNVMeGatewayConfigRDMA(t *testing.T) {
 
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:      "data",
-		Nqn:           "nqn.2024-01.com.example:sds.rdma",
+		Nqn:           "nqn.2024-01.com.example:haify.rdma",
 		ServiceIp:     "192.168.1.150/24",
 		TransportType: "rdma",
 	}
@@ -172,7 +172,7 @@ func TestGenerateNVMeGatewayConfigDefaultTransport(t *testing.T) {
 
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:  "data",
-		Nqn:       "nqn.2024-01.com.example:sds.default",
+		Nqn:       "nqn.2024-01.com.example:haify.default",
 		ServiceIp: "192.168.1.150/24",
 		// No TransportType specified
 	}
@@ -192,9 +192,9 @@ func TestGenerateNQN(t *testing.T) {
 		resource string
 		expected string
 	}{
-		{"data", "nqn.2024-01.com.example:sds.data"},
-		{"my-resource", "nqn.2024-01.com.example:sds.my-resource"},
-		{"storage_01", "nqn.2024-01.com.example:sds.storage_01"},
+		{"data", "nqn.2024-01.com.example:haify.data"},
+		{"my-resource", "nqn.2024-01.com.example:haify.my-resource"},
+		{"storage_01", "nqn.2024-01.com.example:haify.storage_01"},
 	}
 
 	for _, tt := range tests {
@@ -226,7 +226,7 @@ func TestNVMeGatewayRequiresTwoVolumes(t *testing.T) {
 	ctx := context.Background()
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:  "single-volume",
-		Nqn:       "nqn.2024-01.com.example:sds.single",
+		Nqn:       "nqn.2024-01.com.example:haify.single",
 		ServiceIp: "192.168.1.150/24",
 	}
 
@@ -298,7 +298,7 @@ func TestNVMeGatewayUUIDGeneration(t *testing.T) {
 	baseManager := New(mockResources, mockDeployment, logger, hosts)
 	nvmeManager := NewNVMeManager(baseManager)
 
-	nqn := "nqn.2024-01.com.example:sds.data"
+	nqn := "nqn.2024-01.com.example:haify.data"
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:  "data",
 		Nqn:       nqn,
@@ -337,7 +337,7 @@ func TestNVMeGatewaySerialGeneration(t *testing.T) {
 	baseManager := New(mockResources, mockDeployment, logger, hosts)
 	nvmeManager := NewNVMeManager(baseManager)
 
-	nqn := "nqn.2024-01.com.example:sds.data"
+	nqn := "nqn.2024-01.com.example:haify.data"
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:  "data",
 		Nqn:       nqn,

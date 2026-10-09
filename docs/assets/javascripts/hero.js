@@ -2,11 +2,11 @@
 // (the timings are in partials/hero.html), pauses it off screen, and holds
 // one frame when the reader has asked for less motion.
 (function () {
-  var svg = document.getElementById("sds-hero-scene");
+  var svg = document.getElementById("haify-hero-scene");
   if (!svg) return;
-  var caption = document.getElementById("sds-hero-caption");
+  var caption = document.getElementById("haify-hero-caption");
   var labels = {};
-  svg.querySelectorAll(".sds-hero-state").forEach(function (el) { labels[el.dataset.node] = el; });
+  svg.querySelectorAll(".haify-hero-state").forEach(function (el) { labels[el.dataset.node] = el; });
 
   // [from second, caption, server 1, server 2, server 3]
   var STEPS = [
@@ -27,14 +27,14 @@
     ["1", "2", "3"].forEach(function (n, k) {
       var state = STEPS[i][k + 2];
       labels[n].textContent = state;
-      labels[n].setAttribute("class", "sds-hero-state is-" + state.replace(" ", "-"));
+      labels[n].setAttribute("class", "haify-hero-state is-" + state.replace(" ", "-"));
     });
   }
 
   function tick() { render(); requestAnimationFrame(tick); }
 
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  document.getElementById("sds-replay").addEventListener("click", function () {
+  document.getElementById("haify-replay").addEventListener("click", function () {
     svg.setCurrentTime(still ? parseFloat(svg.dataset.still) : 0);
     render();
   });

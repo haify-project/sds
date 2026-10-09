@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,8 +28,8 @@ func withSelfHaBinary(t *testing.T, unit string, extra ...string) string {
 	require.NoError(t, os.WriteFile(controllerUnitPath, []byte(unit), 0o644))
 
 	dir := t.TempDir()
-	exe := filepath.Join(dir, "sds-controller")
-	for _, name := range append([]string{"sds-controller"}, extra...) {
+	exe := filepath.Join(dir, "haify-controller")
+	for _, name := range append([]string{"haify-controller"}, extra...) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("bin"), 0o755))
 	}
 	orig := controllerExecutable
@@ -55,7 +55,7 @@ func archDeployment(machine string) *fakeDeploymentClient {
 // fixed path: the unit goes to the standby verbatim.
 func TestEnableSelfHaInstallsBinaryAtUnitExecStart(t *testing.T) {
 	exe := withSelfHaBinary(t, "[Unit]\nDescription=x\n\n[Service]\n"+
-		"ExecStart=/usr/local/bin/sds-controller --config /etc/sds/controller.toml\n")
+		"ExecStart=/usr/local/bin/haify-controller --config /etc/haify/controller.toml\n")
 	dep := selfHaFakeDeployment()
 	ctrl, _, _ := newSelfHaTestController(t, dep)
 
@@ -64,12 +64,12 @@ func TestEnableSelfHaInstallsBinaryAtUnitExecStart(t *testing.T) {
 
 	require.Len(t, dep.installedFiles, 1)
 	assert.Equal(t, exe, dep.installedFiles[0].localPath)
-	assert.Equal(t, "/usr/local/bin/sds-controller", dep.installedFiles[0].remotePath)
+	assert.Equal(t, "/usr/local/bin/haify-controller", dep.installedFiles[0].remotePath)
 	assert.Equal(t, []string{"10.0.0.2"}, dep.installedFiles[0].hosts)
 
 	for _, dc := range dep.distributedConfigs {
 		if dc.remotePath == controllerUnitPath {
-			assert.Contains(t, dc.content, "ExecStart=/usr/local/bin/sds-controller ")
+			assert.Contains(t, dc.content, "ExecStart=/usr/local/bin/haify-controller ")
 		}
 	}
 }
@@ -78,7 +78,7 @@ func TestEnableSelfHaInstallsBinaryAtUnitExecStart(t *testing.T) {
 // the running binary.
 func TestEnableSelfHaUsesPerArchBinary(t *testing.T) {
 	arch := foreignArch()
-	exe := withSelfHaBinary(t, "[Service]\nExecStart=/opt/sds/bin/sds-controller\n", "sds-controller-"+arch)
+	exe := withSelfHaBinary(t, "[Service]\nExecStart=/opt/haify/bin/haify-controller\n", "haify-controller-"+arch)
 	dep := archDeployment(unameMachine(arch))
 	ctrl, _, _ := newSelfHaTestController(t, dep)
 
@@ -87,20 +87,20 @@ func TestEnableSelfHaUsesPerArchBinary(t *testing.T) {
 
 	require.Len(t, dep.installedFiles, 1)
 	assert.Equal(t, exe+"-"+arch, dep.installedFiles[0].localPath)
-	assert.Equal(t, "/opt/sds/bin/sds-controller", dep.installedFiles[0].remotePath)
+	assert.Equal(t, "/opt/haify/bin/haify-controller", dep.installedFiles[0].remotePath)
 }
 
 // Without a build for the standby's architecture, enable refuses before it
 // changes anything.
 func TestEnableSelfHaRefusesForeignArchBeforeChanges(t *testing.T) {
-	withSelfHaBinary(t, "[Service]\nExecStart=/opt/sds/bin/sds-controller\n")
+	withSelfHaBinary(t, "[Service]\nExecStart=/opt/haify/bin/haify-controller\n")
 	dep := archDeployment(unameMachine(foreignArch()))
 	ctrl, _, _ := newSelfHaTestController(t, dep)
 
 	_, err := ctrl.resources.EnableSelfHa(context.Background(), "10.0.0.50/24", "p0", 0, 0, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "node2 ("+unameMachine(foreignArch())+")")
-	assert.Contains(t, err.Error(), "sds-controller-<goarch>")
+	assert.Contains(t, err.Error(), "haify-controller-<goarch>")
 
 	assert.Empty(t, dep.installedFiles)
 	assert.Empty(t, dep.distributedConfigs)
@@ -125,15 +125,15 @@ func TestUnitExecStartPath(t *testing.T) {
 	cases := []struct {
 		unit, want, err string
 	}{
-		{"[Service]\nExecStart=/opt/sds/bin/sds-controller\n", "/opt/sds/bin/sds-controller", ""},
-		{"[Service]\nExecStart=/usr/local/bin/sds-controller --config /etc/sds/controller.toml\n", "/usr/local/bin/sds-controller", ""},
-		{"[Service]\nExecStart=-/usr/local/bin/sds-controller\n", "/usr/local/bin/sds-controller", ""},
-		{"[Service]\nExecStart=\"/srv/sds bin/sds-controller\" --x\n", "/srv/sds bin/sds-controller", ""},
+		{"[Service]\nExecStart=/opt/haify/bin/haify-controller\n", "/opt/haify/bin/haify-controller", ""},
+		{"[Service]\nExecStart=/usr/local/bin/haify-controller --config /etc/haify/controller.toml\n", "/usr/local/bin/haify-controller", ""},
+		{"[Service]\nExecStart=-/usr/local/bin/haify-controller\n", "/usr/local/bin/haify-controller", ""},
+		{"[Service]\nExecStart=\"/srv/haify bin/haify-controller\" --x\n", "/srv/haify bin/haify-controller", ""},
 		{"[Service]\nExecStart=-\n", "", "empty ExecStart"},
 		{"[Service]\n  ExecStart = /a/b \n", "/a/b", ""},
 		{"[Service]\nExecStart=/old\nExecStart=\nExecStart=/new --x\n", "/new", ""},
 		{"[Unit]\nExecStart=/wrong\n[Service]\nType=simple\n", "", "no ExecStart"},
-		{"[Service]\nExecStart=sds-controller\n", "", "absolute"},
+		{"[Service]\nExecStart=haify-controller\n", "", "absolute"},
 	}
 	for _, c := range cases {
 		got, err := unitExecStartPath(c.unit)

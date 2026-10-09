@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Retention counts snapshots; it does not look at the pool they fill. On a

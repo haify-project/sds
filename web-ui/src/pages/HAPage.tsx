@@ -57,7 +57,7 @@ export function HAPage() {
     refetchInterval: 15000,
   });
 
-  // DRBD reports the Primary by host name (`sds-e`) and the registry lists
+  // DRBD reports the Primary by host name (`haify-e`) and the registry lists
   // members by node name (`node-e`). Without this map the active member is
   // never the one highlighted.
   const { data: nodeList } = useQuery({

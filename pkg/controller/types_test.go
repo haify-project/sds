@@ -74,13 +74,13 @@ func TestResourceInfoProtocol(t *testing.T) {
 func TestSnapshotInfoFields(t *testing.T) {
 	snap := &SnapshotInfo{
 		Name:      "daily-backup",
-		Volume:    "sds_vg0/data",
+		Volume:    "haify_vg0/data",
 		SizeGB:    500,
 		CreatedAt: "2024-01-15 10:30:00",
 	}
 
 	assert.Equal(t, "daily-backup", snap.Name)
-	assert.Equal(t, "sds_vg0/data", snap.Volume)
+	assert.Equal(t, "haify_vg0/data", snap.Volume)
 	assert.Equal(t, uint64(500), snap.SizeGB)
 	assert.Equal(t, "2024-01-15 10:30:00", snap.CreatedAt)
 }

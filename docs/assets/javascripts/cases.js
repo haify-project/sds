@@ -1,7 +1,7 @@
 // The use-case illustrations: animate only while on screen, and hold one
 // telling frame when the reader has asked for less motion.
 (function () {
-  var svgs = document.querySelectorAll(".sds-cases .sds-ill");
+  var svgs = document.querySelectorAll(".haify-cases .haify-ill");
   if (!svgs.length) return;
 
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

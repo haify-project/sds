@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haify-project/sds/pkg/backup"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/backup"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // dataMoveTimeout is how long a volume transfer may take when the caller set no
@@ -86,7 +86,7 @@ trap cleanup EXIT
 %s
 sudo dd if="$SRC" bs=4M count=%d iflag=fullblock,count_bytes status=none | gzip -1 -c | tee >(wc -c > "$CNT") | %s
 for i in $(seq 1 100); do [ -s "$CNT" ] && break; sleep 0.1; done
-echo "SDS_SENT=$(cat "$CNT")"`, closeSource, source, size, sess.PushCmd(object, size))
+echo "HAIFY_SENT=$(cat "$CNT")"`, closeSource, source, size, sess.PushCmd(object, size))
 		*uploaded = append(*uploaded, object)
 		res, err := bm.execDataMove(ctx, host, "bash -c "+shellSingleQuote(cmd))
 		if err != nil {
@@ -166,7 +166,7 @@ func shellSingleQuote(s string) string {
 func sentBytes(res *deployment.ExecResult) (uint64, error) {
 	for _, h := range res.Hosts {
 		for _, line := range strings.Split(h.Output, "\n") {
-			if v, ok := strings.CutPrefix(strings.TrimSpace(line), "SDS_SENT="); ok {
+			if v, ok := strings.CutPrefix(strings.TrimSpace(line), "HAIFY_SENT="); ok {
 				n, err := strconv.ParseUint(strings.TrimSpace(v), 10, 64)
 				if err != nil || n == 0 {
 					return 0, fmt.Errorf("the upload did not report how much it sent (%q)", v)

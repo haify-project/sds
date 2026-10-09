@@ -26,13 +26,13 @@ func nvmeNamespaceAdd() *cobra.Command {
 		Use:   "add --resource <name> --device <path>",
 		Short: "Add a namespace to an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.AddNVMeNamespace(cmd.Context(), resource, device)
+			err = haifyClient.AddNVMeNamespace(cmd.Context(), resource, device)
 			if err != nil {
 				return fmt.Errorf("failed to add NVMe namespace: %w", err)
 			}
@@ -58,13 +58,13 @@ func nvmeNamespaceRemove() *cobra.Command {
 		Use:   "remove --resource <name> --id <nsid>",
 		Short: "Remove a namespace from an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.RemoveNVMeNamespace(cmd.Context(), resource, namespaceID)
+			err = haifyClient.RemoveNVMeNamespace(cmd.Context(), resource, namespaceID)
 			if err != nil {
 				return fmt.Errorf("failed to remove NVMe namespace: %w", err)
 			}
@@ -89,13 +89,13 @@ func nvmeNamespaceList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List namespaces on an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			namespaces, err := sdsClient.ListNVMeNamespaces(cmd.Context(), resource)
+			namespaces, err := haifyClient.ListNVMeNamespaces(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to list NVMe namespaces: %w", err)
 			}
@@ -139,13 +139,13 @@ func nvmeHostAdd() *cobra.Command {
 		Use:   "add --resource <name> --nqn <host-nqn>",
 		Short: "Allow a host on an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.AddNVMeHost(cmd.Context(), resource, hostNQN)
+			err = haifyClient.AddNVMeHost(cmd.Context(), resource, hostNQN)
 			if err != nil {
 				return fmt.Errorf("failed to add NVMe host: %w", err)
 			}
@@ -170,13 +170,13 @@ func nvmeHostRemove() *cobra.Command {
 		Use:   "remove --resource <name> --nqn <host-nqn>",
 		Short: "Remove a host from an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.RemoveNVMeHost(cmd.Context(), resource, hostNQN)
+			err = haifyClient.RemoveNVMeHost(cmd.Context(), resource, hostNQN)
 			if err != nil {
 				return fmt.Errorf("failed to remove NVMe host: %w", err)
 			}
@@ -201,13 +201,13 @@ func nvmeHostList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List hosts allowed on an NVMe gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			hosts, err := sdsClient.ListNVMeHosts(cmd.Context(), resource)
+			hosts, err := haifyClient.ListNVMeHosts(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to list NVMe hosts: %w", err)
 			}

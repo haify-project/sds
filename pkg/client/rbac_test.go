@@ -14,13 +14,13 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // rbacStub answers the RBAC RPCs the way the controller does, recording the
 // bearer token each call carried.
 type rbacStub struct {
-	sdspb.UnimplementedSDSControllerServer
+	haifypb.UnimplementedHaifyControllerServer
 	enabled bool
 	auth    []string
 }
@@ -30,25 +30,25 @@ func (s *rbacStub) seen(ctx context.Context) {
 	s.auth = append(s.auth, md.Get("authorization")...)
 }
 
-func (s *rbacStub) GetRbacWhoami(ctx context.Context, _ *sdspb.GetRbacWhoamiRequest) (*sdspb.GetRbacWhoamiResponse, error) {
+func (s *rbacStub) GetRbacWhoami(ctx context.Context, _ *haifypb.GetRbacWhoamiRequest) (*haifypb.GetRbacWhoamiResponse, error) {
 	s.seen(ctx)
-	return &sdspb.GetRbacWhoamiResponse{Enabled: s.enabled, User: "alice", Role: "admin", CanAdmin: true}, nil
+	return &haifypb.GetRbacWhoamiResponse{Enabled: s.enabled, User: "alice", Role: "admin", CanAdmin: true}, nil
 }
 
-func (s *rbacStub) CreateRbacUser(ctx context.Context, req *sdspb.CreateRbacUserRequest) (*sdspb.CreateRbacUserResponse, error) {
+func (s *rbacStub) CreateRbacUser(ctx context.Context, req *haifypb.CreateRbacUserRequest) (*haifypb.CreateRbacUserResponse, error) {
 	s.seen(ctx)
 	if !s.enabled {
-		return &sdspb.CreateRbacUserResponse{Message: "RBAC is not enabled"}, nil
+		return &haifypb.CreateRbacUserResponse{Message: "RBAC is not enabled"}, nil
 	}
 	if req.Name == "taken" {
-		return &sdspb.CreateRbacUserResponse{Enabled: true, Message: `user "taken" already exists`}, nil
+		return &haifypb.CreateRbacUserResponse{Enabled: true, Message: `user "taken" already exists`}, nil
 	}
-	return &sdspb.CreateRbacUserResponse{Success: true, Enabled: true, Token: "generated-" + req.Name}, nil
+	return &haifypb.CreateRbacUserResponse{Success: true, Enabled: true, Token: "generated-" + req.Name}, nil
 }
 
-func (s *rbacStub) DeleteRbacUser(ctx context.Context, _ *sdspb.DeleteRbacUserRequest) (*sdspb.DeleteRbacUserResponse, error) {
+func (s *rbacStub) DeleteRbacUser(ctx context.Context, _ *haifypb.DeleteRbacUserRequest) (*haifypb.DeleteRbacUserResponse, error) {
 	s.seen(ctx)
-	return &sdspb.DeleteRbacUserResponse{Success: s.enabled, Enabled: s.enabled}, nil
+	return &haifypb.DeleteRbacUserResponse{Success: s.enabled, Enabled: s.enabled}, nil
 }
 
 func startRBACStub(t *testing.T, p *clientTestPKI, stub *rbacStub) string {
@@ -59,7 +59,7 @@ func startRBACStub(t *testing.T, p *clientTestPKI, stub *rbacStub) string {
 		Certificates: []tls.Certificate{p.server},
 		MinVersion:   tls.VersionTLS12,
 	})))
-	sdspb.RegisterSDSControllerServer(srv, stub)
+	haifypb.RegisterHaifyControllerServer(srv, stub)
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 	return lis.Addr().String()
@@ -72,8 +72,8 @@ func TestRBACCallsOverTLS(t *testing.T) {
 	stub := &rbacStub{enabled: true}
 	addr := startRBACStub(t, pki, stub)
 
-	c, err := NewSDSClient(addr, WithToken("admin-token"),
-		WithTLS(TLSOptions{CACert: pki.caFile, ServerName: "sds-controller.test"}))
+	c, err := NewHaifyClient(addr, WithToken("admin-token"),
+		WithTLS(TLSOptions{CACert: pki.caFile, ServerName: "haify-controller.test"}))
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -97,7 +97,7 @@ func TestRBACCallsReportDisabled(t *testing.T) {
 	pki := newClientTestPKI(t)
 	addr := startRBACStub(t, pki, &rbacStub{enabled: false})
 
-	c, err := NewSDSClient(addr, WithTLS(TLSOptions{CACert: pki.caFile, ServerName: "sds-controller.test"}))
+	c, err := NewHaifyClient(addr, WithTLS(TLSOptions{CACert: pki.caFile, ServerName: "haify-controller.test"}))
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

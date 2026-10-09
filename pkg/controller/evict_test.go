@@ -12,11 +12,11 @@ import (
 )
 
 // evictScript must evict through whichever promoter config exists — a gateway
-// is sds-iscsi-<res>, not sds-ha-<res> — and fail when there is none, because
+// is haify-iscsi-<res>, not haify-ha-<res> — and fail when there is none, because
 // drbd-reactorctl reports success for a config name that does not exist.
 func TestEvictScriptPicksTheExistingPromoter(t *testing.T) {
 	script := evictScript("isc1")
-	for _, n := range []string{"sds-ha-isc1", "sds-nfs-isc1", "sds-iscsi-isc1", "sds-nvmeof-isc1"} {
+	for _, n := range []string{"haify-ha-isc1", "haify-nfs-isc1", "haify-iscsi-isc1", "haify-nvmeof-isc1"} {
 		assert.Contains(t, script, n)
 	}
 
@@ -44,10 +44,10 @@ func TestEvictScriptPicksTheExistingPromoter(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, out, "no drbd-reactor promoter manages isc1")
 
-	require.NoError(t, os.WriteFile(filepath.Join(confDir, "sds-iscsi-isc1.toml"), nil, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(confDir, "haify-iscsi-isc1.toml"), nil, 0644))
 	out, err = run()
 	require.NoError(t, err)
-	assert.Equal(t, "evict sds-iscsi-isc1\nNode 'n2' took over", out)
+	assert.Equal(t, "evict haify-iscsi-isc1\nNode 'n2' took over", out)
 
 	// reactorctl exits 0 when it gave up and re-enabled the resource here.
 	fakeReactorctl("Local node still DRBD Primary, not all services stopped in time locally\\nRe-enabling isc1")

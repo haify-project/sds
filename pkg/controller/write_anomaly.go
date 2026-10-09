@@ -10,9 +10,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/alert"
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/alert"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Write-anomaly detection ([alert.write_anomaly]).
@@ -26,11 +26,11 @@ import (
 // When it fires, the detector does what keeps the clean history: it freezes
 // the resource's snapshot schedule (snapshot_freeze.go), so neither retention
 // nor a filling thin pool removes the snapshots from before the rewrite and
-// nobody can delete them through sds, and it takes one more snapshot now. It
+// nobody can delete them through haify, and it takes one more snapshot now. It
 // raises resource.write_anomaly at critical severity. It does not claim an
 // attack: a bulk import, a reindex or a restore look the same. Encryption
 // that is slow, paused or throttled to look normal does not trip it, and a
-// volume whose guest encrypts it (or an sds LUKS resource) changes nothing
+// volume whose guest encrypts it (or an haify LUKS resource) changes nothing
 // about the signal: it is the rate, not the content.
 //
 // Each resource learns its own normal, from the polls that were not

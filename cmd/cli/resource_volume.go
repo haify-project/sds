@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/haify-project/sds/pkg/util"
+	"github.com/haify-project/haify/pkg/util"
 	"github.com/spf13/cobra"
 )
 
@@ -43,13 +43,13 @@ func resourceAddVolume() *cobra.Command {
 				return fmt.Errorf("size too small (minimum 1 GiB)")
 			}
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.AddVolume(ctx, resource, volume, pool, uint32(sizeGiB))
+			err = haifyClient.AddVolume(ctx, resource, volume, pool, uint32(sizeGiB))
 			if err != nil {
 				return fmt.Errorf("failed to add volume: %w", err)
 			}
@@ -94,13 +94,13 @@ func resourceRemoveVolume() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.RemoveVolume(ctx, resource, volumeID)
+			err = haifyClient.RemoveVolume(ctx, resource, volumeID)
 			if err != nil {
 				return fmt.Errorf("failed to remove volume: %w", err)
 			}
@@ -142,15 +142,15 @@ func resourceResizeVolume() *cobra.Command {
 				return fmt.Errorf("size too small (minimum 1 GiB)")
 			}
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			resize := sdsClient.ResizeVolume
+			resize := haifyClient.ResizeVolume
 			if ignoreFreeSpace {
-				resize = sdsClient.ResizeVolumeIgnoringFreeSpace
+				resize = haifyClient.ResizeVolumeIgnoringFreeSpace
 			}
 			err = resize(ctx, resource, volumeID, uint32(sizeGiB))
 			if err != nil {

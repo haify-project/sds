@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// The controller reads sds-proxy's published snapshot to answer the one question
+// The controller reads haify-proxy's published snapshot to answer the one question
 // protocol A makes urgent: how much data would a DR failover lose? A snapshot it
 // cannot read must therefore come back as UNKNOWN (nil), never as a zeroed
 // struct — reporting a zero backlog when the truth is unknown would tell an
@@ -17,7 +17,7 @@ func TestParseMetricsRejectsUnusableInput(t *testing.T) {
 	}{
 		{"empty", ""},
 		{"whitespace only", "  \n "},
-		{"shell error instead of json", "cat: /run/sds-proxy/r.json: No such file or directory"},
+		{"shell error instead of json", "cat: /run/haify-proxy/r.json: No such file or directory"},
 		{"truncated document", `{"buffer_used_bytes": 12`},
 	}
 	for _, tt := range tests {
@@ -29,7 +29,7 @@ func TestParseMetricsRejectsUnusableInput(t *testing.T) {
 	}
 }
 
-// Field-for-field against the document sds_proxy::metrics::Snapshot serializes.
+// Field-for-field against the document haify_proxy::metrics::Snapshot serializes.
 // If either side renames a field this test is what catches it.
 func TestParseMetricsReadsPublishedSnapshot(t *testing.T) {
 	const body = `{

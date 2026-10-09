@@ -6,21 +6,21 @@ import (
 	"strings"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
-func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeRequest) (*sdspb.RegisterNodeResponse, error) {
+func (s *Server) RegisterNode(ctx context.Context, req *haifypb.RegisterNodeRequest) (*haifypb.RegisterNodeResponse, error) {
 	node, err := s.nodes.RegisterNodeWithReplicationAddress(ctx, req.Name, req.Address, req.ReplicationAddress)
 	if err != nil {
-		return &sdspb.RegisterNodeResponse{
+		return &haifypb.RegisterNodeResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.RegisterNodeResponse{
+	return &haifypb.RegisterNodeResponse{
 		Success: true,
 		Message: "Node registered successfully",
-		Node: &sdspb.NodeInfo{
+		Node: &haifypb.NodeInfo{
 			Name:               node.Name,
 			Address:            node.Address,
 			ReplicationAddress: node.ReplicationAddress,
@@ -34,51 +34,51 @@ func (s *Server) RegisterNode(ctx context.Context, req *sdspb.RegisterNodeReques
 	}, nil
 }
 
-func (s *Server) UnregisterNode(ctx context.Context, req *sdspb.UnregisterNodeRequest) (*sdspb.UnregisterNodeResponse, error) {
+func (s *Server) UnregisterNode(ctx context.Context, req *haifypb.UnregisterNodeRequest) (*haifypb.UnregisterNodeResponse, error) {
 	err := s.nodes.UnregisterNode(ctx, req.Address)
 	if err != nil {
-		return &sdspb.UnregisterNodeResponse{
+		return &haifypb.UnregisterNodeResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.UnregisterNodeResponse{
+	return &haifypb.UnregisterNodeResponse{
 		Success: true,
 		Message: "Node unregistered successfully",
 	}, nil
 }
 
-func (s *Server) DrainNode(ctx context.Context, req *sdspb.DrainNodeRequest) (*sdspb.DrainNodeResponse, error) {
+func (s *Server) DrainNode(ctx context.Context, req *haifypb.DrainNodeRequest) (*haifypb.DrainNodeResponse, error) {
 	moved, err := s.resources.DrainNode(ctx, req.Name)
 	if err != nil {
-		return &sdspb.DrainNodeResponse{Success: false, Message: err.Error(), ResourcesMoved: moved}, nil
+		return &haifypb.DrainNodeResponse{Success: false, Message: err.Error(), ResourcesMoved: moved}, nil
 	}
-	return &sdspb.DrainNodeResponse{
+	return &haifypb.DrainNodeResponse{
 		Success:        true,
 		Message:        fmt.Sprintf("node %q drained; %d resource(s) moved", req.Name, len(moved)),
 		ResourcesMoved: moved,
 	}, nil
 }
 
-func (s *Server) UndrainNode(ctx context.Context, req *sdspb.UndrainNodeRequest) (*sdspb.UndrainNodeResponse, error) {
+func (s *Server) UndrainNode(ctx context.Context, req *haifypb.UndrainNodeRequest) (*haifypb.UndrainNodeResponse, error) {
 	if err := s.resources.UndrainNode(ctx, req.Name); err != nil {
-		return &sdspb.UndrainNodeResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.UndrainNodeResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.UndrainNodeResponse{Success: true, Message: fmt.Sprintf("node %q returned to service", req.Name)}, nil
+	return &haifypb.UndrainNodeResponse{Success: true, Message: fmt.Sprintf("node %q returned to service", req.Name)}, nil
 }
 
-func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb.GetNodeResponse, error) {
+func (s *Server) GetNode(ctx context.Context, req *haifypb.GetNodeRequest) (*haifypb.GetNodeResponse, error) {
 	node, err := s.nodes.GetNode(ctx, req.Address)
 	if err != nil {
-		return &sdspb.GetNodeResponse{
+		return &haifypb.GetNodeResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.GetNodeResponse{
+	return &haifypb.GetNodeResponse{
 		Success: true,
 		Message: "Node found",
-		Node: &sdspb.NodeInfo{
+		Node: &haifypb.NodeInfo{
 			Name:               node.Name,
 			Address:            node.Address,
 			Hostname:           node.Hostname,
@@ -92,11 +92,11 @@ func (s *Server) GetNode(ctx context.Context, req *sdspb.GetNodeRequest) (*sdspb
 	}, nil
 }
 
-func (s *Server) SetNodeAddress(ctx context.Context, req *sdspb.SetNodeAddressRequest) (*sdspb.SetNodeAddressResponse, error) {
+func (s *Server) SetNodeAddress(ctx context.Context, req *haifypb.SetNodeAddressRequest) (*haifypb.SetNodeAddressResponse, error) {
 	moves := []AddressMove{{Node: req.Node, Address: req.Address, ReplicationAddress: req.ReplicationAddress}}
 	if len(req.Moves) > 0 {
 		if req.Node != "" || req.Address != "" {
-			return &sdspb.SetNodeAddressResponse{Success: false, Message: "give node and address, or moves, not both"}, nil
+			return &haifypb.SetNodeAddressResponse{Success: false, Message: "give node and address, or moves, not both"}, nil
 		}
 		moves = moves[:0]
 		for _, m := range req.Moves {
@@ -105,11 +105,11 @@ func (s *Server) SetNodeAddress(ctx context.Context, req *sdspb.SetNodeAddressRe
 	}
 	change, err := s.nodes.SetNodeAddresses(ctx, moves)
 	if err != nil {
-		return &sdspb.SetNodeAddressResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.SetNodeAddressResponse{Success: false, Message: err.Error()}, nil
 	}
 	s.resources.RenumberInResources(ctx, change)
 	for _, name := range change.WANResources {
-		resp, err := s.RepairWanProxy(ctx, &sdspb.RepairWanProxyRequest{Name: name})
+		resp, err := s.RepairWanProxy(ctx, &haifypb.RepairWanProxyRequest{Name: name})
 		switch {
 		case err != nil:
 			change.Failed = append(change.Failed, fmt.Sprintf("%s: rebuild WAN proxy: %v", name, err))
@@ -126,7 +126,7 @@ func (s *Server) SetNodeAddress(ctx context.Context, req *sdspb.SetNodeAddressRe
 		parts = append(parts, p)
 	}
 	msg := strings.Join(parts, "; ")
-	return &sdspb.SetNodeAddressResponse{
+	return &haifypb.SetNodeAddressResponse{
 		Success:   len(change.Failed) == 0,
 		Message:   msg,
 		Resources: change.Resources,
@@ -134,15 +134,15 @@ func (s *Server) SetNodeAddress(ctx context.Context, req *sdspb.SetNodeAddressRe
 	}, nil
 }
 
-func (s *Server) SetNodeLabels(ctx context.Context, req *sdspb.SetNodeLabelsRequest) (*sdspb.SetNodeLabelsResponse, error) {
+func (s *Server) SetNodeLabels(ctx context.Context, req *haifypb.SetNodeLabelsRequest) (*haifypb.SetNodeLabelsResponse, error) {
 	node, err := s.nodes.SetNodeLabels(ctx, req.Node, req.Labels, req.Replace)
 	if err != nil {
-		return &sdspb.SetNodeLabelsResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.SetNodeLabelsResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.SetNodeLabelsResponse{
+	return &haifypb.SetNodeLabelsResponse{
 		Success: true,
 		Message: "Node labels updated",
-		Node: &sdspb.NodeInfo{
+		Node: &haifypb.NodeInfo{
 			Name:               node.Name,
 			Address:            node.Address,
 			Hostname:           node.Hostname,
@@ -156,18 +156,18 @@ func (s *Server) SetNodeLabels(ctx context.Context, req *sdspb.SetNodeLabelsRequ
 	}, nil
 }
 
-func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*sdspb.ListNodesResponse, error) {
+func (s *Server) ListNodes(ctx context.Context, req *haifypb.ListNodesRequest) (*haifypb.ListNodesResponse, error) {
 	nodes, err := s.nodes.ListNodes(ctx)
 	if err != nil {
-		return &sdspb.ListNodesResponse{
+		return &haifypb.ListNodesResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	var pbNodes []*sdspb.NodeInfo
+	var pbNodes []*haifypb.NodeInfo
 	for _, n := range nodes {
-		pbNodes = append(pbNodes, &sdspb.NodeInfo{
+		pbNodes = append(pbNodes, &haifypb.NodeInfo{
 			Name:               n.Name,
 			Address:            n.Address,
 			Hostname:           n.Hostname,
@@ -180,26 +180,26 @@ func (s *Server) ListNodes(ctx context.Context, req *sdspb.ListNodesRequest) (*s
 		})
 	}
 
-	return &sdspb.ListNodesResponse{
+	return &haifypb.ListNodesResponse{
 		Success: true,
 		Message: "Nodes listed successfully",
 		Nodes:   pbNodes,
 	}, nil
 }
 
-func (s *Server) HealthCheck(ctx context.Context, req *sdspb.HealthCheckRequest) (*sdspb.HealthCheckResponse, error) {
+func (s *Server) HealthCheck(ctx context.Context, req *haifypb.HealthCheckRequest) (*haifypb.HealthCheckResponse, error) {
 	health, err := s.nodes.HealthCheck(ctx, req.Node)
 	if err != nil {
-		return &sdspb.HealthCheckResponse{
+		return &haifypb.HealthCheckResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	return &sdspb.HealthCheckResponse{
+	return &haifypb.HealthCheckResponse{
 		Success: true,
 		Message: "Health check completed",
-		Health: &sdspb.NodeHealthInfo{
+		Health: &haifypb.NodeHealthInfo{
 			DrbdInstalled:           health.DrbdInstalled,
 			DrbdVersion:             health.DrbdVersion,
 			DrbdReactorInstalled:    health.DrbdReactorInstalled,

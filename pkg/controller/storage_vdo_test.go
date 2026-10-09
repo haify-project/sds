@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 func TestNormalizeVDOPoolType(t *testing.T) {
@@ -26,17 +26,17 @@ func TestNormalizeVDOPoolType(t *testing.T) {
 }
 
 func TestParseVDOReport(t *testing.T) {
-	out := parseVDOReport(`  sds_a|  41.50|  63.20
-  sds_b|12.00|5.00
-  sds_b|77.00|1.00
+	out := parseVDOReport(`  haify_a|  41.50|  63.20
+  haify_b|12.00|5.00
+  haify_b|77.00|1.00
 
   garbage
 `)
 	require.Len(t, out, 2)
-	assert.InDelta(t, 41.5, out["sds_a"].PhysicalPercent, 0.001)
-	assert.InDelta(t, 63.2, out["sds_a"].SavingPercent, 0.001)
+	assert.InDelta(t, 41.5, out["haify_a"].PhysicalPercent, 0.001)
+	assert.InDelta(t, 63.2, out["haify_a"].SavingPercent, 0.001)
 	// Two VDO pools in one group: the fuller one is the one that matters.
-	assert.InDelta(t, 77.0, out["sds_b"].PhysicalPercent, 0.001)
+	assert.InDelta(t, 77.0, out["haify_b"].PhysicalPercent, 0.001)
 }
 
 func TestVDOProbeScriptChecksEveryPrerequisite(t *testing.T) {
@@ -49,24 +49,24 @@ func TestVDOProbeScriptChecksEveryPrerequisite(t *testing.T) {
 
 func TestAssertEncryptableVDOWithoutDB(t *testing.T) {
 	rm := &ResourceManager{controller: &Controller{}}
-	assert.NoError(t, rm.assertEncryptableVDO(context.Background(), "sds_pool"))
+	assert.NoError(t, rm.assertEncryptableVDO(context.Background(), "haify_pool"))
 }
 
 func TestAssertEncryptableVDORefusesVDOPool(t *testing.T) {
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "haify.db")}, zap.NewNop())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	ctx := context.Background()
-	require.NoError(t, db.SavePool(ctx, &database.Pool{Name: "sds_dedup", Type: vdoPoolType, Node: "n1"}))
-	require.NoError(t, db.SavePool(ctx, &database.Pool{Name: "sds_thin", Type: "thin_pool", Node: "n1"}))
+	require.NoError(t, db.SavePool(ctx, &database.Pool{Name: "haify_dedup", Type: vdoPoolType, Node: "n1"}))
+	require.NoError(t, db.SavePool(ctx, &database.Pool{Name: "haify_thin", Type: "thin_pool", Node: "n1"}))
 
 	ctrl := &Controller{db: db}
 	rm := &ResourceManager{controller: ctrl}
 	assert.NoError(t, rm.assertEncryptableVDO(ctx, "thin"))
-	err = rm.assertEncryptableVDO(ctx, "sds_thin", "dedup")
+	err = rm.assertEncryptableVDO(ctx, "haify_thin", "dedup")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "VDO-backed")
 
 	sm := &StorageManager{controller: ctrl}
-	assert.Equal(t, map[string]bool{"sds_dedup": true}, sm.vdoPoolNames(ctx))
+	assert.Equal(t, map[string]bool{"haify_dedup": true}, sm.vdoPoolNames(ctx))
 }

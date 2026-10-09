@@ -23,7 +23,7 @@ DRY_RUN=0
 VERBOSE=0
 
 # Where PVE's cluster filesystem is mounted. Only the tests point it elsewhere.
-PVE_DIR=${SDS_PVE_DIR:-/etc/pve}
+PVE_DIR=${HAIFY_PVE_DIR:-/etc/pve}
 
 log()  { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 step() { printf '\n=== Step %s: %s ===\n' "$1" "$2"; }
@@ -113,7 +113,7 @@ reachable() {
 # real path.
 copy_to() {
 	local node="$1" src="$2" dest="$3" mode="${4:-0644}" tmp
-	tmp="/tmp/.sds-bootstrap.$$.$(basename "$dest")"
+	tmp="/tmp/.haify-bootstrap.$$.$(basename "$dest")"
 	if [ "$DRY_RUN" = 1 ]; then
 		printf '[dry-run] %-12s copy %s -> %s (mode %s)\n' "$node" "$src" "$dest" "$mode"
 		return 0

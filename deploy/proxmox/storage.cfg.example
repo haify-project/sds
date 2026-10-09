@@ -4,10 +4,10 @@
 # every node picks it up. The plugin module itself must be installed on each
 # node (install.sh), because pvedaemon loads it in-process.
 
-# --- Minimal: let sds place replicas by free space -------------------------
-sds: sds0
+# --- Minimal: let haify place replicas by free space -------------------------
+haify: haify0
         controller 192.168.1.10
-        sdspool vg0
+        haifypool vg0
         replicas 2
         content images,rootdir
         shared 1
@@ -17,54 +17,54 @@ sds: sds0
 # already replicated) and ha-manager may restart a guest on any node.
 
 # --- Pinned replica placement ----------------------------------------------
-# Use sdsnodes when replicas must live on specific storage nodes. It takes
+# Use haifynodes when replicas must live on specific storage nodes. It takes
 # precedence over `replicas`.
 #
-#sds: sds-fast
+#haify: haify-fast
 #        controller 192.168.1.10:3375
-#        sdspool nvme0
-#        sdsnodes storage1,storage2,storage3
+#        haifypool nvme0
+#        haifynodes storage1,storage2,storage3
 #        storagetype lvm-thin
 #        content images
 #        shared 1
 
-# --- Two PVE clusters sharing one sds cluster ------------------------------
+# --- Two PVE clusters sharing one haify cluster ------------------------------
 # Resource names are derived as <resourceprefix>-<vmid>-<disk>. VM ids are only
 # unique within a PVE cluster, so give each cluster its own prefix or their
 # resource names will collide.
 #
-#sds: sds-clusterb
+#haify: haify-clusterb
 #        controller 192.168.1.10
-#        sdspool vg0
+#        haifypool vg0
 #        resourceprefix clusterb
 #        replicas 2
 #        content images
 #        shared 1
 
-# --- With sds auth/RBAC enabled --------------------------------------------
-# Give the token with `pvesm set sds0 --apitoken <token>` (or in the web
+# --- With haify auth/RBAC enabled --------------------------------------------
+# Give the token with `pvesm set haify0 --apitoken <token>` (or in the web
 # interface), not in this file: PVE hands it to the plugin, which keeps it in
-# /etc/pve/priv/storage/sds0.sds-token, readable by root only. Scope it to what
+# /etc/pve/priv/storage/haify0.haify-token, readable by root only. Scope it to what
 # the plugin needs rather than reusing an admin token.
 #
-#sds: sds0
+#haify: haify0
 #        controller 192.168.1.10
-#        sdspool vg0
+#        haifypool vg0
 #        replicas 2
 #        content images
 #        shared 1
 
 # --- Self-HA and HTTPS -------------------------------------------------------
-# Under Self-HA the controller runs on whichever node holds sds-meta, so list
+# Under Self-HA the controller runs on whichever node holds haify-meta, so list
 # every node that can run it; an address that refuses the connection is
 # skipped. https:// needs `[tls] rest = true` on the controller; the
 # certificate is verified, against controllerca when it is not signed by a CA
 # the PVE nodes already trust. Its names must include the addresses listed.
 #
-#sds: sds-ha
-#        controller https://sds1,https://sds2,https://sds3
-#        controllerca /etc/pve/sds-ca.pem
-#        sdspool vg0
+#haify: haify-ha
+#        controller https://haify1,https://haify2,https://haify3
+#        controllerca /etc/pve/haify-ca.pem
+#        haifypool vg0
 #        content images
 #        shared 1
 
@@ -72,17 +72,17 @@ sds: sds0
 #   controller      required. Comma-separated addresses, each host or host:port
 #                   (port defaults to 3375), optionally prefixed with https://.
 #   controllerca    PEM CA bundle for https:// addresses; default: system store.
-#   sdspool         sds pool (volume group) new volumes are carved from.
-#   sdsnodes        comma-separated nodes to place replicas on (pins placement).
-#   replicas        replica count for auto-placement; ignored with sdsnodes.
+#   haifypool         haify pool (volume group) new volumes are carved from.
+#   haifynodes        comma-separated nodes to place replicas on (pins placement).
+#   replicas        replica count for auto-placement; ignored with haifynodes.
 #   storagetype     lvm | lvm-thin | zfs. Defaults to the controller's default.
 #   resourceprefix  prefix for generated resource names (default "pve").
-#   apitoken        bearer token when sds [auth]/[rbac] is enabled; set it with
+#   apitoken        bearer token when haify [auth]/[rbac] is enabled; set it with
 #                   pvesm or the web interface so it is kept under /etc/pve/priv.
 #   onnoquorum      suspend-io (default) | io-error, for disks created later.
 #
-# Note: sds allocates in whole gigabytes, so a disk size is rounded UP to the
-# next GB. Volumes are always raw — snapshots come from sds (LVM/ZFS), not from
+# Note: haify allocates in whole gigabytes, so a disk size is rounded UP to the
+# next GB. Volumes are always raw — snapshots come from haify (LVM/ZFS), not from
 # an image format, so qcow2 is neither supported nor needed here.
 
 # --- I/O errors instead of a frozen guest on lost quorum -------------------
@@ -90,9 +90,9 @@ sds: sds0
 # so a guest waits out a partition instead of remounting its filesystems
 # read-only. Set io-error to have the guest see the error instead.
 #
-#sds: sds-ioerror
+#haify: haify-ioerror
 #        controller 192.168.1.10
-#        sdspool vg0
+#        haifypool vg0
 #        onnoquorum io-error
 #        content images
 #        shared 1

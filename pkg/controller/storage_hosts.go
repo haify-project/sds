@@ -6,7 +6,7 @@ import "context"
 // except those the node registry holds offline. A node that stopped answering
 // does not refuse SSH, it lets the connection hang, so asking it cost every
 // listing a TCP timeout per query — several per listing, one listing per
-// placement decision — and `sds pool list` failed outright with one node down.
+// placement decision — and `haify pool list` failed outright with one node down.
 // What is known of its pools is still in the database.
 func (sm *StorageManager) poolHosts(ctx context.Context) []string {
 	hosts := sm.controller.GetHosts()

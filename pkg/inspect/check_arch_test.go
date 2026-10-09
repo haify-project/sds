@@ -9,8 +9,8 @@ import (
 // architecture.
 func TestBinaryArchMismatchFails(t *testing.T) {
 	in := &Input{Probes: map[string]*NodeProbe{
-		"a": {Arch: "x86_64", CtlMachine: "3e00", CtlBin: "/opt/sds/bin/sds-controller"},
-		"b": {Arch: "aarch64", CtlMachine: "3e00", CtlBin: "/opt/sds/bin/sds-controller"},
+		"a": {Arch: "x86_64", CtlMachine: "3e00", CtlBin: "/opt/haify/bin/haify-controller"},
+		"b": {Arch: "aarch64", CtlMachine: "3e00", CtlBin: "/opt/haify/bin/haify-controller"},
 		"c": {Arch: "aarch64", CtlMachine: "b700"},
 		"d": {Arch: "x86_64"},
 	}}

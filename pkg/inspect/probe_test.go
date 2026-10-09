@@ -27,12 +27,12 @@ func TestParseProbe(t *testing.T) {
 		"reactor=1.5.0",
 		"reactor_active=active",
 		"ctl_active=active",
-		"ctl_bin=/opt/sds/bin/sds-controller 0123abcd",
-		"reactor_conf=sds-nfs-share.toml", "reactor_conf=sds-ha-sds-meta.toml.disabled",
+		"ctl_bin=/opt/haify/bin/haify-controller 0123abcd",
+		"reactor_conf=haify-nfs-share.toml", "reactor_conf=haify-ha-haify-meta.toml.disabled",
 		"res_file=vm", "res_file=share",
 		"hosts=10.0.0.2 host-n2 n2",
 		"tls_cert=" + b64("-----BEGIN CERTIFICATE-----"),
-		"lvs=" + b64("  sds_pool0|thinpool|thin-pool|107374182400|61.25|8.50\n  sds_pool0|vm_data|thin|10737418240||\n"),
+		"lvs=" + b64("  haify_pool0|thinpool|thin-pool|107374182400|61.25|8.50\n  haify_pool0|vm_data|thin|10737418240||\n"),
 		"drbd=" + b64(drbdJSON),
 		"end=1",
 	}, "\n")
@@ -46,10 +46,10 @@ func TestParseProbe(t *testing.T) {
 	if !p.HasAddr("10.0.0.1") || p.HasAddr("10.0.0.2") {
 		t.Errorf("addrs: %v", p.Addrs)
 	}
-	if p.CtlBin != "/opt/sds/bin/sds-controller" || p.CtlSHA != "0123abcd" {
+	if p.CtlBin != "/opt/haify/bin/haify-controller" || p.CtlSHA != "0123abcd" {
 		t.Errorf("controller binary: %q %q", p.CtlBin, p.CtlSHA)
 	}
-	if !p.HasReactorConf("sds-nfs-share.toml") || p.HasReactorConf("sds-ha-sds-meta.toml") {
+	if !p.HasReactorConf("haify-nfs-share.toml") || p.HasReactorConf("haify-ha-haify-meta.toml") {
 		t.Errorf("reactor confs: %v", p.ReactorConf)
 	}
 	if len(p.Hosts) != 1 || p.Hosts[0].IP != "10.0.0.2" || len(p.Hosts[0].Names) != 2 {

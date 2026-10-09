@@ -107,7 +107,7 @@ type poolAddDiskIn struct {
 
 // registerClusterTools adds node, health, and pool tools.
 func (s *Server) registerClusterTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_node_list", "List nodes",
+	addRead(s, srv, readOnlyTool("haify_node_list", "List nodes",
 		"List all storage nodes registered with the Haify controller, including their state and version."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, nodeListOut, error) {
 			nodes, err := s.client.ListNodes(ctx)
@@ -127,7 +127,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_node_health_check", "Check node health",
+	addRead(s, srv, readOnlyTool("haify_node_health_check", "Check node health",
 		"Check DRBD, drbd-reactor, and resource-agents availability on storage nodes. "+
 			"Use this to diagnose why resources or gateways fail to start."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in healthCheckIn) (*mcp.CallToolResult, healthCheckOut, error) {
@@ -162,7 +162,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_node_register", "Register node",
+	addWrite(s, srv, writeTool("haify_node_register", "Register node",
 		"Register a storage node with the Haify controller. The controller must reach the node over SSH."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeRegisterIn) (*mcp.CallToolResult, opResult, error) {
 			node, err := s.client.RegisterNode(ctx, in.Name, in.Address)
@@ -172,7 +172,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("node %s (%s) registered, state %s", node.Name, node.Address, node.State)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_node_unregister", "Unregister node",
+	addWrite(s, srv, destructiveTool("haify_node_unregister", "Unregister node",
 		"Unregister a storage node from the Haify controller. Resources on the node are not touched."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeUnregisterIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.UnregisterNode(ctx, in.Address); err != nil {
@@ -181,7 +181,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("node %s unregistered", in.Address)), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_pool_list", "List storage pools",
+	addRead(s, srv, readOnlyTool("haify_pool_list", "List storage pools",
 		"List all storage pools (LVM volume groups, thin pools, ZFS pools) across all nodes with capacity info."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, poolListOut, error) {
 			pools, err := s.client.ListPools(ctx)
@@ -210,7 +210,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_pool_create", "Create storage pool",
+	addWrite(s, srv, writeTool("haify_pool_create", "Create storage pool",
 		"Create a storage pool on one or more nodes. Types: lvm (plain VG), lvm-thin (VG + thin pool), lvm-thin-vdo (thin pool on VDO), zfs."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in poolCreateIn) (*mcp.CallToolResult, opResult, error) {
 			if len(in.Nodes) == 0 || len(in.Devices) == 0 {
@@ -247,7 +247,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			return nil, ok(detail), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_pool_delete", "Delete storage pool",
+	addWrite(s, srv, destructiveTool("haify_pool_delete", "Delete storage pool",
 		"Delete a storage pool from a node. Fails if the pool still backs DRBD resources."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in poolDeleteIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.DeletePool(ctx, in.Name, in.Node); err != nil {
@@ -256,7 +256,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("pool %s deleted on %s", in.Name, in.Node)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_pool_add_disk", "Add disks to pool",
+	addWrite(s, srv, writeTool("haify_pool_add_disk", "Add disks to pool",
 		"Add block devices to an existing storage pool on one or more nodes."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in poolAddDiskIn) (*mcp.CallToolResult, opResult, error) {
 			if len(in.Nodes) == 0 || len(in.Devices) == 0 {

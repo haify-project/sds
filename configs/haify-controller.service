@@ -1,0 +1,22 @@
+[Unit]
+Description=Haify Controller
+Documentation=https://github.com/haify-project/haify
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment="HOME=/root"
+WorkingDirectory=/opt/haify
+ExecStart=/opt/haify/bin/haify-controller --config /etc/haify/controller.toml
+Restart=on-failure
+RestartSec=5s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=haify-controller
+
+[Install]
+WantedBy=multi-user.target

@@ -5,7 +5,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 type backupScheduleOut struct {
@@ -51,7 +51,7 @@ type backupImportOut struct {
 	Skipped  map[string]string `json:"skipped,omitempty"`
 }
 
-func backupScheduleToOut(s *sdspb.BackupScheduleInfo) backupScheduleOut {
+func backupScheduleToOut(s *haifypb.BackupScheduleInfo) backupScheduleOut {
 	k := s.GetKeep()
 	return backupScheduleOut{
 		Name: s.Name, Resource: s.Resource, Target: s.Target, Cron: s.Cron, Enabled: s.Enabled,
@@ -64,7 +64,7 @@ func backupScheduleToOut(s *sdspb.BackupScheduleInfo) backupScheduleOut {
 // registerBackupScheduleTools adds scheduled backups and importing backups
 // from a target.
 func (s *Server) registerBackupScheduleTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_backup_schedule_list", "List backup schedules",
+	addRead(s, srv, readOnlyTool("haify_backup_schedule_list", "List backup schedules",
 		"List the cron-driven backups, their retention, and how the last run went. A schedule with last_error "+
 			"set has not produced a backup since that run."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, backupScheduleListOut, error) {
@@ -79,13 +79,13 @@ func (s *Server) registerBackupScheduleTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_backup_schedule_create", "Schedule backups of a resource",
+	addWrite(s, srv, writeTool("haify_backup_schedule_create", "Schedule backups of a resource",
 		"Create or replace the cron schedule backing a resource up to a target. Retention keeps the newest backup "+
 			"per hour/day/week/month/year up to each count, plus every backup a kept incremental is built on."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in backupScheduleCreateIn) (*mcp.CallToolResult, backupScheduleOut, error) {
-			sc, err := s.client.CreateBackupSchedule(ctx, &sdspb.CreateBackupScheduleRequest{
+			sc, err := s.client.CreateBackupSchedule(ctx, &haifypb.CreateBackupScheduleRequest{
 				Resource: in.Resource, Target: in.Target, Cron: in.Cron, Enabled: !in.Disabled,
-				Keep: &sdspb.GFSRetention{Hourly: in.KeepHourly, Daily: in.KeepDaily, Weekly: in.KeepWeekly,
+				Keep: &haifypb.GFSRetention{Hourly: in.KeepHourly, Daily: in.KeepDaily, Weekly: in.KeepWeekly,
 					Monthly: in.KeepMonthly, Yearly: in.KeepYearly},
 			})
 			if err != nil {
@@ -94,7 +94,7 @@ func (s *Server) registerBackupScheduleTools(srv *mcp.Server) {
 			return nil, backupScheduleToOut(sc), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_backup_schedule_delete", "Stop scheduled backups",
+	addWrite(s, srv, destructiveTool("haify_backup_schedule_delete", "Stop scheduled backups",
 		"Delete a backup schedule by its resource@target name. The backups it made are kept."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in struct {
 			Name string `json:"name" jsonschema:"resource@target"`
@@ -105,7 +105,7 @@ func (s *Server) registerBackupScheduleTools(srv *mcp.Server) {
 			return nil, ok("backup schedule " + in.Name + " deleted"), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_backup_import", "Import backups from a target",
+	addWrite(s, srv, writeTool("haify_backup_import", "Import backups from a target",
 		"Record the backups a target holds that this controller does not know, from their manifests, chains "+
 			"included. For a rebuilt controller, or to restore another cluster's backups. Changes nothing on the target."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in backupImportIn) (*mcp.CallToolResult, backupImportOut, error) {

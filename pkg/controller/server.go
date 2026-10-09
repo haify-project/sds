@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/gateway"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/gateway"
 	"go.uber.org/zap"
 )
 
 // Server implements the Haify controller gRPC service
 type Server struct {
-	sdspb.UnimplementedSDSControllerServer
+	haifypb.UnimplementedHaifyControllerServer
 	ctrl      *Controller
 	logger    *zap.Logger
 	storage   *StorageManager
@@ -36,43 +36,43 @@ func NewServer(ctrl *Controller) *Server {
 
 // ==================== POOL OPERATIONS ====================
 
-func (s *Server) CreatePool(ctx context.Context, req *sdspb.CreatePoolRequest) (*sdspb.CreatePoolResponse, error) {
+func (s *Server) CreatePool(ctx context.Context, req *haifypb.CreatePoolRequest) (*haifypb.CreatePoolResponse, error) {
 	err := s.storage.CreatePool(ctx, req.Name, req.Type, req.Node, req.Disks, req.SizeGb)
 	if err != nil {
-		return &sdspb.CreatePoolResponse{
+		return &haifypb.CreatePoolResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.CreatePoolResponse{
+	return &haifypb.CreatePoolResponse{
 		Success: true,
 		Message: "Pool created successfully",
 	}, nil
 }
 
-func (s *Server) DeletePool(ctx context.Context, req *sdspb.DeletePoolRequest) (*sdspb.DeletePoolResponse, error) {
+func (s *Server) DeletePool(ctx context.Context, req *haifypb.DeletePoolRequest) (*haifypb.DeletePoolResponse, error) {
 	err := s.storage.DeletePool(ctx, req.Name, req.Node)
 	if err != nil {
-		return &sdspb.DeletePoolResponse{
+		return &haifypb.DeletePoolResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.DeletePoolResponse{
+	return &haifypb.DeletePoolResponse{
 		Success: true,
 		Message: "Pool deleted successfully",
 	}, nil
 }
 
-func (s *Server) GetPool(ctx context.Context, req *sdspb.GetPoolRequest) (*sdspb.GetPoolResponse, error) {
+func (s *Server) GetPool(ctx context.Context, req *haifypb.GetPoolRequest) (*haifypb.GetPoolResponse, error) {
 	pool, err := s.storage.GetPool(ctx, req.Name, req.Node)
 	if err != nil {
-		return &sdspb.GetPoolResponse{
+		return &haifypb.GetPoolResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.GetPoolResponse{
+	return &haifypb.GetPoolResponse{
 		Success: true,
 		Message: "Pool found",
 		Pool:    pbPoolInfo(pool),
@@ -80,8 +80,8 @@ func (s *Server) GetPool(ctx context.Context, req *sdspb.GetPoolRequest) (*sdspb
 }
 
 // pbPoolInfo converts a pool, including its storage tier if it has one.
-func pbPoolInfo(p *PoolInfo) *sdspb.PoolInfo {
-	out := &sdspb.PoolInfo{
+func pbPoolInfo(p *PoolInfo) *haifypb.PoolInfo {
+	out := &haifypb.PoolInfo{
 		Name:          p.Name,
 		Type:          p.Type,
 		Node:          p.Node,
@@ -119,63 +119,63 @@ func pbPoolInfo(p *PoolInfo) *sdspb.PoolInfo {
 	return out
 }
 
-func (s *Server) ListPools(ctx context.Context, req *sdspb.ListPoolsRequest) (*sdspb.ListPoolsResponse, error) {
+func (s *Server) ListPools(ctx context.Context, req *haifypb.ListPoolsRequest) (*haifypb.ListPoolsResponse, error) {
 	pools, err := s.storage.ListPools(ctx)
 	if err != nil {
-		return &sdspb.ListPoolsResponse{
+		return &haifypb.ListPoolsResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	var pbPools []*sdspb.PoolInfo
+	var pbPools []*haifypb.PoolInfo
 	for _, p := range pools {
 		pbPools = append(pbPools, pbPoolInfo(p))
 	}
 
-	return &sdspb.ListPoolsResponse{
+	return &haifypb.ListPoolsResponse{
 		Success: true,
 		Message: "Pools listed successfully",
 		Pools:   pbPools,
 	}, nil
 }
 
-func (s *Server) AddDiskToPool(ctx context.Context, req *sdspb.AddDiskToPoolRequest) (*sdspb.AddDiskToPoolResponse, error) {
+func (s *Server) AddDiskToPool(ctx context.Context, req *haifypb.AddDiskToPoolRequest) (*haifypb.AddDiskToPoolResponse, error) {
 	err := s.storage.AddDiskToPool(ctx, req.Pool, req.Disk, req.Node)
 	if err != nil {
-		return &sdspb.AddDiskToPoolResponse{
+		return &haifypb.AddDiskToPoolResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.AddDiskToPoolResponse{
+	return &haifypb.AddDiskToPoolResponse{
 		Success: true,
 		Message: "Disk added to pool successfully",
 	}, nil
 }
 
 // ConvertPoolToThin rebuilds one node's pool as an LVM thin pool.
-func (s *Server) ConvertPoolToThin(ctx context.Context, req *sdspb.ConvertPoolToThinRequest) (*sdspb.ConvertPoolToThinResponse, error) {
+func (s *Server) ConvertPoolToThin(ctx context.Context, req *haifypb.ConvertPoolToThinRequest) (*haifypb.ConvertPoolToThinResponse, error) {
 	if err := s.ctrl.resources.ConvertPoolToThin(ctx, req.GetNode(), req.GetPool()); err != nil {
-		return &sdspb.ConvertPoolToThinResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.ConvertPoolToThinResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.ConvertPoolToThinResponse{
+	return &haifypb.ConvertPoolToThinResponse{
 		Success: true,
 		Message: "pool rebuilt as thin; the volumes are resyncing from their peers",
 	}, nil
 }
 
 // AddPoolCache puts an SSD in front of one node's pool with lvmcache.
-func (s *Server) AddPoolCache(ctx context.Context, req *sdspb.AddPoolCacheRequest) (*sdspb.AddPoolCacheResponse, error) {
+func (s *Server) AddPoolCache(ctx context.Context, req *haifypb.AddPoolCacheRequest) (*haifypb.AddPoolCacheResponse, error) {
 	info, err := s.storage.AddPoolCache(ctx, req.GetNode(), req.GetPool(), req.GetDevice(), req.GetMode())
 	if err != nil {
-		return &sdspb.AddPoolCacheResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.AddPoolCacheResponse{Success: false, Message: err.Error()}, nil
 	}
 	msg := fmt.Sprintf("cache attached to %s on %s in %s mode", req.GetPool(), req.GetNode(), info.Mode)
 	if info.Mode == cacheModeWriteback {
 		msg += "; writes are acknowledged from the SSD, so losing it loses whatever it has not destaged"
 	}
-	return &sdspb.AddPoolCacheResponse{
+	return &haifypb.AddPoolCacheResponse{
 		Success:        true,
 		Message:        msg,
 		Mode:           info.Mode,
@@ -184,11 +184,11 @@ func (s *Server) AddPoolCache(ctx context.Context, req *sdspb.AddPoolCacheReques
 }
 
 // RemovePoolCache flushes and detaches a pool's cache.
-func (s *Server) RemovePoolCache(ctx context.Context, req *sdspb.RemovePoolCacheRequest) (*sdspb.RemovePoolCacheResponse, error) {
+func (s *Server) RemovePoolCache(ctx context.Context, req *haifypb.RemovePoolCacheRequest) (*haifypb.RemovePoolCacheResponse, error) {
 	if err := s.storage.RemovePoolCache(ctx, req.GetNode(), req.GetPool()); err != nil {
-		return &sdspb.RemovePoolCacheResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.RemovePoolCacheResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.RemovePoolCacheResponse{
+	return &haifypb.RemovePoolCacheResponse{
 		Success: true,
 		Message: "cache flushed, detached, and its device released from the pool",
 	}, nil

@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 var (
-	remoteObject = regexp.MustCompile(`sdsbackup:b/([^' ]+)`)
+	remoteObject = regexp.MustCompile(`haifybackup:b/([^' ]+)`)
 	manifestB64  = regexp.MustCompile(`printf %s '\\''([A-Za-z0-9+/=]+)'\\''`)
 )
 
@@ -45,7 +45,7 @@ func withBucket(f *incrementalFixture) *bucket {
 			}
 			out, _ := json.Marshal(list)
 			return successExecResult(hosts, string(out)), nil
-		case strings.Contains(cmd, " cat 'sdsbackup:b/") && strings.Contains(cmd, "manifest.json"):
+		case strings.Contains(cmd, " cat 'haifybackup:b/") && strings.Contains(cmd, "manifest.json"):
 			return successExecResult(hosts, b.manifests[remoteObject.FindStringSubmatch(cmd)[1]]), nil
 		case strings.Contains(cmd, "rcat"):
 			for _, m := range remoteObject.FindAllStringSubmatch(cmd, -1) {

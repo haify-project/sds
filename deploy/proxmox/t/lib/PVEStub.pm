@@ -1,6 +1,6 @@
 package PVEStub;
 
-# Minimal stand-ins for the Proxmox VE modules SDSPlugin.pm loads, so the plugin
+# Minimal stand-ins for the Proxmox VE modules HaifyPlugin.pm loads, so the plugin
 # can be unit-tested on any machine with a plain Perl — no PVE installation.
 #
 # Only what the plugin actually touches is stubbed: the storage plugin base

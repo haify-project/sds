@@ -52,7 +52,7 @@ type lvsCacheRow struct {
 
 // parseCacheReport groups an lvs report by volume group.
 //
-// Rows for internal LVs arrive in brackets — "[sds_pool_thin_tdata]" — and the
+// Rows for internal LVs arrive in brackets — "[haify_pool_thin_tdata]" — and the
 // devices column carries an extent offset, "/dev/nvme0n1(0)". Both are stripped
 // here so that nothing downstream has to know about lvs presentation.
 func parseCacheReport(output string) map[string][]lvsCacheRow {

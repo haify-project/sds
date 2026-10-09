@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A 20 GiB volume cannot be synced onto a node whose 100 GiB thin pool has
@@ -29,19 +29,19 @@ func TestAssertPoolRoomRefusesAFullThinPool(t *testing.T) {
 				pct = "90.00"
 			}
 			res.Hosts[h] = &deployment.HostResult{Host: h, Success: true,
-				Output: "  sds_vg0|sds_vg0_thin|thin-pool|107374182400|" + pct + "|1.00|twi-aotz--"}
+				Output: "  haify_vg0|haify_vg0_thin|thin-pool|107374182400|" + pct + "|1.00|twi-aotz--"}
 		}
 		return res, nil
 	}
 	ctrl.deployment = dep
 	ctrl.resources.SetDeployment(dep)
-	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "sds_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
+	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "haify_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := ctrl.db.SaveResource(ctx, &database.Resource{Name: "r", Nodes: "n2"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeID: 0, Pool: "sds_vg0", SizeGB: 20}); err != nil {
+	if err := ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeID: 0, Pool: "haify_vg0", SizeGB: 20}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,19 +77,19 @@ func TestAssertPoolRoomForGrowthNamesTheReplicaThatCannotHoldIt(t *testing.T) {
 				pct = "90.00" // 10 GiB free of 100
 			}
 			res.Hosts[h] = &deployment.HostResult{Host: h, Success: true,
-				Output: "  sds_vg0|sds_vg0_thin|thin-pool|107374182400|" + pct + "|1.00|twi-aotz--"}
+				Output: "  haify_vg0|haify_vg0_thin|thin-pool|107374182400|" + pct + "|1.00|twi-aotz--"}
 		}
 		return res, nil
 	}
 	ctrl.deployment = dep
 	ctrl.resources.SetDeployment(dep)
-	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "sds_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
+	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "haify_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := ctrl.db.SaveResource(ctx, &database.Resource{Name: "r", Nodes: "n1,n2"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeID: 0, Pool: "sds_vg0", SizeGB: 5, Device: "/dev/sds_vg0/r_data"}); err != nil {
+	if err := ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeID: 0, Pool: "haify_vg0", SizeGB: 5, Device: "/dev/haify_vg0/r_data"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,7 +122,7 @@ func TestAssertPoolRoomForGrowthMeasuresFromTheLiveVolume(t *testing.T) {
 		res := &deployment.ExecResult{Hosts: make(map[string]*deployment.HostResult, len(hosts))}
 		for _, h := range hosts {
 			res.Hosts[h] = &deployment.HostResult{Host: h, Success: true,
-				Output: "  sds_vg0|sds_vg0_thin|thin-pool|107374182400|99.00|1.00|twi-aotz--"} // 1 GiB free
+				Output: "  haify_vg0|haify_vg0_thin|thin-pool|107374182400|99.00|1.00|twi-aotz--"} // 1 GiB free
 		}
 		return res, nil
 	}
@@ -135,14 +135,14 @@ func TestAssertPoolRoomForGrowthMeasuresFromTheLiveVolume(t *testing.T) {
 	}
 	ctrl.deployment = dep
 	ctrl.resources.SetDeployment(dep)
-	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "sds_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
+	if err := ctrl.db.SavePool(ctx, &database.Pool{Name: "haify_vg0", Type: "thin_pool", Node: "n1", Devices: "/dev/vdb"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := ctrl.db.SaveResource(ctx, &database.Resource{Name: "r", Nodes: "n1,n2"}); err != nil {
 		t.Fatal(err)
 	}
 	// Recorded as 2 GiB; it is 4.
-	if err := ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeName: "r_data", VolumeID: 0, Pool: "sds_vg0", SizeGB: 2, Device: "/dev/sds_vg0/r_data"}); err != nil {
+	if err := ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "r", VolumeName: "r_data", VolumeID: 0, Pool: "haify_vg0", SizeGB: 2, Device: "/dev/haify_vg0/r_data"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := ctrl.resources.assertPoolRoomForGrowth(ctx, "r", 0, 4); err != nil {

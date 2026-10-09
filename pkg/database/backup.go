@@ -124,7 +124,7 @@ type Backup struct {
 	FinishedAt time.Time
 
 	// LockMode and RetainUntil are the Object Lock every object of the
-	// backup carries: until then neither sds nor anyone with its credentials
+	// backup carries: until then neither haify nor anyone with its credentials
 	// can delete or overwrite them. Every backup of an incremental chain
 	// shares the date, so no link expires before a backup built on it.
 	LockMode    string    `json:",omitempty"`

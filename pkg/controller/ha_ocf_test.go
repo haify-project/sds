@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -179,7 +179,7 @@ func TestMakeHaComposesOcfAgentsIntoStartList(t *testing.T) {
 
 	var promoter string
 	for _, dc := range dep.distributedConfigs {
-		if dc.remotePath == "/etc/drbd-reactor.d/sds-ha-res1.toml" {
+		if dc.remotePath == "/etc/drbd-reactor.d/haify-ha-res1.toml" {
 			promoter = dc.content
 		}
 	}
@@ -213,7 +213,7 @@ func TestSyncHaTomlDistributesAndReloads(t *testing.T) {
 	assert.Contains(t, msg, "2 nodes")
 
 	require.Len(t, dep.distributedConfigs, 1)
-	assert.Equal(t, "/etc/drbd-reactor.d/sds-ha-res1.toml", dep.distributedConfigs[0].remotePath)
+	assert.Equal(t, "/etc/drbd-reactor.d/haify-ha-res1.toml", dep.distributedConfigs[0].remotePath)
 	assert.Equal(t, content, dep.distributedConfigs[0].content)
 	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, dep.distributedConfigs[0].hosts)
 	require.Len(t, reloaded, 1)
@@ -238,7 +238,7 @@ func TestSyncHaTomlReportsReloadFailure(t *testing.T) {
 func TestGetHaTomlMissing(t *testing.T) {
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
-			return successExecResult(hosts, "__SDS_HA_TOML_MISSING__\n"), nil
+			return successExecResult(hosts, "__HAIFY_HA_TOML_MISSING__\n"), nil
 		},
 	}
 	ctrl := makeHaTestController(t, dep)
@@ -259,7 +259,7 @@ func TestGetHaTomlReadsContent(t *testing.T) {
 
 	path, got, err := ctrl.resources.GetHaToml(context.Background(), "res1")
 	require.NoError(t, err)
-	assert.Equal(t, "/etc/drbd-reactor.d/sds-ha-res1.toml", path)
+	assert.Equal(t, "/etc/drbd-reactor.d/haify-ha-res1.toml", path)
 	assert.Equal(t, content, got)
 }
 

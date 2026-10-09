@@ -1,0 +1,21 @@
+[Unit]
+Description=drbd-reactor controlled haify-mcp (Haify MCP server over HTTP)
+After=network-online.target haify-controller.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Tokens live on the Self-HA mount, so they follow the server when it moves.
+# HAIFY_MCP_ARGS carries the per-site flags, e.g.
+#   HAIFY_MCP_ARGS="--public-url https://mcp.example.com --max-role operate --trust-proxy --admin-listen 0.0.0.0:43872"
+EnvironmentFile=-/var/lib/haify/mcp/haify-mcp.env
+Environment=HOME=/var/lib/haify/mcp
+WorkingDirectory=/var/lib/haify/mcp
+ExecStart=/opt/haify/bin/haify-mcp serve --listen 0.0.0.0:43871 --controller 127.0.0.1:3374 --tokens /var/lib/haify/mcp/tokens.json $HAIFY_MCP_ARGS
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

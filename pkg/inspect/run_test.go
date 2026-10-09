@@ -52,7 +52,7 @@ func TestSummaryWorstAndHeadline(t *testing.T) {
 	if !strings.HasPrefix(h, "Inspection 9: 1 fail, 1 warn, 1 error, 1 pass. gateway.no_primary blk; nodes.ssh n2; and 1 more") {
 		t.Errorf("headline: %s", h)
 	}
-	if !strings.HasSuffix(h, "sds inspect show 9") {
+	if !strings.HasSuffix(h, "haify inspect show 9") {
 		t.Errorf("headline should say where the details are: %s", h)
 	}
 	if !StatusError.AtLeast(StatusWarn) || StatusWarn.AtLeast(StatusFail) || ParseStatus("warning") != StatusWarn {

@@ -1,10 +1,10 @@
-// Command sds-mcp exposes the Haify controller as a Model Context Protocol
+// Command haify-mcp exposes the Haify controller as a Model Context Protocol
 // (MCP) server over stdio, so AI assistants (Claude Code, Claude Desktop,
 // and other MCP clients) can inspect and manage storage.
 //
 // Register with an MCP client, e.g.:
 //
-//	claude mcp add sds -- sds-mcp --controller node1:3374
+//	claude mcp add haify -- haify-mcp --controller node1:3374
 //
 // All logs go to stderr; stdout carries the MCP protocol.
 package main
@@ -17,8 +17,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/haify-project/sds/pkg/k8sapp"
-	"github.com/haify-project/sds/pkg/mcpserver"
+	"github.com/haify-project/haify/pkg/k8sapp"
+	"github.com/haify-project/haify/pkg/mcpserver"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".
@@ -33,7 +33,7 @@ func main() {
 	)
 
 	rootCmd := &cobra.Command{
-		Use:           "sds-mcp",
+		Use:           "haify-mcp",
 		Short:         "MCP server for the Haify storage controller",
 		Long:          "Serves Haify storage management tools over the Model Context Protocol (stdio transport).",
 		Version:       version,
@@ -46,13 +46,13 @@ func main() {
 			}
 			defer func() { _ = logger.Sync() }()
 
-			sdsClient, err := conn.dial()
+			haifyClient, err := conn.dial()
 			if err != nil {
 				return err
 			}
-			defer func() { _ = sdsClient.Close() }()
+			defer func() { _ = haifyClient.Close() }()
 
-			srv := mcpserver.New(sdsClient, logger, mcpserver.Options{
+			srv := mcpserver.New(haifyClient, logger, mcpserver.Options{
 				ReadOnly:   readOnly,
 				AllowWrite: allowWrite,
 				Version:    version,
@@ -64,7 +64,7 @@ func main() {
 	conn.register(rootCmd, "")
 	rootCmd.Flags().BoolVar(&readOnly, "read-only", false, "register only read-only tools (list/status/health)")
 	rootCmd.Flags().StringSliceVar(&allowWrite, "allow", nil,
-		"mutating tools to register by name despite --read-only, e.g. --allow sds_ha_evict. "+
+		"mutating tools to register by name despite --read-only, e.g. --allow haify_ha_evict. "+
 			"Implies --read-only. Refuses to start on a name no tool answers to")
 	rootCmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging on stderr")
 
@@ -91,7 +91,7 @@ func newStderrLogger(debug bool) (*zap.Logger, error) {
 	return cfg.Build()
 }
 
-// k8sCmd serves the Kubernetes (CSI) tools as their own MCP server, sds-k8s.
+// k8sCmd serves the Kubernetes (CSI) tools as their own MCP server, haify-k8s.
 // It talks to a Kubernetes API server, not the Haify controller.
 func k8sCmd() *cobra.Command {
 	var (
@@ -102,7 +102,7 @@ func k8sCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "k8s",
-		Short: "MCP server for Haify on Kubernetes (sds_k8s_* tools)",
+		Short: "MCP server for Haify on Kubernetes (haify_k8s_* tools)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger, err := newStderrLogger(debug)
 			if err != nil {
@@ -114,7 +114,7 @@ func k8sCmd() *cobra.Command {
 				return err
 			}
 			if apps == nil {
-				return fmt.Errorf("no Kubernetes cluster: pass --kubeconfig (or SDS_KUBECONFIG), or run inside a pod")
+				return fmt.Errorf("no Kubernetes cluster: pass --kubeconfig (or HAIFY_KUBECONFIG), or run inside a pod")
 			}
 			return mcpserver.NewK8s(apps, logger, mcpserver.Options{
 				ReadOnly:   readOnly,
@@ -123,8 +123,8 @@ func k8sCmd() *cobra.Command {
 			}).Run(cmd.Context())
 		},
 	}
-	cmd.Flags().StringVar(&kubeconfig, "kubeconfig", os.Getenv("SDS_KUBECONFIG"),
-		"kubeconfig (env SDS_KUBECONFIG; in-cluster config inside a pod when empty)")
+	cmd.Flags().StringVar(&kubeconfig, "kubeconfig", os.Getenv("HAIFY_KUBECONFIG"),
+		"kubeconfig (env HAIFY_KUBECONFIG; in-cluster config inside a pod when empty)")
 	cmd.Flags().BoolVar(&readOnly, "read-only", false, "register only read-only tools")
 	cmd.Flags().StringSliceVar(&allowWrite, "allow", nil, "mutating tools to register despite --read-only")
 	cmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging on stderr")

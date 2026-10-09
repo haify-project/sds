@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build the Haify Debian packages into dist/ with plain dpkg-deb:
 #
-#   sds-controller_<version>_<arch>.deb   per architecture (amd64, arm64)
-#   sds-pve-plugin_<version>_all.deb      the Proxmox VE storage plugin
+#   haify-controller_<version>_<arch>.deb   per architecture (amd64, arm64)
+#   haify-pve-plugin_<version>_all.deb      the Proxmox VE storage plugin
 #
 # No debhelper, nfpm or fpm: a package here is a staged file tree, a generated
 # control file and the maintainer scripts in deploy/deb/<package>/, so the only
@@ -10,12 +10,12 @@
 # Debian/Ubuntu host has.
 #
 #   scripts/build-deb.sh               both packages
-#   scripts/build-deb.sh controller    sds-controller only
-#   scripts/build-deb.sh pve-plugin    sds-pve-plugin only (needs no Go or Node)
+#   scripts/build-deb.sh controller    haify-controller only
+#   scripts/build-deb.sh pve-plugin    haify-pve-plugin only (needs no Go or Node)
 #
 # Environment:
 #   VERSION          version to stamp (default: git describe --tags --always --dirty)
-#   ARCHES           Debian architectures for sds-controller (default "amd64 arm64")
+#   ARCHES           Debian architectures for haify-controller (default "amd64 arm64")
 #   SKIP_UI_BUILD=1  embed the web UI already in ui/dist instead of rebuilding it
 #   MAINTAINER       "Name <email>" for the control files (default: DEBFULLNAME and
 #                    DEBEMAIL, then git config user.name/user.email)
@@ -27,7 +27,7 @@ umask 022
 cd "$(dirname "$0")/.."
 OUT_DIR="${OUT_DIR:-dist}"
 ARCHES="${ARCHES:-amd64 arm64}"
-HOMEPAGE="https://github.com/haify-project/sds"
+HOMEPAGE="https://github.com/haify-project/haify"
 PVE_SRC="deploy/proxmox"
 
 die() { echo "build-deb: $*" >&2; exit 1; }
@@ -81,7 +81,7 @@ if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
 fi
 export SOURCE_DATE_EPOCH
 
-STAGE=$(mktemp -d "${TMPDIR:-/tmp}/sds-deb.XXXXXX")
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/haify-deb.XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$OUT_DIR"
 OUT_DIR=$(cd "$OUT_DIR" && pwd)
@@ -96,7 +96,7 @@ installed_size() {
 copyright() {
     cat > "$1" <<EOF
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: sds
+Upstream-Name: haify
 Source: $HOMEPAGE
 
 Files: *
@@ -131,16 +131,16 @@ finish_package() {
 check_helper_set() {
     local listed present
     listed=$(sed -n 's/^HELPER_NAMES=(\(.*\))$/\1/p' "$PVE_SRC/install.sh" | tr ' ' '\n' | sort | tr '\n' ' ')
-    present=$(cd "$PVE_SRC/PVE/Storage/Custom/SDS" && ls -1 -- *.pm | sort | tr '\n' ' ')
+    present=$(cd "$PVE_SRC/PVE/Storage/Custom/Haify" && ls -1 -- *.pm | sort | tr '\n' ' ')
     [ -n "$listed" ] || die "HELPER_NAMES not found in $PVE_SRC/install.sh"
-    [ "$listed" = "$present" ] || die "$PVE_SRC/install.sh HELPER_NAMES (${listed% }) differs from PVE/Storage/Custom/SDS (${present% })"
+    [ "$listed" = "$present" ] || die "$PVE_SRC/install.sh HELPER_NAMES (${listed% }) differs from PVE/Storage/Custom/Haify (${present% })"
 }
 
 build_pve_plugin() {
-    local root="$STAGE/sds-pve-plugin" custom doc share
+    local root="$STAGE/haify-pve-plugin" custom doc share
     custom="$root/usr/share/perl5/PVE/Storage/Custom"
-    doc="$root/usr/share/doc/sds-pve-plugin"
-    share="$root/usr/share/sds-pve-plugin"
+    doc="$root/usr/share/doc/haify-pve-plugin"
+    share="$root/usr/share/haify-pve-plugin"
 
     check_helper_set
     # The suite stubs the PVE modules, so it runs here; install.sh's perl -c
@@ -152,20 +152,20 @@ build_pve_plugin() {
         echo "build-deb: prove not found, plugin tests skipped" >&2
     fi
 
-    install -d "$root/DEBIAN" "$custom/SDS" "$doc" "$share"
-    install -m 0644 "$PVE_SRC/SDSPlugin.pm" "$custom/SDSPlugin.pm"
-    install -m 0644 "$PVE_SRC"/PVE/Storage/Custom/SDS/*.pm "$custom/SDS/"
+    install -d "$root/DEBIAN" "$custom/Haify" "$doc" "$share"
+    install -m 0644 "$PVE_SRC/HaifyPlugin.pm" "$custom/HaifyPlugin.pm"
+    install -m 0644 "$PVE_SRC"/PVE/Storage/Custom/Haify/*.pm "$custom/Haify/"
     install -m 0755 "$PVE_SRC/lvm-filter.sh" "$PVE_SRC/preflight.sh" "$PVE_SRC/gui/gui-patch.sh" "$share/"
     install -m 0644 "$PVE_SRC/storage.cfg.example" "$doc/"
-    # The web interface's dialog for the sds type, and the apt hook that puts
+    # The web interface's dialog for the haify type, and the apt hook that puts
     # it back after a pve-manager upgrade replaces the page template.
-    install -D -m 0644 "$PVE_SRC/gui/sds-storage.js" "$root/usr/share/pve-manager/js/sds-storage.js"
-    install -D -m 0644 "$PVE_SRC/gui/90sds-pve-gui" "$root/etc/apt/apt.conf.d/90sds-pve-gui"
-    echo /etc/apt/apt.conf.d/90sds-pve-gui > "$root/DEBIAN/conffiles"
+    install -D -m 0644 "$PVE_SRC/gui/haify-storage.js" "$root/usr/share/pve-manager/js/haify-storage.js"
+    install -D -m 0644 "$PVE_SRC/gui/90haify-pve-gui" "$root/etc/apt/apt.conf.d/90haify-pve-gui"
+    echo /etc/apt/apt.conf.d/90haify-pve-gui > "$root/DEBIAN/conffiles"
     copyright "$doc/copyright"
 
-    finish_package sds-pve-plugin "$root" "$OUT_DIR/sds-pve-plugin_${DEB_VERSION}_all.deb" <<EOF
-Package: sds-pve-plugin
+    finish_package haify-pve-plugin "$root" "$OUT_DIR/haify-pve-plugin_${DEB_VERSION}_all.deb" <<EOF
+Package: haify-pve-plugin
 Version: $DEB_VERSION
 Architecture: all
 Maintainer: $MAINTAINER
@@ -174,12 +174,12 @@ Section: admin
 Priority: optional
 Homepage: $HOMEPAGE
 Description: Haify storage plugin for Proxmox VE
- Storage type "sds": backs Proxmox VE guest disks with DRBD resources managed
- by sds-controller, giving synchronous replication, HA restart on a surviving
+ Storage type "haify": backs Proxmox VE guest disks with DRBD resources managed
+ by haify-controller, giving synchronous replication, HA restart on a surviving
  node and live migration that copies only RAM.
  .
  Installs what deploy/proxmox/install.sh installs, adds the LVM filter that
- keeps the host's LVM off DRBD devices (SDS_SKIP_LVM_FILTER=1 skips it) and
+ keeps the host's LVM off DRBD devices (HAIFY_SKIP_LVM_FILTER=1 skips it) and
  restarts pvedaemon and pveproxy, which does not disturb running guests.
  The node also needs the DRBD 9 kernel module.
 EOF
@@ -207,7 +207,7 @@ prepare_ui() {
 build_binaries() {
     local arch="$1" out="$2" spec
     mkdir -p "$out"
-    for spec in controller:sds-controller cli:sds mcp:sds-mcp service-ip:service-ip; do
+    for spec in controller:haify-controller cli:haify mcp:haify-mcp service-ip:service-ip; do
         GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -trimpath \
             -ldflags "-s -w -X main.version=${RAW_VERSION}" \
             -o "$out/${spec#*:}" "./cmd/${spec%%:*}"
@@ -215,48 +215,48 @@ build_binaries() {
 }
 
 build_controller() {
-    local arch="$1" root="$STAGE/sds-controller-$arch" bin="$STAGE/bin-$arch" units doc
+    local arch="$1" root="$STAGE/haify-controller-$arch" bin="$STAGE/bin-$arch" units doc
     units="$root/lib/systemd/system"
-    doc="$root/usr/share/doc/sds-controller"
+    doc="$root/usr/share/doc/haify-controller"
 
-    log "building sds-controller binaries for linux/$arch"
+    log "building haify-controller binaries for linux/$arch"
     build_binaries "$arch" "$bin"
 
-    install -d "$root/DEBIAN" "$root/opt/sds/bin" "$root/usr/bin" "$units" "$doc" \
-        "$root/usr/share/sds-controller"
-    # /opt/sds/bin is where configs/sds-controller.service runs the controller
+    install -d "$root/DEBIAN" "$root/opt/haify/bin" "$root/usr/bin" "$units" "$doc" \
+        "$root/usr/share/haify-controller"
+    # /opt/haify/bin is where configs/haify-controller.service runs the controller
     # from, and where the controller looks for the service-ip it installs on HA
     # nodes (next to its own executable).
-    install -m 0755 "$bin/sds-controller" "$bin/service-ip" "$root/opt/sds/bin/"
+    install -m 0755 "$bin/haify-controller" "$bin/service-ip" "$root/opt/haify/bin/"
     # The CLI and MCP server go on the default PATH. A manual install uses
     # /usr/local/bin, which belongs to the administrator, not to packages.
-    install -m 0755 "$bin/sds" "$bin/sds-mcp" "$root/usr/bin/"
-    ln -s sds "$root/usr/bin/sds-cli"
-    # sds-mcp-http.service and the AI Copilot run /opt/sds/bin/sds-mcp.
-    ln -s /usr/bin/sds-mcp "$root/opt/sds/bin/sds-mcp"
+    install -m 0755 "$bin/haify" "$bin/haify-mcp" "$root/usr/bin/"
+    ln -s haify "$root/usr/bin/haify-cli"
+    # haify-mcp-http.service and the AI Copilot run /opt/haify/bin/haify-mcp.
+    ln -s /usr/bin/haify-mcp "$root/opt/haify/bin/haify-mcp"
 
-    install -m 0644 configs/sds-controller.service configs/sds-mcp-http.service "$units/"
+    install -m 0644 configs/haify-controller.service configs/haify-mcp-http.service "$units/"
     # The repository's service-ip@ unit runs /usr/local/bin/service-ip, where
     # the controller installs it on nodes that lack it, together with its own
     # copy of the unit in /etc/systemd/system (which then takes precedence).
     # The packaged unit runs the packaged binary instead.
-    sed 's|/usr/local/bin/service-ip|/opt/sds/bin/service-ip|g' \
+    sed 's|/usr/local/bin/service-ip|/opt/haify/bin/service-ip|g' \
         "configs/service-ip@.service" > "$units/service-ip@.service"
     chmod 0644 "$units/service-ip@.service"
     if grep -q /usr/local/bin "$units/service-ip@.service"; then
         die "service-ip@.service still names /usr/local/bin after rewriting"
     fi
-    grep -q '^ExecStart=/opt/sds/bin/service-ip ' "$units/service-ip@.service" \
-        || die "service-ip@.service: ExecStart not rewritten to /opt/sds/bin/service-ip"
+    grep -q '^ExecStart=/opt/haify/bin/service-ip ' "$units/service-ip@.service" \
+        || die "service-ip@.service: ExecStart not rewritten to /opt/haify/bin/service-ip"
 
-    # postinst copies the template to /etc/sds/controller.toml when that is
+    # postinst copies the template to /etc/haify/controller.toml when that is
     # unused; it reads this copy because /usr/share/doc may be path-excluded.
-    install -m 0644 configs/controller.toml.example "$root/usr/share/sds-controller/"
+    install -m 0644 configs/controller.toml.example "$root/usr/share/haify-controller/"
     install -m 0644 configs/controller.toml.example "$doc/"
     copyright "$doc/copyright"
 
-    finish_package sds-controller "$root" "$OUT_DIR/sds-controller_${DEB_VERSION}_${arch}.deb" <<EOF
-Package: sds-controller
+    finish_package haify-controller "$root" "$OUT_DIR/haify-controller_${DEB_VERSION}_${arch}.deb" <<EOF
+Package: haify-controller
 Version: $DEB_VERSION
 Architecture: $arch
 Maintainer: $MAINTAINER
@@ -265,11 +265,11 @@ Section: admin
 Priority: optional
 Homepage: $HOMEPAGE
 Description: DRBD-based software-defined storage controller
- sds-controller manages storage pools, replicated DRBD resources, snapshots,
+ haify-controller manages storage pools, replicated DRBD resources, snapshots,
  backups, NFS/iSCSI/NVMe-oF gateways and HA on a set of Linux storage nodes,
  driving them over SSH. This package carries the controller (with its web UI)
- and the service-ip helper in /opt/sds/bin, the sds command-line client, the
- sds-mcp MCP server and their systemd units.
+ and the service-ip helper in /opt/haify/bin, the haify command-line client, the
+ haify-mcp MCP server and their systemd units.
  .
  The controller is installed but never enabled or started: one host per
  cluster runs it, or drbd-reactor does under Self-HA.

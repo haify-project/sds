@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/wanproxy"
 )
 
 // swapBinaryPath points the resolver at a temp directory for the duration of a
@@ -37,7 +37,7 @@ func archFake(byHost map[string]string) *fakeDeploymentClient {
 // home, replicating to whatever the cloud rents.
 func TestWanproxyBinaryResolverPicksPerArchitecture(t *testing.T) {
 	dir := t.TempDir()
-	plain := filepath.Join(dir, "sds-proxy")
+	plain := filepath.Join(dir, "haify-proxy")
 	require.NoError(t, os.WriteFile(plain, []byte("host-arch"), 0o755))
 	require.NoError(t, os.WriteFile(plain+"-arm64", []byte("arm"), 0o755))
 	require.NoError(t, os.WriteFile(plain+"-amd64", []byte("x86"), 0o755))
@@ -59,7 +59,7 @@ func TestWanproxyBinaryResolverPicksPerArchitecture(t *testing.T) {
 // always had, at the path it has always been at.
 func TestWanproxyBinaryResolverFallsBackForMatchingArch(t *testing.T) {
 	dir := t.TempDir()
-	plain := filepath.Join(dir, "sds-proxy")
+	plain := filepath.Join(dir, "haify-proxy")
 	require.NoError(t, os.WriteFile(plain, []byte("host-arch"), 0o755))
 
 	restore := swapBinaryPath(t, plain)
@@ -75,7 +75,7 @@ func TestWanproxyBinaryResolverFallsBackForMatchingArch(t *testing.T) {
 // failure the operator can read and act on.
 func TestWanproxyBinaryResolverRefusesMismatchedFallback(t *testing.T) {
 	dir := t.TempDir()
-	plain := filepath.Join(dir, "sds-proxy")
+	plain := filepath.Join(dir, "haify-proxy")
 	require.NoError(t, os.WriteFile(plain, []byte("host-arch"), 0o755))
 
 	restore := swapBinaryPath(t, plain)
@@ -96,9 +96,9 @@ func TestEnsureBinariesGroupsHostsBySourceFile(t *testing.T) {
 		BinaryFor: func(h string) string {
 			switch h {
 			case "a", "b":
-				return "/x/sds-proxy-amd64"
+				return "/x/haify-proxy-amd64"
 			case "c":
-				return "/x/sds-proxy-arm64"
+				return "/x/haify-proxy-arm64"
 			}
 			return "" // pre-staged
 		},
@@ -109,7 +109,7 @@ func TestEnsureBinariesGroupsHostsBySourceFile(t *testing.T) {
 			seen[p] = append(seen[p], h)
 		}
 	}
-	assert.Equal(t, []string{"a", "b"}, seen["/x/sds-proxy-amd64"])
-	assert.Equal(t, []string{"c"}, seen["/x/sds-proxy-arm64"])
+	assert.Equal(t, []string{"a", "b"}, seen["/x/haify-proxy-amd64"])
+	assert.Equal(t, []string{"c"}, seen["/x/haify-proxy-arm64"])
 	assert.Len(t, seen, 2, "one push per distinct file, not per node")
 }

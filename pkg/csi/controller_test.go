@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func newTestController(b SDSBackend) *controllerServer {
+func newTestController(b HaifyBackend) *controllerServer {
 	return NewControllerServer(b, zap.NewNop()).(*controllerServer)
 }
 
@@ -114,7 +114,7 @@ func TestCreateVolumeMissingPool(t *testing.T) {
 
 func TestCreateVolumeUsesProfilePlacementDefaults(t *testing.T) {
 	b := newFakeBackend("n1", "n2", "n3")
-	b.profiles["production"] = &sdspb.ResourceProfile{
+	b.profiles["production"] = &haifypb.ResourceProfile{
 		Name: "production", Pool: "vg0", StorageType: "lvm", Replicas: 3,
 	}
 	req := validCreateReq("pvc-profile")
@@ -129,7 +129,7 @@ func TestCreateVolumeUsesProfilePlacementDefaults(t *testing.T) {
 
 func TestCreateVolumeProfileOverridesAndMetadata(t *testing.T) {
 	b := newFakeBackend("n1", "n2", "n3")
-	b.profiles["production"] = &sdspb.ResourceProfile{
+	b.profiles["production"] = &haifypb.ResourceProfile{
 		Name: "production", Pool: "archive", StorageType: "zfs", Replicas: 3,
 	}
 	req := validCreateReq("pvc-profile-overrides")
@@ -151,7 +151,7 @@ func TestCreateVolumeProfileOverridesAndMetadata(t *testing.T) {
 	assert.Len(t, created.Nodes, 2)
 	assert.Equal(t, "prod", created.Labels["env"])
 	assert.Equal(t, "critical", created.Labels["tier"])
-	assert.Equal(t, "csi", created.Labels["sds.csi/managed-by"])
+	assert.Equal(t, "csi", created.Labels["haify.csi/managed-by"])
 	assert.Equal(t, "pvc_profile_overrides", resp.Volume.VolumeId)
 }
 
@@ -174,7 +174,7 @@ func TestCreateVolumeProfileErrors(t *testing.T) {
 		},
 		{
 			name: "profile lacks pool", params: map[string]string{"resourceProfile": "empty"},
-			prepare: func(b *fakeBackend) { b.profiles["empty"] = &sdspb.ResourceProfile{Name: "empty"} },
+			prepare: func(b *fakeBackend) { b.profiles["empty"] = &haifypb.ResourceProfile{Name: "empty"} },
 			code:    codes.InvalidArgument, contains: "does not define a pool",
 		},
 	}
@@ -221,11 +221,11 @@ func TestCreateVolumeBackendErrors(t *testing.T) {
 	})
 }
 
-type legacyBackend struct{ SDSBackend }
+type legacyBackend struct{ HaifyBackend }
 
 func TestCreateVolumeRejectsProfileOnLegacyBackend(t *testing.T) {
 	b := newFakeBackend("n1", "n2")
-	legacy := &legacyBackend{SDSBackend: b}
+	legacy := &legacyBackend{HaifyBackend: b}
 	req := validCreateReq("pvc-legacy")
 	req.Parameters = map[string]string{"resourceProfile": "production"}
 
@@ -277,7 +277,7 @@ func (f *fakeBackend) setPoolFree(freeGBByNode map[string]uint64) {
 	}
 }
 
-// A PVC must land where `sds resource create` would: on the nodes with the
+// A PVC must land where `haify resource create` would: on the nodes with the
 // most room. Before capacity-aware placement this took n1 and n2 purely because
 // ListNodes returned them first, filling up an already-tight node.
 func TestCreateVolumePrefersNodesWithMostFreeSpace(t *testing.T) {

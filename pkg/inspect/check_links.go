@@ -55,7 +55,7 @@ func disconnectedPeers(in *Input, r Resource) []Check {
 			c.Status = StatusWarn
 			c.Message = fmt.Sprintf("the quorum tiebreaker %s of %s is unreachable from %s; the data is intact, but the next diskful failure loses quorum",
 				peer, r.Name, strings.Join(who, ", "))
-			c.Fix = fmt.Sprintf("start %s, or choose another tiebreaker: sds ha set-tiebreaker %s --node <node>", peer, r.Name)
+			c.Fix = fmt.Sprintf("start %s, or choose another tiebreaker: haify ha set-tiebreaker %s --node <node>", peer, r.Name)
 		default:
 			c.Status = StatusWarn
 			c.Message = fmt.Sprintf("the diskless client %s of %s is unreachable from %s; it holds no copy, so the data is still fully redundant",
@@ -63,7 +63,7 @@ func disconnectedPeers(in *Input, r Resource) []Check {
 			if !contains(r.Clients, peer) {
 				c.Message += " (it is not a client the controller has on record)"
 			}
-			c.Fix = fmt.Sprintf("start %s, or detach it: sds resource diskless detach %s %s", peer, r.Name, peer)
+			c.Fix = fmt.Sprintf("start %s, or detach it: haify resource diskless detach %s %s", peer, r.Name, peer)
 		}
 		out = append(out, c)
 	}
@@ -87,7 +87,7 @@ func faultDomains(in *Input) []Check {
 			Message: fmt.Sprintf("%s depend on one failure domain (%s) for every copy or the quorum majority",
 				plural(len(res), "resource", "resources"), domain),
 			Evidence: []string{strings.Join(res, ", ")},
-			Fix:      "sds resource add-replica <resource> --node <node-in-another-domain>",
+			Fix:      "haify resource add-replica <resource> --node <node-in-another-domain>",
 			Runbook:  "add-replica"})
 	}
 	return out

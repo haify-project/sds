@@ -4,15 +4,15 @@ import (
 	"context"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/client"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/client"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func (m *mockExtraClient) GetSelfHaStatus(_ context.Context) (*client.SelfHaStatus, error) {
-	return &client.SelfHaStatus{Enabled: true, Resource: "sds-meta", VIP: "10.0.0.250"}, nil
+	return &client.SelfHaStatus{Enabled: true, Resource: "haify-meta", VIP: "10.0.0.250"}, nil
 }
 
 func (m *mockExtraClient) EnableSelfHa(_ context.Context, _, _ string, _, _ uint32, _ []string) (string, string, error) {
@@ -23,8 +23,8 @@ func (m *mockExtraClient) DisableSelfHa(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockExtraClient) ListNFSExports(_ context.Context, _ string) ([]*sdspb.NFSExportInfo, error) {
-	return []*sdspb.NFSExportInfo{{Directory: "/export"}}, nil
+func (m *mockExtraClient) ListNFSExports(_ context.Context, _ string) ([]*haifypb.NFSExportInfo, error) {
+	return []*haifypb.NFSExportInfo{{Directory: "/export"}}, nil
 }
 
 func (m *mockExtraClient) AddNFSExport(_ context.Context, _, _ string, _ int32, _, _ string) error {
@@ -35,8 +35,8 @@ func (m *mockExtraClient) RemoveNFSExport(_ context.Context, _, _ string) error 
 	return nil
 }
 
-func (m *mockExtraClient) ListISCSILUNs(_ context.Context, _ string) ([]*sdspb.ISCSILUNInfo, error) {
-	return []*sdspb.ISCSILUNInfo{{Lun: 1, Device: "/dev/drbd0"}}, nil
+func (m *mockExtraClient) ListISCSILUNs(_ context.Context, _ string) ([]*haifypb.ISCSILUNInfo, error) {
+	return []*haifypb.ISCSILUNInfo{{Lun: 1, Device: "/dev/drbd0"}}, nil
 }
 
 func (m *mockExtraClient) AddISCSILUN(_ context.Context, _ string, _ int32, _ string) error {
@@ -47,8 +47,8 @@ func (m *mockExtraClient) RemoveISCSILUN(_ context.Context, _ string, _ int32) e
 	return nil
 }
 
-func (m *mockExtraClient) ListNVMeNamespaces(_ context.Context, _ string) ([]*sdspb.NVMeNamespaceInfo, error) {
-	return []*sdspb.NVMeNamespaceInfo{{NamespaceId: 1, BackingPath: "/dev/drbd0"}}, nil
+func (m *mockExtraClient) ListNVMeNamespaces(_ context.Context, _ string) ([]*haifypb.NVMeNamespaceInfo, error) {
+	return []*haifypb.NVMeNamespaceInfo{{NamespaceId: 1, BackingPath: "/dev/drbd0"}}, nil
 }
 
 func (m *mockExtraClient) AddNVMeNamespace(_ context.Context, _, _ string) error {
@@ -63,17 +63,17 @@ func TestMCPExtraSubTools(t *testing.T) {
 	mc := &mockExtraClient{}
 	session := connect(t, mc, false)
 
-	// sds_self_ha_status
-	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sds_self_ha_status"})
+	// haify_self_ha_status
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "haify_self_ha_status"})
 	require.NoError(t, err)
 	if res.IsError {
 		t.Logf("tool error: %+v", res.Content[0])
 	}
 	assert.False(t, res.IsError)
 
-	// sds_self_ha_enable
+	// haify_self_ha_enable
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_self_ha_enable",
+		Name: "haify_self_ha_enable",
 		Arguments: map[string]interface{}{
 			"vip":  "10.0.0.250/24",
 			"pool": "vg0",
@@ -85,9 +85,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_self_ha_disable
+	// haify_self_ha_disable
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_self_ha_disable",
+		Name: "haify_self_ha_disable",
 		Arguments: map[string]interface{}{
 			"node": "n1",
 		},
@@ -98,9 +98,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_nfs_exports list, add, remove
+	// haify_nfs_exports list, add, remove
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_nfs_exports",
+		Name:      "haify_nfs_exports",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestMCPExtraSubTools(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_nfs_exports",
+		Name: "haify_nfs_exports",
 		Arguments: map[string]interface{}{
 			"resource":    "gw1",
 			"action":      "add",
@@ -125,7 +125,7 @@ func TestMCPExtraSubTools(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_nfs_exports",
+		Name: "haify_nfs_exports",
 		Arguments: map[string]interface{}{
 			"resource":    "gw1",
 			"action":      "remove",
@@ -138,9 +138,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_iscsi_luns list, add, remove
+	// haify_iscsi_luns list, add, remove
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_iscsi_luns",
+		Name:      "haify_iscsi_luns",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestMCPExtraSubTools(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_iscsi_luns",
+		Name: "haify_iscsi_luns",
 		Arguments: map[string]interface{}{
 			"resource": "gw1",
 			"action":   "add",
@@ -165,7 +165,7 @@ func TestMCPExtraSubTools(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_iscsi_luns",
+		Name: "haify_iscsi_luns",
 		Arguments: map[string]interface{}{
 			"resource": "gw1",
 			"action":   "remove",
@@ -178,9 +178,9 @@ func TestMCPExtraSubTools(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_nvme_namespaces list, add, remove
+	// haify_nvme_namespaces list, add, remove
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_nvme_namespaces",
+		Name:      "haify_nvme_namespaces",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestMCPExtraSubTools(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_nvme_namespaces",
+		Name: "haify_nvme_namespaces",
 		Arguments: map[string]interface{}{
 			"resource": "gw1",
 			"action":   "add",
@@ -204,7 +204,7 @@ func TestMCPExtraSubTools(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_nvme_namespaces",
+		Name: "haify_nvme_namespaces",
 		Arguments: map[string]interface{}{
 			"resource":     "gw1",
 			"action":       "remove",
@@ -226,8 +226,8 @@ func (m *mockExtraClient) AddISCSIInitiator(_ context.Context, _, _ string) erro
 
 func (m *mockExtraClient) RemoveISCSIInitiator(_ context.Context, _, _ string) error { return nil }
 
-func (m *mockExtraClient) GetISCSIChap(_ context.Context, _ string) (*sdspb.GetISCSIChapResponse, error) {
-	return &sdspb.GetISCSIChapResponse{Success: true, Username: "user"}, nil
+func (m *mockExtraClient) GetISCSIChap(_ context.Context, _ string) (*haifypb.GetISCSIChapResponse, error) {
+	return &haifypb.GetISCSIChapResponse{Success: true, Username: "user"}, nil
 }
 
 func (m *mockExtraClient) SetISCSIChap(_ context.Context, _, _, _ string, _ bool) error { return nil }
@@ -240,11 +240,11 @@ func (m *mockExtraClient) AddNVMeHost(_ context.Context, _, _ string) error { re
 
 func (m *mockExtraClient) RemoveNVMeHost(_ context.Context, _, _ string) error { return nil }
 
-func (m *mockExtraClient) ListSnapshotSchedules(_ context.Context) ([]*sdspb.SnapshotScheduleInfo, error) {
-	return []*sdspb.SnapshotScheduleInfo{{Resource: "res1", Cron: "0 * * * *"}}, nil
+func (m *mockExtraClient) ListSnapshotSchedules(_ context.Context) ([]*haifypb.SnapshotScheduleInfo, error) {
+	return []*haifypb.SnapshotScheduleInfo{{Resource: "res1", Cron: "0 * * * *"}}, nil
 }
 
-func (m *mockExtraClient) CreateSnapshotSchedule(_ context.Context, _, _ string, _ *sdspb.GFSRetention, _ bool) error {
+func (m *mockExtraClient) CreateSnapshotSchedule(_ context.Context, _, _ string, _ *haifypb.GFSRetention, _ bool) error {
 	return nil
 }
 
@@ -264,9 +264,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	mc := &mockExtraClient{}
 	session := connect(t, mc, false)
 
-	// sds_iscsi_initiators list, add, remove
+	// haify_iscsi_initiators list, add, remove
 	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_iscsi_initiators",
+		Name:      "haify_iscsi_initiators",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
@@ -276,7 +276,7 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_iscsi_initiators",
+		Name:      "haify_iscsi_initiators",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "add", "iqn": "iqn.init"},
 	})
 	require.NoError(t, err)
@@ -286,7 +286,7 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_iscsi_initiators",
+		Name:      "haify_iscsi_initiators",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "remove", "iqn": "iqn.init"},
 	})
 	require.NoError(t, err)
@@ -295,9 +295,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_iscsi_chap get, set
+	// haify_iscsi_chap get, set
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_iscsi_chap",
+		Name:      "haify_iscsi_chap",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "get"},
 	})
 	require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_iscsi_chap",
+		Name:      "haify_iscsi_chap",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "set", "username": "user", "password": "pass"},
 	})
 	require.NoError(t, err)
@@ -316,9 +316,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_nvme_hosts list, add, remove
+	// haify_nvme_hosts list, add, remove
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_nvme_hosts",
+		Name:      "haify_nvme_hosts",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "list"},
 	})
 	require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_nvme_hosts",
+		Name:      "haify_nvme_hosts",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "add", "host_nqn": "nqn.host"},
 	})
 	require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_nvme_hosts",
+		Name:      "haify_nvme_hosts",
 		Arguments: map[string]interface{}{"resource": "gw1", "action": "remove", "host_nqn": "nqn.host"},
 	})
 	require.NoError(t, err)
@@ -347,9 +347,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_snapshot_schedule_list, create, delete
+	// haify_snapshot_schedule_list, create, delete
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "sds_snapshot_schedule_list",
+		Name: "haify_snapshot_schedule_list",
 	})
 	require.NoError(t, err)
 	if res.IsError {
@@ -358,7 +358,7 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_snapshot_schedule_create",
+		Name:      "haify_snapshot_schedule_create",
 		Arguments: map[string]interface{}{"resource": "res1", "cron": "0 * * * *", "keep_daily": 7},
 	})
 	require.NoError(t, err)
@@ -368,7 +368,7 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	assert.False(t, res.IsError)
 
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_snapshot_schedule_delete",
+		Name:      "haify_snapshot_schedule_delete",
 		Arguments: map[string]interface{}{"name": "res1"},
 	})
 	require.NoError(t, err)
@@ -377,9 +377,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_snapshot_restore
+	// haify_snapshot_restore
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_snapshot_restore",
+		Name:      "haify_snapshot_restore",
 		Arguments: map[string]interface{}{"resource": "res1", "name": "snap1", "node": "n1", "pool": "vg0"},
 	})
 	require.NoError(t, err)
@@ -388,9 +388,9 @@ func TestMCPExtraSubTools2(t *testing.T) {
 	}
 	assert.False(t, res.IsError)
 
-	// sds_resource_set_options
+	// haify_resource_set_options
 	res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "sds_resource_set_options",
+		Name:      "haify_resource_set_options",
 		Arguments: map[string]interface{}{"resource": "res1", "options": map[string]string{"opt": "val"}},
 	})
 	require.NoError(t, err)

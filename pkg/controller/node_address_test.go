@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -257,11 +257,16 @@ func TestKnownHostsScriptForgetsBeforeAdding(t *testing.T) {
 	script := knownHostsScript([]string{"10.0.0.1", "10.0.0.2", "10.0.0.2", "10.0.0.1", ""},
 		"10.0.0.2 ssh-ed25519 AAAAa\n10.0.0.1 ssh-ed25519 AAAAb\n")
 	lastForget := strings.LastIndex(script, "ssh-keygen -R")
-	add := strings.Index(script, "SDS_KNOWN_HOSTS")
+	add := strings.Index(script, "HAIFY_KNOWN_HOSTS")
 	if lastForget < 0 || add < 0 || lastForget > add {
 		t.Fatalf("every ssh-keygen -R must come before the keys are added:\n%s", script)
 	}
 	if n := strings.Count(script, "ssh-keygen -R"); n != 2 {
 		t.Fatalf("each address is forgotten once, got %d:\n%s", n, script)
+	}
+	// The here-document must end on its own delimiter line, or the shell
+	// appends the rest of the script to known_hosts.
+	if !strings.Contains(script, "<<'HAIFY_KNOWN_HOSTS'\n") || !strings.Contains(script, "\nHAIFY_KNOWN_HOSTS\n") {
+		t.Fatalf("the here-document's delimiters do not match:\n%s", script)
 	}
 }

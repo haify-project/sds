@@ -1,0 +1,3 @@
+// A pve-manager upgrade replaces the web interface's page template; put the
+// Haify storage dialog back into it afterwards (haify-pve-plugin, gui-patch.sh).
+DPkg::Post-Invoke { "if [ -x /usr/share/haify-pve-plugin/gui-patch.sh ]; then /usr/share/haify-pve-plugin/gui-patch.sh || true; fi"; };

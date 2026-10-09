@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,14 +47,14 @@ func thinAddDiskDeployment(rec *growRecorder, thinLV string, dataBytes, metaByte
 func TestAddDiskToPoolGrowsThinPool(t *testing.T) {
 	rec := &growRecorder{}
 	// 95 GiB pool with the 128 MiB metadata floor; a 100 GiB disk arrives.
-	dep := thinAddDiskDeployment(rec, "sds_vg0_thin", 95*gib, thinMetadataFloor, 105*gib)
+	dep := thinAddDiskDeployment(rec, "haify_vg0_thin", 95*gib, thinMetadataFloor, 105*gib)
 
 	err := newBasicTestController(dep).storage.AddDiskToPool(context.Background(), "vg0", "/dev/sdc", "n1")
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"metadata", "data"}, rec.order, "metadata grows before data takes the free extents")
-	assert.Equal(t, "sds_vg0", rec.extendVG)
-	assert.Equal(t, "sds_vg0_thin", rec.extendPool)
+	assert.Equal(t, "haify_vg0", rec.extendVG)
+	assert.Equal(t, "haify_vg0_thin", rec.extendPool)
 	assert.Equal(t, thinPoolGrowPercentFree, rec.extendPctArg, "same share of free extents as pool create")
 	assert.Equal(t, thinMetadataBytes(95*gib+105*gib*95/100), rec.metaGrowTo,
 		"metadata is sized for the grown pool with the convert-thin rule")
@@ -71,7 +71,7 @@ func TestAddDiskToPoolLeavesThickPoolAlone(t *testing.T) {
 
 func TestAddDiskToPoolReportsThinGrowFailure(t *testing.T) {
 	rec := &growRecorder{}
-	dep := thinAddDiskDeployment(rec, "sds_vg0_thin", 95*gib, thinMetadataFloor, 105*gib)
+	dep := thinAddDiskDeployment(rec, "haify_vg0_thin", 95*gib, thinMetadataFloor, 105*gib)
 	dep.lvExtendThinPoolPercentFreeFunc = func(hosts []string, _, _ string, _ int) (*deployment.ExecResult, error) {
 		return failedResult(hosts, "Insufficient free space"), nil
 	}

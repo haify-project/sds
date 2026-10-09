@@ -101,9 +101,9 @@ func tiebreakerCluster() (*Manager, *MockDeploymentClient) {
 
 func TestPromoterConfigGoesOnlyToReplicas(t *testing.T) {
 	m, d := tiebreakerCluster()
-	require.NoError(t, m.writeReactorConfig(context.Background(), "xplat", "sds-nfs-xplat", "cfg"))
+	require.NoError(t, m.writeReactorConfig(context.Background(), "xplat", "haify-nfs-xplat", "cfg"))
 
-	assert.Equal(t, []string{"orange1", "orange2"}, d.ConfigHosts["/etc/drbd-reactor.d/sds-nfs-xplat.toml"])
+	assert.Equal(t, []string{"orange1", "orange2"}, d.ConfigHosts["/etc/drbd-reactor.d/haify-nfs-xplat.toml"])
 	// The tiebreaker loses any promoter it already has, and the gateway is
 	// stopped there in case it is the node currently running it.
 	retired := strings.Join(scriptsOn(t, d, "orange3"), "\n")
@@ -117,9 +117,9 @@ func TestPromoterConfigGoesOnlyToReplicas(t *testing.T) {
 func TestUnknownResourceKeepsPromoterEverywhere(t *testing.T) {
 	d := &MockDeploymentClient{}
 	m := New(&MockResourceManager{}, d, zap.NewNop(), []string{"n1", "n2"})
-	require.NoError(t, m.writeReactorConfig(context.Background(), "gone", "sds-iscsi-gone", "cfg"))
+	require.NoError(t, m.writeReactorConfig(context.Background(), "gone", "haify-iscsi-gone", "cfg"))
 
-	assert.Equal(t, []string{"n1", "n2"}, d.ConfigHosts["/etc/drbd-reactor.d/sds-iscsi-gone.toml"])
+	assert.Equal(t, []string{"n1", "n2"}, d.ConfigHosts["/etc/drbd-reactor.d/haify-iscsi-gone.toml"])
 	for _, h := range []string{"n1", "n2"} {
 		for _, s := range scriptsOn(t, d, h) {
 			assert.NotContains(t, s, "rm -f", "nothing may be retired on a guess")
@@ -132,7 +132,7 @@ func TestStartGatewayRetiresTheTiebreakersPromoter(t *testing.T) {
 	require.NoError(t, m.StartGateway(context.Background(), "xplat"))
 
 	// The drop-in is guarded to hosts that carry this gateway's NFS promoter.
-	assert.Contains(t, strings.Join(scriptsOn(t, d, "orange1"), "\n"), "sds-nfs-xplat.toml* >/dev/null 2>&1 || exit 0")
+	assert.Contains(t, strings.Join(scriptsOn(t, d, "orange1"), "\n"), "haify-nfs-xplat.toml* >/dev/null 2>&1 || exit 0")
 	onTiebreaker := strings.Join(scriptsOn(t, d, "orange3"), "\n")
 	assert.Contains(t, onTiebreaker, `rm -f "$f"`)
 	assert.NotContains(t, onTiebreaker, `mv "$f.disabled" "$f"`,
@@ -142,7 +142,7 @@ func TestStartGatewayRetiresTheTiebreakersPromoter(t *testing.T) {
 
 func TestNFSGatewayTiesHelperDaemonsToServer(t *testing.T) {
 	m, d := tiebreakerCluster()
-	require.NoError(t, m.writeReactorConfig(context.Background(), "xplat", "sds-nfs-xplat", "cfg"))
+	require.NoError(t, m.writeReactorConfig(context.Background(), "xplat", "haify-nfs-xplat", "cfg"))
 
 	onReplica := strings.Join(scriptsOn(t, d, "orange1"), "\n")
 	assert.Contains(t, onReplica, "for u in fsidd nfsdcld")
@@ -151,11 +151,11 @@ func TestNFSGatewayTiesHelperDaemonsToServer(t *testing.T) {
 
 	d2 := &MockDeploymentClient{}
 	m2 := New(&MockResourceManager{}, d2, zap.NewNop(), []string{"n1"})
-	require.NoError(t, m2.writeReactorConfig(context.Background(), "blk", "sds-iscsi-blk", "cfg"))
+	require.NoError(t, m2.writeReactorConfig(context.Background(), "blk", "haify-iscsi-blk", "cfg"))
 	assert.NotContains(t, strings.Join(scriptsOn(t, d2, "n1"), "\n"), "PartOf=")
 }
 
-// A gateway's state mount must leave /var/lib/sds, where the controller's own
+// A gateway's state mount must leave /var/lib/haify, where the controller's own
 // Self-HA mount covers it. Starting a stopped legacy gateway rewrites its
 // disabled config — and only that — before re-enabling it.
 func TestStartGatewayMovesStateMountOutOfSelfHaPath(t *testing.T) {
@@ -166,7 +166,7 @@ func TestStartGatewayMovesStateMountOutOfSelfHaPath(t *testing.T) {
 	scripts := scriptsOn(t, mockDeployment, "node1")
 	moveAt, enableAt := -1, -1
 	for i, s := range scripts {
-		if strings.Contains(s, "old=/var/lib/sds/isc1 new=/var/lib/sds-gateway/isc1") {
+		if strings.Contains(s, "old=/var/lib/haify/isc1 new=/var/lib/haify-gateway/isc1") {
 			moveAt = i
 		}
 		if strings.Contains(s, `mv "$f.disabled" "$f"`) {
@@ -179,16 +179,16 @@ func TestStartGatewayMovesStateMountOutOfSelfHaPath(t *testing.T) {
 	// Run the rewrite for real against a copy of a legacy config.
 	dir := t.TempDir()
 	legacy := `      start = [
-        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd15 directory=/var/lib/sds/isc1 fstype=ext4 run_fsck=no",
-        "ocf:heartbeat:nfsserver nfsserver nfs_ip=10.0.0.9 nfs_shared_infodir=/var/lib/sds/isc1/nfs nfs_server_scope=10.0.0.9",
-        "ocf:heartbeat:Filesystem other directory=/var/lib/sds/isc10 fstype=ext4",
-        "ocf:heartbeat:portblock portunblock0 ip=10.0.0.9 portno=3260 action=unblock protocol=tcp tickle_dir=/var/lib/sds/isc1",
+        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd15 directory=/var/lib/haify/isc1 fstype=ext4 run_fsck=no",
+        "ocf:heartbeat:nfsserver nfsserver nfs_ip=10.0.0.9 nfs_shared_infodir=/var/lib/haify/isc1/nfs nfs_server_scope=10.0.0.9",
+        "ocf:heartbeat:Filesystem other directory=/var/lib/haify/isc10 fstype=ext4",
+        "ocf:heartbeat:portblock portunblock0 ip=10.0.0.9 portno=3260 action=unblock protocol=tcp tickle_dir=/var/lib/haify/isc1",
       ]
 `
-	conf := filepath.Join(dir, "sds-iscsi-isc1.toml.disabled")
+	conf := filepath.Join(dir, "haify-iscsi-isc1.toml.disabled")
 	require.NoError(t, os.WriteFile(conf, []byte(legacy), 0644))
 	mountinfo := filepath.Join(dir, "mountinfo")
-	require.NoError(t, os.WriteFile(mountinfo, []byte("66 32 147:7 / /var/lib/sds rw - ext4 /dev/drbd7 rw\n"), 0644))
+	require.NoError(t, os.WriteFile(mountinfo, []byte("66 32 147:7 / /var/lib/haify rw - ext4 /dev/drbd7 rw\n"), 0644))
 
 	script := scripts[moveAt]
 	script = strings.ReplaceAll(script, "/etc/drbd-reactor.d", dir)
@@ -198,13 +198,13 @@ func TestStartGatewayMovesStateMountOutOfSelfHaPath(t *testing.T) {
 
 	got, err := os.ReadFile(conf)
 	require.NoError(t, err)
-	assert.Contains(t, string(got), "directory=/var/lib/sds-gateway/isc1 fstype")
-	assert.Contains(t, string(got), "nfs_shared_infodir=/var/lib/sds-gateway/isc1/nfs ")
-	assert.Contains(t, string(got), `tickle_dir=/var/lib/sds-gateway/isc1",`)
-	assert.Contains(t, string(got), "directory=/var/lib/sds/isc10 ", "another gateway's path must be left alone")
+	assert.Contains(t, string(got), "directory=/var/lib/haify-gateway/isc1 fstype")
+	assert.Contains(t, string(got), "nfs_shared_infodir=/var/lib/haify-gateway/isc1/nfs ")
+	assert.Contains(t, string(got), `tickle_dir=/var/lib/haify-gateway/isc1",`)
+	assert.Contains(t, string(got), "directory=/var/lib/haify/isc10 ", "another gateway's path must be left alone")
 
 	// The old mount still exists but is not reachable by path: refuse.
-	require.NoError(t, os.WriteFile(mountinfo, []byte("325 32 147:15 / /var/lib/sds/isc1 rw - ext4 /dev/drbd15 rw\n"), 0644))
+	require.NoError(t, os.WriteFile(mountinfo, []byte("325 32 147:15 / /var/lib/haify/isc1 rw - ext4 /dev/drbd15 rw\n"), 0644))
 	out, err = exec.Command("/bin/sh", "-c", script).CombinedOutput()
 	require.Error(t, err)
 	assert.Contains(t, string(out), "hidden under the controller database mount")

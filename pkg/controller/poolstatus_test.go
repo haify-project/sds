@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // The listing path end to end: vgs for capacity, lvs for utilisation, folded
@@ -42,8 +42,8 @@ func TestListPoolsFoldsInThinUsage(t *testing.T) {
 	// 21470642176 bytes is what a 20 GiB disk leaves in the group after PV
 	// metadata: 19.996 GiB.
 	ctrl := newThinTestController(t,
-		"  sds_sdspool|21470642176|0|/dev/sdb",
-		"  sds_sdspool|sdsthin|thin-pool|20937965568|45.50|8.23|twi-aotz--")
+		"  haify_haifypool|21470642176|0|/dev/sdb",
+		"  haify_haifypool|haifythin|thin-pool|20937965568|45.50|8.23|twi-aotz--")
 
 	pools, err := ctrl.storage.ListPools(context.Background())
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestListPoolsFoldsInThinUsage(t *testing.T) {
 
 	p := pools[0]
 	require.NotNil(t, p.ThinUsage, "utilisation must reach the pool listing")
-	assert.Equal(t, "sdsthin", p.ThinUsage.PoolLV)
+	assert.Equal(t, "haifythin", p.ThinUsage.PoolLV)
 	assert.InDelta(t, 45.50, p.ThinUsage.DataPercent, 0.001)
 	assert.InDelta(t, 8.23, p.ThinUsage.MetaPercent, 0.001)
 
@@ -73,16 +73,16 @@ func TestBytesToGBRoundsRatherThanTruncates(t *testing.T) {
 
 func TestGetPoolStatusListFeedsTheMonitor(t *testing.T) {
 	ctrl := newThinTestController(t,
-		"  sds_sdspool|21470642176|0|/dev/sdb",
-		"  sds_sdspool|sdsthin|thin-pool|20937965568|100.00|14.00|twi-aotzD-")
+		"  haify_haifypool|21470642176|0|/dev/sdb",
+		"  haify_haifypool|haifythin|thin-pool|20937965568|100.00|14.00|twi-aotzD-")
 
 	statuses, err := ctrl.storage.GetPoolStatusList(context.Background())
 	require.NoError(t, err)
 	require.Len(t, statuses, 1)
 
 	s := statuses[0]
-	assert.Equal(t, "sds_sdspool", s.Name)
-	assert.Equal(t, "sdsthin", s.ThinPool)
+	assert.Equal(t, "haify_haifypool", s.Name)
+	assert.Equal(t, "haifythin", s.ThinPool)
 	assert.InDelta(t, 100.0, s.DataPercent, 0.001)
 	assert.True(t, s.OutOfSpace, "LVM's own flag must survive the adapter")
 }
@@ -92,20 +92,20 @@ func TestGetPoolStatusListPassesThroughThickPools(t *testing.T) {
 	// dropped: the monitor needs to see it to tell a pool converted to thick
 	// from a pool that was deleted.
 	ctrl := newThinTestController(t,
-		"  sds_sdspool|21470642176|10737418240|/dev/sdb",
-		"  sds_sdspool|data|linear|10737418240|||-wi-a-----")
+		"  haify_haifypool|21470642176|10737418240|/dev/sdb",
+		"  haify_haifypool|data|linear|10737418240|||-wi-a-----")
 
 	statuses, err := ctrl.storage.GetPoolStatusList(context.Background())
 	require.NoError(t, err)
 	require.Len(t, statuses, 1)
 	assert.Empty(t, statuses[0].ThinPool)
-	assert.Equal(t, "sds_sdspool", statuses[0].Name)
+	assert.Equal(t, "haify_haifypool", statuses[0].Name)
 }
 
 func TestListPoolsSurvivesAThinReportFailure(t *testing.T) {
 	// A pool that cannot report its utilisation is still a pool. Failing the
 	// whole listing would take the page down over a missing badge.
-	dep := thinClusterDeployment("  sds_sdspool|21470642176|0|/dev/sdb", "")
+	dep := thinClusterDeployment("  haify_haifypool|21470642176|0|/dev/sdb", "")
 	dep.lvsThinReportFunc = func(ctx context.Context, hosts []string, vgName string) (*deployment.ExecResult, error) {
 		return failedExecResult(hosts, "lvs: command not found"), nil
 	}

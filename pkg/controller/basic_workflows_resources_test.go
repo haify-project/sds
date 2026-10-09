@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,11 +23,11 @@ func TestResourceManagerCreateResourceUsesNormalizedPool(t *testing.T) {
 	err := ctrl.resources.CreateResource(context.Background(), "res1", 7001, []string{"node1", "node2"}, "", 10, "data-pool", "lvm", nil)
 	require.NoError(t, err)
 	require.Len(t, dep.lvCreateCalls, 2)
-	assert.Equal(t, "sds_data-pool", dep.lvCreateCalls[0].vgName)
+	assert.Equal(t, "haify_data-pool", dep.lvCreateCalls[0].vgName)
 	assert.Equal(t, "res1_data", dep.lvCreateCalls[0].lvName)
 	assert.Equal(t, []string{"10.0.0.1"}, dep.lvCreateCalls[0].hosts)
 	require.Len(t, dep.distributedConfigs, 1)
-	assert.Contains(t, dep.distributedConfigs[0].content, "/dev/sds_data-pool/res1_data")
+	assert.Contains(t, dep.distributedConfigs[0].content, "/dev/haify_data-pool/res1_data")
 	assert.Contains(t, dep.distributedConfigs[0].remotePath, "/etc/drbd.d/res1.res")
 }
 
@@ -58,13 +58,13 @@ func TestResourceManagerCreateResourcePersistsInitialVolume(t *testing.T) {
 	require.Len(t, volumes, 1)
 	assert.Equal(t, "res1_data", volumes[0].VolumeName)
 	assert.Equal(t, 0, volumes[0].VolumeID)
-	assert.Equal(t, "sds_data-pool", volumes[0].Pool)
+	assert.Equal(t, "haify_data-pool", volumes[0].Pool)
 	assert.Equal(t, 10, volumes[0].SizeGB)
-	assert.Equal(t, "/dev/sds_data-pool/res1_data", volumes[0].Device)
+	assert.Equal(t, "/dev/haify_data-pool/res1_data", volumes[0].Device)
 }
 
 func TestResourceManagerCreateResourceEnablesDRBDBootUnit(t *testing.T) {
-	// After a successful create the native sds-drbd-up.service oneshot must be
+	// After a successful create the native haify-drbd-up.service oneshot must be
 	// installed AND enabled on every diskful node, so a rebooted node re-runs
 	// `drbdadm adjust all` and rejoins replication without a manual `drbdadm
 	// adjust`. We must NOT rely on the packaged drbd.service: it is an LSB unit
@@ -83,16 +83,16 @@ func TestResourceManagerCreateResourceEnablesDRBDBootUnit(t *testing.T) {
 	var installCmd string
 	for _, call := range dep.execCalls {
 		// The single install command both writes the unit file to
-		// /etc/systemd/system/sds-drbd-up.service and enables it.
-		if strings.Contains(call.cmd, "/etc/systemd/system/sds-drbd-up.service") &&
-			strings.Contains(call.cmd, "systemctl enable sds-drbd-up.service") {
+		// /etc/systemd/system/haify-drbd-up.service and enables it.
+		if strings.Contains(call.cmd, "/etc/systemd/system/haify-drbd-up.service") &&
+			strings.Contains(call.cmd, "systemctl enable haify-drbd-up.service") {
 			installHosts = call.hosts
 			installCmd = call.cmd
 			break
 		}
 	}
 	require.NotNil(t, installHosts,
-		"expected an exec call that writes and enables sds-drbd-up.service; got %+v", dep.execCalls)
+		"expected an exec call that writes and enables haify-drbd-up.service; got %+v", dep.execCalls)
 	// The boot bring-up must install the helper script, activate LVM first
 	// (so backing devices exist), and adjust each resource INDEPENDENTLY.
 	// It must not use `up all`/`adjust all`, which abort on a foreign resource
@@ -116,7 +116,7 @@ func TestResourceManagerCreateResourceSucceedsWhenBootUnitEnableFails(t *testing
 	// fail resource creation, since the resource is already up at that point.
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
-			if strings.Contains(cmd, "sds-drbd-up.service") {
+			if strings.Contains(cmd, "haify-drbd-up.service") {
 				return nil, context.DeadlineExceeded
 			}
 			return successExecResult(hosts, ""), nil
@@ -150,9 +150,9 @@ func TestResourceManagerDeleteResourceRemovesDatabaseRecord(t *testing.T) {
 		ResourceName: "res1",
 		VolumeName:   "res1_data",
 		VolumeID:     0,
-		Pool:         "sds_data-pool",
+		Pool:         "haify_data-pool",
 		SizeGB:       10,
-		Device:       "/dev/sds_data-pool/res1_data",
+		Device:       "/dev/haify_data-pool/res1_data",
 	}))
 
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
@@ -180,7 +180,7 @@ func TestResourceManagerDeleteResourceRemovesDatabaseRecord(t *testing.T) {
 	// records were the last knowledge of which LVs belonged to the resource.
 	foundLvremove := false
 	for _, call := range dep.execCalls {
-		if strings.Contains(call.cmd, "lvremove -f sds_data-pool/res1_data") {
+		if strings.Contains(call.cmd, "lvremove -f haify_data-pool/res1_data") {
 			foundLvremove = true
 			assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, call.hosts)
 		}
@@ -244,9 +244,9 @@ func TestResourceManagerGetResourceFallsBackToPersistedVolumes(t *testing.T) {
 		ResourceName: "res1",
 		VolumeName:   "res1_data",
 		VolumeID:     0,
-		Pool:         "sds_data-pool",
+		Pool:         "haify_data-pool",
 		SizeGB:       10,
-		Device:       "/dev/sds_data-pool/res1_data",
+		Device:       "/dev/haify_data-pool/res1_data",
 	}))
 
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
@@ -263,7 +263,7 @@ func TestResourceManagerGetResourceFallsBackToPersistedVolumes(t *testing.T) {
 }
 
 func TestResourceManagerAddVolumePersistsMetadata(t *testing.T) {
-	config := "resource res1 {\n    volume 0 {\n        device    minor 1;\n        disk      /dev/sds_data-pool/res1_data;\n        meta-disk internal;\n    }\n}\n"
+	config := "resource res1 {\n    volume 0 {\n        device    minor 1;\n        disk      /dev/haify_data-pool/res1_data;\n        meta-disk internal;\n    }\n}\n"
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
@@ -296,7 +296,7 @@ func TestResourceManagerAddVolumePersistsMetadata(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, dep.distributedConfigs, 1)
 	assert.Contains(t, dep.distributedConfigs[0].content, "volume 1 {")
-	assert.Contains(t, dep.distributedConfigs[0].content, "disk      /dev/sds_data-pool/res1_logs;")
+	assert.Contains(t, dep.distributedConfigs[0].content, "disk      /dev/haify_data-pool/res1_logs;")
 	var sawAdjust bool
 	for _, call := range dep.execCalls {
 		if call.cmd == "sudo drbdadm adjust res1" {
@@ -314,7 +314,7 @@ func TestResourceManagerAddVolumePersistsMetadata(t *testing.T) {
 }
 
 func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
-	config := "resource res1 {\n    volume 0 {\n        device    minor 1;\n        disk      /dev/sds_data-pool/res1_data;\n        meta-disk internal;\n    }\n\n    volume 1 {\n        device    minor 2;\n        disk      /dev/sds_data-pool/res1_logs;\n        meta-disk internal;\n    }\n}\n"
+	config := "resource res1 {\n    volume 0 {\n        device    minor 1;\n        disk      /dev/haify_data-pool/res1_data;\n        meta-disk internal;\n    }\n\n    volume 1 {\n        device    minor 2;\n        disk      /dev/haify_data-pool/res1_logs;\n        meta-disk internal;\n    }\n}\n"
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
@@ -342,9 +342,9 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 		ResourceName: "res1",
 		VolumeName:   "res1_logs",
 		VolumeID:     1,
-		Pool:         "sds_data-pool",
+		Pool:         "haify_data-pool",
 		SizeGB:       20,
-		Device:       "/dev/sds_data-pool/res1_logs",
+		Device:       "/dev/haify_data-pool/res1_logs",
 	}))
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.nodes.nodes["10.0.0.2"] = &NodeInfo{Name: "node2", Address: "10.0.0.2"}
@@ -361,7 +361,7 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 		if call.cmd == "sudo drbdadm adjust res1" {
 			sawAdjust = true
 		}
-		if strings.Contains(call.cmd, "lvremove -f /dev/sds_data-pool/res1_logs") {
+		if strings.Contains(call.cmd, "lvremove -f /dev/haify_data-pool/res1_logs") {
 			sawLVRemove = true
 		}
 	}
@@ -375,7 +375,7 @@ func TestResourceManagerRemoveVolumeUpdatesConfigAndDatabase(t *testing.T) {
 // A failed lvremove on any node must surface as an error, not a silent success
 // that leaves an orphaned LV and a lopsided DRBD resource.
 func TestResourceManagerRemoveVolumeErrorsWhenBackingRemovalFails(t *testing.T) {
-	config := "resource res1 {\n    volume 1 {\n        device    minor 2;\n        disk      /dev/sds_data-pool/res1_logs;\n        meta-disk internal;\n    }\n}\n"
+	config := "resource res1 {\n    volume 1 {\n        device    minor 2;\n        disk      /dev/haify_data-pool/res1_logs;\n        meta-disk internal;\n    }\n}\n"
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
@@ -406,7 +406,7 @@ func TestResourceManagerRemoveVolumeErrorsWhenBackingRemovalFails(t *testing.T) 
 }
 
 func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
-	config := "resource res1 {\n    volume 1 {\n        device    minor 2;\n        disk      /dev/sds_data-pool/res1_logs;\n        meta-disk internal;\n    }\n}\n"
+	config := "resource res1 {\n    volume 1 {\n        device    minor 2;\n        disk      /dev/haify_data-pool/res1_logs;\n        meta-disk internal;\n    }\n}\n"
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
@@ -434,9 +434,9 @@ func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
 		ResourceName: "res1",
 		VolumeName:   "res1_logs",
 		VolumeID:     1,
-		Pool:         "sds_data-pool",
+		Pool:         "haify_data-pool",
 		SizeGB:       20,
-		Device:       "/dev/sds_data-pool/res1_logs",
+		Device:       "/dev/haify_data-pool/res1_logs",
 	}))
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{Name: "node1", Address: "10.0.0.1"}
 	ctrl.nodes.nodes["10.0.0.2"] = &NodeInfo{Name: "node2", Address: "10.0.0.2"}
@@ -448,7 +448,7 @@ func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
 	var sawLVResize, sawDRBDResize bool
 	for _, call := range dep.execCalls {
 		// The LV grows by DRBD's metadata too, so the device reaches 50 GiB.
-		if call.cmd == fmt.Sprintf("sudo lvresize -L %dB -y /dev/sds_data-pool/res1_logs", backingVolumeSizeBytes(50, 1, false)) {
+		if call.cmd == fmt.Sprintf("sudo lvresize -L %dB -y /dev/haify_data-pool/res1_logs", backingVolumeSizeBytes(50, 1, false)) {
 			sawLVResize = true
 		}
 		if call.cmd == "sudo drbdadm resize res1/1" {

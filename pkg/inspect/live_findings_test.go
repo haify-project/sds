@@ -9,7 +9,7 @@ import (
 
 func TestControllerBinariesComparedPerArchitecture(t *testing.T) {
 	in := cluster()
-	in.SelfHA = &SelfHAInput{Resource: "sds-meta"}
+	in.SelfHA = &SelfHAInput{Resource: "haify-meta"}
 	in.Probes["n1"].Arch, in.Probes["n1"].CtlSHA = "aarch64", "arm"
 	in.Probes["n2"].Arch, in.Probes["n2"].CtlSHA = "x86_64", "amd"
 	in.Probes["n3"].Arch, in.Probes["n3"].CtlSHA = "x86_64", "amd"
@@ -44,7 +44,7 @@ func TestPublicAddressBehindNATIsNotRenumbered(t *testing.T) {
 	in = cluster()
 	in.Nodes[2].Address = "100.64.0.9"
 	in.Probes["n3"].Addrs = []string{"100.64.0.12"}
-	if c := only(t, checkNodes(in), "nodes.address"); c.Fix != "sds node set-address n3 100.64.0.12" {
+	if c := only(t, checkNodes(in), "nodes.address"); c.Fix != "haify node set-address n3 100.64.0.12" {
 		t.Errorf("got %+v", c)
 	}
 }
@@ -58,7 +58,7 @@ func TestDuplicateHostsLinesReportedOnce(t *testing.T) {
 	}
 }
 
-// node-a carries the sds-meta promoter while diskless, on purpose.
+// node-a carries the haify-meta promoter while diskless, on purpose.
 func TestSelfHAPromoterOnDisklessNodeWarns(t *testing.T) {
 	in := cluster()
 	selfHA(in)
@@ -70,25 +70,25 @@ func TestSelfHAPromoterOnDisklessNodeWarns(t *testing.T) {
 	}
 }
 
-// Thick sds_vg0 with 250 extents (1000 MiB) free cannot reserve the 2 GiB a
+// Thick haify_vg0 with 250 extents (1000 MiB) free cannot reserve the 2 GiB a
 // snapshot of a 10 GiB volume needs: the failed scheduled backups.
 func TestThickPoolSnapshotRoom(t *testing.T) {
 	in := cluster()
-	in.Probes["n1"].VGFree = map[string]uint64{"sds_vg0": 250 * 4 << 20}
+	in.Probes["n1"].VGFree = map[string]uint64{"haify_vg0": 250 * 4 << 20}
 	in.Probes["n1"].LVs = []LV{
-		{VG: "sds_vg0", Name: "pve-9001-0_data", Segtype: "linear", SizeBytes: 10 << 30},
-		{VG: "sds_vg0", Name: "small_data", Segtype: "linear", SizeBytes: 1 << 30},
-		{VG: "sds_vg0", Name: "pve-9001-0_data_sched_20261001T020000Z", Segtype: "snapshot", SizeBytes: 2 << 30},
+		{VG: "haify_vg0", Name: "pve-9001-0_data", Segtype: "linear", SizeBytes: 10 << 30},
+		{VG: "haify_vg0", Name: "small_data", Segtype: "linear", SizeBytes: 1 << 30},
+		{VG: "haify_vg0", Name: "pve-9001-0_data_sched_20261001T020000Z", Segtype: "snapshot", SizeBytes: 2 << 30},
 	}
 	checks := checkPools(in)
 	c := only(t, checks, "pool.snapshot_room")
-	if c.Subject != "n1:sds_vg0" || len(c.Evidence) != 2 || !strings.Contains(c.Evidence[1], "pve-9001-0_data") {
+	if c.Subject != "n1:haify_vg0" || len(c.Evidence) != 2 || !strings.Contains(c.Evidence[1], "pve-9001-0_data") {
 		t.Errorf("only the 10 GiB volume is short (1 GiB needs 256 MiB): %+v", c)
 	}
-	if c.Fix != "sds pool add --pool vg0 --nodes n1 --devices <new-device>" {
+	if c.Fix != "haify pool add --pool vg0 --nodes n1 --devices <new-device>" {
 		t.Errorf("fix = %q", c.Fix)
 	}
-	in.Probes["n1"].VGFree["sds_vg0"] = 4 << 30
+	in.Probes["n1"].VGFree["haify_vg0"] = 4 << 30
 	if c := only(t, checkPools(in), "pool.usage"); !strings.Contains(c.Message, "1 thick pool has room") {
 		t.Errorf("got %+v", c)
 	}
@@ -113,11 +113,11 @@ func TestNothingToCountSaysSo(t *testing.T) {
 }
 
 func TestProbeCarriesArchAndVGFree(t *testing.T) {
-	p, err := ParseProbe("probe=1\narch=aarch64\nvg_free=sds_vg0 1048576000\nvg_free=bad\nend=1")
+	p, err := ParseProbe("probe=1\narch=aarch64\nvg_free=haify_vg0 1048576000\nvg_free=bad\nend=1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Arch != "aarch64" || p.VGFree["sds_vg0"] != 1048576000 || len(p.VGFree) != 1 {
+	if p.Arch != "aarch64" || p.VGFree["haify_vg0"] != 1048576000 || len(p.VGFree) != 1 {
 		t.Errorf("got %+v", p)
 	}
 	if !strings.Contains(ProbeScript, "uname -m") || !strings.Contains(ProbeScript, "vg_free") {

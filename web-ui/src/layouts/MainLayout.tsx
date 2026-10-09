@@ -27,7 +27,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 // Collapsing the sidebar is a per-workstation preference, so it is remembered
 // across reloads. Storage can throw (private mode, disabled cookies); the
 // preference is not worth failing a render over.
-const COLLAPSE_KEY = 'sds.sidebar.collapsed';
+const COLLAPSE_KEY = 'haify.sidebar.collapsed';
 
 function readCollapsed(): boolean {
   try {

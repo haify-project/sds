@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
-	"github.com/haify-project/sds/pkg/inspect"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
+	"github.com/haify-project/haify/pkg/inspect"
 )
 
 // The disks under the pools and their health (inspect.DiskProbeScript), for
-// `sds pool disks` and for the daily inspection.
+// `haify pool disks` and for the daily inspection.
 
 const diskProbeTimeout = 2 * time.Minute
 
@@ -81,7 +81,7 @@ func (im *InspectionManager) gatherDisks(ctx context.Context, in *inspect.Input)
 			continue
 		}
 		c.events.Publish(event.Event{Type: event.TypeDiskHealth, Severity: sev, Status: event.StatusInfo, Node: d.Node,
-			Message: fmt.Sprintf("disk %s under pool %s on %s: %s; replace it with `sds pool replace-disk --pool %s --node %s --disk %s --new-disk <device>`",
+			Message: fmt.Sprintf("disk %s under pool %s on %s: %s; replace it with `haify pool replace-disk --pool %s --node %s --disk %s --new-disk <device>`",
 				d.Device, d.Pool, d.Node, d.Detail, d.Pool, d.Node, d.PV),
 			Details: map[string]string{"device": d.Device, "pool": d.Pool, "model": d.Model, "serial": d.Serial}})
 	}

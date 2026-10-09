@@ -9,9 +9,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/alert"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/alert"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Growing a thin pool before it is full ([storage.thin] autoextend_*).
@@ -122,7 +122,7 @@ func (a *thinAutoextender) extend(ctx context.Context, p alert.PoolStatusInfo, g
 		a.mu.Unlock()
 		if !warned {
 			a.publish(p, event.SeverityWarning, fmt.Sprintf("thin pool %s/%s on %s is at %.0f%% data / %.0f%% metadata and its volume group "+
-				"has %s left, too little to grow it: add a disk with `sds pool add --pool %s --nodes %s --devices <disk>`",
+				"has %s left, too little to grow it: add a disk with `haify pool add --pool %s --nodes %s --devices <disk>`",
 				p.Name, p.ThinPool, p.Node, p.DataPercent, p.MetaPercent, formatBytes(free), p.Name, p.Node))
 		}
 		return

@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/gateway"
-	"github.com/haify-project/sds/pkg/rbac"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/gateway"
+	"github.com/haify-project/haify/pkg/rbac"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -52,7 +52,7 @@ func TestRBACAdaptersStoreAndStreamInterceptors(t *testing.T) {
 	stream := &fakeServerStream{ctx: ctx}
 	identity := rbacIdentityStreamInterceptor(engine)
 	called := false
-	err = identity(nil, stream, &grpc.StreamServerInfo{FullMethod: "/sds.v1.SDSController/ListNodes"}, func(_ interface{}, ss grpc.ServerStream) error {
+	err = identity(nil, stream, &grpc.StreamServerInfo{FullMethod: "/haify.v1.HaifyController/ListNodes"}, func(_ interface{}, ss grpc.ServerStream) error {
 		called = true
 		assert.Equal(t, "admin", userFromContext(ss.Context()))
 		return nil
@@ -62,9 +62,9 @@ func TestRBACAdaptersStoreAndStreamInterceptors(t *testing.T) {
 
 	authz := rbacAuthzStreamInterceptor(engine)
 	adminCtx := context.WithValue(context.Background(), ctxUserKey{}, "admin")
-	require.NoError(t, authz(nil, &fakeServerStream{ctx: adminCtx}, &grpc.StreamServerInfo{FullMethod: "/sds.v1.SDSController/DeleteResource"}, func(interface{}, grpc.ServerStream) error { return nil }))
+	require.NoError(t, authz(nil, &fakeServerStream{ctx: adminCtx}, &grpc.StreamServerInfo{FullMethod: "/haify.v1.HaifyController/DeleteResource"}, func(interface{}, grpc.ServerStream) error { return nil }))
 	viewerCtx := context.WithValue(context.Background(), ctxUserKey{}, "viewer")
-	err = authz(nil, &fakeServerStream{ctx: viewerCtx}, &grpc.StreamServerInfo{FullMethod: "/sds.v1.SDSController/DeleteResource"}, func(interface{}, grpc.ServerStream) error { return nil })
+	err = authz(nil, &fakeServerStream{ctx: viewerCtx}, &grpc.StreamServerInfo{FullMethod: "/haify.v1.HaifyController/DeleteResource"}, func(interface{}, grpc.ServerStream) error { return nil })
 	assert.ErrorIs(t, err, errPermissionDenied)
 
 	healthCalled := false
@@ -127,27 +127,27 @@ func TestGatewayServerValidationAndLifecycle(t *testing.T) {
 	srv := NewServer(ctrl)
 	ctx := context.Background()
 
-	nfs, err := srv.CreateNFSGateway(ctx, &sdspb.CreateNFSGatewayRequest{Resource: "r", ServiceIp: "invalid"})
+	nfs, err := srv.CreateNFSGateway(ctx, &haifypb.CreateNFSGatewayRequest{Resource: "r", ServiceIp: "invalid"})
 	require.Error(t, err)
 	assert.False(t, nfs.Success)
-	iscsi, err := srv.CreateISCSIGateway(ctx, &sdspb.CreateISCSIGatewayRequest{Resource: "r", ServiceIp: "invalid"})
+	iscsi, err := srv.CreateISCSIGateway(ctx, &haifypb.CreateISCSIGatewayRequest{Resource: "r", ServiceIp: "invalid"})
 	require.Error(t, err)
 	assert.False(t, iscsi.Success)
-	nvme, err := srv.CreateNVMeGateway(ctx, &sdspb.CreateNVMeGatewayRequest{Resource: "r", ServiceIp: "invalid"})
+	nvme, err := srv.CreateNVMeGateway(ctx, &haifypb.CreateNVMeGatewayRequest{Resource: "r", ServiceIp: "invalid"})
 	require.Error(t, err)
 	assert.False(t, nvme.Success)
 
 	require.NoError(t, ctrl.db.SaveGateway(ctx, &database.Gateway{Name: "r-nfs", Resource: "r", Type: database.GatewayTypeNFS, Status: "configured"}))
-	started, err := srv.StartGateway(ctx, &sdspb.StartGatewayRequest{Id: "r"})
+	started, err := srv.StartGateway(ctx, &haifypb.StartGatewayRequest{Id: "r"})
 	require.NoError(t, err)
 	assert.True(t, started.Success)
 	stored, err := ctrl.db.GetGatewayByResource(ctx, "r")
 	require.NoError(t, err)
 	assert.Equal(t, "started", stored.Status)
-	stopped, err := srv.StopGateway(ctx, &sdspb.StopGatewayRequest{Id: "r"})
+	stopped, err := srv.StopGateway(ctx, &haifypb.StopGatewayRequest{Id: "r"})
 	require.NoError(t, err)
 	assert.True(t, stopped.Success)
-	deleted, err := srv.DeleteGateway(ctx, &sdspb.DeleteGatewayRequest{Id: "r"})
+	deleted, err := srv.DeleteGateway(ctx, &haifypb.DeleteGatewayRequest{Id: "r"})
 	require.NoError(t, err)
 	assert.True(t, deleted.Success)
 }

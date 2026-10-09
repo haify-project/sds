@@ -47,14 +47,14 @@ ui/dist/*
 .playwright-mcp/
 
 # stray local screenshots
-sds-dashboard.png
-sds-resource-status.png
+haify-dashboard.png
+haify-resource-status.png
 
 # transient subagent worktrees
 .claude/worktrees/
 
-# Compiled binaries — never commit (a 75MB sds-ai binary once bloated history)
-cmd/sds-ai/sds-ai
+# Compiled binaries — never commit (a 75MB haify-ai binary once bloated history)
+cmd/haify-ai/haify-ai
 
 # understand-anything: keep the graph and its incremental baseline, drop scratch.
 # The graph is worth ~1h and a few million tokens to rebuild, and fingerprints.json

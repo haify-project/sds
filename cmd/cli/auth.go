@@ -3,19 +3,19 @@ package main
 import (
 	"io"
 
-	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/haify/pkg/client"
 )
 
-// newSDSClient builds the controller client with the resolved API token and
+// newHaifyClient builds the controller client with the resolved API token and
 // transport security. Every command must use this instead of
-// client.NewSDSClient directly — a command that dials on its own gets neither
+// client.NewHaifyClient directly — a command that dials on its own gets neither
 // the token nor TLS, and against a TLS controller it fails at the handshake
 // with an error that looks like the controller is down.
 //
 // Token resolution order is documented on client.ResolveToken:
-// --token flag > SDS_TOKEN env > ~/.sds/token > /etc/sds/token.
+// --token flag > HAIFY_TOKEN env > ~/.haify/token > /etc/haify/token.
 // TLS follows the same flag-beats-environment rule, see client.ResolveTLS.
-func newSDSClient() (*client.SDSClient, error) {
+func newHaifyClient() (*client.HaifyClient, error) {
 	opts := []client.Option{}
 	if token := client.ResolveToken(tokenFlag); token != "" {
 		opts = append(opts, client.WithToken(token))
@@ -23,7 +23,7 @@ func newSDSClient() (*client.SDSClient, error) {
 	if tlsOpts := client.ResolveTLS(tlsFlags); tlsOpts.Active() {
 		opts = append(opts, client.WithTLS(tlsOpts))
 	}
-	return client.NewSDSClient(controllerAddr, opts...)
+	return client.NewHaifyClient(controllerAddr, opts...)
 }
 
 // closeClient releases a controller connection at the end of a CLI command.

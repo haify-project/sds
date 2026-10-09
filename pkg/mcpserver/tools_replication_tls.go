@@ -5,7 +5,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 type tlsStatusIn struct {
@@ -33,13 +33,13 @@ type resourceTLSIn struct {
 // node's system trust store, which is an operator's decision.
 func (s *Server) registerReplicationTLSTools(srv *mcp.Server) {
 	c, supported := s.client.(interface {
-		ReplicationTLSStatus(context.Context, []string) ([]*sdspb.NodeTLSInfo, error)
+		ReplicationTLSStatus(context.Context, []string) ([]*haifypb.NodeTLSInfo, error)
 		SetResourceTLS(context.Context, string, bool) (string, error)
 	})
 	if !supported {
 		return
 	}
-	addRead(s, srv, readOnlyTool("sds_replication_tls_status", "Which nodes can carry encrypted replication",
+	addRead(s, srv, readOnlyTool("haify_replication_tls_status", "Which nodes can carry encrypted replication",
 		"For each node: whether it can run a DRBD connection over TLS (tlshd running with a certificate from this "+
 			"controller's replication CA, CA trusted, tls module loaded) and, if not, what is missing."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in tlsStatusIn) (*mcp.CallToolResult, tlsStatusOut, error) {
@@ -53,10 +53,10 @@ func (s *Server) registerReplicationTLSTools(srv *mcp.Server) {
 			}
 			return nil, out, nil
 		})
-	addWrite(s, srv, writeTool("sds_resource_tls", "Encrypt a resource's replication, or stop",
+	addWrite(s, srv, writeTool("haify_resource_tls", "Encrypt a resource's replication, or stop",
 		"Switch every DRBD connection of a resource to TLS or back. Each link is taken down and brought back on its "+
 			"own while the others keep quorum, so the Primary keeps serving; a resync may follow on that link. Refused "+
-			"unless every node of the resource is ready (sds_replication_tls_status) and for WAN resources, whose "+
+			"unless every node of the resource is ready (haify_replication_tls_status) and for WAN resources, whose "+
 			"off-site leg already runs mutual TLS. A failed handshake leaves that link StandAlone and stops the switch."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceTLSIn) (*mcp.CallToolResult, opResult, error) {
 			msg, err := c.SetResourceTLS(ctx, in.Resource, in.Enabled)

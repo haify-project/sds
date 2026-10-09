@@ -84,14 +84,14 @@ func (o TLSOptions) Credentials() (credentials.TransportCredentials, error) {
 	return credentials.NewTLS(conf), nil
 }
 
-// TLS environment variables, mirroring the flags on sds.
+// TLS environment variables, mirroring the flags on haify.
 const (
-	envTLS           = "SDS_TLS"
-	envTLSCACert     = "SDS_TLS_CA"
-	envTLSClientCert = "SDS_TLS_CERT"
-	envTLSClientKey  = "SDS_TLS_KEY"
-	envTLSServerName = "SDS_TLS_SERVER_NAME"
-	envTLSInsecure   = "SDS_TLS_INSECURE"
+	envTLS           = "HAIFY_TLS"
+	envTLSCACert     = "HAIFY_TLS_CA"
+	envTLSClientCert = "HAIFY_TLS_CERT"
+	envTLSClientKey  = "HAIFY_TLS_KEY"
+	envTLSServerName = "HAIFY_TLS_SERVER_NAME"
+	envTLSInsecure   = "HAIFY_TLS_INSECURE"
 )
 
 // ResolveTLS fills in whatever the caller did not pass explicitly from the
@@ -121,7 +121,7 @@ func ResolveTLS(explicit TLSOptions) TLSOptions {
 	return o
 }
 
-// envBool treats an unparsable value as unset rather than as true: SDS_TLS=no
+// envBool treats an unparsable value as unset rather than as true: HAIFY_TLS=no
 // must not enable TLS just because the string is non-empty.
 func envBool(name string) bool {
 	v, err := strconv.ParseBool(os.Getenv(name))

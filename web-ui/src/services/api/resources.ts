@@ -59,7 +59,7 @@ export interface ResourceStatus {
   drNode?: string;
   drEndpoint?: string;
   wanPort?: number;
-  // Per-leg `sds-proxy@<instance>` unit state, keyed by a label that names both
+  // Per-leg `haify-proxy@<instance>` unit state, keyed by a label that names both
   // ends of the leg. A multi-replica resource has one leg per replica.
   wanProxy?: Record<string, string>;
   wanReachable?: boolean;

@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 func TestParseZFSPoolProperties(t *testing.T) {
-	props := parseZFSPoolProperties("sds_tank\tcompression\tzstd\nsds_tank\tcompressratio\t1.85\n" +
-		"sds_fast\tcompression\tlz4\nsds_fast\tcompressratio\t1.00x\nnoise line\n")
-	assert.Equal(t, zfsPoolProps{compression: "zstd", ratio: 1.85}, props["sds_tank"])
-	assert.Equal(t, zfsPoolProps{compression: "lz4", ratio: 1.00}, props["sds_fast"])
+	props := parseZFSPoolProperties("haify_tank\tcompression\tzstd\nhaify_tank\tcompressratio\t1.85\n" +
+		"haify_fast\tcompression\tlz4\nhaify_fast\tcompressratio\t1.00x\nnoise line\n")
+	assert.Equal(t, zfsPoolProps{compression: "zstd", ratio: 1.85}, props["haify_tank"])
+	assert.Equal(t, zfsPoolProps{compression: "lz4", ratio: 1.00}, props["haify_fast"])
 	assert.Len(t, props, 2)
 }
 
@@ -24,12 +24,12 @@ func TestListZFSPoolsReportsCompression(t *testing.T) {
 	dep := &fakeDeploymentClient{
 		execFunc: func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.Contains(cmd, "base64 -d") {
-				return successExecResult(hosts, "sds_tank\tcompression\tzstd\nsds_tank\tcompressratio\t2.10\n"), nil
+				return successExecResult(hosts, "haify_tank\tcompression\tzstd\nhaify_tank\tcompressratio\t2.10\n"), nil
 			}
 			return successExecResult(hosts, ""), nil
 		},
 		zfsListPoolsFunc: func(_ context.Context, hosts []string) (*deployment.ExecResult, error) {
-			return successExecResult(hosts, "sds_tank\t1000\t400\t600\t60\n"), nil
+			return successExecResult(hosts, "haify_tank\t1000\t400\t600\t60\n"), nil
 		},
 	}
 	ctrl := newBasicTestController(dep)

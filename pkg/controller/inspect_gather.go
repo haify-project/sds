@@ -9,10 +9,10 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
-	"github.com/haify-project/sds/pkg/inspect"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
+	"github.com/haify-project/haify/pkg/inspect"
 )
 
 // alertWindow is how far back the inspection looks for alerts that reached

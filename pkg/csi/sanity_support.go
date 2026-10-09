@@ -8,33 +8,33 @@ import (
 	"sync"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
-// sanityBackend is a concurrency-safe in-memory SDSBackend for the CSI sanity
+// sanityBackend is a concurrency-safe in-memory HaifyBackend for the CSI sanity
 // suite. It is exported via NewSanityFakeBackend.
 type sanityBackend struct {
 	mu        sync.Mutex
-	resources map[string]*sdspb.ResourceInfo
-	nodes     []*sdspb.NodeInfo
-	pools     []*sdspb.PoolInfo
+	resources map[string]*haifypb.ResourceInfo
+	nodes     []*haifypb.NodeInfo
+	pools     []*haifypb.PoolInfo
 	// snapshots is keyed "<backing volume>|<node>", matching the backend's
 	// per-node snapshot namespace.
-	snapshots map[string][]*sdspb.SnapshotInfo
+	snapshots map[string][]*haifypb.SnapshotInfo
 }
 
 // NewSanityFakeBackend builds a fake backend seeded with the given node names.
 // Every node hosts the "vg0" pool the sanity suite provisions against.
-func NewSanityFakeBackend(nodeNames ...string) SDSBackend {
-	b := &sanityBackend{resources: map[string]*sdspb.ResourceInfo{}}
+func NewSanityFakeBackend(nodeNames ...string) HaifyBackend {
+	b := &sanityBackend{resources: map[string]*haifypb.ResourceInfo{}}
 	for i, n := range nodeNames {
 		addr := fmt.Sprintf("10.0.0.%d", i+1)
-		b.nodes = append(b.nodes, &sdspb.NodeInfo{
+		b.nodes = append(b.nodes, &haifypb.NodeInfo{
 			Name:    n,
 			Address: addr,
 			State:   "online",
 		})
-		b.pools = append(b.pools, &sdspb.PoolInfo{Name: "sds_vg0", Node: addr})
+		b.pools = append(b.pools, &haifypb.PoolInfo{Name: "haify_vg0", Node: addr})
 	}
 	return b
 }
@@ -42,12 +42,12 @@ func NewSanityFakeBackend(nodeNames ...string) SDSBackend {
 func (b *sanityBackend) CreateResourceWithPoolAndType(_ context.Context, name string, port uint32, nodes []string, _ string, sizeGB uint32, pool, _ string, _ map[string]string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.resources[name] = &sdspb.ResourceInfo{
+	b.resources[name] = &haifypb.ResourceInfo{
 		Name:   name,
 		Nodes:  nodes,
 		Port:   port,
 		Labels: map[string]string{managedByLabel: managedByValue},
-		Volumes: []*sdspb.VolumeInfo{{
+		Volumes: []*haifypb.VolumeInfo{{
 			VolumeId: 0,
 			Device:   "/dev/drbd100",
 			SizeGb:   uint64(sizeGB),
@@ -61,7 +61,7 @@ func (b *sanityBackend) CreateResourceWithPoolAndType(_ context.Context, name st
 	return nil
 }
 
-func (b *sanityBackend) GetResource(_ context.Context, name string) (*sdspb.ResourceInfo, error) {
+func (b *sanityBackend) GetResource(_ context.Context, name string) (*haifypb.ResourceInfo, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if r, ok := b.resources[name]; ok {
@@ -70,10 +70,10 @@ func (b *sanityBackend) GetResource(_ context.Context, name string) (*sdspb.Reso
 	return nil, fmt.Errorf("resource %q not found", name)
 }
 
-func (b *sanityBackend) ListResources(context.Context) ([]*sdspb.ResourceInfo, error) {
+func (b *sanityBackend) ListResources(context.Context) ([]*haifypb.ResourceInfo, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := make([]*sdspb.ResourceInfo, 0, len(b.resources))
+	out := make([]*haifypb.ResourceInfo, 0, len(b.resources))
 	for _, r := range b.resources {
 		out = append(out, r)
 	}
@@ -87,31 +87,31 @@ func (b *sanityBackend) DeleteResource(_ context.Context, name string) error {
 	return nil
 }
 
-func (b *sanityBackend) ListNodes(_ context.Context) ([]*sdspb.NodeInfo, error) {
+func (b *sanityBackend) ListNodes(_ context.Context) ([]*haifypb.NodeInfo, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := make([]*sdspb.NodeInfo, len(b.nodes))
+	out := make([]*haifypb.NodeInfo, len(b.nodes))
 	copy(out, b.nodes)
 	return out, nil
 }
 
-func (b *sanityBackend) ListPools(_ context.Context) ([]*sdspb.PoolInfo, error) {
+func (b *sanityBackend) ListPools(_ context.Context) ([]*haifypb.PoolInfo, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := make([]*sdspb.PoolInfo, len(b.pools))
+	out := make([]*haifypb.PoolInfo, len(b.pools))
 	copy(out, b.pools)
 	return out, nil
 }
 
-func (b *sanityBackend) RegisterNode(_ context.Context, name, address string) (*sdspb.NodeInfo, error) {
-	return &sdspb.NodeInfo{Name: name, Address: address}, nil
+func (b *sanityBackend) RegisterNode(_ context.Context, name, address string) (*haifypb.NodeInfo, error) {
+	return &haifypb.NodeInfo{Name: name, Address: address}, nil
 }
 
 func (b *sanityBackend) CreateSnapshot(_ context.Context, volume, snapshotName, node string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.snapshots == nil {
-		b.snapshots = map[string][]*sdspb.SnapshotInfo{}
+		b.snapshots = map[string][]*haifypb.SnapshotInfo{}
 	}
 	k := volume + "|" + node
 	for _, s := range b.snapshots[k] {
@@ -121,7 +121,7 @@ func (b *sanityBackend) CreateSnapshot(_ context.Context, volume, snapshotName, 
 	}
 	// The controller reports each snapshot's creation time (lv_time), and CSI
 	// makes creation_time required, so the fake has to carry one too.
-	b.snapshots[k] = append(b.snapshots[k], &sdspb.SnapshotInfo{Name: snapshotName, Volume: volume,
+	b.snapshots[k] = append(b.snapshots[k], &haifypb.SnapshotInfo{Name: snapshotName, Volume: volume,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339)})
 	return nil
 }
@@ -130,7 +130,7 @@ func (b *sanityBackend) DeleteSnapshot(_ context.Context, volume, snapshotName, 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	k := volume + "|" + node
-	var kept []*sdspb.SnapshotInfo
+	var kept []*haifypb.SnapshotInfo
 	for _, s := range b.snapshots[k] {
 		if s.GetName() != snapshotName {
 			kept = append(kept, s)
@@ -140,11 +140,11 @@ func (b *sanityBackend) DeleteSnapshot(_ context.Context, volume, snapshotName, 
 	return nil
 }
 
-func (b *sanityBackend) ListSnapshots(_ context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error) {
+func (b *sanityBackend) ListSnapshots(_ context.Context, volume, node string) ([]*haifypb.SnapshotInfo, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	src := b.snapshots[volume+"|"+node]
-	out := make([]*sdspb.SnapshotInfo, len(src))
+	out := make([]*haifypb.SnapshotInfo, len(src))
 	copy(out, src)
 	return out, nil
 }
@@ -162,7 +162,7 @@ func (b *sanityBackend) ResizeVolume(_ context.Context, _ string, _ uint32, _ ui
 	return nil
 }
 
-var _ SDSBackend = (*sanityBackend)(nil)
+var _ HaifyBackend = (*sanityBackend)(nil)
 
 // nopMounter is a no-op Mounter used in the sanity suite to satisfy the node
 // server without performing real filesystem operations.

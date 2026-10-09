@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -45,7 +45,7 @@ func TestGenerateISCSIGatewayConfig(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:          "data",
-		Iqn:               "iqn.2024-01.com.example:sds.data",
+		Iqn:               "iqn.2024-01.com.example:haify.data",
 		ServiceIp:         "192.168.1.200/24",
 		Username:          "admin",
 		Password:          "secret",
@@ -99,7 +99,7 @@ func TestGenerateISCSIGatewayConfigMultipleLUNs(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "data",
-		Iqn:       "iqn.2024-01.com.example:sds.multi-lun",
+		Iqn:       "iqn.2024-01.com.example:haify.multi-lun",
 		ServiceIp: "10.0.0.50/24",
 	}
 
@@ -139,7 +139,7 @@ func TestGenerateISCSIGatewayConfigDefaults(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "data",
-		Iqn:       "iqn.2024-01.com.example:sds.data",
+		Iqn:       "iqn.2024-01.com.example:haify.data",
 		ServiceIp: "192.168.1.200/24",
 		// No username/password/implementation specified
 	}
@@ -164,7 +164,7 @@ func TestGenerateISCSIGatewayConfigWithCHAP(t *testing.T) {
 	iscsiManager := NewISCSIManager(New(nil, nil, zap.NewNop(), nil))
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "data",
-		Iqn:       "iqn.2024-01.com.example:sds.data",
+		Iqn:       "iqn.2024-01.com.example:haify.data",
 		ServiceIp: "192.168.1.200/24",
 		Username:  "alice",
 		Password:  "s3cret",
@@ -183,9 +183,9 @@ func TestGenerateIQN(t *testing.T) {
 		resource string
 		expected string
 	}{
-		{"data", "iqn.2024-01.com.example:sds.data"},
-		{"my-resource", "iqn.2024-01.com.example:sds.my-resource"},
-		{"storage_01", "iqn.2024-01.com.example:sds.storage_01"},
+		{"data", "iqn.2024-01.com.example:haify.data"},
+		{"my-resource", "iqn.2024-01.com.example:haify.my-resource"},
+		{"storage_01", "iqn.2024-01.com.example:haify.storage_01"},
 	}
 
 	for _, tt := range tests {
@@ -243,7 +243,7 @@ func TestISCSIGatewayRequiresTwoVolumes(t *testing.T) {
 	ctx := context.Background()
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "single-volume",
-		Iqn:       "iqn.2024-01.com.example:sds.single",
+		Iqn:       "iqn.2024-01.com.example:haify.single",
 		ServiceIp: "192.168.1.200/24",
 	}
 
@@ -315,7 +315,7 @@ func TestISCSIGatewaySerialGeneration(t *testing.T) {
 	baseManager := New(mockResources, mockDeployment, logger, hosts)
 	iscsiManager := NewISCSIManager(baseManager)
 
-	iqn := "iqn.2024-01.com.example:sds.data"
+	iqn := "iqn.2024-01.com.example:haify.data"
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "data",
 		Iqn:       iqn,

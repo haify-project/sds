@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -23,14 +23,14 @@ func TestAddAndRemoveNVMeHost(t *testing.T) {
 
 	req := &v1.CreateNVMeGatewayRequest{
 		Resource:  "resource",
-		Nqn:       "nqn.2024-01.com.example:sds.resource",
+		Nqn:       "nqn.2024-01.com.example:haify.resource",
 		ServiceIp: "192.168.1.150/24",
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	config, err := nvmeManager.generateNVMeGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-nvmeof-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-nvmeof-resource"), config)
 
 	ctx := context.Background()
 	err = nvmeManager.AddHost(ctx, "resource", "nqn.2024-01.com.example:host1")

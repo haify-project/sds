@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sds-csi-controller
+  name: haify-csi-controller
   namespace: kube-system
 spec:
   replicas: 1
-  selector: { matchLabels: { app: sds-csi-controller } }
+  selector: { matchLabels: { app: haify-csi-controller } }
   template:
-    metadata: { labels: { app: sds-csi-controller } }
+    metadata: { labels: { app: haify-csi-controller } }
     spec:
       # Provisioning, resizing and snapshots stop with this pod; keep it off the
       # list the kubelet evicts from when a node runs short.
       priorityClassName: system-cluster-critical
-      # Reach the external sds-controller VIP over the host network (a
+      # Reach the external haify-controller VIP over the host network (a
       # flannel pod cannot hairpin to a VIP on its own node). DNS via CoreDNS.
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      serviceAccountName: sds-csi-controller
+      serviceAccountName: haify-csi-controller
       containers:
         - name: csi-provisioner
           image: registry.k8s.io/sig-storage/csi-provisioner:v5.1.0
@@ -70,12 +70,12 @@ spec:
           volumeMounts:
             - { name: socket-dir, mountPath: /csi }
         - name: plugin
-          image: sds-csi:latest
+          image: haify-csi:latest
           imagePullPolicy: IfNotPresent
           command: ["/usr/local/bin/csi-controller"]
           args:
             - "--endpoint=unix:///csi/csi.sock"
-            - "--sds-controller=sds-controller:3374"
+            - "--haify-controller=haify-controller:3374"
           volumeMounts:
             - { name: socket-dir, mountPath: /csi }
         - name: liveness-probe

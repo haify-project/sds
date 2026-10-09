@@ -13,7 +13,7 @@ import (
 // The tools say what can be done; they cannot say in what order, or which
 // call fails halfway if done first. Those live in runbooks, served two ways
 // from the same text: as MCP prompts, which Claude Code offers as slash
-// commands, and through sds_runbook, a read-only tool, because ChatGPT and
+// commands, and through haify_runbook, a read-only tool, because ChatGPT and
 // claude.ai connectors take tools and ignore prompts, and the AI Copilot
 // reads through tools alone.
 
@@ -106,7 +106,7 @@ func (s *Server) registerRunbooks(srv *mcp.Server) {
 		})
 	}
 
-	addRead(s, srv, readOnlyTool("sds_runbook", "Read an operations runbook",
+	addRead(s, srv, readOnlyTool("haify_runbook", "Read an operations runbook",
 		"The order to do a multi-step operation in, and what fails halfway if it is done in another: switching the "+
 			"controller or a gateway to another node, taking a node out of service, adding a replica, growing a "+
 			"volume, checking and repairing replica data, failing a WAN resource back, renumbering nodes. Read the "+

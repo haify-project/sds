@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -90,7 +90,7 @@ func blkResources() *MockResourceManager {
 	}}
 }
 
-const blkPath = DrbdReactorConfigDir + "/sds-iscsi-blk.toml"
+const blkPath = DrbdReactorConfigDir + "/haify-iscsi-blk.toml"
 
 // The controller (node1, or no node at all) holds no copy; the replicas do.
 func TestGatewayEditReadsTheResourceNodes(t *testing.T) {
@@ -142,7 +142,7 @@ func TestGatewayEditPrefersLiveConfig(t *testing.T) {
 	}}
 	m := New(blkResources(), dep, zap.NewNop(), []string{"node2", "node3"})
 
-	cfg, err := m.readGatewayConfig(context.Background(), "blk", "sds-iscsi-blk")
+	cfg, err := m.readGatewayConfig(context.Background(), "blk", "haify-iscsi-blk")
 	require.NoError(t, err)
 	assert.False(t, cfg.disabled)
 	assert.Equal(t, live, cfg.content)
@@ -185,7 +185,7 @@ func TestGatewayEditNodesDisagree(t *testing.T) {
 	}}
 	m := New(res, dep, zap.New(core), []string{"node1", "node2", "node3", "node4"})
 
-	cfg, err := m.readGatewayConfig(context.Background(), "blk", "sds-iscsi-blk")
+	cfg, err := m.readGatewayConfig(context.Background(), "blk", "haify-iscsi-blk")
 	require.NoError(t, err)
 	assert.Equal(t, b, cfg.content, "majority wins")
 
@@ -207,7 +207,7 @@ func TestGatewayEditNodesDisagree(t *testing.T) {
 	// Identical copies: no warning.
 	logs.TakeAll()
 	dep.NodeConfigs = map[string]map[string]string{"node1": {blkPath: a}, "node2": {blkPath: a}, "node3": {blkPath: a}, "node4": {blkPath: a}}
-	_, err = m.readGatewayConfig(context.Background(), "blk", "sds-iscsi-blk")
+	_, err = m.readGatewayConfig(context.Background(), "blk", "haify-iscsi-blk")
 	require.NoError(t, err)
 	assert.Zero(t, logs.Len())
 }
@@ -215,11 +215,11 @@ func TestGatewayEditNodesDisagree(t *testing.T) {
 // ListTargets is the union of the running targets on every managed node.
 func TestListTargetsReadsTheNodes(t *testing.T) {
 	dep := &MockDeploymentClient{NodeConfigs: map[string]map[string]string{
-		"node1": {DrbdReactorConfigDir + "/sds-iscsi-a.toml": testISCSIConfig(t, "iqn.2024-01.com.example:a")},
+		"node1": {DrbdReactorConfigDir + "/haify-iscsi-a.toml": testISCSIConfig(t, "iqn.2024-01.com.example:a")},
 		"node2": {
-			DrbdReactorConfigDir + "/sds-iscsi-a.toml":          testISCSIConfig(t, "iqn.2024-01.com.example:a"),
-			DrbdReactorConfigDir + "/sds-iscsi-b.toml":          testISCSIConfig(t, "iqn.2024-01.com.example:b"),
-			DrbdReactorConfigDir + "/sds-iscsi-c.toml.disabled": testISCSIConfig(t, "iqn.2024-01.com.example:c"),
+			DrbdReactorConfigDir + "/haify-iscsi-a.toml":          testISCSIConfig(t, "iqn.2024-01.com.example:a"),
+			DrbdReactorConfigDir + "/haify-iscsi-b.toml":          testISCSIConfig(t, "iqn.2024-01.com.example:b"),
+			DrbdReactorConfigDir + "/haify-iscsi-c.toml.disabled": testISCSIConfig(t, "iqn.2024-01.com.example:c"),
 		},
 	}}
 	iscsi := NewISCSIManager(New(nil, dep, zap.NewNop(), []string{"node1", "node2", "node3"}))
@@ -243,7 +243,7 @@ func TestListSubsystemsReadsTheNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	dep := &MockDeploymentClient{NodeConfigs: map[string]map[string]string{
-		"node2": {DrbdReactorConfigDir + "/sds-nvmeof-x.toml": cfg},
+		"node2": {DrbdReactorConfigDir + "/haify-nvmeof-x.toml": cfg},
 	}}
 	nvme := NewNVMeManager(New(nil, dep, zap.NewNop(), []string{"node1", "node2"}))
 	got, err := nvme.ListSubsystems(context.Background(), "")
@@ -270,15 +270,15 @@ func TestConfigDumpScriptRuns(t *testing.T) {
 		t.Skip("no base64 on this machine")
 	}
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sds-iscsi-a.toml"), []byte("x = \"$HOME\"\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sds-iscsi-b.toml.disabled"), []byte(""), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "haify-iscsi-a.toml"), []byte("x = \"$HOME\"\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "haify-iscsi-b.toml.disabled"), []byte(""), 0o644))
 
-	script := configDumpScript(filepath.Join(dir, "sds-iscsi-*.toml"), filepath.Join(dir, "sds-iscsi-b.toml.disabled"),
+	script := configDumpScript(filepath.Join(dir, "haify-iscsi-*.toml"), filepath.Join(dir, "haify-iscsi-b.toml.disabled"),
 		filepath.Join(dir, "missing.toml"))
 	out, err := exec.Command("/bin/sh", "-c", script).Output()
 	require.NoError(t, err)
 	files, err := parseConfigDump(string(out))
 	require.NoError(t, err)
-	assert.Equal(t, []string{filepath.Join(dir, "sds-iscsi-a.toml"), filepath.Join(dir, "sds-iscsi-b.toml.disabled")}, sortedKeys(files))
-	assert.Equal(t, "x = \"$HOME\"\n", files[filepath.Join(dir, "sds-iscsi-a.toml")])
+	assert.Equal(t, []string{filepath.Join(dir, "haify-iscsi-a.toml"), filepath.Join(dir, "haify-iscsi-b.toml.disabled")}, sortedKeys(files))
+	assert.Equal(t, "x = \"$HOME\"\n", files[filepath.Join(dir, "haify-iscsi-a.toml")])
 }

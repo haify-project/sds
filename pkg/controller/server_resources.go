@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"strings"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 )
 
-func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRequest) (*sdspb.CreateResourceResponse, error) {
+func (s *Server) CreateResource(ctx context.Context, req *haifypb.CreateResourceRequest) (*haifypb.CreateResourceResponse, error) {
 	if req.Profile != "" {
 		if s.ctrl == nil || s.ctrl.db == nil {
-			return &sdspb.CreateResourceResponse{Success: false, Message: "database not available"}, nil
+			return &haifypb.CreateResourceResponse{Success: false, Message: "database not available"}, nil
 		}
 		profile, err := s.ctrl.db.GetResourceProfile(ctx, req.Profile)
 		if err != nil {
-			return &sdspb.CreateResourceResponse{Success: false, Message: err.Error()}, nil
+			return &haifypb.CreateResourceResponse{Success: false, Message: err.Error()}, nil
 		}
 		applyResourceProfile(req, profile)
 	}
@@ -43,7 +43,7 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 			EgressAddress: strings.TrimSpace(req.WanEgressAddress),
 		}
 	} else if req.DrNode != "" || req.DrEndpoint != "" || req.WanPort != 0 {
-		return &sdspb.CreateResourceResponse{
+		return &haifypb.CreateResourceResponse{
 			Success: false,
 			Message: "dr_node/dr_endpoint/wan_port require --wan (WAN mode is off)",
 		}, nil
@@ -57,14 +57,14 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	var placementWarning string
 	if len(nodes) == 0 {
 		if wan != nil {
-			return &sdspb.CreateResourceResponse{
+			return &haifypb.CreateResourceResponse{
 				Success: false,
 				Message: "WAN resources require an explicit --nodes primary; auto-placement is LAN-only",
 			}, nil
 		}
 		pool, total, perr := singlePoolTotal(volumes)
 		if perr != nil {
-			return &sdspb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
+			return &haifypb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
 		}
 		replicas := int(req.Replicas)
 		if replicas == 0 {
@@ -72,7 +72,7 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		}
 		placed, warn, perr := s.resources.selectPlacementNodes(ctx, pool, total, replicas, req.ReplicasOnDifferent, req.ReplicasOnSame, req.DoNotPlaceWith)
 		if perr != nil {
-			return &sdspb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
+			return &haifypb.CreateResourceResponse{Success: false, Message: perr.Error()}, nil
 		}
 		nodes, placementWarning = placed, warn
 	}
@@ -83,7 +83,7 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 		Encrypt: req.Encrypt,
 	})
 	if err != nil {
-		return &sdspb.CreateResourceResponse{
+		return &haifypb.CreateResourceResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
@@ -92,13 +92,13 @@ func (s *Server) CreateResource(ctx context.Context, req *sdspb.CreateResourceRe
 	if placementWarning != "" {
 		msg += "; warning: " + placementWarning
 	}
-	return &sdspb.CreateResourceResponse{
+	return &haifypb.CreateResourceResponse{
 		Success: true,
 		Message: msg,
 	}, nil
 }
 
-func applyResourceProfile(req *sdspb.CreateResourceRequest, profile *database.ResourceProfile) {
+func applyResourceProfile(req *haifypb.CreateResourceRequest, profile *database.ResourceProfile) {
 	if req.Protocol == "" {
 		req.Protocol = profile.Protocol
 	}
@@ -160,15 +160,15 @@ func singlePoolTotal(volumes []VolumeSpec) (string, uint32, error) {
 	return pool, total, nil
 }
 
-func (s *Server) AdoptResource(ctx context.Context, req *sdspb.AdoptResourceRequest) (*sdspb.AdoptResourceResponse, error) {
+func (s *Server) AdoptResource(ctx context.Context, req *haifypb.AdoptResourceRequest) (*haifypb.AdoptResourceResponse, error) {
 	result, err := s.resources.AdoptResource(ctx, req.Name, req.Nodes, req.Port, req.Protocol)
 	if err != nil {
-		return &sdspb.AdoptResourceResponse{
+		return &haifypb.AdoptResourceResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.AdoptResourceResponse{
+	return &haifypb.AdoptResourceResponse{
 		Success:  true,
 		Message:  "Resource adopted successfully",
 		Nodes:    result.Nodes,
@@ -178,32 +178,32 @@ func (s *Server) AdoptResource(ctx context.Context, req *sdspb.AdoptResourceRequ
 	}, nil
 }
 
-func (s *Server) DeleteResource(ctx context.Context, req *sdspb.DeleteResourceRequest) (*sdspb.DeleteResourceResponse, error) {
+func (s *Server) DeleteResource(ctx context.Context, req *haifypb.DeleteResourceRequest) (*haifypb.DeleteResourceResponse, error) {
 	err := s.resources.DeleteResource(ctx, req.Name, true)
 	if err != nil {
-		return &sdspb.DeleteResourceResponse{
+		return &haifypb.DeleteResourceResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.DeleteResourceResponse{
+	return &haifypb.DeleteResourceResponse{
 		Success: true,
 		Message: "Resource deleted successfully",
 	}, nil
 }
 
-func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest) (*sdspb.GetResourceResponse, error) {
+func (s *Server) GetResource(ctx context.Context, req *haifypb.GetResourceRequest) (*haifypb.GetResourceResponse, error) {
 	resource, err := s.resources.GetResource(ctx, req.Name)
 	if err != nil {
-		return &sdspb.GetResourceResponse{
+		return &haifypb.GetResourceResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	var pbVolumes []*sdspb.VolumeInfo
+	var pbVolumes []*haifypb.VolumeInfo
 	for _, v := range resource.Volumes {
-		pbVolumes = append(pbVolumes, &sdspb.VolumeInfo{
+		pbVolumes = append(pbVolumes, &haifypb.VolumeInfo{
 			VolumeId:      v.VolumeID,
 			Device:        v.Device,
 			SizeGb:        v.SizeGB,
@@ -215,9 +215,9 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 	}
 
 	// Build node states map
-	nodeStates := make(map[string]*sdspb.NodeResourceState)
+	nodeStates := make(map[string]*haifypb.NodeResourceState)
 	for node, state := range resource.NodeStates {
-		nodeStates[node] = &sdspb.NodeResourceState{
+		nodeStates[node] = &haifypb.NodeResourceState{
 			Role:             state.Role,
 			DiskState:        state.DiskState,
 			ReplicationState: state.Replication,
@@ -227,10 +227,10 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 		}
 	}
 
-	return &sdspb.GetResourceResponse{
+	return &haifypb.GetResourceResponse{
 		Success: true,
 		Message: "Resource found",
-		Resource: &sdspb.ResourceInfo{
+		Resource: &haifypb.ResourceInfo{
 			Name:            resource.Name,
 			Port:            resource.Port,
 			Protocol:        resource.Protocol,
@@ -251,23 +251,23 @@ func (s *Server) GetResource(ctx context.Context, req *sdspb.GetResourceRequest)
 	}, nil
 }
 
-func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequest) (*sdspb.ListResourcesResponse, error) {
+func (s *Server) ListResources(ctx context.Context, req *haifypb.ListResourcesRequest) (*haifypb.ListResourcesResponse, error) {
 	resources, err := s.resources.ListResources(ctx)
 	if err != nil {
-		return &sdspb.ListResourcesResponse{
+		return &haifypb.ListResourcesResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	var pbResources []*sdspb.ResourceInfo
+	var pbResources []*haifypb.ResourceInfo
 	for _, r := range resources {
 		if req.GetProfile() != "" && r.Profile != req.GetProfile() {
 			continue
 		}
-		var pbVolumes []*sdspb.VolumeInfo
+		var pbVolumes []*haifypb.VolumeInfo
 		for _, v := range r.Volumes {
-			pbVolumes = append(pbVolumes, &sdspb.VolumeInfo{
+			pbVolumes = append(pbVolumes, &haifypb.VolumeInfo{
 				VolumeId:      v.VolumeID,
 				Device:        v.Device,
 				SizeGb:        v.SizeGB,
@@ -277,7 +277,7 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 				Encrypted:     v.Encrypted,
 			})
 		}
-		pbResources = append(pbResources, &sdspb.ResourceInfo{
+		pbResources = append(pbResources, &haifypb.ResourceInfo{
 			Name:            r.Name,
 			Port:            r.Port,
 			Protocol:        r.Protocol,
@@ -296,57 +296,57 @@ func (s *Server) ListResources(ctx context.Context, req *sdspb.ListResourcesRequ
 		})
 	}
 
-	return &sdspb.ListResourcesResponse{
+	return &haifypb.ListResourcesResponse{
 		Success:   true,
 		Message:   "Resources listed successfully",
 		Resources: pbResources,
 	}, nil
 }
 
-func (s *Server) RepairResource(ctx context.Context, req *sdspb.RepairResourceRequest) (*sdspb.RepairResourceResponse, error) {
+func (s *Server) RepairResource(ctx context.Context, req *haifypb.RepairResourceRequest) (*haifypb.RepairResourceResponse, error) {
 	if err := s.resources.RepairResourceConfig(ctx, req.Name); err != nil {
-		return &sdspb.RepairResourceResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.RepairResourceResponse{Success: false, Message: err.Error()}, nil
 	}
 	// Promoters belong on exactly the primary-site replicas; a replica added
 	// or removed by an older version, or a DR node given one, is put right.
 	if err := s.resources.SyncPromoters(ctx, req.Name); err != nil {
-		return &sdspb.RepairResourceResponse{Success: false,
+		return &haifypb.RepairResourceResponse{Success: false,
 			Message: "resource config reconciled and applied, but its promoters could not be placed: " + err.Error()}, nil
 	}
-	return &sdspb.RepairResourceResponse{Success: true,
+	return &haifypb.RepairResourceResponse{Success: true,
 		Message: "Resource config reconciled on every participant and applied; promoters on the primary-site replicas only"}, nil
 }
 
-func (s *Server) UpdateResourceOptions(ctx context.Context, req *sdspb.UpdateResourceOptionsRequest) (*sdspb.UpdateResourceOptionsResponse, error) {
+func (s *Server) UpdateResourceOptions(ctx context.Context, req *haifypb.UpdateResourceOptionsRequest) (*haifypb.UpdateResourceOptionsResponse, error) {
 	if err := s.resources.SetOptions(ctx, req.Name, req.Options); err != nil {
-		return &sdspb.UpdateResourceOptionsResponse{
+		return &haifypb.UpdateResourceOptionsResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.UpdateResourceOptionsResponse{
+	return &haifypb.UpdateResourceOptionsResponse{
 		Success: true,
 		Message: "Resource options updated and applied",
 	}, nil
 }
 
-func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRequest) (*sdspb.ResourceStatusResponse, error) {
+func (s *Server) ResourceStatus(ctx context.Context, req *haifypb.ResourceStatusRequest) (*haifypb.ResourceStatusResponse, error) {
 	// Get resource detailed status
 	resource, err := s.resources.GetResource(ctx, req.Name)
 	if err != nil {
-		return &sdspb.ResourceStatusResponse{
+		return &haifypb.ResourceStatusResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
 	// Convert to status format with detailed node states
-	status := &sdspb.ResourceStatus{
+	status := &haifypb.ResourceStatus{
 		Name:       resource.Name,
 		Role:       resource.Role,
 		Nodes:      resource.Nodes,
 		Encrypted:  resource.Encrypted,
-		NodeStates: make(map[string]*sdspb.NodeResourceState),
+		NodeStates: make(map[string]*haifypb.NodeResourceState),
 	}
 
 	// Convert node states from endpoint key to hostname key
@@ -362,7 +362,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		if err == nil && nodeInfo.Name != "" {
 			nodeName = nodeInfo.Name
 		}
-		status.NodeStates[hostname] = &sdspb.NodeResourceState{
+		status.NodeStates[hostname] = &haifypb.NodeResourceState{
 			Role:             nodeState.Role,
 			DiskState:        nodeState.DiskState,
 			ReplicationState: nodeState.Replication,
@@ -374,7 +374,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 	}
 
 	for _, v := range resource.Volumes {
-		status.Volumes = append(status.Volumes, &sdspb.VolumeInfo{
+		status.Volumes = append(status.Volumes, &haifypb.VolumeInfo{
 			VolumeId:      v.VolumeID,
 			Device:        v.Device,
 			SizeGb:        v.SizeGB,
@@ -389,7 +389,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 	// serving. Best effort: it is derived from a live probe, and a resource that
 	// is down should still report the rest of its status.
 	if q, qerr := s.resources.Quorum(ctx, req.Name); qerr == nil && q != nil {
-		status.Quorum = &sdspb.QuorumInfo{
+		status.Quorum = &haifypb.QuorumInfo{
 			Members:   int32(q.Members),
 			Required:  int32(q.Required),
 			Online:    int32(q.Online),
@@ -409,7 +409,7 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		// Left nil when the proxy published nothing, so the client can tell
 		// "unknown" from "no backlog".
 		if m := wan.Metrics; m != nil {
-			status.WanMetrics = &sdspb.WANMetrics{
+			status.WanMetrics = &haifypb.WANMetrics{
 				BufferUsedBytes:   m.BufferUsedBytes,
 				BufferCapBytes:    m.BufferCapBytes,
 				BufferFillPercent: m.BufferFillPercent,
@@ -425,14 +425,14 @@ func (s *Server) ResourceStatus(ctx context.Context, req *sdspb.ResourceStatusRe
 		}
 	}
 
-	return &sdspb.ResourceStatusResponse{
+	return &haifypb.ResourceStatusResponse{
 		Success: true,
 		Message: "Resource status retrieved",
 		Status:  status,
 	}, nil
 }
 
-func (s *Server) SetPrimary(ctx context.Context, req *sdspb.SetPrimaryRequest) (*sdspb.SetPrimaryResponse, error) {
+func (s *Server) SetPrimary(ctx context.Context, req *haifypb.SetPrimaryRequest) (*haifypb.SetPrimaryResponse, error) {
 	var err error
 	if req.QuorumGuarded {
 		// Quorum-guarded promote: try normal, escalate to --force only if the
@@ -442,26 +442,26 @@ func (s *Server) SetPrimary(ctx context.Context, req *sdspb.SetPrimaryRequest) (
 		err = s.resources.SetPrimary(ctx, req.Resource, req.Node, req.Force)
 	}
 	if err != nil {
-		return &sdspb.SetPrimaryResponse{
+		return &haifypb.SetPrimaryResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.SetPrimaryResponse{
+	return &haifypb.SetPrimaryResponse{
 		Success: true,
 		Message: "Resource set to Primary successfully",
 	}, nil
 }
 
-func (s *Server) SetSecondary(ctx context.Context, req *sdspb.SetSecondaryRequest) (*sdspb.SetSecondaryResponse, error) {
+func (s *Server) SetSecondary(ctx context.Context, req *haifypb.SetSecondaryRequest) (*haifypb.SetSecondaryResponse, error) {
 	err := s.resources.SetSecondary(ctx, req.Resource, req.Node)
 	if err != nil {
-		return &sdspb.SetSecondaryResponse{
+		return &haifypb.SetSecondaryResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.SetSecondaryResponse{
+	return &haifypb.SetSecondaryResponse{
 		Success: true,
 		Message: "Resource set to Secondary successfully",
 	}, nil
@@ -470,9 +470,9 @@ func (s *Server) SetSecondary(ctx context.Context, req *sdspb.SetSecondaryReques
 // SetDualPrimary toggles allow-two-primaries for the Proxmox live-migration
 // window. See ResourceManager.SetDualPrimary for the safety rules (WAN refused,
 // disable idempotent + verified).
-func (s *Server) SetDualPrimary(ctx context.Context, req *sdspb.SetDualPrimaryRequest) (*sdspb.SetDualPrimaryResponse, error) {
+func (s *Server) SetDualPrimary(ctx context.Context, req *haifypb.SetDualPrimaryRequest) (*haifypb.SetDualPrimaryResponse, error) {
 	if err := s.resources.SetDualPrimaryOn(ctx, req.Resource, req.Enable, req.Nodes); err != nil {
-		return &sdspb.SetDualPrimaryResponse{
+		return &haifypb.SetDualPrimaryResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
@@ -481,7 +481,7 @@ func (s *Server) SetDualPrimary(ctx context.Context, req *sdspb.SetDualPrimaryRe
 	if req.Enable {
 		msg = "Dual-primary enabled for the live-migration window"
 	}
-	return &sdspb.SetDualPrimaryResponse{
+	return &haifypb.SetDualPrimaryResponse{
 		Success: true,
 		Message: msg,
 	}, nil

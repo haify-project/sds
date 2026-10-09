@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/alert"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/alert"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 
@@ -330,7 +330,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 			item.NodeStates[key] = state
 		}
 
-		// For WAN resources, fold the sds-proxy pair's health into the status so
+		// For WAN resources, fold the haify-proxy pair's health into the status so
 		// the alert monitor can surface a broken cross-site link.
 		if dbRes.WANMode {
 			item.WANEnabled = true

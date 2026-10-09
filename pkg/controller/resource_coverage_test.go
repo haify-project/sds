@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -105,10 +105,10 @@ func TestServerResourceValidationAndAdopt(t *testing.T) {
 	srv, _ := newServerWithNodes(t)
 	ctx := context.Background()
 
-	for _, req := range []*sdspb.CreateResourceRequest{
+	for _, req := range []*haifypb.CreateResourceRequest{
 		{Name: "r", DrNode: "dr"},
 		{Name: "r", Wan: true},
-		{Name: "r", Volumes: []*sdspb.VolumeSpec{{SizeGb: 1, Pool: "a"}, {SizeGb: 1, Pool: "b"}}},
+		{Name: "r", Volumes: []*haifypb.VolumeSpec{{SizeGb: 1, Pool: "a"}, {SizeGb: 1, Pool: "b"}}},
 		{Name: "r", Profile: "missing", Nodes: []string{"n1"}},
 	} {
 		resp, err := srv.CreateResource(ctx, req)
@@ -122,7 +122,7 @@ func TestServerResourceValidationAndAdopt(t *testing.T) {
 	assert.Equal(t, "fast", pool)
 	assert.Equal(t, uint32(5), total)
 
-	adopt, err := srv.AdoptResource(ctx, &sdspb.AdoptResourceRequest{Name: "missing"})
+	adopt, err := srv.AdoptResource(ctx, &haifypb.AdoptResourceRequest{Name: "missing"})
 	require.NoError(t, err)
 	assert.False(t, adopt.Success)
 }
@@ -132,15 +132,15 @@ func TestServerRestoreLvmSnapshot(t *testing.T) {
 	merged := false
 	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 		switch {
-		case strings.Contains(cmd, "-o origin sds_fast/snap"):
+		case strings.Contains(cmd, "-o origin haify_fast/snap"):
 			return successExecResult(hosts, "  fast_data\n"), nil
-		case strings.Contains(decodeWrapped(cmd), "lvconvert --merge /dev/sds_fast/snap"):
+		case strings.Contains(decodeWrapped(cmd), "lvconvert --merge /dev/haify_fast/snap"):
 			merged = true
 		}
 		return successExecResult(hosts, ""), nil
 	}
 	srv := NewServer(newBasicTestController(dep))
-	resp, err := srv.RestoreLvmSnapshot(context.Background(), &sdspb.RestoreLvmSnapshotRequest{LvName: "fast", SnapshotName: "snap", Node: "n1"})
+	resp, err := srv.RestoreLvmSnapshot(context.Background(), &haifypb.RestoreLvmSnapshotRequest{LvName: "fast", SnapshotName: "snap", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, resp.Success, resp.Message)
 	assert.True(t, merged)
@@ -148,7 +148,7 @@ func TestServerRestoreLvmSnapshot(t *testing.T) {
 	dep.execFunc = func(_ context.Context, hosts []string, _ string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 		return nil, errors.New("ssh failed")
 	}
-	resp, err = srv.RestoreLvmSnapshot(context.Background(), &sdspb.RestoreLvmSnapshotRequest{LvName: "fast", SnapshotName: "snap", Node: "n1"})
+	resp, err = srv.RestoreLvmSnapshot(context.Background(), &haifypb.RestoreLvmSnapshotRequest{LvName: "fast", SnapshotName: "snap", Node: "n1"})
 	require.NoError(t, err)
 	assert.False(t, resp.Success)
 }

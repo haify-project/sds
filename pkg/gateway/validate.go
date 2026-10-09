@@ -47,7 +47,7 @@ func invalidArgument(err error) error {
 //	naa  naa\.[125][0-9a-f]{15}
 //	eui  eui\.[0-9a-f]{16}
 //
-// A name that fails is not refused when sds writes the config but when the
+// A name that fails is not refused when haify writes the config but when the
 // agent starts the gateway: the iSCSITarget start fails with "WWN not valid as:
 // iqn, naa, eui", and the gateway stays down on every node it is tried on. On
 // sdt, `initiator add iqn.2026-10.test:probe` did exactly that — "test:probe"
@@ -71,7 +71,7 @@ const (
 // iscsiNameFormats is the operator-facing description of what validateIQN
 // accepts, kept in one place so that every rejection names all three formats.
 const iscsiNameFormats = `accepted formats are ` +
-	`"iqn." + year-month + "." + reversed domain with at least two labels, optionally ":" + local name (iqn.2024-01.com.example:sds.data), ` +
+	`"iqn." + year-month + "." + reversed domain with at least two labels, optionally ":" + local name (iqn.2024-01.com.example:haify.data), ` +
 	`"eui." + 16 hex digits (eui.0123456789abcdef), or ` +
 	`"naa." + 16 hex digits starting with 1, 2 or 5 (naa.5001405f1b2c3d4e)`
 

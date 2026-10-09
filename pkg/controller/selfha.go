@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"go.uber.org/zap"
 )
 
@@ -19,32 +19,32 @@ import (
 // reactor mounts the database, brings the VIP up, and starts the controller.
 const (
 	// SelfHaResource is the DRBD resource backing the controller database.
-	SelfHaResource = "sds-meta"
+	SelfHaResource = "haify-meta"
 	// selfHaMountPoint shadows the default database directory, so the
 	// controller config needs no changes; the pre-HA database file remains
 	// underneath the mount as a natural backup.
-	selfHaMountPoint    = "/var/lib/sds"
+	selfHaMountPoint    = "/var/lib/haify"
 	selfHaFsType        = "ext4"
 	selfHaDefaultSizeGB = 1
 	selfHaDefaultPort   = 7999
-	selfHaControllerSvc = "sds-controller.service"
+	selfHaControllerSvc = "haify-controller.service"
 
-	selfHaReactorConfig = "/etc/drbd-reactor.d/sds-ha-" + SelfHaResource + ".toml"
-	selfHaHandoffScript = "/opt/sds/bin/sds-selfha-handoff.sh"
-	selfHaDisableScript = "/opt/sds/bin/sds-selfha-disable.sh"
-	selfHaHandoffLog    = "/var/log/sds/selfha-handoff.log"
-	selfHaDisableLog    = "/var/log/sds/selfha-disable.log"
+	selfHaReactorConfig = "/etc/drbd-reactor.d/haify-ha-" + SelfHaResource + ".toml"
+	selfHaHandoffScript = "/opt/haify/bin/haify-selfha-handoff.sh"
+	selfHaDisableScript = "/opt/haify/bin/haify-selfha-disable.sh"
+	selfHaHandoffLog    = "/var/log/haify/selfha-handoff.log"
+	selfHaDisableLog    = "/var/log/haify/selfha-disable.log"
 )
 
 // Local artifact paths replicated to the other nodes during self-HA
 // enablement; package variables so tests can point them at fixtures.
 var (
-	controllerConfigPath = "/etc/sds/controller.toml"
-	controllerUnitPath   = "/etc/systemd/system/sds-controller.service"
-	// packagedControllerUnitPath is where the sds-controller package puts the
+	controllerConfigPath = "/etc/haify/controller.toml"
+	controllerUnitPath   = "/etc/systemd/system/haify-controller.service"
+	// packagedControllerUnitPath is where the haify-controller package puts the
 	// unit. Enable reads it when there is no /etc copy, and installs it on
 	// the standbys as controllerUnitPath, which overrides a packaged one.
-	packagedControllerUnitPath = "/lib/systemd/system/sds-controller.service"
+	packagedControllerUnitPath = "/lib/systemd/system/haify-controller.service"
 	// dispatchConfigOverride replaces the configured dispatch config path;
 	// tests point it at a fixture.
 	dispatchConfigOverride = ""
@@ -52,7 +52,7 @@ var (
 
 // selfHaExtraServices returns the configured systemd units that should ride the
 // controller's Self-HA promoter (config [self_ha] extra_services). Empty unless a
-// deployment opts in — e.g. "sds-ai.service" to make the AI Copilot follow the
+// deployment opts in — e.g. "haify-ai.service" to make the AI Copilot follow the
 // controller across failover.
 func (rm *ResourceManager) selfHaExtraServices() []string {
 	if rm.controller == nil || rm.controller.config == nil {
@@ -117,10 +117,10 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 		// left them no way forward.
 		if cfg, _ := rm.controller.db.GetHaConfig(ctx, SelfHaResource); cfg == nil {
 			return "", fmt.Errorf("self-HA is disabled, but its metadata resource %s from the previous time is still there; "+
-				"the controller now runs on its local database, so remove it and enable again: sds resource delete %s",
+				"the controller now runs on its local database, so remove it and enable again: haify resource delete %s",
 				SelfHaResource, SelfHaResource)
 		}
-		return "", fmt.Errorf("self-HA is already enabled (resource %s); see sds ha self status", SelfHaResource)
+		return "", fmt.Errorf("self-HA is already enabled (resource %s); see haify ha self status", SelfHaResource)
 	}
 
 	// Where the binary goes and whether each standby can run it — checked
@@ -164,7 +164,7 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 	// it earlier could let a standby promote an empty filesystem and start a
 	// second controller with an empty database.
 	//
-	// Extra services from config (e.g. "sds-ai.service") ride the same promoter,
+	// Extra services from config (e.g. "haify-ai.service") ride the same promoter,
 	// so they start/stop with the controller on the active node — the AI Copilot
 	// follows the controller's failover.
 	services := append([]string{selfHaControllerSvc}, rm.selfHaExtraServices()...)
@@ -173,7 +173,7 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 		return "", fmt.Errorf("failed to distribute reactor config: %w", err)
 	}
 
-	// 5. Persist the HA config so `ha status sds-meta` works after handoff.
+	// 5. Persist the HA config so `ha status haify-meta` works after handoff.
 	if err := rm.controller.db.SaveHaConfig(ctx, &database.HaConfig{
 		Resource:   SelfHaResource,
 		VIP:        vip,
@@ -186,7 +186,7 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 
 	// 6. Launch the detached handoff.
 	script := generateSelfHaHandoffScript(standbyAddrs)
-	if err := rm.runDetachedScript(ctx, selfAddr, selfHaHandoffScript, script, "sds-selfha-handoff"); err != nil {
+	if err := rm.runDetachedScript(ctx, selfAddr, selfHaHandoffScript, script, "haify-selfha-handoff"); err != nil {
 		return "", err
 	}
 
@@ -197,7 +197,7 @@ func (rm *ResourceManager) EnableSelfHa(ctx context.Context, vip, pool string, s
 // node. Reactor management is removed everywhere, the database is copied off
 // the DRBD volume back to the node-local path, and the controller service is
 // re-enabled as a normal systemd service. The metadata resource itself is
-// kept and can be removed afterwards with `resource delete sds-meta`.
+// kept and can be removed afterwards with `resource delete haify-meta`.
 func (rm *ResourceManager) DisableSelfHa(ctx context.Context, node string) error {
 	if rm.deployment == nil {
 		return fmt.Errorf("deployment client not set")
@@ -252,7 +252,7 @@ func (rm *ResourceManager) DisableSelfHa(ctx context.Context, node string) error
 		vip = haCfg.VIP
 	}
 	script := generateSelfHaDisableScript(otherAddrs, targetAddr, selfAddr, vip)
-	if err := rm.runDetachedScript(ctx, selfAddr, selfHaDisableScript, script, "sds-selfha-disable"); err != nil {
+	if err := rm.runDetachedScript(ctx, selfAddr, selfHaDisableScript, script, "haify-selfha-disable"); err != nil {
 		// Restore the record so state stays consistent if we failed to launch.
 		if haCfg != nil {
 			_ = rm.controller.db.SaveHaConfig(ctx, haCfg)
@@ -397,13 +397,13 @@ func (rm *ResourceManager) selfHaPreflight(ctx context.Context, selfAddr string,
 	// The standby controllers must not be running (only one controller may
 	// own the database).
 	for _, addr := range standbyAddrs {
-		result, err := rm.deployment.Exec(ctx, []string{addr}, "systemctl is-active --quiet sds-controller && echo RUNNING || echo STOPPED")
+		result, err := rm.deployment.Exec(ctx, []string{addr}, "systemctl is-active --quiet haify-controller && echo RUNNING || echo STOPPED")
 		if err != nil {
-			return fmt.Errorf("failed to check sds-controller state on %s: %w", addr, err)
+			return fmt.Errorf("failed to check haify-controller state on %s: %w", addr, err)
 		}
 		for _, hr := range result.Hosts {
 			if strings.Contains(hr.Output, "RUNNING") {
-				return fmt.Errorf("sds-controller is already running on %s; stop it before enabling self-HA", addr)
+				return fmt.Errorf("haify-controller is already running on %s; stop it before enabling self-HA", addr)
 			}
 		}
 	}
@@ -452,8 +452,8 @@ func (rm *ResourceManager) distributeControllerArtifacts(ctx context.Context, bi
 
 	// Standbys must not autostart the controller.
 	if len(standbyAddrs) > 0 {
-		if err := rm.execAllSuccess(ctx, standbyAddrs, "sudo systemctl disable sds-controller 2>/dev/null; true",
-			"failed to disable sds-controller autostart"); err != nil {
+		if err := rm.execAllSuccess(ctx, standbyAddrs, "sudo systemctl disable haify-controller 2>/dev/null; true",
+			"failed to disable haify-controller autostart"); err != nil {
 			return err
 		}
 	}

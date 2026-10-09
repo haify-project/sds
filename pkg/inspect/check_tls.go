@@ -26,14 +26,14 @@ func checkTLS(in *Input) []Check {
 	if t.APICert != nil {
 		seen++
 		if c, ok := expiry(in, "tls.api_cert", t.APICertPath, "API server certificate", t.APICert,
-			"replace "+t.APICertPath+" and restart sds-controller"); ok {
+			"replace "+t.APICertPath+" and restart haify-controller"); ok {
 			out = append(out, c)
 		}
 	}
 	if t.ReplicationCA != nil {
 		seen++
 		if c, ok := expiry(in, "tls.replication_ca", t.ReplicationCAPath, "replication CA", t.ReplicationCA,
-			"sds replication-tls setup"); ok {
+			"haify replication-tls setup"); ok {
 			out = append(out, c)
 		}
 	}
@@ -46,10 +46,10 @@ func checkTLS(in *Input) []Check {
 		cert, err := parsePEMCert(raw)
 		if err != nil {
 			out = append(out, Check{ID: "tls.replication_cert", Area: AreaTLS, Subject: node, Status: StatusFail,
-				Message: "/etc/sds/drbd-tls/node.crt is unreadable: " + err.Error(), Fix: "sds replication-tls setup"})
+				Message: "/etc/haify/drbd-tls/node.crt is unreadable: " + err.Error(), Fix: "haify replication-tls setup"})
 			continue
 		}
-		if c, ok := expiry(in, "tls.replication_cert", node, "replication certificate", cert, "sds replication-tls setup"); ok {
+		if c, ok := expiry(in, "tls.replication_cert", node, "replication certificate", cert, "haify replication-tls setup"); ok {
 			out = append(out, c)
 		}
 	}

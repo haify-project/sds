@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // nodeFiles is a fake of the files on each node that the placement code reads
@@ -42,16 +42,16 @@ func (n *nodeFiles) exec(hosts []string, cmd string) (*deployment.ExecResult, er
 	for _, h := range hosts {
 		out := ""
 		switch {
-		case strings.Contains(script, "sds-gateway-config"):
+		case strings.Contains(script, "haify-gateway-config"):
 			m := dumpLoopRE.FindStringSubmatch(script)
 			for _, p := range strings.Fields(m[1]) {
 				if c, ok := n.files[h][p]; ok {
-					out += fmt.Sprintf("sds-gateway-config %s %s\n", p, base64.StdEncoding.EncodeToString([]byte(c)))
+					out += fmt.Sprintf("haify-gateway-config %s %s\n", p, base64.StdEncoding.EncodeToString([]byte(c)))
 				}
 			}
 		case strings.Contains(script, "drbd-services@"):
 			for p := range n.files[h] {
-				if strings.Contains(p, "/drbd-reactor.d/sds-ha-") {
+				if strings.Contains(p, "/drbd-reactor.d/haify-ha-") {
 					delete(n.files[h], p)
 					n.retired = append(n.retired, h)
 				}
@@ -114,7 +114,7 @@ func (n *nodeFiles) put(host, path, content string) {
 	n.files[host][path] = content
 }
 
-const haPath = "/etc/drbd-reactor.d/sds-ha-data.toml"
+const haPath = "/etc/drbd-reactor.d/haify-ha-data.toml"
 const mountPath = "/etc/systemd/system/var-lib-app.mount"
 
 // A replica added after `ha create` had no promoter, so it could never take

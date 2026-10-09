@@ -3,9 +3,9 @@ package controller
 import (
 	"context"
 
-	"github.com/haify-project/sds/pkg/alert"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/metrics"
+	"github.com/haify-project/haify/pkg/alert"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/metrics"
 )
 
 type backupLister interface {

@@ -32,13 +32,13 @@ elif [ -r /proc/drbd ]; then echo "drbd_kmod=$(sed -n 's/^version: \([^ ]*\).*/\
 echo "drbd_utils=$(drbdadm --version 2>/dev/null | sed -n 's/^DRBDADM_VERSION=//p' | head -1)"
 echo "reactor=$(drbd-reactor --version 2>/dev/null | head -1 | awk '{print $NF}')"
 echo "reactor_active=$(systemctl is-active drbd-reactor 2>/dev/null)"
-echo "ctl_active=$(systemctl is-active sds-controller 2>/dev/null)"
-bin=$(systemctl cat sds-controller 2>/dev/null | sed -n 's/^ExecStart=[-@+!]*\([^ ]*\).*/\1/p' | tail -1)
+echo "ctl_active=$(systemctl is-active haify-controller 2>/dev/null)"
+bin=$(systemctl cat haify-controller 2>/dev/null | sed -n 's/^ExecStart=[-@+!]*\([^ ]*\).*/\1/p' | tail -1)
 if [ -n "$bin" ] && [ -f "$bin" ]; then echo "ctl_bin=$bin $(sha256sum "$bin" 2>/dev/null | awk '{print $1}')"; echo "ctl_machine=$(od -An -tx1 -j18 -N2 "$bin" 2>/dev/null | tr -d ' \n')"; fi
 for f in /etc/drbd-reactor.d/*.toml /etc/drbd-reactor.d/*.toml.disabled; do [ -f "$f" ] && echo "reactor_conf=$(basename "$f")"; done
 for f in /etc/drbd.d/*.res; do [ -f "$f" ] && echo "res_file=$(basename "$f" .res)"; done
 awk '!/^[[:space:]]*#/ && NF>=2 {l=$1; for(i=2;i<=NF;i++){if($i ~ /^#/) break; l=l" "$i}; print "hosts="l}' /etc/hosts 2>/dev/null
-[ -s /etc/sds/drbd-tls/node.crt ] && echo "tls_cert=$(base64 -w0 /etc/sds/drbd-tls/node.crt 2>/dev/null)"
+[ -s /etc/haify/drbd-tls/node.crt ] && echo "tls_cert=$(base64 -w0 /etc/haify/drbd-tls/node.crt 2>/dev/null)"
 echo "lvs=$(lvs --noheadings --nosuffix --units b --separator '|' -o vg_name,lv_name,segtype,lv_size,data_percent,metadata_percent 2>/dev/null | base64 -w0)"
 vgs --noheadings --nosuffix --units b --separator '|' -o vg_name,vg_free 2>/dev/null | awk -F'|' '{gsub(/ /,"",$1); gsub(/ /,"",$2); if ($1 != "") print "vg_free="$1" "$2}'
 echo "drbd=$(drbdsetup status --json 2>/dev/null | base64 -w0)"

@@ -34,7 +34,7 @@ type SnapshotSchedule struct {
 	Enabled  bool
 	Keep     GFSPolicy
 	// LockDays locks every snapshot the schedule takes for that many days:
-	// nothing sds does deletes it before then (pkg/controller/snapshot_lock.go).
+	// nothing haify does deletes it before then (pkg/controller/snapshot_lock.go).
 	LockDays int `json:",omitempty"`
 	// FrozenUntil, when in the future, freezes the schedule: it still takes
 	// snapshots, but prunes none, and every scheduled snapshot of the

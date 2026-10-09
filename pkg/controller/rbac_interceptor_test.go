@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/rbac"
+	"github.com/haify-project/haify/pkg/rbac"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -36,7 +36,7 @@ func TestRBACIdentityResolvesUser(t *testing.T) {
 		seenUser = userFromContext(ctx)
 		return struct{}{}, nil
 	}
-	info := &grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/ListPools"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/v1.HaifyController/ListPools"}
 	if _, err := interceptor(ctxWithToken("alice-token-0123456789"), nil, info, handler); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestRBACIdentityRejectsUnknownToken(t *testing.T) {
 	engine := testEngine(t)
 	interceptor := rbacIdentityUnaryInterceptor(engine)
 	handler := func(context.Context, interface{}) (interface{}, error) { return nil, nil }
-	info := &grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/ListPools"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/v1.HaifyController/ListPools"}
 	_, err := interceptor(ctxWithToken("bogus"), nil, info, handler)
 	if status.Code(err) != codes.Unauthenticated {
 		t.Errorf("got %v, want Unauthenticated", status.Code(err))
@@ -67,10 +67,10 @@ func TestRBACAuthzEnforcesRole(t *testing.T) {
 		method string
 		want   codes.Code
 	}{
-		{"admin write ok", "alice", "/v1.SDSController/CreatePool", codes.OK},
-		{"viewer read ok", "victor", "/v1.SDSController/ListPools", codes.OK},
-		{"viewer write denied", "victor", "/v1.SDSController/CreatePool", codes.PermissionDenied},
-		{"viewer gateway write denied", "victor", "/v1.SDSController/CreateNFSGateway", codes.PermissionDenied},
+		{"admin write ok", "alice", "/v1.HaifyController/CreatePool", codes.OK},
+		{"viewer read ok", "victor", "/v1.HaifyController/ListPools", codes.OK},
+		{"viewer write denied", "victor", "/v1.HaifyController/CreatePool", codes.PermissionDenied},
+		{"viewer gateway write denied", "victor", "/v1.HaifyController/CreateNFSGateway", codes.PermissionDenied},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 func resourceRemoveReplica() *cobra.Command {
@@ -35,8 +35,8 @@ still connected to it, or unless the survivors hold quorum and an UpToDate copy
 without it. One remaining diskful copy is enough, since the lost one is already
 gone; add a replica afterwards.
 
-  sds resource remove-replica sds-meta --node node-d
-  sds resource remove-replica db --node node3 --lost --yes`,
+  haify resource remove-replica haify-meta --node node-d
+  haify resource remove-replica db --node node3 --lost --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
@@ -55,13 +55,13 @@ gone; add a replica afterwards.
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			msg, err := sdsClient.RemoveReplicaOptions(ctx, resource, node, lost)
+			msg, err := haifyClient.RemoveReplicaOptions(ctx, resource, node, lost)
 			if err != nil {
 				return fmt.Errorf("failed to remove replica: %w", err)
 			}
@@ -70,7 +70,7 @@ gone; add a replica afterwards.
 			} else {
 				fmt.Printf("Replica removed from %q.\n", node)
 			}
-			fmt.Printf("  sds resource status %s\n", resource)
+			fmt.Printf("  haify resource status %s\n", resource)
 			return nil
 		},
 	}
@@ -96,7 +96,7 @@ that also has an off-site DR the new node additionally gets its own WAN leg,
 because DRBD 9 is a full mesh — a replica the DR cannot reach would silently end
 replication the moment it was promoted.
 
-  sds resource add-replica data --node node4`,
+  haify resource add-replica data --node node4`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
@@ -108,18 +108,18 @@ replication the moment it was promoted.
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.AddReplicaWith(ctx, &sdspb.AddReplicaRequest{Resource: resource, Node: node,
+			if err := haifyClient.AddReplicaWith(ctx, &haifypb.AddReplicaRequest{Resource: resource, Node: node,
 				IgnoreFreeSpace: ignoreFreeSpace, AllowUnreachable: allowUnreachable}); err != nil {
 				return fmt.Errorf("failed to add replica: %w", err)
 			}
 			fmt.Printf("Replica added on %q. Initial sync runs in the background:\n", node)
-			fmt.Printf("  sds resource status %s\n", resource)
+			fmt.Printf("  haify resource status %s\n", resource)
 			return nil
 		},
 	}
@@ -147,12 +147,12 @@ exactly the thing you add after a service has proven it matters. This adds it
 in place — the existing replicas keep their synchronous LAN mesh and a promoted
 resource keeps serving while the remote copy syncs in the background.
 
-The DR node joins over one mTLS sds-proxy leg per replica, using protocol A and
+The DR node joins over one mTLS haify-proxy leg per replica, using protocol A and
 pull-ahead, so a slow or flapping WAN link cannot stall writes at the primary
 site. It does not vote: quorum stays a matter for the primary site alone.
 
-  sds resource add-dr data --dr-node dr1 --dr-endpoint 203.0.113.7
-  sds resource add-dr web --dr-node dr1 --dr-endpoint dr.example.com --wan-port 6612`,
+  haify resource add-dr data --dr-node dr1 --dr-endpoint 203.0.113.7
+  haify resource add-dr web --dr-node dr1 --dr-endpoint dr.example.com --wan-port 6612`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
@@ -168,27 +168,27 @@ site. It does not vote: quorum stays a matter for the primary site alone.
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			port, err := sdsClient.AddDR(ctx, resource, drNode, drEndpoint, wanPort, egress)
+			port, err := haifyClient.AddDR(ctx, resource, drNode, drEndpoint, wanPort, egress)
 			if err != nil {
 				return fmt.Errorf("failed to add DR site: %w", err)
 			}
 
 			fmt.Printf("DR site %q attached to %q (WAN base port %d)\n", drNode, resource, port)
 			fmt.Printf("Initial sync is running in the background; check it with:\n")
-			fmt.Printf("  sds resource status %s\n", resource)
+			fmt.Printf("  haify resource status %s\n", resource)
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&drNode, "dr-node", "", "Registered node that will hold the off-site replica")
 	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "Public address of the DR node that the primary site dials")
-	cmd.Flags().Uint32Var(&wanPort, "wan-port", 0, "Base sds-proxy WAN port (one per replica from here; 0 auto-allocates)")
+	cmd.Flags().Uint32Var(&wanPort, "wan-port", 0, "Base haify-proxy WAN port (one per replica from here; 0 auto-allocates)")
 	cmd.Flags().StringVar(&egress, "egress-address", "", "Source address the primary site dials out from (optional)")
 	return cmd
 }
@@ -212,13 +212,13 @@ func resourceDRFailover() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			status, err := sdsClient.ResourceStatus(ctx, resource)
+			status, err := haifyClient.ResourceStatus(ctx, resource)
 			if err != nil {
 				return fmt.Errorf("failed to get resource status: %w", err)
 			}
@@ -240,7 +240,7 @@ func resourceDRFailover() *cobra.Command {
 
 			// Force is required: the DR peer may not be UpToDate relative to a lost
 			// primary, and a plain promote would refuse.
-			if err := sdsClient.SetPrimary(ctx, resource, drNode, true); err != nil {
+			if err := haifyClient.SetPrimary(ctx, resource, drNode, true); err != nil {
 				return fmt.Errorf("DR failover failed: %w", err)
 			}
 			fmt.Printf("Resource %q promoted on DR node %q. Mount its volume(s) and resume service there.\n", resource, drNode)
@@ -274,13 +274,13 @@ func resourceDisklessAttach() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.AttachDisklessClient(ctx, resource, node); err != nil {
+			if err := haifyClient.AttachDisklessClient(ctx, resource, node); err != nil {
 				return fmt.Errorf("failed to attach diskless client: %w", err)
 			}
 			fmt.Printf("Node '%s' attached to '%s' as a diskless client\n", node, resource)
@@ -300,13 +300,13 @@ func resourceDisklessDetach() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.DetachDisklessClient(ctx, resource, node); err != nil {
+			if err := haifyClient.DetachDisklessClient(ctx, resource, node); err != nil {
 				return fmt.Errorf("failed to detach diskless client: %w", err)
 			}
 			fmt.Printf("Node '%s' detached from '%s'\n", node, resource)
@@ -329,12 +329,12 @@ func resourceDRFailback() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), wait+2*time.Minute)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			resp, err := sdsClient.DRFailback(ctx, args[0], node, uint32(wait.Seconds()))
+			defer closeClient(haifyClient)
+			resp, err := haifyClient.DRFailback(ctx, args[0], node, uint32(wait.Seconds()))
 			if err != nil {
 				return err
 			}

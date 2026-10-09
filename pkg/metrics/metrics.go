@@ -1,7 +1,7 @@
 // Package metrics provides Prometheus metrics support for the Haify controller.
 //
-// Two families live here. The `sds_controller_*` family describes the
-// controller itself and the inventory it manages; the `sds_drbd_*` family
+// Two families live here. The `haify_controller_*` family describes the
+// controller itself and the inventory it manages; the `haify_drbd_*` family
 // describes live replication, one series per replica.
 //
 // The rule the whole package is built around: a number that was never observed
@@ -24,12 +24,12 @@ import (
 )
 
 const (
-	namespace = "sds"
+	namespace = "haify"
 	subsystem = "controller"
 	// drbdSubsystem separates live replication state from controller
 	// inventory. They answer different questions and are collected from
 	// different places, and a single subsystem would have made
-	// `sds_controller_disk_state` read as a property of the controller.
+	// `haify_controller_disk_state` read as a property of the controller.
 	drbdSubsystem = "drbd"
 )
 

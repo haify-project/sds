@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/gateway"
-	"github.com/haify-project/sds/pkg/metrics"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/gateway"
+	"github.com/haify-project/haify/pkg/metrics"
+	"github.com/haify-project/haify/pkg/wanproxy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -135,7 +135,7 @@ func TestScheduleManagerLifecycleAndExecution(t *testing.T) {
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "res1", Nodes: "n1", Port: 7001}))
 	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{
 		ResourceName: "res1", VolumeName: "res1_data", VolumeID: 0,
-		Pool: "sds_vg0", SizeGB: 10, Device: "/dev/drbd100",
+		Pool: "haify_vg0", SizeGB: 10, Device: "/dev/drbd100",
 	}))
 	require.NoError(t, ctrl.db.SaveSnapshotSchedule(ctx, &database.SnapshotSchedule{
 		Name: "res1", Resource: "res1", Cron: "0 * * * *", Enabled: true,
@@ -179,7 +179,7 @@ func TestScheduleSnapshotThickFallbackAndListError(t *testing.T) {
 	type scheduleDeploy struct{ fakeDeploymentClient }
 	dep := &scheduleDeploy{}
 	ctrl := newBasicTestController(dep)
-	vol := &ResourceVolumeInfo{Device: "/dev/sds_vg/data", Pool: "sds_vg", BackingVolume: "data", SizeGB: 10}
+	vol := &ResourceVolumeInfo{Device: "/dev/haify_vg/data", Pool: "haify_vg", BackingVolume: "data", SizeGB: 10}
 	ctrl.schedules.snapshotVolume(context.Background(), "n1", "node1", vol, time.Now().UTC())
 
 	dep.lvListSnapshotsFunc = func(context.Context, []string, string) (*deployment.ExecResult, error) {
@@ -218,7 +218,7 @@ func TestMakeHaSuccessAndRemove(t *testing.T) {
 
 	path, err := ctrl.resources.MakeHa(ctx, "res1", []string{"postgresql.service"}, "/data", "ext4", "10.0.0.50/24", nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "/etc/drbd-reactor.d/sds-ha-res1.toml", path)
+	assert.Equal(t, "/etc/drbd-reactor.d/haify-ha-res1.toml", path)
 	require.Len(t, dep.distributedConfigs, 2)
 	assert.Contains(t, dep.distributedConfigs[0].remotePath, "data.mount")
 	assert.Contains(t, dep.distributedConfigs[1].content, "service-ip@10.0.0.50-24.service")

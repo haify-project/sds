@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 
@@ -31,13 +31,13 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// WAN mode is opt-in and strictly gated: when wan == nil the entire block
 	// below is skipped and the LAN path stays byte-for-byte unchanged. When set,
 	// the resource becomes a two-endpoint (primary + DR) async replica routed
-	// through a per-resource sds-proxy pair.
+	// through a per-resource haify-proxy pair.
 	var wanCfg *wanConfig
 	if wan != nil {
 		// The primary site may hold several synchronous replicas — the
 		// "两地三中心" shape: protocol C inside the production site, one
 		// asynchronous copy far away. Only the legs that cross the WAN go
-		// through sds-proxy.
+		// through haify-proxy.
 		primaries := make([]string, 0, len(nodes))
 		seen := make(map[string]bool, len(nodes))
 		for _, n := range nodes {
@@ -205,7 +205,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// auto-add-quorum-tiebreaker. If no spare node exists we proceed with a
 	// bare 2-node resource but flag the quorum risk loudly.
 	// WAN resources are strictly two-endpoint (primary + DR); a diskless
-	// tiebreaker would need a third mesh connection the sds-proxy pair does not
+	// tiebreaker would need a third mesh connection the haify-proxy pair does not
 	// carry, so the auto-tiebreaker is skipped entirely for WAN.
 	var disklessNodes []string
 	if len(nodes) == 2 && wan == nil {
@@ -289,7 +289,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		defer cancel()
 		_, _ = rm.deployment.DRBDDown(cleanupCtx, allIPs, name)
 		_, _ = rm.deployment.Exec(cleanupCtx, allIPs, fmt.Sprintf("sudo rm -f /etc/drbd.d/%s.res", name))
-		// A WAN create may have provisioned the sds-proxy pair before failing;
+		// A WAN create may have provisioned the haify-proxy pair before failing;
 		// tear it down too so a retry starts clean. Best-effort (idempotent at
 		// the shell level). nodeIPs is [primaryIP, drIP] for a WAN resource.
 		if wan != nil && len(nodeIPs) >= 2 {
@@ -359,7 +359,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 		return fmt.Errorf("metadata creation failed: %s", mdResult.FailureDetails())
 	}
 
-	// 4a. WAN only: bring up the per-resource sds-proxy pair BEFORE `drbdadm up`.
+	// 4a. WAN only: bring up the per-resource haify-proxy pair BEFORE `drbdadm up`.
 	// In WAN mode DRBD connects to 127.0.0.1:<port> (the local proxy), so the
 	// loopback proxy must be listening first — otherwise the resource comes up
 	// with nothing to connect to. The rollback defer deprovisions on any later
@@ -459,7 +459,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	// packaged drbd.service is an LSB/SysV unit whose Default-Start header is
 	// empty, so `systemctl enable drbd.service` fails ("Default-Start contains
 	// no runlevels") and it can never be enabled. Instead we install our own
-	// native systemd oneshot (sds-drbd-up.service) that runs `drbdadm adjust all`
+	// native systemd oneshot (haify-drbd-up.service) that runs `drbdadm adjust all`
 	// before drbd-reactor, letting the reactor promote once resources are up.
 	// Installing/enabling is idempotent and harmless on any node with
 	// drbd-utils (diskful or diskless tiebreaker). Best-effort: never fail

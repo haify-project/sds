@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"go.uber.org/zap"
 )
 
@@ -177,7 +177,7 @@ func hostFailure(hr *deployment.HostResult) string {
 // started last (see generatePromoterConfig). Persisted in sysctl.d so a reboot
 // keeps it; the IPv6 knob is set where the kernel has it.
 func (rm *ResourceManager) ensureNonlocalBind(ctx context.Context, hosts []string) error {
-	script := `f=/etc/sysctl.d/90-sds-ha-vip.conf
+	script := `f=/etc/sysctl.d/90-haify-ha-vip.conf
 want='# Haify HA: services may bind to the VIP, which starts after them.
 net.ipv4.ip_nonlocal_bind = 1
 net.ipv6.ip_nonlocal_bind = 1'

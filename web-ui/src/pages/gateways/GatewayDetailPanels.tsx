@@ -304,7 +304,7 @@ export function StartChainPanel({
       'ocf:heartbeat:Filesystem fs_cluster_private',
       'ocf:heartbeat:Filesystem fs_share',
       'ocf:heartbeat:IPaddr2 service_ip',
-      'sds-smbd@<resource>.service',
+      'haify-smbd@<resource>.service',
     ];
   } else {
     const namespaces = detail.namespaces.data?.namespaces ?? [];

@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // decodeWrapped returns the script inside an "echo <b64> | base64 -d | ..."
@@ -28,7 +28,7 @@ func decodeWrapped(cmd string) string {
 const r3Config = `resource r3 {
     volume 0 {
         device    minor 2;
-        disk      /dev/sds_tp/r3_data;
+        disk      /dev/haify_tp/r3_data;
         meta-disk internal;
     }
     on sdt1 { address 10.0.0.1:7102; node-id 0; }
@@ -72,7 +72,7 @@ func restoreHarness(t *testing.T, status map[string]string) (*Controller, *[]str
 // and on one replica only. It is refused before anything is touched.
 func TestRestoreRefusesAResourceInUse(t *testing.T) {
 	ctrl, calls := restoreHarness(t, map[string]string{"10.0.0.3": "r3 role:Primary\n  disk:UpToDate"})
-	err := ctrl.snapshots.RestoreSnapshot(context.Background(), "sds_tp/r3_data", "s1", "sdt3")
+	err := ctrl.snapshots.RestoreSnapshot(context.Background(), "haify_tp/r3_data", "s1", "sdt3")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Primary on sdt3")
 	for _, c := range *calls {
@@ -87,7 +87,7 @@ func TestRestoreKeepsTheReplicasInStep(t *testing.T) {
 	ctrl, calls := restoreHarness(t, map[string]string{
 		"10.0.0.1": "r3 role:Secondary", "10.0.0.3": "r3 role:Secondary",
 	})
-	require.NoError(t, ctrl.snapshots.RestoreSnapshot(context.Background(), "sds_tp/r3_data", "s1", "sdt3"))
+	require.NoError(t, ctrl.snapshots.RestoreSnapshot(context.Background(), "haify_tp/r3_data", "s1", "sdt3"))
 
 	at := func(sub string) int {
 		for i, c := range *calls {
@@ -98,7 +98,7 @@ func TestRestoreKeepsTheReplicasInStep(t *testing.T) {
 		t.Fatalf("never ran %q: %v", sub, *calls)
 		return -1
 	}
-	down, merge := at("drbdadm down r3"), at("lvconvert --merge /dev/sds_tp/s1")
+	down, merge := at("drbdadm down r3"), at("lvconvert --merge /dev/haify_tp/s1")
 	up, reset := at("10.0.0.3 sudo drbdadm up r3"), at("create-md --force r3/0")
 	assert.True(t, down < merge && merge < up && up < reset, "order: down, merge, up, reset peers")
 	assert.True(t, strings.HasPrefix((*calls)[reset], "10.0.0.1 "), "only the other replica is reset: %s", (*calls)[reset])
@@ -110,7 +110,7 @@ func TestRestoreKeepsTheReplicasInStep(t *testing.T) {
 // activation. The container is closed around the merge and reopened after.
 func TestRestoreOfAnEncryptedVolume(t *testing.T) {
 	var calls []string
-	cfg := strings.ReplaceAll(r3Config, "/dev/sds_tp/r3_data", "/dev/mapper/sds_sds_tp_r3_data")
+	cfg := strings.ReplaceAll(r3Config, "/dev/haify_tp/r3_data", "/dev/mapper/haify_haify_tp_r3_data")
 	dep := &fakeDeploymentClient{}
 	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 		calls = append(calls, strings.Join(hosts, ",")+" "+decodeWrapped(cmd))
@@ -136,7 +136,7 @@ func TestRestoreOfAnEncryptedVolume(t *testing.T) {
 		ctrl.hostsMap[n] = a
 	}
 
-	require.NoError(t, ctrl.snapshots.RestoreSnapshot(context.Background(), "sds_tp/r3_data", "s1", "sdt3"))
+	require.NoError(t, ctrl.snapshots.RestoreSnapshot(context.Background(), "haify_tp/r3_data", "s1", "sdt3"))
 	at := func(sub string) int {
 		for i, c := range calls {
 			if strings.Contains(c, sub) {
@@ -146,7 +146,7 @@ func TestRestoreOfAnEncryptedVolume(t *testing.T) {
 		t.Fatalf("never ran %q: %v", sub, calls)
 		return -1
 	}
-	down, closeC, merge := at("drbdadm down r3"), at("cryptsetup close sds_sds_tp_r3_data"), at("lvconvert --merge")
+	down, closeC, merge := at("drbdadm down r3"), at("cryptsetup close haify_haify_tp_r3_data"), at("lvconvert --merge")
 	open, up := at("cryptsetup open"), at("10.0.0.3 sudo drbdadm up r3")
 	assert.True(t, down < closeC && closeC < merge && merge < open && open < up,
 		"order: down, close container, merge, reopen, up: %v", calls)
@@ -155,9 +155,9 @@ func TestRestoreOfAnEncryptedVolume(t *testing.T) {
 // Thin snapshots are created with activation skipped; anything that reads one
 // has to activate it first, and nothing else may be touched.
 func TestSnapshotsAreActivatedBeforeTheyAreRead(t *testing.T) {
-	assert.Equal(t, "[ -e /dev/sds_tp/r3_data_bk_1 ] || sudo lvchange -ay -K sds_tp/r3_data_bk_1;",
-		activateSnapshotCmd("/dev/sds_tp/r3_data_bk_1"))
-	for _, d := range []string{"/dev/zvol/tank/v@s", "/dev/mapper/sds_x", "/dev/drbd3", "/dev/vdb", "relative"} {
+	assert.Equal(t, "[ -e /dev/haify_tp/r3_data_bk_1 ] || sudo lvchange -ay -K haify_tp/r3_data_bk_1;",
+		activateSnapshotCmd("/dev/haify_tp/r3_data_bk_1"))
+	for _, d := range []string{"/dev/zvol/tank/v@s", "/dev/mapper/haify_x", "/dev/drbd3", "/dev/vdb", "relative"} {
 		assert.Empty(t, activateSnapshotCmd(d), d)
 	}
 }

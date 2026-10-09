@@ -8,9 +8,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/backup"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/backup"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Restore and delete. A backup you cannot restore is not a backup, and a
@@ -435,12 +435,12 @@ func decompressFor(object string) string {
 // knows about gateways, but `ha create` configs live only on the nodes.
 func (bm *BackupManager) promoterHosts(ctx context.Context, info *ResourceInfo) []string {
 	var found []string
-	cmd := fmt.Sprintf("ls /etc/drbd-reactor.d/ 2>/dev/null | grep -Eq '^sds-[a-z]+-%s\\.toml$' && echo SDS_PROMOTER=yes; true",
+	cmd := fmt.Sprintf("ls /etc/drbd-reactor.d/ 2>/dev/null | grep -Eq '^haify-[a-z]+-%s\\.toml$' && echo HAIFY_PROMOTER=yes; true",
 		regexpQuoteForGrep(info.Name))
 	for _, n := range info.Nodes {
 		host := bm.controller.ResolveHost(n)
 		res, err := bm.controller.deployment.Exec(ctx, []string{host}, cmd)
-		if err == nil && res != nil && strings.Contains(hostOutput(res, host), "SDS_PROMOTER=yes") {
+		if err == nil && res != nil && strings.Contains(hostOutput(res, host), "HAIFY_PROMOTER=yes") {
 			found = append(found, n)
 		}
 	}

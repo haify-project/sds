@@ -37,17 +37,17 @@ answer() { if fresh; then exit "$1"; else exit "$2"; fi; }
 done_sha() {
 	local src=""
 	case "$1" in
-		/opt/sds/bin/sds-controller) src="$SDS_BIN_DIR/sds-controller" ;;
-		*/service-ip) src="$SDS_BIN_DIR/service-ip" ;;
-		/usr/local/bin/sds) src="$SDS_BIN_DIR/sds" ;;
-		/etc/systemd/system/*) src="$SDS_CONFIG_DIR/${1##*/}" ;;
+		/opt/haify/bin/haify-controller) src="$HAIFY_BIN_DIR/haify-controller" ;;
+		*/service-ip) src="$HAIFY_BIN_DIR/service-ip" ;;
+		/usr/local/bin/haify) src="$HAIFY_BIN_DIR/haify" ;;
+		/etc/systemd/system/*) src="$HAIFY_CONFIG_DIR/${1##*/}" ;;
 		/root/.dispatch/config.toml)
 			# The file bootstrap generated in its scratch directory.
-			for src in "$TMPDIR"/sds-bootstrap.*/dispatch-config.toml; do break; done
+			for src in "$TMPDIR"/haify-bootstrap.*/dispatch-config.toml; do break; done
 			;;
-		*/Custom/SDSPlugin.pm) src="$STUB_PLUGIN_SRC/SDSPlugin.pm" ;;
-		*/Custom/SDS/*.pm) src="$STUB_PLUGIN_SRC/PVE/Storage/Custom/SDS/${1##*/}" ;;
-		*/pve-manager/js/sds-storage.js) src="$STUB_PLUGIN_SRC/gui/sds-storage.js" ;;
+		*/Custom/HaifyPlugin.pm) src="$STUB_PLUGIN_SRC/HaifyPlugin.pm" ;;
+		*/Custom/Haify/*.pm) src="$STUB_PLUGIN_SRC/PVE/Storage/Custom/Haify/${1##*/}" ;;
+		*/pve-manager/js/haify-storage.js) src="$STUB_PLUGIN_SRC/gui/haify-storage.js" ;;
 	esac
 	[ -n "$src" ] && [ -r "$src" ] && sha256sum "$src" | cut -d' ' -f1
 }
@@ -87,15 +87,15 @@ case "$cmd" in
 		f="${f%% 2>*}"
 		done_sha "$f"
 		;;
-	"test -d /etc/sds"*) answer 1 0 ;;
-	"test -L /usr/local/bin/sds-cli") answer 1 0 ;;
-	"test -f /etc/sds/controller.toml") answer 1 0 ;;
-	"systemctl is-active --quiet sds-controller")
+	"test -d /etc/haify"*) answer 1 0 ;;
+	"test -L /usr/local/bin/haify-cli") answer 1 0 ;;
+	"test -f /etc/haify/controller.toml") answer 1 0 ;;
+	"systemctl is-active --quiet haify-controller")
 		fresh && exit 3
 		[ "$node" = "${STUB_ACTIVE_CONTROLLER:-pve1}" ] && exit 0
 		exit 3
 		;;
-	"drbdadm role sds-meta") fresh && exit 10; echo Secondary ;;
+	"drbdadm role haify-meta") fresh && exit 10; echo Secondary ;;
 	*"/v1/nodes")
 		fresh && exit 22
 		printf '{"success":true,"nodes":[%s]}' "$STUB_NODES_JSON"
@@ -104,11 +104,11 @@ case "$cmd" in
 		fresh && exit 22
 		printf '{"success":true,"pools":[%s]}' "$STUB_POOLS_JSON"
 		;;
-	"sds ha self status")
+	"haify ha self status")
 		fresh && exit 1
 		printf 'Controller self-HA: enabled\n  Active node: pve1\n'
 		;;
-	"vgs sds_vg0") answer 5 0 ;;
+	"vgs haify_vg0") answer 5 0 ;;
 	d=*readlink*)
 		# The device probe.
 		echo "${STUB_DEVICE_VERDICT:-clean}"
@@ -116,7 +116,7 @@ case "$cmd" in
 	*/etc/pve/storage.cfg*)
 		echo "dir local"
 		echo "lvmthin local-lvm"
-		fresh || echo "sds sds0"
+		fresh || echo "haify haify0"
 		[ -n "${STUB_STORAGE_EXTRA:-}" ] && echo "$STUB_STORAGE_EXTRA"
 		;;
 	"pvecm status")

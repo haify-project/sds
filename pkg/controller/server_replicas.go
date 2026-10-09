@@ -4,24 +4,24 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
-func (s *Server) AttachDisklessClient(ctx context.Context, req *sdspb.AttachDisklessClientRequest) (*sdspb.AttachDisklessClientResponse, error) {
+func (s *Server) AttachDisklessClient(ctx context.Context, req *haifypb.AttachDisklessClientRequest) (*haifypb.AttachDisklessClientResponse, error) {
 	if err := s.resources.AttachDisklessClient(ctx, req.Resource, req.Node); err != nil {
-		return &sdspb.AttachDisklessClientResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.AttachDisklessClientResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.AttachDisklessClientResponse{
+	return &haifypb.AttachDisklessClientResponse{
 		Success: true,
 		Message: "Diskless client attached successfully",
 	}, nil
 }
 
-func (s *Server) DetachDisklessClient(ctx context.Context, req *sdspb.DetachDisklessClientRequest) (*sdspb.DetachDisklessClientResponse, error) {
+func (s *Server) DetachDisklessClient(ctx context.Context, req *haifypb.DetachDisklessClientRequest) (*haifypb.DetachDisklessClientResponse, error) {
 	if err := s.resources.DetachDisklessClient(ctx, req.Resource, req.Node); err != nil {
-		return &sdspb.DetachDisklessClientResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.DetachDisklessClientResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.DetachDisklessClientResponse{
+	return &haifypb.DetachDisklessClientResponse{
 		Success: true,
 		Message: "Diskless client detached successfully",
 	}, nil
@@ -29,7 +29,7 @@ func (s *Server) DetachDisklessClient(ctx context.Context, req *sdspb.DetachDisk
 
 // SetTiebreaker moves a resource's diskless quorum tiebreaker to another node.
 // The previous holder is reported back so the caller can show what changed.
-func (s *Server) SetTiebreaker(ctx context.Context, req *sdspb.SetTiebreakerRequest) (*sdspb.SetTiebreakerResponse, error) {
+func (s *Server) SetTiebreaker(ctx context.Context, req *haifypb.SetTiebreakerRequest) (*haifypb.SetTiebreakerResponse, error) {
 	previous := ""
 	if s.ctrl.db != nil {
 		if dbRes, err := s.ctrl.db.GetResource(ctx, req.Resource); err == nil && dbRes != nil {
@@ -38,7 +38,7 @@ func (s *Server) SetTiebreaker(ctx context.Context, req *sdspb.SetTiebreakerRequ
 	}
 
 	if err := s.resources.SetTiebreaker(ctx, req.Resource, req.Node); err != nil {
-		return &sdspb.SetTiebreakerResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.SetTiebreakerResponse{Success: false, Message: err.Error()}, nil
 	}
 
 	msg := fmt.Sprintf("tiebreaker for %q is now %q", req.Resource, req.Node)
@@ -61,7 +61,7 @@ func (s *Server) SetTiebreaker(ctx context.Context, req *sdspb.SetTiebreakerRequ
 				req.Resource, replicas)
 		}
 	}
-	return &sdspb.SetTiebreakerResponse{
+	return &haifypb.SetTiebreakerResponse{
 		Success:      true,
 		Message:      msg,
 		PreviousNode: previous,
@@ -72,9 +72,9 @@ func (s *Server) SetTiebreaker(ctx context.Context, req *sdspb.SetTiebreakerRequ
 // AddDR attaches an off-site asynchronous replica to a running resource. The
 // port actually used is echoed back, since a zero request port is allocated by
 // the controller and the caller needs it to open the firewall.
-func (s *Server) AddDR(ctx context.Context, req *sdspb.AddDRRequest) (*sdspb.AddDRResponse, error) {
+func (s *Server) AddDR(ctx context.Context, req *haifypb.AddDRRequest) (*haifypb.AddDRResponse, error) {
 	if err := s.resources.AddDR(ctx, req.Resource, req.DrNode, req.DrEndpoint, req.WanPort, req.EgressAddress); err != nil {
-		return &sdspb.AddDRResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.AddDRResponse{Success: false, Message: err.Error()}, nil
 	}
 
 	port := req.WanPort
@@ -83,7 +83,7 @@ func (s *Server) AddDR(ctx context.Context, req *sdspb.AddDRRequest) (*sdspb.Add
 			port = uint32(dbRes.WANPort)
 		}
 	}
-	return &sdspb.AddDRResponse{
+	return &haifypb.AddDRResponse{
 		Success: true,
 		Message: fmt.Sprintf("DR site %q attached to %q; initial sync runs in the background", req.DrNode, req.Resource),
 		WanPort: port,
@@ -91,29 +91,29 @@ func (s *Server) AddDR(ctx context.Context, req *sdspb.AddDRRequest) (*sdspb.Add
 }
 
 // AddReplica adds a diskful local replica to a running resource.
-func (s *Server) AddReplica(ctx context.Context, req *sdspb.AddReplicaRequest) (*sdspb.AddReplicaResponse, error) {
+func (s *Server) AddReplica(ctx context.Context, req *haifypb.AddReplicaRequest) (*haifypb.AddReplicaResponse, error) {
 	if err := s.resources.AddReplicaWith(ctx, req.Resource, req.Node,
 		AddReplicaOpts{IgnoreFreeSpace: req.IgnoreFreeSpace, AllowUnreachable: req.AllowUnreachable}); err != nil {
-		return &sdspb.AddReplicaResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.AddReplicaResponse{Success: false, Message: err.Error()}, nil
 	}
-	return &sdspb.AddReplicaResponse{
+	return &haifypb.AddReplicaResponse{
 		Success: true,
 		Message: fmt.Sprintf("replica added on %q; initial sync runs in the background", req.Node),
 	}, nil
 }
 
-func (s *Server) RemoveReplica(ctx context.Context, req *sdspb.RemoveReplicaRequest) (*sdspb.RemoveReplicaResponse, error) {
+func (s *Server) RemoveReplica(ctx context.Context, req *haifypb.RemoveReplicaRequest) (*haifypb.RemoveReplicaResponse, error) {
 	if err := s.resources.RemoveReplicaOptions(ctx, req.Resource, req.Node, req.Lost); err != nil {
-		return &sdspb.RemoveReplicaResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.RemoveReplicaResponse{Success: false, Message: err.Error()}, nil
 	}
 	if req.Lost {
-		return &sdspb.RemoveReplicaResponse{
+		return &haifypb.RemoveReplicaResponse{
 			Success: true,
 			Message: fmt.Sprintf("replica of the lost node %q removed from the survivors; %s",
 				req.Node, LostReplicaCleanup(req.Resource, req.Node)),
 		}, nil
 	}
-	return &sdspb.RemoveReplicaResponse{
+	return &haifypb.RemoveReplicaResponse{
 		Success: true,
 		Message: fmt.Sprintf("replica removed from %q", req.Node),
 	}, nil

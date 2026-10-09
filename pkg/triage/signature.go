@@ -30,7 +30,7 @@ var (
 	// it is carried on the finding, where it belongs.
 	//
 	// Only a line that opens with a real timestamp gets its second token read
-	// as a hostname. dmesg -T's `[Sat Sep  6 ...] drbd sds-meta: ...` has no
+	// as a hostname. dmesg -T's `[Sat Sep  6 ...] drbd haify-meta: ...` has no
 	// host field at all, and a rule loose enough to strip one there would eat
 	// the subsystem name.
 	reJournalISO = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})? +\S+ `)

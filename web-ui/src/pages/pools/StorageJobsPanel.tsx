@@ -11,7 +11,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 // A finished job stays on the page for an hour, so its outcome is seen, and
-// only the latest few: the full history is in `sds pool jobs --all`.
+// only the latest few: the full history is in `haify pool jobs --all`.
 const SHOW_FINISHED_SECONDS = 3600;
 const SHOW_FINISHED_MAX = 3;
 

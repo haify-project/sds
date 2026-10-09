@@ -7,9 +7,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/wanproxy"
 )
 
 // AddReplica adds a diskful local replica to a resource that is already running.
@@ -323,7 +323,7 @@ func (rm *ResourceManager) AddReplicaWith(ctx context.Context, resource, node st
 	// promoter can go in now and takes effect once the copy is UpToDate.
 	if err := rm.SyncPromoters(ctx, resource); err != nil {
 		return fmt.Errorf("replica added on %s, but the resource's promoters could not be placed there: %w; "+
-			"fix that and run `sds resource repair %s`", node, err, resource)
+			"fix that and run `haify resource repair %s`", node, err, resource)
 	}
 	return nil
 }
@@ -449,13 +449,13 @@ func (rm *ResourceManager) undoAddReplica(ctx context.Context, resource, resPath
 }
 
 // wanproxyBinaryProbe reports whether the proxy binary is present and runnable.
-const wanproxyBinaryProbe = `test -x /usr/local/bin/sds-proxy && echo present || echo missing`
+const wanproxyBinaryProbe = `test -x /usr/local/bin/haify-proxy && echo present || echo missing`
 
 // assertWANProxyBinary fails unless every node that will run a proxy leg has the
 // binary.
 //
 // Skipping the push when the controller has no local copy is a reasonable
-// default — most fleets stage sds-proxy with their image — but "assume it is
+// default — most fleets stage haify-proxy with their image — but "assume it is
 // pre-staged" is a bad thing to assume silently. A node without it gets a
 // systemd unit that crash-loops with 203/EXEC, while DRBD reports only
 // "Connecting". Nothing in that picture points at a missing file, and the two
@@ -468,7 +468,7 @@ func (rm *ResourceManager) assertWANProxyBinary(ctx context.Context, hosts, node
 	for i, host := range hosts {
 		res, err := rm.deployment.Exec(ctx, []string{host}, wanproxyBinaryProbe)
 		if err != nil {
-			return fmt.Errorf("check for the sds-proxy binary on %q: %w", nodes[i], err)
+			return fmt.Errorf("check for the haify-proxy binary on %q: %w", nodes[i], err)
 		}
 		out := ""
 		for _, r := range res.Hosts {

@@ -11,9 +11,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/rbac"
+	pb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/rbac"
 )
 
 // dbRBACStore persists the RBAC snapshot inside the controller's BBolt

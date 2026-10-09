@@ -16,6 +16,6 @@
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
-  name: sds-drbd-snapshot
-driver: sds.csi.liliang-cn.com
+  name: haify-drbd-snapshot
+driver: haify.csi.liliang-cn.com
 deletionPolicy: Delete

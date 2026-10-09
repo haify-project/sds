@@ -16,8 +16,8 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/rbac"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/rbac"
 )
 
 // startGRPCServer starts the gRPC server with gRPC-Gateway on separate ports
@@ -132,8 +132,8 @@ func (c *Controller) startGRPCServer() error {
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	// Register Haify controller service
-	sdsServer := NewServer(c)
-	sdspb.RegisterSDSControllerServer(c.server, sdsServer)
+	haifyServer := NewServer(c)
+	haifypb.RegisterHaifyControllerServer(c.server, haifyServer)
 	// Reflection lets grpcurl and similar tools discover the API without a copy
 	// of the .proto files. It describes the schema only; every call still goes
 	// through the same auth interceptors.
@@ -177,7 +177,7 @@ func (c *Controller) startGRPCServer() error {
 
 	// Dial loopback explicitly — grpcAddr above is a LISTEN address and is
 	// normally "0.0.0.0:3374", which is not a destination. See loopbackTarget.
-	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(
+	if err := haifypb.RegisterHaifyControllerHandlerFromEndpoint(
 		context.Background(), gatewayMux, loopbackTarget(c.config), loopbackDialOptions(tlsSetup)); err != nil {
 		return fmt.Errorf("failed to register gateway handler: %w", err)
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A pool past the near-full line gives up the volume's oldest scheduled
@@ -37,7 +37,7 @@ func TestRelieveThinPoolRemovesOldestUntilUnderThreshold(t *testing.T) {
 		return successExecResult(hosts, ""), nil
 	}
 	ctrl := newBasicTestController(dep)
-	vol := &ResourceVolumeInfo{Pool: "sds_pool", BackingVolume: "data_data", Device: "/dev/sds_pool/data_data"}
+	vol := &ResourceVolumeInfo{Pool: "haify_pool", BackingVolume: "data_data", Device: "/dev/haify_pool/data_data"}
 
 	ctrl.schedules.relieveThinPool(context.Background(), "n1", "n1", "r", vol, 0)
 	want := []string{"data_data_sched_20260920T230000Z", "data_data_sched_20260925T230000Z"}

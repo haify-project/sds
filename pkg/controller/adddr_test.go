@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A LAN resource as it exists on disk before any DR is attached: two diskful
@@ -23,7 +23,7 @@ const lanResConfig = `resource openclaw {
         on-no-quorum io-error;
     }
 
-    on sds-a {
+    on haify-a {
         address   192.168.1.10:7300;
         node-id   0;
         volume 0 {
@@ -33,7 +33,7 @@ const lanResConfig = `resource openclaw {
         }
     }
 
-    on sds-b {
+    on haify-b {
         address   192.168.1.11:7300;
         node-id   1;
         volume 0 {
@@ -43,7 +43,7 @@ const lanResConfig = `resource openclaw {
         }
     }
 
-    on sds-e {
+    on haify-e {
         address   192.168.1.20:7300;
         node-id   2;
         volume 0 {
@@ -54,7 +54,7 @@ const lanResConfig = `resource openclaw {
     }
 
     connection-mesh {
-        hosts sds-a sds-b sds-e;
+        hosts haify-a haify-b haify-e;
     }
 }
 `
@@ -63,10 +63,10 @@ func addDRTestFixture(t *testing.T) *ResourceManager {
 	t.Helper()
 	ctrl := newBasicTestController(&fakeDeploymentClient{})
 	for _, n := range []struct{ name, addr, host string }{
-		{"node-a", "192.168.1.10", "sds-a"},
-		{"node-b", "192.168.1.11", "sds-b"},
-		{"node-e", "192.168.1.20", "sds-e"},
-		{"node-c", "203.0.113.7", "sds-c"},
+		{"node-a", "192.168.1.10", "haify-a"},
+		{"node-b", "192.168.1.11", "haify-b"},
+		{"node-e", "192.168.1.20", "haify-e"},
+		{"node-c", "203.0.113.7", "haify-c"},
 	} {
 		ctrl.nodes.nodes[n.addr] = &NodeInfo{
 			Name: n.name, Address: n.addr, Hostname: n.host, State: NodeStateOnline,
@@ -109,12 +109,12 @@ func TestAddDRToConfigAddsDRStanza(t *testing.T) {
 		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
-	assert.Contains(t, out, "on sds-c {")
+	assert.Contains(t, out, "on haify-c {")
 	assert.Contains(t, out, "node-id   3;", "next free id after 0,1,2")
 	assert.Contains(t, out, "disk      /dev/vg0/openclaw_data;")
 	// The DR's own stanza binds the leg port; only the connection sections use
 	// the +100 offset, and only for the primaries.
-	drStanza := out[strings.Index(out, "on sds-c {"):]
+	drStanza := out[strings.Index(out, "on haify-c {"):]
 	drStanza = drStanza[:strings.Index(drStanza, "\n    }")]
 	assert.Contains(t, drStanza, "address   127.0.0.1:7300;")
 }
@@ -132,18 +132,18 @@ func TestAddDRToConfigNarrowsMeshAndAddsLegs(t *testing.T) {
 	require.Equal(t, 1, strings.Count(out, "connection-mesh"))
 	mesh := out[strings.Index(out, "connection-mesh"):]
 	mesh = mesh[:strings.Index(mesh, ";")]
-	assert.Contains(t, mesh, "sds-a")
-	assert.Contains(t, mesh, "sds-b")
-	assert.Contains(t, mesh, "sds-e", "the tiebreaker still votes over the LAN")
-	assert.NotContains(t, mesh, "sds-c", "the DR must not join the LAN mesh")
+	assert.Contains(t, mesh, "haify-a")
+	assert.Contains(t, mesh, "haify-b")
+	assert.Contains(t, mesh, "haify-e", "the tiebreaker still votes over the LAN")
+	assert.NotContains(t, mesh, "haify-c", "the DR must not join the LAN mesh")
 
 	// One leg per diskful replica: DRBD 9 is a full mesh, so whichever replica
 	// is Primary after a local failover must have a path to the DR.
 	assert.Equal(t, 2, strings.Count(out, "connection {"))
-	assert.Contains(t, out, "host sds-a address 127.0.0.1:7400;")
-	assert.Contains(t, out, "host sds-c address 127.0.0.1:7300;")
-	assert.Contains(t, out, "host sds-b address 127.0.0.1:7401;")
-	assert.Contains(t, out, "host sds-c address 127.0.0.1:7301;")
+	assert.Contains(t, out, "host haify-a address 127.0.0.1:7400;")
+	assert.Contains(t, out, "host haify-c address 127.0.0.1:7300;")
+	assert.Contains(t, out, "host haify-b address 127.0.0.1:7401;")
+	assert.Contains(t, out, "host haify-c address 127.0.0.1:7301;")
 
 	// Each leg is async and yields under congestion, so a saturated or flapping
 	// WAN link cannot stall writes in the primary site.
@@ -153,7 +153,7 @@ func TestAddDRToConfigNarrowsMeshAndAddsLegs(t *testing.T) {
 
 	// No tiebreaker leg: a diskless voter reachable only over the WAN would make
 	// quorum depend on the link.
-	assert.NotContains(t, out, "host sds-e address 127.0.0.1")
+	assert.NotContains(t, out, "host haify-e address 127.0.0.1")
 }
 
 // The port layout must match what generateDrbdConfig produces for a resource
@@ -174,10 +174,10 @@ func TestAddDRToConfigMatchesCreateTimeLayout(t *testing.T) {
 	)
 
 	for _, line := range []string{
-		"host sds-a address 127.0.0.1:7400;",
-		"host sds-b address 127.0.0.1:7401;",
-		"host sds-c address 127.0.0.1:7300;",
-		"host sds-c address 127.0.0.1:7301;",
+		"host haify-a address 127.0.0.1:7400;",
+		"host haify-b address 127.0.0.1:7401;",
+		"host haify-c address 127.0.0.1:7300;",
+		"host haify-c address 127.0.0.1:7301;",
 	} {
 		assert.Contains(t, created, line, "create-time config")
 		assert.Contains(t, added, line, "add-dr config")
@@ -207,18 +207,18 @@ func TestAddDRToConfigWithoutExistingMesh(t *testing.T) {
 		[]string{"node-a", "node-b"}, []string{"node-e"}, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
-	assert.Contains(t, out, "on sds-c {")
+	assert.Contains(t, out, "on haify-c {")
 	assert.Equal(t, 2, strings.Count(out, "connection {"))
 	// The primary site is now spelled out, since the DR's arrival means the
 	// implicit all-pairs reading of the file would include it.
-	assert.Contains(t, out, "hosts sds-a sds-b sds-e;")
+	assert.Contains(t, out, "hosts haify-a haify-b haify-e;")
 }
 
 func TestMinorForVolume(t *testing.T) {
 	assert.Equal(t, 12, minorForVolume(lanResConfig, 0))
 
 	twoVol := `resource r {
-    on sds-a {
+    on haify-a {
         volume 0 {
             device    minor 5;
         }
@@ -319,12 +319,12 @@ func TestAddDRToConfigHonoursProbedBindPorts(t *testing.T) {
 		[]int{7900, 7901})
 	require.NoError(t, err)
 
-	assert.Contains(t, out, "host sds-a address 127.0.0.1:7900;")
-	assert.Contains(t, out, "host sds-b address 127.0.0.1:7901;")
+	assert.Contains(t, out, "host haify-a address 127.0.0.1:7900;")
+	assert.Contains(t, out, "host haify-b address 127.0.0.1:7901;")
 	assert.NotContains(t, out, "127.0.0.1:7400", "the colliding default must not survive")
 	// The DR side is untouched: it binds the leg port, where its acceptor dials.
-	assert.Contains(t, out, "host sds-c address 127.0.0.1:7300;")
-	assert.Contains(t, out, "host sds-c address 127.0.0.1:7301;")
+	assert.Contains(t, out, "host haify-c address 127.0.0.1:7300;")
+	assert.Contains(t, out, "host haify-c address 127.0.0.1:7301;")
 }
 
 // Same requirement on the create-time path, which generates the identical shape.
@@ -340,8 +340,8 @@ func TestGenerateDrbdConfigHonoursProbedBindPorts(t *testing.T) {
 		&wanConfig{DRNode: "node-dr", PrimaryNodes: []string{"node-a", "node-b"}, BindPorts: []int{7900, 7901}},
 	)
 
-	assert.Contains(t, cfg, "host sds-a address 127.0.0.1:7900;")
-	assert.Contains(t, cfg, "host sds-b address 127.0.0.1:7901;")
+	assert.Contains(t, cfg, "host haify-a address 127.0.0.1:7900;")
+	assert.Contains(t, cfg, "host haify-b address 127.0.0.1:7901;")
 	assert.NotContains(t, cfg, "127.0.0.1:7400")
 }
 
@@ -408,40 +408,40 @@ func TestDisklessMeshRebuildExcludesWANHosts(t *testing.T) {
 		[]int{7900, 7901})
 	require.NoError(t, err)
 
-	out, err := removeDisklessClientBlock(twoSite, "sds-e")
+	out, err := removeDisklessClientBlock(twoSite, "haify-e")
 	require.NoError(t, err)
 
 	require.Equal(t, 1, strings.Count(out, "connection-mesh"))
 	mesh := out[strings.Index(out, "connection-mesh"):]
 	mesh = mesh[:strings.Index(mesh, ";")]
-	assert.Contains(t, mesh, "sds-a")
-	assert.Contains(t, mesh, "sds-b")
-	assert.NotContains(t, mesh, "sds-e", "the removed tiebreaker is gone")
-	assert.NotContains(t, mesh, "sds-c", "the DR must stay out of the LAN mesh")
+	assert.Contains(t, mesh, "haify-a")
+	assert.Contains(t, mesh, "haify-b")
+	assert.NotContains(t, mesh, "haify-e", "the removed tiebreaker is gone")
+	assert.NotContains(t, mesh, "haify-c", "the DR must stay out of the LAN mesh")
 
 	// And the WAN legs survive untouched.
 	assert.Equal(t, 2, strings.Count(out, "connection {"))
-	assert.Contains(t, out, "host sds-a address 127.0.0.1:7900;")
-	assert.Contains(t, out, "host sds-c address 127.0.0.1:7301;")
+	assert.Contains(t, out, "host haify-a address 127.0.0.1:7900;")
+	assert.Contains(t, out, "host haify-c address 127.0.0.1:7301;")
 }
 
 func TestDisklessAddExcludesWANHostsFromMesh(t *testing.T) {
 	rm := addDRTestFixture(t)
 	// Two replicas plus a DR, no tiebreaker yet.
-	noTB := lanResConfig[:strings.Index(lanResConfig, "    on sds-e {")] +
+	noTB := lanResConfig[:strings.Index(lanResConfig, "    on haify-e {")] +
 		lanResConfig[strings.Index(lanResConfig, "    connection-mesh"):]
-	noTB = strings.Replace(noTB, "hosts sds-a sds-b sds-e;", "hosts sds-a sds-b;", 1)
+	noTB = strings.Replace(noTB, "hosts haify-a haify-b haify-e;", "hosts haify-a haify-b;", 1)
 	twoSite, err := rm.addDRToConfig(noTB, "openclaw", "node-c",
 		[]string{"node-a", "node-b"}, nil, "203.0.113.7", addDRVolumes, 7300, nil)
 	require.NoError(t, err)
 
-	out, err := addDisklessClientBlock(twoSite, "sds-e", "192.168.1.20", 7300)
+	out, err := addDisklessClientBlock(twoSite, "haify-e", "192.168.1.20", 7300)
 	require.NoError(t, err)
 
 	mesh := out[strings.Index(out, "connection-mesh"):]
 	mesh = mesh[:strings.Index(mesh, ";")]
-	assert.Contains(t, mesh, "sds-e", "the new tiebreaker joins the LAN mesh")
-	assert.NotContains(t, mesh, "sds-c", "the DR does not")
+	assert.Contains(t, mesh, "haify-e", "the new tiebreaker joins the LAN mesh")
+	assert.NotContains(t, mesh, "haify-c", "the DR does not")
 }
 
 // Removing the tiebreaker is only dangerous when too few replicas are left.
@@ -474,7 +474,7 @@ func TestSetTiebreakerRemovalMessageDependsOnReplicaCount(t *testing.T) {
 
 			srv := &Server{ctrl: ctrl, resources: ctrl.resources}
 			resp, err := srv.SetTiebreaker(context.Background(),
-				&sdspb.SetTiebreakerRequest{Resource: "data", Node: ""})
+				&haifypb.SetTiebreakerRequest{Resource: "data", Node: ""})
 			require.NoError(t, err)
 			assert.Contains(t, resp.Message, tc.wantSub)
 		})

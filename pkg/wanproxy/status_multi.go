@@ -64,7 +64,7 @@ func (s *MultiStatus) Unhealthy() []LegStatus {
 //
 // A resource with N primary-site replicas has N independent tunnels, each a
 // separately-named systemd instance (see LegID). Checking a single
-// "sds-proxy@<resource>" unit — as a per-resource status query would — names a
+// "haify-proxy@<resource>" unit — as a per-resource status query would — names a
 // unit that exists on no node once N > 1, so a perfectly healthy WAN reads as
 // completely down.
 //
@@ -125,7 +125,7 @@ func StatusMulti(ctx context.Context, deploy DeploymentClient, m MultiSpec) (*Mu
 		if !active[leg.PrimaryNodeAddr][unit] {
 			if found := soleUnitFor(active[leg.PrimaryNodeAddr]); found != "" {
 				unit = found
-				legID = strings.TrimSuffix(strings.TrimPrefix(found, "sds-proxy@"), ".service")
+				legID = strings.TrimSuffix(strings.TrimPrefix(found, "haify-proxy@"), ".service")
 			}
 		}
 

@@ -5,15 +5,15 @@ import (
 	"strings"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/wanproxy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // withTempPKI points wanproxy's controller-side PKI cache at a temp dir so
-// Provision can generate mTLS material without touching /var/lib/sds.
+// Provision can generate mTLS material without touching /var/lib/haify.
 func withTempPKI(t *testing.T) {
 	t.Helper()
 	prev := wanproxy.PKIDir
@@ -43,7 +43,7 @@ func execCmdIssued(dep *fakeDeploymentClient, substr string) bool {
 
 // TestCreateResourceWANProvisionsAndPersists verifies the WAN create branch:
 // it forces protocol A, participates on [primary, dr] with no tiebreaker,
-// provisions the sds-proxy pair (config + enabled unit), and persists the WAN
+// provisions the haify-proxy pair (config + enabled unit), and persists the WAN
 // metadata onto the saved resource record.
 func TestCreateResourceWANProvisionsAndPersists(t *testing.T) {
 	withTempPKI(t)
@@ -76,17 +76,17 @@ func TestCreateResourceWANProvisionsAndPersists(t *testing.T) {
 	assert.Contains(t, res, "127.0.0.1:7100;") // DR binds the DRBD port
 	assert.NotContains(t, res, "10.0.0.1")     // no real peer IP leaks
 
-	// The sds-proxy per-resource config was distributed to both endpoints.
+	// The haify-proxy per-resource config was distributed to both endpoints.
 	_, ok = findDistributedConfig(dep, wanproxy.NodeConfigPath("wanres"))
-	require.True(t, ok, "per-resource sds-proxy config was not distributed")
+	require.True(t, ok, "per-resource haify-proxy config was not distributed")
 
 	// The per-resource proxy unit was enabled and restarted (Provision ran
 	// before up). Restart rather than `enable --now`: the latter no-ops on a
 	// running leg, which would leave it on stale config and mTLS material.
 	assert.True(t, execCmdIssued(dep, "systemctl enable "+wanproxy.UnitInstance("wanres")),
-		"sds-proxy@wanres unit was not enabled; exec calls: %+v", dep.execCalls)
+		"haify-proxy@wanres unit was not enabled; exec calls: %+v", dep.execCalls)
 	assert.True(t, execCmdIssued(dep, "systemctl restart "+wanproxy.UnitInstance("wanres")),
-		"sds-proxy@wanres unit was not restarted; exec calls: %+v", dep.execCalls)
+		"haify-proxy@wanres unit was not restarted; exec calls: %+v", dep.execCalls)
 }
 
 // TestCreateResourceWANAutoPort auto-picks a random high port when WANPort is 0.
@@ -238,7 +238,7 @@ func TestServerCreateResourceWANSucceeds(t *testing.T) {
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1", "dr": "10.0.0.2"})
 	srv := NewServer(ctrl)
 
-	resp, err := srv.CreateResource(context.Background(), &sdspb.CreateResourceRequest{
+	resp, err := srv.CreateResource(context.Background(), &haifypb.CreateResourceRequest{
 		Name:        "wanres",
 		Port:        7100,
 		Nodes:       []string{"primary"},
@@ -268,7 +268,7 @@ func TestServerCreateResourceRejectsDRFieldsWithoutWan(t *testing.T) {
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1", "dr": "10.0.0.2"})
 	srv := NewServer(ctrl)
 
-	resp, err := srv.CreateResource(context.Background(), &sdspb.CreateResourceRequest{
+	resp, err := srv.CreateResource(context.Background(), &haifypb.CreateResourceRequest{
 		Name:        "wanres",
 		Port:        7100,
 		Nodes:       []string{"primary"},
@@ -294,7 +294,7 @@ func TestServerCreateResourceWANRejectsUnregisteredDRNode(t *testing.T) {
 	registerNodes(ctrl, map[string]string{"primary": "10.0.0.1"})
 	srv := NewServer(ctrl)
 
-	resp, err := srv.CreateResource(context.Background(), &sdspb.CreateResourceRequest{
+	resp, err := srv.CreateResource(context.Background(), &haifypb.CreateResourceRequest{
 		Name:        "wanres",
 		Port:        7100,
 		Nodes:       []string{"primary"},
@@ -311,7 +311,7 @@ func TestServerCreateResourceWANRejectsUnregisteredDRNode(t *testing.T) {
 }
 
 // TestDeleteResourceWANDeprovisions confirms the delete path tears down the
-// per-resource sds-proxy after DRBD down when the stored resource is WAN.
+// per-resource haify-proxy after DRBD down when the stored resource is WAN.
 func TestDeleteResourceWANDeprovisions(t *testing.T) {
 	withTempPKI(t)
 	dep := &fakeDeploymentClient{}
@@ -334,5 +334,5 @@ func TestDeleteResourceWANDeprovisions(t *testing.T) {
 	err := ctrl.resources.DeleteResource(context.Background(), "wanres", true)
 	require.NoError(t, err)
 	assert.True(t, execCmdIssued(dep, "systemctl disable --now "+wanproxy.UnitInstance("wanres")),
-		"WAN delete must disable the sds-proxy@wanres unit; exec calls: %+v", dep.execCalls)
+		"WAN delete must disable the haify-proxy@wanres unit; exec calls: %+v", dep.execCalls)
 }

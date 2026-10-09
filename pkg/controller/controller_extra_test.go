@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -24,7 +24,7 @@ import (
 // anything the test observed.
 func newTestDB(t *testing.T) *database.DB {
 	t.Helper()
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "haify.db")}, zap.NewNop())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
@@ -121,18 +121,18 @@ func TestServerDrainAndUndrainHandlers(t *testing.T) {
 	require.NoError(t, err)
 
 	// DrainNode handler
-	drainResp, err := srv.DrainNode(context.Background(), &sdspb.DrainNodeRequest{Name: "n1"})
+	drainResp, err := srv.DrainNode(context.Background(), &haifypb.DrainNodeRequest{Name: "n1"})
 	require.NoError(t, err)
 	assert.True(t, drainResp.Success)
 
 	// UndrainNode handler
-	undrainResp, err := srv.UndrainNode(context.Background(), &sdspb.UndrainNodeRequest{Name: "n1"})
+	undrainResp, err := srv.UndrainNode(context.Background(), &haifypb.UndrainNodeRequest{Name: "n1"})
 	require.NoError(t, err)
 	assert.True(t, undrainResp.Success)
 
 	// GetHaStatus handler
 	require.NoError(t, ctrl.db.SaveHaConfig(context.Background(), &database.HaConfig{Resource: "res1"}))
-	haStatusResp, err := srv.GetHaStatus(context.Background(), &sdspb.GetHaStatusRequest{Resource: "res1"})
+	haStatusResp, err := srv.GetHaStatus(context.Background(), &haifypb.GetHaStatusRequest{Resource: "res1"})
 	require.NoError(t, err)
 	assert.True(t, haStatusResp.Success)
 }
@@ -165,50 +165,50 @@ func TestServerPoolAndResourceHandlers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Pool Handlers
-	cResp, err := srv.CreatePool(ctx, &sdspb.CreatePoolRequest{Name: "vg0", Type: "lvm", Node: "n1", Disks: []string{"/dev/sdb"}, SizeGb: 100})
+	cResp, err := srv.CreatePool(ctx, &haifypb.CreatePoolRequest{Name: "vg0", Type: "lvm", Node: "n1", Disks: []string{"/dev/sdb"}, SizeGb: 100})
 	require.NoError(t, err)
 	assert.True(t, cResp.Success)
 
-	gResp, err := srv.GetPool(ctx, &sdspb.GetPoolRequest{Name: "vg0", Node: "n1"})
+	gResp, err := srv.GetPool(ctx, &haifypb.GetPoolRequest{Name: "vg0", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, gResp.Success)
 
-	lResp, err := srv.ListPools(ctx, &sdspb.ListPoolsRequest{})
+	lResp, err := srv.ListPools(ctx, &haifypb.ListPoolsRequest{})
 	require.NoError(t, err)
 	assert.True(t, lResp.Success)
 
-	dResp, err := srv.DeletePool(ctx, &sdspb.DeletePoolRequest{Name: "vg0", Node: "n1"})
+	dResp, err := srv.DeletePool(ctx, &haifypb.DeletePoolRequest{Name: "vg0", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, dResp.Success)
 
 	// Resource Handlers
-	crResp, err := srv.CreateResource(ctx, &sdspb.CreateResourceRequest{
+	crResp, err := srv.CreateResource(ctx, &haifypb.CreateResourceRequest{
 		Name: "res1", Port: 7001, Nodes: []string{"n1"}, Protocol: "C", SizeGb: 10, Pool: "vg0", StorageType: "lvm",
 	})
 	require.NoError(t, err)
 	assert.True(t, crResp.Success)
 
-	grResp, err := srv.GetResource(ctx, &sdspb.GetResourceRequest{Name: "res1"})
+	grResp, err := srv.GetResource(ctx, &haifypb.GetResourceRequest{Name: "res1"})
 	require.NoError(t, err)
 	assert.True(t, grResp.Success)
 
-	lrResp, err := srv.ListResources(ctx, &sdspb.ListResourcesRequest{})
+	lrResp, err := srv.ListResources(ctx, &haifypb.ListResourcesRequest{})
 	require.NoError(t, err)
 	assert.True(t, lrResp.Success)
 
-	rsResp, err := srv.ResourceStatus(ctx, &sdspb.ResourceStatusRequest{Name: "res1"})
+	rsResp, err := srv.ResourceStatus(ctx, &haifypb.ResourceStatusRequest{Name: "res1"})
 	require.NoError(t, err)
 	assert.True(t, rsResp.Success)
 
-	spResp, err := srv.SetPrimary(ctx, &sdspb.SetPrimaryRequest{Resource: "res1", Node: "n1"})
+	spResp, err := srv.SetPrimary(ctx, &haifypb.SetPrimaryRequest{Resource: "res1", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, spResp.Success)
 
-	ssResp, err := srv.SetSecondary(ctx, &sdspb.SetSecondaryRequest{Resource: "res1", Node: "n1"})
+	ssResp, err := srv.SetSecondary(ctx, &haifypb.SetSecondaryRequest{Resource: "res1", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, ssResp.Success)
 
-	drResp, err := srv.DeleteResource(ctx, &sdspb.DeleteResourceRequest{Name: "res1"})
+	drResp, err := srv.DeleteResource(ctx, &haifypb.DeleteResourceRequest{Name: "res1"})
 	require.NoError(t, err)
 	assert.True(t, drResp.Success)
 }
@@ -228,22 +228,22 @@ func TestServerSnapshotAndGatewayHandlers(t *testing.T) {
 	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "res1", VolumeID: 0, Pool: "vg0"}))
 
 	// Snapshot Handlers
-	csResp, err := srv.CreateSnapshot(ctx, &sdspb.CreateSnapshotRequest{Volume: "vg0/res1_data", SnapshotName: "snap1", Node: "n1"})
+	csResp, err := srv.CreateSnapshot(ctx, &haifypb.CreateSnapshotRequest{Volume: "vg0/res1_data", SnapshotName: "snap1", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, csResp.Success)
 
-	lsResp, err := srv.ListSnapshots(ctx, &sdspb.ListSnapshotsRequest{Volume: "vg0/res1_data", Node: "n1"})
+	lsResp, err := srv.ListSnapshots(ctx, &haifypb.ListSnapshotsRequest{Volume: "vg0/res1_data", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, lsResp.Success)
 
-	dsResp, err := srv.DeleteSnapshot(ctx, &sdspb.DeleteSnapshotRequest{Volume: "vg0/res1_data", SnapshotName: "snap1", Node: "n1"})
+	dsResp, err := srv.DeleteSnapshot(ctx, &haifypb.DeleteSnapshotRequest{Volume: "vg0/res1_data", SnapshotName: "snap1", Node: "n1"})
 	require.NoError(t, err)
 	assert.True(t, dsResp.Success)
 }
 
 func TestNamingHelpers(t *testing.T) {
-	assert.Equal(t, "sds_vg0", normalizeManagedName("vg0"))
-	assert.Equal(t, "sds_vg0", normalizeManagedName("sds_vg0"))
+	assert.Equal(t, "haify_vg0", normalizeManagedName("vg0"))
+	assert.Equal(t, "haify_vg0", normalizeManagedName("haify_vg0"))
 
 	pt, err := normalizeLVMPoolType("lvm-thin")
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestNamingHelpers(t *testing.T) {
 	_, err = normalizeLVMPoolType("invalid-type")
 	assert.Error(t, err)
 
-	assert.Equal(t, "sds_ds1", normalizeManagedZFSPath("ds1"))
+	assert.Equal(t, "haify_ds1", normalizeManagedZFSPath("ds1"))
 
 	bytes, err := parseByteCount("1073741824")
 	require.NoError(t, err)

@@ -45,7 +45,7 @@ func waitReady(s Spec, b Binaries) string {
 	return "+/bin/sh -c '" + systemdEscape(loop) + "'"
 }
 
-// Unit renders sds-app-<name>.service. It has no [Install] section, so it
+// Unit renders haify-app-<name>.service. It has no [Install] section, so it
 // cannot be enabled: only the promoter starts it, after mounting the volume.
 // It also refuses to start when the volume is not mounted, which keeps a
 // stray `systemctl start` from initializing an empty database on a node's
@@ -70,7 +70,7 @@ func Unit(s Spec, b Binaries) string {
 		exec = fmt.Sprintf("%s %s", b.Server, path.Join(l.Conf, "redis.conf"))
 	}
 	return fmt.Sprintf(`# Haify app %[1]s: %[2]s on DRBD resource %[3]s.
-# Written by sds-controller (sds app create). drbd-reactor starts and stops
+# Written by haify-controller (haify app create). drbd-reactor starts and stops
 # this unit through the promoter %[4]s, on the node where %[3]s is
 # Primary; never enable or start it by hand.
 
@@ -94,7 +94,7 @@ LimitNOFILE=65536
 		strings.TrimPrefix(l.Runtime, "/run/"), l.Mount, exec, waitReady(s, b), extra, ReadyTimeout+60)
 }
 
-// PromoterConfig renders /etc/drbd-reactor.d/sds-app-<name>.toml. The chain
+// PromoterConfig renders /etc/drbd-reactor.d/haify-app-<name>.toml. The chain
 // is mount, database, service IP: the address comes up last, once the
 // database answers, and goes first, so a client never reaches a node whose
 // database is still starting or already stopping.
@@ -105,7 +105,7 @@ func PromoterConfig(s Spec, device string) (string, error) {
 	}
 	l := LayoutFor(s.Name)
 	return fmt.Sprintf(`# drbd-reactor promoter for the Haify app %[1]s (%[2]s).
-# Written by sds-controller (sds app create); remove it with sds app delete.
+# Written by haify-controller (haify app create); remove it with haify app delete.
 
 [[promoter]]
 [promoter.resources.%[3]s]

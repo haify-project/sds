@@ -1,4 +1,4 @@
-export const SELF_HA_RESOURCE = 'sds-meta';
+export const SELF_HA_RESOURCE = 'haify-meta';
 
 /** Self-HA enable/disable failures often manifest as fetch errors while the
  * controller restarts under drbd-reactor. Surface those as informational. */

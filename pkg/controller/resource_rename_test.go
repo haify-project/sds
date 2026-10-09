@@ -8,18 +8,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 func TestRenameInConfig(t *testing.T) {
-	conf := "resource pve-100-0 {\n    volume 0 {\n        disk      /dev/sds_vg0/pve-100-0_data;\n    }\n" +
+	conf := "resource pve-100-0 {\n    volume 0 {\n        disk      /dev/haify_vg0/pve-100-0_data;\n    }\n" +
 		"    on n1 {\n        address 10.0.0.1:7000;\n    }\n}\n"
 	out, err := renameInConfig(conf, "pve-100-0", "pve-base-100-0",
 		map[string]string{"pve-100-0_data": "pve-base-100-0_data"})
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(out, "resource pve-base-100-0 {"))
-	assert.Contains(t, out, "/dev/sds_vg0/pve-base-100-0_data;")
+	assert.Contains(t, out, "/dev/haify_vg0/pve-base-100-0_data;")
 	assert.NotContains(t, out, "pve-100-0_data")
 
 	_, err = renameInConfig(conf, "other", "x", nil)
@@ -34,7 +34,7 @@ func renameFixture(t *testing.T) (*Controller, *fakeDeploymentClient, *[]string)
 	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 		cmds = append(cmds, cmd)
 		if strings.HasPrefix(cmd, "cat /etc/drbd.d/") {
-			return successExecResult(hosts, "resource old {\n    volume 0 {\n        disk /dev/sds_vg0/old_data;\n    }\n}\n"), nil
+			return successExecResult(hosts, "resource old {\n    volume 0 {\n        disk /dev/haify_vg0/old_data;\n    }\n}\n"), nil
 		}
 		return successExecResult(hosts, ""), nil
 	}
@@ -44,7 +44,7 @@ func renameFixture(t *testing.T) (*Controller, *fakeDeploymentClient, *[]string)
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "old", Port: 7000, Nodes: "n1,n2",
 		Labels: map[string]string{pveManagedByLabel: "pve"}}))
 	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{ResourceName: "old", VolumeName: "old_data",
-		Pool: "sds_vg0", SizeGB: 2, Device: "/dev/sds_vg0/old_data"}))
+		Pool: "haify_vg0", SizeGB: 2, Device: "/dev/haify_vg0/old_data"}))
 	return ctrl, dep, &cmds
 }
 
@@ -57,7 +57,7 @@ func TestRenameResource(t *testing.T) {
 
 	joined := strings.Join(*cmds, "\n")
 	down := strings.Index(joined, "drbdadm down old")
-	lvrename := strings.Index(joined, "lvrename sds_vg0 old_data new_data")
+	lvrename := strings.Index(joined, "lvrename haify_vg0 old_data new_data")
 	up := strings.Index(joined, "drbdadm up new")
 	require.True(t, down >= 0 && lvrename > down && up > lvrename, joined)
 
@@ -69,7 +69,7 @@ func TestRenameResource(t *testing.T) {
 	vols, _ := ctrl.db.ListVolumes(ctx, "new")
 	require.Len(t, vols, 1)
 	assert.Equal(t, "new_data", vols[0].VolumeName)
-	assert.Equal(t, "/dev/sds_vg0/new_data", vols[0].Device)
+	assert.Equal(t, "/dev/haify_vg0/new_data", vols[0].Device)
 }
 
 func TestRenameRefusesWhatRefersToTheName(t *testing.T) {

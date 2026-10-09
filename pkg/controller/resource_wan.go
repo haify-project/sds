@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 
 // wanConfig carries the WAN-replication parameters for a resource. When non-nil,
 // generateDrbdConfig emits the opt-in WAN variant: protocol A, DRBD-level
 // pull-ahead, and loopback-routed addresses so DRBD talks to the local
-// per-resource sds-proxy instead of the peer's real IP. Nil ⇒ ordinary LAN
+// per-resource haify-proxy instead of the peer's real IP. Nil ⇒ ordinary LAN
 // config (unchanged). See docs/design/wan-replication.md.
 type wanConfig struct {
 	DRNode string // the DR-site node
@@ -61,16 +61,16 @@ const wanDRBDBindOffset = 100
 // multiPrimary reports whether the primary site holds more than one replica.
 func (w *wanConfig) multiPrimary() bool { return w != nil && len(w.PrimaryNodes) > 1 }
 
-// wanproxyLocalBinaryPath is the controller-local path to the sds-proxy binary
+// wanproxyLocalBinaryPath is the controller-local path to the haify-proxy binary
 // the WAN provisioner pushes to both nodes. We follow the same convention as
-// the service-ip / sds-controller helpers: a well-known /usr/local/bin path.
-var wanproxyLocalBinaryPath = "/usr/local/bin/sds-proxy"
+// the service-ip / haify-controller helpers: a well-known /usr/local/bin path.
+var wanproxyLocalBinaryPath = "/usr/local/bin/haify-proxy"
 
-// wanproxyBinaryPath returns the controller-local sds-proxy binary to push to
+// wanproxyBinaryPath returns the controller-local haify-proxy binary to push to
 // the WAN nodes, or "" when it is not present locally. Returning "" makes
 // wanproxy.Provision skip the binary push and assume the binary was pre-staged
 // on the nodes (a warning is logged) rather than failing the create outright —
-// most fleets stage sds-proxy alongside drbd-utils via their image/package.
+// most fleets stage haify-proxy alongside drbd-utils via their image/package.
 //
 // This is the architecture-blind answer, kept for callers that push to a single
 // known-compatible node. Anything pushing to a set of nodes should use
@@ -88,7 +88,7 @@ var wanproxyLocalBinaryPath = "/usr/local/bin/sds-proxy"
 //nolint:unused // deliberately retained; see the note above.
 func (rm *ResourceManager) wanproxyBinaryPath() string {
 	if _, err := os.Stat(wanproxyLocalBinaryPath); err != nil {
-		rm.controller.logger.Warn("sds-proxy binary not found on controller; assuming it is pre-staged on WAN nodes",
+		rm.controller.logger.Warn("haify-proxy binary not found on controller; assuming it is pre-staged on WAN nodes",
 			zap.String("path", wanproxyLocalBinaryPath))
 		return ""
 	}
@@ -99,7 +99,7 @@ func (rm *ResourceManager) wanproxyBinaryPath() string {
 const nodeArchProbe = `case "$(uname -m)" in x86_64) echo amd64;; aarch64|arm64) echo arm64;; *) uname -m;; esac`
 
 // wanproxyBinaryResolver returns a function that picks the controller-local
-// sds-proxy binary appropriate to each node.
+// haify-proxy binary appropriate to each node.
 //
 // Pushing one file to every node is right only while the fleet is uniform, and
 // a two-site cluster is the case least likely to be: an arm64 machine at home
@@ -109,7 +109,7 @@ const nodeArchProbe = `case "$(uname -m)" in x86_64) echo amd64;; aarch64|arm64)
 // DRBD connection that never forms.
 //
 // Per-architecture binaries are looked for beside the default path, named
-// "<path>-<goarch>" (e.g. /usr/local/bin/sds-proxy-arm64). A node whose
+// "<path>-<goarch>" (e.g. /usr/local/bin/haify-proxy-arm64). A node whose
 // architecture matches the controller's own falls back to the plain path, which
 // keeps every existing single-architecture deployment working untouched.
 func (rm *ResourceManager) wanproxyBinaryResolver(ctx context.Context, hosts []string) func(string) string {
@@ -137,7 +137,7 @@ func (rm *ResourceManager) wanproxyBinaryResolver(ctx context.Context, hosts []s
 		if (a == runtime.GOARCH || a == "") && fileExists(wanproxyLocalBinaryPath) {
 			return wanproxyLocalBinaryPath
 		}
-		rm.controller.logger.Warn("No sds-proxy binary on the controller for this node's architecture; assuming it is pre-staged",
+		rm.controller.logger.Warn("No haify-proxy binary on the controller for this node's architecture; assuming it is pre-staged",
 			zap.String("host", host), zap.String("arch", a),
 			zap.String("looked_for", wanproxyLocalBinaryPath+"-"+a))
 		return ""
@@ -190,12 +190,12 @@ func (rm *ResourceManager) wanEndpointAddrs(dbRes *database.Resource) (primaryAd
 }
 
 // WANStatusInfo carries a WAN resource's DR endpoints and the live
-// sds-proxy@<resource> unit state on each WAN node (keyed by node name).
+// haify-proxy@<resource> unit state on each WAN node (keyed by node name).
 type WANStatusInfo struct {
 	DRNode     string
 	DREndpoint string
 	WANPort    int
-	// ProxyState maps a node name to its `systemctl is-active sds-proxy@<res>`
+	// ProxyState maps a node name to its `systemctl is-active haify-proxy@<res>`
 	// result ("active" / "inactive" / "failed" / "unknown").
 	ProxyState map[string]string
 	// WANReachable is true when the primary can currently reach the DR WAN
@@ -209,7 +209,7 @@ type WANStatusInfo struct {
 }
 
 // WANStatus returns the WAN replication view for a resource, or (nil, nil) for a
-// LAN resource (WANMode false / no record). It probes the sds-proxy unit on the
+// LAN resource (WANMode false / no record). It probes the haify-proxy unit on the
 // primary and DR nodes so `resource status` can surface proxy health.
 func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStatusInfo, error) {
 	if rm.controller.db == nil {
@@ -228,7 +228,7 @@ func (rm *ResourceManager) WANStatus(ctx context.Context, name string) (*WANStat
 	_, drAddr := rm.wanEndpointAddrs(dbRes)
 
 	// One leg per primary-site replica, each its own systemd instance. Probing
-	// only "sds-proxy@<resource>" reports every leg of a multi-replica resource
+	// only "haify-proxy@<resource>" reports every leg of a multi-replica resource
 	// as inactive, because that unit name only exists in the single-replica
 	// shape.
 	primaryNodes := make([]string, 0, 4)
@@ -371,10 +371,10 @@ func localSiteVoters(allMembers int) int {
 	return allMembers - 1
 }
 
-// wanProxySpecFor rebuilds the sds-proxy spec for a stored WAN resource so its
+// wanProxySpecFor rebuilds the haify-proxy spec for a stored WAN resource so its
 // live status can be queried. The primary is the resource node that is not the
 // DR node.
-// wanMultiSpecFor rebuilds the full multi-leg sds-proxy spec for a stored WAN
+// wanMultiSpecFor rebuilds the full multi-leg haify-proxy spec for a stored WAN
 // resource so its live status can be queried.
 //
 // It must mirror what provisioning built, because leg names and ports are
@@ -384,7 +384,7 @@ func localSiteVoters(allMembers int) int {
 // This replaced a version that collapsed the resource to a single ProxySpec
 // named after the resource with an arbitrary node as "the primary". Once a WAN
 // resource has more than one primary-site replica, the real units are
-// sds-proxy@<resource>_<node>, so that spec named a unit present on no node and
+// haify-proxy@<resource>_<node>, so that spec named a unit present on no node and
 // reported a perfectly healthy WAN as entirely down.
 func (rm *ResourceManager) wanMultiSpecFor(dbRes *database.Resource) wanproxy.MultiSpec {
 	var primaries, primaryNames []string

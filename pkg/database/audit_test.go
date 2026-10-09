@@ -78,7 +78,7 @@ func TestAuditFilters(t *testing.T) {
 	db := auditDB(t)
 	old := time.Now().Add(-2 * time.Hour)
 	appendEvents(t, db,
-		&AuditEvent{Method: "EvictHa", Target: "sds-meta", User: "alice", Result: "OK", Timestamp: old},
+		&AuditEvent{Method: "EvictHa", Target: "haify-meta", User: "alice", Result: "OK", Timestamp: old},
 		&AuditEvent{Method: "DeletePool", Target: "vg0", User: "bob", Result: "PermissionDenied", Timestamp: time.Now()},
 		&AuditEvent{Method: "EvictHa", Target: "openclaw", User: "alice", Result: "OK", Timestamp: time.Now()},
 	)
@@ -165,11 +165,11 @@ func TestAuditEventRoundTrip(t *testing.T) {
 		Method:    "EvictHa",
 		Client:    "175.152.6.49",
 		User:      "alice",
-		Target:    "sds-meta",
+		Target:    "haify-meta",
 		Result:    "OK",
 		Granted:   true,
 		Latency:   1044 * time.Millisecond,
-		Node:      "sds-e",
+		Node:      "haify-e",
 	})
 
 	events, _, err := db.ListAuditEvents(context.Background(), AuditFilter{})
@@ -179,8 +179,8 @@ func TestAuditEventRoundTrip(t *testing.T) {
 	assert.True(t, got.Timestamp.Equal(now))
 	assert.Equal(t, "175.152.6.49", got.Client)
 	assert.Equal(t, "alice", got.User)
-	assert.Equal(t, "sds-meta", got.Target)
+	assert.Equal(t, "haify-meta", got.Target)
 	assert.True(t, got.Granted)
 	assert.Equal(t, 1044*time.Millisecond, got.Latency)
-	assert.Equal(t, "sds-e", got.Node)
+	assert.Equal(t, "haify-e", got.Node)
 }

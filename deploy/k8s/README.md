@@ -1,19 +1,19 @@
 # Haify CSI Driver
 
-Driver name: `sds.csi.liliang-cn.com`. Everything is deployed into
-`kube-system` except the optional Copilot RBAC (`60-sds-ai-apps-rbac.yaml`,
-namespace `sds-ai`).
+Driver name: `haify.csi.liliang-cn.com`. Everything is deployed into
+`kube-system` except the optional Copilot RBAC (`60-haify-ai-apps-rbac.yaml`,
+namespace `haify-ai`).
 
 | File | What it creates |
 | ---- | --------------- |
 | `00-csidriver.yaml` | `CSIDriver` (`attachRequired: false`, `storageCapacity: true`, `fsGroupPolicy: File`) |
-| `00-sds-controller-endpoint.yaml` | Selectorless `Service` + manual `Endpoints` pointing at the external sds-controller |
-| `10-rbac.yaml` | ServiceAccounts `sds-csi-controller`, `sds-csi-node`; ClusterRoles for provisioner, snapshotter, resizer and the health reporter |
-| `20-controller.yaml` | Deployment `sds-csi-controller`: csi-provisioner, csi-resizer, csi-snapshotter, plugin (`csi-controller`), livenessprobe |
-| `30-node.yaml` | DaemonSet `sds-csi-node`: node-driver-registrar, plugin (`csi-node`, privileged) |
-| `40-storageclass.yaml` | StorageClass `sds-drbd` |
-| `50-volumesnapshotclass.yaml` | VolumeSnapshotClass `sds-drbd-snapshot` (needs the snapshot CRDs, see below) |
-| `60-sds-ai-apps-rbac.yaml` | ServiceAccount + token Secret for the Haify Copilot's `sds_k8s_app_create` tool |
+| `00-haify-controller-endpoint.yaml` | Selectorless `Service` + manual `Endpoints` pointing at the external haify-controller |
+| `10-rbac.yaml` | ServiceAccounts `haify-csi-controller`, `haify-csi-node`; ClusterRoles for provisioner, snapshotter, resizer and the health reporter |
+| `20-controller.yaml` | Deployment `haify-csi-controller`: csi-provisioner, csi-resizer, csi-snapshotter, plugin (`csi-controller`), livenessprobe |
+| `30-node.yaml` | DaemonSet `haify-csi-node`: node-driver-registrar, plugin (`csi-node`, privileged) |
+| `40-storageclass.yaml` | StorageClass `haify-drbd` |
+| `50-volumesnapshotclass.yaml` | VolumeSnapshotClass `haify-drbd-snapshot` (needs the snapshot CRDs, see below) |
+| `60-haify-ai-apps-rbac.yaml` | ServiceAccount + token Secret for the Haify Copilot's `haify_k8s_app_create` tool |
 
 ## Prerequisites
 
@@ -21,39 +21,39 @@ namespace `sds-ai`).
   DRBD 9 kernel module and `drbd-utils`, and LVM or ZFS. **The Kubernetes node
   name must equal the Haify node name**: the node plugin reports
   `spec.nodeName` as its topology, and the controller plugin matches it against
-  `sds node list`. At startup the node plugin registers its node with the
+  `haify node list`. At startup the node plugin registers its node with the
   controller under that name and `status.hostIP` (`--node-name`/`--node-ip`,
   from `NODE_NAME`/`NODE_IP`); registration is idempotent, and the controller
   still needs SSH to that address.
 - The Haify pool named in the StorageClass exists on at least `replicas` of
-  those nodes (`sds pool create --name vg0 ...`).
+  those nodes (`haify pool create --name vg0 ...`).
 
 ## Build the image
 
-Both plugin containers use `sds-csi:latest` with `imagePullPolicy: IfNotPresent`,
+Both plugin containers use `haify-csi:latest` with `imagePullPolicy: IfNotPresent`,
 so the image must exist on every node or be pushed to a registry you then put
 in `20-controller.yaml` / `30-node.yaml`:
 
-    docker build -f Dockerfile.csi -t sds-csi:latest .
-    docker save sds-csi:latest | sudo k3s ctr images import -    # on each k3s node
+    docker build -f Dockerfile.csi -t haify-csi:latest .
+    docker save haify-csi:latest | sudo k3s ctr images import -    # on each k3s node
 
 `Dockerfile.csi` cross-compiles for `--platform`, so `docker buildx build
 --platform linux/amd64,linux/arm64 ...` works from either architecture.
 
-## Point the CSI at your sds-controller VIP
+## Point the CSI at your haify-controller VIP
 
-The sds-controller runs **outside** the cluster on the storage hosts, HA'd
-behind a floating VIP. `00-sds-controller-endpoint.yaml` ships a selectorless
-`Service` named `sds-controller` (port `3374`, named `grpc`) plus a manual
-`Endpoints` carrying the VIP, so the in-cluster name `sds-controller:3374`
+The haify-controller runs **outside** the cluster on the storage hosts, HA'd
+behind a floating VIP. `00-haify-controller-endpoint.yaml` ships a selectorless
+`Service` named `haify-controller` (port `3374`, named `grpc`) plus a manual
+`Endpoints` carrying the VIP, so the in-cluster name `haify-controller:3374`
 reaches the external controller.
 
 **You must set the VIP.** Replace the `192.0.2.10` placeholder (marked
 `# CHANGE ME`) with your real VIP, shown as `VIP:` in:
 
-    sds ha self status
+    haify ha self status
 
-The plugins' `--sds-controller=sds-controller:3374` (also the binaries'
+The plugins' `--haify-controller=haify-controller:3374` (also the binaries'
 default) then resolves without editing the Deployment or DaemonSet. An
 `ExternalName` Service will not work here: the target is an IP, not a DNS name.
 
@@ -70,13 +70,13 @@ Then:
 
 | Parameter | Default | Meaning |
 | --------- | ------- | ------- |
-| `pool` | required unless `resourceProfile` sets it | Haify pool name as given to `sds pool create --name` (`vg0` and `sds_vg0` both match) |
+| `pool` | required unless `resourceProfile` sets it | Haify pool name as given to `haify pool create --name` (`vg0` and `haify_vg0` both match) |
 | `replicas` | `2` | Diskful copies |
 | `storageType` | `lvm` | `lvm` or `zfs` |
 | `allowRemoteVolumeAccess` | `false` | `true` lets a Pod run on a node with no replica: the node plugin attaches a diskless DRBD client there at stage time and detaches it at unstage. Without it, Pods are pinned to replica nodes |
-| `faultDomainLabel` | `host` | Haify node label whose values replicas are spread across (`sds node label <node> host=<name>`); nodes without the label count as their own domain |
+| `faultDomainLabel` | `host` | Haify node label whose values replicas are spread across (`haify node label <node> host=<name>`); nodes without the label count as their own domain |
 | `resourceProfile` | none | Haify resource profile; its pool, replica count and storage type apply unless the StorageClass sets them explicitly |
-| `resourceLabels` | none | `key=value,key=value` labels put on the Haify resource. `sds.csi/managed-by=csi` is always added |
+| `resourceLabels` | none | `key=value,key=value` labels put on the Haify resource. `haify.csi/managed-by=csi` is always added |
 
 Placement: the node the scheduler picked (`WaitForFirstConsumer` with
 `--strict-topology`) is seated first, the rest go to the nodes whose pool has
@@ -115,7 +115,7 @@ orchestrate.
 
 Snapshots live on individual storage nodes with no cluster-wide index, so
 `ListSnapshots` walks the driver's volumes and asks each replica node. Only
-snapshots the driver created (`sdssnap_*`) are listed; the controller's own
+snapshots the driver created (`haifysnap_*`) are listed; the controller's own
 scheduled snapshots of the same LV are not.
 
 ### Cluster prerequisites (install once)
@@ -142,7 +142,7 @@ apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshot
 metadata: { name: data-snap }
 spec:
-  volumeSnapshotClassName: sds-drbd-snapshot
+  volumeSnapshotClassName: haify-drbd-snapshot
   source:
     persistentVolumeClaimName: data
 ```
@@ -214,17 +214,17 @@ Only controller-managed pods (Deployment, StatefulSet) are recreated. A bare
 
 ## Haify Copilot access (optional)
 
-`60-sds-ai-apps-rbac.yaml` lets `sds-ai` create databases on Haify volumes
-(the `sds_k8s_app_create` tool). It may create namespaces, Secrets, PVCs, Services
+`60-haify-ai-apps-rbac.yaml` lets `haify-ai` create databases on Haify volumes
+(the `haify_k8s_app_create` tool). It may create namespaces, Secrets, PVCs, Services
 and Deployments and read Pods, PVs and StorageClasses; it cannot update or
-delete anything. sds-ai runs outside the cluster and reads its kubeconfig from
-`SDS_AI_KUBECONFIG`. Build one from the token Secret:
+delete anything. haify-ai runs outside the cluster and reads its kubeconfig from
+`HAIFY_AI_KUBECONFIG`. Build one from the token Secret:
 
 ```bash
-TOKEN=$(kubectl -n sds-ai get secret sds-ai-token -o jsonpath='{.data.token}' | base64 -d)
-kubectl config view --minify --raw --flatten > sds-ai.kubeconfig
-KUBECONFIG=sds-ai.kubeconfig kubectl config set-credentials sds-ai --token="$TOKEN"
-KUBECONFIG=sds-ai.kubeconfig kubectl config set-context --current --user=sds-ai
+TOKEN=$(kubectl -n haify-ai get secret haify-ai-token -o jsonpath='{.data.token}' | base64 -d)
+kubectl config view --minify --raw --flatten > haify-ai.kubeconfig
+KUBECONFIG=haify-ai.kubeconfig kubectl config set-credentials haify-ai --token="$TOKEN"
+KUBECONFIG=haify-ai.kubeconfig kubectl config set-context --current --user=haify-ai
 ```
 
 Without `storageClass` in the request, it picks a Haify StorageClass that does

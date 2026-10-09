@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Adding a replica while a member is away.

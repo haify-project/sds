@@ -23,16 +23,16 @@ func checkGateways(in *Input) []Check {
 		if !ok {
 			out = append(out, Check{ID: "gateway.orphan", Area: AreaGateways, Subject: g.Resource, Status: StatusFail,
 				Message: fmt.Sprintf("%s gateway is recorded as %s but its resource %s does not exist", g.Type, g.Status, g.Resource),
-				Fix:     fmt.Sprintf("sds gateway delete --resource %s", g.Resource)})
+				Fix:     fmt.Sprintf("haify gateway delete --resource %s", g.Resource)})
 			continue
 		}
 		why := fmt.Sprintf("%s gateway, %s", g.Type, orDash(g.Status))
 		out = append(out, primaryCheck(in, r, AreaGateways, "gateway", why,
-			fmt.Sprintf("sds gateway start --resource %s", g.Resource))...)
+			fmt.Sprintf("haify gateway start --resource %s", g.Resource))...)
 		// Start re-enables a .disabled config and retires one left on a node
 		// without a replica.
-		out = append(out, promoterChecks(in, r, AreaGateways, "gateway", fmt.Sprintf("sds-%s-%s.toml", g.Type, g.Resource),
-			fmt.Sprintf("sds gateway start --resource %s", g.Resource))...)
+		out = append(out, promoterChecks(in, r, AreaGateways, "gateway", fmt.Sprintf("haify-%s-%s.toml", g.Type, g.Resource),
+			fmt.Sprintf("haify gateway start --resource %s", g.Resource))...)
 	}
 	if len(out) == 0 && serving == 0 {
 		msg := "no gateways"
@@ -74,7 +74,7 @@ func promoterChecks(in *Input, r Resource, area Area, prefix, file, fix string) 
 					Message: fmt.Sprintf("%s is the off-site DR node of %s and has its promoter config: drbd-reactor can promote "+
 						"its asynchronous copy, which may be behind, without anyone deciding to fail over", name, r.Name),
 					Evidence: []string{"/etc/drbd-reactor.d/" + file + " present on " + name},
-					Fix:      "sds resource repair " + r.Name})
+					Fix:      "haify resource repair " + r.Name})
 			}
 			continue
 		}

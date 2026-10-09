@@ -28,7 +28,7 @@ func sanitizeResourceName(in string) string {
 // ("Names starting \"snapshot\" are reserved"), and Kubernetes names every
 // VolumeSnapshot "snapshot-<uuid>" — so the sanitized name would be rejected on
 // the node without this prefix.
-const snapshotNamePrefix = "sdssnap_"
+const snapshotNamePrefix = "haifysnap_"
 
 // sanitizeSnapshotName maps a CSI snapshot name (typically "snapshot-<uuid>") to
 // a name that LVM and ZFS both accept. The result is embedded in the CSI

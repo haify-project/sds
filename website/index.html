@@ -3,30 +3,30 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Haify · 软件定义存储 · 支持国产芯片</title>
-<meta name="description" content="Haify 是一套基于 DRBD 的软件定义存储,支持国产 CPU(鲲鹏/飞腾/龙芯)与国产操作系统(麒麟/统信):强一致同步复制、智能放置、自动高可用、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI,源码自主可控。" />
+<title>Haify · 软件定义存储</title>
+<meta name="description" content="Haify 是一套软件定义存储:每份数据同时写在多台服务器上,坏一台机器不丢数据、一分钟左右自动接管;提供 NFS/iSCSI/NVMe-oF 网关、Proxmox VE 存储插件与 Kubernetes CSI。" />
 <meta name="robots" content="index, follow, max-image-preview:large" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="mask-icon" href="/favicon.svg" color="#44e0ad" />
 <link rel="apple-touch-icon" href="/favicon.svg" />
 <meta name="theme-color" content="#0a0e15" media="(prefers-color-scheme: dark)" />
 <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" />
-<meta name="keywords" content="软件定义存储,Haify,DRBD,国产CPU,信创,鲲鹏,飞腾,龙芯,麒麟,统信,Kubernetes CSI,高可用,块存储,自主可控" />
+<meta name="keywords" content="软件定义存储,Haify,DRBD,高可用,块存储,同步复制,Proxmox VE,Kubernetes CSI,NFS,iSCSI,NVMe-oF" />
 <link rel="canonical" href="https://sds.superleo.cn/" />
 <!-- Open Graph -->
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Haify 软件定义存储" />
 <meta property="og:locale" content="zh_CN" />
-<meta property="og:title" content="Haify · 支持国产芯片的软件定义存储" />
-<meta property="og:description" content="基于 DRBD 的软件定义存储:强一致同步复制、智能放置、自动高可用、多协议网关与 Kubernetes CSI,全栈运行在国产 CPU 与国产操作系统上。" />
+<meta property="og:title" content="Haify · 坏一台机器,数据不丢" />
+<meta property="og:description" content="每份数据同时写在多台服务器上:坏一台机器不丢数据,一分钟左右自动接管。多协议网关、Proxmox VE 与 Kubernetes CSI。" />
 <meta property="og:url" content="https://sds.superleo.cn/" />
 <meta property="og:image" content="https://sds.superleo.cn/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Haify · 支持国产芯片的软件定义存储" />
-<meta name="twitter:description" content="基于 DRBD 的软件定义存储:强一致同步复制、自动高可用、多协议网关与 Kubernetes CSI,支持国产 CPU 与国产 OS。" />
+<meta name="twitter:title" content="Haify · 坏一台机器,数据不丢" />
+<meta name="twitter:description" content="每份数据同时写在多台服务器上:坏一台机器不丢数据,一分钟左右自动接管。多协议网关、Proxmox VE 与 Kubernetes CSI。" />
 <meta name="twitter:image" content="https://sds.superleo.cn/og.png" />
 <script>
-  (function(){try{var t=localStorage.getItem('sds-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+  (function(){try{var t=localStorage.getItem('haify-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
 <!--
   没有网络字体,故意的。这个页面的读者在国内,而 fonts.googleapis.com 那条
@@ -227,8 +227,8 @@
       "applicationCategory": "StorageApplication",
       "applicationSubCategory": "Software-Defined Storage",
       "operatingSystem": "Linux (Kylin, UnionTech UOS)",
-      "processorRequirements": "aarch64 (鲲鹏/飞腾), loongarch (龙芯), x86_64",
-      "description": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI,全栈运行在国产 CPU 与国产操作系统上,源码自主可控。",
+      "processorRequirements": "x86_64, aarch64, loongarch64",
+      "description": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。",
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY", "description": "私有化 · 源码交付" },
       "featureList": [
         "基于 DRBD 的强一致同步多副本复制",
@@ -238,18 +238,17 @@
         "NFS / iSCSI / NVMe-oF 多协议网关",
         "Kubernetes CSI 动态供给与拓扑感知调度",
         "卷快照与定时快照",
-        "WAN 跨数据中心异步复制容灾",
-        "支持鲲鹏、飞腾、龙芯国产 CPU 与麒麟、统信国产操作系统"
+        "WAN 跨数据中心异步复制容灾"
       ]
     },
     {
       "@type": "FAQPage",
       "mainEntity": [
-        { "@type": "Question", "name": "Haify 是什么?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。它全栈运行在国产 CPU 与国产操作系统上,源码自主可控。" } },
-        { "@type": "Question", "name": "Haify 支持哪些国产 CPU 和操作系统?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 已在鲲鹏、飞腾(aarch64)与龙芯(loongarch)等国产 CPU 上端到端验证,操作系统覆盖麒麟(Kylin)与统信 UOS。从内核复制到控制面的整条链路,均可在完全离线的国产化环境中独立运行。" } },
-        { "@type": "Question", "name": "Haify 和 Ceph、LINSTOR 有什么区别?", "acceptedAnswer": { "@type": "Answer", "text": "与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 原生适配国产 CPU 与操作系统并提供本地化交付,而 LINSTOR 是国外项目、未适配国产平台。" } },
+        { "@type": "Question", "name": "Haify 是什么?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。" } },
+        { "@type": "Question", "name": "Haify 能跑在哪些平台上?", "acceptedAnswer": { "@type": "Answer", "text": "CPU 支持 x86_64、aarch64(含鲲鹏、飞腾)与 loongarch64(龙芯);操作系统支持 Debian、Ubuntu、RHEL 系以及麒麟、统信 UOS。可在完全离线的环境中部署。" } },
+        { "@type": "Question", "name": "Haify 和 Ceph、LINSTOR 有什么区别?", "acceptedAnswer": { "@type": "Answer", "text": "与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 不需要在每个存储节点上常驻代理进程,控制面通过 SSH 直接管理节点。" } },
         { "@type": "Question", "name": "Haify 的高可用如何工作?故障切换多快?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。" } },
-        { "@type": "Question", "name": "Haify 支持 Kubernetes 吗?", "acceptedAnswer": { "@type": "Answer", "text": "支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。该能力已在国产芯片(arm64)k3s 集群上端到端验证。" } },
+        { "@type": "Question", "name": "Haify 支持 Kubernetes 吗?", "acceptedAnswer": { "@type": "Answer", "text": "支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。已在 x86_64 与 aarch64 的 k3s 集群上端到端验证。" } },
         { "@type": "Question", "name": "Haify 的数据是怎么复制的?会丢数据吗?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。" } }
       ]
     }
@@ -271,7 +270,6 @@
     </div>
     <div class="nav-right">
       <div class="nav-links">
-        <a href="#control">自主可控</a>
         <a href="#features">能力</a>
         <a href="#arch">架构</a>
         <a href="#compare">对比</a>
@@ -290,11 +288,11 @@
 <main>
 <header>
   <div class="wrap">
-    <p class="eyebrow rv">软件定义存储 · <b>支持国产 CPU 与国产 OS</b> · 源码自主可控</p>
-    <h1 class="rv" style="transition-delay:.05s">把块存储,<br>建在<span class="em">国产芯片</span>上。</h1>
+    <p class="eyebrow rv">软件定义存储 · <b>同步复制 · 自动接管</b> · 开源</p>
+    <h1 class="rv" style="transition-delay:.05s">坏一台机器,<br>数据<span class="em">一点不丢</span>。</h1>
     <p class="lede rv" style="transition-delay:.12s">
-      Haify 是一套基于 DRBD 的软件定义存储控制面。<b>强一致同步复制、智能放置、自动故障切换、多协议网关与 Kubernetes CSI</b>——
-      全栈运行在国产 CPU 与国产操作系统上。
+      Haify 把每份数据同时写在多台服务器上。一台坏了,另一台在一分钟左右接手,
+      <b>虚拟机、数据库和 Kubernetes 应用</b>接着跑。
     </p>
     <div class="cta-row rv" style="transition-delay:.18s">
       <a class="btn btn-solid" href="#start">▸ 快速部署</a>
@@ -302,7 +300,7 @@
     </div>
 
     <div class="facts rv" style="transition-delay:.24s">
-      <div><div class="n"><b>3+</b></div><div class="l">国产 CPU 架构验证</div></div>
+      <div><div class="n"><b>&lt;0.1</b>s</div><div class="l">虚拟机热迁移停顿</div></div>
       <div><div class="n"><b>~70</b>s</div><div class="l">硬故障自动接管</div></div>
       <div><div class="n"><b>0</b></div><div class="l">故障切换数据丢失</div></div>
       <div><div class="n"><b>3</b></div><div class="l">网关协议 NFS/iSCSI/NVMe</div></div>
@@ -350,30 +348,10 @@
   </div>
 </header>
 
-<section id="control">
-  <div class="wrap">
-    <div class="sec-head rv">
-      <span class="sec-no">01</span>
-      <h2>自主可控,不是贴牌。</h2>
-      <p>从内核模块到控制面,整条链路运行在国产软硬件栈上,源码可审计、可本地交付。</p>
-    </div>
-    <div class="band rv">
-      <i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i>
-      <h3>国产 CPU × 国产 OS,全栈端到端验证。</h3>
-      <p>Haify 不依赖任何境外托管服务或专有云组件。DRBD 内核复制 + 用户态控制器,已在 aarch64 全栈跑通;龙芯平台通过更换加密后端适配。存储、复制、故障切换、网关、CSI——每一层都可在完全离线的国产环境里独立运行。</p>
-      <div class="stack">
-        <div><div class="k">CPU</div><div class="v">鲲鹏 · 飞腾 · 龙芯</div><div class="s">aarch64 / loongarch</div></div>
-        <div><div class="k">OS</div><div class="v">麒麟 · 统信 UOS</div><div class="s">Kylin / UnionTech</div></div>
-        <div><div class="k">交付</div><div class="v">源码 · 私有化</div><div class="s">no vendor lock-in</div></div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <section id="features">
   <div class="wrap">
     <div class="sec-head rv">
-      <span class="sec-no">02</span>
+      <span class="sec-no">01</span>
       <h2>一套控制面,块 · 文件 · 对象接入全覆盖。</h2>
     </div>
     <div class="grid">
@@ -405,7 +383,7 @@
       <div class="card rv" style="transition-delay:.1s"><div class="no">/06</div>
         <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 20V11M12 11l8-4.5M12 11L4 6.5"/></svg></div>
         <h4>Kubernetes CSI</h4><p>动态供给持久卷,拓扑感知调度;节点硬故障后由 node 插件安全提升本地副本并接管,数据完好。arm64 k3s 已验证。</p>
-        <div class="tag">CSI · dynamic provisioning · 国产芯片 k8s</div></div>
+        <div class="tag">CSI · dynamic provisioning · topology-aware</div></div>
 
       <div class="card rv"><div class="no">/07</div>
         <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
@@ -428,19 +406,19 @@
 <section id="arch">
   <div class="wrap">
     <div class="sec-head rv">
-      <span class="sec-no">03</span>
+      <span class="sec-no">02</span>
       <h2>控制面下发,数据面同步。清晰分层。</h2>
       <p>控制器通过 SSH 直接编排存储节点,不在数据路径上,也不常驻 Agent。</p>
     </div>
     <div class="schematic rv" style="margin-top:0">
       <div class="cap"><b>architecture</b> / control plane ⟶ dispatch/SSH ⟶ storage nodes · data plane = DRBD + drbd-reactor</div>
-      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Haify 架构分层图:控制面(sds/Web/CSI → sds-controller gRPC → dispatch/SSH)下发到数据面存储节点(DRBD 内核模块、drbd-reactor promoter、网关 OCF 代理)。">
+      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Haify 架构分层图:控制面(haify/Web/CSI → haify-controller gRPC → dispatch/SSH)下发到数据面存储节点(DRBD 内核模块、drbd-reactor promoter、网关 OCF 代理)。">
         <text x="40" y="40" class="s-mute" font-size="11">CONTROL PLANE</text>
         <rect x="40" y="52" width="200" height="46" rx="3" class="s-box"/>
-        <text x="140" y="80" class="s-ink" font-size="13" text-anchor="middle">sds · Web · CSI</text>
+        <text x="140" y="80" class="s-ink" font-size="13" text-anchor="middle">haify · Web · CSI</text>
         <path d="M240 75 L300 75" class="s-line" marker-end="url(#arw2)"/>
         <rect x="300" y="52" width="220" height="46" rx="3" class="s-box"/>
-        <text x="410" y="80" class="s-ink" font-size="13" text-anchor="middle">sds-controller (gRPC)</text>
+        <text x="410" y="80" class="s-ink" font-size="13" text-anchor="middle">haify-controller (gRPC)</text>
         <path d="M520 75 L590 75" class="s-line" marker-end="url(#arw2)"/>
         <rect x="590" y="52" width="200" height="46" rx="3" class="s-panel"/>
         <text x="690" y="80" class="s-dim" font-size="13" text-anchor="middle">dispatch · SSH</text>
@@ -472,19 +450,19 @@
 <section id="compare">
   <div class="wrap">
     <div class="sec-head rv">
-      <span class="sec-no">04</span>
+      <span class="sec-no">03</span>
       <h2>为什么不用现成的?</h2>
-      <p>同为软件定义存储,在国产芯片支持、运维复杂度与源码可控上的直接对照。</p>
+      <p>同为软件定义存储,在运维复杂度、集成与源码可控上的直接对照。</p>
     </div>
     <div class="rv cmp-scroll">
       <table class="cmp">
         <thead><tr><th></th><th class="us">Haify</th><th>Ceph</th><th>LINSTOR</th><th>商业存储</th></tr></thead>
         <tbody>
-          <tr><td class="feat">国产芯片 / OS 支持</td><td class="us yes">原生适配 · 已验证</td><td class="no">可跑但重</td><td class="no">国外项目 · 未适配国产平台</td><td class="no">少数支持 · 闭源</td></tr>
+          <tr><td class="feat">Proxmox VE 集成</td><td class="us yes">存储插件 · 含界面</td><td class="yes">内置</td><td class="yes">linstor-proxmox</td><td class="no">看厂商</td></tr>
           <tr><td class="feat">运维复杂度</td><td class="us">轻 · 单控制面 + SSH</td><td class="no">高 · MON/OSD/MGR</td><td class="us">中</td><td class="no">黑盒</td></tr>
           <tr><td class="feat">块存储强一致</td><td class="us yes">DRBD 同步</td><td class="yes">RBD</td><td class="yes">DRBD 同步</td><td class="yes">是</td></tr>
           <tr><td class="feat">源码可控 / 可审计</td><td class="us yes">是</td><td class="yes">是</td><td class="yes">是</td><td class="no">否</td></tr>
-          <tr><td class="feat">K8s CSI · 国产芯片</td><td class="us yes">已验证</td><td class="yes">是</td><td class="yes">Piraeus</td><td class="no">看厂商</td></tr>
+          <tr><td class="feat">Kubernetes CSI</td><td class="us yes">已验证</td><td class="yes">是</td><td class="yes">Piraeus</td><td class="no">看厂商</td></tr>
           <tr><td class="feat">本地化交付与支持</td><td class="us yes">私有化 · 中文</td><td class="no">社区为主</td><td class="no">德国厂商</td><td class="us">是 · 但锁定</td></tr>
         </tbody>
       </table>
@@ -495,21 +473,21 @@
 <section id="start">
   <div class="wrap">
     <div class="sec-head rv">
-      <span class="sec-no">05</span>
+      <span class="sec-no">04</span>
       <h2>三条命令,建起一套高可用块存储。</h2>
       <p>从裸盘到跨机架三副本 + NFS 高可用导出。</p>
     </div>
     <div class="code rv">
-      <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>root@node-1 — sds</span></div>
+      <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>root@node-1 — haify</span></div>
 <pre><span class="c"># 1 · 用裸盘建存储池</span>
-sds <span class="p">pool create</span> <span class="f">--name</span> vg0 <span class="f">--node</span> node1 <span class="f">--disks</span> /dev/vdb
+haify <span class="p">pool create</span> <span class="f">--name</span> vg0 <span class="f">--node</span> node1 <span class="f">--disks</span> /dev/vdb
 
 <span class="c"># 2 · 建 DRBD 资源:自动放置,三副本强制跨机架</span>
-sds <span class="p">resource create</span> <span class="f">--name</span> data <span class="f">--size</span> 100G \
+haify <span class="p">resource create</span> <span class="f">--name</span> data <span class="f">--size</span> 100G \
   <span class="f">--replicas</span> <span class="s">3</span> <span class="f">--replicas-on-different</span> <span class="s">rack</span>
 
 <span class="c"># 3 · 导出为高可用 NFS(浮动 VIP 自动跟随主节点)</span>
-sds <span class="p">gateway nfs create</span> <span class="f">--resource</span> data \
+haify <span class="p">gateway nfs create</span> <span class="f">--resource</span> data \
   <span class="f">--service-ip</span> 192.168.1.200/24 <span class="f">--export-path</span> /data
 
 <span class="c"># 就绪 —— 客户端始终访问 VIP,故障时约 70s 自动接管</span>
@@ -525,21 +503,21 @@ sds <span class="p">gateway nfs create</span> <span class="f">--resource</span> 
 <section id="faq">
   <div class="wrap">
     <div class="sec-head rv">
-      <span class="sec-no">06</span>
+      <span class="sec-no">05</span>
       <h2>常见问题</h2>
-      <p>关于 Haify 的定义、国产化支持、高可用与 Kubernetes 的直接回答。</p>
+      <p>关于 Haify 的定义、平台、高可用与 Kubernetes 的直接回答。</p>
     </div>
     <div class="faq">
       <div class="faq-item rv"><h3>Haify 是什么?</h3>
-        <p>Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。它全栈运行在国产 CPU 与国产操作系统上,源码自主可控。</p></div>
-      <div class="faq-item rv"><h3>Haify 支持哪些国产 CPU 和操作系统?</h3>
-        <p>Haify 已在鲲鹏、飞腾(aarch64)与龙芯(loongarch)等国产 CPU 上端到端验证,操作系统覆盖麒麟(Kylin)与统信 UOS。从内核复制到控制面的整条链路,均可在完全离线的国产化环境中独立运行。</p></div>
+        <p>Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。</p></div>
+      <div class="faq-item rv"><h3>Haify 能跑在哪些平台上?</h3>
+        <p>CPU 支持 x86_64、aarch64(含鲲鹏、飞腾)与 loongarch64(龙芯);操作系统支持 Debian、Ubuntu、RHEL 系以及麒麟、统信 UOS。可在完全离线的环境中部署。</p></div>
       <div class="faq-item rv"><h3>Haify 和 Ceph、LINSTOR 有什么区别?</h3>
-        <p>与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 原生适配国产 CPU 与操作系统并提供本地化交付,而 LINSTOR 是国外项目、未适配国产平台。</p></div>
+        <p>与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 不需要在每个存储节点上常驻代理进程,控制面通过 SSH 直接管理节点。</p></div>
       <div class="faq-item rv"><h3>Haify 的高可用如何工作?故障切换多快?</h3>
         <p>Haify 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。</p></div>
       <div class="faq-item rv"><h3>Haify 支持 Kubernetes 吗?</h3>
-        <p>支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。该能力已在国产芯片(arm64)k3s 集群上端到端验证。</p></div>
+        <p>支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。已在 x86_64 与 aarch64 的 k3s 集群上端到端验证。</p></div>
       <div class="faq-item rv"><h3>Haify 的数据是怎么复制的?会丢数据吗?</h3>
         <p>Haify 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。</p></div>
     </div>
@@ -549,7 +527,7 @@ sds <span class="p">gateway nfs create</span> <span class="f">--resource</span> 
 
 <footer>
   <div class="wrap foot">
-    <div>Haify · 软件定义存储 · 支持国产芯片 &nbsp;/&nbsp; DRBD-based Software Defined Storage</div>
+    <div>Haify · 软件定义存储 &nbsp;/&nbsp; Replicated block storage</div>
     <div style="display:flex;gap:26px">
       <a href="#features">能力</a><a href="#arch">架构</a><a href="#start">快速开始</a>
     </div>
@@ -561,7 +539,7 @@ sds <span class="p">gateway nfs create</span> <span class="f">--resource</span> 
   document.getElementById('theme').addEventListener('click',()=>{
     const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
     root.setAttribute('data-theme',next);
-    try{localStorage.setItem('sds-theme',next);}catch(e){}
+    try{localStorage.setItem('haify-theme',next);}catch(e){}
   });
   const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.12,rootMargin:"0px 0px -8% 0px"});
   document.querySelectorAll('.rv').forEach(el=>io.observe(el));

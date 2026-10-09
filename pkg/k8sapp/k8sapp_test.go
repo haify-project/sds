@@ -13,23 +13,23 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func sdsCluster() *Manager {
+func haifyCluster() *Manager {
 	return &Manager{kube: fake.NewClientset(
 		&storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "local-path"}, Provisioner: "rancher.io/local-path"},
-		&storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "sds-drbd-remote"}, Provisioner: sdsDriverName,
+		&storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "haify-drbd-remote"}, Provisioner: haifyDriverName,
 			Parameters: map[string]string{"allowRemoteVolumeAccess": "true"}},
-		&storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "sds-drbd"}, Provisioner: sdsDriverName},
+		&storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "haify-drbd"}, Provisioner: haifyDriverName},
 	)}
 }
 
 func TestMySQLAppFailsOverWithTheVolume(t *testing.T) {
-	m := sdsCluster()
+	m := haifyCluster()
 	ctx := context.Background()
 	got, err := m.Create(ctx, Request{Template: "mysql", Name: "orders", Namespace: "shop"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.StorageClass != "sds-drbd" {
+	if got.StorageClass != "haify-drbd" {
 		t.Errorf("storage class = %q, want the Haify class that keeps data local", got.StorageClass)
 	}
 	if got.Service != "orders.shop.svc:3306" {
@@ -70,7 +70,7 @@ func TestMySQLAppFailsOverWithTheVolume(t *testing.T) {
 	}
 	// RWOP would count the pod left Terminating on a dead node and block the
 	// replacement.
-	if pvc.Spec.AccessModes[0] != corev1.ReadWriteOnce || *pvc.Spec.StorageClassName != "sds-drbd" {
+	if pvc.Spec.AccessModes[0] != corev1.ReadWriteOnce || *pvc.Spec.StorageClassName != "haify-drbd" {
 		t.Errorf("claim %v on %s", pvc.Spec.AccessModes, *pvc.Spec.StorageClassName)
 	}
 	if q := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; q.String() != defaultSize {
@@ -86,7 +86,7 @@ func TestMySQLAppFailsOverWithTheVolume(t *testing.T) {
 }
 
 func TestCreateNeverReplacesAnExistingApp(t *testing.T) {
-	m := sdsCluster()
+	m := haifyCluster()
 	ctx := context.Background()
 	if _, err := m.Create(ctx, Request{Template: "mysql"}); err != nil {
 		t.Fatal(err)
@@ -103,8 +103,8 @@ func TestCreateNeverReplacesAnExistingApp(t *testing.T) {
 	}
 }
 
-func TestStorageClassMustBeSDS(t *testing.T) {
-	m := sdsCluster()
+func TestStorageClassMustBeHaify(t *testing.T) {
+	m := haifyCluster()
 	_, err := m.Create(context.Background(), Request{Template: "postgres", StorageClass: "local-path"})
 	if err == nil || !strings.Contains(err.Error(), "not Haify") {
 		t.Fatalf("err = %v", err)

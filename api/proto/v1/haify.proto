@@ -1,0 +1,3788 @@
+syntax = "proto3";
+
+package v1;
+
+option go_package = "./;v1";
+
+import "google/api/annotations.proto";
+
+// Haify Controller Service
+service HaifyController {
+  // Pool operations
+  rpc CreatePool(CreatePoolRequest) returns (CreatePoolResponse) {
+    option (google.api.http) = { post: "/v1/pools"; body: "*"; };
+  }
+  rpc DeletePool(DeletePoolRequest) returns (DeletePoolResponse) {
+    option (google.api.http) = { delete: "/v1/pools/{name}"; };
+  }
+  rpc GetPool(GetPoolRequest) returns (GetPoolResponse) {
+    option (google.api.http) = { get: "/v1/pools/{name}"; };
+  }
+  rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse) {
+    option (google.api.http) = { get: "/v1/pools"; };
+  }
+  // Storage upkeep: trimming, disks, and long-running storage jobs.
+  rpc TrimPools(TrimPoolsRequest) returns (TrimPoolsResponse) {
+    option (google.api.http) = { post: "/v1/storage/trim"; body: "*"; };
+  }
+  rpc ListPoolDisks(ListPoolDisksRequest) returns (ListPoolDisksResponse) {
+    option (google.api.http) = { get: "/v1/storage/disks"; };
+  }
+  rpc RemovePoolDisk(RemovePoolDiskRequest) returns (StorageJobResponse) {
+    option (google.api.http) = { post: "/v1/storage/disks/remove"; body: "*"; };
+  }
+  rpc ReplacePoolDisk(ReplacePoolDiskRequest) returns (StorageJobResponse) {
+    option (google.api.http) = { post: "/v1/storage/disks/replace"; body: "*"; };
+  }
+  rpc MoveVolume(MoveVolumeRequest) returns (StorageJobResponse) {
+    option (google.api.http) = { post: "/v1/storage/volumes/move"; body: "*"; };
+  }
+  rpc ListStorageJobs(ListStorageJobsRequest) returns (ListStorageJobsResponse) {
+    option (google.api.http) = { get: "/v1/storage/jobs"; };
+  }
+  rpc AddDiskToPool(AddDiskToPoolRequest) returns (AddDiskToPoolResponse) {
+    option (google.api.http) = { post: "/v1/pools/{pool}/disks"; body: "*"; };
+  }
+
+  // Node operations
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes"; body: "*"; };
+  }
+  rpc UnregisterNode(UnregisterNodeRequest) returns (UnregisterNodeResponse) {
+    option (google.api.http) = { delete: "/v1/nodes/{address}"; };
+  }
+  rpc SetNodeLabels(SetNodeLabelsRequest) returns (SetNodeLabelsResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/labels"; body: "*"; };
+  }
+  rpc SetNodeAddress(SetNodeAddressRequest) returns (SetNodeAddressResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/address"; body: "*"; };
+  }
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {
+    option (google.api.http) = { get: "/v1/nodes/{address}"; };
+  }
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse) {
+    option (google.api.http) = { get: "/v1/nodes"; };
+  }
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {
+    option (google.api.http) = { get: "/v1/nodes/{node}/health"; };
+  }
+
+  // Resource operations
+  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources"; body: "*"; };
+  }
+  rpc AdoptResource(AdoptResourceRequest) returns (AdoptResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/adopt"; body: "*"; };
+  }
+  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{name}"; };
+  }
+  rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {
+    option (google.api.http) = { get: "/v1/resources/{name}"; };
+  }
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {
+    option (google.api.http) = { get: "/v1/resources"; };
+  }
+  rpc CreateResourceProfile(CreateResourceProfileRequest) returns (CreateResourceProfileResponse) {
+    option (google.api.http) = { post: "/v1/resource-profiles"; body: "*"; };
+  }
+  rpc GetResourceProfile(GetResourceProfileRequest) returns (GetResourceProfileResponse) {
+    option (google.api.http) = { get: "/v1/resource-profiles/{name}"; };
+  }
+  rpc ListResourceProfiles(ListResourceProfilesRequest) returns (ListResourceProfilesResponse) {
+    option (google.api.http) = { get: "/v1/resource-profiles"; };
+  }
+  rpc DeleteResourceProfile(DeleteResourceProfileRequest) returns (DeleteResourceProfileResponse) {
+    option (google.api.http) = { delete: "/v1/resource-profiles/{name}"; };
+  }
+  rpc SetResourceProfileOptions(SetResourceProfileOptionsRequest) returns (SetResourceProfileOptionsResponse) {
+    option (google.api.http) = { post: "/v1/resource-profiles/{name}/options"; body: "*"; };
+  }
+  rpc AdjustResourceProfile(AdjustResourceProfileRequest) returns (AdjustResourceProfileResponse) {
+    option (google.api.http) = { post: "/v1/resource-profiles/{name}/adjust"; body: "*"; };
+  }
+  rpc GetResourceProfileMaxSize(GetResourceProfileMaxSizeRequest) returns (GetResourceProfileMaxSizeResponse) {
+    option (google.api.http) = { get: "/v1/resource-profiles/{name}/max-size"; };
+  }
+  rpc SetResourceProfile(SetResourceProfileRequest) returns (SetResourceProfileResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/profile"; body: "*"; };
+  }
+  rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes"; body: "*"; };
+  }
+  rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/volumes/{volume_id}"; };
+  }
+  // Renames a resource that nothing else refers to by name: offline (not
+  // Primary anywhere), with no HA config, gateway, schedule, backups or
+  // snapshots, not WAN-replicated or encrypted. Its data, node ids and port
+  // are kept. The Proxmox plugin uses it to reassign disks and make templates.
+  // Resource snapshots: every volume on every diskful replica, taken with
+  // I/O suspended across them, so a rollback restores all replicas together
+  // and resyncs nothing. Backing snapshots are "<backing>_snap_<name>".
+  rpc CreateResourceSnapshot(CreateResourceSnapshotRequest) returns (CreateResourceSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/snapshots"; body: "*"; };
+  }
+  rpc ListResourceSnapshots(ListResourceSnapshotsRequest) returns (ListResourceSnapshotsResponse) {
+    option (google.api.http) = { get: "/v1/resources/{resource}/snapshots"; };
+  }
+  rpc RollbackResourceSnapshot(RollbackResourceSnapshotRequest) returns (RollbackResourceSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/snapshots/{name}/rollback"; body: "*"; };
+  }
+  rpc DeleteResourceSnapshot(DeleteResourceSnapshotRequest) returns (DeleteResourceSnapshotResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/snapshots/{name}"; };
+  }
+  rpc RenameResource(RenameResourceRequest) returns (RenameResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/rename"; body: "*"; };
+  }
+  rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse) {
+    option (google.api.http) = { patch: "/v1/resources/{resource}/volumes/{volume_id}"; body: "*"; };
+  }
+  rpc UpdateResourceOptions(UpdateResourceOptionsRequest) returns (UpdateResourceOptionsResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/options"; body: "*"; };
+  }
+  // Brings every participant's copy of a resource's DRBD config back into
+  // agreement, tiebreakers and diskless clients included, and applies it.
+  rpc RepairResource(RepairResourceRequest) returns (RepairResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/repair"; body: "*"; };
+  }
+  rpc ResourceStatus(ResourceStatusRequest) returns (ResourceStatusResponse) {
+    option (google.api.http) = { get: "/v1/resources/{name}/status"; };
+  }
+  rpc SetPrimary(SetPrimaryRequest) returns (SetPrimaryResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/primary"; body: "*"; };
+  }
+  rpc SetSecondary(SetSecondaryRequest) returns (SetSecondaryResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/secondary"; body: "*"; };
+  }
+  rpc SetDualPrimary(SetDualPrimaryRequest) returns (SetDualPrimaryResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/dual-primary"; body: "*"; };
+  }
+  rpc AttachDisklessClient(AttachDisklessClientRequest) returns (AttachDisklessClientResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/diskless-clients"; body: "*"; };
+  }
+  rpc DetachDisklessClient(DetachDisklessClientRequest) returns (DetachDisklessClientResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/diskless-clients/{node}"; };
+  }
+  rpc CreateFilesystem(CreateFilesystemRequest) returns (CreateFilesystemResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/filesystem"; body: "*"; };
+  }
+  rpc MountResource(MountResourceRequest) returns (MountResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/mount"; body: "*"; };
+  }
+  rpc UnmountResource(UnmountResourceRequest) returns (UnmountResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/volumes/{volume_id}/unmount"; body: "*"; };
+  }
+  rpc MakeHa(MakeHaRequest) returns (MakeHaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha"; body: "*"; };
+  }
+  rpc EvictHa(EvictHaRequest) returns (EvictHaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha/evict"; body: "*"; };
+  }
+  // Orders where drbd-reactor starts an HA resource (preferred-nodes). A
+  // preference, not a fence; DRBD quorum is what prevents split brain.
+  rpc SetHaPreferredNodes(SetHaPreferredNodesRequest) returns (SetHaPreferredNodesResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha/preferred-nodes"; body: "*"; };
+  }
+  rpc SetTiebreaker(SetTiebreakerRequest) returns (SetTiebreakerResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/ha/tiebreaker"; body: "*"; };
+  }
+  // Encrypted DRBD replication: prepare nodes (key, certificate from the
+  // controller's replication CA, tlshd), report their readiness, and switch a
+  // resource's connections over one link at a time.
+  rpc SetupReplicationTLS(SetupReplicationTLSRequest) returns (ReplicationTLSResponse) {
+    option (google.api.http) = { post: "/v1/replication-tls/setup"; body: "*"; };
+  }
+  rpc GetReplicationTLSStatus(GetReplicationTLSStatusRequest) returns (ReplicationTLSResponse) {
+    option (google.api.http) = { get: "/v1/replication-tls" };
+  }
+  rpc SetResourceTLS(SetResourceTLSRequest) returns (SetResourceTLSResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/tls"; body: "*"; };
+  }
+  rpc AddDR(AddDRRequest) returns (AddDRResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/dr"; body: "*"; };
+  }
+  rpc AddReplica(AddReplicaRequest) returns (AddReplicaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/replicas"; body: "*"; };
+  }
+  rpc RemoveReplica(RemoveReplicaRequest) returns (RemoveReplicaResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/replicas/{node}"; };
+  }
+  rpc DeleteHa(DeleteHaRequest) returns (DeleteHaResponse) {
+    option (google.api.http) = { delete: "/v1/resources/{resource}/ha"; };
+  }
+  rpc GetHa(GetHaRequest) returns (GetHaResponse) {
+    option (google.api.http) = { get: "/v1/resources/{resource}/ha"; };
+  }
+  rpc ListHa(ListHaRequest) returns (ListHaResponse) {
+    option (google.api.http) = { get: "/v1/ha"; };
+  }
+
+  rpc GetHaStatus(GetHaStatusRequest) returns (GetHaStatusResponse) {
+    option (google.api.http) = { get: "/v1/ha/{resource}/status"; };
+  }
+
+
+  // HA OCF resource-agent discovery and drbd-reactor promoter TOML editing.
+  rpc ListResourceAgents(ListResourceAgentsRequest) returns (ListResourceAgentsResponse) {
+    option (google.api.http) = { get: "/v1/ha/resource-agents"; };
+  }
+  rpc GetResourceAgentMetadata(GetResourceAgentMetadataRequest) returns (GetResourceAgentMetadataResponse) {
+    option (google.api.http) = { get: "/v1/ha/resource-agents/{provider}/{name}"; };
+  }
+  rpc GetHaToml(GetHaTomlRequest) returns (GetHaTomlResponse) {
+    option (google.api.http) = { get: "/v1/ha/{resource}/toml"; };
+  }
+  rpc SyncHaToml(SyncHaTomlRequest) returns (SyncHaTomlResponse) {
+    option (google.api.http) = { post: "/v1/ha/{resource}/toml"; body: "*"; };
+  }
+
+  // Controller self-HA operations: make the controller itself highly
+  // available on its own DRBD + drbd-reactor machinery.
+  rpc EnableSelfHa(EnableSelfHaRequest) returns (EnableSelfHaResponse) {
+    option (google.api.http) = { post: "/v1/selfha/enable"; body: "*"; };
+  }
+  rpc DisableSelfHa(DisableSelfHaRequest) returns (DisableSelfHaResponse) {
+    option (google.api.http) = { post: "/v1/selfha/disable"; body: "*"; };
+  }
+  rpc GetSelfHaStatus(GetSelfHaStatusRequest) returns (GetSelfHaStatusResponse) {
+    option (google.api.http) = { get: "/v1/selfha"; };
+  }
+
+  // Snapshot operations. Volume identifiers are "<pool>/<lv>" paths, so the
+  // REST bindings need the two-segment pattern {volume=*/*}; a plain
+  // {volume} never matches a value containing a slash. The single-segment
+  // binding is kept for backward compatibility.
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse) {
+    option (google.api.http) = {
+      post: "/v1/volumes/{volume=*/*}/snapshots"; body: "*";
+      additional_bindings { post: "/v1/volumes/{volume}/snapshots"; body: "*"; }
+    };
+  }
+  rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse) {
+    option (google.api.http) = {
+      delete: "/v1/volumes/{volume=*/*}/snapshots/{snapshot_name}";
+      additional_bindings { delete: "/v1/volumes/{volume}/snapshots/{snapshot_name}"; }
+    };
+  }
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (RestoreSnapshotResponse) {
+    option (google.api.http) = {
+      post: "/v1/volumes/{volume=*/*}/snapshots/{snapshot_name}/restore"; body: "*";
+      additional_bindings { post: "/v1/volumes/{volume}/snapshots/{snapshot_name}/restore"; body: "*"; }
+    };
+  }
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse) {
+    option (google.api.http) = {
+      get: "/v1/volumes/{volume=*/*}/snapshots";
+      additional_bindings { get: "/v1/volumes/{volume}/snapshots"; }
+    };
+  }
+  // PopulateVolume copies a source block device (an LVM/ZFS snapshot, or another
+  // resource's backing volume) into an ALREADY-CREATED, still-empty DRBD
+  // resource. Unlike RestoreSnapshot — which merges a snapshot back into its own
+  // origin in place — this fills a *different*, new volume, which is what CSI
+  // restore-from-snapshot and volume cloning need.
+  //
+  // The copy is written to the target's DRBD device (not its backing LV) on a
+  // node that holds a replica, so DRBD replicates it to every peer for free.
+  rpc PopulateVolume(PopulateVolumeRequest) returns (PopulateVolumeResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/populate"; body: "*"; };
+  }
+
+  // Snapshot schedule operations (cron-driven snapshots + GFS retention)
+  rpc CreateSnapshotSchedule(CreateSnapshotScheduleRequest) returns (CreateSnapshotScheduleResponse) {
+    option (google.api.http) = { post: "/v1/snapshot-schedules"; body: "*"; };
+  }
+  rpc ListSnapshotSchedules(ListSnapshotSchedulesRequest) returns (ListSnapshotSchedulesResponse) {
+    option (google.api.http) = { get: "/v1/snapshot-schedules"; };
+  }
+  rpc DeleteSnapshotSchedule(DeleteSnapshotScheduleRequest) returns (DeleteSnapshotScheduleResponse) {
+    option (google.api.http) = { delete: "/v1/snapshot-schedules/{name}"; };
+  }
+  // Freezing a schedule keeps it snapshotting but stops all pruning, and locks
+  // every scheduled snapshot of the resource until the freeze ends. The
+  // write-anomaly detector freezes one when it fires. A freeze is only ever
+  // extended by Freeze; Unfreeze ends it early.
+  rpc FreezeSnapshotSchedule(FreezeSnapshotScheduleRequest) returns (FreezeSnapshotScheduleResponse) {
+    option (google.api.http) = { post: "/v1/snapshot-schedules/{resource}/freeze"; body: "*"; };
+  }
+  rpc UnfreezeSnapshotSchedule(UnfreezeSnapshotScheduleRequest) returns (UnfreezeSnapshotScheduleResponse) {
+    option (google.api.http) = { post: "/v1/snapshot-schedules/{resource}/unfreeze"; body: "*"; };
+  }
+
+  // Backup operations: shipping point-in-time copies OFF the cluster to an
+  // S3-compatible object store, an SMB share or a WebDAV endpoint.
+  //
+  // Distinct from snapshots (same pool, lost with the machine) and from WAN DR
+  // (a replica, where a delete replicates). After the first full image, a
+  // backup of a thin volume is incremental: only blocks changed since the last
+  // backup to the same target are shipped.
+  rpc AddBackupTarget(AddBackupTargetRequest) returns (AddBackupTargetResponse) {
+    option (google.api.http) = { post: "/v1/backup-targets"; body: "*"; };
+  }
+  rpc ListBackupTargets(ListBackupTargetsRequest) returns (ListBackupTargetsResponse) {
+    option (google.api.http) = { get: "/v1/backup-targets"; };
+  }
+  rpc DeleteBackupTarget(DeleteBackupTargetRequest) returns (DeleteBackupTargetResponse) {
+    option (google.api.http) = { delete: "/v1/backup-targets/{name}"; };
+  }
+  rpc CreateBackup(CreateBackupRequest) returns (CreateBackupResponse) {
+    option (google.api.http) = { post: "/v1/backups"; body: "*"; };
+  }
+  rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse) {
+    option (google.api.http) = { get: "/v1/backups"; };
+  }
+  rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse) {
+    option (google.api.http) = { post: "/v1/backups/{id}/restore"; body: "*"; };
+  }
+  rpc DeleteBackup(DeleteBackupRequest) returns (DeleteBackupResponse) {
+    option (google.api.http) = { delete: "/v1/backups/{id}"; };
+  }
+  // ImportBackups rebuilds backup records from the manifests on a target, for
+  // a controller that lost its database or a cluster restoring another's.
+  rpc ImportBackups(ImportBackupsRequest) returns (ImportBackupsResponse) {
+    option (google.api.http) = { post: "/v1/backup-targets/{target}/import"; body: "*"; };
+  }
+  rpc CreateBackupSchedule(CreateBackupScheduleRequest) returns (CreateBackupScheduleResponse) {
+    option (google.api.http) = { post: "/v1/backup-schedules"; body: "*"; };
+  }
+  rpc ListBackupSchedules(ListBackupSchedulesRequest) returns (ListBackupSchedulesResponse) {
+    option (google.api.http) = { get: "/v1/backup-schedules"; };
+  }
+  rpc DeleteBackupSchedule(DeleteBackupScheduleRequest) returns (DeleteBackupScheduleResponse) {
+    option (google.api.http) = { delete: "/v1/backup-schedules/{name}"; };
+  }
+  rpc RunBackupSchedule(RunBackupScheduleRequest) returns (RunBackupScheduleResponse) {
+    option (google.api.http) = { post: "/v1/backup-schedules/{name}/run"; body: "*"; };
+  }
+
+  // Gateway operations
+  rpc CreateNFSGateway(CreateNFSGatewayRequest) returns (CreateNFSGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs"; body: "*"; };
+  }
+  rpc CreateISCSIGateway(CreateISCSIGatewayRequest) returns (CreateISCSIGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi"; body: "*"; };
+  }
+  rpc CreateNVMeGateway(CreateNVMeGatewayRequest) returns (CreateNVMeGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme"; body: "*"; };
+  }
+  rpc DeleteGateway(DeleteGatewayRequest) returns (DeleteGatewayResponse) {
+    option (google.api.http) = { delete: "/v1/gateways/{id}"; };
+  }
+  rpc GetGateway(GetGatewayRequest) returns (GetGatewayResponse) {
+    option (google.api.http) = { get: "/v1/gateways/{id}"; };
+  }
+  rpc ListGateways(ListGatewaysRequest) returns (ListGatewaysResponse) {
+    option (google.api.http) = { get: "/v1/gateways"; };
+  }
+  rpc StartGateway(StartGatewayRequest) returns (StartGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/{id}/start"; body: "*"; };
+  }
+  rpc StopGateway(StopGatewayRequest) returns (StopGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/{id}/stop"; body: "*"; };
+  }
+  rpc AddNFSExport(AddNFSExportRequest) returns (AddNFSExportResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/exports:add"; body: "*"; };
+  }
+  rpc RemoveNFSExport(RemoveNFSExportRequest) returns (RemoveNFSExportResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/exports:remove"; body: "*"; };
+  }
+  rpc ListNFSExports(ListNFSExportsRequest) returns (ListNFSExportsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/exports:list"; body: "*"; };
+  }
+  // SMB gateway (workgroup edition): a standalone Samba server per resource,
+  // its users and shares kept on the gateway's state volume.
+  rpc CreateSMBGateway(CreateSMBGatewayRequest) returns (CreateSMBGatewayResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb"; body: "*"; };
+  }
+  rpc AddSMBShare(AddSMBShareRequest) returns (AddSMBShareResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/shares:add"; body: "*"; };
+  }
+  rpc RemoveSMBShare(RemoveSMBShareRequest) returns (RemoveSMBShareResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/shares:remove"; body: "*"; };
+  }
+  rpc ListSMBShares(ListSMBSharesRequest) returns (ListSMBSharesResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/shares:list"; body: "*"; };
+  }
+  rpc SetSMBUser(SetSMBUserRequest) returns (SetSMBUserResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/users:set"; body: "*"; };
+  }
+  rpc RemoveSMBUser(RemoveSMBUserRequest) returns (RemoveSMBUserResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/users:remove"; body: "*"; };
+  }
+  rpc ListSMBUsers(ListSMBUsersRequest) returns (ListSMBUsersResponse) {
+    option (google.api.http) = { post: "/v1/gateways/smb/users:list"; body: "*"; };
+  }
+  rpc AddISCSILUN(AddISCSILUNRequest) returns (AddISCSILUNResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/luns:add"; body: "*"; };
+  }
+  rpc RemoveISCSILUN(RemoveISCSILUNRequest) returns (RemoveISCSILUNResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/luns:remove"; body: "*"; };
+  }
+  rpc ListISCSILUNs(ListISCSILUNsRequest) returns (ListISCSILUNsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/luns:list"; body: "*"; };
+  }
+  rpc AddISCSIInitiator(AddISCSIInitiatorRequest) returns (AddISCSIInitiatorResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/initiators:add"; body: "*"; };
+  }
+  rpc RemoveISCSIInitiator(RemoveISCSIInitiatorRequest) returns (RemoveISCSIInitiatorResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/initiators:remove"; body: "*"; };
+  }
+  rpc ListISCSIInitiators(ListISCSIInitiatorsRequest) returns (ListISCSIInitiatorsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/initiators:list"; body: "*"; };
+  }
+  rpc SetISCSIChap(SetISCSIChapRequest) returns (SetISCSIChapResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/chap:set"; body: "*"; };
+  }
+  rpc GetISCSIChap(GetISCSIChapRequest) returns (GetISCSIChapResponse) {
+    option (google.api.http) = { post: "/v1/gateways/iscsi/chap:get"; body: "*"; };
+  }
+  rpc AddNVMeNamespace(AddNVMeNamespaceRequest) returns (AddNVMeNamespaceResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/namespaces:add"; body: "*"; };
+  }
+  rpc RemoveNVMeNamespace(RemoveNVMeNamespaceRequest) returns (RemoveNVMeNamespaceResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/namespaces:remove"; body: "*"; };
+  }
+  rpc ListNVMeNamespaces(ListNVMeNamespacesRequest) returns (ListNVMeNamespacesResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/namespaces:list"; body: "*"; };
+  }
+  rpc AddNVMeHost(AddNVMeHostRequest) returns (AddNVMeHostResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/hosts:add"; body: "*"; };
+  }
+  rpc RemoveNVMeHost(RemoveNVMeHostRequest) returns (RemoveNVMeHostResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/hosts:remove"; body: "*"; };
+  }
+  rpc ListNVMeHosts(ListNVMeHostsRequest) returns (ListNVMeHostsResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nvme/hosts:list"; body: "*"; };
+  }
+
+  // ZFS operations
+  rpc CreateZFSPool(CreateZFSPoolRequest) returns (CreateZFSPoolResponse) {
+    option (google.api.http) = { post: "/v1/zfs/pools"; body: "*"; };
+  }
+  rpc DeleteZFSPool(DeleteZFSPoolRequest) returns (DeleteZFSPoolResponse) {
+    option (google.api.http) = { delete: "/v1/zfs/pools/{name}"; };
+  }
+  // Listing ZFS pools was the one RPC in the ZFS pool CRUD triple with no HTTP
+  // binding, so it was reachable over gRPC but absent from the REST API and
+  // from the generated OpenAPI document. Create and Delete were both bound.
+  rpc ListZFSpools(ListZFSPoolsRequest) returns (ListZFSPoolsResponse) {
+    option (google.api.http) = { get: "/v1/zfs/pools"; };
+  }
+  rpc CreateZFSDataset(CreateZFSDatasetRequest) returns (CreateZFSDatasetResponse) {
+    option (google.api.http) = { post: "/v1/zfs/datasets"; body: "*"; };
+  }
+  rpc CreateZFSVolume(CreateZFSVolumeRequest) returns (CreateZFSVolumeResponse) {
+    option (google.api.http) = { post: "/v1/zfs/volumes"; body: "*"; };
+  }
+  rpc ResizeZFSVolume(ResizeZFSVolumeRequest) returns (ResizeZFSVolumeResponse) {
+    option (google.api.http) = {
+      patch: "/v1/zfs/volumes/{volume_path=*/*}"; body: "*";
+      additional_bindings { patch: "/v1/zfs/volumes/{volume_path}"; body: "*"; }
+    };
+  }
+  rpc DeleteZFSDataset(DeleteZFSDatasetRequest) returns (DeleteZFSDatasetResponse) {
+    option (google.api.http) = {
+      delete: "/v1/zfs/datasets/{dataset_path=*/*}";
+      additional_bindings { delete: "/v1/zfs/datasets/{dataset_path}"; }
+    };
+  }
+
+  // ZFS Snapshot operations
+  // ZFS snapshot identifiers are "<pool>/<dataset>" (and
+  // "<pool>/<dataset>@<snap>") paths; single-segment {param} patterns never
+  // match values containing '/', so two-segment bindings come first.
+  // Deeply nested datasets (pool/a/b) are not reachable over REST.
+  rpc CreateZFSSnapshot(CreateZFSSnapshotRequest) returns (CreateZFSSnapshotResponse) {
+    option (google.api.http) = {
+      post: "/v1/zfs/datasets/{dataset=*/*}/snapshots"; body: "*";
+      additional_bindings { post: "/v1/zfs/datasets/{dataset}/snapshots"; body: "*"; }
+    };
+  }
+  rpc DeleteZFSSnapshot(DeleteZFSSnapshotRequest) returns (DeleteZFSSnapshotResponse) {
+    option (google.api.http) = {
+      delete: "/v1/zfs/snapshots/{snapshot=*/*}";
+      additional_bindings { delete: "/v1/zfs/snapshots/{snapshot}"; }
+    };
+  }
+  rpc ListZFSSnapshots(ListZFSSnapshotsRequest) returns (ListZFSSnapshotsResponse) {
+    option (google.api.http) = {
+      get: "/v1/zfs/datasets/{dataset=*/*}/snapshots";
+      additional_bindings { get: "/v1/zfs/datasets/{dataset}/snapshots"; }
+    };
+  }
+  rpc RestoreZFSSnapshot(RestoreZFSSnapshotRequest) returns (RestoreZFSSnapshotResponse) {
+    option (google.api.http) = {
+      post: "/v1/zfs/datasets/{dataset=*/*}/snapshots/{snapshot_name}/restore"; body: "*";
+      additional_bindings { post: "/v1/zfs/datasets/{dataset}/snapshots/{snapshot_name}/restore"; body: "*"; }
+    };
+  }
+  rpc CloneZFSSnapshot(CloneZFSSnapshotRequest) returns (CloneZFSSnapshotResponse) {
+    option (google.api.http) = {
+      post: "/v1/zfs/snapshots/{snapshot=*/*}/clone"; body: "*";
+      additional_bindings { post: "/v1/zfs/snapshots/{snapshot}/clone"; body: "*"; }
+    };
+  }
+
+  // LVM Snapshot operations
+  rpc CreateLvmSnapshot(CreateLvmSnapshotRequest) returns (CreateLvmSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/lvm/volumes/{lv_name}/snapshots"; body: "*"; };
+  }
+  rpc DeleteLvmSnapshot(DeleteLvmSnapshotRequest) returns (DeleteLvmSnapshotResponse) {
+    option (google.api.http) = { delete: "/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}"; };
+  }
+  rpc ListLvmSnapshots(ListLvmSnapshotsRequest) returns (ListLvmSnapshotsResponse) {
+    option (google.api.http) = { get: "/v1/lvm/volumes/{lv_name}/snapshots"; };
+  }
+  rpc RestoreLvmSnapshot(RestoreLvmSnapshotRequest) returns (RestoreLvmSnapshotResponse) {
+    option (google.api.http) = { post: "/v1/lvm/volumes/{lv_name}/snapshots/{snapshot_name}/restore"; body: "*"; };
+  }
+  // Self-healing (see docs/user-guide.md "Self-healing"). MoveReplica adds
+  // the new replica and removes the old one once the new one is UpToDate.
+  // PlanRebalance proposes moves from the fullest node; apply runs them one
+  // at a time. MarkNodeLost removes the replicas of a node that will not
+  // return; RestoreNode cleans what a returned node holds of resources it is
+  // no longer part of and lets it take replicas again.
+  // Caps an NFS export directory with an ext4 project quota (gateways
+  // created from this version on); size 0 removes the cap.
+  rpc SetNFSExportQuota(SetNFSExportQuotaRequest) returns (SetNFSExportQuotaResponse) {
+    option (google.api.http) = { post: "/v1/gateways/nfs/{resource}/quota"; body: "*"; };
+  }
+  rpc MoveReplica(MoveReplicaRequest) returns (MoveReplicaResponse) {
+    option (google.api.http) = { post: "/v1/resources/{resource}/move-replica"; body: "*"; };
+  }
+  rpc PlanRebalance(PlanRebalanceRequest) returns (PlanRebalanceResponse) {
+    option (google.api.http) = { post: "/v1/rebalance"; body: "*"; };
+  }
+  rpc MarkNodeLost(MarkNodeLostRequest) returns (MarkNodeLostResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/lost"; body: "*"; };
+  }
+  rpc RestoreNode(RestoreNodeRequest) returns (RestoreNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/restore"; body: "*"; };
+  }
+  rpc DrainNode(DrainNodeRequest) returns (DrainNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{name}/drain"; };
+  }
+  rpc UndrainNode(UndrainNodeRequest) returns (UndrainNodeResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{name}/undrain"; };
+  }
+  // ConvertPoolToThin rebuilds one node's LVM pool as a thin pool, in place.
+  // Thick pools cannot hold a snapshot history: each snapshot reserves a fixed
+  // COW area whether anything changes or not.
+  rpc ConvertPoolToThin(ConvertPoolToThinRequest) returns (ConvertPoolToThinResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/pools/{pool}/convert-thin"; };
+  }
+
+  // Storage tiering: put an SSD/NVMe device in front of one node's LVM pool
+  // with lvmcache. The cache serves the whole pool, and defaults to
+  // writethrough because a writeback cache holds acknowledged writes that no
+  // other node has yet.
+  rpc AddPoolCache(AddPoolCacheRequest) returns (AddPoolCacheResponse) {
+    option (google.api.http) = { post: "/v1/nodes/{node}/pools/{pool}/cache"; body: "*"; };
+  }
+  rpc RemovePoolCache(RemovePoolCacheRequest) returns (RemovePoolCacheResponse) {
+    option (google.api.http) = { delete: "/v1/nodes/{node}/pools/{pool}/cache"; };
+  }
+
+  // Audit trail: who called what, when, and whether it was allowed. Persisted
+  // in the database, which lives on the controller's replicated volume, so the
+  // history follows the controller across a failover instead of being split
+  // across the journals of whichever nodes happened to be active.
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse) {
+    option (google.api.http) = { get: "/v1/audit"; };
+  }
+
+  // The controller's own log output, from an in-memory ring buffer. Deliberately
+  // not persisted: this is for watching what a running controller is doing, and
+  // a controller that has moved has nothing useful to say about its old node.
+  rpc ListControllerLogs(ListControllerLogsRequest) returns (ListControllerLogsResponse) {
+    option (google.api.http) = { get: "/v1/logs"; };
+  }
+
+  // The journals and kernel messages the controller does not hold.
+  //
+  // ListControllerLogs above is the controller's own ring buffer, and almost
+  // nothing that breaks DRBD appears in it: a promoter that could not start its
+  // target, a resource that will not connect, a kernel that refused the module,
+  // an LVM pool with no space left. Those are on the nodes, and until now the
+  // only way to read them was for a person to ssh in.
+  //
+  // The collectors are a fixed table, named and read-only. This is deliberately
+  // not a command channel: a request names collectors, never a command line, so
+  // an unknown name is reported back and nothing is run. See
+  // pkg/controller/diagnostics.go for the table and what each one reads.
+  rpc CollectNodeDiagnostics(CollectNodeDiagnosticsRequest) returns (CollectNodeDiagnosticsResponse) {
+    option (google.api.http) = { post: "/v1/diagnostics/collect"; body: "*"; };
+  }
+
+  // Operational notifications: a replica degraded, a resource's Primary moved,
+  // a node stopped answering. ListEvents serves the controller's bounded
+  // in-memory history — enough to see what just happened, not an archive. The
+  // durable record of who did what is ListAuditEvents.
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse) {
+    option (google.api.http) = { get: "/v1/events"; };
+  }
+
+  // Notification channels: where alerts are delivered. These live in the
+  // controller database rather than in controller.toml so they can be changed
+  // from the UI while the controller runs — reconfiguring alerting by editing a
+  // file and restarting means a deliberate window with no alerting at all.
+  //
+  // A channel has a kind, because a chat service does not accept an arbitrary
+  // JSON document: Feishu, Slack, WeCom and DingTalk each define their own
+  // message envelope and reject anything else, and Feishu, WeCom and DingTalk
+  // do it inside an HTTP 200.
+  rpc ListNotifyChannels(ListNotifyChannelsRequest) returns (ListNotifyChannelsResponse) {
+    option (google.api.http) = { get: "/v1/notify-channels"; };
+  }
+  rpc SaveNotifyChannel(SaveNotifyChannelRequest) returns (SaveNotifyChannelResponse) {
+    option (google.api.http) = { post: "/v1/notify-channels"; body: "*"; };
+  }
+  rpc DeleteNotifyChannel(DeleteNotifyChannelRequest) returns (DeleteNotifyChannelResponse) {
+    option (google.api.http) = { delete: "/v1/notify-channels/{name}"; };
+  }
+  // TestNotifyChannel delivers one synthetic message to a single channel and
+  // reports what the far end actually said, including a rejection returned
+  // inside a 200. It does not go through the event bus, so it neither pages the
+  // other channels nor appears in the event history.
+  rpc TestNotifyChannel(TestNotifyChannelRequest) returns (TestNotifyChannelResponse) {
+    option (google.api.http) = { post: "/v1/notify-channels/{name}/test"; body: "*"; };
+  }
+
+  // Cluster inspection: deterministic checks of everything around the alerts —
+  // replicas stuck mid-handshake, alerts that reach no channel, node clocks,
+  // disks and addresses, pool growth, late backups, Self-HA readiness,
+  // certificate expiry, leftovers. RunInspection runs one now and waits for
+  // the report; it changes nothing on the cluster. A run already in progress
+  // is not overlapped: the call fails instead.
+  rpc RunInspection(RunInspectionRequest) returns (RunInspectionResponse) {
+    option (google.api.http) = { post: "/v1/inspections"; body: "*"; };
+  }
+  // ListInspections lists stored reports, newest first, without their checks.
+  rpc ListInspections(ListInspectionsRequest) returns (ListInspectionsResponse) {
+    option (google.api.http) = { get: "/v1/inspections"; };
+  }
+  // GetInspection returns one stored report; id "latest" (or empty) is the
+  // newest.
+  rpc GetInspection(GetInspectionRequest) returns (GetInspectionResponse) {
+    option (google.api.http) = { get: "/v1/inspections/{id}"; };
+  }
+
+  // RepairWanProxy reconciles a WAN resource's replication tunnels with what
+  // the controller currently believes its nodes are: it re-provisions the legs
+  // that should exist and removes instances left behind by a node that was
+  // renumbered or removed. Safe to run on a healthy resource — it converges.
+  rpc RepairWanProxy(RepairWanProxyRequest) returns (RepairWanProxyResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/wan/repair"; body: "*"; };
+  }
+  rpc DRFailback(DRFailbackRequest) returns (DRFailbackResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/wan/failback"; body: "*"; };
+  }
+  rpc SetWanEndpoint(SetWanEndpointRequest) returns (SetWanEndpointResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/wan/endpoint"; body: "*"; };
+  }
+  rpc VerifyResource(VerifyResourceRequest) returns (VerifyResourceResponse) {
+    option (google.api.http) = { post: "/v1/resources/{name}/verify"; body: "*"; };
+  }
+
+  // WatchEvents streams notifications as they happen, so an operator (or the
+  // web UI, or a script) can react without polling. Over REST this is a
+  // newline-delimited JSON stream; `curl -N .../v1/events/watch` works.
+  //
+  // A watcher that cannot keep up loses events rather than blocking the
+  // controller. Event.id is monotonic across the whole stream, so a gap in it
+  // is how a client detects that it fell behind.
+  rpc WatchEvents(WatchEventsRequest) returns (stream Event) {
+    option (google.api.http) = { get: "/v1/events/watch"; };
+  }
+
+  // Role-based access control: the caller's identity, the effective policy,
+  // and user management. gRPC only, so they share the API's transport
+  // security; the web UI reaches the same operations through hand-written
+  // REST routes under /v1/rbac. Policy listing and user changes require the
+  // administrator role. Each returns enabled=false when [rbac] is off.
+  rpc GetRbacWhoami(GetRbacWhoamiRequest) returns (GetRbacWhoamiResponse);
+  rpc ListRbacPolicies(ListRbacPoliciesRequest) returns (ListRbacPoliciesResponse);
+  rpc CreateRbacUser(CreateRbacUserRequest) returns (CreateRbacUserResponse);
+  rpc DeleteRbacUser(DeleteRbacUserRequest) returns (DeleteRbacUserResponse);
+  rpc SetRbacUserRole(SetRbacUserRoleRequest) returns (SetRbacUserRoleResponse);
+
+  // Two-person approval ([rbac.approval]). A call on the approval list made
+  // without an approval fails with FAILED_PRECONDITION and leaves a pending
+  // request; once a different user with the approve right approves it, the
+  // same caller repeats the identical call and it runs, once.
+  rpc ListApprovals(ListApprovalsRequest) returns (ListApprovalsResponse) {
+    option (google.api.http) = { get: "/v1/approvals"; };
+  }
+  rpc ApproveRequest(ApproveRequestRequest) returns (ApproveRequestResponse) {
+    option (google.api.http) = { post: "/v1/approvals/{id}/approve"; body: "*"; };
+  }
+  rpc RejectRequest(RejectRequestRequest) returns (RejectRequestResponse) {
+    option (google.api.http) = { post: "/v1/approvals/{id}/reject"; body: "*"; };
+  }
+
+  // Database applications (`haify app`): a single-instance PostgreSQL, MySQL/
+  // MariaDB or Redis on a resource's DRBD volume, failed over by drbd-reactor
+  // (mount, database unit, service IP last). CreateApp returns the generated
+  // password once; it is kept only on the volume, readable by root.
+  rpc CreateApp(CreateAppRequest) returns (CreateAppResponse) {
+    option (google.api.http) = { post: "/v1/apps"; body: "*"; };
+  }
+  rpc ListApps(ListAppsRequest) returns (ListAppsResponse) {
+    option (google.api.http) = { get: "/v1/apps"; };
+  }
+  rpc GetAppStatus(GetAppStatusRequest) returns (GetAppStatusResponse) {
+    option (google.api.http) = { get: "/v1/apps/{name}"; };
+  }
+  // Takes the app out of drbd-reactor's hands and stops it. The resource and
+  // its data are kept unless delete_data is set.
+  rpc DeleteApp(DeleteAppRequest) returns (DeleteAppResponse) {
+    option (google.api.http) = { delete: "/v1/apps/{name}"; };
+  }
+  // Planned switchover: the app's node stops it and another replica takes over.
+  rpc FailoverApp(FailoverAppRequest) returns (FailoverAppResponse) {
+    option (google.api.http) = { post: "/v1/apps/{name}/failover"; body: "*"; };
+  }
+  // Freezes the database on its node (with a node-side thaw watchdog), takes
+  // a resource snapshot on every replica, and thaws.
+  rpc SnapshotApp(SnapshotAppRequest) returns (SnapshotAppResponse) {
+    option (google.api.http) = { post: "/v1/apps/{name}/snapshots"; body: "*"; };
+  }
+}
+
+// Pool messages
+message CreatePoolRequest {
+  string name = 1;
+  string type = 2;
+  string node = 3;
+  repeated string disks = 4;
+  uint64 size_gb = 5;
+}
+
+message CreatePoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeletePoolRequest {
+  string name = 1;
+  string node = 2;
+}
+
+message DeletePoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetPoolRequest {
+  string name = 1;
+  string node = 2;
+}
+
+message GetPoolResponse {
+  bool success = 1;
+  string message = 2;
+  PoolInfo pool = 3;
+}
+
+message ListPoolsRequest {}
+
+message ListPoolsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PoolInfo pools = 3;
+}
+
+message AddDiskToPoolRequest {
+  string pool = 1;
+  string disk = 2;
+  string node = 3;
+}
+
+message AddDiskToPoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PoolInfo {
+  string name = 1;
+  string type = 2;
+  string node = 3;
+  uint64 total_gb = 4;
+  uint64 free_gb = 5;
+  repeated string devices = 6;
+  bool thin = 7;
+  string compression = 8;
+
+  // Storage tiering (lvmcache). A pool with no fast tier reports cached=false
+  // and leaves the rest zero, so a tiered pool is distinguishable from a plain
+  // one in a plain `pool list`.
+  bool cached = 9;
+  // "writethrough" or "writeback".
+  string cache_mode = 10;
+  // Size of the fast device given to the cache.
+  uint64 cache_size_bytes = 11;
+  // Kernel dm-cache counters, rounded to whole percent. hit_percent is
+  // cumulative since the cache was last activated, not a moving average.
+  uint32 cache_used_percent = 12;
+  uint32 cache_hit_percent = 13;
+  // Share of the cache holding writes that have not reached the slow device.
+  // Zero on a writethrough cache by construction; on a writeback cache this is
+  // the size of the window that a lost SSD would take with it.
+  uint32 cache_dirty_percent = 14;
+  // The fast block device backing the cache, as the node names it.
+  string cache_device = 15;
+  // True when LVM reports the cache as unhealthy — a cache in this state
+  // cannot be flushed, so it cannot be detached without discarding data.
+  bool cache_degraded = 16;
+
+  // Thin pool utilisation. total_gb/free_gb above describe the VOLUME GROUP,
+  // and Haify gives its thin pool 95% of the group's free extents at create (all
+  // of them on convert-thin), so free_gb stays near zero for the whole life of
+  // such a pool however empty it is. These fields are the ones that say
+  // whether the next write will succeed.
+  //
+  // thin_pool_lv is empty when the group holds no thin pool; that — not a zero
+  // percentage — is how "no thin pool" is told apart from "a thin pool at 0%".
+  string thin_pool_lv = 17;
+  // Capacity of the thin pool itself, which data_percent is a percentage of.
+  uint64 thin_size_bytes = 18;
+  double thin_data_percent = 19;
+  // Metadata exhaustion stops writes as completely as data exhaustion, and the
+  // two fill for unrelated reasons, so neither substitutes for the other.
+  double thin_metadata_percent = 20;
+  // LVM's own verdict, from the volume health field of lv_attr rather than
+  // inferred from a percentage. A pool in this state has already refused
+  // writes, and the kernel drops the backing disk out from under DRBD.
+  bool thin_out_of_space = 21;
+
+  // Exact capacity. total_gb/free_gb are rounded to whole gibibytes and are
+  // kept for compatibility; anything doing arithmetic or rendering a precise
+  // size should use these.
+  uint64 total_bytes = 22;
+  uint64 free_bytes = 23;
+  // compress_ratio is how much compression saves on a ZFS pool, as ZFS
+  // reports it (1.85 means 1.85x); 0 when not reported. compression above is
+  // the algorithm in use.
+  double compress_ratio = 24;
+
+  // VDO-backed thin pools (type "thin_vdo"). thin_data_percent above is the
+  // logical space handed out; vdo_physical_percent is the physical space
+  // deduplication and compression did not save, and the one that, at 100%,
+  // turns writes into I/O errors. has_vdo is false for any other pool.
+  bool has_vdo = 25;
+  double vdo_physical_percent = 26;
+  double vdo_saving_percent = 27;
+}
+
+// ZFS messages
+message CreateZFSPoolRequest {
+  string name = 1;
+  string node = 2;
+  repeated string vdevs = 3;
+  // Field 4 (bool thin) removed: ZFS has no pool-level thin/thick.
+  // Thin vs thick provisioning is a zvol-level property (zfs create -s -V
+  // / refreservation), handled by CreateZFSVolume, not pool creation.
+  reserved 4;
+  reserved "thin";
+  // compression is the pool's compression algorithm (on, off, lz4, zstd,
+  // zstd-1..19, gzip, gzip-1..9, lzjb, zle), set on its root dataset so every
+  // volume inherits it. Empty keeps OpenZFS's default, which is on (lz4) from
+  // 2.2.
+  string compression = 5;
+  // dedup turns on deduplication for the pool. It costs RAM for the dedup
+  // table on every write; only worth it for data known to repeat.
+  bool dedup = 6;
+}
+
+message CreateZFSPoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteZFSPoolRequest {
+  string name = 1;
+  string node = 2;
+}
+
+message DeleteZFSPoolResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListZFSPoolsRequest {}
+
+message ListZFSPoolsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PoolInfo pools = 3;
+}
+
+message CreateZFSDatasetRequest {
+  string dataset_path = 1;
+  string node = 2;
+}
+
+message CreateZFSDatasetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateZFSVolumeRequest {
+  string pool_name = 1;
+  string volume_name = 2;
+  string size = 3;
+  string node = 4;
+}
+
+message CreateZFSVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResizeZFSVolumeRequest {
+  string volume_path = 1;
+  string new_size = 2;
+  string node = 3;
+}
+
+message ResizeZFSVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteZFSDatasetRequest {
+  string dataset_path = 1;
+  string node = 2;
+}
+
+message DeleteZFSDatasetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateZFSSnapshotRequest {
+  string dataset = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message CreateZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteZFSSnapshotRequest {
+  string snapshot = 1;
+  string node = 2;
+}
+
+message DeleteZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListZFSSnapshotsRequest {
+  string dataset = 1;
+  string node = 2;
+}
+
+message ListZFSSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SnapshotInfo snapshots = 3;
+}
+
+message RestoreZFSSnapshotRequest {
+  string dataset = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message RestoreZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CloneZFSSnapshotRequest {
+  string snapshot = 1;
+  string clone_path = 2;
+  string node = 3;
+}
+
+message CloneZFSSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// LVM Snapshot messages
+message CreateLvmSnapshotRequest {
+  string resource = 1;
+  string lv_name = 2;
+  string snapshot_name = 3;
+  string node = 4;
+  string size = 5;  // e.g., "1G"
+}
+
+message CreateLvmSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteLvmSnapshotRequest {
+  string lv_name = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message DeleteLvmSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListLvmSnapshotsRequest {
+  // Despite the name this carries the VOLUME GROUP, which is what the pool is
+  // at the LVM level. Kept for wire compatibility.
+  string lv_name = 1;
+  string node = 2;
+  // Narrows the result to one DRBD resource's volumes. Empty lists the whole
+  // group. Without it, `snapshot list --resource a` and `--resource b` returned
+  // identical lists of everything in the pool.
+  string resource = 3;
+}
+
+message ListLvmSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SnapshotInfo snapshots = 3;
+}
+
+message RestoreLvmSnapshotRequest {
+  string lv_name = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message RestoreLvmSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Node messages
+message RegisterNodeRequest {
+  string address = 1;
+  string name = 2;
+  // replication_address is the address DRBD uses for this node in generated
+  // .res files, letting replication traffic ride a dedicated NIC/subnet while
+  // the controller keeps reaching the node over `address` (SSH/management).
+  // Empty means "same as address", which is the historical behavior.
+  string replication_address = 3;
+}
+
+message RegisterNodeResponse {
+  bool success = 1;
+  string message = 2;
+  NodeInfo node = 3;
+}
+
+// SetNodeLabels sets or merges key=value labels on a node. When replace is
+// true the node's labels are replaced wholesale; otherwise the given labels are
+// merged in (a label with an empty value deletes that key).
+message SetNodeLabelsRequest {
+  string node = 1; // node name or address
+  map<string, string> labels = 2;
+  bool replace = 3;
+}
+
+message SetNodeLabelsResponse {
+  bool success = 1;
+  string message = 2;
+  NodeInfo node = 3;
+}
+
+message UnregisterNodeRequest {
+  string address = 1;
+}
+
+message UnregisterNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetNodeRequest {
+  string address = 1;
+}
+
+message GetNodeResponse {
+  bool success = 1;
+  string message = 2;
+  NodeInfo node = 3;
+}
+
+message ListNodesRequest {}
+
+message ListNodesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NodeInfo nodes = 3;
+}
+
+message NodeInfo {
+  string name = 1;
+  string address = 2;
+  string hostname = 3;
+  string state = 4;
+  int64 last_seen = 5;
+  string version = 6;
+  // labels are arbitrary key=value tags on the node (e.g. rack=A, zone=east)
+  // used by placement constraints like replicas_on_different.
+  map<string, string> labels = 7;
+  // replication_address is the address DRBD uses for this node. Empty means it
+  // shares `address` (the historical single-network setup).
+  string replication_address = 8;
+  // offline_since is when the node stopped answering (Unix seconds), 0 while
+  // it answers. Self-healing counts from it.
+  int64 offline_since = 9;
+}
+
+// Health check messages
+message HealthCheckRequest {
+  string node = 1;
+}
+
+message HealthCheckResponse {
+  bool success = 1;
+  string message = 2;
+  NodeHealthInfo health = 3;
+}
+
+message NodeHealthInfo {
+  bool drbd_installed = 1;
+  string drbd_version = 2;
+  bool drbd_reactor_installed = 3;
+  string drbd_reactor_version = 4;
+  bool drbd_reactor_running = 5;
+  bool resource_agents_installed = 6;
+  repeated string available_agents = 7;
+}
+
+// Resource messages
+message CreateResourceRequest {
+  string name = 1;
+  uint32 port = 2;
+  repeated string nodes = 3;
+  string protocol = 4;
+  uint32 size_gb = 5;  // single-volume shorthand; ignored when `volumes` is set
+  string pool = 6;     // single-volume shorthand; ignored when `volumes` is set
+  string storage_type = 7;  // "lvm", "lvm-thin" or "zfs" (applies to all volumes)
+  map<string, string> drbd_options = 8;
+  // volumes lists one or more DRBD volumes to create atomically (volume 0..N).
+  // When empty, a single volume is created from size_gb/pool for back-compat.
+  repeated VolumeSpec volumes = 9;
+
+  // WAN replication (opt-in add-on). Absent/false ⇒ LAN, behaves exactly as
+  // before. `wan` is the master switch; without it the dr_* fields are rejected.
+  // See docs/design/wan-replication.md.
+  bool wan = 10;            // route this resource over the internet via a per-resource haify-proxy pair
+  string dr_node = 11;      // the DR-site node (must be a registered node); WAN only
+  string dr_endpoint = 12;  // the DR site's public WAN address the primary dials; WAN only
+  uint32 wan_port = 13;     // WAN mTLS port (default a random >3000 per resource); WAN only
+  // wan_egress_address optionally pins the source address the primary's proxy
+  // binds before dialing the DR site, so replication leaves over a chosen
+  // interface (e.g. a leased line) and reaches the DR firewall from a
+  // predictable source IP. Empty lets the primary's routing table decide.
+  string wan_egress_address = 20;
+
+  // replicas requests auto-placement: when `nodes` is empty the controller
+  // picks this many nodes (most free space in the target pool first). Ignored
+  // when `nodes` is set. 0 means "not auto-placing" unless nodes is also empty,
+  // in which case the controller defaults to 2.
+  uint32 replicas = 14;
+  // replicas_on_different names node-label keys (e.g. "rack"); during
+  // auto-placement each replica is put in a distinct value of every listed
+  // label, so a single fault domain never holds two replicas. Only nodes
+  // carrying the labels participate. Empty = capacity-only. Ignored when `nodes`
+  // is set. (Wire-compatible successor of the earlier singular string field.)
+  repeated string replicas_on_different = 15;
+  // replicas_on_same names node-label keys whose value must be IDENTICAL across
+  // all replicas (e.g. keep every copy in one zone). Composable with
+  // replicas_on_different. Ignored when `nodes` is set.
+  repeated string replicas_on_same = 16;
+  // do_not_place_with names other resources; auto-placement will not put a
+  // replica on any node already holding a replica of them (cross-resource
+  // anti-affinity). Ignored when `nodes` is set.
+  repeated string do_not_place_with = 17;
+  map<string, string> labels = 18;
+  string profile = 19;
+
+  // encrypt puts a LUKS2 container between DRBD and the backing LVM/ZFS volume
+  // on every replica, so the pool disks hold ciphertext. This is encryption AT
+  // REST ONLY: DRBD sits ABOVE the crypt layer, so replication traffic between
+  // nodes is the same plaintext it always was. Chosen once, at creation: there
+  // is no in-place conversion, and asking for one on a resource that already
+  // exists is refused rather than half-applied.
+  bool encrypt = 21;
+  // size_bytes, for the single-volume shorthand, makes the device exactly
+  // this many bytes (rounded up to a 512-byte sector) instead of size_gb
+  // whole GiB; size_gb may then be 0. PVE's online Move Disk needs it.
+  uint64 size_bytes = 22;
+}
+
+// VolumeSpec is one DRBD volume within a resource. storage_type comes from the
+// resource; each volume may target its own pool.
+message VolumeSpec {
+  uint32 size_gb = 1;
+  string pool = 2;  // optional; auto-selected when empty
+  uint64 size_bytes = 3;  // exact device size; see CreateResourceRequest.size_bytes
+}
+
+message CreateResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// AdoptResourceRequest imports an already-existing (foreign) DRBD resource into
+// Haify management by recording its metadata in the Haify database. It never
+// creates or modifies the actual DRBD resource or its data. Every field except
+// name is optional and auto-discovered from the live .res on a node when
+// omitted; a provided value overrides discovery.
+message AdoptResourceRequest {
+  string name = 1;
+  repeated string nodes = 2;
+  uint32 port = 3;
+  string protocol = 4;
+  map<string, string> labels = 5;
+  string profile = 6;
+}
+
+message AdoptResourceResponse {
+  bool success = 1;
+  string message = 2;
+  // Discovered/recorded metadata, echoed back for the caller to display.
+  repeated string nodes = 3;
+  uint32 port = 4;
+  string protocol = 5;
+  uint32 volumes = 6;
+}
+
+message DeleteResourceRequest {
+  string name = 1;
+}
+
+message DeleteResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetResourceRequest {
+  string name = 1;
+}
+
+message GetResourceResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceInfo resource = 3;
+}
+
+message ListResourcesRequest {
+  // profile, when set, lists only that profile's members.
+  string profile = 1;
+}
+
+message ListResourcesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ResourceInfo resources = 3;
+}
+
+message ResourceProfile {
+  string name = 1;
+  string protocol = 2;
+  string storage_type = 3;
+  string pool = 4;
+  uint32 replicas = 5;
+  repeated string replicas_on_different = 6;
+  repeated string replicas_on_same = 7;
+  map<string, string> drbd_options = 8;
+  map<string, string> labels = 9;
+}
+
+message CreateResourceProfileRequest {
+  ResourceProfile profile = 1;
+}
+
+message CreateResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceProfile profile = 3;
+}
+
+message GetResourceProfileRequest { string name = 1; }
+
+message GetResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceProfile profile = 3;
+}
+
+message ListResourceProfilesRequest {}
+
+message ListResourceProfilesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ResourceProfile profiles = 3;
+}
+
+message DeleteResourceProfileRequest { string name = 1; }
+
+message DeleteResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message AddVolumeRequest {
+  string resource = 1;
+  string volume = 2;
+  string pool = 3;
+  uint32 size_gb = 4;
+}
+
+message AddVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UpdateResourceOptionsRequest {
+  string name = 1;
+  // DRBD options as "section/key" -> value (e.g. "net/max-buffers" -> "8000",
+  // "on-no-quorum" -> "suspend-io"). Keys without a section default to the
+  // resource-level "options" section.
+  map<string, string> options = 2;
+}
+
+message UpdateResourceOptionsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RepairResourceRequest {
+  string name = 1;
+}
+
+message RepairResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveVolumeRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+}
+
+message RemoveVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateResourceSnapshotRequest {
+  string resource = 1;
+  string name = 2;
+}
+message CreateResourceSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+message ListResourceSnapshotsRequest {
+  string resource = 1;
+}
+message ListResourceSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string names = 3;
+}
+message RollbackResourceSnapshotRequest {
+  string resource = 1;
+  string name = 2;
+}
+message RollbackResourceSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+message DeleteResourceSnapshotRequest {
+  string resource = 1;
+  string name = 2;
+}
+message DeleteResourceSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SetHaPreferredNodesRequest {
+  string resource = 1;
+  repeated string nodes = 2;  // in order; empty removes the preference
+  string policy = 3;          // start-only (drbd-reactor 1.9+) or always; empty = drbd-reactor's default
+}
+message SetHaPreferredNodesResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SetNFSExportQuotaRequest {
+  string resource = 1;
+  string export_path = 2;
+  uint64 size_bytes = 3;
+}
+message SetNFSExportQuotaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message MoveReplicaRequest {
+  string resource = 1;
+  string from = 2;
+  string to = 3;
+}
+message MoveReplicaResponse {
+  bool success = 1;
+  string message = 2;
+}
+message RebalanceMove {
+  string resource = 1;
+  string from = 2;
+  string to = 3;
+  uint64 size_gb = 4;
+}
+message PlanRebalanceRequest {
+  bool apply = 1;         // run the plan (one move at a time); otherwise only propose it
+  uint32 max_moves = 2;   // 0 = 10
+}
+message PlanRebalanceResponse {
+  bool success = 1;
+  string message = 2;
+  repeated RebalanceMove moves = 3;
+  repeated string notes = 4;    // what was left out, and why
+}
+message MarkNodeLostRequest {
+  string node = 1;
+}
+message MarkNodeLostResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string resources = 3;  // replicas removed
+}
+message RestoreNodeRequest {
+  string node = 1;
+  bool dry_run = 2;
+}
+message RestoreNodeResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string plan = 3;
+}
+
+message RenameResourceRequest {
+  string name = 1;
+  string new_name = 2;
+}
+
+message RenameResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResizeVolumeRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  uint32 size_gb = 3;
+  // ignore_free_space grows the volume although a replica's pool has less free
+  // space than the growth. The added area is resynced onto every replica;
+  // without this a pool that cannot hold it refuses the resize, because a full
+  // thin pool fails the writes and drops the disk.
+  bool ignore_free_space = 4;
+  // size_bytes grows the device to exactly this many bytes; size_gb is then
+  // ignored.
+  uint64 size_bytes = 5;
+}
+
+message ResizeVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResourceStatusRequest {
+  string name = 1;
+}
+
+message ResourceStatusResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceStatus status = 3;
+}
+
+message SetPrimaryRequest {
+  string resource = 1;
+  string node = 2;
+  bool force = 3;
+  // quorum_guarded requests a SAFE hard-failover promote: the controller tries
+  // a normal (non-forced) promote first and only escalates to `drbdadm primary
+  // --force` if the target node currently holds DRBD quorum (majority). If the
+  // node lacks quorum the promote is REFUSED (forcing without quorum could
+  // split-brain). When set, `force` is ignored. Used by the CSI node plugin so
+  // a Pod rescheduled after a hard node failure promotes the survivor iff it is
+  // safe to do so.
+  bool quorum_guarded = 4;
+}
+
+message SetPrimaryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SetSecondaryRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message SetSecondaryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// SetDualPrimary toggles DRBD's allow-two-primaries for a resource. It exists
+// for the live-migration hand-off in the Proxmox VE storage plugin, where the
+// source and target hypervisor both hold the disk open for a moment.
+//
+// The toggle is applied at RUNTIME only (drbdadm net-options) and never written
+// into the .res file, so a reboot or `drbdadm adjust` restores single-primary
+// on its own.
+message SetDualPrimaryRequest {
+  string resource = 1;
+  // enable=true is strict: WAN (protocol A / async) resources are REFUSED,
+  // because two Primaries over an async link corrupts data, and a failure on
+  // any node fails the call.
+  //
+  // enable=false is idempotent: it is the caller's cleanup path, so an unknown
+  // resource or a node that rejects the command is tolerated — but the
+  // effective state is verified afterwards and an error is returned if any
+  // reachable node is still dual-primary.
+  bool enable = 2;
+  // nodes limits an enable to these participants — a live migration's source
+  // and target, the two ends of the only connection that will carry two
+  // Primaries. Empty enables it on every participant. Disabling always covers
+  // every participant.
+  repeated string nodes = 3;
+}
+
+message SetDualPrimaryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// AttachDisklessClient adds a node to a resource as a diskless data client: it
+// stores no local replica but connects over DRBD and can be promoted Primary to
+// read/write the volume over the network. Distinct from a quorum tiebreaker,
+// which is never promoted. Idempotent.
+message AttachDisklessClientRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message AttachDisklessClientResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// DetachDisklessClient removes a diskless client previously added via
+// AttachDisklessClient. Idempotent.
+message DetachDisklessClientRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message DetachDisklessClientResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateFilesystemRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  string fstype = 3;
+  string node = 4;
+}
+
+message CreateFilesystemResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message MountResourceRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  string path = 3;
+  string node = 4;
+  string fstype = 5;
+}
+
+message MountResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UnmountResourceRequest {
+  string resource = 1;
+  uint32 volume_id = 2;
+  string node = 3;
+}
+
+message UnmountResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// OcfAgent is one OCF resource-agent entry to compose into an HA promoter's
+// start[] list. It renders as "ocf:<provider>:<name> <instance> <k>=<v> ...".
+message OcfAgent {
+  string provider = 1;               // e.g. heartbeat
+  string name = 2;                   // e.g. IPaddr2
+  string instance = 3;               // OCF instance id, e.g. vip_pgha
+  map<string, string> params = 4;    // OCF parameters (rendered with sorted keys)
+}
+
+// HaStartItem is one entry in the promoter start[] list. systemd/mount units and
+// OCF resource agents are PEERS: the list is a single ordered sequence and each
+// item is exactly one of the fields below. This is what lets a correct stack be
+// expressed (e.g. portblock -> Filesystem -> IPaddr2 -> nfsserver -> exportfs ->
+// portunblock) instead of forcing all OCF agents after all systemd units.
+message HaStartItem {
+  oneof item {
+    string systemd_unit = 1;  // a systemd/mount unit, e.g. "mysql.service" or "mnt-data.mount"
+    OcfAgent ocf = 2;         // an OCF resource agent
+  }
+}
+
+message MakeHaRequest {
+  string resource = 1;
+  repeated string services = 2;      // systemd services to start/stop
+  string mount_point = 3;            // optional mount point
+  string fstype = 4;                 // filesystem type (if mount_point specified)
+  string vip = 5;                    // optional virtual IP (CIDR, e.g., "192.168.1.100/24")
+  repeated OcfAgent ocf_agents = 6;  // optional OCF agents appended to promoter start[]
+  // start_items, when non-empty, defines the promoter start[] list verbatim and
+  // in order (systemd units and OCF agents interleaved). The legacy fields
+  // 2/3/5/6 above are then used only for provisioning side effects (mount unit
+  // generation, VIP service-ip precondition) and NOT for start[] ordering.
+  repeated HaStartItem start_items = 7;
+}
+
+message ResourceAgentInfo {
+  string provider = 1;
+  string name = 2;
+  string shortdesc = 3;
+}
+
+message ListResourceAgentsRequest {}
+
+message ListResourceAgentsResponse {
+  repeated ResourceAgentInfo agents = 1;
+}
+
+message ResourceAgentParameter {
+  string name = 1;
+  bool required = 2;
+  bool unique = 3;
+  string type = 4;
+  string default = 5;
+  string shortdesc = 6;
+  string longdesc = 7;
+}
+
+message GetResourceAgentMetadataRequest {
+  string provider = 1;
+  string name = 2;
+}
+
+message GetResourceAgentMetadataResponse {
+  string provider = 1;
+  string name = 2;
+  string version = 3;
+  string shortdesc = 4;
+  string longdesc = 5;
+  repeated ResourceAgentParameter parameters = 6;
+}
+
+message GetHaTomlRequest {
+  string resource = 1;
+}
+
+message GetHaTomlResponse {
+  string resource = 1;
+  string path = 2;
+  string content = 3;
+}
+
+message SyncHaTomlRequest {
+  string resource = 1;
+  string content = 2;
+}
+
+message SyncHaTomlResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message MakeHaResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;            // path to generated promoter config
+}
+
+message EvictHaRequest {
+  string resource = 1;
+}
+
+// SetTiebreakerRequest moves a resource's diskless quorum tiebreaker to
+// another node. An empty node removes the tiebreaker without adding one.
+message SetTiebreakerRequest {
+  string resource = 1;
+  string node = 2;
+}
+
+message SetTiebreakerResponse {
+  bool success = 1;
+  string message = 2;
+  string previous_node = 3;
+  string node = 4;
+}
+
+// AddDRRequest attaches an asynchronous off-site replica to a resource that is
+// already running, turning a LAN cluster into the two-site shape in place.
+message AddDRRequest {
+  string resource = 1;
+  string dr_node = 2;           // registered node that will hold the remote copy
+  string dr_endpoint = 3;       // public address the primary site dials
+  uint32 wan_port = 4;          // base haify-proxy port; 0 auto-allocates
+  string egress_address = 5;    // optional source address for the primary site
+}
+
+message AddDRResponse {
+  bool success = 1;
+  string message = 2;
+  uint32 wan_port = 3;
+}
+
+// AddReplicaRequest adds a diskful local replica to a running resource. On a
+// two-site resource the new node also gets its own WAN leg to the DR: DRBD 9 is
+// a full mesh, and a replica the DR cannot reach ends replication the moment it
+// is promoted.
+message AddReplicaRequest {
+  string resource = 1;
+  string node = 2;
+  // ignore_free_space adds the replica although the node's pool has less free
+  // space than the volume, which the sync writes in full. Without it that is
+  // refused: a full thin pool fails the sync's writes and drops the new disk.
+  bool ignore_free_space = 3;
+  // allow_unreachable adds the replica while a minority of the resource's
+  // members do not answer; they get the new config when they are back.
+  bool allow_unreachable = 4;
+}
+
+// RemoveReplicaRequest takes a diskful replica out of a running resource. The
+// inverse of AddReplica; refused when the node is Primary, is the tiebreaker or
+// the DR, or when fewer than two diskful copies would remain.
+message RemoveReplicaRequest {
+  string resource = 1;
+  string node = 2;
+  // lost removes the replica of a node that is gone for good: nothing is run
+  // on it, only the survivors' configs change. Refused while the node answers
+  // or any survivor is still connected to it.
+  bool lost = 3;
+}
+
+message RemoveReplicaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message AddReplicaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message EvictHaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Controller self-HA messages
+message EnableSelfHaRequest {
+  string vip = 1;             // virtual IP for the controller (CIDR, required)
+  string pool = 2;            // storage pool backing the metadata resource
+  uint32 size_gb = 3;         // metadata resource size (default 1)
+  uint32 port = 4;            // DRBD port for the metadata resource (default 7999)
+  repeated string nodes = 5;  // target nodes (default: all registered nodes)
+}
+
+message EnableSelfHaResponse {
+  bool success = 1;
+  string message = 2;
+  string resource = 3;        // metadata resource name (haify-meta)
+  string handoff_log = 4;     // node-local log path of the handoff script
+}
+
+message DisableSelfHaRequest {
+  string node = 1;            // node that keeps running the standalone controller
+}
+
+message DisableSelfHaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetSelfHaStatusRequest {}
+
+message GetSelfHaStatusResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;           // self-HA config present
+  string resource = 4;        // metadata resource name
+  string vip = 5;
+  repeated string nodes = 6;
+  string active_node = 7;     // node currently running the controller (DRBD Primary)
+}
+
+// ==================== Logs ====================
+
+message AuditEvent {
+  int64 timestamp_unix_ms = 1;
+  string method = 2;          // short RPC name, e.g. "EvictHa"
+  string client = 3;          // caller address, forwarded client IP when proxied
+  string user = 4;            // empty when RBAC is off: no identity exists
+  string target = 5;          // resource acted on, best-effort
+  string result = 6;          // gRPC code, "OK" on success
+  bool granted = 7;           // false only for Unauthenticated / PermissionDenied
+  int64 latency_ms = 8;
+  string error = 9;
+  // Node that served the call. The controller relocates, so a trail spanning a
+  // failover is otherwise ambiguous about where each entry came from.
+  string node = 10;
+}
+
+message ListAuditEventsRequest {
+  int32 limit = 1;            // newest first; 0 means a server-chosen default
+  string method = 2;          // exact match filter, empty for all
+  string target = 3;
+  string user = 4;
+  bool failures_only = 5;     // only entries whose result is not OK
+  int64 since_unix_ms = 6;    // 0 for no lower bound
+}
+
+message ListAuditEventsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated AuditEvent events = 3;
+  // Entries held in total, so the UI can say whether it is showing everything.
+  int64 total = 4;
+}
+
+message ControllerLogEntry {
+  int64 timestamp_unix_ms = 1;
+  string level = 2;           // debug / info / warn / error
+  string logger = 3;          // zap named logger, e.g. "audit"
+  string caller = 4;
+  string message = 5;
+  // Structured zap fields, rendered as strings so the UI needs no type table.
+  map<string, string> fields = 6;
+}
+
+message ListControllerLogsRequest {
+  int32 limit = 1;            // newest first; 0 means a server-chosen default
+  string level = 2;           // minimum level, empty for all
+  string contains = 3;        // substring match on the message
+}
+
+message ListControllerLogsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ControllerLogEntry entries = 3;
+  // The node whose ring buffer this is — the active controller, whichever it is.
+  string node = 4;
+  // True when the buffer has wrapped, i.e. older lines have been discarded.
+  bool truncated = 5;
+}
+
+// ==================== Node diagnostics ====================
+
+message CollectNodeDiagnosticsRequest {
+  // Nodes to read. Empty means every registered node, which is what a caller
+  // investigating a cluster-wide symptom wants and is why it is the default.
+  repeated string nodes = 1;
+  // Collector names. Empty means all of them. An unrecognised name is returned
+  // in unknown_collectors and runs nothing — a typo must not silently collect
+  // less than the caller asked for.
+  repeated string collectors = 2;
+  // How far back to read, for the collectors that take a window (journals).
+  // 0 takes the server's default.
+  int32 since_minutes = 3;
+  // Per collector, per node. 0 takes the server's default. A cap is not a
+  // nicety here: dmesg on a node that has been up for a year is megabytes, and
+  // this response is read by an assistant with a context window.
+  int32 max_lines = 4;
+}
+
+// NodeCollectorOutput is one collector's reading on one node.
+message NodeCollectorOutput {
+  string collector = 1;
+  // The exact command that produced these lines, so an operator can repeat it
+  // by hand and see the same thing. A diagnosis nobody can reproduce is a
+  // rumour.
+  string command = 2;
+  repeated string lines = 3;
+  bool ok = 4;
+  string error = 5;
+  // True when max_lines cut this short: what follows is the tail of the record,
+  // not all of it. A count of what was dropped is deliberately not reported —
+  // the collector reads the tail and never sees the rest, so any number here
+  // would be invented.
+  bool truncated = 6;
+}
+
+message NodeDiagnostics {
+  string node = 1;
+  string address = 2;
+  // False when the node could not be reached at all. Distinguished from a
+  // collector that ran and failed: an unreachable node is itself the finding.
+  bool reachable = 3;
+  string error = 4;
+  repeated NodeCollectorOutput collectors = 5;
+}
+
+message CollectNodeDiagnosticsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NodeDiagnostics nodes = 3;
+  repeated string unknown_collectors = 4;
+  // Every collector this controller knows, so a caller that asked for all of
+  // them can tell which ones it got and a caller that mistyped one can see the
+  // list without a second call.
+  repeated string available_collectors = 5;
+}
+
+// ==================== Events / notifications ====================
+
+// Event is one operational notification. The same shape is delivered to
+// Webhook receivers as JSON, so a receiver written against one works against
+// the other.
+message Event {
+  // Monotonic across the controller's whole event stream, starting at 1. A
+  // watcher whose ids skip a value knows it fell behind and lost events.
+  uint64 id = 1;
+  // Dotted "<subject>.<condition>", e.g. "resource.failover",
+  // "resource.degraded", "resource.no_primary", "resource.promoted",
+  // "node.unreachable", "wan.degraded".
+  string type = 2;
+  // "info" | "warning" | "critical".
+  string severity = 3;
+  // "firing" when a condition starts, "resolved" when it clears, "info" for
+  // one-shot events that do neither. Pairing these is how a receiver avoids
+  // treating a recovery as a new problem.
+  string status = 4;
+  string resource = 5;      // empty for events not scoped to a resource
+  string node = 6;          // empty for events not scoped to a node
+  string message = 7;       // human-readable, already formatted
+  // Type-specific fields: disk_state / repl_state for degrade events,
+  // from / to for failover events.
+  map<string, string> details = 8;
+  int64 timestamp_unix_ms = 9;
+}
+
+message ListEventsRequest {
+  int32 limit = 1;              // newest first; 0 means a server-chosen default
+  string min_severity = 2;      // "info" (default) | "warning" | "critical"
+  repeated string types = 3;    // exact type matches; empty for all
+  string resource = 4;          // empty for all
+  // Only events newer than this id. Lets a client resume where it left off
+  // instead of re-reading the whole buffer.
+  uint64 since_id = 5;
+}
+
+message ListEventsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Event events = 3;    // oldest first
+  // Total published since the controller started. Compared against the oldest
+  // id returned, this tells a client whether history has been discarded.
+  uint64 published = 4;
+  // Events dropped because a subscriber could not keep up.
+  uint64 dropped = 5;
+}
+
+message RepairWanProxyRequest {
+  string name = 1;
+  // DryRun reports what would change without touching anything. Worth using
+  // first: repair restarts replication tunnels.
+  bool dry_run = 2;
+}
+
+message RepairWanProxyResponse {
+  bool success = 1;
+  string message = 2;
+  // Legs the resource should have, as "<node> -> <leg id>".
+  repeated string expected_legs = 3;
+  // Instances removed (or, under dry_run, that would be), as "<host>: <leg id>".
+  repeated string removed_legs = 4;
+  // True when nothing needed changing.
+  bool already_consistent = 5;
+}
+
+message WatchEventsRequest {
+  string min_severity = 1;
+  repeated string types = 2;
+  string resource = 3;
+  // Replay retained events newer than this id before streaming live ones, so a
+  // reconnecting client does not miss what happened while it was away. 0 skips
+  // the replay and starts from now.
+  uint64 since_id = 4;
+}
+
+message ResourceInfo {
+  string name = 1;
+  uint32 port = 2;
+  string protocol = 3;
+  repeated string nodes = 4;
+  string role = 5;
+  repeated VolumeInfo volumes = 6;
+  map<string, NodeResourceState> node_states = 7;
+  // Nodes participating only as diskless quorum tiebreakers (vote, no data).
+  repeated string diskless_nodes = 8;
+  // True when the resource has two diskful nodes and no tiebreaker, so a
+  // single node failure suspends I/O (no quorum majority).
+  bool quorum_risk = 9;
+  // Nodes attached as diskless data clients: no local replica, but connected
+  // over DRBD and promotable to serve the volume over the network. Distinct
+  // from diskless_nodes (quorum-only tiebreakers).
+  repeated string diskless_clients = 10;
+  map<string, string> labels = 11;
+  string profile = 12;
+  // WAN replication: wan_mode marks a resource with an off-site asynchronous
+  // copy, and dr_node names which of `nodes` holds it. Without this the list
+  // shows the DR as just another replica, which is exactly wrong — it is a
+  // different site, a different protocol, and it never takes over automatically.
+  bool wan_mode = 13;
+  string dr_node = 14;
+  // encrypted is true when every replica's backing volume is a LUKS2 container
+  // (DRBD → LUKS → LVM/ZFS). Encryption at rest only — DRBD replicates the
+  // plaintext, so the wire is not protected by this.
+  bool encrypted = 15;
+  // fault_domain_risk names the labelled fault domain(s), e.g. "host=dell",
+  // whose loss would take every copy of the data or the quorum majority.
+  string fault_domain_risk = 16;
+}
+
+message ResourceStatus {
+  string name = 1;
+  string role = 2;
+  repeated string nodes = 3;
+  map<string, NodeResourceState> node_states = 4;
+  repeated VolumeInfo volumes = 5;
+  // WAN replication (all empty/false for an ordinary LAN resource). When wan is
+  // true this resource replicates over the internet via a per-resource haify-proxy
+  // pair (protocol A / async), so the DR peer can lag; wan_proxy reports each
+  // WAN node's `haify-proxy@<resource>` unit state (active/inactive/...).
+  bool wan = 6;
+  string dr_node = 7;
+  string dr_endpoint = 8;
+  uint32 wan_port = 9;
+  map<string, string> wan_proxy = 10;
+  // wan_reachable is true when the primary node can currently open a TCP
+  // connection to the DR WAN endpoint (i.e. the DR firewall/security group
+  // permits the mTLS port). False here explains a WAN resource that is up
+  // locally but not replicating.
+  bool wan_reachable = 11;
+  // wan_metrics carries the counters haify-proxy publishes on the primary. Absent
+  // when they could not be read (older proxy, first tick not yet written, node
+  // unreachable) — absent means UNKNOWN, not zero.
+  WANMetrics wan_metrics = 12;
+  // quorum is what decides whether this resource keeps serving when nodes are
+  // lost. It is the one number that governs availability and it was previously
+  // reported nowhere: an operator had to know DRBD counts every configured node
+  // (tiebreakers and the off-site DR included) and work out the majority by hand.
+  QuorumInfo quorum = 13;
+  // encrypted mirrors ResourceInfo.encrypted: the backing volumes are LUKS2
+  // containers. Reported here because "is this volume encrypted?" is a question
+  // an auditor asks of the running system, not of the creation request.
+  bool encrypted = 14;
+}
+
+// QuorumInfo is the vote arithmetic behind "will this resource survive?".
+message QuorumInfo {
+  // members is every node in the resource config: diskful replicas, diskless
+  // tiebreakers and diskless clients alike. DRBD counts them all.
+  int32 members = 1;
+  // required is the majority DRBD needs to keep serving: members/2 + 1.
+  int32 required = 2;
+  // online is how many members the reporting node can currently see, itself
+  // included.
+  int32 online = 3;
+  // has_quorum is what DRBD itself reports, not a recomputation of the fields
+  // above — they can disagree while a connection is being established, and DRBD
+  // is the one that decides whether I/O proceeds.
+  bool has_quorum = 4;
+  // tolerated is how many further members can be lost before I/O suspends.
+  // Negative is not possible; zero means the next failure stops the resource.
+  int32 tolerated = 5;
+}
+
+// WANMetrics is what the primary site's haify-proxy reports about the WAN leg.
+message WANMetrics {
+  // buffer_used_bytes is the un-replicated backlog: writes the primary's DRBD
+  // has already acknowledged to its application that have NOT yet reached the
+  // DR site. Under protocol A this IS the data-loss window of a DR failover
+  // performed right now — the question `resource status` previously could not
+  // answer.
+  uint64 buffer_used_bytes = 1;
+  uint64 buffer_cap_bytes = 2;
+  double buffer_fill_percent = 3;
+  // Payload accepted from DRBD versus bytes actually put on the WAN, and the
+  // ratio between them: the compression the link is really achieving.
+  uint64 drbd_to_wan_bytes = 4;
+  uint64 wan_wire_bytes = 5;
+  uint64 wan_to_drbd_bytes = 6;
+  uint64 frames_sent = 7;
+  double compression_ratio = 8;
+  bool wan_connected = 9;
+  // reconnects climbing on an otherwise healthy link is the signature of a
+  // flapping path; ring_full_events non-zero means the WAN could not keep up
+  // with the write workload and DRBD was pushed into Ahead.
+  uint64 reconnects = 10;
+  uint64 ring_full_events = 11;
+}
+
+message NodeResourceState {
+  string role = 1;
+  string disk_state = 2;
+  string replication_state = 3;
+  // Percent of this peer's data in sync (0..100). 100 when steady-state / not
+  // resyncing. Only meaningful for a peer whose replication_state is a resync
+  // state (SyncSource/SyncTarget/PausedSync*).
+  double sync_percent = 4;
+  // node is the Haify node name this state belongs to. The map itself is keyed by
+  // DRBD host name, which is the machine's real hostname and generally is NOT
+  // the node name the rest of the API uses — so without this a caller cannot
+  // pair a state with the entry of `nodes` it describes.
+  string node = 5;
+  // Peer DRBD connection state as the answering node sees it ("Connected",
+  // "Connecting", "StandAlone", ...). Empty for the answering node itself. A
+  // peer that is not Connected reports no role, disk or replication state, so
+  // this is the only field that tells an unreachable replica from a healthy one.
+  string connection = 6;
+  // tls is whether the connection to this peer runs over TLS.
+  bool tls = 7;
+}
+
+message VolumeInfo {
+  uint32 volume_id = 1;
+  string device = 2;
+  uint64 size_gb = 3;
+  // Storage pool (volume group) backing this volume.
+  string pool = 4;
+  // Backing logical volume name inside the pool (e.g. "<resource>_data").
+  // Combined with pool it forms the "<pool>/<lv>" path used by snapshot APIs.
+  string backing_volume = 5;
+  // encrypted is true when DRBD consumes this volume through a LUKS2 container
+  // rather than the backing LV/zvol directly. Snapshots of an encrypted volume
+  // are snapshots of the ciphertext.
+  bool encrypted = 6;
+  // size_bytes is the device's exact size when it was given one; 0 means
+  // size_gb whole GiB.
+  uint64 size_bytes = 7;
+}
+
+// Snapshot messages
+message CreateSnapshotRequest {
+  string volume = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message CreateSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteSnapshotRequest {
+  string volume = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message DeleteSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RestoreSnapshotRequest {
+  string volume = 1;
+  string snapshot_name = 2;
+  string node = 3;
+}
+
+message RestoreSnapshotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PopulateVolumeRequest {
+  // resource / volume_id identify the freshly created, still-empty target.
+  string resource = 1;
+  uint32 volume_id = 2;
+  // source_device is the block device to copy FROM, on `node`: an LVM snapshot
+  // (/dev/<vg>/<snap>), a ZFS zvol, or another resource's backing volume.
+  string source_device = 3;
+  // node must hold a diskful replica of `resource` AND have source_device
+  // locally; the copy runs entirely on that node.
+  string node = 4;
+}
+
+message PopulateVolumeResponse {
+  bool success = 1;
+  string message = 2;
+  // bytes_copied is what dd reported, for logging and progress reporting.
+  uint64 bytes_copied = 3;
+}
+
+message ListSnapshotsRequest {
+  string volume = 1;
+  string node = 2;
+}
+
+message ListSnapshotsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SnapshotInfo snapshots = 3;
+}
+
+message SnapshotInfo {
+  string name = 1;
+  string volume = 2;
+  uint64 size_gb = 3;
+  string created_at = 4;
+  // The logical volume this snapshot was taken from. A pool holds the snapshots
+  // of every resource on its node, and the snapshot name alone does not say
+  // which one it belongs to.
+  string origin = 5;
+}
+
+// Snapshot schedule messages
+
+// GFSRetention is a grandfather-father-son retention policy: how many
+// snapshots to keep per time bucket. Zero disables a bucket.
+message GFSRetention {
+  int32 hourly = 1;
+  int32 daily = 2;
+  int32 weekly = 3;
+  int32 monthly = 4;
+  int32 yearly = 5;
+}
+
+message SnapshotScheduleInfo {
+  string name = 1;
+  string resource = 2;
+  string cron = 3;
+  bool enabled = 4;
+  GFSRetention keep = 5;
+  string last_run = 6;
+  string next_run = 7;
+  // lock_days locks every snapshot the schedule takes for that many days.
+  uint32 lock_days = 8;
+  // locked_until (RFC3339) is when the newest snapshot it took stops being
+  // locked; until then the schedule and its resource cannot be deleted.
+  string locked_until = 9;
+  // frozen_until (RFC3339) is when a freeze ends; empty when not frozen.
+  string frozen_until = 10;
+  string frozen_reason = 11;
+}
+
+message FreezeSnapshotScheduleRequest {
+  string resource = 1;
+  uint32 hours = 2;      // 0 = 168 (a week)
+  string reason = 3;
+}
+
+message FreezeSnapshotScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  string frozen_until = 3;
+}
+
+message UnfreezeSnapshotScheduleRequest {
+  string resource = 1;
+}
+
+message UnfreezeSnapshotScheduleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateSnapshotScheduleRequest {
+  string resource = 1;
+  string cron = 2;
+  GFSRetention keep = 3;
+  bool enabled = 4;
+  // lock_days locks every snapshot the schedule takes for that many days: no
+  // retention, full pool or API call deletes it before then. Unset keeps the
+  // current schedule's lock; it can be raised at any time, lowered only once
+  // nothing is locked.
+  optional uint32 lock_days = 5;
+}
+
+message CreateSnapshotScheduleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListSnapshotSchedulesRequest {}
+
+message ListSnapshotSchedulesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SnapshotScheduleInfo schedules = 3;
+}
+
+message DeleteSnapshotScheduleRequest {
+  string name = 1;
+}
+
+message DeleteSnapshotScheduleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Backup messages
+
+// BackupTargetInfo describes a backup repository. The secret is intentionally
+// absent: a credential readable back out of the API leaks through every client
+// that ever renders it.
+message BackupTargetInfo {
+  string name = 1;
+  string kind = 2;       // s3 | smb | webdav
+  string prefix = 3;
+  string bucket = 4;
+  string endpoint = 5;
+  string region = 6;
+  string host = 7;
+  string share = 8;
+  string user = 9;
+  // description is a rendered one-line summary for display.
+  string description = 10;
+  string lock_mode = 11;
+  uint32 lock_days = 12;
+  uint32 full_every_days = 13;
+}
+
+message AddBackupTargetRequest {
+  string name = 1;
+  string kind = 2;
+  string prefix = 3;
+  string bucket = 4;
+  string endpoint = 5;
+  string region = 6;
+  string host = 7;
+  string share = 8;
+  // user is the S3 access key id, or the SMB/WebDAV username.
+  string user = 9;
+  // secret is the S3 secret access key, or the SMB/WebDAV password. It is
+  // write-only: it is never returned by any RPC. Clients are expected to read
+  // it from an environment variable or a file rather than a command-line flag.
+  string secret = 10;
+  // secret_obscured says secret is already in rclone's obscured form.
+  bool secret_obscured = 11;
+  // lock_mode turns on S3 Object Lock for every object written: "governance"
+  // or "compliance"; empty for none. The bucket must have Object Lock (and so
+  // versioning) enabled, and rclone 1.74 or later must be on the nodes.
+  string lock_mode = 12;
+  // lock_days is how long every backup stays locked at the least.
+  uint32 lock_days = 13;
+  // full_every_days is how long an incremental chain grows on a locked
+  // target before the next backup is full (default 7). Every backup of a
+  // chain is locked until chain start + full_every_days + lock_days, so no
+  // link expires before a backup built on it.
+  uint32 full_every_days = 14;
+}
+
+message AddBackupTargetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListBackupTargetsRequest {}
+
+message ListBackupTargetsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BackupTargetInfo targets = 3;
+}
+
+message DeleteBackupTargetRequest {
+  string name = 1;
+  bool force = 2;
+}
+
+message DeleteBackupTargetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// NotifyChannelInfo describes one alert delivery channel. The signing secret is
+// intentionally absent, exactly as BackupTargetInfo omits its credential: a
+// secret readable back out of the API leaks through every client that renders
+// it. has_secret says whether one is stored, which is what a UI needs in order
+// to show "configured" without showing the value.
+message NotifyChannelInfo {
+  string name = 1;
+  // kind is generic | feishu | slack | wecom | dingtalk.
+  string kind = 2;
+  string url = 3;
+  string min_severity = 4;
+  repeated string types = 5;
+  map<string, string> headers = 6;
+  bool enabled = 7;
+  bool has_secret = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message ListNotifyChannelsRequest {}
+
+message ListNotifyChannelsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NotifyChannelInfo channels = 3;
+  // kinds lists the message formats this controller can render, so a client
+  // does not have to carry its own copy of the list and go stale.
+  repeated string kinds = 4;
+}
+
+// SaveNotifyChannelRequest creates a channel or replaces one by name.
+message SaveNotifyChannelRequest {
+  string name = 1;
+  string kind = 2;
+  string url = 3;
+  string min_severity = 4;
+  repeated string types = 5;
+  map<string, string> headers = 6;
+  bool enabled = 7;
+  // secret is the signing secret for kinds that authenticate that way
+  // (DingTalk's 加签). Write-only: never returned by any RPC.
+  //
+  // An empty secret on an existing channel LEAVES THE STORED ONE ALONE, because
+  // a UI cannot render the secret to send it back, so an edit of any other
+  // field would otherwise silently clear it. clear_secret is how a secret is
+  // actually removed.
+  string secret = 8;
+  bool clear_secret = 9;
+}
+
+message SaveNotifyChannelResponse {
+  bool success = 1;
+  string message = 2;
+  NotifyChannelInfo channel = 3;
+}
+
+message DeleteNotifyChannelRequest {
+  string name = 1;
+}
+
+message DeleteNotifyChannelResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message TestNotifyChannelRequest {
+  string name = 1;
+}
+
+message TestNotifyChannelResponse {
+  bool success = 1;
+  // message carries the far end's own rejection text when it refused, which is
+  // the part that says what to fix.
+  string message = 2;
+}
+
+message BackupVolumeInfo {
+  uint32 volume_id = 1;
+  string object = 2;
+  uint64 bytes = 3;
+  string pool = 4;
+  string backing_volume = 5;
+  // ranges is the object listing the byte ranges an incremental image holds;
+  // empty for a full image.
+  string ranges = 6;
+  // changed_bytes is how much of the volume an incremental image carries.
+  uint64 changed_bytes = 7;
+}
+
+message BackupInfo {
+  string id = 1;
+  string resource = 2;
+  string target = 3;
+  string node = 4;
+  string backend = 5;
+  // state is running | completed | failed. Only completed is restorable.
+  string state = 6;
+  string error = 7;
+  string prefix = 8;
+  uint64 total_bytes = 9;
+  string started_at = 10;
+  string finished_at = 11;
+  repeated BackupVolumeInfo volumes = 12;
+  // kind is full or incremental. An incremental restores only together with
+  // every backup down to the full one it is built on.
+  string kind = 13;
+  // parent is the backup an incremental is built on.
+  string parent = 14;
+  // schedule is the backup schedule (resource@target) that took it; empty for
+  // a backup taken by hand. A schedule's retention deletes only its own.
+  string schedule = 15;
+  // lock_mode and retain_until (RFC3339) are the Object Lock its objects
+  // carry; until then it cannot be deleted, by haify or by anyone using haify's
+  // credentials.
+  string lock_mode = 16;
+  string retain_until = 17;
+  // read_at (RFC3339) is the time its objects are read as of, for a backup
+  // imported with as_of.
+  string read_at = 18;
+}
+
+message CreateBackupRequest {
+  string resource = 1;
+  string target = 2;
+  // node optionally pins which replica is snapshotted and read. Empty prefers
+  // an UpToDate Secondary.
+  string node = 3;
+  // full skips the incremental path even when a base is available.
+  bool full = 4;
+}
+
+message CreateBackupResponse {
+  bool success = 1;
+  string message = 2;
+  BackupInfo backup = 3;
+}
+
+message ListBackupsRequest {
+  string resource = 1;
+  string target = 2;
+}
+
+message ListBackupsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BackupInfo backups = 3;
+}
+
+message RestoreBackupRequest {
+  string id = 1;
+  // resource is the resource to restore INTO; empty restores into the resource
+  // the backup was taken from. It must exist, be large enough, and not be in
+  // use.
+  string resource = 2;
+  string node = 3;
+}
+
+message RestoreBackupResponse {
+  bool success = 1;
+  string message = 2;
+  BackupInfo backup = 3;
+}
+
+message DeleteBackupRequest {
+  string id = 1;
+  // node optionally selects which node reaches the target to delete the
+  // objects; empty uses the node that wrote the backup.
+  string node = 2;
+  // force drops the record even when the objects could not be removed.
+  bool force = 3;
+}
+
+message DeleteBackupResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ImportBackupsRequest {
+  string target = 1;
+  // node reads the target; empty tries the registered nodes in turn.
+  string node = 2;
+  // as_of (RFC3339) imports the target as it was at that time: the object
+  // versions current then, before any later overwrite or delete. Restores of
+  // what it imports read those versions too. S3 targets with versioning only.
+  string as_of = 3;
+}
+
+message ImportBackupsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string imported = 3;
+  // skipped maps a backup id, or a manifest path when it could not be read,
+  // to why it was not imported.
+  map<string, string> skipped = 4;
+}
+
+// BackupScheduleInfo is a cron-driven backup of one resource to one target.
+// Retention is GFS over the completed backups it made, and never breaks an
+// incremental chain: a kept backup keeps everything down to its full one.
+message BackupScheduleInfo {
+  // name is resource@target.
+  string name = 1;
+  string resource = 2;
+  string target = 3;
+  string cron = 4;
+  bool enabled = 5;
+  GFSRetention keep = 6;
+  string last_run = 7;
+  string next_run = 8;
+  // last_backup is the id the last run produced; last_error why it did not.
+  string last_backup = 9;
+  string last_error = 10;
+}
+
+message CreateBackupScheduleRequest {
+  string resource = 1;
+  string target = 2;
+  string cron = 3;
+  GFSRetention keep = 4;
+  bool enabled = 5;
+}
+
+message CreateBackupScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  BackupScheduleInfo schedule = 3;
+}
+
+message ListBackupSchedulesRequest {}
+
+message ListBackupSchedulesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated BackupScheduleInfo schedules = 3;
+}
+
+message DeleteBackupScheduleRequest {
+  string name = 1;
+}
+
+message DeleteBackupScheduleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// RunBackupScheduleRequest runs a schedule now, retention included, and waits
+// for it.
+message RunBackupScheduleRequest {
+  string name = 1;
+}
+
+message RunBackupScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  BackupScheduleInfo schedule = 3;
+}
+
+// Gateway messages
+message CreateNFSGatewayRequest {
+  string resource = 1;           // DRBD resource name
+  string service_ip = 2;         // Service IP (e.g., "192.168.1.200/24")
+  string export_path = 3;        // Base export path (e.g., "/data")
+  repeated string allowed_ips = 4; // Allowed client IPs (e.g., ["192.168.1.0/24"])
+  string fs_type = 5;            // Filesystem type (ext4, xfs)
+  map<string, string> options = 6; // Additional options
+}
+
+message CreateNFSGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;        // Path to generated config file
+}
+
+message CreateISCSIGatewayRequest {
+  string resource = 1;           // DRBD resource name
+  string service_ip = 2;         // Service IP (e.g., "192.168.1.100/24")
+  string iqn = 3;                // iSCSI Qualified Name
+  repeated string allowed_initiators = 4; // Allowed initiator IQNs
+  string username = 5;           // CHAP username (optional)
+  string password = 6;           // CHAP password (optional)
+  string implementation = 7;     // iSCSI implementation: lio (default; tgt and iet are refused)
+  map<string, string> options = 8; // Additional options
+}
+
+message CreateISCSIGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;        // Path to generated config file
+}
+
+message CreateNVMeGatewayRequest {
+  string resource = 1;           // DRBD resource name
+  string service_ip = 2;         // Service IP (e.g., "192.168.1.150/24")
+  string nqn = 3;                // NVMe Qualified Name
+  string transport_type = 4;     // Transport type (tcp, rdma)
+  map<string, string> options = 5; // Additional options
+}
+
+message CreateNVMeGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;        // Path to generated config file
+}
+
+message DeleteGatewayRequest {
+  string id = 1;
+}
+
+message DeleteGatewayResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetGatewayRequest {
+  string id = 1;
+}
+
+message GetGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  GatewayInfo gateway = 3;
+}
+
+message ListGatewaysRequest {}
+
+message ListGatewaysResponse {
+  bool success = 1;
+  string message = 2;
+  repeated GatewayInfo gateways = 3;
+}
+
+message StartGatewayRequest {
+  string id = 1;
+}
+
+message StartGatewayResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message StopGatewayRequest {
+  string id = 1;
+}
+
+message StopGatewayResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GatewayInfo {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  string state = 4;
+  string node = 5;
+  string resource = 6;
+  uint32 volume_id = 7;
+  string path = 8;
+  map<string, string> options = 9;
+}
+
+message NFSExportInfo {
+  string directory = 1;
+  string fsid = 2;
+  string clientspec = 3;
+  string options = 4;
+}
+
+message AddNFSExportRequest {
+  string resource = 1;
+  string export_path = 2;
+  int32 fsid = 3;
+  string client_spec = 4;
+  string options = 5;
+}
+
+message AddNFSExportResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveNFSExportRequest {
+  string resource = 1;
+  string export_path = 2;
+}
+
+message RemoveNFSExportResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListNFSExportsRequest {
+  string resource = 1;
+}
+
+message ListNFSExportsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NFSExportInfo exports = 3;
+}
+
+// SMB gateway messages.
+message CreateSMBGatewayRequest {
+  string resource = 1;
+  // CIDR, e.g. 192.168.1.210/24.
+  string service_ip = 2;
+  // Defaults to WORKGROUP.
+  string workgroup = 3;
+  // The first share, over the whole data volume; defaults to the resource name.
+  string share_name = 4;
+  bool read_only = 5;
+  repeated string valid_users = 6;
+}
+
+message CreateSMBGatewayResponse {
+  bool success = 1;
+  string message = 2;
+  string config_path = 3;
+}
+
+message SMBShareInfo {
+  string name = 1;
+  // Relative to the gateway's data volume; empty is the whole volume.
+  string path = 2;
+  bool read_only = 3;
+  // Empty: every SMB user of the gateway.
+  repeated string valid_users = 4;
+}
+
+message AddSMBShareRequest {
+  string resource = 1;
+  SMBShareInfo share = 2;
+}
+
+message AddSMBShareResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveSMBShareRequest {
+  string resource = 1;
+  string name = 2;
+}
+
+message RemoveSMBShareResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListSMBSharesRequest {
+  string resource = 1;
+}
+
+message ListSMBSharesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SMBShareInfo shares = 3;
+}
+
+message SetSMBUserRequest {
+  string resource = 1;
+  string user = 2;
+  string password = 3;
+}
+
+message SetSMBUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveSMBUserRequest {
+  string resource = 1;
+  string user = 2;
+}
+
+message RemoveSMBUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListSMBUsersRequest {
+  string resource = 1;
+}
+
+message ListSMBUsersResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string users = 3;
+}
+
+message ISCSILUNInfo {
+  int32 lun = 1;
+  string device = 2;
+  string target_iqn = 3;
+}
+
+message AddISCSILUNRequest {
+  string resource = 1;
+  int32 lun = 2;
+  string device = 3;
+}
+
+message AddISCSILUNResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveISCSILUNRequest {
+  string resource = 1;
+  int32 lun = 2;
+}
+
+message RemoveISCSILUNResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListISCSILUNsRequest {
+  string resource = 1;
+}
+
+message ListISCSILUNsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ISCSILUNInfo luns = 3;
+}
+
+message AddISCSIInitiatorRequest {
+  string resource = 1;
+  string initiator = 2;
+}
+
+message AddISCSIInitiatorResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveISCSIInitiatorRequest {
+  string resource = 1;
+  string initiator = 2;
+}
+
+message RemoveISCSIInitiatorResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListISCSIInitiatorsRequest {
+  string resource = 1;
+}
+
+message ListISCSIInitiatorsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string initiators = 3;
+}
+
+message SetISCSIChapRequest {
+  string resource = 1;
+  string username = 2;
+  string password = 3;
+  bool mutual = 4;
+}
+
+message SetISCSIChapResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetISCSIChapRequest {
+  string resource = 1;
+}
+
+message GetISCSIChapResponse {
+  bool success = 1;
+  string message = 2;
+  string username = 3;
+  string password = 4;
+  bool mutual = 5;
+}
+
+message NVMeNamespaceInfo {
+  int32 namespace_id = 1;
+  string backing_path = 2;
+  string uuid = 3;
+  string nguid = 4;
+  string nqn = 5;
+}
+
+message AddNVMeNamespaceRequest {
+  string resource = 1;
+  string device = 2;
+}
+
+message AddNVMeNamespaceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveNVMeNamespaceRequest {
+  string resource = 1;
+  int32 namespace_id = 2;
+}
+
+message RemoveNVMeNamespaceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListNVMeNamespacesRequest {
+  string resource = 1;
+}
+
+message ListNVMeNamespacesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NVMeNamespaceInfo namespaces = 3;
+}
+
+message AddNVMeHostRequest {
+  string resource = 1;
+  string host_nqn = 2;
+}
+
+message AddNVMeHostResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveNVMeHostRequest {
+  string resource = 1;
+  string host_nqn = 2;
+}
+
+message RemoveNVMeHostResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListNVMeHostsRequest {
+  string resource = 1;
+}
+
+message ListNVMeHostsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string hosts = 3;
+}
+
+message DeleteHaRequest {
+  string resource = 1;
+}
+
+message DeleteHaResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetHaRequest {
+  string resource = 1;
+}
+
+message GetHaResponse {
+  bool success = 1;
+  string message = 2;
+  HaConfigInfo config = 3;
+}
+
+message ListHaRequest {}
+
+message ListHaResponse {
+  bool success = 1;
+  string message = 2;
+  repeated HaConfigInfo configs = 3;
+}
+
+message HaConfigInfo {
+  string resource = 1;
+  string vip = 2;
+  string mount_point = 3;
+  string fs_type = 4;
+  repeated string services = 5;
+  repeated OcfAgent ocf_agents = 6;      // OCF agents appended after the services
+  repeated HaStartItem start_items = 7;  // the explicit start list, when one was given
+}
+
+message HaServiceStatus {
+  string name    = 1;
+  string status  = 2;
+}
+
+message HaPromoterStatus {
+  string drbd_resource              = 1;
+  string primary_on                 = 2;
+  string status                     = 3;
+  HaServiceStatus target            = 4;
+  repeated HaServiceStatus deps     = 5;
+}
+
+message GetHaStatusRequest {
+  string resource = 1;  // empty = all resources
+}
+
+message GetHaStatusResponse {
+  bool success                        = 1;
+  string message                      = 2;
+  repeated HaPromoterStatus promoters = 3;
+}
+
+message DrainNodeRequest {
+  string name = 1;
+}
+
+message ConvertPoolToThinRequest {
+  string node = 1;
+  string pool = 2;
+}
+
+message ConvertPoolToThinResponse {
+  bool success = 1;
+  string message = 2;
+  // Volumes rebuilt on this node; each is resyncing in full from its peers
+  // when the call returns.
+  repeated string volumes = 3;
+}
+
+message AddPoolCacheRequest {
+  string node = 1;
+  string pool = 2;
+  // Block device on that node to spend entirely on cache, e.g. /dev/nvme0n1.
+  string device = 3;
+  // "writethrough" (the default when empty) or "writeback". writeback
+  // acknowledges a write once it is on the SSD, so losing that one SSD loses
+  // every write it had not yet destaged, recoverable only from a replica that
+  // happens to hold them.
+  string mode = 4;
+}
+
+message AddPoolCacheResponse {
+  bool success = 1;
+  string message = 2;
+  // The mode actually applied, so a caller that sent nothing learns it got
+  // writethrough rather than assuming.
+  string mode = 3;
+  uint64 cache_size_bytes = 4;
+}
+
+message RemovePoolCacheRequest {
+  string node = 1;
+  string pool = 2;
+}
+
+message RemovePoolCacheResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DrainNodeResponse {
+  bool success = 1;
+  string message = 2;
+  // resources_moved lists the DRBD resources whose Primary was moved off the node.
+  repeated string resources_moved = 3;
+}
+
+message UndrainNodeRequest {
+  string name = 1;
+}
+
+message UndrainNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// SetNodeAddressRequest renumbers a registered node: the controller reaches it
+// at the new address, checks it is the same machine, and rewrites every place
+// the old address was recorded — the node registry, /etc/hosts on the nodes,
+// and the DRBD config of each resource the node takes part in.
+message SetNodeAddressRequest {
+  string node = 1;
+  string address = 2;
+  // replication_address moves DRBD traffic to a separate network; empty keeps
+  // the node's current choice (none = the management address).
+  string replication_address = 3;
+  // moves renumbers several nodes together, instead of node/address — what a
+  // DHCP server handing every node a new lease needs. One at a time cannot
+  // work then: each node's resources are rewritten through peers still known
+  // only by their dead addresses.
+  repeated NodeAddressMove moves = 4;
+}
+
+message NodeAddressMove {
+  string node = 1;
+  string address = 2;
+  string replication_address = 3;
+}
+
+message SetNodeAddressResponse {
+  bool success = 1;
+  string message = 2;
+  // resources whose DRBD config now carries the new address.
+  repeated string resources = 3;
+  // failed names each resource that could not be rewritten, with the reason.
+  repeated string failed = 4;
+}
+
+// ProfileMemberResult is what a profile operation did to one member resource.
+message ProfileMemberResult {
+  string resource = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// SetResourceProfileOptionsRequest records DRBD options on a profile and
+// applies them to every member.
+message SetResourceProfileOptionsRequest {
+  string name = 1;
+  map<string, string> options = 2;
+}
+
+message SetResourceProfileOptionsResponse {
+  bool success = 1;
+  string message = 2;
+  ResourceProfile profile = 3;
+  repeated ProfileMemberResult members = 4;
+}
+
+// AdjustResourceProfileRequest brings every member into line with its profile:
+// DRBD options applied, missing replicas added. Replicas beyond the profile's
+// count are reported, never removed.
+message AdjustResourceProfileRequest {
+  string name = 1;
+  bool dry_run = 2;
+}
+
+message AdjustResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ProfileMemberResult members = 3;
+}
+
+message GetResourceProfileMaxSizeRequest { string name = 1; }
+
+// GetResourceProfileMaxSizeResponse is the largest volume a new member could
+// get now, and the nodes it would land on.
+message GetResourceProfileMaxSizeResponse {
+  bool success = 1;
+  string message = 2;
+  uint64 max_size_gb = 3;
+  repeated string nodes = 4;
+  // thin: the pool is over-provisioned, so the size is what fits without
+  // overcommitting rather than a hard limit.
+  bool thin = 5;
+}
+
+// SetResourceProfileRequest makes a resource a member of a profile (applying
+// its DRBD options), or takes it out with an empty profile.
+message SetResourceProfileRequest {
+  string resource = 1;
+  string profile = 2;
+}
+
+message SetResourceProfileResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// SetWanEndpointRequest changes where a WAN resource's primary site reaches its
+// DR site, and rebuilds the tunnels on it. An empty field keeps its value.
+message SetWanEndpointRequest {
+  string name = 1;
+  // dr_endpoint is the DR site's address the primary dials: an IP or a host
+  // name, without a port (the WAN port is the resource's own).
+  string dr_endpoint = 2;
+  // egress_address pins the source address the primary dials from.
+  string egress_address = 3;
+  // clear_egress lets the routing table choose the source again.
+  bool clear_egress = 4;
+  // skip_reachability_check saves and provisions without checking that the DR
+  // endpoint answers — for a DR site whose firewall is not open yet. Without
+  // it, an endpoint that does not answer is refused and the old one restored.
+  bool skip_reachability_check = 5;
+}
+
+message SetWanEndpointResponse {
+  bool success = 1;
+  string message = 2;
+  string dr_endpoint = 3;
+  string egress_address = 4;
+}
+
+// DRFailbackRequest returns a WAN resource from its DR node to the primary site
+// after a DR failover. Run it again until phase is "done": it rejoins the
+// primary site (discarding what those nodes wrote after they were cut off),
+// waits for them to resync from the DR, then moves the Primary role back.
+message DRFailbackRequest {
+  string name = 1;
+  // node is the primary-site node to promote; empty takes the first.
+  string node = 2;
+  // wait_seconds bounds how long this call waits for the resync before it
+  // reports progress and returns; 0 does not wait.
+  uint32 wait_seconds = 3;
+}
+
+// VerifyResourceRequest compares a resource's replicas block by block (DRBD
+// online verify) from one node against each of its connected peers. Run it
+// again while phase is "running" to follow it; with resync it instead copies
+// the source's data over every block marked out of sync, which makes the
+// copies identical and clears the marks.
+message VerifyResourceRequest {
+  string name = 1;
+  // node is the node to verify from and, with resync, whose data wins. Empty
+  // takes the Primary, else the first diskful node.
+  string node = 2;
+  // wait_seconds bounds how long this call waits for the verify to finish;
+  // 0 does not wait.
+  uint32 wait_seconds = 3;
+  bool resync = 4;
+}
+
+message VerifyPeer {
+  string node = 1;
+  // state is "verifying", "done", or why the peer was skipped.
+  string state = 2;
+  // out_of_sync_kib is how much DRBD has marked out of sync with this peer in
+  // all: what this verify found, plus whatever was marked before it. Marks
+  // are set by verify and never cleared by it — only a resync clears them.
+  uint64 out_of_sync_kib = 3;
+  double percent_done = 4;
+  // found_kib is the part of out_of_sync_kib this verify added. It is only
+  // meaningful when baseline_known: a verify that is followed from another
+  // call, or across a controller restart, has no record of what was marked
+  // before it started.
+  uint64 found_kib = 5;
+  bool baseline_known = 6;
+}
+
+message VerifyResourceResponse {
+  bool success = 1;
+  string message = 2;
+  // phase is "running", "done" or "resynced".
+  string phase = 3;
+  string source = 4;
+  repeated VerifyPeer peers = 5;
+  repeated string steps = 6;
+}
+
+message DRFailbackResponse {
+  bool success = 1;
+  string message = 2;
+  // phase is where the failback stands: "resyncing" (run again to finish) or
+  // "done".
+  string phase = 3;
+  repeated string steps = 4;
+}
+
+message SetupReplicationTLSRequest {
+  // nodes to prepare; empty prepares every registered node.
+  repeated string nodes = 1;
+}
+
+message GetReplicationTLSStatusRequest {
+  repeated string nodes = 1;
+}
+
+message NodeTLSInfo {
+  string node = 1;
+  bool ready = 2;
+  // problem says what stops the node from carrying an encrypted connection.
+  string problem = 3;
+  string expires = 4;
+}
+
+message ReplicationTLSResponse {
+  bool success = 1;
+  string message = 2;
+  repeated NodeTLSInfo nodes = 3;
+}
+
+message SetResourceTLSRequest {
+  string resource = 1;
+  bool enabled = 2;
+}
+
+message SetResourceTLSResponse {
+  bool success = 1;
+  string message = 2;
+  uint32 links_changed = 3;
+}
+
+// ==================== RBAC ====================
+
+message GetRbacWhoamiRequest {}
+
+message GetRbacWhoamiResponse {
+  bool enabled = 1;
+  string user = 2;
+  string role = 3;
+  bool can_admin = 4;
+}
+
+message ListRbacPoliciesRequest {}
+
+message RbacPolicy {
+  string role = 1;
+  string object = 2;   // "*" matches every object
+  string action = 3;   // read, write or "*"
+}
+
+message RbacUser {
+  string name = 1;
+  string role = 2;
+}
+
+message ListRbacPoliciesResponse {
+  bool enabled = 1;
+  repeated RbacPolicy policies = 2;
+  repeated RbacUser users = 3;
+}
+
+message CreateRbacUserRequest {
+  string name = 1;
+  string role = 2;
+  // Optional, at least 16 characters; empty means the controller generates one.
+  string token = 3;
+}
+
+message CreateRbacUserResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;
+  // The user's token. Returned once and never stored in clear.
+  string token = 4;
+}
+
+message DeleteRbacUserRequest {
+  string name = 1;
+}
+
+message DeleteRbacUserResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;
+}
+
+message SetRbacUserRoleRequest {
+  string name = 1;
+  string role = 2;
+}
+
+message SetRbacUserRoleResponse {
+  bool success = 1;
+  string message = 2;
+  bool enabled = 3;
+}
+
+// ==================== Approvals ====================
+
+message ApprovalInfo {
+  string id = 1;
+  string method = 2;          // e.g. DeleteBackupTarget
+  string request = 3;         // the call's arguments as JSON, secrets masked
+  string requester = 4;
+  string created_at = 5;      // RFC 3339
+  string expires_at = 6;
+  string state = 7;           // pending, approved, rejected, used, expired
+  string decided_by = 8;
+  string decided_at = 9;
+}
+
+message ListApprovalsRequest {
+  bool include_closed = 1;    // also approved, rejected, used and expired ones
+}
+
+message ListApprovalsResponse {
+  bool enabled = 1;
+  repeated ApprovalInfo approvals = 2;
+}
+
+message ApproveRequestRequest {
+  string id = 1;
+}
+
+message ApproveRequestResponse {
+  bool success = 1;
+  string message = 2;
+  ApprovalInfo approval = 3;
+}
+
+message RejectRequestRequest {
+  string id = 1;
+}
+
+message RejectRequestResponse {
+  bool success = 1;
+  string message = 2;
+  ApprovalInfo approval = 3;
+}
+
+// One finding of an inspection.
+message InspectionCheck {
+  // Stable slug, e.g. "resource.no_primary", "alerts.channel_failing".
+  string id = 1;
+  // resources | gateways | nodes | pools | backups | alerts | selfha | tls | hygiene
+  string area = 2;
+  // The resource, node or channel concerned; empty for an area-wide line.
+  string subject = 3;
+  // pass | warn | fail | error ("error": the check itself could not run).
+  string status = 4;
+  string message = 5;
+  // What was seen, one fact per entry.
+  repeated string evidence = 6;
+  // A command to run as written: `haify ...` or a shell line.
+  string fix = 7;
+  // A runbook (haify_runbook / MCP prompt) covering the repair, when one fits.
+  string runbook = 8;
+}
+
+message InspectionSummary {
+  int32 pass = 1;
+  int32 warn = 2;
+  int32 fail = 3;
+  int32 error = 4;
+}
+
+message InspectionReport {
+  string id = 1;
+  // schedule | manual
+  string trigger = 2;
+  int64 started_at_unix_ms = 3;
+  int64 finished_at_unix_ms = 4;
+  // The areas that were inspected; empty means all.
+  repeated string areas = 5;
+  InspectionSummary summary = 6;
+  // Sorted by area, most serious first. Empty in ListInspections.
+  repeated InspectionCheck checks = 7;
+}
+
+message RunInspectionRequest {
+  // Restrict to these areas; empty inspects everything.
+  repeated string areas = 1;
+}
+
+message RunInspectionResponse {
+  bool success = 1;
+  string message = 2;
+  InspectionReport report = 3;
+}
+
+message ListInspectionsRequest {
+  int32 limit = 1;  // 0 means every stored report
+}
+
+message ListInspectionsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated InspectionReport reports = 3;  // newest first, checks omitted
+}
+
+message GetInspectionRequest {
+  string id = 1;  // a report id, or "latest"
+}
+
+message GetInspectionResponse {
+  bool success = 1;
+  string message = 2;
+  InspectionReport report = 3;
+}
+
+// ---- Database applications (haify app) ----
+
+message AppInfo {
+  string name = 1;
+  string engine = 2;            // postgres, mysql or redis
+  string resource = 3;
+  string service_ip = 4;        // CIDR
+  uint32 port = 5;
+  bool vector = 6;              // postgres with pgvector
+  string mount_point = 7;       // where the Primary mounts the volume
+  string unit = 8;              // the systemd unit drbd-reactor starts
+  string admin_user = 9;        // the account whose password was generated
+  string credentials_file = 10; // the password, root-only, on the volume
+  string version = 11;          // engine version the nodes agreed on
+  string connection = 12;       // how a client reaches it through the service IP
+  int64 created_at_unix = 13;
+}
+
+message CreateAppRequest {
+  string name = 1;
+  string engine = 2;
+  string resource = 3;    // default: the app's name
+  string service_ip = 4;  // CIDR, required
+  uint32 port = 5;        // 0: the engine's default
+  bool vector = 6;        // postgres only
+}
+
+message CreateAppResponse {
+  bool success = 1;
+  string message = 2;
+  AppInfo app = 3;
+  // The generated password, returned only by the call that generated it.
+  // Empty when the volume already held the app's data (data_reused).
+  string password = 4;
+  string primary_node = 5;  // where it was initialized
+  bool data_reused = 6;
+}
+
+message ListAppsRequest {}
+
+message ListAppsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated AppInfo apps = 3;
+}
+
+message GetAppStatusRequest {
+  string name = 1;
+}
+
+message GetAppStatusResponse {
+  bool success = 1;
+  string message = 2;
+  AppInfo app = 3;
+  string primary_node = 4;   // empty when the resource is Primary nowhere
+  string service_state = 5;  // systemctl is-active of the unit there
+  bool healthy = 6;          // the engine's probe answered
+  string state = 7;          // running, degraded or stopped
+  repeated string nodes = 8; // the nodes its promoter runs on
+}
+
+message DeleteAppRequest {
+  string name = 1;
+  bool delete_data = 2;  // also delete the resource and its data
+}
+
+message DeleteAppResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message FailoverAppRequest {
+  string name = 1;
+}
+
+message FailoverAppResponse {
+  bool success = 1;
+  string message = 2;
+  string from_node = 3;
+  string to_node = 4;
+}
+
+message SnapshotAppRequest {
+  string name = 1;
+  string snapshot = 2;
+}
+
+message SnapshotAppResponse {
+  bool success = 1;
+  string message = 2;
+  bool frozen = 3;  // false when the app was not running (nothing to freeze)
+}
+
+// ==================== Storage upkeep ====================
+
+message TrimPoolsRequest {
+  // node limits the trim to one node; empty trims every online node.
+  string node = 1;
+}
+
+message TrimResultInfo {
+  string node = 1;
+  string mount = 2;
+  uint64 bytes = 3;
+  string error = 4;
+}
+
+message TrimPoolsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated TrimResultInfo results = 3;
+}
+
+message ListPoolDisksRequest {
+  string pool = 1;
+  string node = 2;
+}
+
+message PoolDiskInfo {
+  string node = 1;
+  string pool = 2;
+  string device = 3;
+  uint64 size_bytes = 4;
+  uint64 used_bytes = 5;
+  // health is "ok", "warn", "fail" or "unknown" (no SMART on this device,
+  // e.g. a virtual disk); health_detail says why.
+  string health = 6;
+  string health_detail = 7;
+  string model = 8;
+  string serial = 9;
+}
+
+message ListPoolDisksResponse {
+  bool success = 1;
+  string message = 2;
+  repeated PoolDiskInfo disks = 3;
+}
+
+message RemovePoolDiskRequest {
+  string pool = 1;
+  string node = 2;
+  string disk = 3;
+}
+
+message ReplacePoolDiskRequest {
+  string pool = 1;
+  string node = 2;
+  string old_disk = 3;
+  string new_disk = 4;
+}
+
+message MoveVolumeRequest {
+  string resource = 1;
+  int32 volume_id = 2;
+  // pool is the destination pool; it must exist on every diskful node.
+  string pool = 3;
+}
+
+message StorageJobResponse {
+  bool success = 1;
+  string message = 2;
+  string job_id = 3;
+}
+
+message ListStorageJobsRequest {
+  bool include_finished = 1;
+}
+
+message StorageJobInfo {
+  string id = 1;
+  // kind is "remove-disk", "replace-disk" or "move-volume".
+  string kind = 2;
+  string state = 3;
+  string subject = 4;
+  string progress = 5;
+  string message = 6;
+  int64 started_unix = 7;
+  int64 updated_unix = 8;
+}
+
+message ListStorageJobsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated StorageJobInfo jobs = 3;
+}

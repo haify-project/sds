@@ -8,10 +8,10 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/gateway"
+	"github.com/haify-project/haify/pkg/gateway"
 )
 
-// Preferred nodes for an HA resource (`sds ha set-preferred`).
+// Preferred nodes for an HA resource (`haify ha set-preferred`).
 //
 // drbd-reactor's promoter can be told which nodes to prefer: `preferred-nodes`
 // lists them in order, and each node waits a moment longer the further down
@@ -22,7 +22,7 @@ import (
 //
 // It is a preference, not a fence: it does not stop any node from promoting
 // and plays no part in split-brain avoidance, which is DRBD quorum's job.
-// drbd-reactor compares the entries with each node's `uname -n`, so sds node
+// drbd-reactor compares the entries with each node's `uname -n`, so haify node
 // names are written as the hostnames recorded at registration.
 //
 // The new config is written on every node that runs the promoter, and
@@ -65,7 +65,7 @@ func (rm *ResourceManager) SetHaPreferredNodes(ctx context.Context, resource str
 	}
 	ha, err := rm.controller.db.GetHaConfig(ctx, resource)
 	if err != nil || ha == nil {
-		return fmt.Errorf("%s has no HA config; create it with `sds ha create` first", resource)
+		return fmt.Errorf("%s has no HA config; create it with `haify ha create` first", resource)
 	}
 	dbRes, err := rm.controller.db.GetResource(ctx, resource)
 	if err != nil || dbRes == nil {

@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // A promoter on a resource another system promotes fights it for Primary:
@@ -41,11 +41,11 @@ func TestPromoterRefusedOnExternallyPromotedResources(t *testing.T) {
 	}
 
 	srv := &Server{ctrl: ctrl, resources: ctrl.resources}
-	_, err := srv.CreateNFSGateway(ctx, &sdspb.CreateNFSGatewayRequest{Resource: "vmdisk"})
+	_, err := srv.CreateNFSGateway(ctx, &haifypb.CreateNFSGatewayRequest{Resource: "vmdisk"})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-	_, err = srv.CreateISCSIGateway(ctx, &sdspb.CreateISCSIGatewayRequest{Resource: "attached"})
+	_, err = srv.CreateISCSIGateway(ctx, &haifypb.CreateISCSIGatewayRequest{Resource: "attached"})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-	_, err = srv.CreateNVMeGateway(ctx, &sdspb.CreateNVMeGatewayRequest{Resource: "pvc-1"})
+	_, err = srv.CreateNVMeGateway(ctx, &haifypb.CreateNVMeGatewayRequest{Resource: "pvc-1"})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 	assert.Empty(t, dep.execCalls, "nothing reached a node")
 }

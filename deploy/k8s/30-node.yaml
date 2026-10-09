@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: sds-csi-node
+  name: haify-csi-node
   namespace: kube-system
 spec:
-  selector: { matchLabels: { app: sds-csi-node } }
+  selector: { matchLabels: { app: haify-csi-node } }
   template:
-    metadata: { labels: { app: sds-csi-node } }
+    metadata: { labels: { app: haify-csi-node } }
     spec:
-      serviceAccountName: sds-csi-node
+      serviceAccountName: haify-csi-node
       # The kubelet never evicts a node-critical pod. Under disk pressure it
       # evicted this plugin along with the workloads, and a node with no plugin
       # cannot unmount: every volume on it stayed mounted and DRBD Primary, so
@@ -17,8 +17,8 @@ spec:
       priorityClassName: system-node-critical
       hostNetwork: true
       # With hostNetwork the pod otherwise uses the node's resolv.conf and cannot
-      # resolve the in-cluster `sds-controller` Service name. ClusterFirstWithHostNet
-      # makes it use cluster DNS (CoreDNS) so `--sds-controller=sds-controller:3374`
+      # resolve the in-cluster `haify-controller` Service name. ClusterFirstWithHostNet
+      # makes it use cluster DNS (CoreDNS) so `--haify-controller=haify-controller:3374`
       # resolves; without it the node plugin fails to reach the controller and every
       # MountDevice errors with a gRPC "EOF". The controller Deployment runs on
       # hostNetwork too and sets the same dnsPolicy.
@@ -28,17 +28,17 @@ spec:
           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
           args:
             - "--csi-address=/csi/csi.sock"
-            - "--kubelet-registration-path=/var/lib/kubelet/plugins/sds.csi.liliang-cn.com/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/haify.csi.liliang-cn.com/csi.sock"
           volumeMounts:
             - { name: socket-dir, mountPath: /csi }
             - { name: registration-dir, mountPath: /registration }
         - name: plugin
-          image: sds-csi:latest
+          image: haify-csi:latest
           imagePullPolicy: IfNotPresent
           command: ["/usr/local/bin/csi-node"]
           args:
             - "--endpoint=unix:///csi/csi.sock"
-            - "--sds-controller=sds-controller:3374"
+            - "--haify-controller=haify-controller:3374"
           securityContext:
             privileged: true
           env:
@@ -55,7 +55,7 @@ spec:
             - { name: cgroup, mountPath: /sys/fs/cgroup }
       volumes:
         - name: socket-dir
-          hostPath: { path: /var/lib/kubelet/plugins/sds.csi.liliang-cn.com, type: DirectoryOrCreate }
+          hostPath: { path: /var/lib/kubelet/plugins/haify.csi.liliang-cn.com, type: DirectoryOrCreate }
         - name: registration-dir
           hostPath: { path: /var/lib/kubelet/plugins_registry, type: Directory }
         - name: kubelet-dir

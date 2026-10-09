@@ -6,11 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCheckHaMountPointRefusesPathsSDSMountsOver(t *testing.T) {
-	for _, bad := range []string{"/var/lib/sds", "/var/lib/sds/app", "/var/lib/sds-gateway/x", "/var/lib/sds/../sds/app"} {
+func TestCheckHaMountPointRefusesPathsHaifyMountsOver(t *testing.T) {
+	for _, bad := range []string{"/var/lib/haify", "/var/lib/haify/app", "/var/lib/haify-gateway/x", "/var/lib/haify/../haify/app"} {
 		assert.Error(t, checkHaMountPoint(bad), bad)
 	}
-	for _, ok := range []string{"", "/mnt/data", "/var/lib/sdsdata", "/srv/app"} {
+	for _, ok := range []string{"", "/mnt/data", "/var/lib/haifydata", "/srv/app"} {
 		assert.NoError(t, checkHaMountPoint(ok), ok)
 	}
 }

@@ -6,8 +6,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/triage"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/triage"
 )
 
 // The diagnosis tool: read everything, then say what is wrong.
@@ -94,11 +94,11 @@ const (
 )
 
 func (s *Server) registerDiagnoseTools(srv *mcp.Server) {
-	addReadWithin(s, srv, readOnlyTool("sds_diagnose", "Diagnose the cluster",
+	addReadWithin(s, srv, readOnlyTool("haify_diagnose", "Diagnose the cluster",
 		"Read every record the cluster keeps — operational events, the audit trail, the controller's own log, and "+
 			"the nodes' journals, kernel messages, DRBD status and LVM usage — correlate them, and return the "+
 			"problems rather than the lines. This is the tool to reach for when asked what is wrong, why something "+
-			"broke, or why a resource will not start; the individual sds_event_list / sds_audit_list / sds_log_list "+
+			"broke, or why a resource will not start; the individual haify_event_list / haify_audit_list / haify_log_list "+
 			"tools are for when you already know what you are looking for.\n\n"+
 			"Findings marked known:true carry a cause and exact steps that Haify is sure of — repeat those verbatim, "+
 			"including any caution, rather than rewording them. Findings without it are grouped evidence and nothing "+
@@ -121,7 +121,7 @@ func (s *Server) handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, in 
 	// a node that is down has no journal, and neither is a reason to refuse to
 	// diagnose what is left — a diagnosis from partial evidence is useful as
 	// long as it says which part is missing.
-	if resp, err := s.client.ListEvents(ctx, &sdspb.ListEventsRequest{Limit: diagEventLimit}); err != nil {
+	if resp, err := s.client.ListEvents(ctx, &haifypb.ListEventsRequest{Limit: diagEventLimit}); err != nil {
 		notes = append(notes, "could not read cluster events: "+err.Error())
 	} else {
 		for _, e := range resp.Events {
@@ -133,7 +133,7 @@ func (s *Server) handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, in 
 		}
 	}
 
-	if resp, err := s.client.ListAuditEvents(ctx, &sdspb.ListAuditEventsRequest{
+	if resp, err := s.client.ListAuditEvents(ctx, &haifypb.ListAuditEventsRequest{
 		Limit: diagAuditLimit, FailuresOnly: true,
 	}); err != nil {
 		notes = append(notes, "could not read the audit trail: "+err.Error())
@@ -147,7 +147,7 @@ func (s *Server) handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, in 
 		}
 	}
 
-	if resp, err := s.client.ListControllerLogs(ctx, &sdspb.ListControllerLogsRequest{
+	if resp, err := s.client.ListControllerLogs(ctx, &haifypb.ListControllerLogsRequest{
 		Limit: diagLogLimit, Level: "warn",
 	}); err != nil {
 		notes = append(notes, "could not read the controller log: "+err.Error())
@@ -163,7 +163,7 @@ func (s *Server) handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if in.SkipNodes {
 		notes = append(notes, "node collection was skipped, so no DRBD, kernel, promoter or storage evidence was read")
 	} else {
-		resp, err := s.client.CollectNodeDiagnostics(ctx, &sdspb.CollectNodeDiagnosticsRequest{
+		resp, err := s.client.CollectNodeDiagnostics(ctx, &haifypb.CollectNodeDiagnosticsRequest{
 			Nodes: in.Nodes, Collectors: in.Collectors,
 			SinceMinutes: int32(window), MaxLines: 200,
 		})

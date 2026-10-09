@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 )
 
 // gatewayFixture builds a gateway manager over a resource that is otherwise
@@ -52,7 +52,7 @@ func TestCreateNVMeGatewayRejectsBadTransportBeforeSideEffects(t *testing.T) {
 
 	resp, err := nvme.CreateNVMeGateway(context.Background(), &v1.CreateNVMeGatewayRequest{
 		Resource:      "data",
-		Nqn:           "nqn.2024-01.com.example:sds.data",
+		Nqn:           "nqn.2024-01.com.example:haify.data",
 		ServiceIp:     "192.168.1.150/24",
 		TransportType: "rmda",
 	})
@@ -90,14 +90,14 @@ func TestCreateNVMeGatewayAcceptsEmptyTransport(t *testing.T) {
 
 	resp, err := nvme.CreateNVMeGateway(context.Background(), &v1.CreateNVMeGatewayRequest{
 		Resource:  "data",
-		Nqn:       "nqn.2024-01.com.example:sds.data",
+		Nqn:       "nqn.2024-01.com.example:haify.data",
 		ServiceIp: "192.168.1.150/24",
 	})
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.True(t, resp.Success)
-	assert.Contains(t, deployment.Configs[gatewayConfigPath("sds-nvmeof-data")], "type=tcp")
+	assert.Contains(t, deployment.Configs[gatewayConfigPath("haify-nvmeof-data")], "type=tcp")
 }
 
 func TestCreateISCSIGatewayRejectsBadIQNBeforeSideEffects(t *testing.T) {
@@ -132,7 +132,7 @@ func TestCreateGatewayServiceIPErrorIsInvalidArgument(t *testing.T) {
 
 	_, iscsiErr := NewISCSIManager(base).CreateISCSIGateway(context.Background(), &v1.CreateISCSIGatewayRequest{
 		Resource:  "data",
-		Iqn:       "iqn.2024-01.com.example:sds.data",
+		Iqn:       "iqn.2024-01.com.example:haify.data",
 		ServiceIp: "not-an-ip",
 	})
 	require.Error(t, iscsiErr)
@@ -140,7 +140,7 @@ func TestCreateGatewayServiceIPErrorIsInvalidArgument(t *testing.T) {
 
 	_, nvmeErr := NewNVMeManager(base).CreateNVMeGateway(context.Background(), &v1.CreateNVMeGatewayRequest{
 		Resource:  "data",
-		Nqn:       "nqn.2024-01.com.example:sds.data",
+		Nqn:       "nqn.2024-01.com.example:haify.data",
 		ServiceIp: "not-an-ip",
 	})
 	require.Error(t, nvmeErr)
@@ -157,15 +157,15 @@ func TestValidateIQN(t *testing.T) {
 		hasError bool
 	}{
 		{"iqn plain", "iqn.2024-01.com.example:storage", false},
-		{"iqn dotted local name", "iqn.2024-01.com.example:sds.data", false},
+		{"iqn dotted local name", "iqn.2024-01.com.example:haify.data", false},
 		{"iqn two-label domain", "iqn.2026-10.lab.test:probe", false},
 		{"iqn without local name", "iqn.2024-01.com.example", false},
 		{"iqn one-label domain (sdt outage)", "iqn.2026-10.test:probe", true},
 		{"iqn no date", "iqn.invalid", true},
 		{"iqn month 2x", "iqn.2024-21.com.example:x", true},
-		{"iqn underscore", "iqn.2024-01.com.example:sds_data", true},
-		{"iqn space", "iqn.2024-01.com.example:sds data", true},
-		{"iqn quote", "iqn.2024-01.com.example:sds\"data", true},
+		{"iqn underscore", "iqn.2024-01.com.example:haify_data", true},
+		{"iqn space", "iqn.2024-01.com.example:haify data", true},
+		{"iqn quote", "iqn.2024-01.com.example:haify\"data", true},
 
 		{"eui lowercase", "eui.0123456789abcdef", false},
 		{"eui uppercase hex", "eui.0123456789ABCDEF", false},
@@ -228,7 +228,7 @@ func TestCreateISCSIGatewayAcceptsEUIAndNAANames(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, resp)
 			assert.True(t, resp.Success)
-			assert.Contains(t, deployment.Configs[gatewayConfigPath("sds-iscsi-data")], "iqn="+iqn)
+			assert.Contains(t, deployment.Configs[gatewayConfigPath("haify-iscsi-data")], "iqn="+iqn)
 		})
 	}
 }
@@ -239,7 +239,7 @@ func TestValidateNQN(t *testing.T) {
 		hasError bool
 	}{
 		{"nqn.2024-01.com.example:storage", false},
-		{"nqn.2024-01.com.example:sds.data", false},
+		{"nqn.2024-01.com.example:haify.data", false},
 		{"iqn.2024-01.com.example:storage", true}, // Wrong prefix
 		{"nqn.invalid", true},                     // Missing colon
 		{"", true},                                // Empty

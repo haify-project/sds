@@ -36,7 +36,7 @@ func (n *NVMeManager) AddNamespace(ctx context.Context, resource, device string)
 		zap.String("resource", resource),
 		zap.String("device", device))
 
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -90,7 +90,7 @@ func (n *NVMeManager) RemoveNamespace(ctx context.Context, resource string, nsid
 		zap.String("resource", resource),
 		zap.Int("nsid", nsid))
 
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -111,7 +111,7 @@ func (n *NVMeManager) RemoveNamespace(ctx context.Context, resource string, nsid
 
 // ListNamespaces lists all namespaces for an NVMe-oF gateway
 func (n *NVMeManager) ListNamespaces(ctx context.Context, resource string) ([]map[string]string, error) {
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func (n *NVMeManager) DeleteSubsystem(ctx context.Context, nqn string) error {
 // ListSubsystems lists the NQNs of the running NVMe-oF gateways' subsystems,
 // read from the managed nodes like ListTargets.
 func (n *NVMeManager) ListSubsystems(ctx context.Context, host string) ([]string, error) {
-	contents, err := n.readAllNodeConfigs(ctx, "sds-nvmeof-*.toml")
+	contents, err := n.readAllNodeConfigs(ctx, "haify-nvmeof-*.toml")
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func (n *NVMeManager) DeletePort(ctx context.Context, resource, addr string, por
 		return fmt.Errorf("custom NVMe port removal is not supported by the current config writer")
 	}
 
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -222,7 +222,7 @@ func (n *NVMeManager) DeletePort(ctx context.Context, resource, addr string, por
 
 // ListPorts lists all ports for an NVMe subsystem
 func (n *NVMeManager) ListPorts(ctx context.Context, resource string) ([]map[string]string, error) {
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err

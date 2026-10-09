@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/util"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/util"
 	"github.com/spf13/cobra"
 )
 
@@ -111,7 +111,7 @@ func resourceCreate() *cobra.Command {
 				fmt.Fprintf(os.Stderr,
 					"Note: --encrypt encrypts each replica's backing volume (at rest).\n"+
 						"      DRBD sits above the crypt layer, so replication between nodes stays PLAINTEXT.\n"+
-						"      Each node keeps its own key in /etc/sds/luks (root-only); deleting the\n"+
+						"      Each node keeps its own key in /etc/haify/luks (root-only); deleting the\n"+
 						"      resource destroys those keys, and there is no central escrow.\n")
 			}
 
@@ -142,7 +142,7 @@ func resourceCreate() *cobra.Command {
 			if wan {
 				requestProtocol = "A"
 			}
-			resp, err := grpcClient.CreateResource(ctx, &sdspb.CreateResourceRequest{
+			resp, err := grpcClient.CreateResource(ctx, &haifypb.CreateResourceRequest{
 				Name:                name,
 				Port:                port,
 				Nodes:               nodeList,
@@ -215,8 +215,8 @@ func resourceCreate() *cobra.Command {
 				fmt.Printf("  Labels:      %s\n", formatLabels(labels))
 			}
 			fmt.Printf("\nNext steps:\n")
-			fmt.Printf("  1. sds resource get %s\n", name)
-			fmt.Printf("  2. sds resource primary %s <node>\n", name)
+			fmt.Printf("  1. haify resource get %s\n", name)
+			fmt.Printf("  2. haify resource primary %s <node>\n", name)
 
 			return nil
 		},
@@ -240,9 +240,9 @@ func resourceCreate() *cobra.Command {
 	cmd.Flags().BoolVar(&encrypt, "encrypt", false,
 		"Encrypt each replica's backing volume with LUKS2 (DRBD -> LUKS -> LVM). "+
 			"AT REST ONLY: DRBD is above the crypt layer, so replication traffic between nodes stays plaintext. "+
-			"Each node generates and keeps its own key under /etc/sds/luks (root-only, never sent anywhere); "+
+			"Each node generates and keeps its own key under /etc/haify/luks (root-only, never sent anywhere); "+
 			"there is no central escrow and it cannot be enabled later. LVM pools only.")
-	cmd.Flags().BoolVar(&wan, "wan", false, "Enable opt-in WAN replication (async protocol A to --dr-node via sds-proxy; --nodes may list several primary-site replicas)")
+	cmd.Flags().BoolVar(&wan, "wan", false, "Enable opt-in WAN replication (async protocol A to --dr-node via haify-proxy; --nodes may list several primary-site replicas)")
 	cmd.Flags().StringVar(&drNode, "dr-node", "", "DR-site node name (requires --wan; must be a registered node)")
 	cmd.Flags().StringVar(&drEndpoint, "dr-endpoint", "", "DR site's public WAN address the primary dials (requires --wan)")
 	cmd.Flags().Uint32Var(&wanPort, "wan-port", 0, "WAN mTLS port (requires --wan; 0 = auto-pick a random port >3000)")
@@ -282,13 +282,13 @@ func resourceAdopt() *cobra.Command {
 				nodeList = strings.Split(nodes, ",")
 			}
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			resp, err := sdsClient.AdoptResource(ctx, name, nodeList, port, protocol)
+			resp, err := haifyClient.AdoptResource(ctx, name, nodeList, port, protocol)
 			if err != nil {
 				return fmt.Errorf("failed to adopt resource: %w", err)
 			}
@@ -299,7 +299,7 @@ func resourceAdopt() *cobra.Command {
 			fmt.Printf("  Protocol: %s\n", resp.Protocol)
 			fmt.Printf("  Volumes:  %d\n", resp.Volumes)
 			fmt.Printf("\nThe DRBD resource and its data were not modified.\n")
-			fmt.Printf("Next: sds ha create %s\n", name)
+			fmt.Printf("Next: haify ha create %s\n", name)
 
 			return nil
 		},

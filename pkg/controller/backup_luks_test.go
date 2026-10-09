@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // encryptFixture marks the fixture's resource as Haify-encrypted, the way
@@ -169,12 +169,12 @@ func TestBackupSnapshotSourceScriptFindsTheLUKSOffset(t *testing.T) {
 	cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
-	assert.Regexp(t, `SRC=/dev/mapper/sdsbk_[0-9a-f]{16} OFF=16777216`, string(out))
+	assert.Regexp(t, `SRC=/dev/mapper/haifybk_[0-9a-f]{16} OFF=16777216`, string(out))
 
 	logged, err := os.ReadFile(log)
 	require.NoError(t, err)
-	assert.Contains(t, string(logged), "open --type luks --readonly --key-file /etc/sds/luks/sds_vg0_data_data.key /dev/vg0/data_data_bk_20261004T000000Z sdsbk_")
-	assert.Contains(t, string(logged), "close sdsbk_", "the mapping is closed on exit")
+	assert.Contains(t, string(logged), "open --type luks --readonly --key-file /etc/haify/luks/haify_vg0_data_data.key /dev/vg0/data_data_bk_20261004T000000Z haifybk_")
+	assert.Contains(t, string(logged), "close haifybk_", "the mapping is closed on exit")
 
 	_, _, err = backupSnapshotSource("vg0", "data;rm", "s", true)
 	assert.Error(t, err, "names are validated before they reach a shell")

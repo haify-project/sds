@@ -11,8 +11,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/drbdtls"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/drbdtls"
 )
 
 // Encrypted replication. DRBD 9.2+ can run a connection over kernel TLS: the
@@ -30,8 +30,8 @@ import (
 // key stays with the controller, next to the database.
 
 const (
-	nodeTLSDir    = "/etc/sds/drbd-tls"
-	trustAnchor   = "sds-drbd-ca.crt"
+	nodeTLSDir    = "/etc/haify/drbd-tls"
+	trustAnchor   = "haify-drbd-ca.crt"
 	tlshdConfPath = "/etc/tlshd.conf"
 )
 
@@ -45,7 +45,7 @@ type NodeTLSState struct {
 
 // replicationCA loads, or on first use creates, the replication CA.
 func (rm *ResourceManager) replicationCA() (*drbdtls.CA, error) {
-	dir := "/var/lib/sds/drbd-tls"
+	dir := "/var/lib/haify/drbd-tls"
 	if rm.controller.config != nil && rm.controller.config.Database.Path != "" {
 		dir = filepath.Join(filepath.Dir(rm.controller.config.Database.Path), "drbd-tls")
 	}
@@ -55,7 +55,7 @@ func (rm *ResourceManager) replicationCA() (*drbdtls.CA, error) {
 // tlsNodePreflight checks what a node needs before it can be given a
 // certificate, makes its key if it has none, and prints a certificate request.
 const tlsNodePreflight = `set -e
-missing() { echo "SDS_MISSING=$1"; exit 3; }
+missing() { echo "HAIFY_MISSING=$1"; exit 3; }
 command -v tlshd >/dev/null || missing "tlshd (install ktls-utils)"
 command -v openssl >/dev/null || missing "openssl"
 sudo modprobe tls 2>/dev/null || missing "the kernel tls module (CONFIG_TLS)"
@@ -64,13 +64,13 @@ sudo drbdsetup net-options --help 2>&1 | grep -q -- '--tls=' || missing "DRBD wi
 sudo install -d -m 700 ` + nodeTLSDir + `
 [ -s ` + nodeTLSDir + `/node.key ] || sudo openssl ecparam -name prime256v1 -genkey -noout -out ` + nodeTLSDir + `/node.key
 sudo chmod 600 ` + nodeTLSDir + `/node.key
-echo SDS_CSR_BEGIN
+echo HAIFY_CSR_BEGIN
 sudo openssl req -new -key ` + nodeTLSDir + `/node.key -subj "/CN=%s"
-echo SDS_CSR_END`
+echo HAIFY_CSR_END`
 
 // tlsNodeInstall installs the node certificate and the CA, points tlshd at
 // them and restarts it. The packaged tlshd.conf is kept once as
-// tlshd.conf.sds-orig. Restarting tlshd does not touch established
+// tlshd.conf.haify-orig. Restarting tlshd does not touch established
 // connections: the handshake is long over by then.
 const tlsNodeInstall = `set -e
 D=` + nodeTLSDir + `
@@ -82,19 +82,19 @@ if [ -d /usr/local/share/ca-certificates ]; then
 else
   sudo cp $D/ca.crt /etc/pki/ca-trust/source/anchors/` + trustAnchor + ` && sudo update-ca-trust
 fi
-[ -e ` + tlshdConfPath + `.sds-orig ] || sudo cp ` + tlshdConfPath + ` ` + tlshdConfPath + `.sds-orig 2>/dev/null || true
+[ -e ` + tlshdConfPath + `.haify-orig ] || sudo cp ` + tlshdConfPath + ` ` + tlshdConfPath + `.haify-orig 2>/dev/null || true
 printf '[main]\ndebug=0\ntlsdebug=0\nnl_debug=0\n\n[authenticate.client]\nx509.certificate= %%s/node.crt\nx509.private_key= %%s/node.key\n\n[authenticate.server]\nx509.certificate= %%s/node.crt\nx509.private_key= %%s/node.key\n' $D $D $D $D | sudo tee ` + tlshdConfPath + ` >/dev/null
-echo tls | sudo tee /etc/modules-load.d/sds-drbd-tls.conf >/dev/null
+echo tls | sudo tee /etc/modules-load.d/haify-drbd-tls.conf >/dev/null
 sudo systemctl enable tlshd >/dev/null 2>&1
 sudo systemctl restart tlshd
 systemctl is-active tlshd`
 
 // tlsNodeStatus reports what a node has; the controller judges it.
-const tlsNodeStatus = `echo "SDS_TLSHD=$(systemctl is-active tlshd 2>/dev/null)"
-grep -q "` + nodeTLSDir + `/node.crt" ` + tlshdConfPath + ` 2>/dev/null && echo SDS_CONF=yes
-lsmod 2>/dev/null | grep -q '^tls ' && echo SDS_MODULE=yes
-for f in /usr/local/share/ca-certificates/` + trustAnchor + ` /etc/pki/ca-trust/source/anchors/` + trustAnchor + `; do [ -s "$f" ] && echo "SDS_TRUST=$(base64 -w0 "$f")"; done
-[ -s ` + nodeTLSDir + `/node.crt ] && echo "SDS_CERT=$(base64 -w0 ` + nodeTLSDir + `/node.crt)"
+const tlsNodeStatus = `echo "HAIFY_TLSHD=$(systemctl is-active tlshd 2>/dev/null)"
+grep -q "` + nodeTLSDir + `/node.crt" ` + tlshdConfPath + ` 2>/dev/null && echo HAIFY_CONF=yes
+lsmod 2>/dev/null | grep -q '^tls ' && echo HAIFY_MODULE=yes
+for f in /usr/local/share/ca-certificates/` + trustAnchor + ` /etc/pki/ca-trust/source/anchors/` + trustAnchor + `; do [ -s "$f" ] && echo "HAIFY_TRUST=$(base64 -w0 "$f")"; done
+[ -s ` + nodeTLSDir + `/node.crt ] && echo "HAIFY_CERT=$(base64 -w0 ` + nodeTLSDir + `/node.crt)"
 true`
 
 // SetupReplicationTLS prepares nodes (all registered ones when nodes is empty)
@@ -139,14 +139,14 @@ func (rm *ResourceManager) setupNodeTLS(ctx context.Context, ca *drbdtls.CA, n *
 		return err
 	}
 	output := hostOutput(res, host)
-	if v, ok := tlsField(output, "SDS_MISSING"); ok {
+	if v, ok := tlsField(output, "HAIFY_MISSING"); ok {
 		return fmt.Errorf("missing %s", v)
 	}
 	if !res.AllSuccess() {
 		return fmt.Errorf("preparing the key failed: %s", res.FailureDetails())
 	}
-	_, rest, _ := strings.Cut(output, "SDS_CSR_BEGIN")
-	csr, _, _ := strings.Cut(rest, "SDS_CSR_END")
+	_, rest, _ := strings.Cut(output, "HAIFY_CSR_BEGIN")
+	csr, _, _ := strings.Cut(rest, "HAIFY_CSR_END")
 	cert, err := ca.Sign([]byte(strings.TrimSpace(csr)), n.Name, []string{n.Address})
 	if err != nil {
 		return err
@@ -193,20 +193,20 @@ func (rm *ResourceManager) ReplicationTLSStatus(ctx context.Context, nodes []str
 // thing that stops it.
 func judgeNodeTLS(ca *drbdtls.CA, node, output string, now time.Time) NodeTLSState {
 	st := NodeTLSState{Node: node}
-	certB64, hasCert := tlsField(output, "SDS_CERT")
-	trustB64, hasTrust := tlsField(output, "SDS_TRUST")
-	if tlshd, _ := tlsField(output, "SDS_TLSHD"); !hasCert {
-		st.Problem = "no replication certificate; run `sds replication-tls setup`"
+	certB64, hasCert := tlsField(output, "HAIFY_CERT")
+	trustB64, hasTrust := tlsField(output, "HAIFY_TRUST")
+	if tlshd, _ := tlsField(output, "HAIFY_TLSHD"); !hasCert {
+		st.Problem = "no replication certificate; run `haify replication-tls setup`"
 		return st
 	} else if tlshd != "active" {
 		st.Problem = "tlshd is " + orUnknown(tlshd)
 		return st
 	}
-	if _, ok := tlsField(output, "SDS_CONF"); !ok {
+	if _, ok := tlsField(output, "HAIFY_CONF"); !ok {
 		st.Problem = "tlshd.conf does not point at the replication certificate"
 		return st
 	}
-	if _, ok := tlsField(output, "SDS_MODULE"); !ok {
+	if _, ok := tlsField(output, "HAIFY_MODULE"); !ok {
 		st.Problem = "the kernel tls module is not loaded"
 		return st
 	}

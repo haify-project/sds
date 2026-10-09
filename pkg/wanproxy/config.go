@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// sds-proxy config defaults. These mirror config.example.toml so a generated
-// config behaves identically to the documented defaults. See the sds-proxy repo
+// haify-proxy config defaults. These mirror config.example.toml so a generated
+// config behaves identically to the documented defaults. See the haify-proxy repo
 // (config.example.toml) for the authoritative schema.
 const (
 	// DefaultBulkCapBytes is the Bulk-lane backpressure cap (4 GiB).
@@ -39,7 +39,7 @@ const (
 
 	// CertSAN is the SAN carried by the shared leaf certificate; both proxies
 	// pin their peer to this name via the [tls] peer_name field.
-	CertSAN = "sds-proxy"
+	CertSAN = "haify-proxy"
 
 	// roleDialer runs on the primary site; roleAcceptor runs on the DR site.
 	roleDialer   = "dialer"
@@ -50,7 +50,7 @@ const (
 // same host so the routed traffic never leaves loopback.
 const loopback = "127.0.0.1"
 
-// RenderDialerConfig renders the primary-site (dialer) sds-proxy config for the
+// RenderDialerConfig renders the primary-site (dialer) haify-proxy config for the
 // resource in spec. The dialer binds the loopback DRBD port (P) and accepts the
 // local DRBD-A connection, and dials the DR site's WAN endpoint over mTLS.
 //
@@ -85,7 +85,7 @@ func RenderDialerConfig(spec ProxySpec) string {
 	return b.String()
 }
 
-// RenderAcceptorConfig renders the DR-site (acceptor) sds-proxy config. The
+// RenderAcceptorConfig renders the DR-site (acceptor) haify-proxy config. The
 // acceptor binds the WAN port and accepts the peer proxy's mTLS connection, and
 // dials the local DRBD-B at the loopback DRBD port (P).
 //

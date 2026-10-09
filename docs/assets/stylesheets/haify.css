@@ -1,0 +1,225 @@
+/* Haify site theme on top of MkDocs Material.
+   Colours follow DRBD's own vocabulary: teal is UpToDate, amber is the state
+   a failover passes through, grey is a node that is gone. */
+
+@font-face { font-family: "Instrument Sans"; font-weight: 400; font-display: swap;
+  src: url("../fonts/instrument-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 600; font-display: swap;
+  src: url("../fonts/instrument-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: swap;
+  src: url("../fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 600; font-display: swap;
+  src: url("../fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2"); }
+
+:root {
+  --md-text-font-family: "Instrument Sans", -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --md-code-font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+[data-md-color-scheme="default"] {
+  --haify-bg: #f4f6f5;
+  --haify-surface: #ffffff;
+  --haify-ink: #17211e;
+  --haify-muted: #56635e;
+  --haify-line: #d6dcd9;
+  --haify-ok: #0b6e63;
+  --haify-ok-soft: #d7ebe7;
+  --haify-turn: #a86a12;
+  --haify-gone: #a3aca8;
+
+  --md-default-bg-color: var(--haify-bg);
+  --md-default-fg-color: var(--haify-ink);
+  --md-default-fg-color--light: var(--haify-muted);
+  --md-default-fg-color--lighter: #8b9692;
+  --md-default-fg-color--lightest: var(--haify-line);
+  --md-primary-fg-color: var(--haify-ink);
+  --md-primary-fg-color--dark: #0f1715;
+  --md-primary-bg-color: #eef3f1;
+  --md-accent-fg-color: var(--haify-ok);
+  --md-typeset-a-color: var(--haify-ok);
+  --md-typeset-color: var(--haify-ink);
+  --md-code-bg-color: #e9edeb;
+  --md-code-fg-color: var(--haify-ink);
+  --md-footer-bg-color: var(--haify-ink);
+}
+
+[data-md-color-scheme="slate"] {
+  color-scheme: dark;
+  --haify-bg: #101715;
+  --haify-surface: #172220;
+  --haify-ink: #e3eae7;
+  --haify-muted: #93a29c;
+  --haify-line: #2a3633;
+  --haify-ok: #3fb3a4;
+  --haify-ok-soft: #173b36;
+  --haify-turn: #d69a3c;
+  --haify-gone: #4d5a56;
+
+  --md-default-bg-color: var(--haify-bg);
+  --md-default-fg-color: var(--haify-ink);
+  --md-default-fg-color--light: var(--haify-muted);
+  --md-default-fg-color--lighter: #6f7d78;
+  --md-default-fg-color--lightest: var(--haify-line);
+  --md-primary-fg-color: #0c1311;
+  --md-primary-fg-color--dark: #080d0c;
+  --md-primary-bg-color: #e3eae7;
+  --md-accent-fg-color: var(--haify-ok);
+  --md-typeset-a-color: var(--haify-ok);
+  --md-typeset-color: var(--haify-ink);
+  --md-code-bg-color: #1b2725;
+  --md-code-fg-color: var(--haify-ink);
+  --md-footer-bg-color: #0c1311;
+  --md-hue: 160;
+}
+
+.md-typeset { font-size: 0.8rem; line-height: 1.65; }
+.md-typeset h1 { font-weight: 600; letter-spacing: -0.015em; color: var(--haify-ink); }
+.md-typeset h2 { font-weight: 600; letter-spacing: -0.01em; }
+.md-typeset code { font-size: 0.82em; }
+.md-header, .md-tabs { box-shadow: none; }
+
+/* ---------- Home ---------- */
+
+.haify-home { color: var(--haify-ink); }
+.haify-wrap { max-width: 61rem; margin: 0 auto; padding: 0 1.2rem; }
+
+/* The hero is always a dark stage, in both colour schemes: it redefines the
+   page tokens locally, so the buttons and the scene's drawing classes pick up
+   the dark values without rules of their own. */
+.haify-hero {
+  --haify-bg: #0c1412; --haify-surface: #121e1b; --haify-ink: #e6eeeb; --haify-muted: #8fa29b;
+  --haify-line: #24332f; --haify-ok: #3fd0bc; --haify-ok-soft: #10332e; --haify-turn: #e7a74e;
+  color: var(--haify-ink);
+  background:
+    radial-gradient(ellipse 60% 70% at 75% 45%, rgba(63, 208, 188, 0.13), transparent 70%),
+    #0c1412;
+  padding: 3.4rem 0 3.2rem;
+}
+.haify-hero .haify-wrap {
+  display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 2.8rem; align-items: center;
+}
+.haify-hero h1 {
+  font-size: 2.2rem; line-height: 1.1; font-weight: 600; letter-spacing: -0.025em;
+  margin: 0 0 1rem; color: var(--haify-ink);
+}
+.haify-lede { font-size: 0.92rem; line-height: 1.6; color: var(--haify-muted); max-width: 32em; margin: 0 0 1.6rem; }
+.haify-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.haify-btn {
+  display: inline-block; padding: 0.55rem 1rem; border-radius: 0.3rem;
+  font-weight: 600; font-size: 0.78rem; text-decoration: none;
+  border: 1px solid var(--haify-ink);
+}
+.haify-btn--primary { background: var(--haify-ink); color: var(--haify-bg); }
+.haify-btn--primary:hover { background: var(--haify-ok); border-color: var(--haify-ok); color: #fff; }
+.haify-btn--plain { color: var(--haify-ink); }
+.haify-btn--plain:hover { border-color: var(--haify-ok); color: var(--haify-ok); }
+.haify-btn:focus-visible, .haify-home a:focus-visible { outline: 2px solid var(--haify-ok); outline-offset: 2px; }
+
+.haify-stage { margin: 0; }
+.haify-hero-scene {
+  margin: 0; background-color: rgba(18, 30, 27, 0.6);
+  background-image: radial-gradient(var(--haify-line) 1px, transparent 1px);
+  background-size: 16px 16px; border-color: var(--haify-line);
+}
+.haify-hero-scene .wire--on, .haify-hero-scene .ring, .haify-hero-scene .pkt { filter: drop-shadow(0 0 3px var(--haify-ok)); }
+.haify-hero-scene .ring { fill: none; stroke: var(--haify-ok); stroke-width: 2; }
+.haify-hero-state { font-size: 11px; }
+.haify-ill text.haify-hero-state { fill: var(--haify-muted); }
+.haify-ill text.is-serving { fill: var(--haify-ok); font-weight: 600; }
+.haify-ill text.is-taking-over, .haify-ill text.is-catching-up { fill: var(--haify-turn); font-weight: 600; }
+.haify-stage figcaption {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+  margin-top: 0.7rem; font-size: 0.76rem; color: var(--haify-muted); min-height: 2.6em;
+}
+.haify-replay {
+  flex: none; background: none; border: 0; padding: 0; color: var(--haify-ok); cursor: pointer;
+  font: inherit; font-size: 0.72rem; text-decoration: underline;
+}
+
+.haify-section { padding: 3rem 0; border-bottom: 1px solid var(--haify-line); }
+.haify-section h2 { font-size: 1.3rem; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 0.4rem; }
+.haify-section > .haify-wrap > p.haify-intro { color: var(--haify-muted); max-width: 38em; margin: 0 0 1.8rem; font-size: 0.85rem; }
+
+.haify-scope { display: grid; grid-template-columns: 13rem 1fr; gap: 0; margin: 0; }
+.haify-scope dt { font-weight: 600; font-size: 0.82rem; padding: 0.85rem 0; border-top: 1px solid var(--haify-line); }
+.haify-scope dd { margin: 0; padding: 0.85rem 0; border-top: 1px solid var(--haify-line);
+  font-size: 0.82rem; color: var(--haify-muted); max-width: 44em; }
+.haify-scope dd strong { color: var(--haify-ink); font-weight: 600; }
+
+.haify-steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.haify-steps li { counter-increment: step; display: grid; grid-template-columns: 2rem 1fr; gap: 0.2rem 0.8rem; margin: 0 0 1.2rem; }
+.haify-steps li::before {
+  content: counter(step); grid-row: span 2; font-weight: 600; font-size: 0.8rem;
+  width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid var(--haify-ink);
+  display: flex; align-items: center; justify-content: center;
+}
+.haify-steps p { margin: 0.15rem 0 0.35rem; font-size: 0.82rem; }
+.haify-steps pre { margin: 0; }
+.haify-steps code {
+  display: block; padding: 0.6rem 0.8rem; border-radius: 0.3rem; background: var(--md-code-bg-color);
+  font-size: 0.7rem; white-space: pre; overflow-x: auto;
+}
+
+/* The home page is all hero and sections; Material's empty article would only add a gap. */
+body:has(.haify-home) .md-main__inner { display: none; }
+
+/* Use cases: the main section, so it gets the most room. */
+.haify-cases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2rem; margin-top: 1.4rem; }
+.haify-cases article { padding: 0 0 2rem; display: flex; flex-direction: column; }
+.haify-cases h3 { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 600; line-height: 1.3; letter-spacing: -0.005em; }
+.haify-cases p { margin: 0 0 0.8rem; font-size: 0.8rem; color: var(--haify-muted); flex: 1; }
+.haify-cases a { font-size: 0.78rem; font-weight: 600; color: var(--haify-ok); text-decoration: none; align-self: flex-start; }
+.haify-cases a:hover { text-decoration: underline; }
+
+/* Use-case illustrations: drawn in the page's own colours, so they follow the theme. */
+.haify-ill { display: block; width: 100%; height: auto; margin: 0 0 0.9rem; background: var(--haify-surface);
+  border: 1px solid var(--haify-line); border-radius: 0.5rem; }
+.haify-ill .box { fill: var(--haify-surface); stroke: var(--haify-ink); stroke-width: 1.5; }
+.haify-ill .box--app { fill: var(--haify-ok-soft); stroke: var(--haify-ok); }
+.haify-ill .bay { fill: var(--haify-line); }
+.haify-ill .led, .haify-ill .pkt { fill: var(--haify-ok); }
+.haify-ill .disk { fill: var(--haify-ok-soft); stroke: var(--haify-ok); stroke-width: 1.5; }
+.haify-ill .icon { fill: none; stroke: var(--haify-ink); stroke-width: 1.5; stroke-linejoin: round; }
+.haify-ill .wire { fill: none; stroke: var(--haify-muted); stroke-width: 1.5; }
+.haify-ill .wire--idle { stroke: var(--haify-line); stroke-dasharray: 3 4; }
+.haify-ill .wire--on { stroke: var(--haify-ok); stroke-width: 2; }
+.haify-ill .veil { fill: var(--haify-bg); opacity: 0.78; }
+.haify-ill .cross { fill: none; stroke: var(--haify-turn); stroke-width: 3; stroke-linecap: round; }
+.haify-ill text { font-family: var(--md-text-font-family); font-size: 11px; fill: var(--haify-muted); }
+.haify-ill text.lbl { fill: var(--haify-ink); font-weight: 600; font-size: 12px; }
+
+.haify-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2rem; }
+.haify-links a { display: block; padding: 0.8rem 0; border-top: 1px solid var(--haify-line); text-decoration: none; color: var(--haify-ink); }
+.haify-links a span { display: block; font-size: 0.74rem; color: var(--haify-muted); margin-top: 0.15rem; }
+.haify-links a:hover strong { color: var(--haify-ok); }
+.haify-links strong { font-weight: 600; font-size: 0.85rem; }
+
+@media (max-width: 60em) {
+  .haify-hero .haify-wrap { grid-template-columns: minmax(0, 1fr); }
+  .haify-cases, .haify-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 36em) {
+  .haify-hero { padding: 2rem 0 2.4rem; }
+  .haify-hero h1 { font-size: 1.6rem; }
+  .haify-section { padding: 2.2rem 0; }
+  .haify-actions .haify-btn { flex: 1 1 100%; text-align: center; padding: 0.75rem 1rem; }
+  .haify-stage figcaption { font-size: 0.72rem; }
+  /* The scene shrinks to about 0.65 on a phone: give it the full width and
+     larger type so the labels stay readable. */
+  .haify-stage { margin: 0 -1.2rem; }
+  .haify-stage figcaption { padding: 0 1.2rem; }
+  .haify-hero-scene { border-radius: 0; border-left: 0; border-right: 0; }
+  .haify-hero-scene text.lbl { font-size: 16px; }
+  .haify-hero-scene text.app-lbl { font-size: 13px; }
+  .haify-hero-scene text.haify-hero-state { font-size: 15px; }
+
+  .haify-scope { grid-template-columns: minmax(0, 1fr); }
+  .haify-scope dd { border-top: 0; padding-top: 0; }
+
+  .haify-steps li::before { grid-row: auto; }
+  .haify-steps code { grid-column: 1 / -1; white-space: pre-wrap; }
+  .haify-steps code span { white-space: nowrap; }
+
+  .haify-cases, .haify-links { grid-template-columns: minmax(0, 1fr); }
+}

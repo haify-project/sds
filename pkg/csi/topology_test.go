@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -121,15 +121,15 @@ func TestSelectReplicaNodesEqualCapacityTieBreaksOnName(t *testing.T) {
 }
 
 func TestNodesWithPoolCarriesFreeSpace(t *testing.T) {
-	nodes := []*sdspb.NodeInfo{
+	nodes := []*haifypb.NodeInfo{
 		{Name: "n1", Address: "10.0.0.1"},
 		{Name: "n2", Address: "10.0.0.2"},
 		{Name: "n3", Address: "10.0.0.3"},
 	}
-	pools := []*sdspb.PoolInfo{
-		{Name: "sds_vg0", Node: "10.0.0.1", FreeBytes: 20 * giB},
-		{Name: "sds_vg0", Node: "10.0.0.2", FreeGb: 90}, // DB-served pool: no byte counts
-		{Name: "sds_other", Node: "10.0.0.3", FreeBytes: 900 * giB},
+	pools := []*haifypb.PoolInfo{
+		{Name: "haify_vg0", Node: "10.0.0.1", FreeBytes: 20 * giB},
+		{Name: "haify_vg0", Node: "10.0.0.2", FreeGb: 90}, // DB-served pool: no byte counts
+		{Name: "haify_other", Node: "10.0.0.3", FreeBytes: 900 * giB},
 	}
 	got := nodesWithPool(nodes, pools, "vg0", "host")
 	require.Len(t, got, 2, "n3 hosts a different pool")
@@ -140,21 +140,21 @@ func TestNodesWithPoolCarriesFreeSpace(t *testing.T) {
 // A thin pool's volume group reports zero free for life, so ranking has to read
 // the thin pool's own utilisation or every thin node looks equally full.
 func TestPoolFreeBytesUsesThinUtilisation(t *testing.T) {
-	thin := &sdspb.PoolInfo{
-		Name: "sds_vg0", Node: "10.0.0.1",
+	thin := &haifypb.PoolInfo{
+		Name: "haify_vg0", Node: "10.0.0.1",
 		FreeGb:          0,
-		ThinPoolLv:      "sds_vg0_tpool",
+		ThinPoolLv:      "haify_vg0_tpool",
 		ThinSizeBytes:   100 * giB,
 		ThinDataPercent: 25,
 	}
 	assert.Equal(t, uint64(75*giB), poolFreeBytes(thin))
 
-	full := &sdspb.PoolInfo{ThinPoolLv: "tp", ThinSizeBytes: 100 * giB, ThinDataPercent: 100}
+	full := &haifypb.PoolInfo{ThinPoolLv: "tp", ThinSizeBytes: 100 * giB, ThinDataPercent: 100}
 	assert.Zero(t, poolFreeBytes(full))
 
 	// No thin pool: exact bytes when present, rounded gibibytes otherwise.
-	assert.Equal(t, uint64(7*giB), poolFreeBytes(&sdspb.PoolInfo{FreeBytes: 7 * giB, FreeGb: 3}))
-	assert.Equal(t, uint64(3*giB), poolFreeBytes(&sdspb.PoolInfo{FreeGb: 3}))
+	assert.Equal(t, uint64(7*giB), poolFreeBytes(&haifypb.PoolInfo{FreeBytes: 7 * giB, FreeGb: 3}))
+	assert.Equal(t, uint64(3*giB), poolFreeBytes(&haifypb.PoolInfo{FreeGb: 3}))
 }
 
 func TestRequisiteNodes(t *testing.T) {
@@ -195,15 +195,15 @@ func TestSelectReplicaNodesSpreadsAcrossFaultDomains(t *testing.T) {
 
 // A drained node must not receive a replica of a new PVC.
 func TestNodesWithPoolSkipsDrainedNode(t *testing.T) {
-	nodes := []*sdspb.NodeInfo{
+	nodes := []*haifypb.NodeInfo{
 		{Name: "n1", Address: "10.0.0.1", State: "online"},
 		{Name: "n2", Address: "10.0.0.2", State: "maintenance"},
 		{Name: "n3", Address: "10.0.0.3", State: "offline"},
 	}
-	pools := []*sdspb.PoolInfo{
-		{Name: "sds_vg0", Node: "10.0.0.1", FreeBytes: 10 * giB},
-		{Name: "sds_vg0", Node: "10.0.0.2", FreeBytes: 900 * giB},
-		{Name: "sds_vg0", Node: "10.0.0.3", FreeBytes: 10 * giB},
+	pools := []*haifypb.PoolInfo{
+		{Name: "haify_vg0", Node: "10.0.0.1", FreeBytes: 10 * giB},
+		{Name: "haify_vg0", Node: "10.0.0.2", FreeBytes: 900 * giB},
+		{Name: "haify_vg0", Node: "10.0.0.3", FreeBytes: 10 * giB},
 	}
 	got := nodesWithPool(nodes, pools, "vg0", "")
 	var names []string

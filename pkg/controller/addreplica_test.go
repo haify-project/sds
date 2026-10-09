@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A LAN resource gains a plain mesh member: real address, no explicit
@@ -18,7 +18,7 @@ func TestAddReplicaToConfigLAN(t *testing.T) {
 	// node-e is the fixture's tiebreaker and already in the config; a fresh node
 	// is what an operator would actually be adding.
 	rm.controller.nodes.nodes["192.168.1.30"] = &NodeInfo{
-		Name: "node-d", Address: "192.168.1.30", Hostname: "sds-d", State: NodeStateOnline,
+		Name: "node-d", Address: "192.168.1.30", Hostname: "haify-d", State: NodeStateOnline,
 	}
 	rm.controller.hostsMap["node-d"] = "192.168.1.30"
 
@@ -26,7 +26,7 @@ func TestAddReplicaToConfigLAN(t *testing.T) {
 		addDRVolumes, 7300, 2, 0, false, "", false)
 	require.NoError(t, err)
 
-	assert.Contains(t, out, "on sds-d {")
+	assert.Contains(t, out, "on haify-d {")
 	assert.Contains(t, out, "address   192.168.1.30:7300;")
 	assert.Contains(t, out, "node-id   3;", "next free id after 0,1,2")
 	// Every replica of a resource shares one minor.
@@ -36,7 +36,7 @@ func TestAddReplicaToConfigLAN(t *testing.T) {
 
 	mesh := out[strings.Index(out, "connection-mesh"):]
 	mesh = mesh[:strings.Index(mesh, ";")]
-	for _, h := range []string{"sds-a", "sds-b", "sds-e", "sds-d"} {
+	for _, h := range []string{"haify-a", "haify-b", "haify-e", "haify-d"} {
 		assert.Contains(t, mesh, h)
 	}
 }
@@ -53,7 +53,7 @@ func TestAddReplicaToConfigTwoSiteGetsItsOwnLeg(t *testing.T) {
 
 	// node-d joins as a third primary-site replica: leg index 2.
 	rm.controller.nodes.nodes["192.168.1.30"] = &NodeInfo{
-		Name: "node-d", Address: "192.168.1.30", Hostname: "sds-d", State: NodeStateOnline,
+		Name: "node-d", Address: "192.168.1.30", Hostname: "haify-d", State: NodeStateOnline,
 	}
 	rm.controller.hostsMap["node-d"] = "192.168.1.30"
 
@@ -63,15 +63,15 @@ func TestAddReplicaToConfigTwoSiteGetsItsOwnLeg(t *testing.T) {
 
 	// Its LAN identity is a real address; only the leg uses loopback.
 	assert.Contains(t, out, "address   192.168.1.30:7300;")
-	assert.Contains(t, out, "host sds-d address 127.0.0.1:7902;")
-	assert.Contains(t, out, "host sds-c address 127.0.0.1:7302;", "leg index 2 → port+2")
+	assert.Contains(t, out, "host haify-d address 127.0.0.1:7902;")
+	assert.Contains(t, out, "host haify-c address 127.0.0.1:7302;", "leg index 2 → port+2")
 	assert.Equal(t, 3, strings.Count(out, "connection {"), "one leg per primary-site replica")
 
 	// The DR stays out of the LAN mesh; the newcomer joins it.
 	mesh := out[strings.Index(out, "connection-mesh"):]
 	mesh = mesh[:strings.Index(mesh, ";")]
-	assert.Contains(t, mesh, "sds-d")
-	assert.NotContains(t, mesh, "sds-c")
+	assert.Contains(t, mesh, "haify-d")
+	assert.NotContains(t, mesh, "haify-c")
 }
 
 func TestAddReplicaToConfigRejectsExistingNode(t *testing.T) {

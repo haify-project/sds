@@ -25,7 +25,7 @@ func TestShellQuoteContainsOperatorInput(t *testing.T) {
 // a missing tool without taking the whole command down with it.
 func TestProbeBlockDeviceEmitsItsContractForAMissingDevice(t *testing.T) {
 	c, host := covLocalClient(t)
-	res, err := c.ProbeBlockDevice(covCtx(t), host, "/dev/sds-cache-probe-nodev")
+	res, err := c.ProbeBlockDevice(covCtx(t), host, "/dev/haify-cache-probe-nodev")
 	require.NoError(t, err)
 
 	hr := res.Hosts[host]

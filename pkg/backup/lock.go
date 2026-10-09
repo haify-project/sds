@@ -8,14 +8,14 @@ import (
 // Immutable backups: S3 Object Lock.
 //
 // A backup that whoever holds the cluster can delete is not a backup against
-// whoever holds the cluster. Ransomware with a stolen sds token, or root on a
+// whoever holds the cluster. Ransomware with a stolen haify token, or root on a
 // storage node, deletes the backups first and encrypts second. Object Lock
 // moves the guarantee to the object store: an object locked until a date
-// cannot be deleted or overwritten before it, by sds or anyone using sds's
+// cannot be deleted or overwritten before it, by haify or anyone using haify's
 // credentials (governance mode: anyone without s3:BypassGovernanceRetention;
 // compliance mode: anyone at all, the bucket owner included).
 //
-// The lock is only as strong as the credentials sds is given, and those sit
+// The lock is only as strong as the credentials haify is given, and those sit
 // on the storage nodes. They must not carry s3:BypassGovernanceRetention,
 // s3:DeleteObjectVersion or s3:PutBucketObjectLockConfiguration; with any of
 // them the lock is a formality. The user guide has the policy.
@@ -27,7 +27,7 @@ const (
 	// LockNone writes objects unlocked.
 	LockNone LockMode = ""
 	// LockGovernance can be lifted by a principal holding
-	// s3:BypassGovernanceRetention, which sds's credentials must not.
+	// s3:BypassGovernanceRetention, which haify's credentials must not.
 	LockGovernance LockMode = "governance"
 	// LockCompliance cannot be lifted by anyone before it expires.
 	LockCompliance LockMode = "compliance"

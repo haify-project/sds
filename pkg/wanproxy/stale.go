@@ -61,7 +61,7 @@ func FindStaleLegs(ctx context.Context, deploy DeploymentClient, m MultiSpec) ([
 				continue
 			}
 			for unit := range parseActiveUnits(h.Output) {
-				legID := strings.TrimSuffix(strings.TrimPrefix(unit, "sds-proxy@"), ".service")
+				legID := strings.TrimSuffix(strings.TrimPrefix(unit, "haify-proxy@"), ".service")
 				if !belongsToResource(legID, m.Resource) || expected[host][legID] {
 					continue
 				}

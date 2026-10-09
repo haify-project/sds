@@ -59,7 +59,7 @@ func stampVersion(t *testing.T, path string, raw string) {
 }
 
 func TestFreshDatabaseIsStampedWithCurrentVersion(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sds.db")
+	path := filepath.Join(t.TempDir(), "haify.db")
 
 	db, err := Open(&Config{Path: path}, zap.NewNop())
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestLegacyDatabaseIsTreatedAsVersionOneNotAsFresh(t *testing.T) {
 		},
 	}})
 
-	path := filepath.Join(t.TempDir(), "sds.db")
+	path := filepath.Join(t.TempDir(), "haify.db")
 	writeLegacyDatabase(t, path)
 
 	db, err := Open(&Config{Path: path}, zap.NewNop())
@@ -123,7 +123,7 @@ func TestFreshDatabaseSkipsMigrations(t *testing.T) {
 		},
 	}})
 
-	path := filepath.Join(t.TempDir(), "sds.db")
+	path := filepath.Join(t.TempDir(), "haify.db")
 	db, err := Open(&Config{Path: path}, zap.NewNop())
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
@@ -134,7 +134,7 @@ func TestFreshDatabaseSkipsMigrations(t *testing.T) {
 }
 
 func TestNewerSchemaIsRefused(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sds.db")
+	path := filepath.Join(t.TempDir(), "haify.db")
 	writeLegacyDatabase(t, path)
 	stampVersion(t, path, "99")
 
@@ -165,7 +165,7 @@ func TestNewerSchemaIsRefused(t *testing.T) {
 }
 
 func TestUnreadableSchemaVersionIsRefused(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sds.db")
+	path := filepath.Join(t.TempDir(), "haify.db")
 	writeLegacyDatabase(t, path)
 	stampVersion(t, path, "not-a-number")
 
@@ -194,7 +194,7 @@ func TestMigrationsRunInOrder(t *testing.T) {
 	}
 	withMigrations(t, []migration{step(2), step(3), step(4)})
 
-	path := filepath.Join(t.TempDir(), "sds.db")
+	path := filepath.Join(t.TempDir(), "haify.db")
 	writeLegacyDatabase(t, path)
 
 	db, err := Open(&Config{Path: path}, zap.NewNop())
@@ -216,7 +216,7 @@ func TestAlreadyCurrentDatabaseRunsNothing(t *testing.T) {
 		apply: func(tx *bolt.Tx) error { ran++; return nil },
 	}})
 
-	path := filepath.Join(t.TempDir(), "sds.db")
+	path := filepath.Join(t.TempDir(), "haify.db")
 	writeLegacyDatabase(t, path)
 
 	db, err := Open(&Config{Path: path}, zap.NewNop())
@@ -234,7 +234,7 @@ func TestAlreadyCurrentDatabaseRunsNothing(t *testing.T) {
 
 func TestFailedMigrationLeavesNoPartialState(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "sds.db")
+	path := filepath.Join(dir, "haify.db")
 	writeLegacyDatabase(t, path)
 
 	mark := func(tx *bolt.Tx, key string) error {
@@ -302,7 +302,7 @@ func TestPreMigrationBackupIsWrittenAndUsable(t *testing.T) {
 	}})
 
 	dir := t.TempDir()
-	path := filepath.Join(dir, "sds.db")
+	path := filepath.Join(dir, "haify.db")
 	writeLegacyDatabase(t, path)
 
 	db, err := Open(&Config{Path: path}, zap.NewNop())
@@ -328,7 +328,7 @@ func TestPreMigrationBackupIsWrittenAndUsable(t *testing.T) {
 
 func TestNoBackupWithoutAMigration(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "sds.db")
+	path := filepath.Join(dir, "haify.db")
 
 	db, err := Open(&Config{Path: path}, zap.NewNop())
 	require.NoError(t, err)
@@ -364,7 +364,7 @@ func TestMalformedMigrationChainIsRejected(t *testing.T) {
 
 	// A malformed chain must stop Open rather than migrate half a database.
 	withMigrations(t, cases["gap"])
-	db, err := Open(&Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	db, err := Open(&Config{Path: filepath.Join(t.TempDir(), "haify.db")}, zap.NewNop())
 	require.Error(t, err)
 	assert.Nil(t, db)
 }

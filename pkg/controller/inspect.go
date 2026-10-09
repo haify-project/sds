@@ -12,15 +12,15 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/event"
-	"github.com/haify-project/sds/pkg/inspect"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/event"
+	"github.com/haify-project/haify/pkg/inspect"
 )
 
 // ErrInspectionRunning is returned when a run is asked for while one is in
 // progress. Two runs would probe every node twice and store two reports of
 // the same moment.
-var ErrInspectionRunning = errors.New("an inspection is already running; wait for it, then read it with `sds inspect show latest`")
+var ErrInspectionRunning = errors.New("an inspection is already running; wait for it, then read it with `haify inspect show latest`")
 
 // inspectionTimeout bounds one run. The probe round is bounded on its own;
 // this covers the database reads around it.
@@ -145,7 +145,7 @@ func (im *InspectionManager) Get(ctx context.Context, id string) (*inspect.Repor
 			return nil, err
 		}
 		if len(records) == 0 {
-			return nil, fmt.Errorf("no inspection has run yet; start one with `sds inspect run`")
+			return nil, fmt.Errorf("no inspection has run yet; start one with `haify inspect run`")
 		}
 		raw = records[0]
 	} else {

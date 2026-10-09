@@ -8,9 +8,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/backup"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/backup"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Incremental backups. A full image of a 2 TiB volume every night is 2 TiB on
@@ -221,9 +221,9 @@ while read -r -u3 off len; do
   sudo dd if="$SRC" bs=1M iflag=skip_bytes,count_bytes,fullblock skip="$off" count="$len" status=none
 done 3<"$R" | gzip -1 -c | tee >(wc -c > "$CNT") | %s
 for i in $(seq 1 100); do [ -s "$CNT" ] && break; sleep 0.1; done
-echo "SDS_SENT=$(cat "$CNT")"
-echo "SDS_RANGES_BYTES=$(wc -c < "$R")"
-echo "SDS_CHANGED=$(awk '{s+=$2} END {printf "%%.0f", s}' "$R")"`,
+echo "HAIFY_SENT=$(cat "$CNT")"
+echo "HAIFY_RANGES_BYTES=$(wc -c < "$R")"
+echo "HAIFY_CHANGED=$(awk '{s+=$2} END {printf "%%.0f", s}' "$R")"`,
 		shellSingleQuote(vg), shellSingleQuote(base), shellSingleQuote(snap), size,
 		closeSource, source, deltaCoalesceGap, thinDeltaAwk, pushRanges, pushData)
 }
@@ -264,11 +264,11 @@ func parseDeltaReport(res *deployment.ExecResult) (deltaReport, error) {
 				continue
 			}
 			switch key {
-			case "SDS_SENT":
+			case "HAIFY_SENT":
 				r.sent = n
-			case "SDS_RANGES_BYTES":
+			case "HAIFY_RANGES_BYTES":
 				r.rangesBytes = n
-			case "SDS_CHANGED":
+			case "HAIFY_CHANGED":
 				r.changed = n
 			default:
 				continue

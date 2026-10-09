@@ -26,7 +26,7 @@ func TestUnreachableDisklessClientsAreOneWarningEach(t *testing.T) {
 	if c.Subject != "pve-9001-0->pve-a" || c.Status != StatusWarn || len(c.Evidence) != 4 {
 		t.Errorf("got %+v", c)
 	}
-	if c.Fix != "start pve-a, or detach it: sds resource diskless detach pve-9001-0 pve-a" {
+	if c.Fix != "start pve-a, or detach it: haify resource diskless detach pve-9001-0 pve-a" {
 		t.Errorf("fix = %q", c.Fix)
 	}
 	if !strings.Contains(c.Message, "n1, n2, n3") {
@@ -40,7 +40,7 @@ func TestUnreachableTiebreakerWarns(t *testing.T) {
 	view(in, "n1", "vm", "Primary", "UpToDate", conn("n2", 1, "Connected", "Secondary", up("UpToDate")), conn("n3", 2, "Connecting", "", nil))
 	view(in, "n2", "vm", "Secondary", "UpToDate", conn("n1", 0, "Connected", "Primary", up("UpToDate")), conn("n3", 2, "Connecting", "", nil))
 	c := only(t, checkResources(in), "resource.disconnected")
-	if c.Status != StatusWarn || !strings.Contains(c.Fix, "sds ha set-tiebreaker vm") {
+	if c.Status != StatusWarn || !strings.Contains(c.Fix, "haify ha set-tiebreaker vm") {
 		t.Errorf("got %+v", c)
 	}
 }

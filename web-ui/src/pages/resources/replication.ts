@@ -17,7 +17,7 @@ const SYNC_REPLICATION_STATES = new Set([
 // provisions (see pkg/csi CreateVolume). Such a volume's lifecycle belongs to
 // Kubernetes: deleting it here strands the PersistentVolume that still
 // references it, so the UI marks it and warns before a manual delete.
-const csiManagedLabel = 'sds.csi/managed-by';
+const csiManagedLabel = 'haify.csi/managed-by';
 
 export function isCsiManaged(resource: Resource): boolean {
   return resource.labels?.[csiManagedLabel] === 'csi';

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,8 +37,8 @@ func resWithVolumes(t *testing.T, cfg string, dep *fakeDeploymentClient, volumes
 func TestAddVolumeIdempotentWhenDiskAlreadyReferenced(t *testing.T) {
 	// Config already carries volume 1 pointing at the state LV.
 	config := "resource res1 {\n" +
-		"    volume 0 {\n        device    minor 1;\n        disk      /dev/sds_data-pool/res1_data;\n        meta-disk internal;\n    }\n" +
-		"    volume 1 {\n        device    minor 2;\n        disk      /dev/sds_data-pool/res1_state1;\n        meta-disk internal;\n    }\n}\n"
+		"    volume 0 {\n        device    minor 1;\n        disk      /dev/haify_data-pool/res1_data;\n        meta-disk internal;\n    }\n" +
+		"    volume 1 {\n        device    minor 2;\n        disk      /dev/haify_data-pool/res1_state1;\n        meta-disk internal;\n    }\n}\n"
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
@@ -64,7 +64,7 @@ func TestAddVolumeIdempotentWhenDiskAlreadyReferenced(t *testing.T) {
 // volume block must be rolled back (original config restored) and the created
 // LV removed, so a retry starts from a clean .res instead of stacking blocks.
 func TestAddVolumeRollsBackAppendedBlockAndLVOnFailure(t *testing.T) {
-	config := "resource res1 {\n    volume 0 {\n        device    minor 1;\n        disk      /dev/sds_data-pool/res1_data;\n        meta-disk internal;\n    }\n}\n"
+	config := "resource res1 {\n    volume 0 {\n        device    minor 1;\n        disk      /dev/haify_data-pool/res1_data;\n        meta-disk internal;\n    }\n}\n"
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/res1.res") {
@@ -96,7 +96,7 @@ func TestAddVolumeRollsBackAppendedBlockAndLVOnFailure(t *testing.T) {
 	// The LV created for the failed add must be removed.
 	var removedStateLV bool
 	for _, call := range dep.lvRemoveCalls {
-		if call.lvPath == "/dev/sds_data-pool/res1_state1" {
+		if call.lvPath == "/dev/haify_data-pool/res1_state1" {
 			removedStateLV = true
 		}
 	}
@@ -114,8 +114,8 @@ func TestAddVolumeRollsBackAppendedBlockAndLVOnFailure(t *testing.T) {
 func TestDeleteResourceRemovesStateVolumeLVs(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	ctrl := resWithVolumes(t, "", dep,
-		&database.Volume{ResourceName: "res1", VolumeName: "res1_data", VolumeID: 0, Pool: "sds_data-pool", SizeGB: 10, Device: "/dev/sds_data-pool/res1_data"},
-		&database.Volume{ResourceName: "res1", VolumeName: "res1_state1", VolumeID: 1, Pool: "sds_data-pool", SizeGB: 1, Device: "/dev/sds_data-pool/res1_state1"},
+		&database.Volume{ResourceName: "res1", VolumeName: "res1_data", VolumeID: 0, Pool: "haify_data-pool", SizeGB: 10, Device: "/dev/haify_data-pool/res1_data"},
+		&database.Volume{ResourceName: "res1", VolumeName: "res1_state1", VolumeID: 1, Pool: "haify_data-pool", SizeGB: 1, Device: "/dev/haify_data-pool/res1_state1"},
 	)
 
 	err := ctrl.resources.DeleteResource(context.Background(), "res1", true)
@@ -123,10 +123,10 @@ func TestDeleteResourceRemovesStateVolumeLVs(t *testing.T) {
 
 	var removedData, removedState, sawSweep bool
 	for _, call := range dep.execCalls {
-		if strings.Contains(call.cmd, "lvremove -f sds_data-pool/res1_data") {
+		if strings.Contains(call.cmd, "lvremove -f haify_data-pool/res1_data") {
 			removedData = true
 		}
-		if strings.Contains(call.cmd, "lvremove -f sds_data-pool/res1_state1") {
+		if strings.Contains(call.cmd, "lvremove -f haify_data-pool/res1_state1") {
 			removedState = true
 		}
 		// The orphan sweep enumerates the pool for leftover state LVs.

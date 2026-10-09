@@ -26,14 +26,14 @@ zstd_level = 3
 zstd_min_size = 64
 on_congestion = "pull-ahead"
 overflow_grace_secs = 30
-metrics_path = "/run/sds-proxy/data.json"
+metrics_path = "/run/haify-proxy/data.json"
 metrics_interval_secs = 5
 
 [tls]
-ca = "/etc/sds-proxy/ca.pem"
-cert = "/etc/sds-proxy/cert.pem"
-key = "/etc/sds-proxy/key.pem"
-peer_name = "sds-proxy"
+ca = "/etc/haify-proxy/ca.pem"
+cert = "/etc/haify-proxy/cert.pem"
+key = "/etc/haify-proxy/key.pem"
+peer_name = "haify-proxy"
 `
 	if got != want {
 		t.Fatalf("dialer config mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
@@ -51,16 +51,16 @@ zstd_level = 3
 zstd_min_size = 64
 on_congestion = "pull-ahead"
 overflow_grace_secs = 30
-metrics_path = "/run/sds-proxy/data.json"
+metrics_path = "/run/haify-proxy/data.json"
 metrics_interval_secs = 5
 acceptor_park_secs = 30
 synthesize_ping_acks = true
 
 [tls]
-ca = "/etc/sds-proxy/ca.pem"
-cert = "/etc/sds-proxy/cert.pem"
-key = "/etc/sds-proxy/key.pem"
-peer_name = "sds-proxy"
+ca = "/etc/haify-proxy/ca.pem"
+cert = "/etc/haify-proxy/cert.pem"
+key = "/etc/haify-proxy/key.pem"
+peer_name = "haify-proxy"
 `
 	if got != want {
 		t.Fatalf("acceptor config mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
@@ -81,7 +81,7 @@ peer_name = "sds-proxy"
 // not. The renderers are pure string building, so the loop costs microseconds.
 //
 // Determinism matters beyond tidiness: the provisioner writes these files to
-// both nodes and reloads sds-proxy when the content changes. A renderer that
+// both nodes and reloads haify-proxy when the content changes. A renderer that
 // reorders its own keys would make every reconciliation look like a config
 // change and bounce the WAN legs on a loop.
 func TestConfigDeterministic(t *testing.T) {

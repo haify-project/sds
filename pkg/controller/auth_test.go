@@ -24,7 +24,7 @@ func callUnary(t *testing.T, ctx context.Context, method string) error {
 }
 
 func TestAuthUnaryInterceptor(t *testing.T) {
-	method := "/v1.SDSController/ListPools"
+	method := "/v1.HaifyController/ListPools"
 
 	t.Run("missing metadata rejected", func(t *testing.T) {
 		err := callUnary(t, context.Background(), method)
@@ -88,7 +88,7 @@ func TestAuthStreamInterceptor(t *testing.T) {
 
 	t.Run("missing token rejected", func(t *testing.T) {
 		err := interceptor(nil, fakeServerStream{ctx: context.Background()},
-			&grpc.StreamServerInfo{FullMethod: "/v1.SDSController/Watch"}, handler)
+			&grpc.StreamServerInfo{FullMethod: "/v1.HaifyController/Watch"}, handler)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
 	})
 
@@ -96,7 +96,7 @@ func TestAuthStreamInterceptor(t *testing.T) {
 		ctx := metadata.NewIncomingContext(context.Background(),
 			metadata.Pairs("authorization", "Bearer "+testToken))
 		err := interceptor(nil, fakeServerStream{ctx: ctx},
-			&grpc.StreamServerInfo{FullMethod: "/v1.SDSController/Watch"}, handler)
+			&grpc.StreamServerInfo{FullMethod: "/v1.HaifyController/Watch"}, handler)
 		require.NoError(t, err)
 	})
 }

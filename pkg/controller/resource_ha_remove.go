@@ -38,7 +38,7 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 		zap.String("active_node", activeNode))
 
 	// The config name for drbd-reactorctl (without .toml extension)
-	configName := fmt.Sprintf("sds-ha-%s", resource)
+	configName := fmt.Sprintf("haify-ha-%s", resource)
 
 	// Evicting the controller's own metadata resource stops this very
 	// process mid-eviction: a synchronous drbd-reactorctl child (local or
@@ -46,9 +46,9 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 	// detached through systemd-run on the active node and return.
 	if resource == SelfHaResource {
 		evictCmd := fmt.Sprintf(
-			"sudo systemd-run --unit=sds-selfha-evict --collect drbd-reactorctl evict %s", configName)
+			"sudo systemd-run --unit=haify-selfha-evict --collect drbd-reactorctl evict %s", configName)
 		if activeNode == localHostname() {
-			// Usually the case: the controller runs where sds-meta is Primary.
+			// Usually the case: the controller runs where haify-meta is Primary.
 			// Its hostname need not be a name dispatch can reach.
 			if o, err := exec.Command("/bin/bash", "-c", evictCmd).CombinedOutput(); err != nil {
 				return fmt.Errorf("failed to launch detached self-eviction: %s", strings.TrimSpace(string(o)))
@@ -99,7 +99,7 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 
 // evictPromoterConfigs are the promoter configs Haify writes for a resource, in
 // the order evictScript tries them.
-var evictPromoterConfigs = []string{"sds-ha-%s", "sds-nfs-%s", "sds-iscsi-%s", "sds-nvmeof-%s", "sds-smb-%s"}
+var evictPromoterConfigs = []string{"haify-ha-%s", "haify-nfs-%s", "haify-iscsi-%s", "haify-nvmeof-%s", "haify-smb-%s"}
 
 // evictScript evicts the resource from the node it runs on through whichever
 // Haify promoter config for it exists there, and fails when none does — or when
@@ -108,13 +108,13 @@ var evictPromoterConfigs = []string{"sds-ha-%s", "sds-nfs-%s", "sds-iscsi-%s", "
 // where it was and says so only in its output.
 //
 // An app's config is named after the app, not the resource
-// (sds-app-<name>.toml), so it is found by the resource it promotes.
+// (haify-app-<name>.toml), so it is found by the resource it promotes.
 func evictScript(resource string) string {
 	names := make([]string, len(evictPromoterConfigs))
 	for i, f := range evictPromoterConfigs {
 		names[i] = fmt.Sprintf(f, resource)
 	}
-	apps := fmt.Sprintf(`$(grep -l '^\[promoter\.resources\.%s\]' /etc/drbd-reactor.d/sds-app-*.toml 2>/dev/null | sed 's#.*/##; s#\.toml$##')`, resource)
+	apps := fmt.Sprintf(`$(grep -l '^\[promoter\.resources\.%s\]' /etc/drbd-reactor.d/haify-app-*.toml 2>/dev/null | sed 's#.*/##; s#\.toml$##')`, resource)
 	names = append(names, apps)
 	return fmt.Sprintf(`for n in %[1]s; do
   [ -f /etc/drbd-reactor.d/$n.toml ] || continue
@@ -153,7 +153,7 @@ func (rm *ResourceManager) RemoveHa(ctx context.Context, resource string) error 
 	}
 
 	// 1. Delete promoter config
-	configPath := fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
+	configPath := fmt.Sprintf("/etc/drbd-reactor.d/haify-ha-%s.toml", resource)
 	if err := rm.deployment.DeleteConfig(ctx, hosts, configPath); err != nil {
 		rm.controller.logger.Warn("Failed to delete promoter config", zap.Error(err))
 	}

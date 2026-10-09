@@ -15,7 +15,7 @@ import (
 
 // PKI is the shared mTLS material distributed to BOTH sites. It is the
 // shared-CA MVP: one CA + one leaf, reused for every WAN resource. (Per-resource
-// PKI is a later phase.) The leaf carries SAN "sds-proxy" with server+client
+// PKI is a later phase.) The leaf carries SAN "haify-proxy" with server+client
 // EKU so either proxy can act as the TLS server or client, and each proxy pins
 // its peer to that SAN via the [tls] peer_name field.
 type PKI struct {
@@ -125,7 +125,7 @@ func generatePKI() (*PKI, error) {
 	now := time.Now().Add(-time.Minute) // small backdate for clock skew
 	caTemplate := &x509.Certificate{
 		SerialNumber:          caSerial,
-		Subject:               pkix.Name{CommonName: "sds-proxy-ca"},
+		Subject:               pkix.Name{CommonName: "haify-proxy-ca"},
 		NotBefore:             now,
 		NotAfter:              now.Add(pkiValidity),
 		IsCA:                  true,

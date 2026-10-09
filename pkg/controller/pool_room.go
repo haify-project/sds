@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // A replica added to a running resource syncs the whole volume onto the new

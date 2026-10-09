@@ -8,8 +8,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/haify-project/sds/pkg/client"
-	"github.com/haify-project/sds/pkg/util"
+	"github.com/haify-project/haify/pkg/client"
+	"github.com/haify-project/haify/pkg/util"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +31,7 @@ this on [storage.thin] trim_schedule (daily by default).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return err
 			}
@@ -66,7 +66,7 @@ func poolDisks() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return err
 			}
@@ -96,9 +96,9 @@ func poolRemoveDisk() *cobra.Command {
 		Short: "Move a disk's data onto the pool's other disks, then take it out",
 		Long: `The data moves first (pvmove), while the pool stays in use; the disk leaves the
 pool only when that is done. The other disks need room for what it holds; when
-they have none, use replace-disk. Follow it with: sds pool jobs`,
+they have none, use replace-disk. Follow it with: haify pool jobs`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runJob(func(ctx context.Context, c *client.SDSClient) (string, error) {
+			return runJob(func(ctx context.Context, c *client.HaifyClient) (string, error) {
 				resp, err := c.RemovePoolDisk(ctx, pool, node, disk)
 				if err != nil {
 					return "", err
@@ -109,7 +109,7 @@ they have none, use replace-disk. Follow it with: sds pool jobs`,
 	}
 	cmd.Flags().StringVar(&pool, "pool", "", "Pool name (required)")
 	cmd.Flags().StringVar(&node, "node", "", "Node (required)")
-	cmd.Flags().StringVar(&disk, "disk", "", "Disk to take out, as the pool knows it (sds pool disks)")
+	cmd.Flags().StringVar(&disk, "disk", "", "Disk to take out, as the pool knows it (haify pool disks)")
 	return cmd
 }
 
@@ -120,9 +120,9 @@ func poolReplaceDisk() *cobra.Command {
 		Short: "Move a disk's data to a new disk, then take the old one out",
 		Long: `For a disk that is failing or too small. The new disk joins the pool, the old
 one's data moves to it, and the old disk leaves the pool. The pool stays in use throughout.
-Follow it with: sds pool jobs`,
+Follow it with: haify pool jobs`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runJob(func(ctx context.Context, c *client.SDSClient) (string, error) {
+			return runJob(func(ctx context.Context, c *client.HaifyClient) (string, error) {
 				resp, err := c.ReplacePoolDisk(ctx, pool, node, disk, newDisk)
 				if err != nil {
 					return "", err
@@ -146,7 +146,7 @@ func poolJobs() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return err
 			}
@@ -179,10 +179,10 @@ func poolJobs() *cobra.Command {
 }
 
 // runJob connects, starts a job and prints what it said.
-func runJob(start func(context.Context, *client.SDSClient) (string, error)) error {
+func runJob(start func(context.Context, *client.HaifyClient) (string, error)) error {
 	ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 	defer cancel()
-	c, err := newSDSClient()
+	c, err := newHaifyClient()
 	if err != nil {
 		return err
 	}

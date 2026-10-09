@@ -11,7 +11,7 @@ import (
 // production site, one asynchronous copy far away.
 //
 // The primary site keeps its normal LAN mesh (real IPs, protocol C). Only the
-// legs that cross the WAN go through sds-proxy, one per primary-site node, each
+// legs that cross the WAN go through haify-proxy, one per primary-site node, each
 // with its own WAN port and its own loopback pair so the tunnels do not collide
 // on either end.
 type MultiSpec struct {

@@ -7,13 +7,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A backing volume that cannot be removed aborts a non-forced delete. The
 // error must point at something the operator can actually do — there is no
-// force option on `sds resource delete` — and the records must survive so the
+// force option on `haify resource delete` — and the records must survive so the
 // rerun it suggests still knows which volume to remove.
 func TestDeleteResourceBackingVolumeFailureMessage(t *testing.T) {
 	dep := &fakeDeploymentClient{
@@ -40,7 +40,7 @@ func TestDeleteResourceBackingVolumeFailureMessage(t *testing.T) {
 	require.Error(t, err)
 	msg := err.Error()
 	require.Contains(t, msg, "vg0/data_vol0")
-	require.Contains(t, msg, "sds resource delete data")
+	require.Contains(t, msg, "haify resource delete data")
 	require.NotContains(t, msg, "force")
 
 	_, gerr := db.GetResource(ctx, "data")

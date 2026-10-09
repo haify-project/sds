@@ -460,7 +460,7 @@ var appMethodRe = regexp.MustCompile(`^[A-Z][a-z]+(App|Apps|AppStatus)$`)
 // readVerbs are method-name prefixes that denote a read-only operation.
 var readVerbs = []string{"List", "Get", "Describe", "Watch", "Stream", "Check"}
 
-// Classify maps a gRPC full method (e.g. "/v1.SDSController/CreateNFSGateway")
+// Classify maps a gRPC full method (e.g. "/v1.HaifyController/CreateNFSGateway")
 // to the (object, action) pair used for authorization. Unknown methods map to
 // the "system" object and, unless clearly read-only, the "write" action — so a
 // newly added RPC is locked down by default rather than silently permitted.

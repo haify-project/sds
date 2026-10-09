@@ -15,7 +15,7 @@ import (
 //
 // This exists because a running gateway cannot be edited through drbd-reactor.
 // A changed promoter config is a different plugin to drbd-reactor: on reload it
-// stops the old one and starts a new one, and sds writes every gateway with
+// stops the old one and starts a new one, and haify writes every gateway with
 // stop-services-on-exit = true, so stopping the old plugin stops the whole
 // service chain — filesystem, target, LUNs, service IP — demotes the resource
 // and lets every node race to promote it again. Whatever an edit changes has
@@ -232,7 +232,7 @@ func servicesTarget(resource string) string {
 }
 
 // dropInHeader marks the files as written on drbd-reactor's behalf.
-const dropInHeader = "# Written by sds for an edit of a running gateway; drbd-reactor writes the same file on its next reload of this config\n"
+const dropInHeader = "# Written by haify for an edit of a running gateway; drbd-reactor writes the same file on its next reload of this config\n"
 
 // unitDropIn renders units[i]'s reactor.conf as promote_unit does.
 func (p *promoterUnits) unitDropIn(i int) string {

@@ -11,12 +11,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Trimming the filesystems on DRBD devices ([storage.thin] trim_schedule,
-// `sds pool trim`).
+// `haify pool trim`).
 //
 // A filesystem that frees a block tells nobody: the thin pool under every
 // replica keeps it allocated. Worse, a full resync writes the zeros of every

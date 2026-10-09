@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 
-	"github.com/haify-project/sds/pkg/util"
+	"github.com/haify-project/haify/pkg/util"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +50,7 @@ func poolCreate() *cobra.Command {
 			}
 			// An omitted type is left empty on purpose: the controller fills it
 			// from storage.default_pool_type. Substituting a default here is
-			// what made sds and every other client disagree about what an
+			// what made haify and every other client disagree about what an
 			// unspecified pool is — see StorageManager.defaultedPoolType.
 			if nodes == "" {
 				return fmt.Errorf("nodes is required")
@@ -81,11 +81,11 @@ func poolCreate() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Create pool on each node
 			successCount := 0
@@ -96,7 +96,7 @@ func poolCreate() *cobra.Command {
 				case "zfs":
 					// For ZFS, 'disks' are vdevs. A zpool has no thin/thick mode;
 					// thin provisioning is a per-zvol property set at volume creation.
-					err = sdsClient.CreateZFSPoolOptions(ctx, name, n, diskList, compression, dedup)
+					err = haifyClient.CreateZFSPoolOptions(ctx, name, n, diskList, compression, dedup)
 				// "" reaches the LVM path deliberately: an unspecified type is
 				// resolved by the controller from storage.default_pool_type, and
 				// that setting can only name an LVM type — ZFS pools are built by
@@ -114,7 +114,7 @@ func poolCreate() *cobra.Command {
 					case "lvm-thin-vdo":
 						backendType = "thin_vdo"
 					}
-					err = sdsClient.CreatePool(ctx, name, backendType, n, diskList, util.BytesToGiB(sizeBytes))
+					err = haifyClient.CreatePool(ctx, name, backendType, n, diskList, util.BytesToGiB(sizeBytes))
 				default:
 					err = fmt.Errorf("unsupported pool type: %s", poolType)
 				}
@@ -186,13 +186,13 @@ func poolDelete() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.DeletePool(ctx, name, node)
+			err = haifyClient.DeletePool(ctx, name, node)
 			if err != nil {
 				return fmt.Errorf("failed to delete pool: %w", err)
 			}
@@ -229,13 +229,13 @@ func poolGet() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			pool, err := sdsClient.GetPool(ctx, name, node)
+			pool, err := haifyClient.GetPool(ctx, name, node)
 			if err != nil {
 				return fmt.Errorf("failed to get pool: %w", err)
 			}
@@ -303,13 +303,13 @@ func poolList() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			pools, err := sdsClient.ListPools(ctx)
+			pools, err := haifyClient.ListPools(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list pools: %w", err)
 			}
@@ -322,7 +322,7 @@ func poolList() *cobra.Command {
 			// Pools report their node by address; the operator knows nodes by
 			// name, which is what every other command takes.
 			nodeNames := map[string]string{}
-			if nodes, err := sdsClient.ListNodes(ctx); err == nil {
+			if nodes, err := haifyClient.ListNodes(ctx); err == nil {
 				for _, n := range nodes {
 					nodeNames[n.GetAddress()] = n.GetName()
 				}
@@ -398,18 +398,18 @@ func poolAddDisk() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			successCount := 0
 			var failedOps []string
 
 			for _, node := range nodeList {
 				for _, device := range deviceList {
-					err = sdsClient.AddDiskToPool(ctx, pool, strings.TrimSpace(device), node)
+					err = haifyClient.AddDiskToPool(ctx, pool, strings.TrimSpace(device), node)
 					if err != nil {
 						failedOps = append(failedOps, fmt.Sprintf("%s@%s: %v", device, node, err))
 						continue
@@ -465,7 +465,7 @@ Note that the rebuilt volume ends up fully allocated — DRBD's resync writes
 every block, zeroes included — so the pool is sized for the whole origin plus
 headroom, not for the live data.
 
-  sds pool convert-thin --node node2 --pool sds_pool0`,
+  haify pool convert-thin --node node2 --pool haify_pool0`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if node == "" || pool == "" {
 				return fmt.Errorf("--node and --pool are both required")
@@ -475,19 +475,19 @@ headroom, not for the live data.
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.ConvertPoolToThin(ctx, node, pool); err != nil {
+			if err := haifyClient.ConvertPoolToThin(ctx, node, pool); err != nil {
 				return fmt.Errorf("failed to convert pool: %w", err)
 			}
 
 			fmt.Printf("Pool %s on %s rebuilt as thin.\n", pool, node)
 			fmt.Printf("Its volumes are resyncing from their peers; watch with:\n")
-			fmt.Printf("  sds resource status <resource>\n")
+			fmt.Printf("  haify resource status <resource>\n")
 			fmt.Printf("Wait for every volume to read UpToDate before converting the next node.\n")
 			return nil
 		},
@@ -502,7 +502,7 @@ headroom, not for the live data.
 // pool lives inside a volume group whose free extents are what is left after
 // the thin pool was carved out — a full-looking "1 of 10 GB" on a pool that is
 // empty. Its capacity is the thin pool's size less the data it holds.
-func poolSpace(p *sdspb.PoolInfo) (kind string, free, total uint64) {
+func poolSpace(p *haifypb.PoolInfo) (kind string, free, total uint64) {
 	if p.GetThinPoolLv() != "" && p.GetThinSizeBytes() > 0 {
 		used := uint64(float64(p.GetThinSizeBytes()) * p.GetThinDataPercent() / 100)
 		if used > p.GetThinSizeBytes() {

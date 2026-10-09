@@ -3,16 +3,16 @@ package inspect
 import "testing"
 
 func selfHA(in *Input) {
-	in.SelfHA = &SelfHAInput{Resource: "sds-meta", Nodes: []string{"n1", "n2", "n3"}}
-	in.Resources = append(in.Resources, Resource{Name: "sds-meta", Diskful: []string{"n1", "n2", "n3"}, ServedBy: "self-ha"})
-	view(in, "n1", "sds-meta", "Primary", "UpToDate", conn("n2", 1, "Connected", "Secondary", up("UpToDate")),
+	in.SelfHA = &SelfHAInput{Resource: "haify-meta", Nodes: []string{"n1", "n2", "n3"}}
+	in.Resources = append(in.Resources, Resource{Name: "haify-meta", Diskful: []string{"n1", "n2", "n3"}, ServedBy: "self-ha"})
+	view(in, "n1", "haify-meta", "Primary", "UpToDate", conn("n2", 1, "Connected", "Secondary", up("UpToDate")),
 		conn("n3", 2, "Connected", "Secondary", up("UpToDate")))
-	view(in, "n2", "sds-meta", "Secondary", "UpToDate")
-	view(in, "n3", "sds-meta", "Secondary", "UpToDate")
+	view(in, "n2", "haify-meta", "Secondary", "UpToDate")
+	view(in, "n3", "haify-meta", "Secondary", "UpToDate")
 	for _, n := range []string{"n1", "n2", "n3"} {
 		p := in.Probes[n]
 		p.ReactorConf = []string{selfHAPromoter}
-		p.CtlBin, p.CtlSHA = "/opt/sds/bin/sds-controller", "abc"
+		p.CtlBin, p.CtlSHA = "/opt/haify/bin/haify-controller", "abc"
 		p.CtlActive = "inactive"
 	}
 	in.Probes["n1"].CtlActive = "active"
@@ -37,8 +37,8 @@ func TestSelfHAFindings(t *testing.T) {
 		t.Errorf("got %+v", c)
 	}
 	only(t, checks, "selfha.promoter_missing")
-	if c := only(t, checks, "selfha.controller_active"); c.Fix != "ssh 10.0.0.2 sudo systemctl stop sds-controller" {
-		t.Errorf("the controller not on the sds-meta Primary is the one to stop: %+v", c)
+	if c := only(t, checks, "selfha.controller_active"); c.Fix != "ssh 10.0.0.2 sudo systemctl stop haify-controller" {
+		t.Errorf("the controller not on the haify-meta Primary is the one to stop: %+v", c)
 	}
 	if c := only(t, checks, "selfha.controller_binary"); c.Subject != "n3" {
 		t.Errorf("got %+v", c)

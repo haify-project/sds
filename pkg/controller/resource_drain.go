@@ -77,7 +77,7 @@ func (rm *ResourceManager) DrainNode(ctx context.Context, nodeName string) ([]st
 // and says how it did.
 //
 // A resource drbd-reactor manages (an HA config, a gateway, the controller's
-// own metadata) goes through the promoter's eviction, exactly as `sds ha
+// own metadata) goes through the promoter's eviction, exactly as `haify ha
 // evict` does: a raw demote fails while the promoter's mount holds the device,
 // and even when it succeeds the promoter promotes it straight back.
 //
@@ -89,7 +89,7 @@ func (rm *ResourceManager) moveOffDrainedNode(ctx context.Context, info *Resourc
 	name := info.Name
 	if rm.reactorManaged(ctx, name) {
 		if err := rm.EvictHa(ctx, name); err != nil {
-			return "", fmt.Errorf("drbd-reactor manages it and evicting it failed: %v; fix that, then run `sds ha evict %s`", err, name)
+			return "", fmt.Errorf("drbd-reactor manages it and evicting it failed: %v; fix that, then run `haify ha evict %s`", err, name)
 		}
 		return "drbd-reactor evict", nil
 	}

@@ -26,8 +26,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
 )
 
 // testPKI is a throwaway CA plus the leaves signed by it, generated per test.
@@ -52,7 +52,7 @@ func newTestPKI(t *testing.T) *testPKI {
 	now := time.Now().Add(-time.Minute)
 	caTmpl := &x509.Certificate{
 		SerialNumber:          testSerial(t),
-		Subject:               pkix.Name{CommonName: "sds-test-ca"},
+		Subject:               pkix.Name{CommonName: "haify-test-ca"},
 		NotBefore:             now,
 		NotAfter:              now.Add(time.Hour),
 		IsCA:                  true,
@@ -73,10 +73,10 @@ func newTestPKI(t *testing.T) *testPKI {
 	p.caFile = filepath.Join(dir, "ca.crt")
 	require.NoError(t, os.WriteFile(p.caFile, p.caPEM, 0o600))
 
-	// The server leaf deliberately names only "sds-controller.test" — NOT
+	// The server leaf deliberately names only "haify-controller.test" — NOT
 	// 127.0.0.1. A certificate issued for the cluster's service name is the
 	// normal case, and it is what breaks a loopback hop that verifies by name.
-	certPEM, keyPEM := p.issue(t, "sds-controller.test", []string{"sds-controller.test"}, x509.ExtKeyUsageServerAuth)
+	certPEM, keyPEM := p.issue(t, "haify-controller.test", []string{"haify-controller.test"}, x509.ExtKeyUsageServerAuth)
 	p.certFile = filepath.Join(dir, "server.crt")
 	p.keyFile = filepath.Join(dir, "server.key")
 	require.NoError(t, os.WriteFile(p.certFile, certPEM, 0o600))
@@ -111,7 +111,7 @@ func (p *testPKI) issue(t *testing.T, cn string, dnsNames []string, eku x509.Ext
 // tls.Certificate ready to present.
 func (p *testPKI) clientCert(t *testing.T) tls.Certificate {
 	t.Helper()
-	certPEM, keyPEM := p.issue(t, "sds-test", nil, x509.ExtKeyUsageClientAuth)
+	certPEM, keyPEM := p.issue(t, "haify-test", nil, x509.ExtKeyUsageClientAuth)
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	require.NoError(t, err)
 	return cert
@@ -143,7 +143,7 @@ func startTLSServer(t *testing.T, cfg config.TLSConfig) (*tlsSetup, string) {
 	require.NoError(t, err)
 
 	srv := grpc.NewServer(grpc.Creds(setup.serverCreds))
-	sdspb.RegisterSDSControllerServer(srv, NewServer(&Controller{logger: zap.NewNop()}))
+	haifypb.RegisterHaifyControllerServer(srv, NewServer(&Controller{logger: zap.NewNop()}))
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 
@@ -160,7 +160,7 @@ func callAPI(t *testing.T, addr string, creds credentials.TransportCredentials) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err = sdspb.NewSDSControllerClient(conn).ListControllerLogs(ctx, &sdspb.ListControllerLogsRequest{})
+	_, err = haifypb.NewHaifyControllerClient(conn).ListControllerLogs(ctx, &haifypb.ListControllerLogsRequest{})
 	return err
 }
 
@@ -193,7 +193,7 @@ func TestTLSServerAcceptsClientsTrustingTheCA(t *testing.T) {
 
 	creds := credentials.NewTLS(&tls.Config{
 		RootCAs:    pki.rootPool(t),
-		ServerName: "sds-controller.test",
+		ServerName: "haify-controller.test",
 		MinVersion: tls.VersionTLS12,
 	})
 	require.NoError(t, callAPI(t, addr, creds))
@@ -210,7 +210,7 @@ func TestTLSServerRejectsAnUntrustedCA(t *testing.T) {
 
 	creds := credentials.NewTLS(&tls.Config{
 		RootCAs:    other.rootPool(t),
-		ServerName: "sds-controller.test",
+		ServerName: "haify-controller.test",
 		MinVersion: tls.VersionTLS12,
 	})
 	require.Error(t, callAPI(t, addr, creds))
@@ -227,7 +227,7 @@ func TestMutualTLSRejectsAClientWithoutACertificate(t *testing.T) {
 
 	creds := credentials.NewTLS(&tls.Config{
 		RootCAs:    pki.rootPool(t),
-		ServerName: "sds-controller.test",
+		ServerName: "haify-controller.test",
 		MinVersion: tls.VersionTLS12,
 	})
 	require.Error(t, callAPI(t, addr, creds), "mutual TLS must refuse a client with no certificate")
@@ -242,7 +242,7 @@ func TestMutualTLSAcceptsAClientWithACertificate(t *testing.T) {
 	creds := credentials.NewTLS(&tls.Config{
 		RootCAs:      pki.rootPool(t),
 		Certificates: []tls.Certificate{pki.clientCert(t)},
-		ServerName:   "sds-controller.test",
+		ServerName:   "haify-controller.test",
 		MinVersion:   tls.VersionTLS12,
 	})
 	require.NoError(t, callAPI(t, addr, creds))
@@ -259,7 +259,7 @@ func TestMutualTLSRejectsAForeignClientCertificate(t *testing.T) {
 	creds := credentials.NewTLS(&tls.Config{
 		RootCAs:      pki.rootPool(t),
 		Certificates: []tls.Certificate{other.clientCert(t)},
-		ServerName:   "sds-controller.test",
+		ServerName:   "haify-controller.test",
 		MinVersion:   tls.VersionTLS12,
 	})
 	require.Error(t, callAPI(t, addr, creds))
@@ -286,7 +286,7 @@ func TestRESTLoopbackWorksWithTLS(t *testing.T) {
 			setup, addr := startTLSServer(t, cfg)
 
 			mux := runtime.NewServeMux()
-			require.NoError(t, sdspb.RegisterSDSControllerHandlerFromEndpoint(
+			require.NoError(t, haifypb.RegisterHaifyControllerHandlerFromEndpoint(
 				context.Background(), mux, addr, loopbackDialOptions(setup)))
 
 			rec := httptest.NewRecorder()
@@ -326,7 +326,7 @@ func TestLoopbackCredentialsPinTheExactCertificate(t *testing.T) {
 		Certificates: []tls.Certificate{impostor},
 		MinVersion:   tls.VersionTLS12,
 	})))
-	sdspb.RegisterSDSControllerServer(srv, NewServer(&Controller{logger: zap.NewNop()}))
+	haifypb.RegisterHaifyControllerServer(srv, NewServer(&Controller{logger: zap.NewNop()}))
 	go func() { _ = srv.Serve(lis) }()
 	defer srv.Stop()
 
@@ -343,7 +343,7 @@ func TestLoopbackDialOptionsStayPlaintextWithoutTLS(t *testing.T) {
 	})
 
 	mux := runtime.NewServeMux()
-	require.NoError(t, sdspb.RegisterSDSControllerHandlerFromEndpoint(
+	require.NoError(t, haifypb.RegisterHaifyControllerHandlerFromEndpoint(
 		context.Background(), mux, addr, loopbackDialOptions(nil)))
 
 	rec := httptest.NewRecorder()

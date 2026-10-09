@@ -256,7 +256,7 @@ func (rm *ResourceManager) SetSecondary(ctx context.Context, resource, node stri
 // would risk a dual-Primary split-brain if the "failed" node is actually alive
 // behind a network partition.
 //
-// The safe rule is DRBD-native: rely on quorum. sds configures resources with
+// The safe rule is DRBD-native: rely on quorum. haify configures resources with
 // `quorum majority` + `on-no-quorum io-error` and auto-adds a diskless
 // tiebreaker to 2-node resources, giving a 3-way majority. A hard-failed or
 // partitioned old Primary that cannot reach the majority LOSES quorum and its

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +22,7 @@ import (
 // leftover mesh entry names a host that no longer exists and `drbdadm adjust`
 // rejects the whole file.
 
-const threeReplicaConfig = `resource sds-meta {
+const threeReplicaConfig = `resource haify-meta {
 
     options {
         quorum majority;
@@ -30,27 +30,27 @@ const threeReplicaConfig = `resource sds-meta {
 
     volume 0 {
         device    minor 3;
-        disk      /dev/sds_sdspool/sds-meta_data;
+        disk      /dev/haify_haifypool/haify-meta_data;
         meta-disk internal;
     }
 
-    on sds-b {
+    on haify-b {
         address   192.168.123.227:7999;
         node-id   0;
     }
 
-    on sds-e {
+    on haify-e {
         address   192.168.123.212:7999;
         node-id   1;
     }
 
-    on sds-d {
+    on haify-d {
         address   192.168.123.228:7999;
         node-id   3;
     }
 
     connection-mesh {
-        hosts sds-b sds-e sds-d;
+        hosts haify-b haify-e haify-d;
     }
 }
 `
@@ -61,18 +61,18 @@ func TestRemoveReplicaDropsTheNodeAndItsMeshEntry(t *testing.T) {
 		"node-b": "192.168.123.227", "node-e": "192.168.123.212", "node-d": "192.168.123.228",
 	})
 
-	out, err := ctrl.resources.removeReplicaFromConfig(threeReplicaConfig, "sds-meta", "node-d")
+	out, err := ctrl.resources.removeReplicaFromConfig(threeReplicaConfig, "haify-meta", "node-d")
 	require.NoError(t, err)
 
-	assert.NotContains(t, out, "sds-d",
+	assert.NotContains(t, out, "haify-d",
 		"a leftover on-block is a member that never connects and still counts for quorum")
-	assert.Contains(t, out, "on sds-b", "the surviving replicas must stay")
-	assert.Contains(t, out, "on sds-e")
+	assert.Contains(t, out, "on haify-b", "the surviving replicas must stay")
+	assert.Contains(t, out, "on haify-e")
 
 	mesh := meshLine(t, out)
-	assert.NotContains(t, mesh, "sds-d", "adjust rejects a mesh naming a host with no on-block")
-	assert.Contains(t, mesh, "sds-b")
-	assert.Contains(t, mesh, "sds-e")
+	assert.NotContains(t, mesh, "haify-d", "adjust rejects a mesh naming a host with no on-block")
+	assert.Contains(t, mesh, "haify-b")
+	assert.Contains(t, mesh, "haify-e")
 }
 
 // The node-ids of the survivors must not move. DRBD stores the peer's node-id
@@ -84,7 +84,7 @@ func TestRemoveReplicaLeavesSurvivingNodeIDsAlone(t *testing.T) {
 		"node-b": "192.168.123.227", "node-e": "192.168.123.212", "node-d": "192.168.123.228",
 	})
 
-	out, err := ctrl.resources.removeReplicaFromConfig(threeReplicaConfig, "sds-meta", "node-d")
+	out, err := ctrl.resources.removeReplicaFromConfig(threeReplicaConfig, "haify-meta", "node-d")
 	require.NoError(t, err)
 
 	for _, want := range []string{"node-id   0", "node-id   1"} {
@@ -96,7 +96,7 @@ func TestRemoveReplicaRefusesANodeThatIsNotInTheConfig(t *testing.T) {
 	ctrl := newBasicTestController(&fakeDeploymentClient{})
 	registerNodes(ctrl, map[string]string{"node-x": "10.0.0.9"})
 
-	_, err := ctrl.resources.removeReplicaFromConfig(threeReplicaConfig, "sds-meta", "node-x")
+	_, err := ctrl.resources.removeReplicaFromConfig(threeReplicaConfig, "haify-meta", "node-x")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not in the config")
 }
@@ -124,12 +124,12 @@ func removeTestController(t *testing.T, dep deploymentClient, nodes, diskless st
 	ctrl.db = db
 
 	require.NoError(t, db.SaveResource(context.Background(), &database.Resource{
-		Name: "sds-meta", Port: 7999, Nodes: nodes, DisklessNodes: diskless,
+		Name: "haify-meta", Port: 7999, Nodes: nodes, DisklessNodes: diskless,
 		Protocol: "C", Replicas: 3,
 	}))
 	require.NoError(t, db.SaveVolume(context.Background(), &database.Volume{
-		ResourceName: "sds-meta", VolumeName: "sds-meta_data", VolumeID: 0,
-		Pool: "sds_sdspool", SizeGB: 1, Device: "/dev/sds_sdspool/sds-meta_data",
+		ResourceName: "haify-meta", VolumeName: "haify-meta_data", VolumeID: 0,
+		Pool: "haify_haifypool", SizeGB: 1, Device: "/dev/haify_haifypool/haify-meta_data",
 	}))
 	registerNodes(ctrl, map[string]string{
 		"node-b": "192.168.123.227", "node-e": "192.168.123.212", "node-d": "192.168.123.228",
@@ -158,29 +158,29 @@ func statusExec(status string) func(context.Context, []string, string, ...deploy
 	}
 }
 
-const healthyStatus = `sds-meta role:Secondary
+const healthyStatus = `haify-meta role:Secondary
   disk:UpToDate open:no
-  sds-b role:Primary
+  haify-b role:Primary
     peer-disk:UpToDate
-  sds-e role:Secondary
+  haify-e role:Secondary
     peer-disk:UpToDate
 `
 
 // Taking the copy a resource is currently served from is not a removal, it is
 // an outage.
 func TestRemoveReplicaRefusesThePrimary(t *testing.T) {
-	primaryHere := `sds-meta role:Primary
+	primaryHere := `haify-meta role:Primary
   disk:UpToDate open:yes
-  sds-b role:Secondary
+  haify-b role:Secondary
     peer-disk:UpToDate
-  sds-e role:Secondary
+  haify-e role:Secondary
     peer-disk:UpToDate
 `
 	ctrl := removeTestController(t,
 		statusFake(primaryHere),
 		"node-b,node-e,node-d", "")
 
-	err := ctrl.resources.RemoveReplica(context.Background(), "sds-meta", "node-d")
+	err := ctrl.resources.RemoveReplica(context.Background(), "haify-meta", "node-d")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Primary")
 }
@@ -192,7 +192,7 @@ func TestRemoveReplicaRefusesWhenOnlyOneDiskfulWouldRemain(t *testing.T) {
 		statusFake(healthyStatus),
 		"node-b,node-d", "")
 
-	err := ctrl.resources.RemoveReplica(context.Background(), "sds-meta", "node-d")
+	err := ctrl.resources.RemoveReplica(context.Background(), "haify-meta", "node-d")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "one diskful")
 }
@@ -202,7 +202,7 @@ func TestRemoveReplicaRefusesANodeThatHoldsNoReplica(t *testing.T) {
 		statusFake(healthyStatus),
 		"node-b,node-e", "")
 
-	err := ctrl.resources.RemoveReplica(context.Background(), "sds-meta", "node-d")
+	err := ctrl.resources.RemoveReplica(context.Background(), "haify-meta", "node-d")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no replica")
 }
@@ -214,7 +214,7 @@ func TestRemoveReplicaRefusesTheTiebreaker(t *testing.T) {
 		statusFake(healthyStatus),
 		"node-b,node-e,node-d", "node-d")
 
-	err := ctrl.resources.RemoveReplica(context.Background(), "sds-meta", "node-d")
+	err := ctrl.resources.RemoveReplica(context.Background(), "haify-meta", "node-d")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "tiebreaker")
 }
@@ -235,26 +235,26 @@ func TestRemoveReplicaTearsDownAndForgetsTheNode(t *testing.T) {
 	}
 	ctrl := removeTestController(t, dep, "node-b,node-e,node-d", "")
 
-	require.NoError(t, ctrl.resources.RemoveReplica(context.Background(), "sds-meta", "node-d"))
+	require.NoError(t, ctrl.resources.RemoveReplica(context.Background(), "haify-meta", "node-d"))
 
 	joined := strings.Join(ran, "\n")
-	assert.Contains(t, joined, "192.168.123.228: sudo drbdadm down sds-meta",
+	assert.Contains(t, joined, "192.168.123.228: sudo drbdadm down haify-meta",
 		"the leaving node must stop serving the resource")
-	assert.Contains(t, joined, "192.168.123.227: sudo drbdadm adjust sds-meta",
+	assert.Contains(t, joined, "192.168.123.227: sudo drbdadm adjust haify-meta",
 		"survivors must be told the peer is gone")
 
 	// Recorded last, so a failure above leaves the row describing reality.
-	res, err := ctrl.db.GetResource(context.Background(), "sds-meta")
+	res, err := ctrl.db.GetResource(context.Background(), "haify-meta")
 	require.NoError(t, err)
 	assert.Equal(t, "node-b,node-e", res.Nodes, "the leaving node must be forgotten")
 
 	// The command says it destroys the copy, so its storage goes too — only on
 	// the node that left. A volume left behind held pool space nothing counted.
 	assert.Contains(t, joined, "192.168.123.228: for s in $(sudo lvs", "the leaving node's volume must be deleted")
-	assert.Contains(t, joined, "sudo lvremove -f sds_sdspool/sds-meta_data")
+	assert.Contains(t, joined, "sudo lvremove -f haify_haifypool/haify-meta_data")
 	// Its config goes too: rewritten without the node, it only made drbdadm
 	// there answer "not defined for this host".
-	assert.Contains(t, joined, "192.168.123.228: sudo rm -f /etc/drbd.d/sds-meta.res")
+	assert.Contains(t, joined, "192.168.123.228: sudo rm -f /etc/drbd.d/haify-meta.res")
 	for _, line := range ran {
 		if strings.Contains(line, "lvremove") && !strings.HasPrefix(line, "192.168.123.228:") {
 			t.Errorf("a surviving node's volume was touched: %s", line)
@@ -267,7 +267,7 @@ func TestRemoveReplicaTearsDownAndForgetsTheNode(t *testing.T) {
 func TestRemoveReplicaRefusesWhenTheRoleCannotBeRead(t *testing.T) {
 	ctrl := removeTestController(t, statusFake(""), "node-b,node-e,node-d", "")
 
-	err := ctrl.resources.RemoveReplica(context.Background(), "sds-meta", "node-d")
+	err := ctrl.resources.RemoveReplica(context.Background(), "haify-meta", "node-d")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "blind")
 }

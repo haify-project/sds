@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -60,7 +60,7 @@ type resourceProfileListOut struct {
 	Profiles []resourceProfileOut `json:"profiles"`
 }
 
-func volumesOut(vols []*sdspb.VolumeInfo) []volumeOut {
+func volumesOut(vols []*haifypb.VolumeInfo) []volumeOut {
 	out := make([]volumeOut, 0, len(vols))
 	for _, v := range vols {
 		out = append(out, volumeOut{
@@ -74,7 +74,7 @@ func volumesOut(vols []*sdspb.VolumeInfo) []volumeOut {
 	return out
 }
 
-func nodeStatesOut(states map[string]*sdspb.NodeResourceState) []nodeStateOut {
+func nodeStatesOut(states map[string]*haifypb.NodeResourceState) []nodeStateOut {
 	out := make([]nodeStateOut, 0, len(states))
 	for node, st := range states {
 		out = append(out, nodeStateOut{
@@ -205,13 +205,13 @@ type unmountIn struct {
 // registerResourceTools adds DRBD resource and volume tools.
 func (s *Server) registerResourceTools(srv *mcp.Server) {
 	profileClient, profilesSupported := s.client.(interface {
-		CreateResourceProfile(context.Context, *sdspb.ResourceProfile) (*sdspb.ResourceProfile, error)
-		GetResourceProfile(context.Context, string) (*sdspb.ResourceProfile, error)
-		ListResourceProfiles(context.Context) ([]*sdspb.ResourceProfile, error)
+		CreateResourceProfile(context.Context, *haifypb.ResourceProfile) (*haifypb.ResourceProfile, error)
+		GetResourceProfile(context.Context, string) (*haifypb.ResourceProfile, error)
+		ListResourceProfiles(context.Context) ([]*haifypb.ResourceProfile, error)
 		DeleteResourceProfile(context.Context, string) error
 	})
 	if profilesSupported {
-		addRead(s, srv, readOnlyTool("sds_resource_profile_list", "List resource profiles",
+		addRead(s, srv, readOnlyTool("haify_resource_profile_list", "List resource profiles",
 			"List reusable resource creation profiles."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, resourceProfileListOut, error) {
 				profiles, err := profileClient.ListResourceProfiles(ctx)
@@ -224,7 +224,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				}
 				return nil, out, nil
 			})
-		addRead(s, srv, readOnlyTool("sds_resource_profile_get", "Get resource profile",
+		addRead(s, srv, readOnlyTool("haify_resource_profile_get", "Get resource profile",
 			"Get one reusable resource creation profile."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in resourceProfileNameIn) (*mcp.CallToolResult, resourceProfileOut, error) {
 				profile, err := profileClient.GetResourceProfile(ctx, in.Name)
@@ -233,10 +233,10 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				}
 				return nil, profileOut(profile), nil
 			})
-		addWrite(s, srv, writeTool("sds_resource_profile_create", "Create resource profile",
+		addWrite(s, srv, writeTool("haify_resource_profile_create", "Create resource profile",
 			"Create or replace a reusable resource creation profile. Existing resources are not changed."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in resourceProfileIn) (*mcp.CallToolResult, resourceProfileOut, error) {
-				profile, err := profileClient.CreateResourceProfile(ctx, &sdspb.ResourceProfile{
+				profile, err := profileClient.CreateResourceProfile(ctx, &haifypb.ResourceProfile{
 					Name: in.Name, Protocol: in.Protocol, StorageType: in.StorageType, Pool: in.Pool,
 					Replicas: in.Replicas, ReplicasOnDifferent: in.ReplicasOnDifferent,
 					ReplicasOnSame: in.ReplicasOnSame, DrbdOptions: in.DrbdOptions, Labels: in.Labels,
@@ -246,8 +246,8 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				}
 				return nil, profileOut(profile), nil
 			})
-		addWrite(s, srv, destructiveTool("sds_resource_profile_delete", "Delete resource profile",
-			"Delete a resource profile. Refused while any resource is still a member; take members out with sds_resource_set_profile first."),
+		addWrite(s, srv, destructiveTool("haify_resource_profile_delete", "Delete resource profile",
+			"Delete a resource profile. Refused while any resource is still a member; take members out with haify_resource_set_profile first."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in resourceProfileNameIn) (*mcp.CallToolResult, opResult, error) {
 				if err := profileClient.DeleteResourceProfile(ctx, in.Name); err != nil {
 					return nil, opResult{}, err
@@ -257,7 +257,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 	}
 	s.registerProfileGroupTools(srv)
 
-	addRead(s, srv, readOnlyTool("sds_resource_list", "List resources",
+	addRead(s, srv, readOnlyTool("haify_resource_list", "List resources",
 		"List all DRBD resources with their nodes, volumes, and replication state."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, resourceListOut, error) {
 			resources, err := s.client.ListResources(ctx)
@@ -283,7 +283,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_resource_status", "Resource status",
+	addRead(s, srv, readOnlyTool("haify_resource_status", "Resource status",
 		"Show live DRBD status for one resource: per-node role and disk state (UpToDate, Inconsistent, ...)."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceNameIn) (*mcp.CallToolResult, resourceOut, error) {
 			st, err := s.client.ResourceStatus(ctx, in.Name)
@@ -299,7 +299,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_create", "Create resource",
+	addWrite(s, srv, writeTool("haify_resource_create", "Create resource",
 		"Create a replicated DRBD resource backed by a storage pool. Allocates volumes on every node, "+
 			"writes the DRBD config, and brings the resource up. Initial sync starts automatically. "+
 			"For a single volume pass size_gb (and optionally pool). For a multi-volume resource pass "+
@@ -318,17 +318,17 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				protocol = "C"
 			}
 			requestClient, metadataAware := s.client.(interface {
-				CreateResourceRequest(context.Context, *sdspb.CreateResourceRequest) error
+				CreateResourceRequest(context.Context, *haifypb.CreateResourceRequest) error
 			})
 			if in.Profile != "" || len(in.Labels) > 0 {
 				if !metadataAware {
 					return nil, opResult{}, fmt.Errorf("controller client does not support resource profiles or labels")
 				}
-				volumes := make([]*sdspb.VolumeSpec, 0, len(in.Volumes))
+				volumes := make([]*haifypb.VolumeSpec, 0, len(in.Volumes))
 				for _, v := range in.Volumes {
-					volumes = append(volumes, &sdspb.VolumeSpec{SizeGb: v.SizeGB, Pool: v.Pool})
+					volumes = append(volumes, &haifypb.VolumeSpec{SizeGb: v.SizeGB, Pool: v.Pool})
 				}
-				if err := requestClient.CreateResourceRequest(ctx, &sdspb.CreateResourceRequest{
+				if err := requestClient.CreateResourceRequest(ctx, &haifypb.CreateResourceRequest{
 					Name: in.Name, Port: in.Port, Nodes: in.Nodes, Pool: in.Pool, SizeGb: in.SizeGB,
 					Volumes: volumes, StorageType: storageType, Protocol: protocol,
 					DrbdOptions: in.DrbdOptions, Profile: in.Profile, Labels: in.Labels,
@@ -338,9 +338,9 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				return nil, ok(fmt.Sprintf("resource %s created with profile %s", in.Name, in.Profile)), nil
 			}
 			if len(in.Volumes) > 0 {
-				volumes := make([]*sdspb.VolumeSpec, 0, len(in.Volumes))
+				volumes := make([]*haifypb.VolumeSpec, 0, len(in.Volumes))
 				for _, v := range in.Volumes {
-					volumes = append(volumes, &sdspb.VolumeSpec{SizeGb: v.SizeGB, Pool: v.Pool})
+					volumes = append(volumes, &haifypb.VolumeSpec{SizeGb: v.SizeGB, Pool: v.Pool})
 				}
 				if err := s.client.CreateResourceWithVolumes(ctx, in.Name, in.Port, in.Nodes,
 					protocol, storageType, in.DrbdOptions, volumes); err != nil {
@@ -358,7 +358,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				in.Name, len(in.Nodes), in.SizeGB, in.Pool)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_resource_delete", "Delete resource",
+	addWrite(s, srv, destructiveTool("haify_resource_delete", "Delete resource",
 		"Delete a DRBD resource and its backing volumes on all nodes. All data on the resource is lost."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceNameIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.DeleteResource(ctx, in.Name); err != nil {
@@ -367,11 +367,11 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("resource %s deleted", in.Name)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_resource_set_role", "Set resource role",
+	addWrite(s, srv, destructiveTool("haify_resource_set_role", "Set resource role",
 		"Promote a resource to Primary or demote it to Secondary on a node. "+
 			"Only the Primary node can mount and write the volume. Demoting fails while the volume is "+
 			"mounted or in use. Do not use it on a resource an HA promoter runs: the promoter puts the "+
-			"role back within seconds — use sds_ha_evict. Set quorum_guarded=true "+
+			"role back within seconds — use haify_ha_evict. Set quorum_guarded=true "+
 			"for a safe hard-failover promote: the controller force-promotes only if the node "+
 			"holds DRBD quorum and refuses otherwise, avoiding split-brain."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceSetRoleIn) (*mcp.CallToolResult, opResult, error) {
@@ -396,7 +396,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("resource %s is now %s on %s", in.Resource, in.Role, in.Node)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_dual_primary", "Toggle dual-primary",
+	addWrite(s, srv, writeTool("haify_resource_dual_primary", "Toggle dual-primary",
 		"Open or close a DRBD dual-primary (allow-two-primaries) window on a resource. "+
 			"This exists for hypervisor LIVE MIGRATION, where the source and target host both "+
 			"hold the disk open during hand-off — it is not a way to share a volume between two "+
@@ -416,7 +416,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("dual-primary window closed on %s", in.Resource)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_adopt", "Adopt resource",
+	addWrite(s, srv, writeTool("haify_resource_adopt", "Adopt resource",
 		"Adopt a pre-existing/foreign DRBD resource into Haify management. Auto-discovers "+
 			"nodes/port/volumes from the resource's .res on a node when omitted. Writes only "+
 			"Haify metadata — never touches the DRBD device or data."),
@@ -439,7 +439,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_add_volume", "Add volume",
+	addWrite(s, srv, writeTool("haify_resource_add_volume", "Add volume",
 		"Add another replicated volume to an existing DRBD resource."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in volumeAddIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.AddVolume(ctx, in.Resource, in.Volume, in.Pool, in.SizeGB); err != nil {
@@ -448,7 +448,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("volume %s (%d GiB) added to resource %s", in.Volume, in.SizeGB, in.Resource)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_set_options", "Set DRBD options",
+	addWrite(s, srv, writeTool("haify_resource_set_options", "Set DRBD options",
 		"Update DRBD options on an existing resource and apply them live with "+
 			"`drbdadm adjust`, without recreating it. Options use the "+
 			"\"section/key\" form (e.g. net/max-buffers, disk/on-io-error); a bare "+
@@ -463,7 +463,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("applied %d option(s) to resource %s and adjusted", len(in.Options), in.Resource)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_resource_remove_volume", "Remove volume",
+	addWrite(s, srv, destructiveTool("haify_resource_remove_volume", "Remove volume",
 		"Remove a volume from a DRBD resource on all nodes. Data on the volume is lost."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in volumeRemoveIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.RemoveVolume(ctx, in.Resource, in.VolumeID); err != nil {
@@ -472,7 +472,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("volume %d removed from resource %s", in.VolumeID, in.Resource)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_resize_volume", "Resize volume",
+	addWrite(s, srv, writeTool("haify_resource_resize_volume", "Resize volume",
 		"Grow a DRBD volume on all nodes. Shrinking is not supported. The space is not usable "+
 			"until the filesystem on the Primary is grown too (resize2fs/xfs_growfs) — this tool "+
 			"does not do that."),
@@ -483,7 +483,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("volume %d of resource %s resized to %d GiB", in.VolumeID, in.Resource, in.SizeGB)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_resource_create_filesystem", "Create filesystem",
+	addWrite(s, srv, destructiveTool("haify_resource_create_filesystem", "Create filesystem",
 		"Format a DRBD volume with a filesystem on the Primary node. Any existing data is destroyed."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in filesystemIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.CreateFilesystem(ctx, in.Resource, in.VolumeID, in.Node, in.Fstype); err != nil {
@@ -493,7 +493,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 				in.Fstype, in.Resource, in.VolumeID, in.Node)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_mount", "Mount volume",
+	addWrite(s, srv, writeTool("haify_resource_mount", "Mount volume",
 		"Mount a DRBD volume on its Primary node."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in mountIn) (*mcp.CallToolResult, opResult, error) {
 			fstype := in.Fstype
@@ -506,7 +506,7 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("%s volume %d mounted at %s on %s", in.Resource, in.VolumeID, in.Path, in.Node)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_resource_unmount", "Unmount volume",
+	addWrite(s, srv, destructiveTool("haify_resource_unmount", "Unmount volume",
 		"Unmount a DRBD volume on a node."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in unmountIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.UnmountResource(ctx, in.Resource, in.VolumeID, in.Node); err != nil {

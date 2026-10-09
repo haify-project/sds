@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Resource snapshots: one snapshot of every volume on every diskful replica,
@@ -126,7 +126,7 @@ func (rm *ResourceManager) suspendForSnapshot(ctx context.Context, resource stri
 			}
 		}
 	}
-	unit := fmt.Sprintf("sds-snapshot-resume-%s-%d", resource, time.Now().UnixNano())
+	unit := fmt.Sprintf("haify-snapshot-resume-%s-%d", resource, time.Now().UnixNano())
 	for i, host := range ordered {
 		cmd := fmt.Sprintf("sudo systemd-run --unit=%s --collect --on-active=%d drbdadm resume-io %s && sudo drbdadm suspend-io %s",
 			unit, int(resourceSnapshotWatchdog.Seconds()), resource, resource)

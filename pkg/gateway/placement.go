@@ -24,10 +24,10 @@ var gatewayKinds = []struct {
 	prefix  string
 	prereqs func() gatewayPrereqs
 }{
-	{"sds-nfs-", nfsPrereqs},
-	{"sds-iscsi-", iscsiPrereqs},
-	{"sds-nvmeof-", nvmePrereqs},
-	{"sds-smb-", smbPrereqs},
+	{"haify-nfs-", nfsPrereqs},
+	{"haify-iscsi-", iscsiPrereqs},
+	{"haify-nvmeof-", nvmePrereqs},
+	{"haify-smb-", smbPrereqs},
 }
 
 // SyncPlacement makes resource's gateway promoter config present on every
@@ -113,15 +113,15 @@ func (m *Manager) placeConfig(ctx context.Context, pluginID string, byHost map[s
 	if err := m.checkGatewayPrereqs(ctx, missing, prereqs); err != nil {
 		return fmt.Errorf("gateway %s cannot run on %s: %w", pluginID, strings.Join(missing, ", "), err)
 	}
-	if strings.HasPrefix(pluginID, "sds-nfs-") {
+	if strings.HasPrefix(pluginID, "haify-nfs-") {
 		m.prepareNFSNode(ctx, missing, "")
 	}
-	if strings.HasPrefix(pluginID, "sds-smb-") {
+	if strings.HasPrefix(pluginID, "haify-smb-") {
 		if err := m.prepareSMBNode(ctx, missing); err != nil {
 			return err
 		}
 	}
-	if strings.HasPrefix(pluginID, "sds-nvmeof-") {
+	if strings.HasPrefix(pluginID, "haify-nvmeof-") {
 		if err := m.loadNVMeModulesFor(ctx, missing, chosen.content); err != nil {
 			return err
 		}
@@ -167,7 +167,7 @@ func (m *Manager) loadNVMeModulesFor(ctx context.Context, hosts []string, conten
 // refuse a new replica before anything is provisioned for it.
 func (m *Manager) CheckPlacementPrereqs(ctx context.Context, gatewayType string, hosts []string) error {
 	for _, k := range gatewayKinds {
-		if k.prefix == "sds-"+gatewayType+"-" {
+		if k.prefix == "haify-"+gatewayType+"-" {
 			return m.checkGatewayPrereqs(ctx, hosts, k.prereqs())
 		}
 	}

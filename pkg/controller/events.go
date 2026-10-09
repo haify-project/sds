@@ -13,10 +13,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/alert"
-	"github.com/haify-project/sds/pkg/event"
-	"github.com/haify-project/sds/pkg/rbac"
+	pb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/alert"
+	"github.com/haify-project/haify/pkg/event"
+	"github.com/haify-project/haify/pkg/rbac"
 )
 
 // defaultEventLimit caps an unbounded ListEvents request. Large enough to cover
@@ -55,7 +55,7 @@ func (s *Server) ListEvents(ctx context.Context, req *pb.ListEventsRequest) (*pb
 
 // WatchEvents streams notifications until the client disconnects or the
 // controller shuts down.
-func (s *Server) WatchEvents(req *pb.WatchEventsRequest, stream pb.SDSController_WatchEventsServer) error {
+func (s *Server) WatchEvents(req *pb.WatchEventsRequest, stream pb.HaifyController_WatchEventsServer) error {
 	bus := s.ctrl.Events()
 	if bus == nil {
 		return status.Error(codes.FailedPrecondition,

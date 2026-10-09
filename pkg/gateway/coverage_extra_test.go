@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -41,10 +41,10 @@ func TestCovCreateNFSGatewaySuccess(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, resp.Success)
-	assert.Contains(t, resp.ConfigPath, "sds-nfs-data.toml")
+	assert.Contains(t, resp.ConfigPath, "haify-nfs-data.toml")
 
 	// The generated config was distributed to the node.
-	cfg, ok := dep.GetConfig(gatewayConfigPath("sds-nfs-data"))
+	cfg, ok := dep.GetConfig(gatewayConfigPath("haify-nfs-data"))
 	require.True(t, ok)
 	assert.Contains(t, cfg, "ocf:heartbeat:exportfs")
 	assert.Contains(t, cfg, "ocf:heartbeat:nfsserver")
@@ -57,14 +57,14 @@ func TestCovCreateISCSIGatewaySuccess(t *testing.T) {
 
 	resp, err := iscsi.CreateISCSIGateway(context.Background(), &v1.CreateISCSIGatewayRequest{
 		Resource:  "data",
-		Iqn:       "iqn.2024-01.com.example:sds.data",
+		Iqn:       "iqn.2024-01.com.example:haify.data",
 		ServiceIp: "192.168.1.101/24",
 	})
 	require.NoError(t, err)
 	require.True(t, resp.Success)
-	assert.Contains(t, resp.ConfigPath, "sds-iscsi-data.toml")
+	assert.Contains(t, resp.ConfigPath, "haify-iscsi-data.toml")
 
-	cfg, ok := dep.GetConfig(gatewayConfigPath("sds-iscsi-data"))
+	cfg, ok := dep.GetConfig(gatewayConfigPath("haify-iscsi-data"))
 	require.True(t, ok)
 	assert.Contains(t, cfg, "ocf:heartbeat:iSCSITarget")
 	assert.Contains(t, cfg, "ocf:heartbeat:iSCSILogicalUnit")
@@ -77,14 +77,14 @@ func TestCovCreateNVMeGatewaySuccess(t *testing.T) {
 
 	resp, err := nvme.CreateNVMeGateway(context.Background(), &v1.CreateNVMeGatewayRequest{
 		Resource:  "data",
-		Nqn:       "nqn.2024-01.com.example:sds.data",
+		Nqn:       "nqn.2024-01.com.example:haify.data",
 		ServiceIp: "192.168.1.102/24",
 	})
 	require.NoError(t, err)
 	require.True(t, resp.Success)
-	assert.Contains(t, resp.ConfigPath, "sds-nvmeof-data.toml")
+	assert.Contains(t, resp.ConfigPath, "haify-nvmeof-data.toml")
 
-	cfg, ok := dep.GetConfig(gatewayConfigPath("sds-nvmeof-data"))
+	cfg, ok := dep.GetConfig(gatewayConfigPath("haify-nvmeof-data"))
 	require.True(t, ok)
 	assert.Contains(t, cfg, "ocf:heartbeat:nvmet-subsystem")
 	assert.Contains(t, cfg, "ocf:heartbeat:nvmet-port")
@@ -139,7 +139,7 @@ func TestCovCreateGatewayPromoteFails(t *testing.T) {
 	m := New(res, dep, zap.NewNop(), []string{"node1"})
 
 	resp, err := NewISCSIManager(m).CreateISCSIGateway(context.Background(), &v1.CreateISCSIGatewayRequest{
-		Resource: "data", Iqn: "iqn.2024-01.com.example:sds.data", ServiceIp: "192.168.1.101/24",
+		Resource: "data", Iqn: "iqn.2024-01.com.example:haify.data", ServiceIp: "192.168.1.101/24",
 	})
 	assert.Error(t, err)
 	assert.False(t, resp.Success)
@@ -160,9 +160,9 @@ func TestCovDeleteGateway(t *testing.T) {
 	for _, c := range dep.ExecCommands {
 		joined += c + "\n"
 	}
-	assert.Contains(t, joined, "sds-nfs-data.toml")
-	assert.Contains(t, joined, "sds-iscsi-data.toml")
-	assert.Contains(t, joined, "sds-nvmeof-data.toml")
+	assert.Contains(t, joined, "haify-nfs-data.toml")
+	assert.Contains(t, joined, "haify-iscsi-data.toml")
+	assert.Contains(t, joined, "haify-nvmeof-data.toml")
 	assert.Contains(t, joined, "reload drbd-reactor")
 }
 
@@ -206,13 +206,13 @@ func TestCovListNamespacesAndPorts(t *testing.T) {
 	nvme := NewNVMeManager(New(nil, dep, zap.NewNop(), []string{"node1"}))
 
 	req := &v1.CreateNVMeGatewayRequest{
-		Resource: "res", Nqn: "nqn.2024-01.com.example:sds.res", ServiceIp: "192.168.1.150/24",
+		Resource: "res", Nqn: "nqn.2024-01.com.example:haify.res", ServiceIp: "192.168.1.150/24",
 	}
 	sip, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	cfg, err := nvme.generateNVMeGatewayConfig(req, sip, "/dev/drbd0", testVolumes(3))
 	require.NoError(t, err)
-	dep.SetConfig(gatewayConfigPath("sds-nvmeof-res"), cfg)
+	dep.SetConfig(gatewayConfigPath("haify-nvmeof-res"), cfg)
 
 	ns, err := nvme.ListNamespaces(context.Background(), "res")
 	require.NoError(t, err)
@@ -236,13 +236,13 @@ func TestCovNVMeRemoveHostErrors(t *testing.T) {
 	nvme := NewNVMeManager(New(nil, dep, zap.NewNop(), []string{"node1"}))
 
 	req := &v1.CreateNVMeGatewayRequest{
-		Resource: "res", Nqn: "nqn.2024-01.com.example:sds.res", ServiceIp: "192.168.1.150/24",
+		Resource: "res", Nqn: "nqn.2024-01.com.example:haify.res", ServiceIp: "192.168.1.150/24",
 	}
 	sip, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	cfg, err := nvme.generateNVMeGatewayConfig(req, sip, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	dep.SetConfig(gatewayConfigPath("sds-nvmeof-res"), cfg)
+	dep.SetConfig(gatewayConfigPath("haify-nvmeof-res"), cfg)
 
 	// No explicit allow-list yet: removing a host is refused.
 	err = nvme.RemoveHost(context.Background(), "res", "nqn.host")
@@ -263,13 +263,13 @@ func TestCovISCSIRemoveInitiatorAndListErrors(t *testing.T) {
 	iscsi := NewISCSIManager(New(nil, dep, zap.NewNop(), []string{"node1"}))
 
 	req := &v1.CreateISCSIGatewayRequest{
-		Resource: "res", Iqn: "iqn.2024-01.com.example:sds.res", ServiceIp: "192.168.1.200/24",
+		Resource: "res", Iqn: "iqn.2024-01.com.example:haify.res", ServiceIp: "192.168.1.200/24",
 	}
 	sip, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	cfg, err := iscsi.generateISCSIGatewayConfig(req, sip, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	dep.SetConfig(gatewayConfigPath("sds-iscsi-res"), cfg)
+	dep.SetConfig(gatewayConfigPath("haify-iscsi-res"), cfg)
 
 	// No explicit ACL: remove is refused.
 	err = iscsi.RemoveInitiator(context.Background(), "res", "iqn.x")

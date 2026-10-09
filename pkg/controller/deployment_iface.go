@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 type deploymentClient interface {

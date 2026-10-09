@@ -29,7 +29,7 @@ func checkNodes(in *Input) []Check {
 			Message: fmt.Sprintf("%s did not answer the probe over SSH at %s; every check on it is unknown. If it is up at another address (DHCP), register that address",
 				name, addr),
 			Evidence: []string{in.ProbeErrors[name]},
-			Fix:      fmt.Sprintf("sds node set-address %s <address-it-answers-on>", name),
+			Fix:      fmt.Sprintf("haify node set-address %s <address-it-answers-on>", name),
 			Runbook:  "renumber-nodes"})
 	}
 	for _, n := range in.Nodes {
@@ -78,7 +78,7 @@ func nodeChecks(in *Input, n Node, p *NodeProbe) []Check {
 	if p.Hostname != "" && n.Hostname != "" && p.Hostname != n.Hostname && p.Hostname != n.Name {
 		out = append(out, Check{ID: "nodes.identity", Area: AreaNodes, Subject: n.Name, Status: StatusFail,
 			Message: fmt.Sprintf("%s answers as host %q, not %q: the address now belongs to another machine", n.Address, p.Hostname, n.Hostname),
-			Fix:     fmt.Sprintf("sds node set-address %s <its-current-address>", n.Name), Runbook: "renumber-nodes"})
+			Fix:     fmt.Sprintf("haify node set-address %s <its-current-address>", n.Name), Runbook: "renumber-nodes"})
 	}
 	for _, a := range []string{n.Address, n.ReplicationAddress} {
 		ip := net.ParseIP(a)
@@ -98,7 +98,7 @@ func nodeChecks(in *Input, n Node, p *NodeProbe) []Check {
 		out = append(out, Check{ID: "nodes.address", Area: AreaNodes, Subject: n.Name, Status: StatusWarn,
 			Message:  fmt.Sprintf("registered address %s is on none of %s's interfaces (DHCP renumbered it, or SSH goes through NAT)", a, n.Name),
 			Evidence: []string{"interfaces: " + strings.Join(p.Addrs, ", ")},
-			Fix:      fmt.Sprintf("sds node set-address %s %s", n.Name, firstNonEmpty(candidateAddr(a, p.Addrs), "<new-address>")),
+			Fix:      fmt.Sprintf("haify node set-address %s %s", n.Name, firstNonEmpty(candidateAddr(a, p.Addrs), "<new-address>")),
 			Runbook:  "renumber-nodes"})
 	}
 	if p.DRBDKmod == "" {
@@ -240,7 +240,7 @@ func binaryCheck(in *Input, arch string, bins map[string][]string) (Check, bool)
 		which = arch + " nodes"
 	}
 	st := StatusWarn
-	msg := "the installed sds-controller binaries differ between " + which
+	msg := "the installed haify-controller binaries differ between " + which
 	if in.SelfHA != nil {
 		st = StatusFail
 		msg += "; a Self-HA failover starts whichever version that node has, against the same database"
@@ -322,7 +322,7 @@ func binaryArchChecks(in *Input) []Check {
 			continue
 		}
 		out = append(out, Check{ID: "nodes.controller_binary_arch", Area: AreaNodes, Subject: name, Status: StatusFail,
-			Message: fmt.Sprintf("the sds-controller binary on %s is built for %s, but the node is %s; it cannot run there",
+			Message: fmt.Sprintf("the haify-controller binary on %s is built for %s, but the node is %s; it cannot run there",
 				name, want, p.Arch),
 			Evidence: []string{p.CtlBin},
 			Fix:      "./scripts/deploy-all.sh " + name + " (it builds for each node's architecture)"})

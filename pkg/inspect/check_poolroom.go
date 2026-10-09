@@ -41,7 +41,7 @@ func snapshotRoom(in *Input) ([]Check, int) {
 				thin[lv.VG] = true
 				continue
 			}
-			m := sdsLVName.FindStringSubmatch(lv.Name)
+			m := haifyLVName.FindStringSubmatch(lv.Name)
 			if m == nil || m[3] != "" || strings.Contains(lv.Name, "_bk_") || lv.Segtype == "snapshot" {
 				continue
 			}
@@ -65,10 +65,10 @@ func snapshotRoom(in *Input) ([]Check, int) {
 			sort.Strings(short)
 			out = append(out, Check{ID: "pool.snapshot_room", Area: AreaPools, Subject: node + ":" + vg, Status: StatusWarn,
 				Message: fmt.Sprintf("thick pool %s has %s free, less than a snapshot of %s reserves: its scheduled snapshots and backups fail here. "+
-					"Add a device, or convert the pool to thin (sds pool convert-thin --node %s --pool %s)",
-					vg, gib(free), plural(len(short), "volume", "volumes"), node, strings.TrimPrefix(vg, "sds_")),
+					"Add a device, or convert the pool to thin (haify pool convert-thin --node %s --pool %s)",
+					vg, gib(free), plural(len(short), "volume", "volumes"), node, strings.TrimPrefix(vg, "haify_")),
 				Evidence: append([]string{fmt.Sprintf("vg_free %s", gib(free))}, short...),
-				Fix:      fmt.Sprintf("sds pool add --pool %s --nodes %s --devices <new-device>", strings.TrimPrefix(vg, "sds_"), node)})
+				Fix:      fmt.Sprintf("haify pool add --pool %s --nodes %s --devices <new-device>", strings.TrimPrefix(vg, "haify_"), node)})
 		}
 	}
 	return out, groups

@@ -367,7 +367,7 @@ func ResolveNFSExportPath(resource, exportPath string) (string, error) {
 	}
 	// The export directory becomes a mount point owned by the gateway;
 	// refuse paths that would shadow system directories or Haify state.
-	forbidden := []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/proc", "/root", "/run", "/sbin", "/sys", "/usr", "/var/lib/sds", DefaultClusterPrivateMountPath}
+	forbidden := []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/proc", "/root", "/run", "/sbin", "/sys", "/usr", "/var/lib/haify", DefaultClusterPrivateMountPath}
 	for _, prefix := range forbidden {
 		if cleaned == prefix || strings.HasPrefix(cleaned, prefix+"/") {
 			return "", fmt.Errorf("export path %s would shadow %s; choose a dedicated directory (e.g. /srv/...)", cleaned, prefix)

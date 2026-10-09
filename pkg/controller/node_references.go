@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // nodeReferences lists what still depends on a node, one entry per resource

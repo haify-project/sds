@@ -28,7 +28,7 @@ import (
 // # Key management
 //
 // Each node generates its own 512-bit key, on the node, from /dev/urandom, and
-// keeps it at /etc/sds/luks/<container>.key — mode 0400, inside a 0700
+// keeps it at /etc/haify/luks/<container>.key — mode 0400, inside a 0700
 // directory, both owned by root. The key never leaves the node it was made on,
 // is never sent over SSH, never reaches the controller, and therefore cannot
 // appear in the audit log, in the controller's log, or in the database.
@@ -66,7 +66,7 @@ import (
 // being promoted, and it runs after DRBD is already up, which is too late.
 //
 // So the open belongs where the backing devices are already assembled at boot:
-// sds-drbd-up.service, the node-local oneshot that runs `vgchange -ay` and then
+// haify-drbd-up.service, the node-local oneshot that runs `vgchange -ay` and then
 // `drbdadm adjust` before drbd-reactor. luksBootOpenSnippet is spliced in
 // between those two steps. That covers a reboot and, transitively, a failover:
 // after any node comes back its containers are open and its replica reattaches,
@@ -75,7 +75,7 @@ import (
 // luksKeyDir holds one key file and one device pointer per container. 0700 and
 // root-owned: the mode is what keeps the keys out of reach of anything but
 // root, and it is checked by the provisioning script rather than assumed.
-const luksKeyDir = "/etc/sds/luks"
+const luksKeyDir = "/etc/haify/luks"
 
 // luksNameRe constrains the pool and volume names that are interpolated into a
 // device-mapper name, a file path and a shell command. Everything reaching here
@@ -99,7 +99,7 @@ const luksHeaderBytes = 32 << 20
 // that it is identical on every node (the DRBD config is shared) and unique
 // within a node (pool names are unique per node, LV names within a pool).
 func luksContainerName(pool, volume string) string {
-	return "sds_" + pool + "_" + volume
+	return "haify_" + pool + "_" + volume
 }
 
 // luksMapperPath is what DRBD is pointed at instead of the LV or zvol.
@@ -219,7 +219,7 @@ sudo rm -f ` + key + ` ` + ptr + `
 true`, nil
 }
 
-// luksBootOpenSnippet is spliced into the sds-drbd-up boot script, after LVM
+// luksBootOpenSnippet is spliced into the haify-drbd-up boot script, after LVM
 // activation and before `drbdadm adjust`, so the crypt containers exist by the
 // time DRBD looks for its backing devices.
 //
@@ -404,7 +404,7 @@ func (rm *ResourceManager) resourceIsEncrypted(ctx context.Context, resource str
 // in between.
 //
 // LVM commands have to be aimed at the LV, not at the mapping: `lvresize
-// /dev/mapper/sds_vg0_data_data` and `lvremove` of the same do not address an
+// /dev/mapper/haify_vg0_data_data` and `lvremove` of the same do not address an
 // LV at all. The container name cannot be split back into pool and volume
 // unambiguously — both may contain underscores — so the volume record is the
 // authority, and a missing one is an error rather than a guess.

@@ -23,11 +23,11 @@ func TestSetReplicationExportsSteadyStateAsFullySynced(t *testing.T) {
 	})
 
 	id := labels{"resource": "data", "node": "node-a"}
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_resync_completed_ratio", id))
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_quorum", id))
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_role", labels{"resource": "data", "node": "node-a", "role": "Primary"}))
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_disk_state", labels{"resource": "data", "node": "node-a", "state": "UpToDate"}))
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_resource_up", labels{"resource": "data"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_resync_completed_ratio", id))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_quorum", id))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_role", labels{"resource": "data", "node": "node-a", "role": "Primary"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_disk_state", labels{"resource": "data", "node": "node-a", "state": "UpToDate"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_resource_up", labels{"resource": "data"}))
 }
 
 // A replica that did not report is absent, never zero. Zero is a real reading —
@@ -43,11 +43,11 @@ func TestSetReplicationOmitsAReplicaThatStoppedReporting(t *testing.T) {
 	m.SetReplication(ReplicationSnapshot{Resources: []string{"data"}, Replicas: both})
 	m.SetReplication(ReplicationSnapshot{Resources: []string{"data"}, Replicas: both[:1]})
 
-	_, ok := gaugeValue(t, m, "sds_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-b"})
+	_, ok := gaugeValue(t, m, "haify_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-b"})
 	assert.False(t, ok, "an unreachable replica must vanish from /metrics, not read as 0%% synced")
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-a"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-a"}))
 	// The resource itself still answered through node-a.
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_resource_up", labels{"resource": "data"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_resource_up", labels{"resource": "data"}))
 }
 
 // resource_up is how "no node answered for this resource" is said out loud.
@@ -60,9 +60,9 @@ func TestSetReplicationReportsResourceDownWhenNoReplicaAnswered(t *testing.T) {
 		{Resource: "data", Node: "node-a", DiskState: "UpToDate"},
 	}})
 
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_resource_up", labels{"resource": "data"}))
-	assert.Equal(t, 0.0, requireGauge(t, m, "sds_drbd_resource_up", labels{"resource": "quiet"}))
-	_, ok := gaugeValue(t, m, "sds_drbd_disk_state", labels{"resource": "quiet", "node": "node-a", "state": "UpToDate"})
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_resource_up", labels{"resource": "data"}))
+	assert.Equal(t, 0.0, requireGauge(t, m, "haify_drbd_resource_up", labels{"resource": "quiet"}))
+	_, ok := gaugeValue(t, m, "haify_drbd_disk_state", labels{"resource": "quiet", "node": "node-a", "state": "UpToDate"})
 	assert.False(t, ok, "a resource nobody answered for must export no replica series at all")
 }
 
@@ -77,8 +77,8 @@ func TestSetReplicationDistinguishesLostQuorumFromUnreportedQuorum(t *testing.T)
 		{Resource: "data", Node: "node-b"},
 	}})
 
-	assert.Equal(t, 0.0, requireGauge(t, m, "sds_drbd_quorum", labels{"resource": "data", "node": "node-a"}))
-	_, ok := gaugeValue(t, m, "sds_drbd_quorum", labels{"resource": "data", "node": "node-b"})
+	assert.Equal(t, 0.0, requireGauge(t, m, "haify_drbd_quorum", labels{"resource": "data", "node": "node-a"}))
+	_, ok := gaugeValue(t, m, "haify_drbd_quorum", labels{"resource": "data", "node": "node-b"})
 	assert.False(t, ok, "an unreported quorum must not be exported as quorum lost")
 }
 
@@ -90,9 +90,9 @@ func TestSetReplicationSkipsEmptyStateLabels(t *testing.T) {
 		{Resource: "data", Node: "node-a", Role: "", DiskState: "UpToDate", ReplicationState: ""},
 	}})
 
-	_, roleExported := gaugeValue(t, m, "sds_drbd_role", labels{"resource": "data", "node": "node-a", "role": ""})
+	_, roleExported := gaugeValue(t, m, "haify_drbd_role", labels{"resource": "data", "node": "node-a", "role": ""})
 	assert.False(t, roleExported, "an unknown role must not be exported as an empty label value")
-	_, replExported := gaugeValue(t, m, "sds_drbd_replication_state", labels{"resource": "data", "node": "node-a", "state": ""})
+	_, replExported := gaugeValue(t, m, "haify_drbd_replication_state", labels{"resource": "data", "node": "node-a", "state": ""})
 	assert.False(t, replExported)
 }
 
@@ -107,10 +107,10 @@ func TestSetReplicationOmitsResyncWhenTheReplicaDidNotReportIt(t *testing.T) {
 		{Resource: "data", Node: "node-a", DiskState: "UpToDate", SyncPercent: nil},
 	}})
 
-	_, ok := gaugeValue(t, m, "sds_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-a"})
+	_, ok := gaugeValue(t, m, "haify_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-a"})
 	assert.False(t, ok, "an unreported resync figure must be absent, not exported as 0%%")
 	// The replica itself is still very much there.
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_disk_state", labels{"resource": "data", "node": "node-a", "state": "UpToDate"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_disk_state", labels{"resource": "data", "node": "node-a", "state": "UpToDate"}))
 }
 
 // DRBD has been seen to report slightly over 100 on a finishing resync. A ratio
@@ -124,8 +124,8 @@ func TestSetReplicationClampsResyncRatio(t *testing.T) {
 		{Resource: "data", Node: "node-b", SyncPercent: ptr(-3.0)},
 	}})
 
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-a"}))
-	assert.Equal(t, 0.0, requireGauge(t, m, "sds_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-b"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-a"}))
+	assert.Equal(t, 0.0, requireGauge(t, m, "haify_drbd_resync_completed_ratio", labels{"resource": "data", "node": "node-b"}))
 }
 
 // Only the node whose status was read reports what it wrote; a peer has no
@@ -139,7 +139,7 @@ func TestSetReplicationExportsWrittenBytes(t *testing.T) {
 			{Resource: "data", Node: "node-b"},
 		},
 	})
-	assert.Equal(t, 4096.0, requireGauge(t, m, "sds_drbd_written_bytes", labels{"resource": "data", "node": "node-a"}))
-	_, ok := gaugeValue(t, m, "sds_drbd_written_bytes", labels{"resource": "data", "node": "node-b"})
+	assert.Equal(t, 4096.0, requireGauge(t, m, "haify_drbd_written_bytes", labels{"resource": "data", "node": "node-a"}))
+	_, ok := gaugeValue(t, m, "haify_drbd_written_bytes", labels{"resource": "data", "node": "node-b"})
 	assert.False(t, ok)
 }

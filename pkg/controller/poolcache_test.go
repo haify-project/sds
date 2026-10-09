@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,27 +29,27 @@ func lvsLine(fields ...string) string {
 // the fast device on an internal _cvol, neither of which lvs shows without -a.
 func cachedThinPoolReport(mode, attr string) string {
 	return strings.Join([]string{
-		lvsLine("sds_sdspool", "openclaw_data", "Vwi-aotz--", "thin", "6442450944",
-			"", "", "", "", "", "", "", "", "sds_sdspool_thin(0)"),
-		lvsLine("sds_sdspool", "sds_sdspool_thin", "twi-aotz--", "thin-pool", "107374182400",
-			"", "", "", "", "", "", "", "", "sds_sdspool_thin_tdata(0)"),
-		lvsLine("sds_sdspool", "[sds_sdspool_thin_tdata]", attr, "cache", "107374182400",
+		lvsLine("haify_haifypool", "openclaw_data", "Vwi-aotz--", "thin", "6442450944",
+			"", "", "", "", "", "", "", "", "haify_haifypool_thin(0)"),
+		lvsLine("haify_haifypool", "haify_haifypool_thin", "twi-aotz--", "thin-pool", "107374182400",
+			"", "", "", "", "", "", "", "", "haify_haifypool_thin_tdata(0)"),
+		lvsLine("haify_haifypool", "[haify_haifypool_thin_tdata]", attr, "cache", "107374182400",
 			mode, "1638400", "409600", "16384", "900000", "60000", "30000", "10000",
-			"sds_sdspool_thin_tdata_corig(0)"),
-		lvsLine("sds_sdspool", "[sds_sdspool_thin_tmeta]", "ewi-ao----", "linear", "134217728",
+			"haify_haifypool_thin_tdata_corig(0)"),
+		lvsLine("haify_haifypool", "[haify_haifypool_thin_tmeta]", "ewi-ao----", "linear", "134217728",
 			"", "", "", "", "", "", "", "", "/dev/sdb(0)"),
-		lvsLine("sds_sdspool", "[sdscache_cvol]", "Cwi-aoC---", "linear", "107374182400",
+		lvsLine("haify_haifypool", "[haifycache_cvol]", "Cwi-aoC---", "linear", "107374182400",
 			"", "", "", "", "", "", "", "", "/dev/nvme0n1(0)"),
 	}, "\n")
 }
 
 func TestParsesACachedThinPoolReport(t *testing.T) {
-	info := summarizeCache(parseCacheReport(cachedThinPoolReport("writethrough", "Cwi-aoC---"))["sds_sdspool"])
+	info := summarizeCache(parseCacheReport(cachedThinPoolReport("writethrough", "Cwi-aoC---"))["haify_haifypool"])
 	require.NotNil(t, info)
 	assert.Equal(t, "writethrough", info.Mode)
 	// The cache is bolted to the thin pool's data sub-LV, and its brackets are
 	// lvs presentation, not part of the name.
-	assert.Equal(t, "sds_sdspool_thin_tdata", info.OriginLV)
+	assert.Equal(t, "haify_haifypool_thin_tdata", info.OriginLV)
 	assert.Equal(t, "/dev/nvme0n1", info.Device, "the extent offset is not part of the device path")
 	assert.Equal(t, uint64(107374182400), info.SizeBytes, "the size is the fast volume's, not the origin's")
 	assert.Equal(t, uint32(25), info.UsedPercent)
@@ -61,20 +61,20 @@ func TestParsesACachedThinPoolReport(t *testing.T) {
 
 func TestReportsNoCacheForAPlainPool(t *testing.T) {
 	plain := strings.Join([]string{
-		lvsLine("sds_sdspool", "openclaw_data", "Vwi-aotz--", "thin", "6442450944",
-			"", "", "", "", "", "", "", "", "sds_sdspool_thin(0)"),
-		lvsLine("sds_sdspool", "sds_sdspool_thin", "twi-aotz--", "thin-pool", "107374182400",
+		lvsLine("haify_haifypool", "openclaw_data", "Vwi-aotz--", "thin", "6442450944",
+			"", "", "", "", "", "", "", "", "haify_haifypool_thin(0)"),
+		lvsLine("haify_haifypool", "haify_haifypool_thin", "twi-aotz--", "thin-pool", "107374182400",
 			"", "", "", "", "", "", "", "", "/dev/sdb(0)"),
 	}, "\n")
-	assert.Nil(t, summarizeCache(parseCacheReport(plain)["sds_sdspool"]))
+	assert.Nil(t, summarizeCache(parseCacheReport(plain)["haify_haifypool"]))
 }
 
 // The kernel counters are blank for an LV that is not currently active. That is
 // missing information, not a broken cache, and it must not divide by zero.
 func TestParsesACacheWhoseCountersAreBlank(t *testing.T) {
-	inactive := lvsLine("sds_sdspool", "[sds_sdspool_thin_tdata]", "Cwi---C---", "cache", "107374182400",
-		"writeback", "", "", "", "", "", "", "", "sds_sdspool_thin_tdata_corig(0)")
-	info := summarizeCache(parseCacheReport(inactive)["sds_sdspool"])
+	inactive := lvsLine("haify_haifypool", "[haify_haifypool_thin_tdata]", "Cwi---C---", "cache", "107374182400",
+		"writeback", "", "", "", "", "", "", "", "haify_haifypool_thin_tdata_corig(0)")
+	info := summarizeCache(parseCacheReport(inactive)["haify_haifypool"])
 	require.NotNil(t, info)
 	assert.Equal(t, "writeback", info.Mode)
 	assert.Zero(t, info.UsedPercent)
@@ -87,24 +87,24 @@ func TestParsesACacheWhoseCountersAreBlank(t *testing.T) {
 // volume group.
 func TestSkipsLinesThatAreNotReportRows(t *testing.T) {
 	noise := strings.Join([]string{
-		"  WARNING: PV /dev/sdb in VG sds_sdspool is missing.",
+		"  WARNING: PV /dev/sdb in VG haify_haifypool is missing.",
 		"",
-		"  sds_sdspool|truncated|Cwi-aoC---|cache",
+		"  haify_haifypool|truncated|Cwi-aoC---|cache",
 		cachedThinPoolReport("writethrough", "Cwi-aoC---"),
 	}, "\n")
 	byVG := parseCacheReport(noise)
 	assert.Len(t, byVG, 1)
-	require.NotNil(t, summarizeCache(byVG["sds_sdspool"]))
+	require.NotNil(t, summarizeCache(byVG["haify_haifypool"]))
 }
 
 func TestGroupsRowsFromEveryVolumeGroupOnAHost(t *testing.T) {
 	both := cachedThinPoolReport("writeback", "Cwi-aoC---") + "\n" +
-		lvsLine("sds_other", "sds_other_thin", "twi-aotz--", "thin-pool", "1073741824",
+		lvsLine("haify_other", "haify_other_thin", "twi-aotz--", "thin-pool", "1073741824",
 			"", "", "", "", "", "", "", "", "/dev/sdc(0)")
 	byVG := parseCacheReport(both)
 	require.Len(t, byVG, 2)
-	assert.NotNil(t, summarizeCache(byVG["sds_sdspool"]))
-	assert.Nil(t, summarizeCache(byVG["sds_other"]))
+	assert.NotNil(t, summarizeCache(byVG["haify_haifypool"]))
+	assert.Nil(t, summarizeCache(byVG["haify_other"]))
 }
 
 // The health character is what says a cache cannot be flushed, and getting it
@@ -229,7 +229,7 @@ func TestPoolListingCarriesCacheState(t *testing.T) {
 	dep := &fakeDeploymentClient{
 		execFunc: func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.Contains(cmd, "vgs") {
-				return successExecResult(hosts, "sds_sdspool|107374182400|53687091200|/dev/sdb"), nil
+				return successExecResult(hosts, "haify_haifypool|107374182400|53687091200|/dev/sdb"), nil
 			}
 			return successExecResult(hosts, ""), nil
 		},
@@ -255,12 +255,12 @@ func TestPoolListingSurvivesAnUnreadableCacheQuery(t *testing.T) {
 	dep := &fakeDeploymentClient{
 		execFunc: func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.Contains(cmd, "vgs") {
-				return successExecResult(hosts, "sds_sdspool|107374182400|53687091200|/dev/sdb"), nil
+				return successExecResult(hosts, "haify_haifypool|107374182400|53687091200|/dev/sdb"), nil
 			}
 			return successExecResult(hosts, ""), nil
 		},
 		lvsCacheReportFunc: func(_ context.Context, hosts []string, _ string) (*deployment.ExecResult, error) {
-			return failedResult(hosts, "  Volume group sds_sdspool not found"), nil
+			return failedResult(hosts, "  Volume group haify_haifypool not found"), nil
 		},
 	}
 	ctrl := cacheTestController(t, dep)
@@ -293,14 +293,14 @@ func TestPoolListingSurvivesAnUnreadableCacheQuery(t *testing.T) {
 //   - The origin row's own devices column names an LV, not a device, so the
 //     device has to come from the _cvol row.
 func TestParsesRealLVMCachedThinPoolReport(t *testing.T) {
-	const real = `  sds_vg0|[tiertest_cache_cvol]|Cwi-aoC---|linear|1073741824|||||||||/dev/sdd(512)
-  sds_vg0|tiertest_thin|twi-a-tz--|thin-pool|2147483648|||||||||tiertest_thin_tdata(0)
-  sds_vg0|[tiertest_thin_tdata]|Cwi-aoC---|cache|2147483648|writethrough|16256|0|0|0|0|0|0|tiertest_thin_tdata_corig(0)
-  sds_vg0|[tiertest_thin_tdata_corig]|owi-aoC---|linear|2147483648|||||||||/dev/sdd(0)
-  sds_vg0|[tiertest_thin_tmeta]|ewi-ao----|linear|4194304|||||||||/dev/sdc(6145)`
+	const real = `  haify_vg0|[tiertest_cache_cvol]|Cwi-aoC---|linear|1073741824|||||||||/dev/sdd(512)
+  haify_vg0|tiertest_thin|twi-a-tz--|thin-pool|2147483648|||||||||tiertest_thin_tdata(0)
+  haify_vg0|[tiertest_thin_tdata]|Cwi-aoC---|cache|2147483648|writethrough|16256|0|0|0|0|0|0|tiertest_thin_tdata_corig(0)
+  haify_vg0|[tiertest_thin_tdata_corig]|owi-aoC---|linear|2147483648|||||||||/dev/sdd(0)
+  haify_vg0|[tiertest_thin_tmeta]|ewi-ao----|linear|4194304|||||||||/dev/sdc(6145)`
 
 	byVG := parseCacheReport(real)
-	rows, found := byVG["sds_vg0"]
+	rows, found := byVG["haify_vg0"]
 	require.True(t, found, "the volume group must be recognised")
 	require.Len(t, rows, 5, "every internal row is reported and must survive parsing")
 
@@ -325,10 +325,10 @@ func TestParsesRealLVMCachedThinPoolReport(t *testing.T) {
 // The same host before any cache existed: the plain thin pool must not be
 // mistaken for a cached one just because it has internal sub-LVs.
 func TestParsesRealLVMUncachedThinPoolReport(t *testing.T) {
-	const real = `  sds_vg0|tiertest_thin|twi-a-tz--|thin-pool|2147483648|||||||||tiertest_thin_tdata(0)
-  sds_vg0|[tiertest_thin_tdata]|Twi-ao----|linear|2147483648|||||||||/dev/sdd(0)
-  sds_vg0|[tiertest_thin_tmeta]|ewi-ao----|linear|4194304|||||||||/dev/sdc(6145)`
+	const real = `  haify_vg0|tiertest_thin|twi-a-tz--|thin-pool|2147483648|||||||||tiertest_thin_tdata(0)
+  haify_vg0|[tiertest_thin_tdata]|Twi-ao----|linear|2147483648|||||||||/dev/sdd(0)
+  haify_vg0|[tiertest_thin_tmeta]|ewi-ao----|linear|4194304|||||||||/dev/sdc(6145)`
 
-	info := summarizeCache(parseCacheReport(real)["sds_vg0"])
+	info := summarizeCache(parseCacheReport(real)["haify_vg0"])
 	assert.Nil(t, info, "a thin pool with no cache segment has no cache")
 }

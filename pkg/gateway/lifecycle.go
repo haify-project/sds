@@ -49,7 +49,7 @@ func (m *Manager) DeleteGateway(ctx context.Context, id string) error {
 
 		// Delete the reactor config of every gateway type.
 		for _, t := range GatewayTypes {
-			configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("sds-%s-%s.toml", t, id))
+			configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("haify-%s-%s.toml", t, id))
 			// A stopped gateway keeps its config as .toml.disabled; the node
 			// running an edited gateway may hold a .toml.pending.
 			rmCmd := fmt.Sprintf("sudo rm -f %[1]s %[1]s.disabled %[1]s.pending", configPath)
@@ -86,7 +86,7 @@ func (m *Manager) writeReactorConfig(ctx context.Context, resource, pluginID, co
 		zap.Strings("retired_on", rest),
 		zap.String("path", remotePath))
 
-	if strings.HasPrefix(pluginID, "sds-nfs-") {
+	if strings.HasPrefix(pluginID, "haify-nfs-") {
 		m.prepareNFSNode(ctx, run, "")
 	}
 	if err := m.deployment.DistributeConfig(ctx, run, config, remotePath); err != nil {
@@ -206,7 +206,7 @@ if awk -v p="$old" '$5 == p {f=1} END {exit !f}' /proc/self/mountinfo; then
   if mountpoint -q "$old"; then
     umount "$old" || { echo "$(hostname): cannot unmount the gateway's old state mount $old" >&2; exit 3; }
   else
-    echo "$(hostname): the gateway's old state mount $old is hidden under the controller database mount %[3]s; move the controller off this node (sds ha evict sds-meta), then start the gateway again" >&2
+    echo "$(hostname): the gateway's old state mount $old is hidden under the controller database mount %[3]s; move the controller off this node (haify ha evict haify-meta), then start the gateway again" >&2
     exit 3
   fi
 fi
@@ -225,7 +225,7 @@ true`, oldDir, newDir, legacyClusterPrivateMountPath, promoterConfigPaths(id, ".
 // NFS gateway's chain, where the templates now put it (see them for why). Like
 // moveClusterPrivatePath it touches only a disabled config.
 func serviceIPLastScript(id string) string {
-	return fmt.Sprintf(`for f in /etc/drbd-reactor.d/sds-iscsi-%[1]s.toml.disabled /etc/drbd-reactor.d/sds-nfs-%[1]s.toml.disabled; do
+	return fmt.Sprintf(`for f in /etc/drbd-reactor.d/haify-iscsi-%[1]s.toml.disabled /etc/drbd-reactor.d/haify-nfs-%[1]s.toml.disabled; do
   [ -f "$f" ] || continue
   awk '/"ocf:heartbeat:IPaddr2 / {ip = $0; next} /^[ \t]*\][ \t]*$/ && ip != "" {print ip; ip = ""} {print}' "$f" >"$f.new" && mv "$f.new" "$f"
 done

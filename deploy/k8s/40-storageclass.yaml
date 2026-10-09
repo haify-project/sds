@@ -1,8 +1,8 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: sds-drbd
-provisioner: sds.csi.liliang-cn.com
+  name: haify-drbd
+provisioner: haify.csi.liliang-cn.com
 parameters:
   pool: "vg0"
   replicas: "2"

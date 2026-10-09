@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,14 +27,14 @@ func TestLUKSProvisionNeverPutsAKeyOnTheCommandLine(t *testing.T) {
 		assert.NotContains(t, cmd, forbidden,
 			"the passphrase must never travel through the command string")
 	}
-	assert.Contains(t, cmd, "--key-file /etc/sds/luks/sds_vg0_res1_data.key")
-	assert.Contains(t, cmd, "dd if=/dev/urandom of=/etc/sds/luks/sds_vg0_res1_data.key",
+	assert.Contains(t, cmd, "--key-file /etc/haify/luks/haify_vg0_res1_data.key")
+	assert.Contains(t, cmd, "dd if=/dev/urandom of=/etc/haify/luks/haify_vg0_res1_data.key",
 		"the key is generated on the node, not sent to it")
 
 	// A key readable by anyone but root defeats the exercise on a multi-user
 	// node, and the directory mode is what protects it before the chmod lands.
-	assert.Contains(t, cmd, "install -d -m 0700 -o root -g root /etc/sds/luks")
-	assert.Contains(t, cmd, "chmod 0400 /etc/sds/luks/sds_vg0_res1_data.key")
+	assert.Contains(t, cmd, "install -d -m 0700 -o root -g root /etc/haify/luks")
+	assert.Contains(t, cmd, "chmod 0400 /etc/haify/luks/haify_vg0_res1_data.key")
 }
 
 func TestLUKSProvisionIsRerunnable(t *testing.T) {
@@ -44,10 +44,10 @@ func TestLUKSProvisionIsRerunnable(t *testing.T) {
 	// Key AND header present ⇒ leave both alone. Either missing ⇒ rebuild the
 	// pair. A luksFormat that ran unconditionally would wipe the container on
 	// every retry of a partially failed create.
-	assert.Contains(t, cmd, "if sudo test -f /etc/sds/luks/sds_vg0_res1_data.key && sudo cryptsetup isLuks /dev/vg0/res1_data")
+	assert.Contains(t, cmd, "if sudo test -f /etc/haify/luks/haify_vg0_res1_data.key && sudo cryptsetup isLuks /dev/vg0/res1_data")
 	assert.Contains(t, cmd, "luksFormat --batch-mode --type luks2")
 	// Opening an already-open container fails; the boot path reruns this shape.
-	assert.Contains(t, cmd, "if [ ! -e /dev/mapper/sds_vg0_res1_data ]")
+	assert.Contains(t, cmd, "if [ ! -e /dev/mapper/haify_vg0_res1_data ]")
 }
 
 // Key stretching buys nothing against 512 bits of /dev/urandom, and argon2id's
@@ -62,14 +62,14 @@ func TestLUKSTeardownDestroysTheKeyBeforeTheStorageGoes(t *testing.T) {
 	cmd, err := luksTeardownCmd("vg0", "res1_data")
 	require.NoError(t, err)
 
-	assert.Contains(t, cmd, "cryptsetup close sds_vg0_res1_data")
+	assert.Contains(t, cmd, "cryptsetup close haify_vg0_res1_data")
 	// Unlinking alone leaves the 64 bytes in whatever extent the root
 	// filesystem hands out next — which is the only thing making a
 	// decommissioned pool disk unreadable.
-	assert.Contains(t, cmd, "shred -u /etc/sds/luks/sds_vg0_res1_data.key")
-	assert.Contains(t, cmd, "dd if=/dev/urandom of=/etc/sds/luks/sds_vg0_res1_data.key",
+	assert.Contains(t, cmd, "shred -u /etc/haify/luks/haify_vg0_res1_data.key")
+	assert.Contains(t, cmd, "dd if=/dev/urandom of=/etc/haify/luks/haify_vg0_res1_data.key",
 		"a node without shred still has to overwrite it")
-	assert.Contains(t, cmd, "rm -f /etc/sds/luks/sds_vg0_res1_data.key /etc/sds/luks/sds_vg0_res1_data.dev")
+	assert.Contains(t, cmd, "rm -f /etc/haify/luks/haify_vg0_res1_data.key /etc/haify/luks/haify_vg0_res1_data.dev")
 }
 
 // Pool and volume names reach a shell command and a device path. Everything on
@@ -82,7 +82,7 @@ func TestLUKSNamesAreValidatedBeforeReachingAShell(t *testing.T) {
 		wantReject bool
 	}{
 		{name: "ordinary", pool: "vg0", vol: "res1_data"},
-		{name: "dashes and dots", pool: "sds-pool.1", vol: "my-res_data"},
+		{name: "dashes and dots", pool: "haify-pool.1", vol: "my-res_data"},
 		{name: "command substitution in pool", pool: "vg0$(id)", vol: "res1_data", wantReject: true},
 		{name: "semicolon in volume", pool: "vg0", vol: "res1;rm -rf /", wantReject: true},
 		{name: "path traversal", pool: "../../etc", vol: "res1_data", wantReject: true},
@@ -142,7 +142,7 @@ func TestBootScriptOpensContainersBetweenLVMAndDRBD(t *testing.T) {
 
 	// Driven by what is on the node, so it keeps working for resources created
 	// after the unit was written.
-	assert.Contains(t, script, "for ptr in /etc/sds/luks/*.dev")
+	assert.Contains(t, script, "for ptr in /etc/haify/luks/*.dev")
 	// One unopenable container must not keep every other resource down.
 	assert.Contains(t, script, `"$cname" >/dev/null 2>&1 || true`)
 	// The unit is what makes an encrypted resource survive a reboot, so it has
@@ -299,10 +299,10 @@ func TestBackingLVForResolvesThroughTheVolumeRecord(t *testing.T) {
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "data", Encrypted: true}))
 	require.NoError(t, ctrl.db.SaveVolume(ctx, &database.Volume{
 		ResourceName: "data", VolumeName: "data_data", VolumeID: 0, Pool: "vg0",
-		Device: "/dev/mapper/sds_vg0_data_data",
+		Device: "/dev/mapper/haify_vg0_data_data",
 	}))
 
-	lv, pool, vol, err := ctrl.resources.backingLVFor(ctx, "data", 0, "/dev/mapper/sds_vg0_data_data")
+	lv, pool, vol, err := ctrl.resources.backingLVFor(ctx, "data", 0, "/dev/mapper/haify_vg0_data_data")
 	require.NoError(t, err)
 	assert.Equal(t, "/dev/vg0/data_data", lv)
 	assert.Equal(t, "vg0", pool)
@@ -316,7 +316,7 @@ func TestBackingLVForResolvesThroughTheVolumeRecord(t *testing.T) {
 
 	// The container name cannot be split back into pool and volume — both may
 	// contain underscores — so a missing record is an error, never a guess.
-	_, _, _, err = ctrl.resources.backingLVFor(ctx, "data", 7, "/dev/mapper/sds_vg0_data_vol7")
+	_, _, _, err = ctrl.resources.backingLVFor(ctx, "data", 7, "/dev/mapper/haify_vg0_data_vol7")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be identified")
 
@@ -346,7 +346,7 @@ func TestGeneratedConfigPointsDRBDAtTheContainer(t *testing.T) {
 		[]resolvedVolume{{id: 0, minor: 0, pool: "vg0", volumeName: "res1_data", encrypted: true}},
 		[]string{"node1", "node2"}, nil, "C", "lvm", nil, nil)
 
-	assert.Contains(t, cfg, "disk      /dev/mapper/sds_vg0_res1_data;")
+	assert.Contains(t, cfg, "disk      /dev/mapper/haify_vg0_res1_data;")
 	assert.NotContains(t, cfg, "disk      /dev/vg0/res1_data;")
 }
 
@@ -369,7 +369,7 @@ func TestGeneratedConfigStillPointsAtTheLVWhenNotEncrypted(t *testing.T) {
 func TestAddReplicaConfigUsesTheContainerOnAnEncryptedResource(t *testing.T) {
 	rm := addDRTestFixture(t)
 	rm.controller.nodes.nodes["192.168.1.30"] = &NodeInfo{
-		Name: "node-d", Address: "192.168.1.30", Hostname: "sds-d", State: NodeStateOnline,
+		Name: "node-d", Address: "192.168.1.30", Hostname: "haify-d", State: NodeStateOnline,
 	}
 	rm.controller.hostsMap["node-d"] = "192.168.1.30"
 
@@ -377,7 +377,7 @@ func TestAddReplicaConfigUsesTheContainerOnAnEncryptedResource(t *testing.T) {
 		addDRVolumes, 7300, 2, 0, false, "", true)
 	require.NoError(t, err)
 
-	stanza := out[strings.Index(out, "on sds-d {"):]
+	stanza := out[strings.Index(out, "on haify-d {"):]
 	for _, v := range addDRVolumes {
 		assert.Contains(t, stanza, "disk      "+luksMapperPath(v.Pool, v.VolumeName)+";")
 	}

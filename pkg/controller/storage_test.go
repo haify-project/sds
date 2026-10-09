@@ -9,7 +9,7 @@ import (
 
 func TestPoolInfo(t *testing.T) {
 	pool := &PoolInfo{
-		Name:    "sds_vg0",
+		Name:    "haify_vg0",
 		Type:    "vg",
 		Node:    "node1",
 		TotalGB: 1000,
@@ -18,7 +18,7 @@ func TestPoolInfo(t *testing.T) {
 		Thin:    false,
 	}
 
-	assert.Equal(t, "sds_vg0", pool.Name)
+	assert.Equal(t, "haify_vg0", pool.Name)
 	assert.Equal(t, "vg", pool.Type)
 	assert.Equal(t, "node1", pool.Node)
 	assert.Equal(t, uint64(1000), pool.TotalGB)
@@ -28,7 +28,7 @@ func TestPoolInfo(t *testing.T) {
 
 func TestPoolInfoZFS(t *testing.T) {
 	pool := &PoolInfo{
-		Name:        "sds_pool0",
+		Name:        "haify_pool0",
 		Type:        "zfs",
 		Node:        "node2",
 		TotalGB:     2000,
@@ -38,7 +38,7 @@ func TestPoolInfoZFS(t *testing.T) {
 		Compression: "lz4",
 	}
 
-	assert.Equal(t, "sds_pool0", pool.Name)
+	assert.Equal(t, "haify_pool0", pool.Name)
 	assert.Equal(t, "zfs", pool.Type)
 	assert.Equal(t, "lz4", pool.Compression)
 	assert.True(t, pool.Thin)
@@ -118,7 +118,7 @@ func TestNodeStateConstants(t *testing.T) {
 
 func TestPoolInfoThinPool(t *testing.T) {
 	pool := &PoolInfo{
-		Name:    "sds_thin_pool",
+		Name:    "haify_thin_pool",
 		Type:    "thin_pool",
 		Node:    "node1",
 		TotalGB: 1000,

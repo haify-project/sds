@@ -33,7 +33,7 @@ func TestCertificateExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in.TLS.APICert, in.TLS.APICertPath = api, "/etc/sds/tls/server.crt"
+	in.TLS.APICert, in.TLS.APICertPath = api, "/etc/haify/tls/server.crt"
 	in.Probes["n1"].TLSCert = certPEM(t, "n1", t0.Add(3*24*time.Hour))
 	in.Probes["n2"].TLSCert = certPEM(t, "n2", t0.Add(-time.Hour))
 	in.Probes["n3"].TLSCert = certPEM(t, "n3", t0.Add(200*24*time.Hour))
@@ -47,7 +47,7 @@ func TestCertificateExpiry(t *testing.T) {
 		t.Fatalf("want n1 and n2:\n%s", dump(checks))
 	}
 	for _, c := range repl {
-		if c.Status != StatusFail || c.Fix != "sds replication-tls setup" {
+		if c.Status != StatusFail || c.Fix != "haify replication-tls setup" {
 			t.Errorf("%+v", c)
 		}
 	}

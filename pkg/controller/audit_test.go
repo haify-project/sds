@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -34,7 +34,7 @@ func invokeUnary(log *zap.Logger, includeReads bool, fullMethod string, req inte
 
 func TestAuditRecordsMutatingCall(t *testing.T) {
 	log, logs := newObservedLogger()
-	invokeUnary(log, false, "/v1.SDSController/CreatePool", nameReq{name: "data"}, nil)
+	invokeUnary(log, false, "/v1.HaifyController/CreatePool", nameReq{name: "data"}, nil)
 
 	entries := logs.All()
 	if len(entries) != 1 {
@@ -57,7 +57,7 @@ func TestAuditRecordsMutatingCall(t *testing.T) {
 
 func TestAuditSkipsReadsByDefault(t *testing.T) {
 	log, logs := newObservedLogger()
-	invokeUnary(log, false, "/v1.SDSController/ListPools", nameReq{}, nil)
+	invokeUnary(log, false, "/v1.HaifyController/ListPools", nameReq{}, nil)
 	if n := logs.Len(); n != 0 {
 		t.Fatalf("expected read-only call to be skipped, got %d entries", n)
 	}
@@ -65,7 +65,7 @@ func TestAuditSkipsReadsByDefault(t *testing.T) {
 
 func TestAuditIncludesReadsWhenConfigured(t *testing.T) {
 	log, logs := newObservedLogger()
-	invokeUnary(log, true, "/v1.SDSController/ListPools", nameReq{}, nil)
+	invokeUnary(log, true, "/v1.HaifyController/ListPools", nameReq{}, nil)
 	if n := logs.Len(); n != 1 {
 		t.Fatalf("expected read-only call to be audited, got %d entries", n)
 	}
@@ -82,7 +82,7 @@ func TestAuditSkipsHealthChecks(t *testing.T) {
 func TestAuditRecordsDeniedAttempt(t *testing.T) {
 	log, logs := newObservedLogger()
 	denied := status.Error(codes.Unauthenticated, "no token")
-	invokeUnary(log, false, "/v1.SDSController/DeletePool", nameReq{name: "data"}, denied)
+	invokeUnary(log, false, "/v1.HaifyController/DeletePool", nameReq{name: "data"}, denied)
 
 	entries := logs.All()
 	if len(entries) != 1 {
@@ -106,10 +106,10 @@ func TestAuditRecordsAFailureReportedInTheResponse(t *testing.T) {
 	log, logs := newObservedLogger()
 	interceptor := auditUnaryInterceptor(log, false, nil, nil)
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return &sdspb.AddVolumeResponse{Success: false, Message: "insufficient free space"}, nil
+		return &haifypb.AddVolumeResponse{Success: false, Message: "insufficient free space"}, nil
 	}
 	_, _ = interceptor(context.Background(), nameReq{name: "r5"},
-		&grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/AddVolume"}, handler)
+		&grpc.UnaryServerInfo{FullMethod: "/v1.HaifyController/AddVolume"}, handler)
 
 	m := logs.All()[0].ContextMap()
 	if m["result"] != "FAILED" || m["error"] != "insufficient free space" {
@@ -121,10 +121,10 @@ func TestAuditRecordsAFailureReportedInTheResponse(t *testing.T) {
 
 	logs.TakeAll()
 	ok := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return &sdspb.AddVolumeResponse{Success: true}, nil
+		return &haifypb.AddVolumeResponse{Success: true}, nil
 	}
 	_, _ = interceptor(context.Background(), nameReq{name: "r5"},
-		&grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/AddVolume"}, ok)
+		&grpc.UnaryServerInfo{FullMethod: "/v1.HaifyController/AddVolume"}, ok)
 	if r := logs.All()[0].ContextMap()["result"]; r != codes.OK.String() {
 		t.Errorf("a successful response was recorded as %v", r)
 	}

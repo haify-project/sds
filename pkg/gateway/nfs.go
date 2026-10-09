@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 )
 
@@ -123,7 +123,7 @@ func (n *NFSManager) CreateNFSGateway(ctx context.Context, req *v1.CreateNFSGate
 	}
 
 	// Write configuration to all nodes
-	pluginID := fmt.Sprintf("sds-nfs-%s", req.Resource)
+	pluginID := fmt.Sprintf("haify-nfs-%s", req.Resource)
 	if err := n.writeReactorConfig(ctx, req.Resource, pluginID, config); err != nil {
 		return &v1.CreateNFSGatewayResponse{
 			Success: false,
@@ -164,19 +164,19 @@ func (m *Manager) prepareNFSNode(ctx context.Context, hosts []string, onlyIfNFS 
 	}
 	guard := ""
 	if onlyIfNFS != "" {
-		guard = fmt.Sprintf("ls /etc/drbd-reactor.d/sds-nfs-%s.toml* >/dev/null 2>&1 || exit 0\n", onlyIfNFS)
+		guard = fmt.Sprintf("ls /etc/drbd-reactor.d/haify-nfs-%s.toml* >/dev/null 2>&1 || exit 0\n", onlyIfNFS)
 	}
 	script := guard + `changed=
 for u in fsidd nfsdcld; do
   d=/etc/systemd/system/$u.service.d
-  f=$d/50-sds-nfs-gateway.conf
+  f=$d/50-haify-nfs-gateway.conf
   want='[Unit]
 PartOf=nfs-server.service'
   [ "$(cat "$f" 2>/dev/null)" = "$want" ] && continue
   mkdir -p "$d" && printf '%s\n' "$want" > "$f" && changed=1
 done
 [ -z "$changed" ] || systemctl daemon-reload
-f=/etc/sysctl.d/90-sds-nfs-gateway.conf
+f=/etc/sysctl.d/90-haify-nfs-gateway.conf
 want='# Haify NFS gateway: sm-notify binds to the service IP before it is up.
 net.ipv4.ip_nonlocal_bind = 1'
 [ "$(cat "$f" 2>/dev/null)" = "$want" ] || printf '%s\n' "$want" > "$f"
@@ -342,7 +342,7 @@ func (n *NFSManager) GetNFSGatewayStatus(ctx context.Context, resource string) (
 	}
 
 	// Check if the gateway config exists
-	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("sds-nfs-%s.toml", resource))
+	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("haify-nfs-%s.toml", resource))
 	if _, err := os.Stat(configPath); err != nil {
 		status["status"] = "not_configured"
 		return status, nil
@@ -364,7 +364,7 @@ func (n *NFSManager) GetNFSGatewayStatus(ctx context.Context, resource string) (
 func (n *NFSManager) DeleteNFSGateway(ctx context.Context, resource string) error {
 	n.logger.Info("Deleting NFS gateway", zap.String("resource", resource))
 
-	configFile := fmt.Sprintf("sds-nfs-%s.toml", resource)
+	configFile := fmt.Sprintf("haify-nfs-%s.toml", resource)
 	configPath := filepath.Join(DrbdReactorConfigDir, configFile)
 
 	// Remove config from all nodes
@@ -394,7 +394,7 @@ func (n *NFSManager) AddNFSExport(ctx context.Context, resource, exportPath stri
 		zap.String("resource", resource),
 		zap.String("export_path", exportPath))
 
-	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
+	pluginID := fmt.Sprintf("haify-nfs-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -442,7 +442,7 @@ func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath s
 		zap.String("resource", resource),
 		zap.String("export_path", exportPath))
 
-	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
+	pluginID := fmt.Sprintf("haify-nfs-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -467,7 +467,7 @@ func (n *NFSManager) RemoveNFSExport(ctx context.Context, resource, exportPath s
 
 // ListNFSExports lists all exports for an NFS gateway
 func (n *NFSManager) ListNFSExports(ctx context.Context, resource string) ([]map[string]string, error) {
-	pluginID := fmt.Sprintf("sds-nfs-%s", resource)
+	pluginID := fmt.Sprintf("haify-nfs-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err

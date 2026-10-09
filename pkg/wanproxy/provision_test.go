@@ -79,7 +79,7 @@ func (f *fakeDeploy) result(hosts []string, fail bool) *Result {
 func newSpecWithTempPKI(t *testing.T) ProxySpec {
 	t.Helper()
 	// Redirect the package PKI cache to a temp dir so the test never writes to
-	// /var/lib/sds.
+	// /var/lib/haify.
 	prev := PKIDir
 	PKIDir = t.TempDir()
 	t.Cleanup(func() { PKIDir = prev })
@@ -157,7 +157,7 @@ func TestProvisionPushesBinaryWhenPathSet(t *testing.T) {
 	spec := newSpecWithTempPKI(t)
 
 	// A stand-in "binary" file; Provision just distributes its bytes.
-	binPath := filepath.Join(t.TempDir(), "sds-proxy")
+	binPath := filepath.Join(t.TempDir(), "haify-proxy")
 	if err := os.WriteFile(binPath, []byte("\x7fELF fake binary"), 0o755); err != nil {
 		t.Fatalf("write fake binary: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestProvisionMultiPushesThePerNodeBinary(t *testing.T) {
 	prev := PKIDir
 	PKIDir = t.TempDir()
 	t.Cleanup(func() { PKIDir = prev })
-	bin := filepath.Join(t.TempDir(), "sds-proxy-arm64")
+	bin := filepath.Join(t.TempDir(), "haify-proxy-arm64")
 	if err := os.WriteFile(bin, []byte("binary"), 0755); err != nil {
 		t.Fatal(err)
 	}

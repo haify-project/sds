@@ -10,7 +10,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// Database applications (`sds app`): a single-instance PostgreSQL, MySQL or
+// Database applications (`haify app`): a single-instance PostgreSQL, MySQL or
 // Redis on a DRBD resource, failed over by drbd-reactor. The promoter config
 // and unit on the nodes are what run; this record is how they were made —
 // the binaries and ids every node agreed on at creation included — so they

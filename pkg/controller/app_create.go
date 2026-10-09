@@ -9,8 +9,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/apptemplate"
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/apptemplate"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // AppCreated is what creating an app reports. Password is set only when this
@@ -58,7 +58,7 @@ func (am *AppManager) Create(ctx context.Context, spec apptemplate.Spec) (*AppCr
 	}
 	if len(hosts) < appMinReplicas {
 		return nil, fmt.Errorf("resource %s has %d diskful replica(s) a promoter can run on; an app needs at least %d "+
-			"(add one with sds resource add-replica)", spec.Resource, len(hosts), appMinReplicas)
+			"(add one with haify resource add-replica)", spec.Resource, len(hosts), appMinReplicas)
 	}
 	device, err := am.dataDevice(ctx, spec.Resource)
 	if err != nil {
@@ -108,12 +108,12 @@ func (am *AppManager) Create(ctx context.Context, spec apptemplate.Spec) (*AppCr
 		UID: agreed.UID, GID: agreed.GID,
 	}
 	// Recorded before the promoter exists, so a failure from here on leaves an
-	// app `sds app delete` can find and clean up.
+	// app `haify app delete` can find and clean up.
 	if err := am.c.db.SaveApp(ctx, app); err != nil {
 		return nil, fmt.Errorf("record the app: %w", err)
 	}
 	if err := am.install(ctx, spec, agreed.Binaries, device, hosts); err != nil {
-		return nil, fmt.Errorf("%w; the app is recorded, so `sds app delete %s` removes what was installed", err, spec.Name)
+		return nil, fmt.Errorf("%w; the app is recorded, so `haify app delete %s` removes what was installed", err, spec.Name)
 	}
 	logger.Info("App created", zap.Bool("data_reused", reused), zap.Strings("hosts", hosts))
 
@@ -139,7 +139,7 @@ func (am *AppManager) checkCreatable(ctx context.Context, spec apptemplate.Spec)
 	}
 	res, err := db.GetResource(ctx, spec.Resource)
 	if err != nil || res == nil {
-		return fmt.Errorf("resource %s not found; create it first (sds resource create --name %s --size ... --nodes ...)",
+		return fmt.Errorf("resource %s not found; create it first (haify resource create --name %s --size ... --nodes ...)",
 			spec.Resource, spec.Resource)
 	}
 	if other, err := db.GetAppByResource(ctx, spec.Resource); err != nil {
@@ -148,11 +148,11 @@ func (am *AppManager) checkCreatable(ctx context.Context, spec apptemplate.Spec)
 		return fmt.Errorf("resource %s already runs the app %s", spec.Resource, other.Name)
 	}
 	if ha, err := db.GetHaConfig(ctx, spec.Resource); err == nil && ha != nil {
-		return fmt.Errorf("resource %s already has an HA config (sds ha create); remove it first (sds ha delete %s)",
+		return fmt.Errorf("resource %s already has an HA config (haify ha create); remove it first (haify ha delete %s)",
 			spec.Resource, spec.Resource)
 	}
 	if gw, err := db.GetGatewayByResource(ctx, spec.Resource); err == nil && gw != nil {
-		return fmt.Errorf("resource %s already exports a gateway; delete it first (sds gateway delete %s)",
+		return fmt.Errorf("resource %s already exports a gateway; delete it first (haify gateway delete %s)",
 			spec.Resource, spec.Resource)
 	}
 	return am.c.assertPromoterAllowed(ctx, spec.Resource, "an app")
@@ -163,7 +163,7 @@ func (am *AppManager) checkCreatable(ctx context.Context, spec apptemplate.Spec)
 // behind. Its own config left by an earlier, failed create is not foreign.
 func (am *AppManager) checkNoForeignPromoter(ctx context.Context, spec apptemplate.Spec, hosts []string) error {
 	own := path.Base(apptemplate.PromoterPath(spec.Name))
-	script := fmt.Sprintf(`for f in %[1]s/sds-*-%[2]s.toml %[1]s/sds-*-%[2]s.toml.disabled; do
+	script := fmt.Sprintf(`for f in %[1]s/haify-*-%[2]s.toml %[1]s/haify-*-%[2]s.toml.disabled; do
   [ -e "$f" ] || continue
   case "$(basename "$f")" in %[3]s|%[3]s.disabled) continue ;; esac
   echo "promoter=$f"
@@ -253,7 +253,7 @@ func (am *AppManager) firstPrimary(ctx context.Context, resource string, hosts [
 // there. The staged copy is removed by the script, and again here in case the
 // script never ran.
 func (am *AppManager) initialize(ctx context.Context, host string, spec apptemplate.Spec, bins apptemplate.Binaries, device, password string) (string, error) {
-	rel := ".sds-app/" + spec.Name + ".pw"
+	rel := ".haify-app/" + spec.Name + ".pw"
 	staged, err := am.stagePassword(ctx, host, rel, password)
 	defer func() {
 		cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -280,12 +280,12 @@ func (am *AppManager) initialize(ctx context.Context, host string, spec apptempl
 func (am *AppManager) stagePassword(ctx context.Context, host, rel, password string) (string, error) {
 	dir := path.Dir(rel)
 	res, err := am.rm().deployment.Exec(ctx, []string{host},
-		fmt.Sprintf(`mkdir -p "$HOME/%[1]s" && chmod 0700 "$HOME/%[1]s" && echo "SDS_HOME=$HOME"`, dir))
+		fmt.Sprintf(`mkdir -p "$HOME/%[1]s" && chmod 0700 "$HOME/%[1]s" && echo "HAIFY_HOME=$HOME"`, dir))
 	if err != nil {
 		return "", fmt.Errorf("prepare %s on %s: %w", dir, am.nodeName(host), err)
 	}
 	out, ok := appHostOutput(res, host)
-	home := keyValues(out)["SDS_HOME"]
+	home := keyValues(out)["HAIFY_HOME"]
 	if !ok || !strings.HasPrefix(home, "/") {
 		return "", fmt.Errorf("prepare %s on %s: %s", dir, am.nodeName(host), hostFailure(res.Hosts[host]))
 	}

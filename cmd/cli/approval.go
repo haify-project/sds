@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/haify/pkg/client"
 )
 
 // With [rbac.approval] on, a call such as deleting a backup target fails
@@ -30,7 +30,7 @@ func approvalListCommand() *cobra.Command {
 		Use:   "list",
 		Short: "List pending (and approved, not yet used) requests",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRBACClient(func(ctx context.Context, c *client.SDSClient) error {
+			return withRBACClient(func(ctx context.Context, c *client.HaifyClient) error {
 				list, err := c.ListApprovals(ctx, all)
 				if err != nil {
 					return err
@@ -63,7 +63,7 @@ func approvalDecideCommand(approve bool) *cobra.Command {
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRBACClient(func(ctx context.Context, c *client.SDSClient) error {
+			return withRBACClient(func(ctx context.Context, c *client.HaifyClient) error {
 				if !approve {
 					if _, err := c.RejectRequest(ctx, args[0]); err != nil {
 						return err

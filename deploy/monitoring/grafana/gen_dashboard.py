@@ -1,5 +1,5 @@
 import json
-DS={"type":"prometheus","uid":"sds-prom"}
+DS={"type":"prometheus","uid":"haify-prom"}
 C='cluster="$cluster"'
 panels=[]; nid=[0]
 def nxt(): nid[0]+=1; return nid[0]
@@ -40,25 +40,25 @@ def ts(title, targets, x, y, w, h, unit=None, stack=False, th=None, maxv=None, n
 
 ok_bad=steps(("green",None),("red",1))
 y=0
-stat("Controller", f'up{{job="sds",{C}}}',0,y,4,4,th=steps(("red",None),("green",1)),mappings=vmap({1:("UP","green"),0:("DOWN","red")}),nodata="DOWN")
-stat("Nodes reachable", f'sum(sds_controller_node_reachable{{{C}}}) / count(sds_controller_node_reachable{{{C}}})',4,y,4,4,unit="percentunit",th=steps(("red",None),("orange",0.5),("green",1)),nodata="—")
-stat("Resources", f'count(sds_drbd_resource_up{{{C}}})',8,y,4,4,th=steps(("blue",None)))
-stat("Degraded replicas", f'count(sds_drbd_disk_state{{{C},state!~"UpToDate|Diskless"}} == 1)',12,y,3,4,th=ok_bad)
-stat("Quorum lost", f'count(sds_drbd_quorum{{{C}}} == 0)',15,y,3,4,th=ok_bad)
-stat("Critical alerts", f'sum(sds_controller_alerts_firing{{{C},severity="critical"}})',18,y,3,4,th=ok_bad)
-stat("Warnings", f'sum(sds_controller_alerts_firing{{{C},severity="warning"}})',21,y,3,4,th=steps(("green",None),("orange",1)))
+stat("Controller", f'up{{job="haify",{C}}}',0,y,4,4,th=steps(("red",None),("green",1)),mappings=vmap({1:("UP","green"),0:("DOWN","red")}),nodata="DOWN")
+stat("Nodes reachable", f'sum(haify_controller_node_reachable{{{C}}}) / count(haify_controller_node_reachable{{{C}}})',4,y,4,4,unit="percentunit",th=steps(("red",None),("orange",0.5),("green",1)),nodata="—")
+stat("Resources", f'count(haify_drbd_resource_up{{{C}}})',8,y,4,4,th=steps(("blue",None)))
+stat("Degraded replicas", f'count(haify_drbd_disk_state{{{C},state!~"UpToDate|Diskless"}} == 1)',12,y,3,4,th=ok_bad)
+stat("Quorum lost", f'count(haify_drbd_quorum{{{C}}} == 0)',15,y,3,4,th=ok_bad)
+stat("Critical alerts", f'sum(haify_controller_alerts_firing{{{C},severity="critical"}})',18,y,3,4,th=ok_bad)
+stat("Warnings", f'sum(haify_controller_alerts_firing{{{C},severity="warning"}})',21,y,3,4,th=steps(("green",None),("orange",1)))
 y+=4
 row("Resources",y); y+=1
 table("Resources", 0, y, 24, 13, [
-    tgt(f'max by (resource) (sds_drbd_resource_up{{{C}}})',"A",table=True),
-    tgt(f'group by (resource, node) (sds_drbd_role{{{C},role="Primary"}} == 1)',"B",table=True),
-    tgt(f'count by (resource) (sds_drbd_disk_state{{{C},state="UpToDate"}} == 1)',"C",table=True),
-    tgt(f'count by (resource) (sds_drbd_disk_state{{{C},state!~"Diskless|DUnknown"}} == 1)',"D",table=True),
-    tgt(f'min by (resource) (sds_drbd_quorum{{{C}}})',"E",table=True),
-    tgt(f'sum by (resource) (sds_drbd_out_of_sync_bytes{{{C}}})',"F",table=True),
-    tgt(f'min by (resource) (sds_drbd_connection_tls{{{C}}})',"G",table=True),
-    tgt(f'group by (resource, domain) (sds_controller_resource_fault_domain_risk{{{C}}} == 1)',"H",table=True),
-    tgt(f'group by (resource, degraded) (label_join(sds_drbd_disk_state{{{C},state!~"UpToDate|Diskless"}} == 1, "degraded", " ", "node", "state"))',"I",table=True),
+    tgt(f'max by (resource) (haify_drbd_resource_up{{{C}}})',"A",table=True),
+    tgt(f'group by (resource, node) (haify_drbd_role{{{C},role="Primary"}} == 1)',"B",table=True),
+    tgt(f'count by (resource) (haify_drbd_disk_state{{{C},state="UpToDate"}} == 1)',"C",table=True),
+    tgt(f'count by (resource) (haify_drbd_disk_state{{{C},state!~"Diskless|DUnknown"}} == 1)',"D",table=True),
+    tgt(f'min by (resource) (haify_drbd_quorum{{{C}}})',"E",table=True),
+    tgt(f'sum by (resource) (haify_drbd_out_of_sync_bytes{{{C}}})',"F",table=True),
+    tgt(f'min by (resource) (haify_drbd_connection_tls{{{C}}})',"G",table=True),
+    tgt(f'group by (resource, domain) (haify_controller_resource_fault_domain_risk{{{C}}} == 1)',"H",table=True),
+    tgt(f'group by (resource, degraded) (label_join(haify_drbd_disk_state{{{C},state!~"UpToDate|Diskless"}} == 1, "degraded", " ", "node", "state"))',"I",table=True),
   ], "resource",
   {"resource":"Resource","node":"Primary","Value #A":"Readable","Value #C":"UpToDate","Value #D":"Copies","Value #E":"Quorum","Value #F":"Out of sync","Value #G":"TLS","domain":"Single point of failure","degraded":"Degraded"},
   ["Resource","Primary","Readable","UpToDate","Copies","Quorum","Out of sync","TLS","Degraded","Single point of failure","Value #B","Value #H","Value #I"],
@@ -76,10 +76,10 @@ table("Resources", 0, y, 24, 13, [
 y+=13
 row("Nodes",y); y+=1
 table("Nodes", 0, y, 24, 6, [
-    tgt(f'max by (node) (sds_controller_node_reachable{{{C}}})',"A",table=True),
-    tgt(f'max by (node) (100 * sds_controller_storage_capacity_bytes{{{C},state="used"}} / on (cluster, pool, node) sds_controller_storage_capacity_bytes{{{C},state="total"}})',"B",table=True),
-    tgt(f'max by (node) (sds_controller_pool_thin_used_percent{{{C},kind="metadata"}})',"C",table=True),
-    tgt(f'count by (node) (sds_drbd_role{{{C},role="Primary"}} == 1)',"D",table=True),
+    tgt(f'max by (node) (haify_controller_node_reachable{{{C}}})',"A",table=True),
+    tgt(f'max by (node) (100 * haify_controller_storage_capacity_bytes{{{C},state="used"}} / on (cluster, pool, node) haify_controller_storage_capacity_bytes{{{C},state="total"}})',"B",table=True),
+    tgt(f'max by (node) (haify_controller_pool_thin_used_percent{{{C},kind="metadata"}})',"C",table=True),
+    tgt(f'count by (node) (haify_drbd_role{{{C},role="Primary"}} == 1)',"D",table=True),
   ], "node",
   {"node":"Node","Value #A":"Reachable","Value #B":"Pool used","Value #C":"Thin metadata","Value #D":"Primary for"},
   ["Node","Reachable","Pool used","Thin metadata","Primary for"],
@@ -89,27 +89,27 @@ table("Nodes", 0, y, 24, 6, [
    col("Primary for",[{"id":"noValue","value":"0"},{"id":"unit","value":"none"}])])
 y+=6
 row("Trends",y); y+=1
-ts("Pool use",[tgt(f'100 * sds_controller_storage_capacity_bytes{{{C},state="used"}} / on (cluster, pool, node) sds_controller_storage_capacity_bytes{{{C},state="total"}}',"A","{{node}} {{pool}}")],0,y,12,8,unit="percent",maxv=100,th=steps(("green",None),("orange",85),("red",95)))
-ts("Alerts firing",[tgt(f'sum by (type, severity) (sds_controller_alerts_firing{{{C}}})',"A","{{severity}} {{type}}")],12,y,12,8,stack=True,nodata="Nothing firing")
+ts("Pool use",[tgt(f'100 * haify_controller_storage_capacity_bytes{{{C},state="used"}} / on (cluster, pool, node) haify_controller_storage_capacity_bytes{{{C},state="total"}}',"A","{{node}} {{pool}}")],0,y,12,8,unit="percent",maxv=100,th=steps(("green",None),("orange",85),("red",95)))
+ts("Alerts firing",[tgt(f'sum by (type, severity) (haify_controller_alerts_firing{{{C}}})',"A","{{severity}} {{type}}")],12,y,12,8,stack=True,nodata="Nothing firing")
 y+=8
-ts("Out of sync",[tgt(f'sum by (resource) (sds_drbd_out_of_sync_bytes{{{C}}}) > 0',"A","{{resource}}")],0,y,12,8,unit="bytes",nodata="Nothing out of sync")
-ts("Controller API",[tgt(f'sum(rate(sds_controller_grpc_requests_total{{{C}}}[5m]))',"A","requests/s"),
-                     tgt(f'histogram_quantile(0.95, sum by (le) (rate(sds_controller_grpc_request_duration_seconds_bucket{{{C}}}[5m])))',"B","p95 latency")],12,y,12,8,unit="reqps",
+ts("Out of sync",[tgt(f'sum by (resource) (haify_drbd_out_of_sync_bytes{{{C}}}) > 0',"A","{{resource}}")],0,y,12,8,unit="bytes",nodata="Nothing out of sync")
+ts("Controller API",[tgt(f'sum(rate(haify_controller_grpc_requests_total{{{C}}}[5m]))',"A","requests/s"),
+                     tgt(f'histogram_quantile(0.95, sum by (le) (rate(haify_controller_grpc_request_duration_seconds_bucket{{{C}}}[5m])))',"B","p95 latency")],12,y,12,8,unit="reqps",
    overrides=[{"matcher":{"id":"byName","options":"p95 latency"},"properties":[{"id":"unit","value":"s"},{"id":"custom.axisPlacement","value":"right"}]}])
 y+=8
 row("Backups",y); y+=1
 table("Backups", 0, y, 24, 6, [
-    tgt(f'max by (resource, target) (sds_controller_backup_last_success_timestamp_seconds{{{C}}}) * 1000',"A",table=True),
-    tgt(f'max by (resource, target) (sds_controller_backup_last_shipped_bytes{{{C}}})',"B",table=True),
+    tgt(f'max by (resource, target) (haify_controller_backup_last_success_timestamp_seconds{{{C}}}) * 1000',"A",table=True),
+    tgt(f'max by (resource, target) (haify_controller_backup_last_shipped_bytes{{{C}}})',"B",table=True),
   ], "resource",
   {"resource":"Resource","target":"Target","Value #A":"Last backup","Value #B":"Shipped"},
   ["Resource","Target","Last backup","Shipped"],
   [col("Last backup",[{"id":"unit","value":"dateTimeFromNow"}]),col("Shipped",[{"id":"unit","value":"bytes"}])], nodata="No backups yet")
-dash={"uid":"sds-overview","title":"Haify","tags":["sds"],"timezone":"browser","schemaVersion":41,"refresh":"30s",
+dash={"uid":"haify-overview","title":"Haify","tags":["haify"],"timezone":"browser","schemaVersion":41,"refresh":"30s",
  "time":{"from":"now-24h","to":"now"},"graphTooltip":1,
  "templating":{"list":[{"name":"cluster","label":"Cluster","type":"query","datasource":DS,
-   "query":{"query":"label_values(up{job=\"sds\"}, cluster)","refId":"q"},"definition":"label_values(up{job=\"sds\"}, cluster)",
+   "query":{"query":"label_values(up{job=\"haify\"}, cluster)","refId":"q"},"definition":"label_values(up{job=\"haify\"}, cluster)",
    "includeAll":False,"multi":False,"refresh":2,"sort":1}]},
  "panels":panels}
-json.dump(dash,open(__import__('os').path.join(__import__('os').path.dirname(__file__),'dashboards','sds.json'),'w'),indent=1)
+json.dump(dash,open(__import__('os').path.join(__import__('os').path.dirname(__file__),'dashboards','haify.json'),'w'),indent=1)
 print(len(panels))

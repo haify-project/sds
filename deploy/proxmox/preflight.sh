@@ -8,7 +8,7 @@
 #   ./preflight.sh <controller>[,<controller>...]
 #
 # <controller> is what goes in storage.cfg: host, host:port or [v6]:port,
-# optionally prefixed with https://. Set SDS_CA to a PEM bundle when the
+# optionally prefixed with https://. Set HAIFY_CA to a PEM bundle when the
 # controller's certificate is signed by a private CA (storage.cfg's
 # controllerca). Exits non-zero if anything required is missing.
 
@@ -39,7 +39,7 @@ base_url() {
 }
 
 CURL=(curl -s -m 10)
-[ -n "${SDS_CA:-}" ] && CURL+=(--cacert "$SDS_CA")
+[ -n "${HAIFY_CA:-}" ] && CURL+=(--cacert "$HAIFY_CA")
 
 FAIL=0
 ok()   { echo "  OK    $*"; }
@@ -76,7 +76,7 @@ else
     bad "DRBD kernel module cannot be loaded — install drbd-dkms (LINBIT) for kernel $(uname -r)"
 fi
 
-# 3. sudo. The sds-controller reaches this node over SSH and runs every
+# 3. sudo. The haify-controller reaches this node over SSH and runs every
 #    privileged operation (drbdadm, lvcreate, writing /etc/drbd.d) through
 #    `sudo`. A minimal Proxmox/Debian install may not ship sudo, in which case
 #    those commands fail silently mid-operation (config never lands, DRBD never
@@ -97,13 +97,13 @@ for entry in "${ENTRIES[@]}"; do
     url="$(base_url "$entry")"
     code=$("${CURL[@]}" -o /dev/null -w '%{http_code}' "${url}/v1/resources")
     case "$code" in
-        200) ok "sds-controller REST answers at ${url}"; BASE="${BASE:-$url}" ;;
-        401|403) ok "sds-controller REST answers at ${url} (auth enabled — set 'apitoken' in storage.cfg)"; BASE="${BASE:-$url}" ;;
-        000) warn "no answer at ${url} (fine for a standby Self-HA node; for https, check the certificate and SDS_CA)" ;;
+        200) ok "haify-controller REST answers at ${url}"; BASE="${BASE:-$url}" ;;
+        401|403) ok "haify-controller REST answers at ${url} (auth enabled — set 'apitoken' in storage.cfg)"; BASE="${BASE:-$url}" ;;
+        000) warn "no answer at ${url} (fine for a standby Self-HA node; for https, check the certificate and HAIFY_CA)" ;;
         *) warn "${url} answered HTTP ${code}" ;;
     esac
 done
-[ -n "$BASE" ] || bad "no sds-controller REST address in '${CONTROLLER}' answered"
+[ -n "$BASE" ] || bad "no haify-controller REST address in '${CONTROLLER}' answered"
 
 # 5. This node must be registered with Haify under its PVE node name, because the
 #    plugin promotes/attaches by node name. A mismatch is the subtlest failure
@@ -113,12 +113,12 @@ NODES_JSON=""
 [ -n "$BASE" ] && NODES_JSON=$("${CURL[@]}" -f "${BASE}/v1/nodes" 2>/dev/null)
 if [ -n "$NODES_JSON" ]; then
     if echo "$NODES_JSON" | grep -q "\"name\":\"${NODENAME}\""; then
-        ok "node '${NODENAME}' is registered with sds"
+        ok "node '${NODENAME}' is registered with haify"
     else
-        bad "node '${NODENAME}' is NOT registered with sds — run: sds node register --name ${NODENAME} --address <ip>"
+        bad "node '${NODENAME}' is NOT registered with haify — run: haify node register --name ${NODENAME} --address <ip>"
     fi
 else
-    warn "could not list sds nodes (auth?); verify '${NODENAME}' is registered manually"
+    warn "could not list haify nodes (auth?); verify '${NODENAME}' is registered manually"
 fi
 
 # 6. Perl dependencies. Both ship with PVE, so this should never fail — but if

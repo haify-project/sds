@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 )
 
@@ -22,7 +22,7 @@ import (
 // clients reconnect, and a file a client held open across the switch sees the
 // error a server restart would give it.
 //
-// Each gateway runs its own smbd, sds-smbd@<resource>.service, bound to the
+// Each gateway runs its own smbd, haify-smbd@<resource>.service, bound to the
 // gateway's service IP only (`bind interfaces only`), so several SMB gateways
 // can run on one node. That is also why the chain brings the service IP up
 // BEFORE smbd, the opposite of the NFS and iSCSI chains: smbd binds to the
@@ -30,24 +30,24 @@ import (
 // a switchover, in which the address refuses connections rather than ignoring
 // them; SMB clients reconnect either way.
 //
-// Files are owned by one account, sds-smb, on every share (force user/group):
+// Files are owned by one account, haify-smb, on every share (force user/group):
 // access is decided per share, by `valid users` and `read only`, not by Unix
 // permissions per user. That keeps file ownership meaningful after a failover,
 // where per-user ownership would need every user's uid to match on every node.
-// sds-smb, and the account behind every SMB user (passdb requires one), are
+// haify-smb, and the account behind every SMB user (passdb requires one), are
 // created with the same uid on every node; the uids are recorded on the state
 // volume and the unit creates any missing account before smbd starts.
 
 const (
 	smbPort = 445
 	// smbOwner owns every file on every SMB share.
-	smbOwner = "sds-smb"
+	smbOwner = "haify-smb"
 	// smbUnitPath is the per-gateway smbd unit, installed on every node that
 	// may run an SMB gateway.
-	smbUnitPath = "/etc/systemd/system/sds-smbd@.service"
+	smbUnitPath = "/etc/systemd/system/haify-smbd@.service"
 	// smbUsersHelper creates the accounts recorded on a gateway's state
 	// volume; the unit runs it before smbd.
-	smbUsersHelper = "/usr/local/libexec/sds-smb-users"
+	smbUsersHelper = "/usr/local/libexec/haify-smb-users"
 	// smbFirstUID is where allocated uids start, clear of distribution
 	// ranges for regular users.
 	smbFirstUID = 61000
@@ -72,7 +72,7 @@ func smbUsersPath(resource string) string { return filepath.Join(smbDir(resource
 func smbShareRoot(resource string) string { return filepath.Join(DefaultExportBasePath, resource) }
 
 // smbUnit is the systemd unit that runs one gateway's smbd.
-func smbUnit(resource string) string { return fmt.Sprintf("sds-smbd@%s.service", resource) }
+func smbUnit(resource string) string { return fmt.Sprintf("haify-smbd@%s.service", resource) }
 
 // smbUnitContent runs smbd from the gateway's own config. %i is the resource.
 const smbUnitContent = `[Unit]
@@ -222,13 +222,13 @@ func (s *SMBManager) CreateSMBGateway(ctx context.Context, req *v1.CreateSMBGate
 	if err != nil {
 		return fail(err)
 	}
-	pluginID := "sds-smb-" + req.Resource
+	pluginID := "haify-smb-" + req.Resource
 	if err := s.writeReactorConfig(ctx, req.Resource, pluginID, config); err != nil {
 		return fail(fmt.Errorf("failed to write config: %w", err))
 	}
 	return &v1.CreateSMBGatewayResponse{
 		Success:    true,
-		Message:    fmt.Sprintf("SMB gateway created: \\\\%s\\%s (add users with `sds gateway smb user set`)", serviceIP.IP, share.Name),
+		Message:    fmt.Sprintf("SMB gateway created: \\\\%s\\%s (add users with `haify gateway smb user set`)", serviceIP.IP, share.Name),
 		ConfigPath: gatewayConfigPath(pluginID),
 	}, nil
 }
@@ -292,7 +292,7 @@ func smbGlobalConfig(resource, workgroup string, ip *ServiceIP) string {
 		"  cache directory = " + d + "/cache",
 		"  pid directory = " + d + "/run",
 		"  ncalrpc dir = " + d + "/run/ncalrpc",
-		"  log file = /var/log/samba/sds-" + resource + ".log",
+		"  log file = /var/log/samba/haify-" + resource + ".log",
 		"  max log size = 10000",
 		"  load printers = no",
 		"  printing = bsd",

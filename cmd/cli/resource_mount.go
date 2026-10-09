@@ -27,13 +27,13 @@ func resourceFs() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.CreateFilesystem(ctx, resource, volumeID, node, fstype)
+			err = haifyClient.CreateFilesystem(ctx, resource, volumeID, node, fstype)
 			if err != nil {
 				return fmt.Errorf("failed to create filesystem: %w", err)
 			}
@@ -68,13 +68,13 @@ func resourceMount() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.MountResource(ctx, resource, volumeID, mountPath, node, fstype)
+			err = haifyClient.MountResource(ctx, resource, volumeID, mountPath, node, fstype)
 			if err != nil {
 				return fmt.Errorf("failed to mount resource: %w", err)
 			}
@@ -109,13 +109,13 @@ func resourceUnmount() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.UnmountResource(ctx, resource, volumeID, node)
+			err = haifyClient.UnmountResource(ctx, resource, volumeID, node)
 			if err != nil {
 				return fmt.Errorf("failed to unmount resource: %w", err)
 			}

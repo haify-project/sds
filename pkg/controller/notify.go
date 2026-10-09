@@ -10,8 +10,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // NotifyManager owns the alert delivery channels that live in the database.

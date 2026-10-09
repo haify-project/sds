@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -27,20 +27,20 @@ func TestAddLUNUpdatesConfig(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "resource",
-		Iqn:       "iqn.2024-01.com.example:sds.resource",
+		Iqn:       "iqn.2024-01.com.example:haify.resource",
 		ServiceIp: "192.168.1.200/24",
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(2))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-iscsi-resource"), config)
 
 	ctx := context.Background()
 	err = iscsiManager.AddLUN(ctx, "resource", 3, "/dev/drbd3")
 
 	require.NoError(t, err)
-	updated, ok := mockDeployment.GetConfig(gatewayConfigPath("sds-iscsi-resource"))
+	updated, ok := mockDeployment.GetConfig(gatewayConfigPath("haify-iscsi-resource"))
 	require.True(t, ok)
 	assert.Contains(t, updated, "lun=3")
 	assert.Contains(t, updated, "path=/dev/drbd3")
@@ -75,7 +75,7 @@ func TestISCSIConfigStartsServiceIPLast(t *testing.T) {
 // it is started from stopped.
 func TestISCSIServiceIPLastScriptReordersLegacyConfig(t *testing.T) {
 	legacy := `      start = [
-        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd15 directory=/var/lib/sds-gateway/r fstype=ext4 run_fsck=no",
+        "ocf:heartbeat:Filesystem fs_cluster_private device=/dev/drbd15 directory=/var/lib/haify-gateway/r fstype=ext4 run_fsck=no",
         "ocf:heartbeat:IPaddr2 service_ip0 ip=10.0.0.9 cidr_netmask=24",
         "ocf:heartbeat:iSCSITarget target iqn=iqn.x:r portals=10.0.0.9:3260 implementation=lio-t",
 
@@ -84,7 +84,7 @@ func TestISCSIServiceIPLastScriptReordersLegacyConfig(t *testing.T) {
       ]
 `
 	dir := t.TempDir()
-	conf := filepath.Join(dir, "sds-iscsi-r.toml.disabled")
+	conf := filepath.Join(dir, "haify-iscsi-r.toml.disabled")
 	require.NoError(t, os.WriteFile(conf, []byte(legacy), 0644))
 	script := strings.ReplaceAll(serviceIPLastScript("r"), "/etc/drbd-reactor.d", dir)
 	for i := 0; i < 2; i++ { // idempotent
@@ -106,14 +106,14 @@ func TestListLUNs(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "resource",
-		Iqn:       "iqn.2024-01.com.example:sds.resource",
+		Iqn:       "iqn.2024-01.com.example:haify.resource",
 		ServiceIp: "192.168.1.200/24",
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(3))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-iscsi-resource"), config)
 
 	luns, err := iscsiManager.ListLUNs(context.Background(), "resource")
 	require.NoError(t, err)
@@ -132,20 +132,20 @@ func TestRemoveLUNUpdatesConfig(t *testing.T) {
 
 	req := &v1.CreateISCSIGatewayRequest{
 		Resource:  "resource",
-		Iqn:       "iqn.2024-01.com.example:sds.resource",
+		Iqn:       "iqn.2024-01.com.example:haify.resource",
 		ServiceIp: "192.168.1.200/24",
 	}
 	serviceIP, err := parseServiceIP(req.ServiceIp)
 	require.NoError(t, err)
 	config, err := iscsiManager.generateISCSIGatewayConfig(req, serviceIP, "/dev/drbd0", testVolumes(3))
 	require.NoError(t, err)
-	mockDeployment.SetConfig(gatewayConfigPath("sds-iscsi-resource"), config)
+	mockDeployment.SetConfig(gatewayConfigPath("haify-iscsi-resource"), config)
 
 	ctx := context.Background()
 	err = iscsiManager.RemoveLUN(ctx, "resource", 2)
 
 	require.NoError(t, err)
-	updated, ok := mockDeployment.GetConfig(gatewayConfigPath("sds-iscsi-resource"))
+	updated, ok := mockDeployment.GetConfig(gatewayConfigPath("haify-iscsi-resource"))
 	require.True(t, ok)
 	assert.NotContains(t, updated, "lun=2")
 }

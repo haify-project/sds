@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # Several controller addresses, and HTTPS.
 #
-# Under Self-HA the controller runs on whichever node holds sds-meta, so a
+# Under Self-HA the controller runs on whichever node holds haify-meta, so a
 # single address in storage.cfg went dark every time it moved. And the bearer
 # token went over plain HTTP.
 
@@ -16,8 +16,8 @@ use PVEStub;
 use JSON::PP qw(encode_json);
 use Test::More tests => 14;
 
-require "$FindBin::Bin/../SDSPlugin.pm";
-my $RC = 'PVE::Storage::Custom::SDS::Client';
+require "$FindBin::Bin/../HaifyPlugin.pm";
+my $RC = 'PVE::Storage::Custom::Haify::Client';
 
 {
     package ScriptedUA;
@@ -45,7 +45,7 @@ sub client {
 
 # --- parsing ------------------------------------------------------------------
 
-my @eps = PVE::Storage::Custom::SDS::Client::parse_controllers(
+my @eps = PVE::Storage::Custom::Haify::Client::parse_controllers(
     ' n1 , n2:9999,https://n3, https://[fd00::1]:8443/, [fd00::2]');
 is_deeply([ map { "$_->{scheme} $_->{host} $_->{port}" } @eps ],
     [ 'http n1 3375', 'http n2 9999', 'https n3 3375', 'https fd00::1 8443', 'http fd00::2 3375' ],
@@ -71,19 +71,19 @@ is($c2->{ua}{seen}[0], 'http://n2:3375/v1/resources', 'so does a new client for 
 # it, and a POST sent again elsewhere could do it twice.
 $c = client('t1,t2', 't1:3375' => $TIMEOUT, 't2:3375' => $OK);
 eval { $c->request('POST', '/v1/resources/x/primary', {}) };
-like($@, qr/^sds controller unreachable at t1:3375: Timed out/, 'a timeout is reported, not retried');
+like($@, qr/^haify controller unreachable at t1:3375: Timed out/, 'a timeout is reported, not retried');
 is(scalar(@{ $c->{ua}{seen} }), 1, 'and t2 is never asked');
 
 $c = client('r1,r2', 'r1:3375' => $REFUSED, 'r2:3375' => $REFUSED);
 eval { $c->request('GET', '/v1/resources') };
-like($@, qr/^sds controller unreachable at r1:3375: Could not connect.*; r2:3375: Could not connect/,
+like($@, qr/^haify controller unreachable at r1:3375: Could not connect.*; r2:3375: Could not connect/,
     'nobody answering names every address tried');
 
 # --- https --------------------------------------------------------------------------
 
-$c = $RC->new({ controller => 'https://ctl.example', controllerca => '/etc/pve/sds-ca.pem' });
+$c = $RC->new({ controller => 'https://ctl.example', controllerca => '/etc/pve/haify-ca.pem' });
 ok($c->{ua}{verify_SSL}, "the controller's certificate is verified");
-is($c->{ua}{SSL_options}{SSL_ca_file}, '/etc/pve/sds-ca.pem', 'against the configured CA');
+is($c->{ua}{SSL_options}{SSL_ca_file}, '/etc/pve/haify-ca.pem', 'against the configured CA');
 $c->{ua} = ScriptedUA->new('ctl.example:3375' => $OK);
 $c->request('GET', '/v1/resources');
 is($c->{ua}{seen}[0], 'https://ctl.example:3375/v1/resources', 'and spoken to over https');

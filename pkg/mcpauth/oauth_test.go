@@ -94,10 +94,10 @@ func TestOAuthFlowEndToEnd(t *testing.T) {
 	verifier, challenge := pkce()
 
 	// A wrong token on the authorization page is refused.
-	if code, status := e.authorize(client, redirect, challenge, "sdsmcp_nope", ""); code != "" || status != http.StatusUnauthorized {
+	if code, status := e.authorize(client, redirect, challenge, "haifymcp_nope", ""); code != "" || status != http.StatusUnauthorized {
 		t.Fatalf("bad token: %q %d", code, status)
 	}
-	code, _ := e.authorize(client, redirect, challenge, e.secret, "sds:read")
+	code, _ := e.authorize(client, redirect, challenge, e.secret, "haify:read")
 	if code == "" {
 		t.Fatal("no code for a valid token")
 	}
@@ -108,7 +108,7 @@ func TestOAuthFlowEndToEnd(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("wrong verifier: %d", resp.StatusCode)
 	}
-	code, _ = e.authorize(client, redirect, challenge, e.secret, "sds:read")
+	code, _ = e.authorize(client, redirect, challenge, e.secret, "haify:read")
 	resp, body := e.post("/oauth/token", url.Values{"grant_type": {"authorization_code"}, "client_id": {client},
 		"code": {code}, "redirect_uri": {redirect}, "code_verifier": {verifier}})
 	if resp.StatusCode != 200 {
@@ -174,7 +174,7 @@ func TestOAuthNeverGrantsMoreThanAllowed(t *testing.T) {
 	redirect := "https://claude.ai/api/mcp/auth_callback"
 	client := e.register(redirect)
 	verifier, challenge := pkce()
-	code, _ := e.authorize(client, redirect, challenge, e.secret, "sds:admin")
+	code, _ := e.authorize(client, redirect, challenge, e.secret, "haify:admin")
 	_, body := e.post("/oauth/token", url.Values{"grant_type": {"authorization_code"}, "client_id": {client},
 		"code": {code}, "redirect_uri": {redirect}, "code_verifier": {verifier}})
 	var tok struct {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 )
 
@@ -31,15 +31,15 @@ const (
 
 	// DefaultClusterPrivateMountPath is where the active node mounts a
 	// gateway's own state volume, one directory per gateway. It must not lie
-	// under the controller's Self-HA mount point (/var/lib/sds): the two
+	// under the controller's Self-HA mount point (/var/lib/haify): the two
 	// promoters move independently, so whichever mounts second covers or is
 	// covered by the other — a covered mount can no longer be found by path,
 	// its promoter cannot stop, and the resource cannot be demoted.
-	DefaultClusterPrivateMountPath = "/var/lib/sds-gateway"
+	DefaultClusterPrivateMountPath = "/var/lib/haify-gateway"
 
 	// legacyClusterPrivateMountPath is where gateways created before that was
 	// understood keep their state volume; StartGateway moves them.
-	legacyClusterPrivateMountPath = "/var/lib/sds"
+	legacyClusterPrivateMountPath = "/var/lib/haify"
 )
 
 // ResourceVolumeInfo represents a DRBD volume
@@ -156,8 +156,8 @@ type HostOutputReader interface {
 }
 
 // GatewayTypes are the storage gateway types, as the <type> in a promoter
-// config's name, sds-<type>-<resource>.toml. HA and service promoters share the
-// directory and the sds- prefix but are not gateways.
+// config's name, haify-<type>-<resource>.toml. HA and service promoters share the
+// directory and the haify- prefix but are not gateways.
 //
 // Every path that acts on "the gateway of a resource" without knowing its type
 // — stop, start, delete, retire — iterates over this list, so a new type is
@@ -177,7 +177,7 @@ var storageGatewayTypes = func() map[string]bool {
 func promoterConfigPaths(resource, suffix string) string {
 	paths := make([]string, 0, len(GatewayTypes))
 	for _, t := range GatewayTypes {
-		paths = append(paths, fmt.Sprintf("%s/sds-%s-%s.toml%s", DrbdReactorConfigDir, t, resource, suffix))
+		paths = append(paths, fmt.Sprintf("%s/haify-%s-%s.toml%s", DrbdReactorConfigDir, t, resource, suffix))
 	}
 	return strings.Join(paths, " ")
 }
@@ -239,17 +239,17 @@ func (m *Manager) ListGateways(ctx context.Context) ([]*GatewayInfo, error) {
 // parseGatewayConfigName returns the gateway a file in /etc/drbd-reactor.d
 // configures, or nil when it is not a storage gateway config. live is false
 // for a stopped gateway's .toml.disabled copy.
-// Format: sds-<type>-<resource>.toml[.disabled]
+// Format: haify-<type>-<resource>.toml[.disabled]
 func parseGatewayConfigName(name string) (gw *GatewayInfo, live bool) {
 	live = true
 	if strings.HasSuffix(name, ".toml.disabled") {
 		live = false
 		name = strings.TrimSuffix(name, ".disabled")
 	}
-	if !strings.HasPrefix(name, "sds-") || !strings.HasSuffix(name, ".toml") {
+	if !strings.HasPrefix(name, "haify-") || !strings.HasSuffix(name, ".toml") {
 		return nil, false
 	}
-	parts := strings.SplitN(strings.TrimSuffix(strings.TrimPrefix(name, "sds-"), ".toml"), "-", 2)
+	parts := strings.SplitN(strings.TrimSuffix(strings.TrimPrefix(name, "haify-"), ".toml"), "-", 2)
 	if len(parts) != 2 || parts[1] == "" || !storageGatewayTypes[parts[0]] {
 		return nil, false
 	}

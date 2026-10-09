@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CSI smoke test against a real cluster with the driver installed and
-# sds-controller reachable. Requires: kubectl context set, StorageClass sds-drbd,
+# haify-controller reachable. Requires: kubectl context set, StorageClass haify-drbd,
 # at least 2 storage nodes registered, pool "vg0" present on the nodes.
 set -euo pipefail
 
@@ -14,7 +14,7 @@ kind: PersistentVolumeClaim
 metadata: { name: data }
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: sds-drbd
+  storageClassName: haify-drbd
   resources: { requests: { storage: 1Gi } }
 ---
 apiVersion: v1
@@ -24,7 +24,7 @@ spec:
   containers:
     - name: app
       image: busybox
-      command: ["sh", "-c", "echo hello-sds > /data/marker && sleep 3600"]
+      command: ["sh", "-c", "echo hello-haify > /data/marker && sleep 3600"]
       volumeMounts: [{ name: data, mountPath: /data }]
   volumes:
     - name: data
@@ -35,7 +35,7 @@ echo "waiting for pod Ready..."
 kubectl -n "$NS" wait --for=condition=Ready pod/writer --timeout=180s
 
 echo "verifying write landed on the DRBD-backed volume..."
-kubectl -n "$NS" exec writer -- cat /data/marker | grep -q hello-sds
+kubectl -n "$NS" exec writer -- cat /data/marker | grep -q hello-haify
 echo "PASS: pod mounted a DRBD volume and wrote data"
 
 echo "verifying the pod scheduled onto a replica node (topology)..."

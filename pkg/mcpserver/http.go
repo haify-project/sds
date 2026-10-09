@@ -13,7 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/mcpauth"
+	"github.com/haify-project/haify/pkg/mcpauth"
 )
 
 // HTTPOptions configures the remote server.

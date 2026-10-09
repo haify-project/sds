@@ -1,4 +1,4 @@
-// Package wanproxy orchestrates the per-resource sds-proxy pair that carries a
+// Package wanproxy orchestrates the per-resource haify-proxy pair that carries a
 // DRBD resource's replication across the internet (primary site <-> DR site).
 //
 // It is the controller-side implementation of the opt-in WAN replication
@@ -9,19 +9,19 @@
 // # What it does
 //
 // For one WAN resource it renders a dialer config (primary site) and an acceptor
-// config (DR site), then pushes the shared PKI, the sds-proxy binary and those
+// config (DR site), then pushes the shared PKI, the haify-proxy binary and those
 // configs to the two nodes and installs+enables a per-resource systemd unit
-// (sds-proxy@<resource>). Deprovision reverses the per-resource state.
+// (haify-proxy@<resource>). Deprovision reverses the per-resource state.
 //
 // # On-node layout
 //
-//	/usr/local/bin/sds-proxy            the proxy binary (shared, pushed once per node)
-//	/etc/sds-proxy/ca.pem               shared CA cert     (shared)
-//	/etc/sds-proxy/cert.pem             shared leaf cert   (shared)
-//	/etc/sds-proxy/key.pem              shared leaf key    (shared)
-//	/etc/sds-proxy/<resource>.toml      per-resource proxy config
-//	/etc/systemd/system/sds-proxy@.service   the unit template (shared)
-//	sds-proxy@<resource>                the per-resource systemd instance
+//	/usr/local/bin/haify-proxy            the proxy binary (shared, pushed once per node)
+//	/etc/haify-proxy/ca.pem               shared CA cert     (shared)
+//	/etc/haify-proxy/cert.pem             shared leaf cert   (shared)
+//	/etc/haify-proxy/key.pem              shared leaf key    (shared)
+//	/etc/haify-proxy/<resource>.toml      per-resource proxy config
+//	/etc/systemd/system/haify-proxy@.service   the unit template (shared)
+//	haify-proxy@<resource>                the per-resource systemd instance
 //
 // # Ordering contract
 //
@@ -62,14 +62,14 @@ var (
 	reachTimeoutSecs = 5
 )
 
-// On-node filesystem layout. These are the canonical paths the sds-proxy binary,
+// On-node filesystem layout. These are the canonical paths the haify-proxy binary,
 // its shared PKI and per-resource configs live at on every WAN node.
 const (
-	// NodeBinaryPath is where the sds-proxy binary is installed on each node.
-	NodeBinaryPath = "/usr/local/bin/sds-proxy"
+	// NodeBinaryPath is where the haify-proxy binary is installed on each node.
+	NodeBinaryPath = "/usr/local/bin/haify-proxy"
 
 	// NodeConfigDir holds the shared certs and every per-resource config.
-	NodeConfigDir = "/etc/sds-proxy"
+	NodeConfigDir = "/etc/haify-proxy"
 
 	// NodeCAPath, NodeCertPath and NodeKeyPath are the shared mTLS material.
 	NodeCAPath   = NodeConfigDir + "/ca.pem"
@@ -78,22 +78,22 @@ const (
 
 	// UnitTemplateName is the templated systemd unit; the instance part (%i) is
 	// the resource name.
-	UnitTemplateName = "sds-proxy@.service"
+	UnitTemplateName = "haify-proxy@.service"
 
 	// UnitTemplatePath is where the unit template is installed on each node.
 	UnitTemplatePath = "/etc/systemd/system/" + UnitTemplateName
 
-	// NodeMetricsDir holds the per-resource JSON snapshots sds-proxy publishes.
+	// NodeMetricsDir holds the per-resource JSON snapshots haify-proxy publishes.
 	// It lives under /run because these are volatile runtime state: a reboot
 	// should not leave a stale backlog figure behind for the controller to read
 	// and report as current.
-	NodeMetricsDir = "/run/sds-proxy"
+	NodeMetricsDir = "/run/haify-proxy"
 )
 
 // PKIDir is the controller-side cache for the shared CA + leaf. EnsurePKI
 // generates the material once and reuses it thereafter. It is a package var so
 // it can be overridden (e.g. in tests or by configuration).
-var PKIDir = "/var/lib/sds/wanproxy-pki"
+var PKIDir = "/var/lib/haify/wanproxy-pki"
 
 // NodeConfigPath returns the on-node path of a resource's proxy config.
 func NodeConfigPath(resource string) string {
@@ -102,7 +102,7 @@ func NodeConfigPath(resource string) string {
 
 // UnitInstance returns the systemd instance name for a resource's proxy.
 func UnitInstance(resource string) string {
-	return "sds-proxy@" + resource
+	return "haify-proxy@" + resource
 }
 
 // LegID names one primary-site node's WAN leg to the DR site.
@@ -142,7 +142,7 @@ func NodeMetricsPath(resource string) string {
 // create time).
 const unitTemplate = `[Unit]
 Description=Haify WAN replication proxy for %i
-Documentation=https://github.com/haify-project/sds
+Documentation=https://github.com/haify-project/haify
 After=network-online.target
 Wants=network-online.target
 Before=drbd.service
@@ -157,7 +157,7 @@ RestartSec=5
 WantedBy=multi-user.target
 `
 
-// UnitTemplate returns the content of the sds-proxy@.service systemd unit
+// UnitTemplate returns the content of the haify-proxy@.service systemd unit
 // template installed on each node.
 func UnitTemplate() string { return unitTemplate }
 
@@ -241,7 +241,7 @@ type DeploymentClient interface {
 	Exec(ctx context.Context, hosts []string, cmd string) (*Result, error)
 }
 
-// ProxySpec fully describes the sds-proxy pair for one WAN resource. It is the
+// ProxySpec fully describes the haify-proxy pair for one WAN resource. It is the
 // public input to Provision; the controller builds it from the resource's WAN
 // fields (see database.Resource / the CreateResource WAN branch).
 type ProxySpec struct {
@@ -275,7 +275,7 @@ type ProxySpec struct {
 	// generateDrbdConfig's WAN branch.)
 	DRBDPort int
 
-	// BinaryPath is the controller-local path to the sds-proxy binary to push to
+	// BinaryPath is the controller-local path to the haify-proxy binary to push to
 	// both nodes (installed at NodeBinaryPath). When empty the binary push is
 	// skipped, assuming it was pre-staged on the nodes.
 	//
@@ -320,9 +320,9 @@ func (s ProxySpec) Validate() error {
 	return nil
 }
 
-// Provision brings up the sds-proxy pair for one WAN resource. It is idempotent
+// Provision brings up the haify-proxy pair for one WAN resource. It is idempotent
 // for the shared artifacts (PKI, unit template, certs, binary) and (re)writes
-// the per-resource config, then enables+starts sds-proxy@<resource> on both
+// the per-resource config, then enables+starts haify-proxy@<resource> on both
 // nodes.
 //
 // IMPORTANT ordering: the controller MUST call Provision before `drbdadm up`
@@ -330,12 +330,12 @@ func (s ProxySpec) Validate() error {
 //
 // Steps (all privileged, run on both nodes unless noted):
 //  1. ensure the shared CA+leaf PKI on the controller (generate once, cached)
-//  2. install the sds-proxy@.service unit template
+//  2. install the haify-proxy@.service unit template
 //  3. distribute the shared ca/cert/key
-//  4. push the sds-proxy binary (only when spec.BinaryPath is set)
+//  4. push the haify-proxy binary (only when spec.BinaryPath is set)
 //  5. write the dialer config to the primary and the acceptor config to the DR
 //  6. systemctl daemon-reload
-//  7. systemctl enable + restart sds-proxy@<resource> (restart, so a leg
+//  7. systemctl enable + restart haify-proxy@<resource> (restart, so a leg
 //     that is already running picks up the config and PKI just written)
 func Provision(ctx context.Context, deploy DeploymentClient, spec ProxySpec) error {
 	if deploy == nil {
@@ -429,7 +429,7 @@ func Provision(ctx context.Context, deploy DeploymentClient, spec ProxySpec) err
 }
 
 // Deprovision tears down the per-resource proxy: it stops+disables
-// sds-proxy@<resource> and removes its config on both nodes. The shared binary,
+// haify-proxy@<resource> and removes its config on both nodes. The shared binary,
 // certs and unit template are intentionally left in place for other resources.
 //
 // It is best-effort/idempotent at the shell level (missing units/files are not
@@ -462,7 +462,7 @@ func Deprovision(ctx context.Context, deploy DeploymentClient, resource, primary
 	return nil
 }
 
-// ensureBinary reads the controller-local sds-proxy binary and installs it at
+// ensureBinary reads the controller-local haify-proxy binary and installs it at
 // NodeBinaryPath on every host, then marks it executable. Distributing the same
 // bytes is idempotent, so re-provisioning simply overwrites with identical
 // content.
@@ -498,7 +498,7 @@ func ensureBinaries(ctx context.Context, deploy DeploymentClient, hosts []string
 func ensureBinary(ctx context.Context, deploy DeploymentClient, hosts []string, localPath string) error {
 	data, err := os.ReadFile(localPath)
 	if err != nil {
-		return fmt.Errorf("wanproxy: read sds-proxy binary %q: %w", localPath, err)
+		return fmt.Errorf("wanproxy: read haify-proxy binary %q: %w", localPath, err)
 	}
 	if err := distribute(ctx, deploy, hosts, string(data), NodeBinaryPath, "distribute binary"); err != nil {
 		return err
@@ -519,7 +519,7 @@ func distribute(ctx context.Context, deploy DeploymentClient, hosts []string, co
 	return nil
 }
 
-// requireBinaries fails unless every host now has a runnable sds-proxy, pushed
+// requireBinaries fails unless every host now has a runnable haify-proxy, pushed
 // by ensureBinaries or staged beforehand. Without one the unit crash-loops with
 // 203/EXEC on the node, and the only symptom anywhere else is a WAN port that
 // never opens — which the reachability probe used to report as a firewall.
@@ -532,7 +532,7 @@ func requireBinaries(ctx context.Context, deploy DeploymentClient, hosts []strin
 		missing := res.FailedHosts()
 		sort.Strings(missing)
 		return fmt.Errorf("wanproxy: no executable %s on %s, and the controller has none for that node's architecture "+
-			"(it looks for %s-<arch>, or %s for its own); install sds-proxy there",
+			"(it looks for %s-<arch>, or %s for its own); install haify-proxy there",
 			NodeBinaryPath, strings.Join(missing, ", "), NodeBinaryPath, NodeBinaryPath)
 	}
 	return nil

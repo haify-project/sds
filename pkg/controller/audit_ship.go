@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/event"
 	"go.uber.org/zap"
 )
 
@@ -163,7 +163,7 @@ func syslogMessage(host string, r database.AuditRecord) ([]byte, error) {
 	if host == "" {
 		host = "-"
 	}
-	return []byte(fmt.Sprintf("<%d>1 %s %s sds-controller - audit - %s\n",
+	return []byte(fmt.Sprintf("<%d>1 %s %s haify-controller - audit - %s\n",
 		13*8+severity, r.Event.Timestamp.UTC().Format("2006-01-02T15:04:05.000000Z07:00"), host, body)), nil
 }
 
@@ -176,7 +176,7 @@ type webhookDestination struct {
 func (d *webhookDestination) Name() string { return "webhook:" + d.url }
 
 func (d *webhookDestination) Send(ctx context.Context, records []database.AuditRecord) error {
-	body, err := json.Marshal(map[string]any{"source": "sds-controller", "records": records})
+	body, err := json.Marshal(map[string]any{"source": "haify-controller", "records": records})
 	if err != nil {
 		return err
 	}

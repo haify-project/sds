@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Snapshot naming follows the controller convention used by sds:
+// Snapshot naming follows the controller convention used by haify:
 // the data volume of a resource is "<resource>_data" inside its pool, so
 // LVM snapshots target LV "<resource>_data" in VG <pool>, and ZFS
 // snapshots target dataset "<pool>/<resource>_data".
@@ -63,7 +63,7 @@ type snapshotListOut struct {
 
 // registerSnapshotTools adds storage-type-aware snapshot tools.
 func (s *Server) registerSnapshotTools(srv *mcp.Server) {
-	addWrite(s, srv, writeTool("sds_snapshot_create", "Create snapshot",
+	addWrite(s, srv, writeTool("haify_snapshot_create", "Create snapshot",
 		"Create a point-in-time snapshot of a DRBD resource's data volume. "+
 			"LVM uses copy-on-write snapshots (reserve enough COW space via size_gib); ZFS uses native snapshots."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in snapshotCreateIn) (*mcp.CallToolResult, opResult, error) {
@@ -85,11 +85,11 @@ func (s *Server) registerSnapshotTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("snapshot %s created for resource %s on %s", in.Name, in.Resource, in.Node)), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_snapshot_list", "List snapshots",
+	addRead(s, srv, readOnlyTool("haify_snapshot_list", "List snapshots",
 		"List snapshots of a DRBD resource's data volume on a node."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in snapshotListIn) (*mcp.CallToolResult, snapshotListOut, error) {
 			var (
-				infos []*sdspb.SnapshotInfo
+				infos []*haifypb.SnapshotInfo
 				err   error
 			)
 			if in.StorageType == "zfs" {
@@ -113,7 +113,7 @@ func (s *Server) registerSnapshotTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_snapshot_delete", "Delete snapshot",
+	addWrite(s, srv, destructiveTool("haify_snapshot_delete", "Delete snapshot",
 		"Delete a snapshot of a DRBD resource's data volume."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in snapshotIn) (*mcp.CallToolResult, opResult, error) {
 			if in.StorageType == "zfs" {
@@ -129,7 +129,7 @@ func (s *Server) registerSnapshotTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("snapshot %s of resource %s deleted on %s", in.Name, in.Resource, in.Node)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_snapshot_restore", "Restore snapshot",
+	addWrite(s, srv, destructiveTool("haify_snapshot_restore", "Restore snapshot",
 		"Roll a DRBD resource's data volume back to a snapshot. All changes since the snapshot are lost. "+
 			"The resource should be stopped (Secondary everywhere, unmounted) before restoring."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in snapshotIn) (*mcp.CallToolResult, opResult, error) {
@@ -179,12 +179,12 @@ type scheduleListOut struct {
 
 // registerSnapshotScheduleTools adds cron-driven snapshot schedule tools.
 func (s *Server) registerSnapshotScheduleTools(srv *mcp.Server) {
-	addWrite(s, srv, writeTool("sds_snapshot_schedule_create", "Create snapshot schedule",
+	addWrite(s, srv, writeTool("haify_snapshot_schedule_create", "Create snapshot schedule",
 		"Create (or replace) a cron-driven snapshot schedule for a resource. Snapshots are taken on every "+
 			"diskful node and pruned by a grandfather-father-son retention policy. One schedule per resource. "+
 			"Set at least one keep_* count."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in scheduleCreateIn) (*mcp.CallToolResult, opResult, error) {
-			keep := &sdspb.GFSRetention{
+			keep := &haifypb.GFSRetention{
 				Hourly: in.Hourly, Daily: in.Daily, Weekly: in.Weekly, Monthly: in.Monthly, Yearly: in.Yearly,
 			}
 			if err := s.client.CreateSnapshotSchedule(ctx, in.Resource, in.Cron, keep, !in.Disabled); err != nil {
@@ -193,7 +193,7 @@ func (s *Server) registerSnapshotScheduleTools(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("snapshot schedule for %s created (cron %q)", in.Resource, in.Cron)), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_snapshot_schedule_list", "List snapshot schedules",
+	addRead(s, srv, readOnlyTool("haify_snapshot_schedule_list", "List snapshot schedules",
 		"List all cron-driven snapshot schedules with their retention policy, last run and next run time."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, scheduleListOut, error) {
 			schedules, err := s.client.ListSnapshotSchedules(ctx)
@@ -217,7 +217,7 @@ func (s *Server) registerSnapshotScheduleTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_snapshot_schedule_delete", "Delete snapshot schedule",
+	addWrite(s, srv, destructiveTool("haify_snapshot_schedule_delete", "Delete snapshot schedule",
 		"Delete a snapshot schedule by name. Existing snapshots are kept; only future scheduled snapshots stop."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in scheduleNameIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.DeleteSnapshotSchedule(ctx, in.Name); err != nil {

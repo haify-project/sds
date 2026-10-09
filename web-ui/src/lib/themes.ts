@@ -30,7 +30,7 @@ const INK = 'oklch(0.205 0 0)';
 
 export const BASE_COLORS: ColorTheme[] = [
   {
-    name: 'sds',
+    name: 'haify',
     label: 'Haify',
     light: {
       primary: 'oklch(0.46 0.115 255)',
@@ -226,12 +226,12 @@ export const BASE_COLORS: ColorTheme[] = [
 /** Radius presets, in rem. */
 export const RADII = [0, 0.3, 0.5, 0.625, 0.75, 1] as const;
 
-export const DEFAULT_COLOR = 'sds';
+export const DEFAULT_COLOR = 'haify';
 export const DEFAULT_RADIUS = 0.625;
 
 export function getColorTheme(name: string): ColorTheme {
   // Fall back to the named default, not to whatever happens to sit at index 0
-  // — the two coincide today only because `sds` is first in the list.
+  // — the two coincide today only because `haify` is first in the list.
   return (
     BASE_COLORS.find((c) => c.name === name) ??
     BASE_COLORS.find((c) => c.name === DEFAULT_COLOR)!

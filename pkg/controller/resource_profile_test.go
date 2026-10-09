@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -30,7 +30,7 @@ func TestApplyResourceProfile_DefaultsAndOverrides(t *testing.T) {
 			"tier": "default",
 		},
 	}
-	req := &sdspb.CreateResourceRequest{
+	req := &haifypb.CreateResourceRequest{
 		Name:                "database",
 		Protocol:            "A",
 		SizeGb:              10,
@@ -63,7 +63,7 @@ func TestApplyResourceProfile_DefaultsAndOverrides(t *testing.T) {
 }
 
 func TestServerResourceProfileCRUD(t *testing.T) {
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "haify.db")}, zap.NewNop())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 
@@ -72,7 +72,7 @@ func TestServerResourceProfileCRUD(t *testing.T) {
 	server := NewServer(ctrl)
 	ctx := context.Background()
 
-	created, err := server.CreateResourceProfile(ctx, &sdspb.CreateResourceProfileRequest{Profile: &sdspb.ResourceProfile{
+	created, err := server.CreateResourceProfile(ctx, &haifypb.CreateResourceProfileRequest{Profile: &haifypb.ResourceProfile{
 		Name:        "production",
 		Protocol:    "C",
 		StorageType: "lvm-thin",
@@ -84,27 +84,27 @@ func TestServerResourceProfileCRUD(t *testing.T) {
 	require.True(t, created.Success, created.Message)
 	assert.Equal(t, "production", created.Profile.Name)
 
-	got, err := server.GetResourceProfile(ctx, &sdspb.GetResourceProfileRequest{Name: "production"})
+	got, err := server.GetResourceProfile(ctx, &haifypb.GetResourceProfileRequest{Name: "production"})
 	require.NoError(t, err)
 	require.True(t, got.Success, got.Message)
 	assert.Equal(t, uint32(3), got.Profile.Replicas)
 
-	listed, err := server.ListResourceProfiles(ctx, &sdspb.ListResourceProfilesRequest{})
+	listed, err := server.ListResourceProfiles(ctx, &haifypb.ListResourceProfilesRequest{})
 	require.NoError(t, err)
 	require.True(t, listed.Success, listed.Message)
 	require.Len(t, listed.Profiles, 1)
 
-	deleted, err := server.DeleteResourceProfile(ctx, &sdspb.DeleteResourceProfileRequest{Name: "production"})
+	deleted, err := server.DeleteResourceProfile(ctx, &haifypb.DeleteResourceProfileRequest{Name: "production"})
 	require.NoError(t, err)
 	require.True(t, deleted.Success, deleted.Message)
-	missing, err := server.GetResourceProfile(ctx, &sdspb.GetResourceProfileRequest{Name: "production"})
+	missing, err := server.GetResourceProfile(ctx, &haifypb.GetResourceProfileRequest{Name: "production"})
 	require.NoError(t, err)
 	assert.False(t, missing.Success)
 }
 
 func TestApplyResourceProfile_FillsEmptyVolumePools(t *testing.T) {
-	req := &sdspb.CreateResourceRequest{
-		Volumes: []*sdspb.VolumeSpec{
+	req := &haifypb.CreateResourceRequest{
+		Volumes: []*haifypb.VolumeSpec{
 			{SizeGb: 10},
 			{SizeGb: 20, Pool: "archive"},
 		},

@@ -53,7 +53,7 @@ systemctl stop @LOCKUNIT@.service 2>/dev/null
 // distinctive so the thaw can find that session, and only it, to kill: a
 // client disconnecting does not end a server-side SLEEP, so stopping the unit
 // alone would keep the lock until the sleep ran out.
-const mysqlLockQuery = "SELECT SLEEP(@HOLD@) AS sds_app_freeze"
+const mysqlLockQuery = "SELECT SLEEP(@HOLD@) AS haify_app_freeze"
 
 func freezeSteps(s Spec, b Binaries) string {
 	var steps string
@@ -115,8 +115,8 @@ fail() {
   exit 3
 }
 mountpoint -q @MOUNT@ || { echo "$(hostname): @MOUNT@ is not mounted; the app does not run here" >&2; exit 3; }
-cat > @THAWFILE@ <<'SDSTHAW'
-@THAW@SDSTHAW
+cat > @THAWFILE@ <<'HAIFYTHAW'
+@THAW@HAIFYTHAW
 chmod 0700 @THAWFILE@
 systemctl stop @THAWUNIT@.timer @THAWUNIT@.service 2>/dev/null
 systemctl reset-failed @THAWUNIT@.timer @THAWUNIT@.service 2>/dev/null

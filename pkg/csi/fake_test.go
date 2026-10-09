@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
-// fakeBackend is an in-memory SDSBackend for unit tests.
+// fakeBackend is an in-memory HaifyBackend for unit tests.
 type fakeBackend struct {
-	resources    map[string]*sdspb.ResourceInfo
-	nodes        []*sdspb.NodeInfo
-	pools        []*sdspb.PoolInfo // one entry per node hosting a pool
-	primary      map[string]string // resource -> node
+	resources    map[string]*haifypb.ResourceInfo
+	nodes        []*haifypb.NodeInfo
+	pools        []*haifypb.PoolInfo // one entry per node hosting a pool
+	primary      map[string]string   // resource -> node
 	createErr    error
-	profiles     map[string]*sdspb.ResourceProfile
+	profiles     map[string]*haifypb.ResourceProfile
 	listNodesErr error
 	listPoolsErr error
 	profileErr   error
-	requestCalls []*sdspb.CreateResourceRequest
+	requestCalls []*haifypb.CreateResourceRequest
 
 	// promoteErr, when set, makes PromoteForNode fail (e.g. simulating a
 	// controller that refused to force-promote because the node lacks quorum).
@@ -32,7 +32,7 @@ type fakeBackend struct {
 
 	// snapshots maps "<volumePath>|<node>" to the snapshot names taken there,
 	// mirroring the backend's per-node, per-backing-volume snapshot namespace.
-	snapshots     map[string][]*sdspb.SnapshotInfo
+	snapshots     map[string][]*haifypb.SnapshotInfo
 	snapCreateErr error
 	snapDeleteErr error
 	snapListErr   error
@@ -54,10 +54,10 @@ func (f *fakeBackend) CreateSnapshot(_ context.Context, volume, snapshotName, no
 	}
 	f.snapCreated = append(f.snapCreated, volume+"/"+snapshotName+"@"+node)
 	if f.snapshots == nil {
-		f.snapshots = map[string][]*sdspb.SnapshotInfo{}
+		f.snapshots = map[string][]*haifypb.SnapshotInfo{}
 	}
 	k := snapKey(volume, node)
-	f.snapshots[k] = append(f.snapshots[k], &sdspb.SnapshotInfo{Name: snapshotName, Volume: volume})
+	f.snapshots[k] = append(f.snapshots[k], &haifypb.SnapshotInfo{Name: snapshotName, Volume: volume})
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (f *fakeBackend) DeleteSnapshot(_ context.Context, volume, snapshotName, no
 	}
 	f.snapDeleted = append(f.snapDeleted, volume+"/"+snapshotName+"@"+node)
 	k := snapKey(volume, node)
-	var kept []*sdspb.SnapshotInfo
+	var kept []*haifypb.SnapshotInfo
 	for _, s := range f.snapshots[k] {
 		if s.GetName() != snapshotName {
 			kept = append(kept, s)
@@ -85,7 +85,7 @@ func (f *fakeBackend) PopulateVolume(_ context.Context, resource string, volumeI
 	return 1 << 20, nil
 }
 
-func (f *fakeBackend) ListSnapshots(_ context.Context, volume, node string) ([]*sdspb.SnapshotInfo, error) {
+func (f *fakeBackend) ListSnapshots(_ context.Context, volume, node string) ([]*haifypb.SnapshotInfo, error) {
 	if f.snapListErr != nil {
 		return nil, f.snapListErr
 	}
@@ -102,19 +102,19 @@ type createCall struct {
 }
 
 func newFakeBackend(nodeNames ...string) *fakeBackend {
-	f := &fakeBackend{resources: map[string]*sdspb.ResourceInfo{}, primary: map[string]string{}, profiles: map[string]*sdspb.ResourceProfile{}}
+	f := &fakeBackend{resources: map[string]*haifypb.ResourceInfo{}, primary: map[string]string{}, profiles: map[string]*haifypb.ResourceProfile{}}
 	for i, n := range nodeNames {
 		addr := fmt.Sprintf("10.0.0.%d", i+1)
-		f.nodes = append(f.nodes, &sdspb.NodeInfo{Name: n, Address: addr, State: "online"})
-		// By default every node hosts the pool used in tests ("vg0" -> "sds_vg0"),
+		f.nodes = append(f.nodes, &haifypb.NodeInfo{Name: n, Address: addr, State: "online"})
+		// By default every node hosts the pool used in tests ("vg0" -> "haify_vg0"),
 		// so pool-aware placement sees all nodes as candidates. Tests that need a
 		// node without the pool trim f.pools directly.
-		f.pools = append(f.pools, &sdspb.PoolInfo{Name: "sds_vg0", Node: addr})
+		f.pools = append(f.pools, &haifypb.PoolInfo{Name: "haify_vg0", Node: addr})
 	}
 	return f
 }
 
-func (f *fakeBackend) CreateResourceRequest(ctx context.Context, req *sdspb.CreateResourceRequest) error {
+func (f *fakeBackend) CreateResourceRequest(ctx context.Context, req *haifypb.CreateResourceRequest) error {
 	f.requestCalls = append(f.requestCalls, req)
 	if err := f.CreateResourceWithPoolAndType(ctx, req.Name, req.Port, req.Nodes, req.Protocol, req.SizeGb, req.Pool, req.StorageType, req.DrbdOptions); err != nil {
 		return err
@@ -125,7 +125,7 @@ func (f *fakeBackend) CreateResourceRequest(ctx context.Context, req *sdspb.Crea
 	return nil
 }
 
-func (f *fakeBackend) GetResourceProfile(_ context.Context, name string) (*sdspb.ResourceProfile, error) {
+func (f *fakeBackend) GetResourceProfile(_ context.Context, name string) (*haifypb.ResourceProfile, error) {
 	if f.profileErr != nil {
 		return nil, f.profileErr
 	}
@@ -149,7 +149,7 @@ func (f *fakeBackend) onlyPoolOnNodes(names ...string) {
 			addrs[n.GetAddress()] = true
 		}
 	}
-	var pruned []*sdspb.PoolInfo
+	var pruned []*haifypb.PoolInfo
 	for _, p := range f.pools {
 		if addrs[p.GetNode()] {
 			pruned = append(pruned, p)
@@ -163,12 +163,12 @@ func (f *fakeBackend) CreateResourceWithPoolAndType(_ context.Context, name stri
 		return f.createErr
 	}
 	f.createCalls = append(f.createCalls, createCall{name, nodes, pool, storageType, sizeGB, port})
-	vols := []*sdspb.VolumeInfo{{VolumeId: 0, Device: "/dev/drbd100", SizeGb: uint64(sizeGB), Pool: pool}}
-	f.resources[name] = &sdspb.ResourceInfo{Name: name, Nodes: nodes, Volumes: vols}
+	vols := []*haifypb.VolumeInfo{{VolumeId: 0, Device: "/dev/drbd100", SizeGb: uint64(sizeGB), Pool: pool}}
+	f.resources[name] = &haifypb.ResourceInfo{Name: name, Nodes: nodes, Volumes: vols}
 	return nil
 }
 
-func (f *fakeBackend) GetResource(_ context.Context, name string) (*sdspb.ResourceInfo, error) {
+func (f *fakeBackend) GetResource(_ context.Context, name string) (*haifypb.ResourceInfo, error) {
 	r, ok := f.resources[name]
 	if !ok {
 		return nil, fmt.Errorf("resource %q not found", name)
@@ -176,8 +176,8 @@ func (f *fakeBackend) GetResource(_ context.Context, name string) (*sdspb.Resour
 	return r, nil
 }
 
-func (f *fakeBackend) ListResources(context.Context) ([]*sdspb.ResourceInfo, error) {
-	out := make([]*sdspb.ResourceInfo, 0, len(f.resources))
+func (f *fakeBackend) ListResources(context.Context) ([]*haifypb.ResourceInfo, error) {
+	out := make([]*haifypb.ResourceInfo, 0, len(f.resources))
 	for _, r := range f.resources {
 		out = append(out, r)
 	}
@@ -189,22 +189,22 @@ func (f *fakeBackend) DeleteResource(_ context.Context, name string) error {
 	return nil
 }
 
-func (f *fakeBackend) ListNodes(context.Context) ([]*sdspb.NodeInfo, error) {
+func (f *fakeBackend) ListNodes(context.Context) ([]*haifypb.NodeInfo, error) {
 	if f.listNodesErr != nil {
 		return nil, f.listNodesErr
 	}
 	return f.nodes, nil
 }
 
-func (f *fakeBackend) ListPools(context.Context) ([]*sdspb.PoolInfo, error) {
+func (f *fakeBackend) ListPools(context.Context) ([]*haifypb.PoolInfo, error) {
 	if f.listPoolsErr != nil {
 		return nil, f.listPoolsErr
 	}
 	return f.pools, nil
 }
 
-func (f *fakeBackend) RegisterNode(_ context.Context, name, address string) (*sdspb.NodeInfo, error) {
-	n := &sdspb.NodeInfo{Name: name, Address: address, State: "online"}
+func (f *fakeBackend) RegisterNode(_ context.Context, name, address string) (*haifypb.NodeInfo, error) {
+	n := &haifypb.NodeInfo{Name: name, Address: address, State: "online"}
 	f.nodes = append(f.nodes, n)
 	return n, nil
 }
@@ -251,4 +251,4 @@ func (f *fakeBackend) ResizeVolume(_ context.Context, resource string, volumeID 
 	return nil
 }
 
-var _ SDSBackend = (*fakeBackend)(nil)
+var _ HaifyBackend = (*fakeBackend)(nil)

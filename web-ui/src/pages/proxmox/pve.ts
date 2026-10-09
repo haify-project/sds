@@ -4,12 +4,12 @@ import { isPeerSyncing } from '../resources/replication';
 
 // What the Proxmox VE storage plugin (deploy/proxmox) creates, read back from
 // the resource list. Every resource it creates carries this label, and its
-// name encodes the volume PVE knows it by (SDS/Naming.pm):
+// name encodes the volume PVE knows it by (Haify/Naming.pm):
 //
 //   <prefix>-<vmid>-<n>          vm-<vmid>-disk-<n>
 //   <prefix>-base-<vmid>-<n>     base-<vmid>-disk-<n>   (a template's disk)
 //   <prefix>-<vmid>-<name>       vm-<vmid>-<name>       (cloudinit, state-…, fleece-…)
-const pveManagedLabel = 'sds.pve/managed-by';
+const pveManagedLabel = 'haify.pve/managed-by';
 
 export function isPveManaged(resource: Resource): boolean {
   return resource.labels?.[pveManagedLabel] === 'pve';

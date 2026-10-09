@@ -9,19 +9,19 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/mcpauth"
-	"github.com/haify-project/sds/pkg/mcpserver"
+	"github.com/haify-project/haify/pkg/mcpauth"
+	"github.com/haify-project/haify/pkg/mcpserver"
 )
 
 // defaultTokenStore lives on the Self-HA DRBD mount so the tokens follow the
 // server when it moves to another node.
-const defaultTokenStore = "/var/lib/sds/mcp/tokens.json"
+const defaultTokenStore = "/var/lib/haify/mcp/tokens.json"
 
 func tokenStorePath(flag string) string {
 	if flag != "" {
 		return flag
 	}
-	if env := os.Getenv("SDS_MCP_TOKENS"); env != "" {
+	if env := os.Getenv("HAIFY_MCP_TOKENS"); env != "" {
 		return env
 	}
 	return defaultTokenStore
@@ -44,7 +44,7 @@ func serveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve MCP over HTTP with token authentication, for Claude Code, ChatGPT and other remote clients",
-		Long: "Serves the Haify tools at /mcp. Every request needs a token made with `sds-mcp token create`;\n" +
+		Long: "Serves the Haify tools at /mcp. Every request needs a token made with `haify-mcp token create`;\n" +
 			"the token's role decides which tools exist for that connection: read (inspect only), operate\n" +
 			"(plus create/grow/snapshot/start/mount) or admin (everything, including delete and evict).\n\n" +
 			"With --public-url the server also runs the OAuth flow that ChatGPT and claude.ai use to add a\n" +
@@ -71,16 +71,16 @@ func serveCmd() *cobra.Command {
 				return err
 			}
 			if list, _ := store.List(); len(list) == 0 {
-				logger.Warn("no tokens exist yet; every request will be refused until one is made with `sds-mcp token create`",
+				logger.Warn("no tokens exist yet; every request will be refused until one is made with `haify-mcp token create`",
 					zap.String("store", tokenStorePath(tokens)))
 			}
-			sdsClient, err := conn.dial()
+			haifyClient, err := conn.dial()
 			if err != nil {
 				return err
 			}
-			defer func() { _ = sdsClient.Close() }()
+			defer func() { _ = haifyClient.Close() }()
 
-			return mcpserver.ServeHTTP(cmd.Context(), sdsClient, logger, mcpserver.Options{Version: version}, mcpserver.HTTPOptions{
+			return mcpserver.ServeHTTP(cmd.Context(), haifyClient, logger, mcpserver.Options{Version: version}, mcpserver.HTTPOptions{
 				Listen: listen, AdminListen: adminListen, PublicURL: publicURL, Tokens: store, MaxRole: role,
 				TLSCert: tlsCert, TLSKey: tlsKey, TrustProxy: trustProxy,
 			})
@@ -91,7 +91,7 @@ func serveCmd() *cobra.Command {
 	f.StringVar(&listen, "listen", "127.0.0.1:43871", "address to listen on")
 	f.StringVar(&adminListen, "admin-listen", "", "second address for the local network that is not capped by --max-role (bearer tokens only, no OAuth); never proxy it")
 	f.StringVar(&publicURL, "public-url", "", "URL clients reach this server at, e.g. https://mcp.example.com; enables OAuth for ChatGPT and claude.ai")
-	f.StringVar(&tokens, "tokens", "", "token store (default: SDS_MCP_TOKENS env, else "+defaultTokenStore+")")
+	f.StringVar(&tokens, "tokens", "", "token store (default: HAIFY_MCP_TOKENS env, else "+defaultTokenStore+")")
 	f.StringVar(&maxRole, "max-role", "admin", "highest role any token may use here: read, operate or admin")
 	f.StringVar(&tlsCert, "tls-cert", "", "serve HTTPS with this certificate")
 	f.StringVar(&tlsKey, "tls-key", "", "private key for --tls-cert")
@@ -106,7 +106,7 @@ func serveCmd() *cobra.Command {
 func tokenCmd() *cobra.Command {
 	var tokens string
 	cmd := &cobra.Command{Use: "token", Short: "Create, list and revoke access tokens for the remote server"}
-	cmd.PersistentFlags().StringVar(&tokens, "tokens", "", "token store (default: SDS_MCP_TOKENS env, else "+defaultTokenStore+")")
+	cmd.PersistentFlags().StringVar(&tokens, "tokens", "", "token store (default: HAIFY_MCP_TOKENS env, else "+defaultTokenStore+")")
 
 	var (
 		name    string
@@ -136,7 +136,7 @@ func tokenCmd() *cobra.Command {
 				until = "expires " + t.Expires.Local().Format("2006-01-02 15:04")
 			}
 			fmt.Printf("Token %q (%s), %s. It is not stored and cannot be shown again:\n\n  %s\n\n", t.Name, t.Role, until, secret)
-			fmt.Printf("Claude Code:\n  claude mcp add --transport http sds %s --header \"Authorization: Bearer %s\"\n\n", url, secret)
+			fmt.Printf("Claude Code:\n  claude mcp add --transport http haify %s --header \"Authorization: Bearer %s\"\n\n", url, secret)
 			fmt.Printf("ChatGPT and claude.ai add the server by URL (%s) and ask for this token when they send you to the authorization page.\n", url)
 			return nil
 		},

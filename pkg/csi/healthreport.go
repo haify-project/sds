@@ -31,7 +31,7 @@ const (
 // Events are posted on transitions only. Every sweep would otherwise repeat the
 // same warning, and a PVC with fifty identical events is one people stop reading.
 type HealthReporter struct {
-	backend  SDSBackend
+	backend  HaifyBackend
 	kube     kubernetes.Interface
 	recorder record.EventRecorder
 	interval time.Duration
@@ -45,7 +45,7 @@ type HealthReporter struct {
 }
 
 // NewHealthReporter builds a reporter. interval is how often volumes are swept.
-func NewHealthReporter(b SDSBackend, kube kubernetes.Interface, recorder record.EventRecorder, interval time.Duration, log *zap.Logger) *HealthReporter {
+func NewHealthReporter(b HaifyBackend, kube kubernetes.Interface, recorder record.EventRecorder, interval time.Duration, log *zap.Logger) *HealthReporter {
 	if log == nil {
 		log = zap.NewNop()
 	}

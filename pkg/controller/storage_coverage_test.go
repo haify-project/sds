@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,15 +17,15 @@ func TestStorageLivePoolDiscovery(t *testing.T) {
 	dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 		switch {
 		case strings.Contains(cmd, "vgs"):
-			return successExecResult(hosts, "sds_fast|107374182400|53687091200|/dev/sdb\nsds_fast|107374182400|53687091200|/dev/sdc\nforeign|1|1|/dev/sdd"), nil
+			return successExecResult(hosts, "haify_fast|107374182400|53687091200|/dev/sdb\nhaify_fast|107374182400|53687091200|/dev/sdc\nforeign|1|1|/dev/sdd"), nil
 		case strings.Contains(cmd, "zpool list"):
-			return successExecResult(hosts, "sds_tank 214748364800 161061273600 25"), nil
+			return successExecResult(hosts, "haify_tank 214748364800 161061273600 25"), nil
 		default:
 			return successExecResult(hosts, ""), nil
 		}
 	}
 	dep.zfsListPoolsFunc = func(_ context.Context, hosts []string) (*deployment.ExecResult, error) {
-		return successExecResult(hosts, "sds_tank 214748364800 161061273600 25\nforeign 1 1 0"), nil
+		return successExecResult(hosts, "haify_tank 214748364800 161061273600 25\nforeign 1 1 0"), nil
 	}
 	ctrl := newBasicTestController(dep)
 	ctrl.hosts = []string{"10.0.0.1"}
@@ -34,10 +34,10 @@ func TestStorageLivePoolDiscovery(t *testing.T) {
 	pools, err := ctrl.storage.ListPools(context.Background())
 	require.NoError(t, err)
 	require.Len(t, pools, 2)
-	assert.Equal(t, "sds_fast", pools[0].Name)
+	assert.Equal(t, "haify_fast", pools[0].Name)
 	assert.Equal(t, []string{"/dev/sdb", "/dev/sdc"}, pools[0].Devices)
 	assert.Equal(t, uint64(100), pools[0].TotalGB)
-	assert.Equal(t, "sds_tank", pools[1].Name)
+	assert.Equal(t, "haify_tank", pools[1].Name)
 	assert.Equal(t, "zfs", pools[1].Type)
 
 	got, err := ctrl.storage.GetPool(context.Background(), "fast", "10.0.0.1")
@@ -56,8 +56,8 @@ func TestStoragePersistedFallbacks(t *testing.T) {
 	ctrl := newBasicTestController(dep)
 	ctrl.db = newTestDB(t)
 	ctx := context.Background()
-	require.NoError(t, ctrl.db.SavePool(ctx, &database.Pool{Name: "sds_fast", Type: "vg", Node: "n1", TotalGB: 20, FreeGB: 10, Devices: "/dev/sdb"}))
-	require.NoError(t, ctrl.db.SavePool(ctx, &database.Pool{Name: "sds_tank", Type: "zfs", Node: "n1", TotalGB: 40, FreeGB: 30, Devices: "/dev/sdc"}))
+	require.NoError(t, ctrl.db.SavePool(ctx, &database.Pool{Name: "haify_fast", Type: "vg", Node: "n1", TotalGB: 20, FreeGB: 10, Devices: "/dev/sdb"}))
+	require.NoError(t, ctrl.db.SavePool(ctx, &database.Pool{Name: "haify_tank", Type: "zfs", Node: "n1", TotalGB: 40, FreeGB: 30, Devices: "/dev/sdc"}))
 
 	pools, err := ctrl.storage.ListPools(ctx)
 	require.NoError(t, err)
@@ -79,11 +79,11 @@ func TestStoragePersistedFallbacks(t *testing.T) {
 func TestStorageSnapshotParsingAndRestore(t *testing.T) {
 	dep := &fakeDeploymentClient{}
 	dep.zfsListSnapshotsFunc = func(_ context.Context, hosts []string, dataset string) (*deployment.ExecResult, error) {
-		assert.Equal(t, "sds_tank/data", dataset)
-		return successExecResult(hosts, "sds_tank/data@snap1 1G 1G 2026-07-23\ninvalid"), nil
+		assert.Equal(t, "haify_tank/data", dataset)
+		return successExecResult(hosts, "haify_tank/data@snap1 1G 1G 2026-07-23\ninvalid"), nil
 	}
 	dep.lvListSnapshotsFunc = func(_ context.Context, hosts []string, vg string) (*deployment.ExecResult, error) {
-		assert.Equal(t, "sds_fast", vg)
+		assert.Equal(t, "haify_fast", vg)
 		// "name|size_bytes|time|origin" — pipe-separated because lv_time
 		// carries spaces. The previous fixture used two space-separated
 		// columns, which is what the command emitted back when it still had
@@ -95,7 +95,7 @@ func TestStorageSnapshotParsingAndRestore(t *testing.T) {
 	mergeCalled := false
 	dep.lvMergeSnapshotFunc = func(_ context.Context, hosts []string, vg, snapshot string) (*deployment.ExecResult, error) {
 		mergeCalled = true
-		assert.Equal(t, "sds_fast", vg)
+		assert.Equal(t, "haify_fast", vg)
 		assert.Equal(t, "snap1", snapshot)
 		return successExecResult(hosts, "merged"), nil
 	}

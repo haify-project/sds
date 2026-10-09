@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -17,11 +17,11 @@ import (
 // ListVolumes and ListSnapshots use it to leave alone every resource the
 // cluster runs for other reasons, such as its own control plane.
 const (
-	managedByLabel = "sds.csi/managed-by"
+	managedByLabel = "haify.csi/managed-by"
 	managedByValue = "csi"
 )
 
-func isCSIVolume(r *sdspb.ResourceInfo) bool {
+func isCSIVolume(r *haifypb.ResourceInfo) bool {
 	return r.GetLabels()[managedByLabel] == managedByValue
 }
 
@@ -118,7 +118,7 @@ func (s *controllerServer) GetCapacity(ctx context.Context, req *csi.GetCapacity
 }
 
 // csiVolume renders a resource as the CSI Volume a list or get returns.
-func csiVolume(r *sdspb.ResourceInfo) *csi.Volume {
+func csiVolume(r *haifypb.ResourceInfo) *csi.Volume {
 	var capacity int64
 	if vols := r.GetVolumes(); len(vols) > 0 {
 		capacity = int64(vols[0].GetSizeGb()) * giB
@@ -137,7 +137,7 @@ func (s *controllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumes
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list resources: %v", err)
 	}
-	var vols []*sdspb.ResourceInfo
+	var vols []*haifypb.ResourceInfo
 	for _, r := range all {
 		if isCSIVolume(r) {
 			vols = append(vols, r)
@@ -230,7 +230,7 @@ func (s *controllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnaps
 }
 
 // snapshotsOf lists a volume's CSI snapshots across all of its replica nodes.
-func (s *controllerServer) snapshotsOf(ctx context.Context, r *sdspb.ResourceInfo) []*csi.Snapshot {
+func (s *controllerServer) snapshotsOf(ctx context.Context, r *haifypb.ResourceInfo) []*csi.Snapshot {
 	var out []*csi.Snapshot
 	for _, node := range r.GetNodes() {
 		out = append(out, s.snapshotsOn(ctx, r, node)...)
@@ -245,7 +245,7 @@ func (s *controllerServer) snapshotsOf(ctx context.Context, r *sdspb.ResourceInf
 // Only names carrying snapshotNamePrefix are the driver's own. The same LV also
 // carries the controller's scheduled snapshots, and reporting those would hand
 // the CO objects it never created and must never delete.
-func (s *controllerServer) snapshotsOn(ctx context.Context, r *sdspb.ResourceInfo, node string) []*csi.Snapshot {
+func (s *controllerServer) snapshotsOn(ctx context.Context, r *haifypb.ResourceInfo, node string) []*csi.Snapshot {
 	volumePath, _, err := snapshotSource(r)
 	if err != nil {
 		return nil

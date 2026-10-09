@@ -3,18 +3,18 @@
 # Step 5 (start the controller, register the nodes, create the pool) and
 # step 6 (Self-HA).
 
-REST_PORT=${SDS_REST_PORT:-3375}
+REST_PORT=${HAIFY_REST_PORT:-3375}
 
-# sds_get <path>: GET from the controller's REST API on the controller node.
+# haify_get <path>: GET from the controller's REST API on the controller node.
 # Empty output when the controller does not answer (yet).
-sds_get() {
+haify_get() {
 	check_on "$CONTROLLER_NODE" "curl -sf -m 10 http://127.0.0.1:$REST_PORT$1" 2>/dev/null || true
 }
 
-# registered_nodes prints "<name>\t<address>" per sds node.
+# registered_nodes prints "<name>\t<address>" per haify node.
 registered_nodes() {
 	# shellcheck disable=SC2016 # Perl, not shell
-	sds_get /v1/nodes | json_query '
+	haify_get /v1/nodes | json_query '
 		printf "%s\t%s\n", $_->{name} // "", $_->{address} // "" for @{ $j->{nodes} || [] };
 	' || true
 }
@@ -22,16 +22,16 @@ registered_nodes() {
 # pools prints "<name>\t<node>" per pool and node.
 pools() {
 	# shellcheck disable=SC2016 # Perl, not shell
-	sds_get /v1/pools | json_query '
+	haify_get /v1/pools | json_query '
 		printf "%s\t%s\n", $_->{name} // "", $_->{node} // "" for @{ $j->{pools} || [] };
 	' || true
 }
 
-# running_controllers prints every node with an active sds-controller.
+# running_controllers prints every node with an active haify-controller.
 running_controllers() {
 	local n
 	for n in "${NODES[@]}"; do
-		if check_on "$n" "systemctl is-active --quiet sds-controller" >/dev/null 2>&1; then
+		if check_on "$n" "systemctl is-active --quiet haify-controller" >/dev/null 2>&1; then
 			printf '%s\n' "$n"
 		fi
 	done
@@ -42,7 +42,7 @@ running_controllers() {
 self_ha_present() {
 	local n
 	for n in "${CONTROLLER_NODES[@]}"; do
-		if check_on "$n" "drbdadm role sds-meta" >/dev/null 2>&1; then
+		if check_on "$n" "drbdadm role haify-meta" >/dev/null 2>&1; then
 			return 0
 		fi
 	done
@@ -59,7 +59,7 @@ locate_controller() {
 	case "${#running[@]}" in
 		0) return 1 ;;
 		1) CONTROLLER_NODE="${running[0]}" ;;
-		*) die "sds-controller is running on several nodes (${running[*]}), each with its own database. Stop all but one." ;;
+		*) die "haify-controller is running on several nodes (${running[*]}), each with its own database. Stop all but one." ;;
 	esac
 	return 0
 }
@@ -70,12 +70,12 @@ start_controller() {
 		return 0
 	fi
 	if self_ha_present; then
-		die "Self-HA is configured (sds-meta exists) but no controller is running. drbd-reactor starts it;
-do not start it by hand. Check on each node: drbd-reactorctl status sds-meta; journalctl -u sds-controller"
+		die "Self-HA is configured (haify-meta exists) but no controller is running. drbd-reactor starts it;
+do not start it by hand. Check on each node: drbd-reactorctl status haify-meta; journalctl -u haify-controller"
 	fi
-	run_on "$CONTROLLER_NODE" "systemctl enable --now sds-controller"
+	run_on "$CONTROLLER_NODE" "systemctl enable --now haify-controller"
 	# The REST gateway comes up a moment after the unit is active.
-	run_on "$CONTROLLER_NODE" "for i in \$(seq 1 30); do sds node list >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'sds-controller did not answer within 60s: journalctl -u sds-controller' >&2; exit 1"
+	run_on "$CONTROLLER_NODE" "for i in \$(seq 1 30); do haify node list >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'haify-controller did not answer within 60s: journalctl -u haify-controller' >&2; exit 1"
 }
 
 register_nodes() {
@@ -87,14 +87,14 @@ register_nodes() {
 		if [ -n "$addr" ]; then
 			note "$n: registered ($addr)"
 			[ "$addr" = "${NODE_IP[$n]}" ] ||
-				warn "$n is registered with $addr, PVE has ${NODE_IP[$n]}; left as is (change it with: sds node set-address $n <ip>)"
+				warn "$n is registered with $addr, PVE has ${NODE_IP[$n]}; left as is (change it with: haify node set-address $n <ip>)"
 		elif [ -n "$regname" ]; then
 			# The plugin attaches and promotes a disk by the PVE node name, so
-			# the same machine under another sds name is unusable for guests.
-			die "${NODE_IP[$n]} is registered in sds as '$regname', but its PVE name is '$n'; sds node names must equal PVE node names.
-Unregister it (sds node unregister $regname, once nothing uses it) and rerun with --from-step 5."
+			# the same machine under another haify name is unusable for guests.
+			die "${NODE_IP[$n]} is registered in haify as '$regname', but its PVE name is '$n'; haify node names must equal PVE node names.
+Unregister it (haify node unregister $regname, once nothing uses it) and rerun with --from-step 5."
 		else
-			run_on "$CONTROLLER_NODE" "sds node register --name $(q "$n") --address $(q "${NODE_IP[$n]}")"
+			run_on "$CONTROLLER_NODE" "haify node register --name $(q "$n") --address $(q "${NODE_IP[$n]}")"
 		fi
 	done
 }
@@ -151,7 +151,7 @@ device_problem() {
 # pool_vg_present <node>: the pool's volume group is already on the node, so
 # its disks rightly carry LVM signatures and are not checked again.
 pool_vg_present() {
-	check_on "$1" "vgs $(q "sds_${POOL#sds_}")" >/dev/null 2>&1
+	check_on "$1" "vgs $(q "haify_${POOL#haify_}")" >/dev/null 2>&1
 }
 
 # verify_devices runs before step 2: a disk that cannot be used stops the
@@ -193,10 +193,10 @@ prepare_devices() {
 }
 
 # pool_on <pools output> <node>: true when the bootstrap pool exists there.
-# The controller stores LVM pools with an sds_ prefix (vg0 -> sds_vg0), and
+# The controller stores LVM pools with an haify_ prefix (vg0 -> haify_vg0), and
 # its pool list names a node by address, not by name.
 pool_on() {
-	printf '%s\n' "$1" | awk -F'\t' -v a="$POOL" -v b="sds_${POOL#sds_}" -v n="$2" -v ip="$(node_ip "$2")" \
+	printf '%s\n' "$1" | awk -F'\t' -v a="$POOL" -v b="haify_${POOL#haify_}" -v n="$2" -v ip="$(node_ip "$2")" \
 		'($1 == a || $1 == b) && ($2 == n || $2 == ip) { found = 1 } END { exit !found }'
 }
 
@@ -210,15 +210,15 @@ create_pools() {
 		fi
 		split_csv "${NODE_DEVICES[$n]:-$DEVICES}" devs
 		prepare_devices "$n" "${devs[@]}"
-		run_on "$CONTROLLER_NODE" "sds pool create --name $(q "$POOL") --type $(q "$POOL_TYPE") --nodes $(q "$n") --devices $(q "$(join_by , "${devs[@]}")")"
+		run_on "$CONTROLLER_NODE" "haify pool create --name $(q "$POOL") --type $(q "$POOL_TYPE") --nodes $(q "$n") --devices $(q "$(join_by , "${devs[@]}")")"
 		created=1
 	done
 	[ "$created" = 1 ] && [ "$DRY_RUN" = 0 ] || return 0
-	# `sds pool create` reports a per-node failure on stderr and still exits 0
+	# `haify pool create` reports a per-node failure on stderr and still exits 0
 	# when another node succeeded, so the result is read back, not assumed.
 	have=$(pools)
 	for n in "${STORAGE_NODES[@]}"; do
-		pool_on "$have" "$n" || die "pool $POOL was not created on $n; see the output above and journalctl -u sds-controller on $CONTROLLER_NODE"
+		pool_on "$have" "$n" || die "pool $POOL was not created on $n; see the output above and journalctl -u haify-controller on $CONTROLLER_NODE"
 	done
 }
 
@@ -231,7 +231,7 @@ step_register_and_pool() {
 
 # ---------------------------------------------------------------------------
 # Step 6: Self-HA. The controller's database moves onto a DRBD resource
-# (sds-meta) and drbd-reactor runs the controller on one storage node at a
+# (haify-meta) and drbd-reactor runs the controller on one storage node at a
 # time behind the VIP, so losing the controller node loses no control plane.
 # ---------------------------------------------------------------------------
 
@@ -247,18 +247,18 @@ step_self_ha() {
 		return 0
 	fi
 	local status vip_addr
-	status=$(check_on "$CONTROLLER_NODE" "sds ha self status" 2>/dev/null || true)
+	status=$(check_on "$CONTROLLER_NODE" "haify ha self status" 2>/dev/null || true)
 	if printf '%s\n' "$status" | grep -q 'self-HA: enabled'; then
 		note "already enabled; active controller on $CONTROLLER_NODE"
 		return 0
 	fi
 	vip_addr="$(rest_addr "${VIP%/*}"):3374"
-	run_on "$CONTROLLER_NODE" "sds ha self enable --vip $(q "$VIP") --pool $(q "$POOL") --nodes $(q "$(join_by , "${STORAGE_NODES[@]}")")"
+	run_on "$CONTROLLER_NODE" "haify ha self enable --vip $(q "$VIP") --pool $(q "$POOL") --nodes $(q "$(join_by , "${STORAGE_NODES[@]}")")"
 	# enable returns once the handoff has started; the controller then
 	# restarts under drbd-reactor. Wait until it answers on the VIP again.
-	run_on "$CONTROLLER_NODE" "for i in \$(seq 1 60); do sds -c $(q "$vip_addr") ha self status 2>/dev/null | grep 'Active node:' | grep -qv unknown && exit 0; sleep 3; done; echo 'the controller did not come back on the VIP within 3 minutes: see /var/log/sds/selfha-handoff.log on $(q "$CONTROLLER_NODE") and journalctl -u sds-controller' >&2; exit 1"
+	run_on "$CONTROLLER_NODE" "for i in \$(seq 1 60); do haify -c $(q "$vip_addr") ha self status 2>/dev/null | grep 'Active node:' | grep -qv unknown && exit 0; sleep 3; done; echo 'the controller did not come back on the VIP within 3 minutes: see /var/log/haify/selfha-handoff.log on $(q "$CONTROLLER_NODE") and journalctl -u haify-controller' >&2; exit 1"
 	if [ "$DRY_RUN" = 0 ]; then
-		locate_controller || die "Self-HA reports an active node, but no node runs sds-controller"
+		locate_controller || die "Self-HA reports an active node, but no node runs haify-controller"
 		log "Self-HA enabled; controller active on $CONTROLLER_NODE, VIP $VIP"
 	fi
 }

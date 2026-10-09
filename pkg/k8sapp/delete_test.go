@@ -14,7 +14,7 @@ import (
 )
 
 func TestDeleteKeepsTheDataUnlessAsked(t *testing.T) {
-	m := sdsCluster()
+	m := haifyCluster()
 	ctx := context.Background()
 	_, err := m.Create(ctx, Request{Template: "postgres", Name: "orders", Namespace: "shop"})
 	require.NoError(t, err)
@@ -60,8 +60,8 @@ func TestDeleteKeepsTheDataUnlessAsked(t *testing.T) {
 	assert.True(t, apierrors.IsNotFound(err))
 }
 
-func TestDeleteRefusesWhatSDSDidNotCreate(t *testing.T) {
-	m := sdsCluster()
+func TestDeleteRefusesWhatHaifyDidNotCreate(t *testing.T) {
+	m := haifyCluster()
 	ctx := context.Background()
 	_, err := m.kube.AppsV1().Deployments("default").Create(ctx, &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default"}}, metav1.CreateOptions{})

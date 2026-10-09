@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // A DRBD .res file only applies to a host that finds itself in one of its
@@ -23,10 +23,10 @@ func TestGenerateDrbdConfigUsesHostnamesNotNodeNames(t *testing.T) {
 	// Node names deliberately differ from hostnames, as they do whenever a host
 	// is registered under a label of the operator's choosing.
 	ctrl.nodes.nodes["10.0.0.1"] = &NodeInfo{
-		Name: "node-a", Address: "10.0.0.1", Hostname: "lima-sds-a", State: NodeStateOnline,
+		Name: "node-a", Address: "10.0.0.1", Hostname: "lima-haify-a", State: NodeStateOnline,
 	}
 	ctrl.nodes.nodes["10.0.0.2"] = &NodeInfo{
-		Name: "node-b", Address: "10.0.0.2", Hostname: "sds-b", State: NodeStateOnline,
+		Name: "node-b", Address: "10.0.0.2", Hostname: "haify-b", State: NodeStateOnline,
 	}
 	ctrl.hostsMap["node-a"] = "10.0.0.1"
 	ctrl.hostsMap["node-b"] = "10.0.0.2"
@@ -38,8 +38,8 @@ func TestGenerateDrbdConfigUsesHostnamesNotNodeNames(t *testing.T) {
 		"C", "lvm", nil, nil,
 	)
 
-	assert.Contains(t, cfg, "on lima-sds-a {", "must key the section by hostname")
-	assert.Contains(t, cfg, "on sds-b {", "must key the section by hostname")
+	assert.Contains(t, cfg, "on lima-haify-a {", "must key the section by hostname")
+	assert.Contains(t, cfg, "on haify-b {", "must key the section by hostname")
 	assert.NotContains(t, cfg, "on node-a {", "Haify node name must not reach DRBD")
 	assert.NotContains(t, cfg, "on node-b {", "Haify node name must not reach DRBD")
 }
@@ -51,9 +51,9 @@ func TestGenerateDrbdConfigMeshUsesHostnames(t *testing.T) {
 	ctrl := newBasicTestController(dep)
 
 	for _, n := range []struct{ name, addr, host string }{
-		{"node-a", "10.0.0.1", "lima-sds-a"},
-		{"node-b", "10.0.0.2", "sds-b"},
-		{"node-d", "10.0.0.4", "sds-d"},
+		{"node-a", "10.0.0.1", "lima-haify-a"},
+		{"node-b", "10.0.0.2", "haify-b"},
+		{"node-d", "10.0.0.4", "haify-d"},
 	} {
 		ctrl.nodes.nodes[n.addr] = &NodeInfo{
 			Name: n.name, Address: n.addr, Hostname: n.host, State: NodeStateOnline,
@@ -76,9 +76,9 @@ func TestGenerateDrbdConfigMeshUsesHostnames(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, meshLine, "expected a connection-mesh hosts line")
-	assert.Contains(t, meshLine, "lima-sds-a")
-	assert.Contains(t, meshLine, "sds-b")
-	assert.Contains(t, meshLine, "sds-d")
+	assert.Contains(t, meshLine, "lima-haify-a")
+	assert.Contains(t, meshLine, "haify-b")
+	assert.Contains(t, meshLine, "haify-d")
 	assert.NotContains(t, meshLine, "node-a")
 }
 
@@ -94,11 +94,11 @@ func TestGetDRBDNameByRefFallsBackToRef(t *testing.T) {
 	assert.Equal(t, "stranger", ctrl.nodes.GetDRBDNameByRef("stranger"), "unknown node")
 
 	ctrl.nodes.nodes["10.0.0.2"] = &NodeInfo{
-		Name: "node-b", Address: "10.0.0.2", Hostname: "sds-b", State: NodeStateOnline,
+		Name: "node-b", Address: "10.0.0.2", Hostname: "haify-b", State: NodeStateOnline,
 	}
-	assert.Equal(t, "sds-b", ctrl.nodes.GetDRBDNameByRef("node-b"), "by name")
-	assert.Equal(t, "sds-b", ctrl.nodes.GetDRBDNameByRef("10.0.0.2"), "by address")
-	assert.Equal(t, "sds-b", ctrl.nodes.GetDRBDNameByRef("sds-b"), "by hostname")
+	assert.Equal(t, "haify-b", ctrl.nodes.GetDRBDNameByRef("node-b"), "by name")
+	assert.Equal(t, "haify-b", ctrl.nodes.GetDRBDNameByRef("10.0.0.2"), "by address")
+	assert.Equal(t, "haify-b", ctrl.nodes.GetDRBDNameByRef("haify-b"), "by hostname")
 }
 
 // Device minors are a node-global namespace and a resource's minor has to be

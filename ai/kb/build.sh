@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the Haify shared knowledge base: the knowledge that is the same on every
 # cluster Haify runs on. One file, versioned with the code, installed on every
-# node and attached to sds-ai read-only (SDS_AI_SHARED_KNOWLEDGE_DB). What a
+# node and attached to haify-ai read-only (HAIFY_AI_SHARED_KNOWLEDGE_DB). What a
 # cluster learns about itself — incident notes, what was tried on which machine
 # — goes into that cluster's own knowledge base, never into this one.
 #
@@ -10,7 +10,7 @@
 #   - the Haify code graph (.understand-anything/knowledge-graph.json, not in the
 #     repository: generate it with Understand-Anything first, or the step is
 #     skipped) and source
-#   - the sds reference, generated from the binary this commit builds, so
+#   - the haify reference, generated from the binary this commit builds, so
 #     it can never describe flags the installed CLI does not have
 #   - the service-ip OCF agent's code graph, when its checkout is present
 #   - DRBD 9 documentation: the LINBIT knowledge base, the DRBD 9 user's guide
@@ -23,25 +23,25 @@
 #
 # Every document and step is retried, and recorded in <out-dir>/progress when
 # it succeeds: a build takes hours, and the embedder behind it answers 503 now
-# and then. SDS_KB_RESUME=1 keeps the
+# and then. HAIFY_KB_RESUME=1 keeps the
 # database and the record and carries on where the last run stopped; without
 # it the build starts from nothing.
 #
 # Environment:
-#   STEWARD_EMB_BASE_URL / _API_KEY / _MODEL, SDS_KB_EMB_DIM   embedder
+#   STEWARD_EMB_BASE_URL / _API_KEY / _MODEL, HAIFY_KB_EMB_DIM   embedder
 #   STEWARD_LLM_BASE_URL / _API_KEY / _MODEL                   entity extraction
-#   SDS_KB_CORPUS     dir holding linbit-blog-kb/, linbit-documentation/, ai-assistants/
+#   HAIFY_KB_CORPUS     dir holding linbit-blog-kb/, linbit-documentation/, ai-assistants/
 #   SERVICE_IP_REPO   service-ip checkout (optional)
 #   STEWARD           steward binary (default: installed at the pinned version)
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 out=${1:-$root/dist/kb}
-corpus=${SDS_KB_CORPUS:?set SDS_KB_CORPUS to the dir with linbit-blog-kb/, linbit-documentation/, ai-assistants/}
+corpus=${HAIFY_KB_CORPUS:?set HAIFY_KB_CORPUS to the dir with linbit-blog-kb/, linbit-documentation/, ai-assistants/}
 : "${STEWARD_EMB_API_KEY:?}" "${STEWARD_EMB_MODEL:?}" "${STEWARD_EMB_BASE_URL:?}"
 : "${STEWARD_LLM_API_KEY:?}" "${STEWARD_LLM_MODEL:?}" "${STEWARD_LLM_BASE_URL:?}"
-export STEWARD_EMB_DIM=${SDS_KB_EMB_DIM:-768}
-steward_version=v0.51.1 # keep in step with cmd/sds-ai/go.mod
+export STEWARD_EMB_DIM=${HAIFY_KB_EMB_DIM:-768}
+steward_version=v0.51.1 # keep in step with cmd/haify-ai/go.mod
 od=${STEWARD:-}
 if [ -z "$od" ]; then
 	od=$(mktemp -d)/steward
@@ -50,12 +50,12 @@ if [ -z "$od" ]; then
 fi
 
 version=$(git -C "$root" describe --tags --always --dirty)
-db=$out/sds-kb.db
+db=$out/haify-kb.db
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$out"
 progress=$out/progress
-if [ "${SDS_KB_RESUME:-0}" != 1 ]; then
+if [ "${HAIFY_KB_RESUME:-0}" != 1 ]; then
 	rm -f "$db" "$db"-wal "$db"-shm "$progress"
 fi
 touch "$progress"
@@ -93,7 +93,7 @@ once() {
 		echo "   $key failed (attempt $try); retrying in $((try * 20))s" >&2
 		sleep $((try * 20))
 	done
-	echo "giving up on $key; rerun with SDS_KB_RESUME=1" >&2
+	echo "giving up on $key; rerun with HAIFY_KB_RESUME=1" >&2
 	return 1
 }
 
@@ -108,14 +108,14 @@ ingest_one() {
 	rm -rf "$one"
 }
 
-# ingest_each <dir>: ingests a flattened dir, SDS_KB_JOBS documents at a time
+# ingest_each <dir>: ingests a flattened dir, HAIFY_KB_JOBS documents at a time
 # (default 4). Almost all of a document's time is spent waiting on the
 # extraction model, so documents in parallel is what makes the build take
 # minutes per hundred documents rather than hours; SQLite serialises the
 # brief writes between them. Waits on the oldest job when all slots are busy,
 # which bash 3.2 (the macOS /bin/bash) can do and `wait -n` cannot.
 ingest_each() {
-	local f jobs=${SDS_KB_JOBS:-4} failed=0
+	local f jobs=${HAIFY_KB_JOBS:-4} failed=0
 	local pids=()
 	for f in "$1"/*; do
 		ingest_one "$f" &
@@ -132,27 +132,27 @@ ingest_each() {
 }
 
 step "Haify documentation"
-docs=$(flatten "$root/docs" sds-docs -name '*.md')
-cp "$root/README.md" "$docs/sds-docs__README.md"
+docs=$(flatten "$root/docs" haify-docs -name '*.md')
+cp "$root/README.md" "$docs/haify-docs__README.md"
 ingest_each "$docs"
 
 # The operations runbooks the MCP server serves to agents: the same text, so
 # the Copilot answers a procedure question with the procedure it would be given.
 step "Haify runbooks"
-ingest_each "$(flatten "$root/pkg/mcpserver/runbooks" sds-runbooks -name '*.md')"
+ingest_each "$(flatten "$root/pkg/mcpserver/runbooks" haify-runbooks -name '*.md')"
 
 if [ -f "$root/.understand-anything/knowledge-graph.json" ]; then
 	step "Haify code graph"
-	once step:sds-code-graph "$od" import-graph "$root/.understand-anything/knowledge-graph.json"
+	once step:haify-code-graph "$od" import-graph "$root/.understand-anything/knowledge-graph.json"
 fi
 
 step "Haify source"
-once step:sds-source "$od" ingest-repo "$root"
+once step:haify-source "$od" ingest-repo "$root"
 
-step "sds reference (built from this commit)"
-cli=$stage/sds
+step "haify reference (built from this commit)"
+cli=$stage/haify
 (cd "$root" && go build -o "$cli" ./cmd/cli)
-once step:sds "$od" ingest-cli "$cli"
+once step:haify "$od" ingest-cli "$cli"
 
 if [ -n "${SERVICE_IP_REPO:-}" ] && [ -f "$SERVICE_IP_REPO/.understand-anything/knowledge-graph.json" ]; then
 	step "service-ip code graph"
@@ -168,7 +168,7 @@ ingest_each "$(flatten "$corpus/ai-assistants" drbd-ai-notes -name '*.md')"
 step "manifest"
 sqlite3 "$db" 'PRAGMA wal_checkpoint(TRUNCATE); VACUUM;'
 sha=$(shasum -a 256 "$db" | cut -d' ' -f1)
-cat >"$out/sds-kb.json" <<EOF
+cat >"$out/haify-kb.json" <<EOF
 {
   "version": "$version",
   "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -178,4 +178,4 @@ cat >"$out/sds-kb.json" <<EOF
   "steward": "$steward_version"
 }
 EOF
-cat "$out/sds-kb.json"
+cat "$out/haify-kb.json"

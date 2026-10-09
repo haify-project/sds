@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/rbac"
+	pb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/rbac"
 )
 
 const (
@@ -120,7 +120,7 @@ func TestRbacMutationsBlockedByInterceptorForNonAdmin(t *testing.T) {
 	authz := rbacAuthzUnaryInterceptor(engine)
 
 	call := func(token, method string) error {
-		info := &grpc.UnaryServerInfo{FullMethod: "/v1.SDSController/" + method}
+		info := &grpc.UnaryServerInfo{FullMethod: "/v1.HaifyController/" + method}
 		_, err := identity(ctxWithToken(token), &pb.CreateRbacUserRequest{Name: "eve", Role: "admin"}, info,
 			func(ctx context.Context, req any) (any, error) {
 				return authz(ctx, req, info, func(ctx context.Context, req any) (any, error) {
@@ -131,7 +131,7 @@ func TestRbacMutationsBlockedByInterceptorForNonAdmin(t *testing.T) {
 	}
 
 	for _, m := range []string{"CreateRbacUser", "DeleteRbacUser", "SetRbacUserRole"} {
-		obj, act := rbac.Classify("/v1.SDSController/" + m)
+		obj, act := rbac.Classify("/v1.HaifyController/" + m)
 		assert.Equal(t, "system", obj, m)
 		assert.Equal(t, rbac.ActWrite, act, m)
 	}

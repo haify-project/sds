@@ -9,9 +9,9 @@ import (
 )
 
 // TiebreakerLabel opts a node out of automatic diskless-tiebreaker selection
-// when set to "false" (`sds node label <node> sds.tiebreaker=false`). Use it on
+// when set to "false" (`haify node label <node> haify.tiebreaker=false`). Use it on
 // WAN/DR nodes, which cannot join a LAN resource's DRBD connection mesh.
-const TiebreakerLabel = "sds.tiebreaker"
+const TiebreakerLabel = "haify.tiebreaker"
 
 // selectTiebreaker picks a registered node, not already part of the resource,
 // to serve as a diskless quorum tiebreaker. A node outside every replica's
@@ -54,7 +54,7 @@ func (rm *ResourceManager) selectTiebreaker(ctx context.Context, nodes []string)
 		// not: it is reached over a WAN and, on a cloud instance, its public
 		// address is not even configured on an interface, so `drbdadm up` fails
 		// with "IP <addr> not found on this host" — after the volumes exist.
-		// Nodes labelled sds.tiebreaker=false are therefore never auto-selected;
+		// Nodes labelled haify.tiebreaker=false are therefore never auto-selected;
 		// label DR sites that way. Same spirit as the compute-only rule below.
 		if strings.EqualFold(n.Labels[TiebreakerLabel], "false") {
 			rm.controller.logger.Debug("Skipping tiebreaker candidate opted out by label",

@@ -20,7 +20,7 @@ func TestSaveSurvivesALoad(t *testing.T) {
 		Storage:  StorageConfig{DefaultPoolType: "vg", DefaultSnapshotSuffix: "_x"},
 		Alert:    AlertConfig{Enabled: true, WebhookURL: "https://example.invalid/hook"},
 		Log:      LogConfig{Level: "debug", Format: "console"},
-		Database: DatabaseConfig{Path: "/tmp/sds.db"},
+		Database: DatabaseConfig{Path: "/tmp/haify.db"},
 	}
 	require.NoError(t, cfg.Save(path))
 

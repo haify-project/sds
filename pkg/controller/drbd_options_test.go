@@ -20,13 +20,13 @@ const sampleRes = `resource data {
 
     volume 0 {
         device    minor 0;
-        disk      /dev/sds_vg0/data_data;
+        disk      /dev/haify_vg0/data_data;
         meta-disk internal;
     }
 
     volume 1 {
         device    minor 1001;
-        disk      /dev/sds_vg0/data_state;
+        disk      /dev/haify_vg0/data_state;
         meta-disk internal;
     }
 
@@ -74,7 +74,7 @@ func TestApplyDrbdOptions(t *testing.T) {
 
 	// Volumes, on-section and mesh must be preserved untouched.
 	for _, keep := range []string{
-		"volume 1 {", "/dev/sds_vg0/data_state", "on orange1 {",
+		"volume 1 {", "/dev/haify_vg0/data_state", "on orange1 {",
 		"192.168.123.214:7000;", "connection-mesh {",
 	} {
 		if !strings.Contains(out, keep) {

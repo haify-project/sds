@@ -1,7 +1,7 @@
 package MockClient;
 
 # A stand-in for the plugin's REST client. It records every request and answers
-# from a per-test routing table, so tests assert on the exact sds endpoint and
+# from a per-test routing table, so tests assert on the exact haify endpoint and
 # payload the plugin produced.
 
 use strict;

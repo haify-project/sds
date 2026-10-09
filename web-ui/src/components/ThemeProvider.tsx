@@ -19,8 +19,8 @@ import {
 // blue --accent the redesign ships. Bumping the key is the honest, code-free
 // migration: everyone lands back on the designed look, and anyone who
 // deliberately re-picks `neutral` keeps it from then on.
-const COLOR_KEY = 'sds-theme-color.v2';
-const RADIUS_KEY = 'sds-theme-radius';
+const COLOR_KEY = 'haify-theme-color.v2';
+const RADIUS_KEY = 'haify-theme-radius';
 
 type ThemeConfig = {
   color: string;

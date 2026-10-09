@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // recordApp stores the app newAppTestController's resource runs.
@@ -174,7 +174,7 @@ func TestAppPlacementOnANewReplica(t *testing.T) {
 	require.NoError(t, ctrl.resources.SyncPromoters(context.Background(), "res1"))
 	var placed []string
 	for _, d := range dep.distributedConfigs {
-		if d.remotePath == "/etc/drbd-reactor.d/sds-app-orders.toml" {
+		if d.remotePath == "/etc/drbd-reactor.d/haify-app-orders.toml" {
 			placed = d.hosts
 		}
 	}
@@ -188,11 +188,11 @@ func TestAppPlacementOnANewReplica(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "gid=121")
 	for _, d := range dep.distributedConfigs {
-		assert.NotEqual(t, "/etc/drbd-reactor.d/sds-app-orders.toml", d.remotePath)
+		assert.NotEqual(t, "/etc/drbd-reactor.d/haify-app-orders.toml", d.remotePath)
 	}
 }
 
-// `sds ha evict` and a node drain evict through whichever promoter manages
+// `haify ha evict` and a node drain evict through whichever promoter manages
 // the resource; an app's is named after the app, so it is found by content.
 func TestEvictScriptFindsAnAppPromoter(t *testing.T) {
 	root := t.TempDir()
@@ -202,9 +202,9 @@ func TestEvictScriptFindsAnAppPromoter(t *testing.T) {
 	require.NoError(t, os.MkdirAll(bin, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(bin, "drbd-reactorctl"),
 		[]byte("#!/bin/sh\necho \"$@\"\necho \"Node 'n2' took over\"\n"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(confDir, "sds-app-orders.toml"),
+	require.NoError(t, os.WriteFile(filepath.Join(confDir, "haify-app-orders.toml"),
 		[]byte("[[promoter]]\n[promoter.resources.res1]\nrunner = \"systemd\"\n"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(confDir, "sds-app-other.toml"),
+	require.NoError(t, os.WriteFile(filepath.Join(confDir, "haify-app-other.toml"),
 		[]byte("[[promoter]]\n[promoter.resources.res10]\n"), 0644))
 
 	script := strings.ReplaceAll(evictScript("res1"), "/etc/drbd-reactor.d", confDir)
@@ -212,5 +212,5 @@ func TestEvictScriptFindsAnAppPromoter(t *testing.T) {
 	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
-	assert.Equal(t, "evict sds-app-orders\nNode 'n2' took over", strings.TrimSpace(string(out)))
+	assert.Equal(t, "evict haify-app-orders\nNode 'n2' took over", strings.TrimSpace(string(out)))
 }

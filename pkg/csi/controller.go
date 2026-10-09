@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,12 +15,12 @@ const giB = 1 << 30
 
 type controllerServer struct {
 	csi.UnimplementedControllerServer
-	backend SDSBackend
+	backend HaifyBackend
 	log     *zap.Logger
 }
 
 // NewControllerServer returns the CSI Controller service.
-func NewControllerServer(b SDSBackend, log *zap.Logger) csi.ControllerServer {
+func NewControllerServer(b HaifyBackend, log *zap.Logger) csi.ControllerServer {
 	return &controllerServer{backend: b, log: log}
 }
 
@@ -65,7 +65,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 	if params.ResourceProfile != "" {
 		profileClient, ok := s.backend.(interface {
-			GetResourceProfile(context.Context, string) (*sdspb.ResourceProfile, error)
+			GetResourceProfile(context.Context, string) (*haifypb.ResourceProfile, error)
 		})
 		if !ok {
 			return nil, status.Error(codes.Internal, "Haify backend does not support resource profiles")
@@ -121,7 +121,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		pinned = append([]string{source.node}, pinned...)
 	}
 	// The free space of the pool decides the rest, so a PVC lands where
-	// `sds resource create` would: on the emptiest nodes. ResourceExhausted
+	// `haify resource create` would: on the emptiest nodes. ResourceExhausted
 	// is the status the CO acts on — external-provisioner drops the PVC's
 	// selected-node annotation on it and reschedules — so every placement
 	// failure, capacity or otherwise, has to surface under that code.
@@ -138,11 +138,11 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	for key, value := range params.ResourceLabels {
 		labels[key] = value
 	}
-	labels["sds.csi/managed-by"] = "csi"
+	labels["haify.csi/managed-by"] = "csi"
 	if backend, ok := s.backend.(interface {
-		CreateResourceRequest(context.Context, *sdspb.CreateResourceRequest) error
+		CreateResourceRequest(context.Context, *haifypb.CreateResourceRequest) error
 	}); ok {
-		err = backend.CreateResourceRequest(ctx, &sdspb.CreateResourceRequest{
+		err = backend.CreateResourceRequest(ctx, &haifypb.CreateResourceRequest{
 			Name:        name,
 			Nodes:       replicaNodes,
 			Protocol:    "C",

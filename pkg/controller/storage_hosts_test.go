@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +24,7 @@ func TestListPoolsSkipsOfflineNodes(t *testing.T) {
 			}
 			mu.Unlock()
 			if strings.Contains(cmd, "vgs") {
-				return successExecResult(hosts, "  sds_tp|10737418240B|5368709120B|/dev/vdb\n"), nil
+				return successExecResult(hosts, "  haify_tp|10737418240B|5368709120B|/dev/vdb\n"), nil
 			}
 			return successExecResult(hosts, ""), nil
 		},
@@ -39,5 +39,5 @@ func TestListPoolsSkipsOfflineNodes(t *testing.T) {
 	assert.True(t, asked["10.0.0.1"])
 	assert.False(t, asked["10.0.0.2"], "the offline node must not be asked")
 	require.Len(t, pools, 1)
-	assert.Equal(t, "sds_tp", pools[0].Name)
+	assert.Equal(t, "haify_tp", pools[0].Name)
 }

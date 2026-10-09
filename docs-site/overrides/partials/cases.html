@@ -9,7 +9,7 @@
 {%- set DOWN = ("0;0;1;1;0;0", "0;0.38;0.42;0.875;0.925;1") -%}
 
 {%- macro share() -%}
-<svg class="sds-ill" viewBox="0 0 320 190" role="img" data-still="5.5"
+<svg class="haify-ill" viewBox="0 0 320 190" role="img" data-still="5.5"
      aria-label="Three computers use a shared folder. The server behind it fails and a second server takes over; the computers keep working.">
   {{ ill.laptop(16, 24) }}{{ ill.laptop(16, 78) }}{{ ill.laptop(16, 132) }}
   {{ ill.link("M50 35 C 86 35, 88 95, 118 95") }}
@@ -26,7 +26,7 @@
 {%- endmacro -%}
 
 {%- macro vm() -%}
-<svg class="sds-ill" viewBox="0 0 320 190" role="img" data-still="4.4"
+<svg class="haify-ill" viewBox="0 0 320 190" role="img" data-still="4.4"
      aria-label="A running virtual machine moves from host 1 to host 2 and back. Its disk is on both hosts.">
   {{ ill.server(40, 106, "host 1") }}{{ ill.server(224, 106, "host 2") }}
   {{ ill.link("M96 128 L224 128", dots=3) }}
@@ -54,7 +54,7 @@
 {%- endmacro -%}
 
 {%- macro k8s() -%}
-<svg class="sds-ill" viewBox="0 0 320 190" role="img" data-still="5.5"
+<svg class="haify-ill" viewBox="0 0 320 190" role="img" data-still="5.5"
      aria-label="An app runs on node 1 with its data. Node 1 fails and the app starts on node 2, where a copy of its data already is.">
   {{ ill.server(20, 106, "node 1") }}{{ ill.server(132, 106, "node 2") }}{{ ill.server(244, 106, "node 3") }}
   {{ ill.disk(48, 78) }}{{ ill.disk(160, 78) }}
@@ -66,7 +66,7 @@
 {%- endmacro -%}
 
 {%- macro db() -%}
-<svg class="sds-ill" viewBox="0 0 320 190" role="img" data-still="5.5"
+<svg class="haify-ill" viewBox="0 0 320 190" role="img" data-still="5.5"
      aria-label="An application talks to a database on server 1. Server 1 fails and the database, with its data and address, moves to server 2.">
   <rect class="box box--app" x="128" y="10" width="64" height="34" rx="6"/>
   <text class="lbl" x="160" y="32" text-anchor="middle">app</text>
@@ -84,7 +84,7 @@
 {%- endmacro -%}
 
 {%- macro backup() -%}
-<svg class="sds-ill" viewBox="0 0 320 190" role="img" data-still="1.2"
+<svg class="haify-ill" viewBox="0 0 320 190" role="img" data-still="1.2"
      aria-label="Backups travel from your cluster to cloud storage, and a live copy streams to a second site.">
   {{ ill.server(20, 16, "") }}{{ ill.server(20, 104, "your cluster") }}
   <path class="wire" d="M48 76 V104"/>
@@ -100,7 +100,7 @@
 {%- endmacro -%}
 
 {%- macro array() -%}
-<svg class="sds-ill" viewBox="0 0 320 190" role="img" data-still="6"
+<svg class="haify-ill" viewBox="0 0 320 190" role="img" data-still="6"
      aria-label="A storage array gives way to three ordinary servers that keep copies of each other's data.">
   <g>
     <rect class="box" x="92" y="20" width="136" height="120" rx="8"/>

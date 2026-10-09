@@ -2,7 +2,7 @@
 # Step 7 (the storage plugin on every node) and step 8 (the storage.cfg entry).
 
 PLUGIN_DIR=/usr/share/perl5/PVE/Storage/Custom
-PLUGIN_STAGING=/root/.sds-bootstrap-proxmox
+PLUGIN_STAGING=/root/.haify-bootstrap-proxmox
 
 # controller_list: what goes into storage.cfg's `controller`. Every node that
 # can run the controller is listed: under Self-HA the plugin tries them in
@@ -24,13 +24,13 @@ plugin_up_to_date() {
 		deb_is_installed "$node" "$PLUGIN_DEB"
 		return
 	fi
-	[ "$(remote_sha256 "$node" "$PLUGIN_DIR/SDSPlugin.pm")" = "$(local_sha256 "$SCRIPT_DIR/SDSPlugin.pm")" ] || return 1
-	for f in "$SCRIPT_DIR"/PVE/Storage/Custom/SDS/*.pm; do
+	[ "$(remote_sha256 "$node" "$PLUGIN_DIR/HaifyPlugin.pm")" = "$(local_sha256 "$SCRIPT_DIR/HaifyPlugin.pm")" ] || return 1
+	for f in "$SCRIPT_DIR"/PVE/Storage/Custom/Haify/*.pm; do
 		rel="${f#"$SCRIPT_DIR"/PVE/Storage/Custom/}"
 		[ "$(remote_sha256 "$node" "$PLUGIN_DIR/$rel")" = "$(local_sha256 "$f")" ] || return 1
 	done
 	# The web interface's storage dialog ships with the plugin.
-	[ "$(remote_sha256 "$node" /usr/share/pve-manager/js/sds-storage.js)" = "$(local_sha256 "$SCRIPT_DIR/gui/sds-storage.js")" ] || return 1
+	[ "$(remote_sha256 "$node" /usr/share/pve-manager/js/haify-storage.js)" = "$(local_sha256 "$SCRIPT_DIR/gui/haify-storage.js")" ] || return 1
 	return 0
 }
 
@@ -78,13 +78,13 @@ step_storage_cfg() {
 	existing=$(check_on "$LOCAL_NODE" "test ! -f /etc/pve/storage.cfg || awk '/^[a-z][a-z0-9]*: / { sub(/:\$/, \"\", \$1); print \$1, \$2 }' /etc/pve/storage.cfg" || true)
 	case "$(printf '%s\n' "$existing" | awk -v id="$STOREID" '$2 == id { print $1 }')" in
 		"") ;;
-		sds)
-			note "storage '$STOREID' (type sds) already present; left as is"
+		haify)
+			note "storage '$STOREID' (type haify) already present; left as is"
 			note "  (its controller list is fixed: edit /etc/pve/storage.cfg to change it)"
 			return 0
 			;;
 		*) die "a storage named '$STOREID' already exists with another type; choose another with --storage-id" ;;
 	esac
 	controllers=$(controller_list)
-	run_on "$LOCAL_NODE" "pvesm add sds $(q "$STOREID") --controller $(q "$controllers") --sdspool $(q "$POOL") --replicas $(q "$REPLICAS") --storagetype $(q "$(storage_type)") --content images,rootdir --shared 1"
+	run_on "$LOCAL_NODE" "pvesm add haify $(q "$STOREID") --controller $(q "$controllers") --haifypool $(q "$POOL") --replicas $(q "$REPLICAS") --storagetype $(q "$(storage_type)") --content images,rootdir --shared 1"
 }

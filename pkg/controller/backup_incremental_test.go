@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // incrementalFixture is the backup fixture with thin volumes: the snapshot
@@ -37,7 +37,7 @@ func newIncrementalFixture(t *testing.T) *incrementalFixture {
 		f.cmds = append(f.cmds, cmd)
 		switch {
 		case strings.Contains(cmd, "thin_delta"):
-			return successExecResult(hosts, fmt.Sprintf("SDS_SENT=%d\nSDS_RANGES_BYTES=%d\nSDS_CHANGED=1048576\n", deltaSent, deltaSent)), nil
+			return successExecResult(hosts, fmt.Sprintf("HAIFY_SENT=%d\nHAIFY_RANGES_BYTES=%d\nHAIFY_CHANGED=1048576\n", deltaSent, deltaSent)), nil
 		case strings.Contains(cmd, "size --json") && (strings.Contains(cmd, ".delta.gz") || strings.Contains(cmd, ".ranges")):
 			return successExecResult(hosts, fmt.Sprintf(`{"count":1,"bytes":%d}`, deltaSent)), nil
 		}

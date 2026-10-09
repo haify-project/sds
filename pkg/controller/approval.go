@@ -18,22 +18,22 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Two-person approval ([rbac.approval]).
 //
 // RBAC decides what a role may do, and an admin may do everything — so one
 // stolen admin token could delete the backup target, the backups and the
-// snapshots, and nothing in sds would object. With approval on, each call on
+// snapshots, and nothing in haify would object. With approval on, each call on
 // the list runs only after a second user approved that exact call:
 //
 //  1. Alice makes the call. It fails with FAILED_PRECONDITION, naming request
 //     <id>, which is now pending and raises an approval.requested event.
 //  2. Bob, a different user with the approve right (admin, security-officer),
-//     reads the request's arguments and runs `sds approval approve <id>`.
+//     reads the request's arguments and runs `haify approval approve <id>`.
 //  3. Alice repeats the identical call within the TTL. It runs, once.
 //
 // "Identical" is the method plus the deterministic encoding of its arguments,
@@ -171,7 +171,7 @@ func (g *approvalGate) check(ctx context.Context, method, user string, req proto
 		if g.events != nil {
 			g.events.Publish(event.Event{
 				Type: event.TypeApprovalRequested, Severity: event.SeverityWarning, Status: event.StatusInfo,
-				Message: fmt.Sprintf("%s asks to run %s %s; approve with `sds approval approve %s`",
+				Message: fmt.Sprintf("%s asks to run %s %s; approve with `haify approval approve %s`",
 					user, method, pending.Request, pending.ID),
 				Details: map[string]string{"id": pending.ID, "method": method, "requester": user},
 			})
@@ -179,7 +179,7 @@ func (g *approvalGate) check(ctx context.Context, method, user string, req proto
 	}
 	return status.Errorf(codes.FailedPrecondition,
 		"%s needs a second person's approval: request %s is pending until %s. Another user with the approve right "+
-			"runs `sds approval approve %s`; then repeat this exact call",
+			"runs `haify approval approve %s`; then repeat this exact call",
 		method, pending.ID, pending.ExpiresAt.UTC().Format(time.RFC3339), pending.ID)
 }
 

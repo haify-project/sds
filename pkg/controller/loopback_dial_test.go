@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
 )
 
 // The gRPC listen address and the gateway's dial target are opposites:
@@ -80,13 +80,13 @@ func TestLoopbackDialOptionsIgnoreAnEnvironmentProxy(t *testing.T) {
 	grpcLis, err := net.Listen("tcp", "0.0.0.0:0")
 	require.NoError(t, err)
 	grpcSrv := grpc.NewServer()
-	sdspb.RegisterSDSControllerServer(grpcSrv, NewServer(&Controller{logger: zap.NewNop()}))
+	haifypb.RegisterHaifyControllerServer(grpcSrv, NewServer(&Controller{logger: zap.NewNop()}))
 	go func() { _ = grpcSrv.Serve(grpcLis) }()
 	defer grpcSrv.Stop()
 
 	target := fmt.Sprintf("0.0.0.0:%d", grpcLis.Addr().(*net.TCPAddr).Port)
 	mux := runtime.NewServeMux()
-	require.NoError(t, sdspb.RegisterSDSControllerHandlerFromEndpoint(
+	require.NoError(t, haifypb.RegisterHaifyControllerHandlerFromEndpoint(
 		context.Background(), mux, target, loopbackDialOptions(nil)))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/logs", nil)

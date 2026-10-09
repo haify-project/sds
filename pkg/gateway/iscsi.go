@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 )
 
@@ -138,7 +138,7 @@ func (i *iSCSIManager) CreateISCSIGateway(ctx context.Context, req *v1.CreateISC
 	}
 
 	// Write configuration to all nodes
-	pluginID := fmt.Sprintf("sds-iscsi-%s", req.Resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", req.Resource)
 	if err := i.writeReactorConfig(ctx, req.Resource, pluginID, config); err != nil {
 		return &v1.CreateISCSIGatewayResponse{
 			Success: false,
@@ -300,7 +300,7 @@ func (i *iSCSIManager) GetISCSIGatewayStatus(ctx context.Context, resource strin
 	}
 
 	// Check if the gateway config exists
-	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("sds-iscsi-%s.toml", resource))
+	configPath := filepath.Join(DrbdReactorConfigDir, fmt.Sprintf("haify-iscsi-%s.toml", resource))
 	if _, err := os.Stat(configPath); err != nil {
 		status["status"] = "not_configured"
 		return status, nil
@@ -323,7 +323,7 @@ func (i *iSCSIManager) GetISCSIGatewayStatus(ctx context.Context, resource strin
 func (i *iSCSIManager) DeleteISCSIGateway(ctx context.Context, resource string) error {
 	i.logger.Info("Deleting iSCSI gateway", zap.String("resource", resource))
 
-	configFile := fmt.Sprintf("sds-iscsi-%s.toml", resource)
+	configFile := fmt.Sprintf("haify-iscsi-%s.toml", resource)
 	configPath := filepath.Join(DrbdReactorConfigDir, configFile)
 
 	// Remove config from all nodes
@@ -349,8 +349,8 @@ func (i *iSCSIManager) DeleteISCSIGateway(ctx context.Context, resource string) 
 
 // generateIQN generates an IQN for a given resource
 func generateIQN(resource string) string {
-	// Format: iqn.2024-01.com.example:sds.resource-name
-	return fmt.Sprintf("iqn.2024-01.com.example:sds.%s", resource)
+	// Format: iqn.2024-01.com.example:haify.resource-name
+	return fmt.Sprintf("iqn.2024-01.com.example:haify.%s", resource)
 }
 
 // parsePortal parses an iSCSI portal string (host:port)

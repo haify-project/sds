@@ -1,7 +1,7 @@
 #!/bin/bash
 # Install the Haify storage plugin on this Proxmox VE node.
 #
-# The plugin is a Perl module plus its helpers under SDS/, with no dependencies
+# The plugin is a Perl module plus its helpers under Haify/, with no dependencies
 # beyond what PVE already ships, so installing is a copy plus a daemon reload.
 #
 #   ./install.sh            install/upgrade, then restart the PVE daemons
@@ -13,20 +13,20 @@
 set -euo pipefail
 
 PLUGIN_DIR=/usr/share/perl5/PVE/Storage/Custom
-PLUGIN_NAME=SDSPlugin.pm
+PLUGIN_NAME=HaifyPlugin.pm
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Helper modules live in a subdirectory: PVE loads every *.pm directly under
-# Custom/ as a storage plugin, so they must not sit next to SDSPlugin.pm.
-HELPER_DIR="$PLUGIN_DIR/SDS"
-HELPER_SRC_DIR="$SRC_DIR/PVE/Storage/Custom/SDS"
+# Custom/ as a storage plugin, so they must not sit next to HaifyPlugin.pm.
+HELPER_DIR="$PLUGIN_DIR/Haify"
+HELPER_SRC_DIR="$SRC_DIR/PVE/Storage/Custom/Haify"
 HELPER_NAMES=(Activation.pm Api.pm Capacity.pm Client.pm Inventory.pm Migration.pm Naming.pm Snapshots.pm Templates.pm Token.pm)
 
-# The web interface's dialog for the sds storage type (gui/), and what keeps
+# The web interface's dialog for the haify storage type (gui/), and what keeps
 # it loaded across pve-manager upgrades.
-GUI_JS=/usr/share/pve-manager/js/sds-storage.js
-GUI_PATCH=/usr/share/sds-pve-plugin/gui-patch.sh
-APT_HOOK=/etc/apt/apt.conf.d/90sds-pve-gui
+GUI_JS=/usr/share/pve-manager/js/haify-storage.js
+GUI_PATCH=/usr/share/haify-pve-plugin/gui-patch.sh
+APT_HOOK=/etc/apt/apt.conf.d/90haify-pve-gui
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "install.sh must run as root" >&2
@@ -35,7 +35,7 @@ fi
 
 # Every PVE daemon that loads storage plugins in-process. Each must restart to
 # see a new or changed module: one that does not answers "unsupported type
-# 'sds'". The HA local resource manager is the one that matters most — before
+# 'haify'". The HA local resource manager is the one that matters most — before
 # it was on this list, the first node failure after an install left HA unable
 # to start the guest anywhere. Restarting them does not disturb running guests;
 # PVE's own upgrades restart the same set.
@@ -59,7 +59,7 @@ if [ "${1:-}" = "--uninstall" ]; then
     [ -x "$GUI_PATCH" ] && "$GUI_PATCH" --remove
     rm -f "$GUI_JS" "$GUI_PATCH" "$APT_HOOK"
     echo "Removed the Haify storage dialog from the web interface"
-    echo "Remove any 'sds:' entries from /etc/pve/storage.cfg before reloading."
+    echo "Remove any 'haify:' entries from /etc/pve/storage.cfg before reloading."
     reload_pve
     exit 0
 fi
@@ -92,15 +92,15 @@ done
 install -m 0644 "$SRC_DIR/$PLUGIN_NAME" "$PLUGIN_DIR/$PLUGIN_NAME"
 echo "Installed $PLUGIN_DIR/$PLUGIN_NAME"
 
-install -D -m 0644 "$SRC_DIR/gui/sds-storage.js" "$GUI_JS"
+install -D -m 0644 "$SRC_DIR/gui/haify-storage.js" "$GUI_JS"
 install -D -m 0755 "$SRC_DIR/gui/gui-patch.sh" "$GUI_PATCH"
-install -m 0644 "$SRC_DIR/gui/90sds-pve-gui" "$APT_HOOK"
+install -m 0644 "$SRC_DIR/gui/90haify-pve-gui" "$APT_HOOK"
 "$GUI_PATCH"
 echo "Added Haify to the web interface's storage dialogs"
 
 # Keep the host's LVM off the DRBD devices that carry guest disks (see
-# lvm-filter.sh). SDS_SKIP_LVM_FILTER=1 leaves lvm.conf to you.
-if [ "${SDS_SKIP_LVM_FILTER:-0}" != "1" ]; then
+# lvm-filter.sh). HAIFY_SKIP_LVM_FILTER=1 leaves lvm.conf to you.
+if [ "${HAIFY_SKIP_LVM_FILTER:-0}" != "1" ]; then
     if ! "$SRC_DIR/lvm-filter.sh"; then
         echo "WARNING: the LVM filter was not added; a guest's LVM inside its disk can be activated on this host" >&2
     fi
@@ -114,9 +114,9 @@ cat <<'EOF'
 Next: add the storage once for the cluster, in the web interface under
 Datacenter -> Storage -> Add -> Haify, or in /etc/pve/storage.cfg, e.g.
 
-  sds: sds0
+  haify: haify0
         controller 192.168.1.10
-        sdspool vg0
+        haifypool vg0
         replicas 2
         content images,rootdir
         shared 1

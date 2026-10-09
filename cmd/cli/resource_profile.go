@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +31,7 @@ func resourceProfileCommand() *cobra.Command {
 	return cmd
 }
 
-func printMemberResults(members []*sdspb.ProfileMemberResult) {
+func printMemberResults(members []*haifypb.ProfileMemberResult) {
 	for _, m := range members {
 		mark := "ok    "
 		if !m.Success {
@@ -51,12 +51,12 @@ func resourceProfileSetOptions() *cobra.Command {
 			if len(options) == 0 {
 				return fmt.Errorf("give at least one --drbd-options key=value")
 			}
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			resp, err := sdsClient.SetResourceProfileOptions(cmd.Context(), args[0], options)
+			defer closeClient(haifyClient)
+			resp, err := haifyClient.SetResourceProfileOptions(cmd.Context(), args[0], options)
 			if err != nil {
 				return err
 			}
@@ -82,12 +82,12 @@ func resourceProfileAdjust() *cobra.Command {
 			"Replicas beyond the profile's count are reported, never removed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			resp, err := sdsClient.AdjustResourceProfile(cmd.Context(), args[0], dryRun)
+			defer closeClient(haifyClient)
+			resp, err := haifyClient.AdjustResourceProfile(cmd.Context(), args[0], dryRun)
 			if err != nil {
 				return err
 			}
@@ -109,12 +109,12 @@ func resourceProfileMaxSize() *cobra.Command {
 		Short: "Largest volume a new resource in this profile could get now",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			resp, err := sdsClient.GetResourceProfileMaxSize(cmd.Context(), args[0])
+			defer closeClient(haifyClient)
+			resp, err := haifyClient.GetResourceProfileMaxSize(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func resourceProfileMaxSize() *cobra.Command {
 }
 
 func resourceProfileCreate() *cobra.Command {
-	profile := &sdspb.ResourceProfile{}
+	profile := &haifypb.ResourceProfile{}
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create or replace a resource profile",
@@ -142,7 +142,7 @@ func resourceProfileCreate() *cobra.Command {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(conn)
-			resp, err := grpcClient.CreateResourceProfile(cmd.Context(), &sdspb.CreateResourceProfileRequest{Profile: profile})
+			resp, err := grpcClient.CreateResourceProfile(cmd.Context(), &haifypb.CreateResourceProfileRequest{Profile: profile})
 			if err != nil {
 				return fmt.Errorf("failed to create resource profile: %w", err)
 			}
@@ -178,7 +178,7 @@ func resourceProfileGet() *cobra.Command {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(conn)
-			resp, err := grpcClient.GetResourceProfile(cmd.Context(), &sdspb.GetResourceProfileRequest{Name: args[0]})
+			resp, err := grpcClient.GetResourceProfile(cmd.Context(), &haifypb.GetResourceProfileRequest{Name: args[0]})
 			if err != nil {
 				return fmt.Errorf("failed to get resource profile: %w", err)
 			}
@@ -186,7 +186,7 @@ func resourceProfileGet() *cobra.Command {
 				return fmt.Errorf("failed to get resource profile: %s", resp.Message)
 			}
 			printResourceProfile(resp.Profile)
-			members, err := grpcClient.ListResources(cmd.Context(), &sdspb.ListResourcesRequest{Profile: args[0]})
+			members, err := grpcClient.ListResources(cmd.Context(), &haifypb.ListResourcesRequest{Profile: args[0]})
 			if err == nil && members.Success {
 				names := make([]string, 0, len(members.Resources))
 				for _, r := range members.Resources {
@@ -210,7 +210,7 @@ func resourceProfileList() *cobra.Command {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(conn)
-			resp, err := grpcClient.ListResourceProfiles(cmd.Context(), &sdspb.ListResourceProfilesRequest{})
+			resp, err := grpcClient.ListResourceProfiles(cmd.Context(), &haifypb.ListResourceProfilesRequest{})
 			if err != nil {
 				return fmt.Errorf("failed to list resource profiles: %w", err)
 			}
@@ -241,7 +241,7 @@ func resourceProfileDelete() *cobra.Command {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(conn)
-			resp, err := grpcClient.DeleteResourceProfile(cmd.Context(), &sdspb.DeleteResourceProfileRequest{Name: args[0]})
+			resp, err := grpcClient.DeleteResourceProfile(cmd.Context(), &haifypb.DeleteResourceProfileRequest{Name: args[0]})
 			if err != nil {
 				return fmt.Errorf("failed to delete resource profile: %w", err)
 			}
@@ -254,7 +254,7 @@ func resourceProfileDelete() *cobra.Command {
 	}
 }
 
-func printResourceProfile(profile *sdspb.ResourceProfile) {
+func printResourceProfile(profile *haifypb.ResourceProfile) {
 	if profile == nil {
 		return
 	}
@@ -269,7 +269,7 @@ func printResourceProfile(profile *sdspb.ResourceProfile) {
 	fmt.Printf("  Labels:                %s\n", formatLabels(profile.Labels))
 }
 
-func formatResourceProfile(profile *sdspb.ResourceProfile) string {
+func formatResourceProfile(profile *haifypb.ResourceProfile) string {
 	if profile == nil {
 		return "(invalid profile)"
 	}
@@ -303,12 +303,12 @@ func resourceSetProfile() *cobra.Command {
 			case len(args) == 2:
 				profile = args[1]
 			}
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			if err := sdsClient.SetResourceProfile(cmd.Context(), args[0], profile); err != nil {
+			defer closeClient(haifyClient)
+			if err := haifyClient.SetResourceProfile(cmd.Context(), args[0], profile); err != nil {
 				return err
 			}
 			if profile == "" {

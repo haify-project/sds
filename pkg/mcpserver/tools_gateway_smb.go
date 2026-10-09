@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -42,11 +42,11 @@ type smbSharesOut struct {
 // to the CLI on purpose: a password typed into a model conversation is a
 // password stored in its transcript.
 func (s *Server) registerSMB(srv *mcp.Server) {
-	addWrite(s, srv, writeTool("sds_gateway_create_smb", "Create SMB gateway",
+	addWrite(s, srv, writeTool("haify_gateway_create_smb", "Create SMB gateway",
 		"Share a DRBD resource over SMB (standalone Samba, workgroup) with automatic failover. "+
-			"Users are added afterwards with `sds gateway smb user set`, which prompts for the password."),
+			"Users are added afterwards with `haify gateway smb user set`, which prompts for the password."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in smbGatewayCreateIn) (*mcp.CallToolResult, opResult, error) {
-			resp, err := s.client.CreateSMBGateway(ctx, &sdspb.CreateSMBGatewayRequest{
+			resp, err := s.client.CreateSMBGateway(ctx, &haifypb.CreateSMBGatewayRequest{
 				Resource: in.Resource, ServiceIp: in.ServiceIP, Workgroup: in.Workgroup,
 				ShareName: in.ShareName, ReadOnly: in.ReadOnly, ValidUsers: in.ValidUsers,
 			})
@@ -59,7 +59,7 @@ func (s *Server) registerSMB(srv *mcp.Server) {
 			return nil, ok(resp.Message), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_gateway_smb_shares", "Manage SMB shares",
+	addWrite(s, srv, destructiveTool("haify_gateway_smb_shares", "Manage SMB shares",
 		"List, add or remove the shares of a running SMB gateway. Removing a share leaves its data in place."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in smbSharesIn) (*mcp.CallToolResult, smbSharesOut, error) {
 			switch in.Action {
@@ -74,7 +74,7 @@ func (s *Server) registerSMB(srv *mcp.Server) {
 				}
 				return nil, out, nil
 			case "add":
-				err := s.client.AddSMBShare(ctx, in.Resource, &sdspb.SMBShareInfo{
+				err := s.client.AddSMBShare(ctx, in.Resource, &haifypb.SMBShareInfo{
 					Name: in.Name, Path: in.Path, ReadOnly: in.ReadOnly, ValidUsers: in.ValidUsers,
 				})
 				if err != nil {
@@ -90,7 +90,7 @@ func (s *Server) registerSMB(srv *mcp.Server) {
 			return nil, smbSharesOut{}, badAction(in.Action, "list, add, remove")
 		})
 
-	addRead(s, srv, readOnlyTool("sds_gateway_smb_users", "List SMB users",
+	addRead(s, srv, readOnlyTool("haify_gateway_smb_users", "List SMB users",
 		"List the users of a running SMB gateway."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, stringListOut, error) {
 			users, err := s.client.ListSMBUsers(ctx, in.Resource)

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/gateway"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/gateway"
 )
 
 func gatewayServiceHost(serviceIP string) string {
@@ -280,7 +280,7 @@ func (s *Server) gatewayRuntimeInfo(ctx context.Context, resource string) (strin
 	return state, activeNode, options
 }
 
-func (s *Server) enrichGatewayInfo(ctx context.Context, gw *gateway.GatewayInfo) *sdspb.GatewayInfo {
+func (s *Server) enrichGatewayInfo(ctx context.Context, gw *gateway.GatewayInfo) *haifypb.GatewayInfo {
 	options := s.gatewayConfigOptions(ctx, gw.Resource)
 	state, node, runtimeOptions := s.gatewayRuntimeInfo(ctx, gw.Resource)
 	for key, value := range runtimeOptions {
@@ -293,7 +293,7 @@ func (s *Server) enrichGatewayInfo(ctx context.Context, gw *gateway.GatewayInfo)
 		node = options["active_node"]
 	}
 
-	info := &sdspb.GatewayInfo{
+	info := &haifypb.GatewayInfo{
 		Id:       gw.ID,
 		Name:     gw.Name,
 		Type:     gw.Type,

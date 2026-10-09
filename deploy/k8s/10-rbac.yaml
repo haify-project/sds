@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: ServiceAccount
-metadata: { name: sds-csi-controller, namespace: kube-system }
+metadata: { name: haify-csi-controller, namespace: kube-system }
 ---
 apiVersion: v1
 kind: ServiceAccount
-metadata: { name: sds-csi-node, namespace: kube-system }
+metadata: { name: haify-csi-node, namespace: kube-system }
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
-metadata: { name: sds-csi-provisioner }
+metadata: { name: haify-csi-provisioner }
 rules:
   - apiGroups: [""]
     resources: ["persistentvolumes"]
@@ -42,21 +42,21 @@ rules:
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
-metadata: { name: sds-csi-provisioner }
+metadata: { name: haify-csi-provisioner }
 subjects:
   - kind: ServiceAccount
-    name: sds-csi-controller
+    name: haify-csi-controller
     namespace: kube-system
 roleRef:
   kind: ClusterRole
-  name: sds-csi-provisioner
+  name: haify-csi-provisioner
   apiGroup: rbac.authorization.k8s.io
 ---
 # csi-snapshotter sidecar: watches VolumeSnapshotContent objects and drives the
 # driver's CreateSnapshot/DeleteSnapshot RPCs.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
-metadata: { name: sds-csi-snapshotter }
+metadata: { name: haify-csi-snapshotter }
 rules:
   - apiGroups: [""]
     resources: ["events"]
@@ -78,14 +78,14 @@ rules:
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
-metadata: { name: sds-csi-snapshotter }
+metadata: { name: haify-csi-snapshotter }
 subjects:
   - kind: ServiceAccount
-    name: sds-csi-controller
+    name: haify-csi-controller
     namespace: kube-system
 roleRef:
   kind: ClusterRole
-  name: sds-csi-snapshotter
+  name: haify-csi-snapshotter
   apiGroup: rbac.authorization.k8s.io
 ---
 # csi-resizer sidecar: turns a larger PVC request into ControllerExpandVolume.
@@ -93,7 +93,7 @@ roleRef:
 # ever called it, and editing a PVC's size did nothing.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
-metadata: { name: sds-csi-resizer }
+metadata: { name: haify-csi-resizer }
 rules:
   - apiGroups: [""]
     resources: ["persistentvolumes"]
@@ -116,21 +116,21 @@ rules:
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
-metadata: { name: sds-csi-resizer }
+metadata: { name: haify-csi-resizer }
 subjects:
   - kind: ServiceAccount
-    name: sds-csi-controller
+    name: haify-csi-controller
     namespace: kube-system
 roleRef:
   kind: ClusterRole
-  name: sds-csi-resizer
+  name: haify-csi-resizer
   apiGroup: rbac.authorization.k8s.io
 ---
 # The plugin's own health reporter: reads this driver's PVs and posts
 # VolumeDegraded/VolumeRecovered events on their PVCs.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
-metadata: { name: sds-csi-health }
+metadata: { name: haify-csi-health }
 rules:
   - apiGroups: [""]
     resources: ["persistentvolumes"]
@@ -141,12 +141,12 @@ rules:
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
-metadata: { name: sds-csi-health }
+metadata: { name: haify-csi-health }
 subjects:
   - kind: ServiceAccount
-    name: sds-csi-controller
+    name: haify-csi-controller
     namespace: kube-system
 roleRef:
   kind: ClusterRole
-  name: sds-csi-health
+  name: haify-csi-health
   apiGroup: rbac.authorization.k8s.io

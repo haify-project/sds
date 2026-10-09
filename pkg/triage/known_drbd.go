@@ -266,7 +266,7 @@ func matchDRBDModuleMissing(in Input) []Finding {
 		ll := strings.ToLower(l)
 		return strings.Contains(ll, "module drbd not found") ||
 			(strings.Contains(ll, "modprobe") && strings.Contains(ll, "drbd") && strings.Contains(ll, "fatal"))
-	}, "drbd_kernel", "kernel_errors", "reactor_journal", "promoter_journal", "sds_journal")
+	}, "drbd_kernel", "kernel_errors", "reactor_journal", "promoter_journal", "haify_journal")
 	if len(ev) == 0 {
 		return nil
 	}
@@ -284,7 +284,7 @@ func matchDRBDModuleMissing(in Input) []Finding {
 			"Confirm what is actually there: drbdadm --version   (DRBD_KERNEL_VERSION=0 means no module)",
 			"Install the module for the running kernel — the package name follows the distribution: drbd-dkms, kmod-drbd9x, or a LINBIT build matching uname -r.",
 			"Load it and make that persist: modprobe drbd && echo drbd > /etc/modules-load.d/drbd.conf",
-			"Re-check the node: sds node health-check <node>",
+			"Re-check the node: haify node health-check <node>",
 		},
 		Evidence: ev,
 	}}

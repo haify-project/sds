@@ -34,7 +34,7 @@ func TestParseSmart(t *testing.T) {
 
 func TestParseDiskProbeAndCheck(t *testing.T) {
 	bad := base64.StdEncoding.EncodeToString([]byte(`{"model_name":"WD","smart_status":{"passed":false}}`))
-	out := "/dev/vdb|sds_tp|10737418240|5368709120|/dev/vdb|NOSMARTCTL\n/dev/sdb1|sds_hdd|100|50|/dev/sdb|" + bad + "\n" +
+	out := "/dev/vdb|haify_tp|10737418240|5368709120|/dev/vdb|NOSMARTCTL\n/dev/sdb1|haify_hdd|100|50|/dev/sdb|" + bad + "\n" +
 		"/dev/sda3|ubuntu-vg|100|100|/dev/sda|NOSMARTCTL\n" // the node's own VG: not a pool
 	disks := ParseDiskProbe("n1", out)
 	require.Len(t, disks, 2)
@@ -46,6 +46,6 @@ func TestParseDiskProbeAndCheck(t *testing.T) {
 	checks := checkDisks(&Input{Disks: disks, DisksProbed: true})
 	require.Len(t, checks, 1, "unknown is not a finding")
 	assert.Equal(t, StatusFail, checks[0].Status)
-	assert.Contains(t, checks[0].Fix, "replace-disk --pool sds_hdd --node n1 --disk /dev/sdb1")
+	assert.Contains(t, checks[0].Fix, "replace-disk --pool haify_hdd --node n1 --disk /dev/sdb1")
 	assert.Nil(t, checkDisks(&Input{}), "nothing read, nothing said")
 }

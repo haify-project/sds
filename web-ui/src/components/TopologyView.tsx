@@ -13,7 +13,7 @@ import { ResourceTopology } from './ResourceTopology';
 
 const ResourceTopology3D = lazy(() => import('./topology3d/ResourceTopology3D'));
 
-const MODE_KEY = 'sds.topology.mode';
+const MODE_KEY = 'haify.topology.mode';
 type Mode = '3d' | '2d';
 
 function readMode(): Mode {

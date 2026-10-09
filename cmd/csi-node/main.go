@@ -7,14 +7,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/haify-project/sds/pkg/client"
-	"github.com/haify-project/sds/pkg/csi"
+	"github.com/haify-project/haify/pkg/client"
+	"github.com/haify-project/haify/pkg/csi"
 	"go.uber.org/zap"
 )
 
 func main() {
 	endpoint := flag.String("endpoint", "unix:///csi/csi.sock", "CSI gRPC endpoint")
-	sdsAddr := flag.String("sds-controller", "sds-controller:3374", "sds-controller gRPC address")
+	haifyAddr := flag.String("haify-controller", "haify-controller:3374", "haify-controller gRPC address")
 	nodeName := flag.String("node-name", os.Getenv("NODE_NAME"), "Kubernetes node name")
 	nodeIP := flag.String("node-ip", os.Getenv("NODE_IP"), "this node's storage IP, registered with the controller at startup")
 	flag.Parse()
@@ -26,26 +26,26 @@ func main() {
 		log.Fatal("node-name and node-ip are required (set via downward API NODE_NAME / NODE_IP)")
 	}
 
-	sds, err := client.NewSDSClient(*sdsAddr)
+	haify, err := client.NewHaifyClient(*haifyAddr)
 	if err != nil {
-		log.Fatal("connect sds-controller", zap.Error(err))
+		log.Fatal("connect haify-controller", zap.Error(err))
 	}
 	// Runs on an orderly shutdown, once the driver has stopped serving. All this
 	// can report is that tearing down an idle gRPC transport was untidy, on a
 	// process that is about to exit and has nothing left to retry, so the error
 	// is dropped rather than logged as a shutdown failure.
-	defer func() { _ = sds.Close() }()
+	defer func() { _ = haify.Close() }()
 
-	// Auto-register this node into sds (idempotent on the controller side):
+	// Auto-register this node into haify (idempotent on the controller side):
 	// maps the k8s node name to its storage IP so topology and SSH line up.
-	if _, err := sds.RegisterNode(context.Background(), *nodeName, *nodeIP); err != nil {
+	if _, err := haify.RegisterNode(context.Background(), *nodeName, *nodeIP); err != nil {
 		log.Warn("register node (continuing)", zap.Error(err))
 	}
 
 	d := csi.NewDriver(*endpoint, log,
 		csi.NewIdentityServer(),
 		nil,
-		csi.NewNodeServer(sds, csi.NewMounter(), *nodeName, log),
+		csi.NewNodeServer(haify, csi.NewMounter(), *nodeName, log),
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // Resource snapshots: every volume on every diskful replica at the same
 // instant, with I/O suspended across them, so a rollback brings all replicas
-// back together and resyncs nothing. `sds resource snapshot create` takes one
+// back together and resyncs nothing. `haify resource snapshot create` takes one
 // on one node; this takes one of the whole resource.
 
 func resourceSnapshotReplicated() *cobra.Command {
@@ -21,7 +21,7 @@ func resourceSnapshotReplicated() *cobra.Command {
 		Short: "Snapshots of a whole resource on every replica (rollback without resync)",
 	}
 	var resource, name string
-	run := func(use, short string, needName bool, fn func(ctx context.Context, c sdspb.SDSControllerClient) error) *cobra.Command {
+	run := func(use, short string, needName bool, fn func(ctx context.Context, c haifypb.HaifyControllerClient) error) *cobra.Command {
 		sub := &cobra.Command{
 			Use:   use,
 			Short: short,
@@ -53,15 +53,15 @@ func resourceSnapshotReplicated() *cobra.Command {
 		return nil
 	}
 	cmd.AddCommand(
-		run("create", "Snapshot every volume on every replica", true, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-			r, err := c.CreateResourceSnapshot(ctx, &sdspb.CreateResourceSnapshotRequest{Resource: resource, Name: name})
+		run("create", "Snapshot every volume on every replica", true, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+			r, err := c.CreateResourceSnapshot(ctx, &haifypb.CreateResourceSnapshotRequest{Resource: resource, Name: name})
 			if err != nil {
 				return err
 			}
 			return result(r.Success, r.Message)
 		}),
-		run("list", "List a resource's snapshots", false, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-			r, err := c.ListResourceSnapshots(ctx, &sdspb.ListResourceSnapshotsRequest{Resource: resource})
+		run("list", "List a resource's snapshots", false, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+			r, err := c.ListResourceSnapshots(ctx, &haifypb.ListResourceSnapshotsRequest{Resource: resource})
 			if err != nil {
 				return err
 			}
@@ -73,15 +73,15 @@ func resourceSnapshotReplicated() *cobra.Command {
 			}
 			return nil
 		}),
-		run("rollback", "Roll every replica back (the resource must not be Primary anywhere)", true, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-			r, err := c.RollbackResourceSnapshot(ctx, &sdspb.RollbackResourceSnapshotRequest{Resource: resource, Name: name})
+		run("rollback", "Roll every replica back (the resource must not be Primary anywhere)", true, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+			r, err := c.RollbackResourceSnapshot(ctx, &haifypb.RollbackResourceSnapshotRequest{Resource: resource, Name: name})
 			if err != nil {
 				return err
 			}
 			return result(r.Success, r.Message)
 		}),
-		run("delete", "Delete a snapshot from every replica", true, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-			r, err := c.DeleteResourceSnapshot(ctx, &sdspb.DeleteResourceSnapshotRequest{Resource: resource, Name: name})
+		run("delete", "Delete a snapshot from every replica", true, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+			r, err := c.DeleteResourceSnapshot(ctx, &haifypb.DeleteResourceSnapshotRequest{Resource: resource, Name: name})
 			if err != nil {
 				return err
 			}

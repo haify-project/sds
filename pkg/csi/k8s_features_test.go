@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -175,12 +175,12 @@ func TestVolumeStatsForAMissingPathIsNotFound(t *testing.T) {
 
 // ---- capacity ----------------------------------------------------------------
 
-func thinPool(node string, sizeGiB, percent float64) *sdspb.PoolInfo {
-	return &sdspb.PoolInfo{Name: "sds_vg0", Node: node, ThinPoolLv: "sdsthin",
+func thinPool(node string, sizeGiB, percent float64) *haifypb.PoolInfo {
+	return &haifypb.PoolInfo{Name: "haify_vg0", Node: node, ThinPoolLv: "haifythin",
 		ThinSizeBytes: uint64(sizeGiB * float64(giB)), ThinDataPercent: percent}
 }
 
-func capacityOn(t *testing.T, b SDSBackend, node string) (*csi.GetCapacityResponse, error) {
+func capacityOn(t *testing.T, b HaifyBackend, node string) (*csi.GetCapacityResponse, error) {
 	t.Helper()
 	return newTestController(b).GetCapacity(context.Background(), &csi.GetCapacityRequest{
 		Parameters:         map[string]string{"pool": "vg0"},
@@ -190,7 +190,7 @@ func capacityOn(t *testing.T, b SDSBackend, node string) (*csi.GetCapacityRespon
 
 func TestCapacityIsTheNodesThinPoolFreeSpace(t *testing.T) {
 	b := newFakeBackend("n1", "n2")
-	b.pools = []*sdspb.PoolInfo{thinPool("10.0.0.1", 20, 75), thinPool("10.0.0.2", 20, 10)}
+	b.pools = []*haifypb.PoolInfo{thinPool("10.0.0.1", 20, 75), thinPool("10.0.0.2", 20, 10)}
 	resp, err := capacityOn(t, b, "n1")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5*giB), resp.AvailableCapacity)
@@ -201,7 +201,7 @@ func TestCapacityIsTheNodesThinPoolFreeSpace(t *testing.T) {
 // published as one, so the scheduler stops placing volumes there.
 func TestAFullThinPoolReportsZero(t *testing.T) {
 	b := newFakeBackend("n1")
-	b.pools = []*sdspb.PoolInfo{thinPool("10.0.0.1", 20, 100)}
+	b.pools = []*haifypb.PoolInfo{thinPool("10.0.0.1", 20, 100)}
 	resp, err := capacityOn(t, b, "n1")
 	require.NoError(t, err)
 	assert.Zero(t, resp.AvailableCapacity)
@@ -211,14 +211,14 @@ func TestAFullThinPoolReportsZero(t *testing.T) {
 // take the node out of scheduling over a figure nobody measured.
 func TestUnreportedCapacityIsUnavailableNotZero(t *testing.T) {
 	b := newFakeBackend("n1")
-	b.pools = []*sdspb.PoolInfo{{Name: "sds_vg0", Node: "10.0.0.1"}}
+	b.pools = []*haifypb.PoolInfo{{Name: "haify_vg0", Node: "10.0.0.1"}}
 	_, err := capacityOn(t, b, "n1")
 	assert.Equal(t, codes.Unavailable, status.Code(err))
 }
 
 func TestANodeWithoutThePoolHasNoCapacity(t *testing.T) {
 	b := newFakeBackend("n1", "n2")
-	b.pools = []*sdspb.PoolInfo{thinPool("10.0.0.1", 20, 10)}
+	b.pools = []*haifypb.PoolInfo{thinPool("10.0.0.1", 20, 10)}
 	resp, err := capacityOn(t, b, "n2")
 	require.NoError(t, err)
 	assert.Zero(t, resp.AvailableCapacity)
@@ -228,7 +228,7 @@ func TestANodeWithoutThePoolHasNoCapacity(t *testing.T) {
 // would hold its last replica, not by the roomiest one.
 func TestCapacityWithoutTopologyBoundsTheVolumeByItsReplicas(t *testing.T) {
 	b := newFakeBackend("n1", "n2", "n3")
-	b.pools = []*sdspb.PoolInfo{thinPool("10.0.0.1", 20, 0), thinPool("10.0.0.2", 20, 50), thinPool("10.0.0.3", 20, 90)}
+	b.pools = []*haifypb.PoolInfo{thinPool("10.0.0.1", 20, 0), thinPool("10.0.0.2", 20, 50), thinPool("10.0.0.3", 20, 90)}
 	resp, err := newTestController(b).GetCapacity(context.Background(), &csi.GetCapacityRequest{
 		Parameters: map[string]string{"pool": "vg0", "replicas": "2"}})
 	require.NoError(t, err)
@@ -250,7 +250,7 @@ func provision(t *testing.T, ctrl *controllerServer, name string) {
 // up as volumes a CO might decide to garbage-collect.
 func TestListVolumesReturnsOnlyTheDriversOwnAndPages(t *testing.T) {
 	b := newFakeBackend("n1", "n2")
-	require.NoError(t, b.CreateResourceWithPoolAndType(context.Background(), "sds-meta", 0, []string{"n1", "n2"}, "C", 1, "vg0", "lvm", nil))
+	require.NoError(t, b.CreateResourceWithPoolAndType(context.Background(), "haify-meta", 0, []string{"n1", "n2"}, "C", 1, "vg0", "lvm", nil))
 	ctrl := newTestController(b)
 	provision(t, ctrl, "pvc-a")
 	provision(t, ctrl, "pvc-b")
@@ -285,18 +285,18 @@ func TestListSnapshotsReportsOnlyTheDriversOwn(t *testing.T) {
 	path, _, err := snapshotSource(b.resources["pvc_a"])
 	require.NoError(t, err)
 	if b.snapshots == nil {
-		b.snapshots = map[string][]*sdspb.SnapshotInfo{}
+		b.snapshots = map[string][]*haifypb.SnapshotInfo{}
 	}
 	node := b.resources["pvc_a"].Nodes[0]
-	b.snapshots[snapKey(path, node)] = []*sdspb.SnapshotInfo{
-		{Name: "sdssnap_snapshot_1"},
+	b.snapshots[snapKey(path, node)] = []*haifypb.SnapshotInfo{
+		{Name: "haifysnap_snapshot_1"},
 		{Name: "pvc_a_data_sched_20260921T010000Z"},
 	}
 
 	resp, err := ctrl.ListSnapshots(context.Background(), &csi.ListSnapshotsRequest{SourceVolumeId: "pvc_a"})
 	require.NoError(t, err)
 	require.Len(t, resp.Entries, 1)
-	assert.Equal(t, makeSnapshotID("pvc_a", node, "sdssnap_snapshot_1"), resp.Entries[0].Snapshot.SnapshotId)
+	assert.Equal(t, makeSnapshotID("pvc_a", node, "haifysnap_snapshot_1"), resp.Entries[0].Snapshot.SnapshotId)
 
 	byID, err := ctrl.ListSnapshots(context.Background(), &csi.ListSnapshotsRequest{SnapshotId: resp.Entries[0].Snapshot.SnapshotId})
 	require.NoError(t, err)
@@ -309,12 +309,12 @@ func TestListSnapshotsReportsOnlyTheDriversOwn(t *testing.T) {
 
 // ---- health ------------------------------------------------------------------
 
-func resourceWith(states map[string]*sdspb.NodeResourceState) *sdspb.ResourceInfo {
-	return &sdspb.ResourceInfo{Name: "v", Nodes: []string{"n1", "n2"}, NodeStates: states}
+func resourceWith(states map[string]*haifypb.NodeResourceState) *haifypb.ResourceInfo {
+	return &haifypb.ResourceInfo{Name: "v", Nodes: []string{"n1", "n2"}, NodeStates: states}
 }
 
 func TestHealthCatchesTheReplicaThatReportsNothing(t *testing.T) {
-	abnormal, msg := volumeHealth(resourceWith(map[string]*sdspb.NodeResourceState{
+	abnormal, msg := volumeHealth(resourceWith(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		// A disconnected peer carries no disk state. Judged on disk state alone
 		// it looks fine — the mistake that hid a split brain for a day.
@@ -326,7 +326,7 @@ func TestHealthCatchesTheReplicaThatReportsNothing(t *testing.T) {
 }
 
 func TestHealthAcceptsAnExpectedDisklessClient(t *testing.T) {
-	r := resourceWith(map[string]*sdspb.NodeResourceState{
+	r := resourceWith(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		"n3": {DiskState: "Diskless", Connection: "Connected", Node: "n3"},
 	})
@@ -336,7 +336,7 @@ func TestHealthAcceptsAnExpectedDisklessClient(t *testing.T) {
 }
 
 func TestHealthReportsAResyncAsDegraded(t *testing.T) {
-	abnormal, msg := volumeHealth(resourceWith(map[string]*sdspb.NodeResourceState{
+	abnormal, msg := volumeHealth(resourceWith(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		"n2": {DiskState: "Inconsistent", ReplicationState: "SyncTarget", SyncPercent: 42.5, Connection: "Connected", Node: "n2"},
 	}))
@@ -377,7 +377,7 @@ func newHealthHarness(t *testing.T) *healthHarness {
 	return &healthHarness{b: b, rep: NewHealthReporter(b, kube, rec, 0, zap.NewNop()), recorder: rec}
 }
 
-func (h *healthHarness) setStates(states map[string]*sdspb.NodeResourceState) {
+func (h *healthHarness) setStates(states map[string]*haifypb.NodeResourceState) {
 	h.b.resources["pvc_x"].NodeStates = states
 }
 
@@ -393,7 +393,7 @@ func (h *healthHarness) drain() []string {
 	}
 }
 
-var healthy = map[string]*sdspb.NodeResourceState{
+var healthy = map[string]*haifypb.NodeResourceState{
 	"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 	"n2": {DiskState: "UpToDate", Connection: "Connected", Node: "n2"},
 }
@@ -406,7 +406,7 @@ func TestReporterPostsOnlyOnTransitions(t *testing.T) {
 	h.rep.Sweep(ctx)
 	assert.Empty(t, h.drain(), "a healthy volume seen for the first time is not news")
 
-	h.setStates(map[string]*sdspb.NodeResourceState{
+	h.setStates(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		"n2": {Connection: "StandAlone", Node: "n2"},
 	})
@@ -430,8 +430,8 @@ func TestReporterPostsOnlyOnTransitions(t *testing.T) {
 func TestReporterDoesNotRepostResyncProgress(t *testing.T) {
 	h := newHealthHarness(t)
 	ctx := context.Background()
-	resync := func(pct float64) map[string]*sdspb.NodeResourceState {
-		return map[string]*sdspb.NodeResourceState{
+	resync := func(pct float64) map[string]*haifypb.NodeResourceState {
+		return map[string]*haifypb.NodeResourceState{
 			"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 			"n2": {DiskState: "Inconsistent", ReplicationState: "SyncTarget", SyncPercent: pct, Connection: "Connected", Node: "n2"},
 		}
@@ -464,7 +464,7 @@ func TestReporterSaysNothingWhenTheControllerDoesNotAnswer(t *testing.T) {
 // From the Primary's side a peer being brought up to date is SyncSource, not
 // SyncTarget. Both are a resync and must read as one.
 func TestHealthRecognisesAResyncSeenFromThePrimary(t *testing.T) {
-	_, msg := volumeHealth(resourceWith(map[string]*sdspb.NodeResourceState{
+	_, msg := volumeHealth(resourceWith(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		"n2": {DiskState: "Inconsistent", ReplicationState: "SyncSource", SyncPercent: 12, Connection: "Connected", Node: "n2"},
 	}))
@@ -476,7 +476,7 @@ func TestHealthRecognisesAResyncSeenFromThePrimary(t *testing.T) {
 func TestReporterStaysQuietDuringAVolumesInitialSync(t *testing.T) {
 	h := newHealthHarness(t)
 	ctx := context.Background()
-	h.setStates(map[string]*sdspb.NodeResourceState{
+	h.setStates(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		"n2": {DiskState: "Inconsistent", ReplicationState: "SyncSource", SyncPercent: 30, Connection: "Connected", Node: "n2"},
 	})
@@ -488,7 +488,7 @@ func TestReporterStaysQuietDuringAVolumesInitialSync(t *testing.T) {
 	assert.Empty(t, h.drain(), "and reaching full redundancy for the first time is not a recovery")
 
 	// Once established, the same resync is a real loss of redundancy.
-	h.setStates(map[string]*sdspb.NodeResourceState{
+	h.setStates(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		"n2": {DiskState: "Inconsistent", ReplicationState: "SyncSource", SyncPercent: 5, Connection: "Connected", Node: "n2"},
 	})
@@ -501,7 +501,7 @@ func TestReporterStaysQuietDuringAVolumesInitialSync(t *testing.T) {
 // A disconnect is reported even before the volume has ever been healthy.
 func TestReporterReportsADisconnectOnAVolumeNeverSeenHealthy(t *testing.T) {
 	h := newHealthHarness(t)
-	h.setStates(map[string]*sdspb.NodeResourceState{
+	h.setStates(map[string]*haifypb.NodeResourceState{
 		"n1": {Role: "Primary", DiskState: "UpToDate", Node: "n1"},
 		"n2": {Connection: "StandAlone", Node: "n2"},
 	})

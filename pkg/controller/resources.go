@@ -274,7 +274,7 @@ func (rm *ResourceManager) CreateResource(ctx context.Context, name string, port
 // WANSpec carries the opt-in WAN-replication parameters supplied to
 // CreateResourceWithVolumes. Nil ⇒ an ordinary LAN resource (behavior
 // unchanged). When set, the resource replicates between the single primary node
-// in `nodes` and DRNode across the internet via a per-resource sds-proxy pair
+// in `nodes` and DRNode across the internet via a per-resource haify-proxy pair
 // (protocol A + loopback-routed DRBD). See docs/design/wan-replication.md.
 type WANSpec struct {
 	// DRNode is the DR-site node name. It must be a registered node and distinct

@@ -12,37 +12,37 @@ import (
 // "list" for clients that already call them that way, but they are
 // destructive and so absent for read and operate tokens; these are not.
 func (s *Server) registerGatewayConfigReads(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_nfs_export_list", "List NFS exports",
+	addRead(s, srv, readOnlyTool("haify_nfs_export_list", "List NFS exports",
 		"List the exports of an NFS gateway: directory, fsid, client spec and options."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, nfsExportsOut, error) {
 			out, err := s.nfsExportList(ctx, in.Resource)
 			return nil, out, err
 		})
-	addRead(s, srv, readOnlyTool("sds_iscsi_lun_list", "List iSCSI LUNs",
+	addRead(s, srv, readOnlyTool("haify_iscsi_lun_list", "List iSCSI LUNs",
 		"List the LUNs of an iSCSI gateway and the device behind each."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, iscsiLunsOut, error) {
 			out, err := s.iscsiLunList(ctx, in.Resource)
 			return nil, out, err
 		})
-	addRead(s, srv, readOnlyTool("sds_iscsi_initiator_list", "List iSCSI initiators",
+	addRead(s, srv, readOnlyTool("haify_iscsi_initiator_list", "List iSCSI initiators",
 		"List the initiator IQNs on an iSCSI gateway's allow-list."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, stringListOut, error) {
 			out, err := s.iscsiInitiatorList(ctx, in.Resource)
 			return nil, out, err
 		})
-	addRead(s, srv, readOnlyTool("sds_iscsi_chap_get", "Show iSCSI CHAP settings",
+	addRead(s, srv, readOnlyTool("haify_iscsi_chap_get", "Show iSCSI CHAP settings",
 		"Whether an iSCSI gateway requires one-way CHAP, and its username. The password is never returned."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, iscsiChapOut, error) {
 			out, err := s.iscsiChapGet(ctx, in.Resource)
 			return nil, out, err
 		})
-	addRead(s, srv, readOnlyTool("sds_nvme_namespace_list", "List NVMe namespaces",
+	addRead(s, srv, readOnlyTool("haify_nvme_namespace_list", "List NVMe namespaces",
 		"List the namespaces of an NVMe-oF gateway: ID, backing device, UUID and NQN."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, nvmeNamespacesOut, error) {
 			out, err := s.nvmeNamespaceList(ctx, in.Resource)
 			return nil, out, err
 		})
-	addRead(s, srv, readOnlyTool("sds_nvme_host_list", "List NVMe hosts",
+	addRead(s, srv, readOnlyTool("haify_nvme_host_list", "List NVMe hosts",
 		"List the host NQNs on an NVMe-oF gateway's allow-list."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, stringListOut, error) {
 			out, err := s.nvmeHostList(ctx, in.Resource)
@@ -121,9 +121,9 @@ func (s *Server) nvmeHostList(ctx context.Context, resource string) (stringListO
 }
 
 func (s *Server) registerNFSConfig(srv *mcp.Server) {
-	addWrite(s, srv, destructiveTool("sds_nfs_exports", "Manage NFS exports",
+	addWrite(s, srv, destructiveTool("haify_nfs_exports", "Manage NFS exports",
 		"Add or remove NFS exports on an existing NFS gateway. Action list is still accepted; "+
-			"sds_nfs_export_list does the same as a read-only tool."),
+			"haify_nfs_export_list does the same as a read-only tool."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nfsExportsIn) (*mcp.CallToolResult, nfsExportsOut, error) {
 			switch in.Action {
 			case "list":
@@ -152,9 +152,9 @@ func (s *Server) registerNFSConfig(srv *mcp.Server) {
 }
 
 func (s *Server) registerISCSIConfig(srv *mcp.Server) {
-	addWrite(s, srv, destructiveTool("sds_iscsi_luns", "Manage iSCSI LUNs",
+	addWrite(s, srv, destructiveTool("haify_iscsi_luns", "Manage iSCSI LUNs",
 		"Add or remove LUNs on an existing iSCSI gateway. Action list is still accepted; "+
-			"sds_iscsi_lun_list does the same as a read-only tool."),
+			"haify_iscsi_lun_list does the same as a read-only tool."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in iscsiLunsIn) (*mcp.CallToolResult, iscsiLunsOut, error) {
 			switch in.Action {
 			case "list":
@@ -178,9 +178,9 @@ func (s *Server) registerISCSIConfig(srv *mcp.Server) {
 			}
 		})
 
-	addWrite(s, srv, destructiveTool("sds_iscsi_initiators", "Manage iSCSI initiators",
+	addWrite(s, srv, destructiveTool("haify_iscsi_initiators", "Manage iSCSI initiators",
 		"Add or remove initiator IQNs on an iSCSI gateway's allow-list. Action list is still accepted; "+
-			"sds_iscsi_initiator_list does the same as a read-only tool."),
+			"haify_iscsi_initiator_list does the same as a read-only tool."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in iscsiInitiatorsIn) (*mcp.CallToolResult, stringListOut, error) {
 			switch in.Action {
 			case "list":
@@ -207,9 +207,9 @@ func (s *Server) registerISCSIConfig(srv *mcp.Server) {
 			}
 		})
 
-	addWrite(s, srv, writeTool("sds_iscsi_chap", "Manage iSCSI CHAP",
+	addWrite(s, srv, writeTool("haify_iscsi_chap", "Manage iSCSI CHAP",
 		"Set one-way CHAP credentials on an iSCSI gateway (mutual CHAP is not supported). Action get is still accepted; "+
-			"sds_iscsi_chap_get does the same as a read-only tool. Passwords are never returned."),
+			"haify_iscsi_chap_get does the same as a read-only tool. Passwords are never returned."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in iscsiChapIn) (*mcp.CallToolResult, iscsiChapOut, error) {
 			switch in.Action {
 			case "get":
@@ -230,9 +230,9 @@ func (s *Server) registerISCSIConfig(srv *mcp.Server) {
 }
 
 func (s *Server) registerNVMeConfig(srv *mcp.Server) {
-	addWrite(s, srv, destructiveTool("sds_nvme_namespaces", "Manage NVMe namespaces",
+	addWrite(s, srv, destructiveTool("haify_nvme_namespaces", "Manage NVMe namespaces",
 		"Add or remove namespaces on an existing NVMe-oF gateway. Action list is still accepted; "+
-			"sds_nvme_namespace_list does the same as a read-only tool."),
+			"haify_nvme_namespace_list does the same as a read-only tool."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nvmeNamespacesIn) (*mcp.CallToolResult, nvmeNamespacesOut, error) {
 			switch in.Action {
 			case "list":
@@ -256,9 +256,9 @@ func (s *Server) registerNVMeConfig(srv *mcp.Server) {
 			}
 		})
 
-	addWrite(s, srv, destructiveTool("sds_nvme_hosts", "Manage NVMe hosts",
+	addWrite(s, srv, destructiveTool("haify_nvme_hosts", "Manage NVMe hosts",
 		"Add or remove host NQNs on an NVMe-oF gateway's allow-list. Action list is still accepted; "+
-			"sds_nvme_host_list does the same as a read-only tool."),
+			"haify_nvme_host_list does the same as a read-only tool."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nvmeHostsIn) (*mcp.CallToolResult, stringListOut, error) {
 			switch in.Action {
 			case "list":

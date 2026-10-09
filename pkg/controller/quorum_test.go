@@ -11,7 +11,7 @@ import (
 const twoSiteVerbose = `openclaw node-id:0 role:Primary suspended:no
   volume:0 minor:2 disk:UpToDate
       quorum:yes open:yes blocked:no
-  sds-b node-id:1 connection:Connected role:Secondary
+  haify-b node-id:1 connection:Connected role:Secondary
     volume:0 replication:Established peer-disk:UpToDate
   iZ2vca1 node-id:3 connection:Connected role:Secondary
     volume:0 replication:Established peer-disk:UpToDate
@@ -31,7 +31,7 @@ func TestParseQuorumThreeMembersAllOnline(t *testing.T) {
 func TestParseQuorumCountsDisconnectedPeersAsMembers(t *testing.T) {
 	out := `openclaw node-id:0 role:Primary
       quorum:yes open:yes
-  sds-b node-id:1 connection:Connected role:Secondary
+  haify-b node-id:1 connection:Connected role:Secondary
   iZ2vca1 node-id:3 connection:Connecting role:Unknown
 `
 	q := parseQuorum(out)
@@ -47,8 +47,8 @@ func TestParseQuorumCountsDisconnectedPeersAsMembers(t *testing.T) {
 func TestParseQuorumFourMembersNeedThree(t *testing.T) {
 	out := `openclaw node-id:0 role:Primary
       quorum:yes open:yes
-  sds-b node-id:1 connection:Connected role:Secondary
-  sds-e node-id:2 connection:Connected role:Secondary
+  haify-b node-id:1 connection:Connected role:Secondary
+  haify-e node-id:2 connection:Connected role:Secondary
   iZ2vca1 node-id:3 connection:Connected role:Secondary
 `
 	q := parseQuorum(out)
@@ -62,8 +62,8 @@ func TestParseQuorumFourMembersNeedThree(t *testing.T) {
 func TestParseQuorumTakesDRBDVerdictNotArithmetic(t *testing.T) {
 	out := `openclaw node-id:0 role:Primary
       quorum:no open:yes blocked:no
-  sds-b node-id:1 connection:Connected role:Secondary
-  sds-e node-id:2 connection:Connected role:Secondary
+  haify-b node-id:1 connection:Connected role:Secondary
+  haify-e node-id:2 connection:Connected role:Secondary
 `
 	q := parseQuorum(out)
 	assert.Equal(t, 3, q.Online)

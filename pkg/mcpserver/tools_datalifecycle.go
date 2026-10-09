@@ -6,7 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // Tools for the three things that decide where a resource's bytes live and how
@@ -20,7 +20,7 @@ import (
 // There is deliberately no tool for ADDING a backup target. Doing so requires
 // an object-store secret, and anything passed as a tool argument is recorded in
 // the conversation that called it — the one place a credential must not end up.
-// The CLI reads it from SDS_BACKUP_SECRET or a file for the same reason.
+// The CLI reads it from HAIFY_BACKUP_SECRET or a file for the same reason.
 // Listing and deleting targets are exposed; creating one stays out of band.
 
 type poolCacheAddIn struct {
@@ -97,7 +97,7 @@ type backupDeleteIn struct {
 	Force bool   `json:"force,omitempty" jsonschema:"remove the record even if the objects cannot be deleted from the target"`
 }
 
-func backupToOut(b *sdspb.BackupInfo) backupOut {
+func backupToOut(b *haifypb.BackupInfo) backupOut {
 	if b == nil {
 		return backupOut{}
 	}
@@ -114,7 +114,7 @@ func backupToOut(b *sdspb.BackupInfo) backupOut {
 
 // registerDataLifecycleTools adds pool-cache and backup tools.
 func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
-	addWrite(s, srv, writeTool("sds_pool_add_cache", "Put an SSD cache in front of a pool",
+	addWrite(s, srv, writeTool("haify_pool_add_cache", "Put an SSD cache in front of a pool",
 		"Attach a fast device as a cache for an LVM thin pool, so every volume in it reads and writes through the "+
 			"SSD. Defaults to writethrough. Writeback is faster and must be asked for by name: it acknowledges a "+
 			"write once it reaches the SSD, so a node that dies with a dirty cache takes acknowledged writes with "+
@@ -132,7 +132,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 			}, nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_pool_remove_cache", "Remove a pool's SSD cache",
+	addWrite(s, srv, destructiveTool("haify_pool_remove_cache", "Remove a pool's SSD cache",
 		"Detach the cache from a pool and release the device. A writeback cache is flushed first; if the flush "+
 			"cannot be confirmed this reports failure rather than letting the SSD be pulled with data still on it."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in poolCacheRemoveIn) (*mcp.CallToolResult, opResult, error) {
@@ -142,7 +142,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 			return nil, ok("cache removed from " + in.Pool + " on " + in.Node), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_backup_target_list", "List backup targets",
+	addRead(s, srv, readOnlyTool("haify_backup_target_list", "List backup targets",
 		"List the configured off-cluster destinations backups can be shipped to (S3, SMB, WebDAV). Credentials "+
 			"are never returned."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, backupTargetListOut, error) {
@@ -159,7 +159,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_backup_target_delete", "Delete a backup target",
+	addWrite(s, srv, destructiveTool("haify_backup_target_delete", "Delete a backup target",
 		"Remove a backup destination. Backups already shipped there become unrestorable through Haify."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in struct {
 			Name  string `json:"name"`
@@ -171,7 +171,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 			return nil, ok("backup target " + in.Name + " deleted"), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_backup_list", "List backups",
+	addRead(s, srv, readOnlyTool("haify_backup_list", "List backups",
 		"List backups shipped off the cluster, with their state. Only a backup in state 'completed' can be "+
 			"restored; 'running' means it is still uploading and 'failed' means it is not a usable copy."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in backupListIn) (*mcp.CallToolResult, backupListOut, error) {
@@ -186,7 +186,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_backup_create", "Back a resource up off-cluster",
+	addWrite(s, srv, writeTool("haify_backup_create", "Back a resource up off-cluster",
 		"Snapshot a resource and ship the image to a configured target. This is the only copy that survives losing "+
 			"the cluster: snapshots live in the same pool, and WAN DR is a replica, so a deletion replicates to it. "+
 			"After the first, a backup to the same target is incremental: only the blocks changed since the last one "+
@@ -200,7 +200,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 			return nil, backupToOut(b), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_backup_restore", "Restore a backup",
+	addWrite(s, srv, destructiveTool("haify_backup_restore", "Restore a backup",
 		"Write a backup image back onto a resource, overwriting it from byte zero. Refused when the resource is "+
 			"Primary anywhere, when a gateway exports it, or when the destination is smaller than the image. "+
 			"Confirm with the operator before calling: this destroys whatever the resource currently holds."),
@@ -212,7 +212,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 			return nil, backupToOut(b), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_backup_delete", "Delete a backup",
+	addWrite(s, srv, destructiveTool("haify_backup_delete", "Delete a backup",
 		"Remove a backup and its objects from the target. Irreversible."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in backupDeleteIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.DeleteBackup(ctx, in.ID, in.Node, in.Force); err != nil {

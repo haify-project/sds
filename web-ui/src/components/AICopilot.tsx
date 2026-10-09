@@ -323,14 +323,14 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
   const [busy, setBusy] = useState(false);
   const sessionRef = useRef<string | undefined>(
     typeof localStorage !== 'undefined'
-      ? localStorage.getItem('sds.ai_session') ?? undefined
+      ? localStorage.getItem('haify.ai_session') ?? undefined
       : undefined,
   );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Resizable split pane: drag the left edge to change the panel width.
   const [width, setWidth] = useState<number>(() => {
-    const s = typeof localStorage !== 'undefined' ? localStorage.getItem('sds.ai_width') : null;
+    const s = typeof localStorage !== 'undefined' ? localStorage.getItem('haify.ai_width') : null;
     const n = s ? Number(s) : NaN;
     return Number.isFinite(n) ? n : 400;
   });
@@ -360,7 +360,7 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
       setWidth((w) => {
-        localStorage.setItem('sds.ai_width', String(w));
+        localStorage.setItem('haify.ai_width', String(w));
         return w;
       });
     };
@@ -458,7 +458,7 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
       const { sessionId } = await streamChat(q, sessionRef.current, onEvent);
       if (sessionId) {
         sessionRef.current = sessionId;
-        localStorage.setItem('sds.ai_session', sessionId);
+        localStorage.setItem('haify.ai_session', sessionId);
       }
     } catch (e) {
       patchLast((m) => {

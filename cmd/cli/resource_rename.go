@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 func resourceRenameCommand() *cobra.Command {
@@ -28,7 +28,7 @@ or encryption refer to the old name.`,
 			defer func() { _ = conn.Close() }()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
-			r, err := c.RenameResource(ctx, &sdspb.RenameResourceRequest{Name: args[0], NewName: args[1]})
+			r, err := c.RenameResource(ctx, &haifypb.RenameResourceRequest{Name: args[0], NewName: args[1]})
 			if err != nil {
 				return err
 			}

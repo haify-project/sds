@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,13 +18,13 @@ func thickPool(t *testing.T, node string) *thinConversionInput {
 	t.Helper()
 	return &thinConversionInput{
 		Node:        node,
-		Pool:        "sds_sdspool",
+		Pool:        "haify_haifypool",
 		VGFreeBytes: 3 * gib,
 		Resources: []*ResourceInfo{{
 			Name:  "openclaw",
 			Nodes: []string{"node-a", "node-b", "node-e"},
 			Volumes: []*ResourceVolumeInfo{{
-				VolumeID: 0, Pool: "sds_sdspool", BackingVolume: "openclaw_data", SizeGB: 6,
+				VolumeID: 0, Pool: "haify_haifypool", BackingVolume: "openclaw_data", SizeGB: 6,
 			}},
 			NodeStates: map[string]*ResourceNodeState{
 				"node-a": {Role: "Primary", DiskState: "UpToDate", SyncPercent: 100},
@@ -38,7 +38,7 @@ func thickPool(t *testing.T, node string) *thinConversionInput {
 }
 
 // NodeStates is keyed by whatever name DRBD reports, which is the node's
-// hostname — "sds-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — not the name Haify knows it by.
+// hostname — "haify-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — not the name Haify knows it by.
 // Looking it up with the Haify name found nothing for every node whose two names
 // differ, and the planner refused every one of them with "no live DRBD state".
 // It failed closed, so nothing was damaged; the feature simply never worked.
@@ -47,12 +47,12 @@ func TestFindsLiveStateWhenDRBDKnowsTheNodeByAnotherName(t *testing.T) {
 	// Re-key exactly as a real cluster does: DRBD hostnames, not Haify names.
 	states := in.Resources[0].NodeStates
 	in.Resources[0].NodeStates = map[string]*ResourceNodeState{
-		"lima-sds-a": states["node-a"],
-		"sds-b":      states["node-b"],
-		"sds-e":      states["node-e"],
+		"lima-haify-a": states["node-a"],
+		"haify-b":      states["node-b"],
+		"haify-e":      states["node-e"],
 	}
 	in.DRBDName = map[string]string{
-		"node-a": "lima-sds-a", "node-b": "sds-b", "node-e": "sds-e",
+		"node-a": "lima-haify-a", "node-b": "haify-b", "node-e": "haify-e",
 	}
 	plan, err := planThinConversion(in)
 	require.NoError(t, err, "the node is Secondary and its peers are UpToDate")
@@ -158,24 +158,24 @@ func TestPoolIsSizedForAFullyAllocatedOriginPlusHeadroom(t *testing.T) {
 func TestPlanCoversEveryVolumeInThePool(t *testing.T) {
 	in := thickPool(t, "node-e")
 	in.Resources = append(in.Resources, &ResourceInfo{
-		Name:  "sds-meta",
+		Name:  "haify-meta",
 		Nodes: []string{"node-b", "node-e"},
 		Volumes: []*ResourceVolumeInfo{{
-			VolumeID: 0, Pool: "sds_sdspool", BackingVolume: "sds-meta_data", SizeGB: 1,
+			VolumeID: 0, Pool: "haify_haifypool", BackingVolume: "haify-meta_data", SizeGB: 1,
 		}},
 		NodeStates: map[string]*ResourceNodeState{
 			"node-b": {Role: "Primary", DiskState: "UpToDate", SyncPercent: 100},
 			"node-e": {Role: "Secondary", DiskState: "UpToDate", SyncPercent: 100},
 		},
 	})
-	in.BackingBytes["sds-meta_data"] = 1073741824
-	in.AlreadyThin["sds-meta_data"] = false
+	in.BackingBytes["haify-meta_data"] = 1073741824
+	in.AlreadyThin["haify-meta_data"] = false
 
-	// Only two diskful copies of sds-meta, so it must be refused for the same
+	// Only two diskful copies of haify-meta, so it must be refused for the same
 	// reason as the single-copy case above — the pool is converted whole.
 	_, err := planThinConversion(in)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "sds-meta")
+	assert.Contains(t, err.Error(), "haify-meta")
 }
 
 // A conversion that dies partway leaves the node diskless with its thick volume
@@ -241,15 +241,15 @@ func TestRebuildSkipsTeardownAndPoolCreationOnResume(t *testing.T) {
 // A pool half-converted by hand has thin volumes and thick ones side by side.
 // Refusing the whole pool because one volume is already thin leaves the rest
 // permanently unconvertible — which is the state node-e sat in: openclaw_data
-// thin, sds-meta_data thick, and every conversion attempt answered "already
+// thin, haify-meta_data thick, and every conversion attempt answered "already
 // thin; nothing to convert".
 func TestConvertsTheThickVolumesInAHalfThinPool(t *testing.T) {
 	in := thickPool(t, "node-e")
 	in.Resources = append(in.Resources, &ResourceInfo{
-		Name:  "sds-meta",
+		Name:  "haify-meta",
 		Nodes: []string{"node-b", "node-e", "node-d"},
 		Volumes: []*ResourceVolumeInfo{{
-			VolumeID: 0, Pool: "sds_sdspool", BackingVolume: "sds-meta_data", SizeGB: 1,
+			VolumeID: 0, Pool: "haify_haifypool", BackingVolume: "haify-meta_data", SizeGB: 1,
 		}},
 		NodeStates: map[string]*ResourceNodeState{
 			"node-b": {Role: "Secondary", DiskState: "UpToDate", SyncPercent: 100},
@@ -257,8 +257,8 @@ func TestConvertsTheThickVolumesInAHalfThinPool(t *testing.T) {
 			"node-e": {Role: "Secondary", DiskState: "UpToDate", SyncPercent: 100},
 		},
 	})
-	in.BackingBytes["sds-meta_data"] = 1077936128
-	in.AlreadyThin = map[string]bool{"openclaw_data": true, "sds-meta_data": false}
+	in.BackingBytes["haify-meta_data"] = 1077936128
+	in.AlreadyThin = map[string]bool{"openclaw_data": true, "haify-meta_data": false}
 	in.ThinPoolExists = true
 	in.ThinPoolMetadataBytes = 8 << 20
 	in.VGFreeBytes = 1048576000
@@ -266,7 +266,7 @@ func TestConvertsTheThickVolumesInAHalfThinPool(t *testing.T) {
 	plan, err := planThinConversion(in)
 	require.NoError(t, err)
 	require.Len(t, plan.Volumes, 1, "only the thick one is work")
-	assert.Equal(t, "sds-meta_data", plan.Volumes[0].LV)
+	assert.Equal(t, "haify-meta_data", plan.Volumes[0].LV)
 	assert.False(t, plan.CreatePool, "the pool is already there")
 	assert.True(t, plan.ExtendPool, "the freed extents should go into it")
 	// 8 MiB of metadata is what LVM's default gives; it is the size that leaves
@@ -360,7 +360,7 @@ func TestRebuildSucceedsWhenEveryStepDoes(t *testing.T) {
 
 func testConversionPlan() *thinConversionPlan {
 	return &thinConversionPlan{
-		Node: "node-e", Pool: "sds_sdspool", ThinPoolName: thinPoolName,
+		Node: "node-e", Pool: "haify_haifypool", ThinPoolName: thinPoolName,
 		PoolBytes: 10464788480, MetadataBytes: 134217728, CreatePool: true,
 		Volumes: []thinVolumePlan{{
 			Resource: "openclaw", LV: "openclaw_data", SizeBytes: 6442450944, NeedsTeardown: true,
@@ -399,11 +399,11 @@ func TestPlanIgnoresVolumesInOtherPools(t *testing.T) {
 func TestExtendsWhicheverThinPoolTheNodeActuallyHas(t *testing.T) {
 	in := thickPool(t, "node-e")
 	in.ThinPoolExists = true
-	in.ExistingThinPool = "sds_sdspool_thin"
+	in.ExistingThinPool = "haify_haifypool_thin"
 	in.ThinPoolMetadataBytes = 128 << 20
 
 	plan, err := planThinConversion(in)
 	require.NoError(t, err)
-	assert.Equal(t, "sds_sdspool_thin", plan.ThinPoolName)
+	assert.Equal(t, "haify_haifypool_thin", plan.ThinPoolName)
 	assert.Zero(t, plan.MetadataGrowTo, "128 MiB is already the floor")
 }

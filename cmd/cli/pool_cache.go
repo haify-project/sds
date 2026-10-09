@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/haify-project/sds/pkg/util"
+	"github.com/haify-project/haify/pkg/util"
 	"github.com/spf13/cobra"
 )
 
@@ -37,14 +37,14 @@ MODES
                           back, which a resyncing peer or a correlated failure
                           will not.
 
-Run 'sds pool get' to see how much of a writeback cache is dirty, which is the
+Run 'haify pool get' to see how much of a writeback cache is dirty, which is the
 size of that window at any moment.
 
 The command refuses when the device is already in use or carries a signature,
 when it is smaller than 4 GiB, when the pool is not an LVM thin pool, and when
 the pool already has a cache.
 
-  sds pool add-cache --node node1 --pool pool0 --device /dev/nvme0n1`,
+  haify pool add-cache --node node1 --pool pool0 --device /dev/nvme0n1`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if node == "" || pool == "" || device == "" {
 				return fmt.Errorf("--node, --pool and --device are all required")
@@ -55,13 +55,13 @@ the pool already has a cache.
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			applied, size, err := sdsClient.AddPoolCache(ctx, node, pool, device, mode)
+			applied, size, err := haifyClient.AddPoolCache(ctx, node, pool, device, mode)
 			if err != nil {
 				return fmt.Errorf("failed to add cache: %w", err)
 			}
@@ -104,7 +104,7 @@ If the cache device has already failed there is nothing to flush from, and this
 command refuses rather than discarding the writes on your behalf; it names the
 lvconvert --uncache --force needed to accept that loss deliberately.
 
-  sds pool remove-cache --node node1 --pool pool0`,
+  haify pool remove-cache --node node1 --pool pool0`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if node == "" || pool == "" {
 				return fmt.Errorf("--node and --pool are both required")
@@ -115,13 +115,13 @@ lvconvert --uncache --force needed to accept that loss deliberately.
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.RemovePoolCache(ctx, node, pool); err != nil {
+			if err := haifyClient.RemovePoolCache(ctx, node, pool); err != nil {
 				return fmt.Errorf("failed to remove cache: %w", err)
 			}
 

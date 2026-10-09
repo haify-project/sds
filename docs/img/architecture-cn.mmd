@@ -2,7 +2,7 @@
 %% Source of architecture-cn.png. Regenerate with:
 %%   npx -p @mermaid-js/mermaid-cli mmdc -i architecture-cn.mmd -o architecture-cn.png -b white -s 2
 flowchart LR
-    clients["sds · Web UI<br>MCP · CSI · Proxmox"] -- gRPC / REST --> ctl["sds-controller<br>BoltDB · 告警 · 调度<br>Self-HA 浮动 VIP"]
+    clients["haify · Web UI<br>MCP · CSI · Proxmox"] -- gRPC / REST --> ctl["haify-controller<br>BoltDB · 告警 · 调度<br>Self-HA 浮动 VIP"]
     ctl -- SSH --> n2["节点 2<br>LVM/ZFS + DRBD 9"]
     ctl -- SSH --> n3["节点 3<br>仲裁 tiebreaker"]
     ctl -- "SSH，节点无 agent" --> n1["节点 1<br>LVM/ZFS + DRBD 9"]

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/haify/pkg/config"
 )
 
 // The REST gateway carries the same bearer token as gRPC, and used to carry
@@ -80,7 +80,7 @@ func TestRESTOverTLSVerifiesLikeAnyServer(t *testing.T) {
 	url := "https://127.0.0.1:" + strconv.Itoa(port) + "/v1/nodes"
 
 	trusting := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		RootCAs: p.rootPool(t), ServerName: "sds-controller.test", MinVersion: tls.VersionTLS12}}}
+		RootCAs: p.rootPool(t), ServerName: "haify-controller.test", MinVersion: tls.VersionTLS12}}}
 	resp, err := trusting.Get(url)
 	require.NoError(t, err)
 	_ = resp.Body.Close()
@@ -88,7 +88,7 @@ func TestRESTOverTLSVerifiesLikeAnyServer(t *testing.T) {
 
 	other := newTestPKI(t)
 	untrusting := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		RootCAs: other.rootPool(t), ServerName: "sds-controller.test", MinVersion: tls.VersionTLS12}}}
+		RootCAs: other.rootPool(t), ServerName: "haify-controller.test", MinVersion: tls.VersionTLS12}}}
 	_, err = untrusting.Get(url)
 	require.Error(t, err)
 }

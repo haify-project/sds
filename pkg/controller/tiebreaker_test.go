@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // registerNodes adds online nodes to the controller's node manager and host map.
@@ -196,9 +196,9 @@ func TestSelectTiebreakerPrefersStorageNodes(t *testing.T) {
 	})
 	// Pools live only on the orange nodes. One recorded by name, one by address,
 	// to prove storageNodeSet normalizes both forms.
-	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0-o1", Type: "vg", Node: "orange1"}))
-	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0-o2", Type: "vg", Node: "10.0.0.2"}))
-	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0-o3", Type: "vg", Node: "orange3"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "haify_vg0-o1", Type: "vg", Node: "orange1"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "haify_vg0-o2", Type: "vg", Node: "10.0.0.2"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "haify_vg0-o3", Type: "vg", Node: "orange3"}))
 
 	// Replicas on orange1+orange3 → candidates are orange2 (storage) and hp
 	// (compute). hp sorts first, but the storage node must win.

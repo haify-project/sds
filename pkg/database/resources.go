@@ -46,7 +46,7 @@ type Resource struct {
 	// WAN replication (opt-in). All zero-valued for an ordinary LAN resource, so
 	// existing records deserialize as LAN and every WAN code path stays gated
 	// behind WANMode. See docs/design/wan-replication.md.
-	WANMode    bool   // false = LAN (default); true routes DRBD via a per-resource sds-proxy pair
+	WANMode    bool   // false = LAN (default); true routes DRBD via a per-resource haify-proxy pair
 	DRNode     string // the DR-site node name (WAN only)
 	DREndpoint string // the DR site's public WAN address the primary dials (WAN only)
 	WANPort    int    // WAN mTLS port the DR acceptor listens on (WAN only)

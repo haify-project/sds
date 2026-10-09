@@ -6,13 +6,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/gateway"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/gateway"
 	"go.uber.org/zap"
 )
 
-func (s *Server) CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGatewayRequest) (*sdspb.CreateNFSGatewayResponse, error) {
+func (s *Server) CreateNFSGateway(ctx context.Context, req *haifypb.CreateNFSGatewayRequest) (*haifypb.CreateNFSGatewayResponse, error) {
 	if err := s.ctrl.assertPromoterAllowed(ctx, req.Resource, "an NFS gateway"); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
@@ -50,7 +50,7 @@ func (s *Server) CreateNFSGateway(ctx context.Context, req *sdspb.CreateNFSGatew
 	return resp, nil
 }
 
-func (s *Server) CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISCSIGatewayRequest) (*sdspb.CreateISCSIGatewayResponse, error) {
+func (s *Server) CreateISCSIGateway(ctx context.Context, req *haifypb.CreateISCSIGatewayRequest) (*haifypb.CreateISCSIGatewayResponse, error) {
 	if err := s.ctrl.assertPromoterAllowed(ctx, req.Resource, "an iSCSI gateway"); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
@@ -89,7 +89,7 @@ func (s *Server) CreateISCSIGateway(ctx context.Context, req *sdspb.CreateISCSIG
 	return resp, nil
 }
 
-func (s *Server) CreateNVMeGateway(ctx context.Context, req *sdspb.CreateNVMeGatewayRequest) (*sdspb.CreateNVMeGatewayResponse, error) {
+func (s *Server) CreateNVMeGateway(ctx context.Context, req *haifypb.CreateNVMeGatewayRequest) (*haifypb.CreateNVMeGatewayResponse, error) {
 	if err := s.ctrl.assertPromoterAllowed(ctx, req.Resource, "an NVMe-oF gateway"); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
@@ -125,10 +125,10 @@ func (s *Server) CreateNVMeGateway(ctx context.Context, req *sdspb.CreateNVMeGat
 	return resp, nil
 }
 
-func (s *Server) DeleteGateway(ctx context.Context, req *sdspb.DeleteGatewayRequest) (*sdspb.DeleteGatewayResponse, error) {
+func (s *Server) DeleteGateway(ctx context.Context, req *haifypb.DeleteGatewayRequest) (*haifypb.DeleteGatewayResponse, error) {
 	err := s.gateway.DeleteGateway(ctx, req.Id)
 	if err != nil {
-		return &sdspb.DeleteGatewayResponse{
+		return &haifypb.DeleteGatewayResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
@@ -141,52 +141,52 @@ func (s *Server) DeleteGateway(ctx context.Context, req *sdspb.DeleteGatewayRequ
 		}
 	}
 
-	return &sdspb.DeleteGatewayResponse{
+	return &haifypb.DeleteGatewayResponse{
 		Success: true,
 		Message: "Gateway deleted successfully",
 	}, nil
 }
 
-func (s *Server) GetGateway(ctx context.Context, req *sdspb.GetGatewayRequest) (*sdspb.GetGatewayResponse, error) {
+func (s *Server) GetGateway(ctx context.Context, req *haifypb.GetGatewayRequest) (*haifypb.GetGatewayResponse, error) {
 	gw, err := s.getGatewayInfo(ctx, req.Id)
 	if err != nil {
-		return &sdspb.GetGatewayResponse{
+		return &haifypb.GetGatewayResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.GetGatewayResponse{
+	return &haifypb.GetGatewayResponse{
 		Success: true,
 		Message: "Gateway found",
 		Gateway: s.enrichGatewayInfo(ctx, gw),
 	}, nil
 }
 
-func (s *Server) ListGateways(ctx context.Context, req *sdspb.ListGatewaysRequest) (*sdspb.ListGatewaysResponse, error) {
+func (s *Server) ListGateways(ctx context.Context, req *haifypb.ListGatewaysRequest) (*haifypb.ListGatewaysResponse, error) {
 	gateways, err := s.listGatewayInfos(ctx)
 	if err != nil {
-		return &sdspb.ListGatewaysResponse{
+		return &haifypb.ListGatewaysResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	var pbGateways []*sdspb.GatewayInfo
+	var pbGateways []*haifypb.GatewayInfo
 	for _, gw := range gateways {
 		pbGateways = append(pbGateways, s.enrichGatewayInfo(ctx, gw))
 	}
 
-	return &sdspb.ListGatewaysResponse{
+	return &haifypb.ListGatewaysResponse{
 		Success:  true,
 		Message:  "Gateways listed successfully",
 		Gateways: pbGateways,
 	}, nil
 }
 
-func (s *Server) StartGateway(ctx context.Context, req *sdspb.StartGatewayRequest) (*sdspb.StartGatewayResponse, error) {
+func (s *Server) StartGateway(ctx context.Context, req *haifypb.StartGatewayRequest) (*haifypb.StartGatewayResponse, error) {
 	err := s.gateway.StartGateway(ctx, req.Id)
 	if err != nil {
-		return &sdspb.StartGatewayResponse{
+		return &haifypb.StartGatewayResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
@@ -199,16 +199,16 @@ func (s *Server) StartGateway(ctx context.Context, req *sdspb.StartGatewayReques
 			}
 		}
 	}
-	return &sdspb.StartGatewayResponse{
+	return &haifypb.StartGatewayResponse{
 		Success: true,
 		Message: "Gateway started successfully",
 	}, nil
 }
 
-func (s *Server) StopGateway(ctx context.Context, req *sdspb.StopGatewayRequest) (*sdspb.StopGatewayResponse, error) {
+func (s *Server) StopGateway(ctx context.Context, req *haifypb.StopGatewayRequest) (*haifypb.StopGatewayResponse, error) {
 	err := s.gateway.StopGateway(ctx, req.Id)
 	if err != nil {
-		return &sdspb.StopGatewayResponse{
+		return &haifypb.StopGatewayResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
@@ -222,7 +222,7 @@ func (s *Server) StopGateway(ctx context.Context, req *sdspb.StopGatewayRequest)
 			}
 		}
 	}
-	return &sdspb.StopGatewayResponse{
+	return &haifypb.StopGatewayResponse{
 		Success: true,
 		Message: "Gateway stopped successfully",
 	}, nil

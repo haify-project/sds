@@ -9,18 +9,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
-const lostHost = "192.168.123.228" // node-d, sds-d, node-id 3 in threeReplicaConfig
+const lostHost = "192.168.123.228" // node-d, haify-d, node-id 3 in threeReplicaConfig
 
-// What a survivor sees when sds-d is gone: the connection to it down, its own
-// copy UpToDate, quorum held with sds-b.
-const survivorSeesDGone = `sds-meta role:Secondary
+// What a survivor sees when haify-d is gone: the connection to it down, its own
+// copy UpToDate, quorum held with haify-b.
+const survivorSeesDGone = `haify-meta role:Secondary
   disk:UpToDate open:no
-  sds-b role:Primary
+  haify-b role:Primary
     peer-disk:UpToDate
-  sds-d connection:Connecting
+  haify-d connection:Connecting
 `
 
 type lostFixture struct {
@@ -57,7 +57,7 @@ func newLostFixture(t *testing.T, nodes string) *lostFixture {
 	}
 	f.ctrl = removeTestController(t, dep, nodes, "")
 	// As registration records them: the DRBD name is the node's hostname.
-	for addr, host := range map[string]string{"192.168.123.227": "sds-b", "192.168.123.212": "sds-e", lostHost: "sds-d"} {
+	for addr, host := range map[string]string{"192.168.123.227": "haify-b", "192.168.123.212": "haify-e", lostHost: "haify-d"} {
 		f.ctrl.nodes.nodes[addr].Hostname = host
 		f.ctrl.hostsMap[host] = addr
 	}
@@ -80,20 +80,20 @@ func (f *lostFixture) on(host string) []string {
 func TestRemoveLostReplicaRunsNothingOnTheLostNode(t *testing.T) {
 	f := newLostFixture(t, "node-b,node-e,node-d")
 
-	require.NoError(t, f.ctrl.resources.RemoveReplicaOptions(context.Background(), "sds-meta", "node-d", true))
+	require.NoError(t, f.ctrl.resources.RemoveReplicaOptions(context.Background(), "haify-meta", "node-d", true))
 
 	assert.Equal(t, []string{"true"}, f.on(lostHost), "the lost node is only probed, never acted on")
 	for _, hosts := range f.distributed {
 		assert.NotContains(t, hosts, lostHost)
 	}
 	for _, h := range []string{"192.168.123.227", "192.168.123.212"} {
-		assert.Contains(t, f.on(h), "sudo drbdadm adjust sds-meta")
-		assert.Contains(t, f.on(h), "sudo drbdsetup forget-peer sds-meta 3", "the dead peer's bitmap slot is freed")
+		assert.Contains(t, f.on(h), "sudo drbdadm adjust haify-meta")
+		assert.Contains(t, f.on(h), "sudo drbdsetup forget-peer haify-meta 3", "the dead peer's bitmap slot is freed")
 	}
 	for _, r := range f.ran {
 		assert.NotContains(t, r, "lvremove", "no storage is touched anywhere")
 	}
-	res, err := f.ctrl.db.GetResource(context.Background(), "sds-meta")
+	res, err := f.ctrl.db.GetResource(context.Background(), "haify-meta")
 	require.NoError(t, err)
 	assert.Equal(t, "node-b,node-e", res.Nodes)
 }
@@ -101,18 +101,18 @@ func TestRemoveLostReplicaRunsNothingOnTheLostNode(t *testing.T) {
 // Its copy is already gone, so removing it from two leaves one: allowed.
 func TestRemoveLostReplicaMayLeaveOneCopy(t *testing.T) {
 	f := newLostFixture(t, "node-b,node-d")
-	require.NoError(t, f.ctrl.resources.RemoveReplicaOptions(context.Background(), "sds-meta", "node-d", true))
+	require.NoError(t, f.ctrl.resources.RemoveReplicaOptions(context.Background(), "haify-meta", "node-d", true))
 
 	f = newLostFixture(t, "node-b,node-d")
 	f.answers = true
-	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "sds-meta", "node-d", false)
+	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "haify-meta", "node-d", false)
 	require.Error(t, err, "without --lost the floor stays at two")
 }
 
 func TestRemoveLostReplicaRefusesANodeThatAnswers(t *testing.T) {
 	f := newLostFixture(t, "node-b,node-e,node-d")
 	f.answers = true
-	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "sds-meta", "node-d", true)
+	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "haify-meta", "node-d", true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "answers over SSH")
 	assert.Empty(t, f.distributed)
@@ -121,8 +121,8 @@ func TestRemoveLostReplicaRefusesANodeThatAnswers(t *testing.T) {
 // Cut off from the controller is not gone: it may still be replicating.
 func TestRemoveLostReplicaRefusesANodeStillConnectedOverDRBD(t *testing.T) {
 	f := newLostFixture(t, "node-b,node-e,node-d")
-	f.status = strings.Replace(survivorSeesDGone, "sds-d connection:Connecting", "sds-d role:Secondary\n    peer-disk:UpToDate", 1)
-	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "sds-meta", "node-d", true)
+	f.status = strings.Replace(survivorSeesDGone, "haify-d connection:Connecting", "haify-d role:Secondary\n    peer-disk:UpToDate", 1)
+	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "haify-meta", "node-d", true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "still connected")
 	assert.Empty(t, f.distributed)
@@ -133,7 +133,7 @@ func TestRemoveLostReplicaRefusesANodeStillConnectedOverDRBD(t *testing.T) {
 func TestRemoveLostReplicaRefusesSurvivorsWithoutQuorum(t *testing.T) {
 	f := newLostFixture(t, "node-b,node-e,node-d")
 	f.status = strings.Replace(survivorSeesDGone, "disk:UpToDate open:no", "disk:UpToDate open:no quorum:no", 1)
-	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "sds-meta", "node-d", true)
+	err := f.ctrl.resources.RemoveReplicaOptions(context.Background(), "haify-meta", "node-d", true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no quorum")
 	assert.Contains(t, err.Error(), "set-tiebreaker")
@@ -145,16 +145,16 @@ func TestRemoveReplicaForgetsThePeerAndUpdatesTheTiebreaker(t *testing.T) {
 	f := newLostFixture(t, "node-b,node-e,node-d")
 	f.answers = true
 	registerNodes(f.ctrl, map[string]string{"node-t": "192.168.123.230"})
-	res, err := f.ctrl.db.GetResource(context.Background(), "sds-meta")
+	res, err := f.ctrl.db.GetResource(context.Background(), "haify-meta")
 	require.NoError(t, err)
 	res.DisklessNodes = "node-t"
 	require.NoError(t, f.ctrl.db.SaveResource(context.Background(), res))
 
-	require.NoError(t, f.ctrl.resources.RemoveReplicaOptions(context.Background(), "sds-meta", "node-d", false))
+	require.NoError(t, f.ctrl.resources.RemoveReplicaOptions(context.Background(), "haify-meta", "node-d", false))
 
-	assert.Contains(t, f.on("192.168.123.227"), "sudo drbdsetup forget-peer sds-meta 3")
-	assert.Contains(t, f.on("192.168.123.230"), "sudo drbdadm adjust sds-meta", "the tiebreaker drops the member too")
-	assert.NotContains(t, f.on("192.168.123.230"), "sudo drbdsetup forget-peer sds-meta 3", "a diskless node has no bitmap")
+	assert.Contains(t, f.on("192.168.123.227"), "sudo drbdsetup forget-peer haify-meta 3")
+	assert.Contains(t, f.on("192.168.123.230"), "sudo drbdadm adjust haify-meta", "the tiebreaker drops the member too")
+	assert.NotContains(t, f.on("192.168.123.230"), "sudo drbdsetup forget-peer haify-meta 3", "a diskless node has no bitmap")
 	found := false
 	for _, hosts := range f.distributed {
 		for _, h := range hosts {
@@ -170,33 +170,33 @@ func TestSetTiebreakerSkipsAMemberThatIsGone(t *testing.T) {
 	f := newLostFixture(t, "node-b,node-e,node-d")
 	registerNodes(f.ctrl, map[string]string{"node-t": "192.168.123.230"})
 
-	require.NoError(t, f.ctrl.resources.SetTiebreaker(context.Background(), "sds-meta", "node-t"))
+	require.NoError(t, f.ctrl.resources.SetTiebreaker(context.Background(), "haify-meta", "node-t"))
 
 	assert.Equal(t, []string{"true"}, f.on(lostHost))
-	assert.Contains(t, f.on("192.168.123.230"), "sudo drbdadm adjust sds-meta")
+	assert.Contains(t, f.on("192.168.123.230"), "sudo drbdadm adjust haify-meta")
 
 	// Still connected over DRBD: not gone, so refused.
 	f = newLostFixture(t, "node-b,node-e,node-d")
 	registerNodes(f.ctrl, map[string]string{"node-t": "192.168.123.230"})
-	f.status = strings.Replace(survivorSeesDGone, "sds-d connection:Connecting", "sds-d role:Secondary", 1)
-	err := f.ctrl.resources.SetTiebreaker(context.Background(), "sds-meta", "node-t")
+	f.status = strings.Replace(survivorSeesDGone, "haify-d connection:Connecting", "haify-d role:Secondary", 1)
+	err := f.ctrl.resources.SetTiebreaker(context.Background(), "haify-meta", "node-t")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "still connected")
 }
 
 func TestParseSurvivorViewReadsBothStatusFormats(t *testing.T) {
-	verbose := `drbdsetup status sds-meta --verbose
-sds-meta node-id:0 role:Secondary suspended:no
+	verbose := `drbdsetup status haify-meta --verbose
+haify-meta node-id:0 role:Secondary suspended:no
   volume:0 minor:3 disk:UpToDate quorum:yes blocked:no
-  sds-e node-id:1 connection:Connected role:Primary congested:no
+  haify-e node-id:1 connection:Connected role:Primary congested:no
     volume:0 replication:Established peer-disk:UpToDate
-  sds-d node-id:3 connection:Connecting
+  haify-d node-id:3 connection:Connecting
 `
 	v := parseSurvivorView(verbose)
 	assert.True(t, v.quorum)
 	assert.True(t, v.upToDate)
-	assert.True(t, v.seesConnected["sds-e"])
-	assert.False(t, v.seesConnected["sds-d"])
+	assert.True(t, v.seesConnected["haify-e"])
+	assert.False(t, v.seesConnected["haify-d"])
 
 	v = parseSurvivorView(strings.Replace(verbose, "quorum:yes", "quorum:no", 1))
 	assert.False(t, v.quorum)
@@ -205,9 +205,9 @@ sds-meta node-id:0 role:Secondary suspended:no
 }
 
 func TestNodeIDOf(t *testing.T) {
-	id, ok := nodeIDOf(threeReplicaConfig, "sds-d")
+	id, ok := nodeIDOf(threeReplicaConfig, "haify-d")
 	assert.True(t, ok)
 	assert.Equal(t, "3", id)
-	_, ok = nodeIDOf(threeReplicaConfig, "sds-x")
+	_, ok = nodeIDOf(threeReplicaConfig, "haify-x")
 	assert.False(t, ok)
 }

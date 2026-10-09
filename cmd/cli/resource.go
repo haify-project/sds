@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/client"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/client"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -82,12 +82,12 @@ func resourceRepair() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			if err := sdsClient.RepairResource(ctx, args[0]); err != nil {
+			defer closeClient(haifyClient)
+			if err := haifyClient.RepairResource(ctx, args[0]); err != nil {
 				return fmt.Errorf("failed to repair %s: %w", args[0], err)
 			}
 			fmt.Printf("Config for '%s' reconciled on every node and adjusted\n", args[0])
@@ -112,12 +112,12 @@ func resourceSetOptions() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
-			if err := sdsClient.UpdateResourceOptions(ctx, args[0], options); err != nil {
+			defer closeClient(haifyClient)
+			if err := haifyClient.UpdateResourceOptions(ctx, args[0], options); err != nil {
 				return fmt.Errorf("failed to update options: %w", err)
 			}
 			fmt.Printf("Options applied to '%s' and adjusted: %v\n", args[0], options)
@@ -140,13 +140,13 @@ func resourceGet() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			resource, err := sdsClient.GetResource(ctx, name)
+			resource, err := haifyClient.GetResource(ctx, name)
 			if err != nil {
 				return fmt.Errorf("failed to get resource: %w", err)
 			}
@@ -205,13 +205,13 @@ func resourceDelete() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.DeleteResource(ctx, name)
+			err = haifyClient.DeleteResource(ctx, name)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource: %w", err)
 			}
@@ -233,17 +233,17 @@ func resourceList() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			var resources []*sdspb.ResourceInfo
+			var resources []*haifypb.ResourceInfo
 			if profile != "" {
-				resources, err = sdsClient.ListProfileMembers(ctx, profile)
+				resources, err = haifyClient.ListProfileMembers(ctx, profile)
 			} else {
-				resources, err = sdsClient.ListResources(ctx)
+				resources, err = haifyClient.ListResources(ctx)
 			}
 			if err != nil {
 				return fmt.Errorf("failed to list resources: %w", err)
@@ -282,8 +282,8 @@ func resourceList() *cobra.Command {
 
 // newResourceGRPCClient dials the raw generated client for the commands that
 // need request fields pkg/client does not expose. It must honour the same
-// token and TLS settings as newSDSClient.
-func newResourceGRPCClient() (sdspb.SDSControllerClient, *grpc.ClientConn, error) {
+// token and TLS settings as newHaifyClient.
+func newResourceGRPCClient() (haifypb.HaifyControllerClient, *grpc.ClientConn, error) {
 	transport := insecure.NewCredentials()
 	if tlsOpts := client.ResolveTLS(tlsFlags); tlsOpts.Active() {
 		creds, err := tlsOpts.Credentials()
@@ -303,7 +303,7 @@ func newResourceGRPCClient() (sdspb.SDSControllerClient, *grpc.ClientConn, error
 	if err != nil {
 		return nil, nil, err
 	}
-	return sdspb.NewSDSControllerClient(conn), conn, nil
+	return haifypb.NewHaifyControllerClient(conn), conn, nil
 }
 
 func displayValue(value string) string {

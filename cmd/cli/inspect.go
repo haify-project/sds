@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // inspectAreas is the report order of the areas.
@@ -44,7 +44,7 @@ func inspectRunCommand() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -69,7 +69,7 @@ func inspectListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -80,7 +80,7 @@ func inspectListCommand() *cobra.Command {
 			}
 			w := cmd.OutOrStdout()
 			if len(reports) == 0 {
-				_, _ = fmt.Fprintln(w, "No inspections yet. Run one with: sds inspect run")
+				_, _ = fmt.Fprintln(w, "No inspections yet. Run one with: haify inspect run")
 				return nil
 			}
 			_, _ = fmt.Fprintf(w, "%-6s %-20s %-9s %5s %5s %5s %5s %s\n", "ID", "STARTED", "TRIGGER", "FAIL", "WARN", "ERROR", "PASS", "AREAS")
@@ -113,7 +113,7 @@ func inspectShowCommand() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -131,7 +131,7 @@ func inspectShowCommand() *cobra.Command {
 
 // printReport writes a report grouped by area, failures first, each finding
 // followed by its evidence and the command that fixes it.
-func printReport(w io.Writer, r *sdspb.InspectionReport, jsonOut bool) error {
+func printReport(w io.Writer, r *haifypb.InspectionReport, jsonOut bool) error {
 	if jsonOut {
 		b, err := protojson.MarshalOptions{Multiline: true, UseProtoNames: true, EmitUnpopulated: true}.Marshal(r)
 		if err != nil {
@@ -145,7 +145,7 @@ func printReport(w io.Writer, r *sdspb.InspectionReport, jsonOut bool) error {
 	_, _ = fmt.Fprintf(w, "Inspection %s (%s, %s, took %s): %d fail, %d warn, %d error, %d pass\n",
 		r.Id, r.Trigger, msTime(r.StartedAtUnixMs), took.Round(100*time.Millisecond), s.GetFail(), s.GetWarn(), s.GetError(), s.GetPass())
 	for _, area := range inspectAreas {
-		var checks []*sdspb.InspectionCheck
+		var checks []*haifypb.InspectionCheck
 		for _, c := range r.Checks {
 			if c.Area == area {
 				checks = append(checks, c)
@@ -166,7 +166,7 @@ func printReport(w io.Writer, r *sdspb.InspectionReport, jsonOut bool) error {
 	return nil
 }
 
-func printCheck(w io.Writer, c *sdspb.InspectionCheck) {
+func printCheck(w io.Writer, c *haifypb.InspectionCheck) {
 	subject := ""
 	if c.Subject != "" {
 		subject = " " + c.Subject

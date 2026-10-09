@@ -25,7 +25,7 @@ func TestUnaryServerInterceptor(t *testing.T) {
 	}
 
 	info := &grpc.UnaryServerInfo{
-		FullMethod: "/v1.SDSController/ListPools",
+		FullMethod: "/v1.HaifyController/ListPools",
 	}
 
 	resp, err := interceptor(context.Background(), nil, info, handler)
@@ -40,8 +40,8 @@ func TestUnaryServerInterceptor(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, "sds_controller_grpc_requests_total")
-	assert.Contains(t, body, `method="/v1.SDSController/ListPools"`)
+	assert.Contains(t, body, "haify_controller_grpc_requests_total")
+	assert.Contains(t, body, `method="/v1.HaifyController/ListPools"`)
 	assert.Contains(t, body, `status="OK"`)
 }
 
@@ -56,7 +56,7 @@ func TestUnaryServerInterceptorWithError(t *testing.T) {
 	}
 
 	info := &grpc.UnaryServerInfo{
-		FullMethod: "/v1.SDSController/CreatePool",
+		FullMethod: "/v1.HaifyController/CreatePool",
 	}
 
 	resp, err := interceptor(context.Background(), nil, info, handler)
@@ -70,9 +70,9 @@ func TestUnaryServerInterceptorWithError(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, `method="/v1.SDSController/CreatePool"`)
+	assert.Contains(t, body, `method="/v1.HaifyController/CreatePool"`)
 	// The status code will be determined by grpc/status.Code()
-	assert.Contains(t, body, "sds_controller_grpc_requests_total")
+	assert.Contains(t, body, "haify_controller_grpc_requests_total")
 }
 
 func TestStreamServerInterceptor(t *testing.T) {
@@ -89,7 +89,7 @@ func TestStreamServerInterceptor(t *testing.T) {
 	}
 
 	info := &grpc.StreamServerInfo{
-		FullMethod: "/v1.SDSController/StreamEvents",
+		FullMethod: "/v1.HaifyController/StreamEvents",
 	}
 
 	err := interceptor(nil, nil, info, handler)
@@ -103,7 +103,7 @@ func TestStreamServerInterceptor(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, `method="/v1.SDSController/StreamEvents"`)
+	assert.Contains(t, body, `method="/v1.HaifyController/StreamEvents"`)
 	assert.Contains(t, body, `status="OK"`)
 }
 
@@ -118,7 +118,7 @@ func TestStreamServerInterceptorWithError(t *testing.T) {
 	}
 
 	info := &grpc.StreamServerInfo{
-		FullMethod: "/v1.SDSController/StreamData",
+		FullMethod: "/v1.HaifyController/StreamData",
 	}
 
 	err := interceptor(nil, nil, info, handler)
@@ -131,7 +131,7 @@ func TestStreamServerInterceptorWithError(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, `method="/v1.SDSController/StreamData"`)
+	assert.Contains(t, body, `method="/v1.HaifyController/StreamData"`)
 }
 
 func TestChainUnaryServer(t *testing.T) {

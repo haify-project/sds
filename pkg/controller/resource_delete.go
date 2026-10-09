@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/wanproxy"
 	"go.uber.org/zap"
 )
 
@@ -103,7 +103,7 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 		return fmt.Errorf("resource down failed on hosts: %s", downResult.FailureDetails())
 	}
 
-	// 1a. WAN only: tear down the per-resource sds-proxy pair AFTER `drbdadm
+	// 1a. WAN only: tear down the per-resource haify-proxy pair AFTER `drbdadm
 	// down` (the proxy must outlive DRBD's connection, mirroring the
 	// Provision-before-up ordering). Best-effort: a failure here must not block
 	// the delete, matching the state-LV sweep below. Gated behind WANMode.
@@ -148,7 +148,7 @@ func (rm *ResourceManager) DeleteResource(ctx context.Context, name string, forc
 			if err := rm.deleteBackingVolume(ctx, hosts, volume); err != nil {
 				if !force {
 					return fmt.Errorf("failed to remove backing volume %s/%s: %w; the resource's records are kept, "+
-						"so free the volume on that node (lvremove or zfs destroy) and rerun `sds resource delete %s`",
+						"so free the volume on that node (lvremove or zfs destroy) and rerun `haify resource delete %s`",
 						volume.Pool, volume.VolumeName, err, name)
 				}
 				rm.controller.logger.Warn("Failed to remove backing volume (force: continuing)",

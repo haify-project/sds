@@ -10,7 +10,7 @@ import (
 //
 //  1. formats the volume ext4 when blkid finds no signature on it, and refuses
 //     one that carries another filesystem;
-//  2. mounts it at /var/lib/sds-app/<name>;
+//  2. mounts it at /var/lib/haify-app/<name>;
 //  3. when the volume already holds an app of the same engine — an app
 //     deleted without --delete-data and created again — keeps it as it is and
 //     reports state=reused;
@@ -67,7 +67,7 @@ func InitScript(s Spec, b Binaries, device, staged string) string {
 }
 
 const initFrame = `#!/bin/bash
-# sds app create: initialize @NAME@ (@ENGINE@) on this node.
+# haify app create: initialize @NAME@ (@ENGINE@) on this node.
 cd /
 umask 022
 dev=@DEV@
@@ -92,7 +92,7 @@ cleanup() {
   if [ -n "$temp_started" ]; then stop_temp; fi
   # A failed first initialization leaves nothing behind, so it can simply be
   # run again; the volume held nothing else (checked before it began).
-  if [ $rc -ne 0 ] && [ -n "$initializing" ]; then rm -rf "$M/data" "$M/conf" "$M/sds"; fi
+  if [ $rc -ne 0 ] && [ -n "$initializing" ]; then rm -rf "$M/data" "$M/conf" "$M/haify"; fi
   if [ -n "$mounted" ]; then
     sync
     umount "$M" || echo "$(hostname): could not unmount $M" >&2
@@ -127,20 +127,20 @@ if [ -z "$where" ]; then
 fi
 mounted=1
 
-if [ -f "$M/sds/engine" ]; then
-  have=$(cat "$M/sds/engine")
+if [ -f "$M/haify/engine" ]; then
+  have=$(cat "$M/haify/engine")
   [ "$have" = "@ENGINE@" ] || fail "the volume already holds a $have app; it is not initialized again as @ENGINE@"
   echo "state=reused"
   exit 0
 fi
-other=$(ls -A "$M" | grep -vx -e lost+found -e sds | head -n1)
-[ -z "$other" ] || fail "the volume holds files sds app did not create ($M/$other); use a blank resource"
+other=$(ls -A "$M" | grep -vx -e lost+found -e haify | head -n1)
+[ -z "$other" ] || fail "the volume holds files haify app did not create ($M/$other); use a blank resource"
 [ -s "$staged" ] || fail "the generated password did not reach this node ($staged)"
 
 initializing=1
-install -d -m 0700 -o root -g root "$M/sds"
-install -m 0600 -o root -g root "$staged" "$M/sds/password"
-pw=$(cat "$M/sds/password")
+install -d -m 0700 -o root -g root "$M/haify"
+install -m 0600 -o root -g root "$staged" "$M/haify/password"
+pw=$(cat "$M/haify/password")
 install -d -m 0755 -o "$u" -g "$u" "$run"
 
 @ENGINE_INIT@
@@ -151,14 +151,14 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled; then
   chcon -R -t @SETYPE@ "$M/data" "$M/conf" 2>/dev/null || echo "$(hostname): could not label $M for SELinux (@SETYPE@)" >&2
 fi
 
-echo "@ENGINE@" > "$M/sds/engine"
+echo "@ENGINE@" > "$M/haify/engine"
 sync
 initializing=
 echo "state=initialized"
 `
 
 // postgresInit runs initdb with the password from a file, puts the settings
-// Haify relies on in conf/postgresql.sds.conf (included last from
+// Haify relies on in conf/postgresql.haify.conf (included last from
 // postgresql.conf, so they win), and starts the server once with no TCP
 // listener to prove it runs — creating pgvector while it is up.
 func postgresInit(s Spec) string {
@@ -172,14 +172,14 @@ done
 	}
 	return `install -d -m 0700 -o "$u" -g "$u" "$M/data"
 install -d -m 0750 -o "$u" -g "$u" "$M/conf"
-install -m 0600 -o "$u" -g "$u" "$M/sds/password" "$M/conf/.initpw"
+install -m 0600 -o "$u" -g "$u" "$M/haify/password" "$M/conf/.initpw"
 runuser -u "$u" -- @INIT@ -D "$M/data" -U postgres --pwfile="$M/conf/.initpw" -E UTF8 --data-checksums \
   --auth-local=peer --auth-host=scram-sha-256 >"$run/init.log" 2>&1
 rc=$?
 rm -f "$M/conf/.initpw"
 [ $rc -eq 0 ] || fail "initdb failed: $(tail -n 5 "$run/init.log")"
-cat > "$M/conf/postgresql.sds.conf" <<'SDSEOF'
-# Written by sds app create: the settings Haify relies on. Tune anything else
+cat > "$M/conf/postgresql.haify.conf" <<'HAIFYEOF'
+# Written by haify app create: the settings Haify relies on. Tune anything else
 # in ../data/postgresql.conf; both live on the DRBD volume and fail over
 # with the data.
 listen_addresses = '*'
@@ -187,9 +187,9 @@ port = @PORT@
 unix_socket_directories = '@RUN@'
 hba_file = '@MOUNT@/conf/pg_hba.conf'
 password_encryption = 'scram-sha-256'
-SDSEOF
-cat > "$M/conf/pg_hba.conf" <<'SDSEOF'
-# Written by sds app create. Local OS users by peer; everything over TCP
+HAIFYEOF
+cat > "$M/conf/pg_hba.conf" <<'HAIFYEOF'
+# Written by haify app create. Local OS users by peer; everything over TCP
 # (including clients of the service IP) by password.
 # TYPE  DATABASE  USER  ADDRESS       METHOD
 local   all       all                 peer
@@ -197,9 +197,9 @@ host    all       all   127.0.0.1/32  scram-sha-256
 host    all       all   ::1/128       scram-sha-256
 host    all       all   0.0.0.0/0     scram-sha-256
 host    all       all   ::/0          scram-sha-256
-SDSEOF
-chown "$u:$u" "$M/conf/postgresql.sds.conf" "$M/conf/pg_hba.conf"
-printf "\ninclude '%s'\n" "$M/conf/postgresql.sds.conf" >> "$M/data/postgresql.conf"
+HAIFYEOF
+chown "$u:$u" "$M/conf/postgresql.haify.conf" "$M/conf/pg_hba.conf"
+printf "\ninclude '%s'\n" "$M/conf/postgresql.haify.conf" >> "$M/data/postgresql.conf"
 runuser -u "$u" -- @PGCTL@ -D "$M/data" -o "-c listen_addresses=''" -l "$run/pg.log" -w -t 120 start >/dev/null \
   || fail "postgres did not start: $(tail -n 5 "$run/pg.log")"
 temp_started=1
@@ -223,8 +223,8 @@ func mysqlInit(b Binaries) string {
 	}
 	return `install -d -m 0750 -o "$u" -g "$u" "$M/data"
 install -d -m 0750 -o root -g "$u" "$M/conf"
-cat > "$M/conf/my.cnf" <<'SDSEOF'
-# Written by sds app create. It lives on the DRBD volume and fails over with
+cat > "$M/conf/my.cnf" <<'HAIFYEOF'
+# Written by haify app create. It lives on the DRBD volume and fails over with
 # the data; tune the server here.
 [mysqld]
 datadir = @MOUNT@/data
@@ -238,7 +238,7 @@ sync_binlog = 1
 
 [client]
 socket = @RUN@/mysqld.sock
-SDSEOF
+HAIFYEOF
 chown "root:$u" "$M/conf/my.cnf"
 chmod 0640 "$M/conf/my.cnf"
 ` + initdb + `
@@ -251,20 +251,20 @@ until @ADMIN@ --socket="$run/mysqld.sock" -uroot ping >/dev/null 2>&1; do
   i=$((i+1)); [ $i -lt 120 ] || fail "the database server did not answer within 120s"
   sleep 1
 done
-@CLIENT@ --socket="$run/mysqld.sock" -uroot <<SDSEOF || fail "setting the root password failed"
+@CLIENT@ --socket="$run/mysqld.sock" -uroot <<HAIFYEOF || fail "setting the root password failed"
 ALTER USER 'root'@'localhost' IDENTIFIED BY '$pw';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '$pw';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 DROP DATABASE IF EXISTS test;
 FLUSH PRIVILEGES;
-SDSEOF
-(umask 077; printf '[client]\nuser=root\npassword=%s\nsocket=%s\n' "$pw" "$run/mysqld.sock" > "$M/sds/client.cnf")
+HAIFYEOF
+(umask 077; printf '[client]\nuser=root\npassword=%s\nsocket=%s\n' "$pw" "$run/mysqld.sock" > "$M/haify/client.cnf")
 stop_temp
 temp_started=`
 }
 
-const mysqlStop = `  if [ -s "$M/sds/client.cnf" ]; then
-    @ADMIN@ --defaults-extra-file="$M/sds/client.cnf" shutdown >/dev/null 2>&1 || kill "$srvpid" 2>/dev/null
+const mysqlStop = `  if [ -s "$M/haify/client.cnf" ]; then
+    @ADMIN@ --defaults-extra-file="$M/haify/client.cnf" shutdown >/dev/null 2>&1 || kill "$srvpid" 2>/dev/null
   else
     @ADMIN@ --socket="$run/mysqld.sock" -uroot shutdown >/dev/null 2>&1 || kill "$srvpid" 2>/dev/null
   fi
@@ -274,8 +274,8 @@ const mysqlStop = `  if [ -s "$M/sds/client.cnf" ]; then
 // the redis user) and starts the server once on its socket only. setpriv
 // execs rather than forks, so $! is the server itself.
 const redisInit = `install -d -m 0750 -o "$u" -g "$u" "$M/data" "$M/conf"
-(umask 077; cat > "$M/conf/redis.conf" <<SDSEOF
-# Written by sds app create. It lives on the DRBD volume and fails over with
+(umask 077; cat > "$M/conf/redis.conf" <<HAIFYEOF
+# Written by haify app create. It lives on the DRBD volume and fails over with
 # the data. appendfsync everysec can lose up to one second of acknowledged
 # writes in a failover; set it to always for none.
 bind 0.0.0.0
@@ -291,7 +291,7 @@ appendonly yes
 appendfsync everysec
 logfile ""
 requirepass $pw
-SDSEOF
+HAIFYEOF
 )
 chown "$u:$u" "$M/conf/redis.conf"
 setpriv --reuid="$u" --regid="$u" --init-groups @SERVER@ "$M/conf/redis.conf" --port 0 >"$run/init.log" 2>&1 &

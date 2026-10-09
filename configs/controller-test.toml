@@ -5,7 +5,7 @@ listen_address = "127.0.0.1"
 port = 3374
 
 [database]
-path = "sds-test.db"
+path = "haify-test.db"
 
 [storage]
 default_pool_type = "vg"

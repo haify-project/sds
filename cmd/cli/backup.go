@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 
 	"github.com/spf13/cobra"
 )
@@ -70,12 +70,12 @@ offered for restore.
 				return fmt.Errorf("--resource is required")
 			}
 			if target == "" {
-				return fmt.Errorf("--target is required (see `sds backup target list`)")
+				return fmt.Errorf("--target is required (see `haify backup target list`)")
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -87,7 +87,7 @@ offered for restore.
 			}
 			out := cmd.OutOrStdout()
 			// Writes to the command's own output stream are best-effort. The only ways
-			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// they fail are a closed pipe (`haify ... | head`) or a full disk, neither of
 			// which this command can report anywhere the operator is still looking, and
 			// treating them as errors would report a successful operation as failed.
 			_, _ = fmt.Fprintf(out, "Backup %s completed\n", info.Id)
@@ -121,7 +121,7 @@ func backupListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -187,7 +187,7 @@ interrupted or that failed verification is never restorable, by design.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -229,7 +229,7 @@ when the target itself no longer exists.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -255,7 +255,7 @@ func orDash(s string) string {
 }
 
 // changedBytes is how much an incremental backup carries across its volumes.
-func changedBytes(b *sdspb.BackupInfo) uint64 {
+func changedBytes(b *haifypb.BackupInfo) uint64 {
 	var n uint64
 	for _, v := range b.Volumes {
 		n += v.ChangedBytes

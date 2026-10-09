@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/gateway"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/gateway"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -195,7 +195,7 @@ func TestNodeHealthCheckUsesAddressForKnownNode(t *testing.T) {
 // role, no peer-disk. Recording it is what lets everything downstream tell
 // "this peer is not Primary" apart from "nobody asked this peer".
 //
-// The output below is verbatim from lima-sds-a on 2026-09-21, seconds after it
+// The output below is verbatim from lima-haify-a on 2026-09-21, seconds after it
 // booted back into the cluster. Parsed without the connection lines it yields
 // exactly one node state, and a resource whose Primary was serving the whole
 // time reads as a resource with no Primary at all.
@@ -203,21 +203,21 @@ func TestPeersThatAreNotConnectedAreStillRecorded(t *testing.T) {
 	output := `openclaw role:Secondary
   disk:Outdated quorum:no open:no
   iZ2vca1rjuuxbqtpm9hy7zZ connection:Connecting
-  sds-b connection:Connecting
-  sds-e connection:Connecting`
+  haify-b connection:Connecting
+  haify-e connection:Connecting`
 
-	states := parseNodeStatesFromStatus(output, []string{"lima-sds-a", "sds-b", "sds-e", "iZ2vca1rjuuxbqtpm9hy7zZ"})
+	states := parseNodeStatesFromStatus(output, []string{"lima-haify-a", "haify-b", "haify-e", "iZ2vca1rjuuxbqtpm9hy7zZ"})
 
 	if len(states) != 4 {
 		t.Fatalf("got %d node states, want 4 — an unreachable peer that is absent from the map is a peer nobody checks: %+v", len(states), states)
 	}
-	if got := states["lima-sds-a"]; got == nil || got.Role != "Secondary" || got.DiskState != "Outdated" {
+	if got := states["lima-haify-a"]; got == nil || got.Role != "Secondary" || got.DiskState != "Outdated" {
 		t.Errorf("answering node = %+v, want the locally read Secondary/Outdated", got)
 	}
-	if got := states["lima-sds-a"]; got != nil && got.Connection != "" {
+	if got := states["lima-haify-a"]; got != nil && got.Connection != "" {
 		t.Errorf("the answering node has no connection to describe, got %q", got.Connection)
 	}
-	for _, peer := range []string{"sds-b", "sds-e", "iZ2vca1rjuuxbqtpm9hy7zZ"} {
+	for _, peer := range []string{"haify-b", "haify-e", "iZ2vca1rjuuxbqtpm9hy7zZ"} {
 		st := states[peer]
 		if st == nil {
 			t.Fatalf("peer %s is missing from the parsed states", peer)
@@ -236,21 +236,21 @@ func TestPeersThatAreNotConnectedAreStillRecorded(t *testing.T) {
 func TestStandAlonePeerIsRecorded(t *testing.T) {
 	output := `openclaw role:Primary
   disk:UpToDate open:yes
-  lima-sds-a connection:StandAlone
-  sds-b role:Secondary
+  lima-haify-a connection:StandAlone
+  haify-b role:Secondary
     peer-disk:UpToDate`
 
-	states := parseNodeStatesFromStatus(output, []string{"sds-e", "lima-sds-a", "sds-b"})
+	states := parseNodeStatesFromStatus(output, []string{"haify-e", "lima-haify-a", "haify-b"})
 
-	if got := states["lima-sds-a"]; got == nil || got.Connection != "StandAlone" {
-		t.Fatalf("lima-sds-a = %+v, want Connection StandAlone", got)
+	if got := states["lima-haify-a"]; got == nil || got.Connection != "StandAlone" {
+		t.Fatalf("lima-haify-a = %+v, want Connection StandAlone", got)
 	}
-	// The peer-disk line after it belongs to sds-b, not to the StandAlone peer.
-	if got := states["lima-sds-a"]; got != nil && got.DiskState != "" {
+	// The peer-disk line after it belongs to haify-b, not to the StandAlone peer.
+	if got := states["lima-haify-a"]; got != nil && got.DiskState != "" {
 		t.Errorf("StandAlone peer picked up a disk state %q from a following line", got.DiskState)
 	}
-	if got := states["sds-b"]; got == nil || got.Role != "Secondary" || got.DiskState != "UpToDate" {
-		t.Errorf("sds-b = %+v, want Secondary/UpToDate", got)
+	if got := states["haify-b"]; got == nil || got.Role != "Secondary" || got.DiskState != "UpToDate" {
+		t.Errorf("haify-b = %+v, want Secondary/UpToDate", got)
 	}
 }
 
@@ -274,25 +274,25 @@ func TestJSONParseCarriesPeerConnectionState(t *testing.T) {
 	  "connections": [
 	    {"name": "iZ2vca1rjuuxbqtpm9hy7zZ", "connection-state": "Connected", "peer-role": "Secondary",
 	     "peer_devices": [{"volume": 0, "replication-state": "SyncTarget", "peer-disk-state": "UpToDate", "done": 43.13}]},
-	    {"name": "sds-b", "connection-state": "Connecting", "peer-role": "Unknown", "peer_devices": []},
-	    {"name": "sds-e", "connection-state": "Connected", "peer-role": "Primary",
+	    {"name": "haify-b", "connection-state": "Connecting", "peer-role": "Unknown", "peer_devices": []},
+	    {"name": "haify-e", "connection-state": "Connected", "peer-role": "Primary",
 	     "peer_devices": [{"volume": 0, "replication-state": "PausedSyncT", "peer-disk-state": "UpToDate"}]}
 	  ]
 	}]`
 
-	states, err := parseNodeStatesFromJSON(output, "lima-sds-a")
+	states, err := parseNodeStatesFromJSON(output, "lima-haify-a")
 	if err != nil {
 		t.Fatalf("parseNodeStatesFromJSON: %v", err)
 	}
 
-	if got := states["sds-b"]; got == nil || got.Connection != "Connecting" {
-		t.Fatalf("sds-b = %+v, want Connection Connecting — without it a disconnected replica is invisible", got)
+	if got := states["haify-b"]; got == nil || got.Connection != "Connecting" {
+		t.Fatalf("haify-b = %+v, want Connection Connecting — without it a disconnected replica is invisible", got)
 	}
-	if got := states["sds-e"]; got == nil || got.Connection != "Connected" || got.Role != "Primary" {
-		t.Errorf("sds-e = %+v, want a Connected Primary", got)
+	if got := states["haify-e"]; got == nil || got.Connection != "Connected" || got.Role != "Primary" {
+		t.Errorf("haify-e = %+v, want a Connected Primary", got)
 	}
 	// The answering node has no connection to itself to describe.
-	if got := states["lima-sds-a"]; got == nil || got.Connection != "" {
+	if got := states["lima-haify-a"]; got == nil || got.Connection != "" {
 		t.Errorf("answering node = %+v, want an empty Connection", got)
 	}
 }

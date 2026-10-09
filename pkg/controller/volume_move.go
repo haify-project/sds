@@ -8,13 +8,13 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Moving a volume to another pool while the resource stays in service
-// (`sds resource move-volume`): from an HDD pool to an SSD pool, off a pool
+// (`haify resource move-volume`): from an HDD pool to an SSD pool, off a pool
 // that is being retired.
 //
 // One node at a time: the node's copy is detached, a fresh volume is made in

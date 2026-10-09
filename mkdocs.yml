@@ -1,8 +1,8 @@
 site_name: Haify
 site_description: Shared storage on your own Linux servers that keeps working when a server fails.
-site_url: https://haify-project.github.io/sds/
-repo_url: https://github.com/haify-project/sds
-repo_name: haify-project/sds
+site_url: https://haify-project.github.io/haify/
+repo_url: https://github.com/haify-project/haify
+repo_name: haify-project/haify
 edit_uri: edit/main/docs/
 copyright: Haify is open source under the Apache License 2.0. DRBD is a registered trademark of LINBIT.
 
@@ -38,7 +38,7 @@ theme:
     - content.code.copy
 
 extra_css:
-  - assets/stylesheets/sds.css
+  - assets/stylesheets/haify.css
 
 hooks:
   - docs-site/hooks.py

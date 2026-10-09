@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/client"
+	v1 "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -31,12 +31,12 @@ func smbCreate() *cobra.Command {
 		Long: `Create an SMB gateway: a standalone Samba server on the service IP, failed
 over with the resource. Its users and shares live on the gateway's state
 volume. The first share covers the whole data volume; add users with
-'sds gateway smb user set' before connecting.`,
+'haify gateway smb user set' before connecting.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if resource == "" || serviceIP == "" {
 				return fmt.Errorf("--resource and --service-ip are required")
 			}
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -169,7 +169,7 @@ standard input: typed at the prompt, or piped with --password-stdin.`,
 	return cmd
 }
 
-type smbClient = *client.SDSClient
+type smbClient = *client.HaifyClient
 
 // smbRun wraps an SMB subcommand: requires --resource, connects, runs fn and
 // prints done on success.
@@ -178,7 +178,7 @@ func smbRun(resource *string, fn func(*cobra.Command, smbClient, []string) error
 		if *resource == "" {
 			return fmt.Errorf("--resource is required")
 		}
-		c, err := newSDSClient()
+		c, err := newHaifyClient()
 		if err != nil {
 			return fmt.Errorf("failed to connect to controller: %w", err)
 		}

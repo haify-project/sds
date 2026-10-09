@@ -30,7 +30,7 @@ func (rm *ResourceManager) NodeLost(ctx context.Context, node string) ([]string,
 		return nil, fmt.Errorf("node %q is not registered", node)
 	}
 	if rm.answers(ctx, addr) {
-		return nil, fmt.Errorf("%s answers over SSH; restore it with `sds node restore %s` instead", node, node)
+		return nil, fmt.Errorf("%s answers over SSH; restore it with `haify node restore %s` instead", node, node)
 	}
 	resources, err := rm.controller.db.ListResources(ctx)
 	if err != nil {
@@ -114,12 +114,12 @@ func (rm *ResourceManager) NodeRestore(ctx context.Context, node string, dryRun 
 
 // staleResourceCleanup takes a resource down on a node that is no longer its
 // member and deletes what it holds there: the config, the promoter configs,
-// and the backing volumes sds names after it ("<r>_data", "<r>_vol<K>") with
+// and the backing volumes haify names after it ("<r>_data", "<r>_vol<K>") with
 // their snapshots. Nothing else is touched.
 func staleResourceCleanup(r string) string {
 	return fmt.Sprintf(`set -e
 drbdadm down %[1]s 2>/dev/null || true
-rm -f /etc/drbd.d/%[1]s.res /etc/drbd-reactor.d/sds-*-%[1]s.toml /etc/drbd-reactor.d/sds-*-%[1]s.toml.pending
+rm -f /etc/drbd.d/%[1]s.res /etc/drbd-reactor.d/haify-*-%[1]s.toml /etc/drbd-reactor.d/haify-*-%[1]s.toml.pending
 for lv in $(lvs --noheadings -o vg_name,lv_name,origin --separator / 2>/dev/null | tr -d ' ' | \
 	awk -F/ '$2 ~ /^%[1]s_(data|vol[0-9]+)$/ || $3 ~ /^%[1]s_(data|vol[0-9]+)$/ {print $1"/"$2}' | sort -r); do
 	lvremove -f "$lv"

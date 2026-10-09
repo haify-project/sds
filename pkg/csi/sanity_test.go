@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/csi"
+	"github.com/haify-project/haify/pkg/csi"
 	"github.com/kubernetes-csi/csi-test/v5/pkg/sanity"
 	"go.uber.org/zap"
 )

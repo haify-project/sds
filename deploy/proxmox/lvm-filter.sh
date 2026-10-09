@@ -3,7 +3,7 @@
 #
 # A guest that uses LVM inside its disk writes a PV header at the start of it,
 # and on this host that disk is /dev/drbdN — or, for an encrypted resource,
-# also the dm-crypt container DRBD sits on (/dev/mapper/sds_*). The host's LVM
+# also the dm-crypt container DRBD sits on (/dev/mapper/haify_*). The host's LVM
 # scans both, finds the guest's volume group, and may activate its LVs: then
 # the guest's LVs are open on the host, the DRBD device cannot be demoted, and
 # a live migration or failover of that VM fails. Two guests with the same VG
@@ -23,7 +23,7 @@
 set -euo pipefail
 
 CONF="${LVM_SYSTEM_DIR:-/etc/lvm}/lvm.conf"
-WANT=('r|^/dev/drbd|' 'r|^/dev/mapper/sds_|')
+WANT=('r|^/dev/drbd|' 'r|^/dev/mapper/haify_|')
 
 # has_filter reports whether LVM's effective global_filter rejects both.
 has_filter() {
@@ -69,7 +69,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-cp -p "$CONF" "$CONF.sds-bak"
+cp -p "$CONF" "$CONF.haify-bak"
 
 # The edit is done in Perl, which every PVE node has: prepend to a one-line
 # global_filter, or add one at the top of the devices section (or a new one).
@@ -84,15 +84,15 @@ if ! WANT_LIST="$(printf '"%s"\n' "${WANT[@]}")" perl -0777 -pi -e '
         $_ .= "\ndevices {\n\tglobal_filter = [ $list ]\n}\n";
     }
 ' "$CONF"; then
-    cp -p "$CONF.sds-bak" "$CONF"
+    cp -p "$CONF.haify-bak" "$CONF"
     echo "$CONF has a global_filter spanning several lines; add these entries at the front of it by hand:" >&2
     printf '  "%s",\n' "${WANT[@]}" >&2
     exit 1
 fi
 
 if ! lvmconfig --validate >/dev/null 2>&1 || ! has_filter; then
-    cp -p "$CONF.sds-bak" "$CONF"
-    echo "the edited $CONF did not validate; it was restored from $CONF.sds-bak" >&2
+    cp -p "$CONF.haify-bak" "$CONF"
+    echo "the edited $CONF did not validate; it was restored from $CONF.haify-bak" >&2
     exit 1
 fi
-echo "Added ${WANT[*]} to the LVM global_filter in $CONF (backup: $CONF.sds-bak)"
+echo "Added ${WANT[*]} to the LVM global_filter in $CONF (backup: $CONF.haify-bak)"

@@ -1,0 +1,40 @@
+# Makes the in-cluster name `haify-controller:3374` resolve to the EXTERNAL
+# haify-controller, which runs on the storage hosts (outside Kubernetes) behind
+# an HA floating VIP. The controller is a plain IP, not a pod and not a DNS
+# name, so we use a Service WITHOUT a selector plus a manually-defined
+# Endpoints carrying the VIP. (ExternalName does not work here: the target is
+# an IP address, not a hostname.)
+#
+# The Service name (`haify-controller`) and port (3374) are kept aligned with the
+# shipped `--haify-controller=haify-controller:3374` arg in 20-controller.yaml and
+# 30-node.yaml, so those defaults resolve unchanged.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haify-controller
+  namespace: kube-system
+spec:
+  # No selector: endpoints are defined manually below (external VIP target).
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 3374
+      targetPort: 3374
+---
+# Classic Endpoints. Modern clusters (k8s >= 1.19) automatically mirror this
+# into an EndpointSlice via the endpointslice-mirroring controller, so a
+# hand-written EndpointSlice is not needed (and would risk duplicate entries).
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: haify-controller   # MUST equal the Service name above for binding.
+  namespace: kube-system
+subsets:
+  - addresses:
+      # CHANGE ME: your haify-controller VIP (from `haify ha self status`)
+      - ip: 192.0.2.10
+    ports:
+      - name: grpc       # MUST match the Service port name above.
+        protocol: TCP
+        port: 3374

@@ -7,9 +7,9 @@ cluster.
 Pool capacity used to be reported as **VG allocation** only. For an LVM thin
 pool that number says nothing about whether the next write will succeed: the
 thin pool LV holds almost every extent in the group, so `vg_free` is close to
-zero for the whole life of the pool. `sds pool convert-thin` creates the
+zero for the whole life of the pool. `haify pool convert-thin` creates the
 pool with `lvcreate -l 100%FREE` and grows it with `lvextend -l +100%FREE`,
-leaving `vg_free` at exactly 0; `sds pool create --type lvm-thin` without
+leaving `vg_free` at exactly 0; `haify pool create --type lvm-thin` without
 `--size` uses `-l 95%FREE`, leaving 5%. Either way the Pools page showed a
 nearly or completely full bar regardless of whether the pool was empty or about
 to fail writes.
@@ -29,7 +29,7 @@ resync, which has to write the entire 6G volume as fresh allocations. The pool
 hit 100% and the kernel dropped the disk:
 
 ```
-sdsthin  Data% 100.00  Attr twi-aotzD-      # D = out-of-data-space
+haifythin  Data% 100.00  Attr twi-aotzD-      # D = out-of-data-space
 drbd app0/0 drbd2: Cannot write resync data to local disk.
 drbd app0/0 drbd2: disk( Failed -> Diskless )
 ```
@@ -72,7 +72,7 @@ the nearest GiB instead of truncating.
 
 ### API
 
-`PoolInfo` in `api/proto/v1/sds.proto`, fields 17–23: `thin_pool_lv`,
+`PoolInfo` in `api/proto/v1/haify.proto`, fields 17–23: `thin_pool_lv`,
 `thin_size_bytes`, `thin_data_percent`, `thin_metadata_percent`,
 `thin_out_of_space`, `total_bytes`, `free_bytes`. `total_gb` / `free_gb` still
 describe the volume group. An empty `thin_pool_lv` — not a zero percentage — is
@@ -80,9 +80,9 @@ how "no thin pool" is told apart from "a thin pool at 0%".
 
 ### Display
 
-- `sds pool list` prints, for a thin pool, the thin pool's own free/total
+- `haify pool list` prints, for a thin pool, the thin pool's own free/total
   and `N% used` (plus `OUT OF SPACE` when LVM says so).
-- `sds pool get` prints the thin pool's total/free, the VG size and
+- `haify pool get` prints the thin pool's total/free, the VG size and
   unallocated space on a separate line, the thin LV and its size, and data and
   metadata percentages. An out-of-space pool prints a warning on stderr.
 - `web-ui/src/pages/PoolsPage.tsx` drives the bar from `thinDataPercent` when
@@ -111,7 +111,7 @@ monitor records which lister raised each condition (`owners`); a condition is
 cleared as vanished only when its own source answered that poll, so a failed
 pool listing does not resolve outstanding pool alerts.
 
-Configuration (`/etc/sds/controller.toml`):
+Configuration (`/etc/haify/controller.toml`):
 
 ```toml
 [alert]
@@ -136,7 +136,7 @@ reallocates every block.
   data or metadata is at or above `ThinPoolFullPercent`, or that LVM flags out
   of space, is excluded (`thinPoolExhausted`).
 
-## Snapshot listing: `sds resource snapshot list` saw no LVM snapshots
+## Snapshot listing: `haify resource snapshot list` saw no LVM snapshots
 
 Turned up while clearing space during the same recovery.
 
@@ -160,7 +160,7 @@ The `|` separator matters because `lv_time` contains spaces. Alongside that:
 2. Size and creation time are parsed (size was hardcoded to 0).
 3. `--resource` filters: the request carries the resource, and the controller
    filters by that resource's backing volumes as recorded in the database.
-   The `sds_snapshot_list` MCP tool uses the same path.
+   The `haify_snapshot_list` MCP tool uses the same path.
 
 The controller enumerates snapshots live and keeps no snapshot table, so
 removing one by hand with `lvremove` remains safe.
@@ -176,7 +176,7 @@ When the thin pool takes every free extent of the VG, LVM's
 extend into. Leaving VG headroom and enabling autoextend is the LVM-side
 safeguard; the alerts above are the Haify-side one.
 
-`sds pool add` on a thin-backed group extends the thin pool with
+`haify pool add` on a thin-backed group extends the thin pool with
 `lvextend -l +95%FREE` after `vgextend` (metadata first, sized at 1% of the
 grown pool as convert-thin does), so a new disk adds usable thin capacity
 rather than sitting unallocated in the group.

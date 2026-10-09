@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Replacing a schedule with one that keeps less makes its next run prune the
@@ -20,9 +20,9 @@ func TestApprovalHoldsBackShorterRetention(t *testing.T) {
 	ctx := context.Background()
 	ran := 0
 
-	snap := func(daily int32) *sdspb.CreateSnapshotScheduleRequest {
-		return &sdspb.CreateSnapshotScheduleRequest{Resource: "db", Cron: "0 * * * *",
-			Keep: &sdspb.GFSRetention{Hourly: 24, Daily: daily}}
+	snap := func(daily int32) *haifypb.CreateSnapshotScheduleRequest {
+		return &haifypb.CreateSnapshotScheduleRequest{Resource: "db", Cron: "0 * * * *",
+			Keep: &haifypb.GFSRetention{Hourly: 24, Daily: daily}}
 	}
 	require.NoError(t, callThrough(g, as("alice"), "CreateSnapshotSchedule", snap(7), &ran), "a new schedule deletes nothing")
 	require.NoError(t, srv.ctrl.db.SaveSnapshotSchedule(ctx, &database.SnapshotSchedule{
@@ -30,9 +30,9 @@ func TestApprovalHoldsBackShorterRetention(t *testing.T) {
 	require.NoError(t, callThrough(g, as("alice"), "CreateSnapshotSchedule", snap(30), &ran), "keeping more deletes nothing")
 	pendingID(t, callThrough(g, as("alice"), "CreateSnapshotSchedule", snap(1), &ran))
 
-	bk := func(weekly int32) *sdspb.CreateBackupScheduleRequest {
-		return &sdspb.CreateBackupScheduleRequest{Resource: "db", Target: "offsite", Cron: "0 2 * * *",
-			Keep: &sdspb.GFSRetention{Weekly: weekly}}
+	bk := func(weekly int32) *haifypb.CreateBackupScheduleRequest {
+		return &haifypb.CreateBackupScheduleRequest{Resource: "db", Target: "offsite", Cron: "0 2 * * *",
+			Keep: &haifypb.GFSRetention{Weekly: weekly}}
 	}
 	require.NoError(t, callThrough(g, as("alice"), "CreateBackupSchedule", bk(4), &ran))
 	require.NoError(t, srv.ctrl.db.SaveBackupSchedule(ctx, &database.BackupSchedule{

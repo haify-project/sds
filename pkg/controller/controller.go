@@ -10,19 +10,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haify-project/sds/pkg/alert"
+	"github.com/haify-project/haify/pkg/alert"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/event"
-	"github.com/haify-project/sds/pkg/gateway"
-	"github.com/haify-project/sds/pkg/logbuf"
-	"github.com/haify-project/sds/pkg/metrics"
-	"github.com/haify-project/sds/pkg/rbac"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/event"
+	"github.com/haify-project/haify/pkg/gateway"
+	"github.com/haify-project/haify/pkg/logbuf"
+	"github.com/haify-project/haify/pkg/metrics"
+	"github.com/haify-project/haify/pkg/rbac"
+	"github.com/haify-project/haify/pkg/wanproxy"
 )
 
 // Controller represents the Haify controller
@@ -126,8 +126,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*Controller, error) {
 	}
 
 	// WAN mTLS material lives next to the rest of the controller's state.
-	// Without this the PKI cache is pinned to /var/lib/sds, so a non-root
-	// controller fails resource creation at "mkdir /var/lib/sds: permission
+	// Without this the PKI cache is pinned to /var/lib/haify, so a non-root
+	// controller fails resource creation at "mkdir /var/lib/haify: permission
 	// denied" — after it has already created the backing volumes.
 	if cfg.WAN.PKIDir != "" {
 		wanproxy.PKIDir = cfg.WAN.PKIDir

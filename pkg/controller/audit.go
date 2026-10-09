@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,7 +30,7 @@ import (
 // write RPC is never silently excluded from the trail.
 var readOnlyPrefixes = []string{"List", "Get", "Describe", "Watch", "Stream", "Check"}
 
-// shortMethod turns "/v1.SDSController/CreatePool" into "CreatePool".
+// shortMethod turns "/v1.HaifyController/CreatePool" into "CreatePool".
 func shortMethod(fullMethod string) string {
 	if i := strings.LastIndex(fullMethod, "/"); i >= 0 {
 		return fullMethod[i+1:]

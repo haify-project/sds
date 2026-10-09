@@ -32,7 +32,7 @@ func (n *NVMeManager) AddHost(ctx context.Context, resource, hostNQN string) err
 		return invalidArgument(err)
 	}
 
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func (n *NVMeManager) RemoveHost(ctx context.Context, resource, hostNQN string) 
 		zap.String("resource", resource),
 		zap.String("host_nqn", hostNQN))
 
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func (n *NVMeManager) RemoveHost(ctx context.Context, resource, hostNQN string) 
 
 // ListHosts lists all hosts for an NVMe subsystem
 func (n *NVMeManager) ListHosts(ctx context.Context, resource string) ([]string, error) {
-	pluginID := fmt.Sprintf("sds-nvmeof-%s", resource)
+	pluginID := fmt.Sprintf("haify-nvmeof-%s", resource)
 	cfg, err := n.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err

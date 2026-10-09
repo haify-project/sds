@@ -31,12 +31,12 @@ ui-ensure:
 
 # Build binaries
 build: ui-sync
-	@echo "Building sds-controller..."
-	go build -o bin/sds-controller ./cmd/controller
-	@echo "Building sds..."
-	go build -o bin/sds ./cmd/cli
-	@echo "Building sds-mcp..."
-	go build -o bin/sds-mcp ./cmd/mcp
+	@echo "Building haify-controller..."
+	go build -o bin/haify-controller ./cmd/controller
+	@echo "Building haify..."
+	go build -o bin/haify ./cmd/cli
+	@echo "Building haify-mcp..."
+	go build -o bin/haify-mcp ./cmd/mcp
 	GOOS=linux go build -o bin/service-ip ./cmd/service-ip
 	go build -o bin/csi-controller ./cmd/csi-controller
 	go build -o bin/csi-node ./cmd/csi-node
@@ -51,32 +51,32 @@ clean:
 
 # Install controller systemd service
 install-controller: build
-	@echo "Installing sds-controller..."
-	sudo mkdir -p /opt/sds/bin /etc/sds
-	sudo cp bin/sds-controller bin/service-ip /opt/sds/bin/
+	@echo "Installing haify-controller..."
+	sudo mkdir -p /opt/haify/bin /etc/haify
+	sudo cp bin/haify-controller bin/service-ip /opt/haify/bin/
 	sudo install -m 755 bin/service-ip /usr/local/bin/service-ip
-	sudo cp configs/sds-controller.service configs/service-ip@.service /etc/systemd/system/
-	sudo cp configs/controller.toml.example /etc/sds/controller.toml.example
+	sudo cp configs/haify-controller.service configs/service-ip@.service /etc/systemd/system/
+	sudo cp configs/controller.toml.example /etc/haify/controller.toml.example
 	sudo systemctl daemon-reload
-	@echo "Controller installed. Copy /etc/sds/controller.toml.example to"
-	@echo "/etc/sds/controller.toml, edit it, then run:"
-	@echo "  sudo systemctl enable --now sds-controller"
+	@echo "Controller installed. Copy /etc/haify/controller.toml.example to"
+	@echo "/etc/haify/controller.toml, edit it, then run:"
+	@echo "  sudo systemctl enable --now haify-controller"
 
 # Install CLI
 install-cli: build
-	@echo "Installing sds..."
-	sudo install -m 755 bin/sds /usr/local/bin/sds
-	sudo ln -sf sds /usr/local/bin/sds-cli
-	@echo "CLI installed to /usr/local/bin/sds (sds-cli links to it)"
+	@echo "Installing haify..."
+	sudo install -m 755 bin/haify /usr/local/bin/haify
+	sudo ln -sf haify /usr/local/bin/haify-cli
+	@echo "CLI installed to /usr/local/bin/haify (haify-cli links to it)"
 
 # Install MCP server
 install-mcp: build
-	@echo "Installing sds-mcp..."
-	sudo cp bin/sds-mcp /usr/local/bin/
-	@echo "MCP server installed to /usr/local/bin/sds-mcp"
+	@echo "Installing haify-mcp..."
+	sudo cp bin/haify-mcp /usr/local/bin/
+	@echo "MCP server installed to /usr/local/bin/haify-mcp"
 
-# Debian packages into dist/: sds-controller for linux/amd64 and linux/arm64
-# (controller, service-ip, sds, sds-mcp, units) and the sds-pve-plugin Proxmox
+# Debian packages into dist/: haify-controller for linux/amd64 and linux/arm64
+# (controller, service-ip, haify, haify-mcp, units) and the haify-pve-plugin Proxmox
 # VE storage plugin. Needs dpkg-deb, Go and web-ui/node_modules (npm ci); see
 # scripts/build-deb.sh for VERSION, ARCHES and SKIP_UI_BUILD.
 deb:
@@ -167,11 +167,11 @@ web-ui-build:
 
 web-ui-install: web-ui-build
 	@echo "Installing web-ui..."
-	sudo mkdir -p /opt/sds/www
-	sudo cp -r web-ui/dist/* /opt/sds/www/
-	@echo "Web UI installed to /opt/sds/www/"
+	sudo mkdir -p /opt/haify/www
+	sudo cp -r web-ui/dist/* /opt/haify/www/
+	@echo "Web UI installed to /opt/haify/www/"
 
-# The shared knowledge base sds-ai attaches read-only on every cluster:
+# The shared knowledge base haify-ai attaches read-only on every cluster:
 # docs, code graph, CLI reference and DRBD manuals. See ai/kb/build.sh for
 # the environment it needs.
 kb:

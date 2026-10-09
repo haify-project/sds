@@ -68,7 +68,7 @@ func TestPKILeafHasSANAndIsCASigned(t *testing.T) {
 		t.Fatalf("parse leaf: %v", err)
 	}
 
-	// SAN "sds-proxy".
+	// SAN "haify-proxy".
 	if len(leaf.DNSNames) != 1 || leaf.DNSNames[0] != CertSAN {
 		t.Fatalf("leaf DNSNames = %v, want [%q]", leaf.DNSNames, CertSAN)
 	}

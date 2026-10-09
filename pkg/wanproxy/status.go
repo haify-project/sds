@@ -7,14 +7,14 @@ import (
 	"strings"
 )
 
-// NodeProxyState is one node's view of its sds-proxy instance.
+// NodeProxyState is one node's view of its haify-proxy instance.
 type NodeProxyState struct {
 	Host   string
 	Active bool // systemd reports the per-resource unit as active
 }
 
-// Metrics is the counter snapshot sds-proxy publishes. Field tags mirror the
-// JSON that `sds_proxy::metrics::Snapshot` serializes — renaming one on either
+// Metrics is the counter snapshot haify-proxy publishes. Field tags mirror the
+// JSON that `haify_proxy::metrics::Snapshot` serializes — renaming one on either
 // side breaks the contract.
 type Metrics struct {
 	// BufferUsedBytes is the un-replicated backlog: writes the local DRBD has
@@ -59,7 +59,7 @@ func (s *ProxyStatus) Healthy() bool {
 }
 
 // Status reports the live health of a WAN resource's proxy pair: whether the
-// sds-proxy@<resource> unit is active on each node, and whether the primary can
+// haify-proxy@<resource> unit is active on each node, and whether the primary can
 // currently reach the DR WAN endpoint. It is read-only (no sudo) and does a
 // single reachability attempt so a status query never blocks on retries.
 func Status(ctx context.Context, deploy DeploymentClient, spec ProxySpec) (*ProxyStatus, error) {

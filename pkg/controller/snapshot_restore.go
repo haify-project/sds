@@ -197,7 +197,7 @@ func (sm *SnapshotManager) restoreReplicated(ctx context.Context, resource, addr
 	for host, h := range st.Hosts {
 		if strings.HasPrefix(strings.TrimSpace(h.Output), resource+" role:Primary") {
 			name := sm.controller.NodeName(host)
-			return fmt.Errorf("%s is Primary on %s: unmount it and demote it (sds resource secondary %s %s) before restoring",
+			return fmt.Errorf("%s is Primary on %s: unmount it and demote it (haify resource secondary %s %s) before restoring",
 				resource, name, resource, name)
 		}
 	}

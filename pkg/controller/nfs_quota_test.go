@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 func TestProjectIDIsStable(t *testing.T) {
-	a := projectID("/srv/sds/data/team-a")
-	assert.Equal(t, a, projectID("/srv/sds/data/team-a"))
-	assert.NotEqual(t, a, projectID("/srv/sds/data/team-b"))
+	a := projectID("/srv/haify/data/team-a")
+	assert.Equal(t, a, projectID("/srv/haify/data/team-a"))
+	assert.NotEqual(t, a, projectID("/srv/haify/data/team-b"))
 	assert.GreaterOrEqual(t, a, uint32(100000))
 }
 

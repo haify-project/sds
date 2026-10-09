@@ -4,13 +4,13 @@ import (
 	"context"
 	"strings"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.MakeHaResponse, error) {
+func (s *Server) MakeHa(ctx context.Context, req *haifypb.MakeHaRequest) (*haifypb.MakeHaResponse, error) {
 	var ocfAgents []OcfAgentSpec
 	for _, a := range req.OcfAgents {
 		if a == nil {
@@ -42,12 +42,12 @@ func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.M
 	}
 	configPath, err := s.resources.MakeHa(ctx, req.Resource, req.Services, req.MountPoint, req.Fstype, req.Vip, ocfAgents, startItems)
 	if err != nil {
-		return &sdspb.MakeHaResponse{
+		return &haifypb.MakeHaResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.MakeHaResponse{
+	return &haifypb.MakeHaResponse{
 		Success:    true,
 		Message:    "HA configuration created successfully",
 		ConfigPath: configPath,
@@ -55,14 +55,14 @@ func (s *Server) MakeHa(ctx context.Context, req *sdspb.MakeHaRequest) (*sdspb.M
 }
 
 // ListResourceAgents lists the OCF resource agents available on the nodes.
-func (s *Server) ListResourceAgents(ctx context.Context, req *sdspb.ListResourceAgentsRequest) (*sdspb.ListResourceAgentsResponse, error) {
+func (s *Server) ListResourceAgents(ctx context.Context, req *haifypb.ListResourceAgentsRequest) (*haifypb.ListResourceAgentsResponse, error) {
 	agents, err := s.resources.ListResourceAgents(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	resp := &sdspb.ListResourceAgentsResponse{}
+	resp := &haifypb.ListResourceAgentsResponse{}
 	for _, a := range agents {
-		resp.Agents = append(resp.Agents, &sdspb.ResourceAgentInfo{
+		resp.Agents = append(resp.Agents, &haifypb.ResourceAgentInfo{
 			Provider:  a.Provider,
 			Name:      a.Name,
 			Shortdesc: a.Shortdesc,
@@ -72,12 +72,12 @@ func (s *Server) ListResourceAgents(ctx context.Context, req *sdspb.ListResource
 }
 
 // GetResourceAgentMetadata returns an OCF agent's parsed meta-data parameter schema.
-func (s *Server) GetResourceAgentMetadata(ctx context.Context, req *sdspb.GetResourceAgentMetadataRequest) (*sdspb.GetResourceAgentMetadataResponse, error) {
+func (s *Server) GetResourceAgentMetadata(ctx context.Context, req *haifypb.GetResourceAgentMetadataRequest) (*haifypb.GetResourceAgentMetadataResponse, error) {
 	meta, err := s.resources.GetResourceAgentMetadata(ctx, req.Provider, req.Name)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
-	resp := &sdspb.GetResourceAgentMetadataResponse{
+	resp := &haifypb.GetResourceAgentMetadataResponse{
 		Provider:  meta.Provider,
 		Name:      meta.Name,
 		Version:   meta.Version,
@@ -85,7 +85,7 @@ func (s *Server) GetResourceAgentMetadata(ctx context.Context, req *sdspb.GetRes
 		Longdesc:  meta.Longdesc,
 	}
 	for _, p := range meta.Parameters {
-		resp.Parameters = append(resp.Parameters, &sdspb.ResourceAgentParameter{
+		resp.Parameters = append(resp.Parameters, &haifypb.ResourceAgentParameter{
 			Name:      p.Name,
 			Required:  p.Required,
 			Unique:    p.Unique,
@@ -99,12 +99,12 @@ func (s *Server) GetResourceAgentMetadata(ctx context.Context, req *sdspb.GetRes
 }
 
 // GetHaToml reads a resource's drbd-reactor promoter TOML.
-func (s *Server) GetHaToml(ctx context.Context, req *sdspb.GetHaTomlRequest) (*sdspb.GetHaTomlResponse, error) {
+func (s *Server) GetHaToml(ctx context.Context, req *haifypb.GetHaTomlRequest) (*haifypb.GetHaTomlResponse, error) {
 	path, content, err := s.resources.GetHaToml(ctx, req.Resource)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
-	return &sdspb.GetHaTomlResponse{
+	return &haifypb.GetHaTomlResponse{
 		Resource: req.Resource,
 		Path:     path,
 		Content:  content,
@@ -112,29 +112,29 @@ func (s *Server) GetHaToml(ctx context.Context, req *sdspb.GetHaTomlRequest) (*s
 }
 
 // SyncHaToml writes an edited promoter TOML to all resource nodes and reloads drbd-reactor.
-func (s *Server) SyncHaToml(ctx context.Context, req *sdspb.SyncHaTomlRequest) (*sdspb.SyncHaTomlResponse, error) {
+func (s *Server) SyncHaToml(ctx context.Context, req *haifypb.SyncHaTomlRequest) (*haifypb.SyncHaTomlResponse, error) {
 	message, err := s.resources.SyncHaToml(ctx, req.Resource, req.Content)
 	if err != nil {
-		return &sdspb.SyncHaTomlResponse{
+		return &haifypb.SyncHaTomlResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.SyncHaTomlResponse{
+	return &haifypb.SyncHaTomlResponse{
 		Success: true,
 		Message: message,
 	}, nil
 }
 
-func (s *Server) EnableSelfHa(ctx context.Context, req *sdspb.EnableSelfHaRequest) (*sdspb.EnableSelfHaResponse, error) {
+func (s *Server) EnableSelfHa(ctx context.Context, req *haifypb.EnableSelfHaRequest) (*haifypb.EnableSelfHaResponse, error) {
 	handoffLog, err := s.resources.EnableSelfHa(ctx, req.Vip, req.Pool, req.SizeGb, req.Port, req.Nodes)
 	if err != nil {
-		return &sdspb.EnableSelfHaResponse{
+		return &haifypb.EnableSelfHaResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.EnableSelfHaResponse{
+	return &haifypb.EnableSelfHaResponse{
 		Success:    true,
 		Message:    "Self-HA handoff started; the controller will restart under drbd-reactor management",
 		Resource:   SelfHaResource,
@@ -142,28 +142,28 @@ func (s *Server) EnableSelfHa(ctx context.Context, req *sdspb.EnableSelfHaReques
 	}, nil
 }
 
-func (s *Server) DisableSelfHa(ctx context.Context, req *sdspb.DisableSelfHaRequest) (*sdspb.DisableSelfHaResponse, error) {
+func (s *Server) DisableSelfHa(ctx context.Context, req *haifypb.DisableSelfHaRequest) (*haifypb.DisableSelfHaResponse, error) {
 	if err := s.resources.DisableSelfHa(ctx, req.Node); err != nil {
-		return &sdspb.DisableSelfHaResponse{
+		return &haifypb.DisableSelfHaResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.DisableSelfHaResponse{
+	return &haifypb.DisableSelfHaResponse{
 		Success: true,
 		Message: "Self-HA disable started; the controller will restart standalone on " + req.Node,
 	}, nil
 }
 
-func (s *Server) GetSelfHaStatus(ctx context.Context, req *sdspb.GetSelfHaStatusRequest) (*sdspb.GetSelfHaStatusResponse, error) {
+func (s *Server) GetSelfHaStatus(ctx context.Context, req *haifypb.GetSelfHaStatusRequest) (*haifypb.GetSelfHaStatusResponse, error) {
 	status, err := s.resources.GetSelfHaStatus(ctx)
 	if err != nil {
-		return &sdspb.GetSelfHaStatusResponse{
+		return &haifypb.GetSelfHaStatusResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.GetSelfHaStatusResponse{
+	return &haifypb.GetSelfHaStatusResponse{
 		Success:    true,
 		Message:    "OK",
 		Enabled:    status.Enabled,
@@ -174,92 +174,92 @@ func (s *Server) GetSelfHaStatus(ctx context.Context, req *sdspb.GetSelfHaStatus
 	}, nil
 }
 
-func (s *Server) EvictHa(ctx context.Context, req *sdspb.EvictHaRequest) (*sdspb.EvictHaResponse, error) {
+func (s *Server) EvictHa(ctx context.Context, req *haifypb.EvictHaRequest) (*haifypb.EvictHaResponse, error) {
 	err := s.resources.EvictHa(ctx, req.Resource)
 	if err != nil {
-		return &sdspb.EvictHaResponse{
+		return &haifypb.EvictHaResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.EvictHaResponse{
+	return &haifypb.EvictHaResponse{
 		Success: true,
 		Message: "HA resource evicted successfully",
 	}, nil
 }
 
-func (s *Server) DeleteHa(ctx context.Context, req *sdspb.DeleteHaRequest) (*sdspb.DeleteHaResponse, error) {
+func (s *Server) DeleteHa(ctx context.Context, req *haifypb.DeleteHaRequest) (*haifypb.DeleteHaResponse, error) {
 	err := s.resources.RemoveHa(ctx, req.Resource)
 	if err != nil {
-		return &sdspb.DeleteHaResponse{
+		return &haifypb.DeleteHaResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
-	return &sdspb.DeleteHaResponse{
+	return &haifypb.DeleteHaResponse{
 		Success: true,
 		Message: "HA configuration deleted successfully",
 	}, nil
 }
 
-func (s *Server) GetHa(ctx context.Context, req *sdspb.GetHaRequest) (*sdspb.GetHaResponse, error) {
+func (s *Server) GetHa(ctx context.Context, req *haifypb.GetHaRequest) (*haifypb.GetHaResponse, error) {
 	haCfg, err := s.resources.GetHaConfig(ctx, req.Resource)
 	if err != nil {
-		return &sdspb.GetHaResponse{
+		return &haifypb.GetHaResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	return &sdspb.GetHaResponse{
+	return &haifypb.GetHaResponse{
 		Success: true,
 		Message: "HA configuration found",
 		Config:  haConfigInfo(haCfg),
 	}, nil
 }
 
-func (s *Server) ListHa(ctx context.Context, req *sdspb.ListHaRequest) (*sdspb.ListHaResponse, error) {
+func (s *Server) ListHa(ctx context.Context, req *haifypb.ListHaRequest) (*haifypb.ListHaResponse, error) {
 	haConfigs, err := s.resources.ListHaConfigs(ctx)
 	if err != nil {
-		return &sdspb.ListHaResponse{
+		return &haifypb.ListHaResponse{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	var pbConfigs []*sdspb.HaConfigInfo
+	var pbConfigs []*haifypb.HaConfigInfo
 	for _, cfg := range haConfigs {
 		pbConfigs = append(pbConfigs, haConfigInfo(cfg))
 	}
 
-	return &sdspb.ListHaResponse{
+	return &haifypb.ListHaResponse{
 		Success: true,
 		Message: "HA configurations listed successfully",
 		Configs: pbConfigs,
 	}, nil
 }
 
-func (s *Server) GetHaStatus(ctx context.Context, req *sdspb.GetHaStatusRequest) (*sdspb.GetHaStatusResponse, error) {
+func (s *Server) GetHaStatus(ctx context.Context, req *haifypb.GetHaStatusRequest) (*haifypb.GetHaStatusResponse, error) {
 	promoters, err := s.resources.GetHaStatus(ctx, req.Resource)
 	if err != nil {
-		return &sdspb.GetHaStatusResponse{Success: false, Message: err.Error()}, nil
+		return &haifypb.GetHaStatusResponse{Success: false, Message: err.Error()}, nil
 	}
 
-	var pbPromoters []*sdspb.HaPromoterStatus
+	var pbPromoters []*haifypb.HaPromoterStatus
 	for _, p := range promoters {
-		pb := &sdspb.HaPromoterStatus{
+		pb := &haifypb.HaPromoterStatus{
 			DrbdResource: p.DRBDResource,
 			PrimaryOn:    p.PrimaryOn,
 			Status:       p.Status,
-			Target:       &sdspb.HaServiceStatus{Name: p.Target.Name, Status: p.Target.Status},
+			Target:       &haifypb.HaServiceStatus{Name: p.Target.Name, Status: p.Target.Status},
 		}
 		for _, d := range p.Deps {
-			pb.Deps = append(pb.Deps, &sdspb.HaServiceStatus{Name: d.Name, Status: d.Status})
+			pb.Deps = append(pb.Deps, &haifypb.HaServiceStatus{Name: d.Name, Status: d.Status})
 		}
 		pbPromoters = append(pbPromoters, pb)
 	}
 
-	return &sdspb.GetHaStatusResponse{
+	return &haifypb.GetHaStatusResponse{
 		Success:   true,
 		Message:   "HA status retrieved successfully",
 		Promoters: pbPromoters,
@@ -267,11 +267,11 @@ func (s *Server) GetHaStatus(ctx context.Context, req *sdspb.GetHaStatusRequest)
 }
 
 // haConfigInfo renders a stored HA config for the API, start order included.
-func haConfigInfo(cfg *database.HaConfig) *sdspb.HaConfigInfo {
-	ocf := func(a database.HaOcfAgent) *sdspb.OcfAgent {
-		return &sdspb.OcfAgent{Provider: a.Provider, Name: a.Name, Instance: a.Instance, Params: a.Params}
+func haConfigInfo(cfg *database.HaConfig) *haifypb.HaConfigInfo {
+	ocf := func(a database.HaOcfAgent) *haifypb.OcfAgent {
+		return &haifypb.OcfAgent{Provider: a.Provider, Name: a.Name, Instance: a.Instance, Params: a.Params}
 	}
-	info := &sdspb.HaConfigInfo{
+	info := &haifypb.HaConfigInfo{
 		Resource:   cfg.Resource,
 		Vip:        cfg.VIP,
 		MountPoint: cfg.MountPoint,
@@ -283,9 +283,9 @@ func haConfigInfo(cfg *database.HaConfig) *sdspb.HaConfigInfo {
 	}
 	for _, it := range cfg.StartItems {
 		if it.Ocf != nil {
-			info.StartItems = append(info.StartItems, &sdspb.HaStartItem{Item: &sdspb.HaStartItem_Ocf{Ocf: ocf(*it.Ocf)}})
+			info.StartItems = append(info.StartItems, &haifypb.HaStartItem{Item: &haifypb.HaStartItem_Ocf{Ocf: ocf(*it.Ocf)}})
 		} else {
-			info.StartItems = append(info.StartItems, &sdspb.HaStartItem{Item: &sdspb.HaStartItem_SystemdUnit{SystemdUnit: it.SystemdUnit}})
+			info.StartItems = append(info.StartItems, &haifypb.HaStartItem{Item: &haifypb.HaStartItem_SystemdUnit{SystemdUnit: it.SystemdUnit}})
 		}
 	}
 	return info

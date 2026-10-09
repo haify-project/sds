@@ -39,7 +39,7 @@ func (i *iSCSIManager) AddInitiator(ctx context.Context, resource, initiatorIQN 
 		return invalidArgument(err)
 	}
 
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (i *iSCSIManager) RemoveInitiator(ctx context.Context, resource, initiatorI
 		zap.String("resource", resource),
 		zap.String("iqn", initiatorIQN))
 
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (i *iSCSIManager) RemoveInitiator(ctx context.Context, resource, initiatorI
 
 // ListInitiators lists all initiators for an iSCSI gateway
 func (i *iSCSIManager) ListInitiators(ctx context.Context, resource string) ([]string, error) {
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (i *iSCSIManager) SetCHAP(ctx context.Context, resource, username, password
 		return fmt.Errorf("mutual CHAP is not supported by the current iSCSI gateway config writer")
 	}
 
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -181,7 +181,7 @@ func (i *iSCSIManager) SetCHAP(ctx context.Context, resource, username, password
 
 // GetCHAP gets CHAP authentication settings
 func (i *iSCSIManager) GetCHAP(ctx context.Context, resource string) (username, password string, mutual bool, err error) {
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return "", "", false, err

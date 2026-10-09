@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Converting a thick LVM pool to a thin one, in place, one node at a time.
@@ -62,7 +62,7 @@ type thinConversionInput struct {
 	// assuming either would build a second pool beside the first.
 	ExistingThinPool string
 	// DRBDName maps a Haify node name to the name DRBD reports it by. The two
-	// differ on most clusters — Haify knows "node-b", DRBD says "sds-b" — and
+	// differ on most clusters — Haify knows "node-b", DRBD says "haify-b" — and
 	// live resource state is keyed by the latter.
 	DRBDName map[string]string
 }
@@ -95,7 +95,7 @@ type thinConversionPlan struct {
 }
 
 // thinPoolName is the LV the converted volumes live inside.
-const thinPoolName = "sdsthin"
+const thinPoolName = "haifythin"
 
 // planThinConversion decides whether this node's pool can be rebuilt as thin
 // right now, and how big to make the pool.
@@ -204,7 +204,7 @@ func checkSafeToRebuild(res *ResourceInfo, node, drbdName string) error {
 		return fmt.Errorf("no live DRBD state for %s on %s; refusing to convert blind", res.Name, node)
 	}
 	if strings.EqualFold(st.Role, "Primary") {
-		return fmt.Errorf("%s is Primary on %s; move it first (sds ha evict, or resource secondary)",
+		return fmt.Errorf("%s is Primary on %s; move it first (haify ha evict, or resource secondary)",
 			res.Name, node)
 	}
 
@@ -248,7 +248,7 @@ func isResyncing(replication string) bool {
 // it by.
 //
 // NodeStates comes from `drbdadm status`, so it is keyed by the hostname DRBD
-// knows — "sds-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — while the caller holds the name
+// knows — "haify-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — while the caller holds the name
 // Haify registered, "node-b". On a cluster where those two happen to match the
 // difference is invisible, which is how looking up only the Haify name survived
 // review and then refused every node on a real cluster.

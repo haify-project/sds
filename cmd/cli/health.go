@@ -25,11 +25,11 @@ func healthCommand() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Get nodes to check
 			var nodeList []string
@@ -40,7 +40,7 @@ func healthCommand() *cobra.Command {
 				}
 			} else {
 				// Get all registered nodes
-				nodeInfos, err := sdsClient.ListNodes(ctx)
+				nodeInfos, err := haifyClient.ListNodes(ctx)
 				if err != nil {
 					return fmt.Errorf("failed to list nodes: %w", err)
 				}
@@ -56,7 +56,7 @@ func healthCommand() *cobra.Command {
 			allHealthy := true
 			for _, node := range nodeList {
 				fmt.Printf("\n=== Node: %s ===\n", node)
-				healthy, err := sdsClient.HealthCheck(ctx, node)
+				healthy, err := haifyClient.HealthCheck(ctx, node)
 				if err != nil {
 					fmt.Printf("  Error: %v\n", err)
 					allHealthy = false

@@ -2,7 +2,7 @@
 
 用 Go 编写的轻量级 DRBD 9 存储控制器。管理存储池、复制卷、iSCSI / NFS / NVMe-oF 网关和高可用,并接入 Kubernetes(CSI)、Proxmox VE 和 AI 助手(MCP)。
 
-[English](README.md) | 简体中文 | [文档站](https://haify-project.github.io/sds/)
+[English](README.md) | 简体中文 | [文档站](https://haify-project.github.io/haify/)
 
 ![Haify 架构](docs/img/architecture-cn.png)
 
@@ -30,17 +30,17 @@
 
 三个节点 `node1`..`node3`,地址 `10.0.0.11`..`10.0.0.13`,各有一块空盘 `/dev/sdb`。控制器跑在 `node1` 上。
 
-**1. 获取二进制。** Release 提供 linux/amd64 压缩包,内含 `sds-controller`、`sds`、`sds-mcp`、`service-ip`、systemd unit 和 `controller.toml.example`:
+**1. 获取二进制。** Release 提供 linux/amd64 压缩包,内含 `haify-controller`、`haify`、`haify-mcp`、`service-ip`、systemd unit 和 `controller.toml.example`:
 
 ```bash
-curl -LO https://github.com/haify-project/sds/releases/latest/download/sds-linux-amd64.tar.gz
-tar -xzf sds-linux-amd64.tar.gz
+curl -LO https://github.com/haify-project/haify/releases/latest/download/haify-linux-amd64.tar.gz
+tar -xzf haify-linux-amd64.tar.gz
 ```
 
 或从源码构建(Go 1.26+,Node.js 用于内嵌的 Web UI),`make build` 把二进制写到 `bin/`:
 
 ```bash
-git clone https://github.com/haify-project/sds.git && cd sds
+git clone https://github.com/haify-project/haify.git && cd haify
 (cd web-ui && npm ci) && make build
 ```
 
@@ -68,16 +68,16 @@ timeout = "30s"
 **3. 在 `node1` 上安装并启动控制器**,以下在解压后的目录里执行(源码构建时二进制在 `bin/`,unit 文件在 `configs/`):
 
 ```bash
-install -d /opt/sds/bin /etc/sds
-install -m 755 sds-controller service-ip /opt/sds/bin/
-install -m 755 sds /usr/local/bin/
-cp sds-controller.service service-ip@.service /etc/systemd/system/
-cat > /etc/sds/controller.toml <<'TOML'
+install -d /opt/haify/bin /etc/haify
+install -m 755 haify-controller service-ip /opt/haify/bin/
+install -m 755 haify /usr/local/bin/
+cp haify-controller.service service-ip@.service /etc/systemd/system/
+cat > /etc/haify/controller.toml <<'TOML'
 [dispatch]
 config_path = "/root/.dispatch/config.toml"
 TOML
 systemctl daemon-reload
-systemctl enable --now sds-controller
+systemctl enable --now haify-controller
 ```
 
 其余配置项都有默认值,完整列表见 [`configs/controller.toml.example`](configs/controller.toml.example)。
@@ -85,43 +85,43 @@ systemctl enable --now sds-controller
 **4. 注册节点并检查:**
 
 ```bash
-sds node register --name node1 --address 10.0.0.11
-sds node register --name node2 --address 10.0.0.12
-sds node register --name node3 --address 10.0.0.13
-sds health-check
+haify node register --name node1 --address 10.0.0.11
+haify node register --name node2 --address 10.0.0.12
+haify node register --name node3 --address 10.0.0.13
+haify health-check
 ```
 
-**5. 创建存储池**(默认是 LVM thin 池,VG 名为 `sds_pool0`):
+**5. 创建存储池**(默认是 LVM thin 池,VG 名为 `haify_pool0`):
 
 ```bash
-sds pool create --name pool0 --nodes node1,node2,node3 --devices /dev/sdb
+haify pool create --name pool0 --nodes node1,node2,node3 --devices /dev/sdb
 ```
 
 **6. 创建复制资源**并查看同步状态:
 
 ```bash
-sds resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
-sds resource status data
+haify resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
+haify resource status data
 ```
 
 两个节点上的卷都是 `/dev/drbd/by-res/data/0`。要对外提供,加一个网关:
 
 ```bash
-sds gateway nfs create --resource data --service-ip 10.0.0.200/24 --export-path /data
+haify gateway nfs create --resource data --service-ip 10.0.0.200/24 --export-path /data
 ```
 
 Web UI 地址是 `http://node1:3376`。控制器 Self-HA、WAN 容灾副本、备份等见 [docs/deployment-guide.md](docs/deployment-guide.md) 和 [docs/user-guide.md](docs/user-guide.md)。
 
 ## 集成
 
-Kubernetes:把控制器地址填进 `deploy/k8s/00-sds-controller-endpoint.yaml`,`kubectl apply -f deploy/k8s/`,然后使用 `sds-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。Proxmox VE 见 [deploy/proxmox/README.md](deploy/proxmox/README.md),Prometheus 和 Grafana 见 [deploy/monitoring/README.md](deploy/monitoring/README.md)。
+Kubernetes:把控制器地址填进 `deploy/k8s/00-haify-controller-endpoint.yaml`,`kubectl apply -f deploy/k8s/`,然后使用 `haify-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。Proxmox VE 见 [deploy/proxmox/README.md](deploy/proxmox/README.md),Prometheus 和 Grafana 见 [deploy/monitoring/README.md](deploy/monitoring/README.md)。
 
 AI 助手:
 
 ```bash
-claude mcp add sds -- sds-mcp --controller node1:3374            # 本地
-claude mcp add --transport http sds https://<host>/mcp \
-    --header "Authorization: Bearer <token>"                     # 远程,sds-mcp serve
+claude mcp add haify -- haify-mcp --controller node1:3374            # 本地
+claude mcp add --transport http haify https://<host>/mcp \
+    --header "Authorization: Bearer <token>"                     # 远程,haify-mcp serve
 ```
 
 工具、角色和令牌见 [docs/mcp.md](docs/mcp.md)。
@@ -130,12 +130,12 @@ claude mcp add --transport http sds https://<host>/mcp \
 
 | 端口 | 服务 |
 | ---- | ---- |
-| 3374 | gRPC(`sds`、CSI、MCP) |
+| 3374 | gRPC(`haify`、CSI、MCP) |
 | 3375 | REST |
 | 3376 | Web UI |
 | 9433 | Prometheus |
 
-控制器配置:`/etc/sds/controller.toml`。
+控制器配置:`/etc/haify/controller.toml`。
 
 ## 文档
 

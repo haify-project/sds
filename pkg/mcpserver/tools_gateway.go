@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -23,7 +23,7 @@ type gatewayListOut struct {
 	Gateways []gatewayOut `json:"gateways"`
 }
 
-func gatewayInfoOut(g *sdspb.GatewayInfo) gatewayOut {
+func gatewayInfoOut(g *haifypb.GatewayInfo) gatewayOut {
 	return gatewayOut{
 		Resource: g.Resource,
 		Type:     g.Type,
@@ -50,7 +50,7 @@ type nfsGatewayCreateIn struct {
 
 type iscsiGatewayCreateIn struct {
 	Resource          string   `json:"resource" jsonschema:"existing DRBD resource to export"`
-	IQN               string   `json:"iqn" jsonschema:"iSCSI Qualified Name, e.g. iqn.2024-01.com.example:sds.data"`
+	IQN               string   `json:"iqn" jsonschema:"iSCSI Qualified Name, e.g. iqn.2024-01.com.example:haify.data"`
 	ServiceIP         string   `json:"service_ip" jsonschema:"floating service IP in CIDR notation, e.g. 192.168.1.100/24"`
 	AllowedInitiators []string `json:"allowed_initiators,omitempty" jsonschema:"initiator IQNs allowed to connect; default allows all"`
 	Username          string   `json:"username,omitempty" jsonschema:"CHAP username"`
@@ -60,7 +60,7 @@ type iscsiGatewayCreateIn struct {
 
 type nvmeGatewayCreateIn struct {
 	Resource  string `json:"resource" jsonschema:"existing DRBD resource to export"`
-	NQN       string `json:"nqn" jsonschema:"NVMe Qualified Name, e.g. nqn.2024-01.com.example:sds.data"`
+	NQN       string `json:"nqn" jsonschema:"NVMe Qualified Name, e.g. nqn.2024-01.com.example:haify.data"`
 	ServiceIP string `json:"service_ip" jsonschema:"floating service IP in CIDR notation, e.g. 192.168.1.150/24"`
 	Transport string `json:"transport,omitempty" jsonschema:"transport type: tcp (default) or rdma"`
 }
@@ -167,7 +167,7 @@ func (s *Server) registerGatewayTools(srv *mcp.Server) {
 }
 
 func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_gateway_list", "List gateways",
+	addRead(s, srv, readOnlyTool("haify_gateway_list", "List gateways",
 		"List all storage gateways (NFS, iSCSI, NVMe-oF, SMB) with their type, state, and serving node."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, gatewayListOut, error) {
 			gws, err := s.client.ListGateways(ctx)
@@ -181,7 +181,7 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_gateway_get", "Gateway details",
+	addRead(s, srv, readOnlyTool("haify_gateway_get", "Gateway details",
 		"Get full details and live status of one gateway: state, serving node, service IP, exports/targets."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, gatewayOut, error) {
 			g, err := s.client.GetGateway(ctx, in.Resource)
@@ -191,7 +191,7 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 			return nil, gatewayInfoOut(g), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_gateway_create_nfs", "Create NFS gateway",
+	addWrite(s, srv, writeTool("haify_gateway_create_nfs", "Create NFS gateway",
 		"Export a DRBD resource over NFS with automatic failover. Creates a drbd-reactor promoter config "+
 			"with filesystem mount, floating IP, NFS server, and exports. The resource must already exist."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nfsGatewayCreateIn) (*mcp.CallToolResult, opResult, error) {
@@ -199,7 +199,7 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 			if fsType == "" {
 				fsType = "ext4"
 			}
-			resp, err := s.client.CreateNFSGateway(ctx, &sdspb.CreateNFSGatewayRequest{
+			resp, err := s.client.CreateNFSGateway(ctx, &haifypb.CreateNFSGatewayRequest{
 				Resource:   in.Resource,
 				ServiceIp:  in.ServiceIP,
 				ExportPath: in.ExportPath,
@@ -216,14 +216,14 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 				in.Resource, in.ServiceIP, in.ExportPath, resp.ConfigPath)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_gateway_create_iscsi", "Create iSCSI gateway",
+	addWrite(s, srv, writeTool("haify_gateway_create_iscsi", "Create iSCSI gateway",
 		"Export a DRBD resource as an iSCSI target with automatic failover. The resource must already exist."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in iscsiGatewayCreateIn) (*mcp.CallToolResult, opResult, error) {
 			impl := in.Implementation
 			if impl == "" {
 				impl = "lio"
 			}
-			resp, err := s.client.CreateISCSIGateway(ctx, &sdspb.CreateISCSIGatewayRequest{
+			resp, err := s.client.CreateISCSIGateway(ctx, &haifypb.CreateISCSIGatewayRequest{
 				Resource:          in.Resource,
 				ServiceIp:         in.ServiceIP,
 				Iqn:               in.IQN,
@@ -242,14 +242,14 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 				in.Resource, in.ServiceIP, in.IQN)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_gateway_create_nvme", "Create NVMe-oF gateway",
+	addWrite(s, srv, writeTool("haify_gateway_create_nvme", "Create NVMe-oF gateway",
 		"Export a DRBD resource as an NVMe-oF subsystem with automatic failover. The resource must already exist."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nvmeGatewayCreateIn) (*mcp.CallToolResult, opResult, error) {
 			transport := in.Transport
 			if transport == "" {
 				transport = "tcp"
 			}
-			resp, err := s.client.CreateNVMeGateway(ctx, &sdspb.CreateNVMeGatewayRequest{
+			resp, err := s.client.CreateNVMeGateway(ctx, &haifypb.CreateNVMeGatewayRequest{
 				Resource:      in.Resource,
 				ServiceIp:     in.ServiceIP,
 				Nqn:           in.NQN,
@@ -265,7 +265,7 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 				in.Resource, in.ServiceIP, in.NQN)), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_gateway_start", "Start gateway",
+	addWrite(s, srv, writeTool("haify_gateway_start", "Start gateway",
 		"Start a stopped gateway: enables its drbd-reactor config and brings services up."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.StartGateway(ctx, in.Resource); err != nil {
@@ -274,7 +274,7 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("gateway %s started", in.Resource)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_gateway_stop", "Stop gateway",
+	addWrite(s, srv, destructiveTool("haify_gateway_stop", "Stop gateway",
 		"Stop a running gateway: clients are disconnected until it is started again."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.StopGateway(ctx, in.Resource); err != nil {
@@ -283,7 +283,7 @@ func (s *Server) registerGatewayLifecycle(srv *mcp.Server) {
 			return nil, ok(fmt.Sprintf("gateway %s stopped", in.Resource)), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_gateway_delete", "Delete gateway",
+	addWrite(s, srv, destructiveTool("haify_gateway_delete", "Delete gateway",
 		"Delete a gateway: removes the drbd-reactor config and stops the export. "+
 			"The underlying DRBD resource and its data are kept."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in gatewayResourceIn) (*mcp.CallToolResult, opResult, error) {

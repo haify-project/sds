@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/haify-project/sds/pkg/serviceip/announce"
-	"github.com/haify-project/sds/pkg/serviceip/ip"
+	"github.com/haify-project/haify/pkg/serviceip/announce"
+	"github.com/haify-project/haify/pkg/serviceip/ip"
 	"github.com/spf13/cobra"
 )
 

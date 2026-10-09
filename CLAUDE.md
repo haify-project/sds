@@ -6,22 +6,21 @@ This file provides guidance to Claude Code when working on the Haify (Software D
 
 Haify is a DRBD-based storage management system built in Go. It provides centralized management for storage pools, DRBD resources, snapshots, backups, storage gateways (NFS, iSCSI, NVMe-oF, SMB), and HA, with a CSI driver, a Proxmox VE plugin, an MCP server and an embedded web UI on top.
 
-**Naming**: the product is called Haify; it was called SDS until 2026-10-09.
-Every name a person reads (UI, docs, site, help text, PVE labels) says
-Haify. Identifiers keep `sds`, because renaming them would break existing
-clusters and storage.cfg entries. That covers the `sds` command, the
-`sds-controller`/`sds-mcp` binaries, the PVE storage type `sds`, the `sds_`
-volume group prefix, the `sds.*` labels, the `sds-*.toml` reactor files, the
-`sds_*` MCP tools, the `SDS_*` environment variables, the Perl
-`PVE::Storage::Custom::SDS*` modules and the Go module path.
+**Naming**: the product was called SDS until 2026-10-09 and is now Haify,
+in names and identifiers alike: the `haify` command, `haify-controller`,
+`haify-mcp`, the PVE storage type `haify`, the `haify_` volume group prefix,
+`haify.*` labels, `haify-*.toml` reactor files, `haify_*` MCP tools, `HAIFY_*`
+environment variables, `/etc/haify`, `/var/lib/haify`, `/opt/haify`. There is no
+compatibility with the old names. Nothing new may say SDS. The domain
+sds.superleo.cn is the one exception, because it is a DNS name.
 
 **Architecture:**
 
 ```
-sds / web UI / sds-mcp / CSI / Proxmox plugin
+haify / web UI / haify-mcp / CSI / Proxmox plugin
         |  gRPC :3374, REST :3375 (grpc-gateway), UI :3376
         v
-sds-controller --> pkg/deployment --> dispatch --> SSH --> storage nodes
+haify-controller --> pkg/deployment --> dispatch --> SSH --> storage nodes
                                                               |
                                                               v
                                                   DRBD + drbd-reactor (failover)
@@ -31,12 +30,12 @@ Binaries (`make build` puts them in `bin/`):
 
 | Binary | Source |
 | ------ | ------ |
-| `sds-controller` | `cmd/controller` |
-| `sds` | `cmd/cli` |
-| `sds-mcp` | `cmd/mcp` |
+| `haify-controller` | `cmd/controller` |
+| `haify` | `cmd/cli` |
+| `haify-mcp` | `cmd/mcp` |
 | `service-ip` | `cmd/service-ip` (Linux only; brings a floating IP up/down on a node) |
 | `csi-controller`, `csi-node` | `cmd/csi-controller`, `cmd/csi-node` |
-| `sds-ai` | `cmd/sds-ai` — separate Go module (own `go.mod`), not built by `make build` |
+| `haify-ai` | `cmd/haify-ai` — separate Go module (own `go.mod`), not built by `make build` |
 
 **Key Design:**
 
@@ -80,11 +79,11 @@ make fmt
 make lint
 
 # Install on the current host (each target runs `make build` first)
-make install-controller   # sds-controller + service-ip to /opt/sds/bin, systemd units
-make install-cli          # /usr/local/bin/sds
-make install-mcp          # /usr/local/bin/sds-mcp
+make install-controller   # haify-controller + service-ip to /opt/haify/bin, systemd units
+make install-cli          # /usr/local/bin/haify
+make install-mcp          # /usr/local/bin/haify-mcp
 
-# Regenerate api/proto/v1 Go code after editing sds.proto
+# Regenerate api/proto/v1 Go code after editing haify.proto
 make proto
 
 # Run controller locally (reads configs/controller.toml, which is not in the
@@ -101,17 +100,17 @@ make run-cli ARGS="pool list"
 
 ```bash
 # Cross-compiles for each host's own architecture (TARGET_ARCH forces one),
-# installs sds-controller to /opt/sds/bin and sds to /usr/local/bin on each
-# host. With Self-HA (sds-meta exists) only the sds-meta Primary's controller
+# installs haify-controller to /opt/haify/bin and haify to /usr/local/bin on each
+# host. With Self-HA (haify-meta exists) only the haify-meta Primary's controller
 # is restarted; without it, every listed host gets an enabled, running
 # controller of its own, so list only the controller host.
 ./scripts/deploy-all.sh node1,node2,node3
 ```
 
 `make build` alone builds for the host it runs on; binaries built on a Mac do
-not run on the nodes. The unit file (`configs/sds-controller.service`) runs
-`/opt/sds/bin/sds-controller`, but a node's installed unit may point elsewhere —
-check `systemctl cat sds-controller | grep ExecStart` before copying by hand.
+not run on the nodes. The unit file (`configs/haify-controller.service`) runs
+`/opt/haify/bin/haify-controller`, but a node's installed unit may point elsewhere —
+check `systemctl cat haify-controller | grep ExecStart` before copying by hand.
 The full procedure is in `docs/deployment-guide.md`.
 
 ### Test with grpcurl (local)
@@ -124,32 +123,32 @@ The controller registers gRPC reflection, so grpcurl needs no proto files
 grpcurl -plaintext node1:3374 list
 
 # Call gRPC methods
-grpcurl -plaintext node1:3374 v1.SDSController/ListPools
+grpcurl -plaintext node1:3374 v1.HaifyController/ListPools
 
 # Or the REST gateway
 curl -s http://node1:3375/v1/pools
 ```
 
-### Test with sds (on server)
+### Test with haify (on server)
 
 ```bash
 # Pool operations
-sds pool list
-sds pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/vdb
+haify pool list
+haify pool create --name pool0 --type lvm-thin --nodes node1,node2 --devices /dev/vdb
 
 # Resource operations (--port and --size are required; omit --nodes to auto-place)
-sds resource create --name data --port 7000 --size 10G --nodes node1,node2 --pool pool0
+haify resource create --name data --port 7000 --size 10G --nodes node1,node2 --pool pool0
 
 # Gateway operations (one gateway per resource)
-sds gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
-sds gateway iscsi create --resource blk --iqn iqn.2024-01.com.example:sds.blk --service-ip 192.168.1.100/24
-sds gateway nvme create --resource nvm --nqn nqn.2024-01.com.example:sds.nvm --service-ip 192.168.1.150/24
+haify gateway nfs create --resource data --service-ip 192.168.1.200/24 --export-path /data
+haify gateway iscsi create --resource blk --iqn iqn.2024-01.com.example:haify.blk --service-ip 192.168.1.100/24
+haify gateway nvme create --resource nvm --nqn nqn.2024-01.com.example:haify.nvm --service-ip 192.168.1.150/24
 ```
 
 ## Configuration
 
-Controller config: `/etc/sds/controller.toml` (without `--config` the
-controller looks for `controller.toml` in `/etc/sds/`, `./configs/`, `.`).
+Controller config: `/etc/haify/controller.toml` (without `--config` the
+controller looks for `controller.toml` in `/etc/haify/`, `./configs/`, `.`).
 Every key, with its default, is in `configs/controller.toml.example`; the
 structs are in `pkg/config/config.go`. Excerpt:
 
@@ -160,7 +159,7 @@ port = 3374
 rest_port = 3375
 
 [database]
-path = "/var/lib/sds/sds.db"
+path = "/var/lib/haify/haify.db"
 
 [dispatch]
 config_path = "/root/.dispatch/config.toml"   # empty = dispatch default (~/.dispatch/config.toml)
@@ -194,29 +193,29 @@ Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
 | ---------------- | -------------------------------------------------------------------------------------- |
 | `pkg/controller` | Main controller: gRPC handlers (`server*.go`), managers for storage, resources, snapshots, nodes, gateways, HA, Self-HA, backups, WAN, REST gateway and UI server |
 | `pkg/gateway`    | Gateway managers (NFS, iSCSI, NVMe-oF, SMB) - generates drbd-reactor configs           |
-| `pkg/apptemplate`| Database apps on a resource (`sds app`: PostgreSQL, MySQL/MariaDB, Redis): unit, promoter, init, probes, freeze/thaw; driven by `pkg/controller/app*.go` |
+| `pkg/apptemplate`| Database apps on a resource (`haify app`: PostgreSQL, MySQL/MariaDB, Redis): unit, promoter, init, probes, freeze/thaw; driven by `pkg/controller/app*.go` |
 | `pkg/deployment` | Wrapper around dispatch for SSH-based operations                                       |
 | `pkg/config`     | Configuration loading with viper                                                       |
-| `pkg/client`     | gRPC client for sds                                                                |
+| `pkg/client`     | gRPC client for haify                                                                |
 | `pkg/database`   | BBolt store: resources, gateways, HA configs, schedules, backups, events, audit, notification channels |
 | `pkg/alert`      | Health detector: turns cluster state into events (degrade, failover, node loss)        |
 | `pkg/event`      | Notification bus, bounded history, and Webhook delivery                                |
 | `pkg/backup`     | Backups to S3 / SMB / WebDAV (via rclone), incremental and scheduled                   |
 | `pkg/drbdtls`    | CA and certificates for TLS-encrypted DRBD replication (kernel TLS via tlshd)          |
-| `pkg/wanproxy`   | The per-resource sds-proxy mTLS pair that carries WAN (DR) replication                 |
+| `pkg/wanproxy`   | The per-resource haify-proxy mTLS pair that carries WAN (DR) replication                 |
 | `pkg/rbac`       | Casbin-backed role authorization                                                       |
 | `pkg/metrics`    | Prometheus metrics                                                                     |
 | `pkg/logbuf`     | In-memory ring of recent controller log lines, served over the API                     |
-| `pkg/triage`     | Turns events, audit and logs into a short list of known problems (used by `sds-mcp`)   |
-| `pkg/inspect`    | Cluster inspection (`sds inspect`, `[inspect]`): the per-node probe script and pure pass/warn/fail checks over what the controller gathers (`pkg/controller/inspect*.go`), run on a schedule or on demand and stored as reports |
-| `pkg/mcpserver`  | MCP tools over the controller API (`sds-mcp`, stdio and HTTP)                          |
+| `pkg/triage`     | Turns events, audit and logs into a short list of known problems (used by `haify-mcp`)   |
+| `pkg/inspect`    | Cluster inspection (`haify inspect`, `[inspect]`): the per-node probe script and pure pass/warn/fail checks over what the controller gathers (`pkg/controller/inspect*.go`), run on a schedule or on demand and stored as reports |
+| `pkg/mcpserver`  | MCP tools over the controller API (`haify-mcp`, stdio and HTTP)                          |
 | `pkg/mcpauth`    | Tokens and OAuth for the remote MCP server                                             |
-| `pkg/k8sapp`     | Databases on Kubernetes backed by Haify volumes (`sds-mcp k8s`, `sds_k8s_*` tools)        |
+| `pkg/k8sapp`     | Databases on Kubernetes backed by Haify volumes (`haify-mcp k8s`, `haify_k8s_*` tools)        |
 | `pkg/csi`        | CSI driver (controller and node services)                                              |
 | `pkg/serviceip`  | Floating IP add/remove and announcement, used by `service-ip`                          |
 | `pkg/util`       | Size parsing and formatting                                                            |
 | `cmd/*`          | Entry points, see the binaries table above                                             |
-| `api/proto/v1`   | gRPC/REST protocol definitions (`sds.proto`) and generated code                        |
+| `api/proto/v1`   | gRPC/REST protocol definitions (`haify.proto`) and generated code                        |
 | `web-ui`         | React web UI; `make build` copies `web-ui/dist` into `ui/dist`, which `ui/ui.go` embeds |
 | `deploy/`        | Kubernetes manifests (`k8s`), Proxmox plugin (`proxmox`), Prometheus/Grafana (`monitoring`) |
 
@@ -268,15 +267,15 @@ written without `lifecycle.go`'s invariants looks correct and isn't.
 | `nfs.go` | NFS gateway — Filesystem, IPaddr2, nfsserver, exportfs OCF agents |
 | `iscsi.go` + `iscsi_target.go` + `iscsi_acl.go` | iSCSI gateway — iSCSITarget/iSCSILogicalUnit agents; target and LUNs; initiator allow-list and CHAP |
 | `nvmeof.go` + `nvmeof_subsystem.go` + `nvmeof_hosts.go` | NVMe-oF gateway — nvmet-subsystem/nvmet-namespace agents; namespaces, subsystem and port; host allow-list |
-| `smb.go` + `smb_shares.go` | SMB gateway (workgroup) — one `sds-smbd@<resource>` per gateway bound to the service IP (so the IP starts *before* smbd); Samba state, shares and passdb on the state volume; shares and users edited live on the serving node |
+| `smb.go` + `smb_shares.go` | SMB gateway (workgroup) — one `haify-smbd@<resource>` per gateway bound to the service IP (so the IP starts *before* smbd); Samba state, shares and passdb on the state volume; shares and users edited live on the serving node |
 
 **Limitation**: Each file must be under 600 lines — see "File size" below.
 
 ### Gateway Configuration
 
 Gateways create TOML config files in `/etc/drbd-reactor.d/` named
-`sds-<type>-<resource>.toml`, `<type>` being `nfs`, `iscsi`, `nvmeof` or `smb` (the list is `GatewayTypes` in `gateway.go`; type-agnostic stop/start/delete loops iterate it)
-(`sds ha create` writes `sds-ha-<resource>.toml`). NFS example:
+`haify-<type>-<resource>.toml`, `<type>` being `nfs`, `iscsi`, `nvmeof` or `smb` (the list is `GatewayTypes` in `gateway.go`; type-agnostic stop/start/delete loops iterate it)
+(`haify ha create` writes `haify-ha-<resource>.toml`). NFS example:
 
 ```toml
 [[promoter]]
@@ -301,7 +300,7 @@ automatically.
 
 ### Adding New Features
 
-1. **API**: edit `api/proto/v1/sds.proto` (add a `google.api.http` option for REST), run `make proto`, implement the handler in the matching `pkg/controller/server_*.go`
+1. **API**: edit `api/proto/v1/haify.proto` (add a `google.api.http` option for REST), run `make proto`, implement the handler in the matching `pkg/controller/server_*.go`
 2. **For storage/pool/snapshot operations**: `pkg/controller/storage.go` (pools), `storage_zfs.go`, `storage_lvm_snapshots.go`, `snapshots.go`, `snapshot_restore.go`
 3. **For DRBD resource operations**: the `pkg/controller/resource_*.go` file for that concern (`resource_create.go`, `resource_delete.go`, `resource_resize.go`, `resource_volumes.go`, ...); `resources.go` holds the types and entry points
 4. **For gateway operations**: Add to `pkg/gateway/*.go` (respective file)

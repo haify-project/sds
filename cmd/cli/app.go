@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/haify-project/sds/pkg/client"
+	"github.com/haify-project/haify/pkg/client"
 )
 
-// `sds app`: a single-instance PostgreSQL, MySQL/MariaDB or Redis on a
+// `haify app`: a single-instance PostgreSQL, MySQL/MariaDB or Redis on a
 // resource's DRBD volume, failed over by drbd-reactor like a gateway.
 
 func appCommand() *cobra.Command {
@@ -45,8 +45,8 @@ func appName(args []string, flag string) (string, error) {
 }
 
 // withApps runs fn with a connected client.
-func withApps(timeout time.Duration, fn func(ctx context.Context, c *client.SDSClient) error) error {
-	c, err := newSDSClient()
+func withApps(timeout time.Duration, fn func(ctx context.Context, c *client.HaifyClient) error) error {
+	c, err := newHaifyClient()
 	if err != nil {
 		return fmt.Errorf("failed to connect to controller: %w", err)
 	}
@@ -62,9 +62,9 @@ func appCreate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create [name]",
 		Short: "Create an app on an existing resource",
-		Example: `  sds app create --name orders --engine postgres --resource orders --service-ip 192.168.1.60/24
-  sds app create --name vectors --engine postgres --vector --service-ip 192.168.1.61/24
-  sds app create --name cache --engine redis --port 6380 --service-ip 192.168.1.62/24`,
+		Example: `  haify app create --name orders --engine postgres --resource orders --service-ip 192.168.1.60/24
+  haify app create --name vectors --engine postgres --vector --service-ip 192.168.1.61/24
+  haify app create --name cache --engine redis --port 6380 --service-ip 192.168.1.62/24`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, err := appName(args, req.Name)
@@ -79,7 +79,7 @@ func appCreate() *cobra.Command {
 				return fmt.Errorf("--port %d is outside 0-65535", port)
 			}
 			req.Port = uint32(port)
-			return withApps(15*time.Minute, func(ctx context.Context, c *client.SDSClient) error {
+			return withApps(15*time.Minute, func(ctx context.Context, c *client.HaifyClient) error {
 				resp, err := c.CreateApp(ctx, req)
 				if err != nil {
 					return err
@@ -96,7 +96,7 @@ func appCreate() *cobra.Command {
 					fmt.Printf("\nThe password is shown once. It is also kept, root-only, in %s on the\n"+
 						"node running the app.\n", a.GetCredentialsFile())
 				}
-				fmt.Printf("\nFollow it with: sds app status %s\n", a.GetName())
+				fmt.Printf("\nFollow it with: haify app status %s\n", a.GetName())
 				return nil
 			})
 		},
@@ -115,7 +115,7 @@ func appList() *cobra.Command {
 		Use:   "list",
 		Short: "List apps",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withApps(30*time.Second, func(ctx context.Context, c *client.SDSClient) error {
+			return withApps(30*time.Second, func(ctx context.Context, c *client.HaifyClient) error {
 				apps, err := c.ListApps(ctx)
 				if err != nil {
 					return err
@@ -152,7 +152,7 @@ func appStatus() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return withApps(60*time.Second, func(ctx context.Context, c *client.SDSClient) error {
+			return withApps(60*time.Second, func(ctx context.Context, c *client.HaifyClient) error {
 				st, err := c.GetAppStatus(ctx, name)
 				if err != nil {
 					return err
@@ -205,7 +205,7 @@ again on it picks the data up. --delete-data also deletes the resource.`,
 				fmt.Printf("This deletes app %q and its resource with every byte of its data. Re-run with --yes to proceed.\n", name)
 				return nil
 			}
-			return withApps(10*time.Minute, func(ctx context.Context, c *client.SDSClient) error {
+			return withApps(10*time.Minute, func(ctx context.Context, c *client.HaifyClient) error {
 				msg, err := c.DeleteApp(ctx, name, deleteData)
 				if err != nil {
 					return err
@@ -232,7 +232,7 @@ func appFailover() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return withApps(5*time.Minute, func(ctx context.Context, c *client.SDSClient) error {
+			return withApps(5*time.Minute, func(ctx context.Context, c *client.HaifyClient) error {
 				resp, err := c.FailoverApp(ctx, name)
 				if err != nil {
 					return err
@@ -255,7 +255,7 @@ func appSnapshot() *cobra.Command {
 TABLES WITH READ LOCK; redis: BGSAVE; then fsfreeze), takes a resource snapshot
 of every volume on every replica, and thaws. The node thaws the database by
 itself after 60 seconds if the controller does not. Roll back with
-sds resource snapshot replicated rollback once the app is deleted or stopped.`,
+haify resource snapshot replicated rollback once the app is deleted or stopped.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, err := appName(args, nameFlag)
@@ -265,7 +265,7 @@ sds resource snapshot replicated rollback once the app is deleted or stopped.`,
 			if snapshot == "" {
 				return fmt.Errorf("--snapshot is required")
 			}
-			return withApps(10*time.Minute, func(ctx context.Context, c *client.SDSClient) error {
+			return withApps(10*time.Minute, func(ctx context.Context, c *client.HaifyClient) error {
 				resp, err := c.SnapshotApp(ctx, name, snapshot)
 				if err != nil {
 					return err

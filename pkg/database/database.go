@@ -68,7 +68,7 @@ type Config struct {
 }
 
 // Default database path
-const DefaultDBPath = "/var/lib/sds/sds.db"
+const DefaultDBPath = "/var/lib/haify/haify.db"
 
 // closeAfterFailedOpen releases the file when Open gives up after bolt has
 // already taken it.

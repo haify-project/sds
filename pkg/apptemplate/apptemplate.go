@@ -10,7 +10,7 @@
 // The shape of an app follows from how drbd-reactor fails a resource over:
 //
 //   - Data, configuration and credentials all live on the DRBD volume,
-//     mounted at /var/lib/sds-app/<name>, so they move together. A config file
+//     mounted at /var/lib/haify-app/<name>, so they move together. A config file
 //     left on one node's root filesystem is a config the next node lacks.
 //   - The unit has no [Install] section and is never enabled: only the
 //     promoter starts it, on the node that is Primary.
@@ -32,17 +32,17 @@ import (
 
 const (
 	// MountBase is where the Primary mounts each app's volume, one directory
-	// per app. It is deliberately outside /var/lib/sds (the controller's own
-	// Self-HA mount) and /var/lib/sds-gateway: promoters move independently,
+	// per app. It is deliberately outside /var/lib/haify (the controller's own
+	// Self-HA mount) and /var/lib/haify-gateway: promoters move independently,
 	// and a mount covered by another cannot be unmounted by path.
-	MountBase = "/var/lib/sds-app"
+	MountBase = "/var/lib/haify-app"
 	// ReactorConfigDir holds drbd-reactor's promoter snippets.
 	ReactorConfigDir = "/etc/drbd-reactor.d"
 	// UnitDir is where the app's unit file is written on every node.
 	UnitDir = "/etc/systemd/system"
 	// RuntimeBase prefixes the per-app runtime directory (sockets, pid files),
 	// which systemd creates and removes with the unit.
-	RuntimeBase = "/run/sds-app-"
+	RuntimeBase = "/run/haify-app-"
 	// FreezeWatchdog is how long a node keeps an app frozen for a snapshot
 	// before it thaws it on its own, whatever happened to the controller.
 	FreezeWatchdog = 60 * time.Second
@@ -204,7 +204,7 @@ type Layout struct {
 	Conf       string // the engine's configuration
 	State      string // root-only: credentials and the init marker
 	Password   string // the generated password, mode 0600, root only
-	ClientConf string // mysql only: client credentials for the tools sds runs
+	ClientConf string // mysql only: client credentials for the tools haify runs
 	Marker     string // names the engine that initialized the volume
 	Runtime    string // sockets and pid files, created by systemd
 }
@@ -212,7 +212,7 @@ type Layout struct {
 // LayoutFor returns the paths of app name.
 func LayoutFor(name string) Layout {
 	m := path.Join(MountBase, name)
-	state := path.Join(m, "sds")
+	state := path.Join(m, "haify")
 	return Layout{
 		Mount:      m,
 		Data:       path.Join(m, "data"),
@@ -226,13 +226,13 @@ func LayoutFor(name string) Layout {
 }
 
 // UnitName is the app's systemd service.
-func UnitName(name string) string { return "sds-app-" + name + ".service" }
+func UnitName(name string) string { return "haify-app-" + name + ".service" }
 
 // UnitPath is where UnitName is written on every node.
 func UnitPath(name string) string { return path.Join(UnitDir, UnitName(name)) }
 
 // PromoterName is the drbd-reactor config name (drbd-reactorctl takes it).
-func PromoterName(name string) string { return "sds-app-" + name }
+func PromoterName(name string) string { return "haify-app-" + name }
 
 // PromoterPath is the promoter config file.
 func PromoterPath(name string) string {
@@ -240,10 +240,10 @@ func PromoterPath(name string) string {
 }
 
 // ThawUnit is the transient unit that thaws the app if nobody else does.
-func ThawUnit(name string) string { return "sds-app-thaw-" + name }
+func ThawUnit(name string) string { return "haify-app-thaw-" + name }
 
 // LockUnit is the transient unit holding MySQL's global read lock.
-func LockUnit(name string) string { return "sds-app-lock-" + name }
+func LockUnit(name string) string { return "haify-app-lock-" + name }
 
 // DataDevice is the DRBD device of one volume of resource, by the stable
 // by-res name drbd-utils' udev rules create.

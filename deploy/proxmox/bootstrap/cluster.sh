@@ -121,21 +121,21 @@ step_quorum_checks() {
 	fi
 
 	# DRBD keeps its own quorum per resource. A disk with two diskful replicas
-	# needs a third, diskless voter, which sds adds automatically ([resource]
+	# needs a third, diskless voter, which haify adds automatically ([resource]
 	# auto_tiebreaker) only when a third registered node exists.
 	if [ "$REPLICAS" -eq 2 ]; then
 		if [ "${#NODES[@]}" -lt 3 ]; then
-			warn "MISSING: replicas=2 and only ${#NODES[@]} sds node(s): no node is left to be a DRBD tiebreaker,"
+			warn "MISSING: replicas=2 and only ${#NODES[@]} haify node(s): no node is left to be a DRBD tiebreaker,"
 			warn "  so losing either node suspends I/O on the other. Add a third machine with drbd-dkms and"
 			warn "  drbd-utils (it needs no disk; the QDevice host can serve), then on the controller:"
-			warn "  sds node register --name <name> --address <ip>"
+			warn "  haify node register --name <name> --address <ip>"
 			missing=1
-		elif check_on "$CONTROLLER_NODE" "grep -Eq '^[[:space:]]*auto_tiebreaker[[:space:]]*=[[:space:]]*false' /etc/sds/controller.toml" 2>/dev/null; then
-			warn "MISSING: [resource] auto_tiebreaker = false in /etc/sds/controller.toml: two-replica disks get"
-			warn "  no tiebreaker. Turn it back on, or give each disk one: sds ha set-tiebreaker <resource> --node <node>"
+		elif check_on "$CONTROLLER_NODE" "grep -Eq '^[[:space:]]*auto_tiebreaker[[:space:]]*=[[:space:]]*false' /etc/haify/controller.toml" 2>/dev/null; then
+			warn "MISSING: [resource] auto_tiebreaker = false in /etc/haify/controller.toml: two-replica disks get"
+			warn "  no tiebreaker. Turn it back on, or give each disk one: haify ha set-tiebreaker <resource> --node <node>"
 			missing=1
 		else
-			log "OK: ${#NODES[@]} sds nodes; a two-replica disk gets a diskless tiebreaker on a third node"
+			log "OK: ${#NODES[@]} haify nodes; a two-replica disk gets a diskless tiebreaker on a third node"
 		fi
 	elif [ "$REPLICAS" -eq 1 ]; then
 		warn "replicas=1: disks have a single copy and survive no node loss"

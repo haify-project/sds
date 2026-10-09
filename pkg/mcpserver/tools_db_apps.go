@@ -6,19 +6,19 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/client"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/client"
 )
 
-// Database applications on bare metal (`sds app`): one database instance on a
+// Database applications on bare metal (`haify app`): one database instance on a
 // resource's DRBD volume, failed over by drbd-reactor. The Kubernetes
-// equivalent is the sds_k8s_app_* set on the sds-k8s server (tools_apps.go).
+// equivalent is the haify_k8s_app_* set on the haify-k8s server (tools_apps.go).
 //
-// sds_app_create never returns the generated password. Whatever a tool
+// haify_app_create never returns the generated password. Whatever a tool
 // returns lands in the conversation that called it, and from there in logs
 // and transcripts nobody audits as credential stores. The tool says where the
 // password is kept instead: root-only, on the volume, on the node running
-// the database. `sds app create` at the CLI prints it once.
+// the database. `haify app create` at the CLI prints it once.
 
 type dbAppCreateIn struct {
 	Name      string `json:"name" jsonschema:"app name: 1-40 lower-case letters, digits and inner hyphens"`
@@ -69,7 +69,7 @@ type dbAppStatusOut struct {
 	Nodes        []string `json:"nodes" jsonschema:"replicas the app can fail over to"`
 }
 
-func dbAppFrom(a *sdspb.AppInfo) dbAppOut {
+func dbAppFrom(a *haifypb.AppInfo) dbAppOut {
 	return dbAppOut{Name: a.GetName(), Engine: a.GetEngine(), Resource: a.GetResource(), ServiceIP: a.GetServiceIp(),
 		Port: a.GetPort(), Vector: a.GetVector(), Version: a.GetVersion(), AdminUser: a.GetAdminUser(),
 		CredentialsFile: a.GetCredentialsFile(), Connection: a.GetConnection()}
@@ -77,8 +77,8 @@ func dbAppFrom(a *sdspb.AppInfo) dbAppOut {
 
 // registerDBAppTools adds the database application tools.
 func (s *Server) registerDBAppTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_app_list", "List database apps",
-		"List the database applications (sds app): single-instance PostgreSQL, MySQL/MariaDB or Redis "+
+	addRead(s, srv, readOnlyTool("haify_app_list", "List database apps",
+		"List the database applications (haify app): single-instance PostgreSQL, MySQL/MariaDB or Redis "+
 			"on a resource's DRBD volume, failed over by drbd-reactor. Shows engine, resource, service IP and port."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dbAppListOut, error) {
 			apps, err := s.client.ListApps(ctx)
@@ -92,7 +92,7 @@ func (s *Server) registerDBAppTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_app_status", "Database app status",
+	addRead(s, srv, readOnlyTool("haify_app_status", "Database app status",
 		"Where a database app runs (the node its resource is Primary on), whether its unit is active "+
 			"there and whether the database answers its health probe (pg_isready, mysqladmin ping, redis PING)."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in dbAppNameIn) (*mcp.CallToolResult, dbAppStatusOut, error) {
@@ -104,14 +104,14 @@ func (s *Server) registerDBAppTools(srv *mcp.Server) {
 				ServiceState: st.ServiceState, Healthy: st.Healthy, Nodes: st.Nodes}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_app_create", "Create a database app",
+	addWrite(s, srv, writeTool("haify_app_create", "Create a database app",
 		"Run PostgreSQL (optionally with pgvector), MySQL/MariaDB or Redis on an existing resource with at "+
 			"least two diskful replicas. Checks every replica first (engine installed in the same version and "+
 			"place, same daemon uid/gid, OCF agents, port free) and refuses with the reason; then formats the "+
 			"volume if blank, initializes the database once, and hands it to drbd-reactor: mount, database, "+
 			"service IP last. Failover keeps every acknowledged write (DRBD protocol C); clients reconnect to "+
 			"the service IP. The generated password is NOT returned here: it is kept root-only on the volume "+
-			"(credentials_file), and the CLI's `sds app create` prints it once."),
+			"(credentials_file), and the CLI's `haify app create` prints it once."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in dbAppCreateIn) (*mcp.CallToolResult, opResult, error) {
 			resp, err := s.client.CreateApp(ctx, client.AppCreateRequest{Name: in.Name, Engine: in.Engine,
 				Resource: in.Resource, ServiceIP: in.ServiceIP, Port: in.Port, Vector: in.Vector})
@@ -129,7 +129,7 @@ func (s *Server) registerDBAppTools(srv *mcp.Server) {
 			return nil, ok(detail), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_app_snapshot", "Snapshot a database app",
+	addWrite(s, srv, writeTool("haify_app_snapshot", "Snapshot a database app",
 		"Take a snapshot of every volume of a database app's resource on every replica, with the database "+
 			"flushed and frozen on its node for the seconds it takes (the node thaws it by itself after 60s "+
 			"if the controller does not)."),
@@ -141,7 +141,7 @@ func (s *Server) registerDBAppTools(srv *mcp.Server) {
 			return nil, ok(resp.Message), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_app_failover", "Fail a database app over",
+	addWrite(s, srv, destructiveTool("haify_app_failover", "Fail a database app over",
 		"Planned switchover: the node running the app stops it (service IP, database, mount) and another "+
 			"replica starts it. Clients are disconnected for the seconds that takes and reconnect to the "+
 			"service IP. Fails when no other replica took over."),
@@ -153,7 +153,7 @@ func (s *Server) registerDBAppTools(srv *mcp.Server) {
 			return nil, ok(resp.Message), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_app_delete", "Delete a database app",
+	addWrite(s, srv, destructiveTool("haify_app_delete", "Delete a database app",
 		"Stop a database app and remove it from drbd-reactor and every node. The resource and its data are "+
 			"kept (creating the app again picks them up) unless delete_data is set, which deletes the resource."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in dbAppDeleteIn) (*mcp.CallToolResult, opResult, error) {

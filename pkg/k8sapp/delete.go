@@ -53,7 +53,7 @@ func (m *Manager) Delete(ctx context.Context, r DeleteRequest) (*Deleted, error)
 		return nil, fmt.Errorf("get deployment: %w", err)
 	}
 	if !managedBy(dep.Labels) {
-		return nil, &InvalidError{fmt.Errorf("deployment %s/%s was not created by sds_k8s_app_create; refusing to delete it",
+		return nil, &InvalidError{fmt.Errorf("deployment %s/%s was not created by haify_k8s_app_create; refusing to delete it",
 			r.Namespace, r.Name)}
 	}
 

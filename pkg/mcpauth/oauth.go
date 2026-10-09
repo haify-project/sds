@@ -21,7 +21,7 @@ import (
 // ChatGPT and claude.ai add an MCP server by URL and then run OAuth against
 // it: they discover the endpoints below, register themselves, and send the
 // user to /oauth/authorize. There the operator pastes a token made with
-// `sds-mcp token create`, which is how "the human approves this client" is
+// `haify-mcp token create`, which is how "the human approves this client" is
 // expressed without a second kind of credential to look after. The client is
 // then given an access token of the same role, or lower if it asked for less,
 // that lives an hour and is renewed with a refresh token for as long as the
@@ -213,7 +213,7 @@ button{margin-top:.8rem;padding:.55rem 1.1rem;font:inherit;border:0;border-radiu
 {{range $k, $v := .Hidden}}<input type="hidden" name="{{$k}}" value="{{$v}}">{{end}}
 <label for="t">Access token</label>
 <input id="t" name="token" type="password" autocomplete="off" autofocus required>
-<p class="dim">Paste a token made with <code>sds-mcp token create</code>. {{.Client}} gets the same role as that token{{if .Capped}}, at most <b>{{.Capped}}</b>{{end}}, and loses access when the token is revoked.</p>
+<p class="dim">Paste a token made with <code>haify-mcp token create</code>. {{.Client}} gets the same role as that token{{if .Capped}}, at most <b>{{.Capped}}</b>{{end}}, and loses access when the token is revoked.</p>
 <button type="submit">Authorize</button>
 </form></body></html>`))
 

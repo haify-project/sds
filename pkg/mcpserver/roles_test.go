@@ -13,22 +13,22 @@ import (
 func TestRoleTiers(t *testing.T) {
 	operate := toolNames(t, New(fullClient{&mockClient{}}, zap.NewNop(), Options{NoDestructive: true}))
 	for _, name := range []string{
-		"sds_resource_set_role", "sds_resource_unmount",
-		"sds_snapshot_schedule_delete", "sds_backup_schedule_delete",
+		"haify_resource_set_role", "haify_resource_unmount",
+		"haify_snapshot_schedule_delete", "haify_backup_schedule_delete",
 	} {
 		if operate[name] {
 			t.Errorf("%s must not be available to operate", name)
 		}
 	}
-	for _, name := range []string{"sds_resource_mount", "sds_iscsi_chap", "sds_snapshot_schedule_create", "sds_backup_schedule_create"} {
+	for _, name := range []string{"haify_resource_mount", "haify_iscsi_chap", "haify_snapshot_schedule_create", "haify_backup_schedule_create"} {
 		if !operate[name] {
 			t.Errorf("%s must be available to operate", name)
 		}
 	}
 
 	reads := []string{
-		"sds_nfs_export_list", "sds_iscsi_lun_list", "sds_iscsi_initiator_list",
-		"sds_iscsi_chap_get", "sds_nvme_namespace_list", "sds_nvme_host_list",
+		"haify_nfs_export_list", "haify_iscsi_lun_list", "haify_iscsi_initiator_list",
+		"haify_iscsi_chap_get", "haify_nvme_namespace_list", "haify_nvme_host_list",
 	}
 	read := toolNames(t, New(&mockExtraClient{}, zap.NewNop(), Options{ReadOnly: true}))
 	for _, name := range reads {

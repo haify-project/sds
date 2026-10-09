@@ -74,7 +74,7 @@ type ResourceStatusInfo struct {
 	Name       string
 	NodeStates map[string]NodeStateInfo
 	// WAN replication health (only meaningful when WANEnabled). WANHealthy is
-	// true when both sds-proxy instances are active and the DR WAN endpoint is
+	// true when both haify-proxy instances are active and the DR WAN endpoint is
 	// reachable; WANMessage describes the fault otherwise.
 	WANEnabled bool
 	WANHealthy bool

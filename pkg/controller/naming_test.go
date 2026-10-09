@@ -7,8 +7,8 @@ import (
 )
 
 func TestNormalizeManagedName(t *testing.T) {
-	assert.Equal(t, "sds_data-pool", normalizeManagedName("data-pool"))
-	assert.Equal(t, "sds_data-pool", normalizeManagedName("sds_data-pool"))
+	assert.Equal(t, "haify_data-pool", normalizeManagedName("data-pool"))
+	assert.Equal(t, "haify_data-pool", normalizeManagedName("haify_data-pool"))
 	assert.Equal(t, "", normalizeManagedName(""))
 }
 
@@ -41,9 +41,9 @@ func TestNormalizeLVMPoolType(t *testing.T) {
 }
 
 func TestNormalizeManagedZFSPath(t *testing.T) {
-	assert.Equal(t, "sds_tank/app", normalizeManagedZFSPath("tank/app"))
-	assert.Equal(t, "sds_tank/app@snap1", normalizeManagedZFSPath("tank/app@snap1"))
-	assert.Equal(t, "sds_tank/app@snap1", normalizeManagedZFSPath("sds_tank/app@snap1"))
+	assert.Equal(t, "haify_tank/app", normalizeManagedZFSPath("tank/app"))
+	assert.Equal(t, "haify_tank/app@snap1", normalizeManagedZFSPath("tank/app@snap1"))
+	assert.Equal(t, "haify_tank/app@snap1", normalizeManagedZFSPath("haify_tank/app@snap1"))
 }
 
 func TestParseByteCount(t *testing.T) {
@@ -57,17 +57,17 @@ func TestParseByteCount(t *testing.T) {
 }
 
 func TestParseLVMPoolLine(t *testing.T) {
-	name, total, free, pv, ok := parseLVMPoolLine("sds_data-pool|10737418240B|5368709120B")
+	name, total, free, pv, ok := parseLVMPoolLine("haify_data-pool|10737418240B|5368709120B")
 	assert.True(t, ok)
-	assert.Equal(t, "sds_data-pool", name)
+	assert.Equal(t, "haify_data-pool", name)
 	assert.Equal(t, uint64(10737418240), total)
 	assert.Equal(t, uint64(5368709120), free)
 	assert.Equal(t, "", pv)
 
 	// With the optional pv_name field (vgs -o ...,pv_name).
-	name, _, _, pv, ok = parseLVMPoolLine("sds_vg0|10737418240B|5368709120B|/dev/sdc")
+	name, _, _, pv, ok = parseLVMPoolLine("haify_vg0|10737418240B|5368709120B|/dev/sdc")
 	assert.True(t, ok)
-	assert.Equal(t, "sds_vg0", name)
+	assert.Equal(t, "haify_vg0", name)
 	assert.Equal(t, "/dev/sdc", pv)
 
 	_, _, _, _, ok = parseLVMPoolLine("broken")
@@ -75,12 +75,12 @@ func TestParseLVMPoolLine(t *testing.T) {
 }
 
 func TestParseZFSSnapshotLine(t *testing.T) {
-	name, volume, createdAt, ok := parseZFSSnapshotLine("sds_tank/app@snap1 0B 0B 2026-03-13-23:30")
+	name, volume, createdAt, ok := parseZFSSnapshotLine("haify_tank/app@snap1 0B 0B 2026-03-13-23:30")
 	assert.True(t, ok)
 	assert.Equal(t, "snap1", name)
-	assert.Equal(t, "sds_tank/app", volume)
+	assert.Equal(t, "haify_tank/app", volume)
 	assert.Equal(t, "2026-03-13-23:30", createdAt)
 
-	_, _, _, ok = parseZFSSnapshotLine("sds_tank/app@snap1 0B")
+	_, _, _, ok = parseZFSSnapshotLine("haify_tank/app@snap1 0B")
 	assert.False(t, ok)
 }

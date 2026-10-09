@@ -102,7 +102,7 @@ type Check struct {
 	// Evidence is what was seen, one fact per line, so the verdict can be
 	// checked without rerunning anything.
 	Evidence []string `json:"evidence,omitempty"`
-	// Fix is a command to run as written: an `sds ...` call or a shell line.
+	// Fix is a command to run as written: an `haify ...` call or a shell line.
 	Fix string `json:"fix,omitempty"`
 	// Runbook names a pkg/mcpserver/runbooks entry covering the repair.
 	Runbook string `json:"runbook,omitempty"`

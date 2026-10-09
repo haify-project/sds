@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/config"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/config"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -93,7 +93,7 @@ func NewGatewayServer(grpcServer *grpc.Server, grpcAddr string, port int, logger
 
 	// Register all services from the grpc server
 	// Note: The gateway will connect to the gRPC server via the local address
-	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(context.Background(), mux, grpcAddr, opts); err != nil {
+	if err := haifypb.RegisterHaifyControllerHandlerFromEndpoint(context.Background(), mux, grpcAddr, opts); err != nil {
 		logger.Error("Failed to register gateway handler", zap.Error(err))
 		return nil
 	}
@@ -124,7 +124,7 @@ func (g *GatewayServer) Handler() http.Handler {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(context.Background(), mux, g.grpcAddr, opts); err != nil {
+	if err := haifypb.RegisterHaifyControllerHandlerFromEndpoint(context.Background(), mux, g.grpcAddr, opts); err != nil {
 		g.logger.Error("Failed to register gateway handler", zap.Error(err))
 		return nil
 	}
@@ -138,7 +138,7 @@ func RegisterGatewayHandler(ctx context.Context, mux *runtime.ServeMux, grpcAddr
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	if err := sdspb.RegisterSDSControllerHandlerFromEndpoint(ctx, mux, grpcAddr, opts); err != nil {
+	if err := haifypb.RegisterHaifyControllerHandlerFromEndpoint(ctx, mux, grpcAddr, opts); err != nil {
 		return fmt.Errorf("failed to register gateway handler: %w", err)
 	}
 

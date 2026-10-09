@@ -3,7 +3,7 @@
 // lets clients which cannot be handed a token by hand — ChatGPT, claude.ai —
 // obtain one.
 //
-// Claude Code and scripts present a token created with `sds-mcp token create`
+// Claude Code and scripts present a token created with `haify-mcp token create`
 // as a bearer credential. A client that speaks only OAuth is sent through the
 // authorization flow in oauth.go, where the operator pastes such a token once
 // to approve it; what the client gets back is a short-lived token of the same
@@ -89,9 +89,9 @@ func (r Role) Scopes() []string {
 
 // OAuth scope names.
 const (
-	ScopeRead    = "sds:read"
-	ScopeOperate = "sds:operate"
-	ScopeAdmin   = "sds:admin"
+	ScopeRead    = "haify:read"
+	ScopeOperate = "haify:operate"
+	ScopeAdmin   = "haify:admin"
 )
 
 // RoleFromScopes is the highest role the scopes name.
@@ -165,7 +165,7 @@ const maxClients = 100
 
 // Store keeps tokens and OAuth clients in one file.
 //
-// The file is re-read when it changes on disk, so `sds-mcp token revoke` run
+// The file is re-read when it changes on disk, so `haify-mcp token revoke` run
 // beside a serving process takes effect on the next request without a signal.
 type Store struct {
 	path string
@@ -272,7 +272,7 @@ func newSecret() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return "sdsmcp_" + base64.RawURLEncoding.EncodeToString(b), nil
+	return "haifymcp_" + base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func hashOf(secret string) string {

@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/gateway"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/gateway"
 )
 
 // listingGatewayDeployment answers the gateway manager's node listing with a
@@ -36,11 +36,11 @@ func TestServerListGatewaysReadsStorageNodes(t *testing.T) {
 	ctrl := newBasicTestController(&fakeDeploymentClient{})
 	ctrl.db = newTestDB(t)
 	ctrl.gateway = gateway.New(nil, &listingGatewayDeployment{outputs: map[string]string{
-		"10.0.0.2": "sds-nfs-data.toml\nsds-iscsi-blk.toml.disabled\n",
+		"10.0.0.2": "haify-nfs-data.toml\nhaify-iscsi-blk.toml.disabled\n",
 	}}, zap.NewNop(), []string{"10.0.0.1", "10.0.0.2"})
 	srv := NewServer(ctrl)
 
-	resp, err := srv.ListGateways(context.Background(), &sdspb.ListGatewaysRequest{})
+	resp, err := srv.ListGateways(context.Background(), &haifypb.ListGatewaysRequest{})
 	require.NoError(t, err)
 	require.True(t, resp.Success, resp.Message)
 	got := map[string]string{}
@@ -60,7 +60,7 @@ func TestServerListGatewaysFallsBackToDatabase(t *testing.T) {
 	ctrl.gateway = gateway.New(nil, &listingGatewayDeployment{}, zap.NewNop(), []string{"10.0.0.1"})
 	srv := NewServer(ctrl)
 
-	resp, err := srv.ListGateways(context.Background(), &sdspb.ListGatewaysRequest{})
+	resp, err := srv.ListGateways(context.Background(), &haifypb.ListGatewaysRequest{})
 	require.NoError(t, err)
 	require.Len(t, resp.Gateways, 1)
 	assert.Equal(t, "data", resp.Gateways[0].Resource)

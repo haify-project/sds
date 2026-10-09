@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/gateway"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/gateway"
 )
 
 // fakeGatewayDeployment records the commands the gateway Manager issues so a
@@ -72,7 +72,7 @@ func TestDeleteResourceCascadesGatewayTeardown(t *testing.T) {
 	// nodes (proof the promoter/target orphan is torn down, not just the DB row).
 	var removedConfig, reloaded bool
 	for _, cmd := range gwDep.execCmds {
-		if strings.Contains(cmd, "rm -f") && strings.Contains(cmd, "sds-nfs-data.toml") {
+		if strings.Contains(cmd, "rm -f") && strings.Contains(cmd, "haify-nfs-data.toml") {
 			removedConfig = true
 		}
 		if strings.Contains(cmd, "drbd-reactor") {

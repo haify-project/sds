@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/drbdtls"
+	"github.com/haify-project/haify/pkg/drbdtls"
 )
 
 func nodeCertFor(t *testing.T, ca *drbdtls.CA, node string) []byte {
@@ -32,18 +32,18 @@ func nodeCertFor(t *testing.T, ca *drbdtls.CA, node string) []byte {
 
 func statusOutput(tlshd string, conf, module bool, trust, cert []byte) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "SDS_TLSHD=%s\n", tlshd)
+	fmt.Fprintf(&b, "HAIFY_TLSHD=%s\n", tlshd)
 	if conf {
-		b.WriteString("SDS_CONF=yes\n")
+		b.WriteString("HAIFY_CONF=yes\n")
 	}
 	if module {
-		b.WriteString("SDS_MODULE=yes\n")
+		b.WriteString("HAIFY_MODULE=yes\n")
 	}
 	if trust != nil {
-		fmt.Fprintf(&b, "SDS_TRUST=%s\n", base64.StdEncoding.EncodeToString(trust))
+		fmt.Fprintf(&b, "HAIFY_TRUST=%s\n", base64.StdEncoding.EncodeToString(trust))
 	}
 	if cert != nil {
-		fmt.Fprintf(&b, "SDS_CERT=%s\n", base64.StdEncoding.EncodeToString(cert))
+		fmt.Fprintf(&b, "HAIFY_CERT=%s\n", base64.StdEncoding.EncodeToString(cert))
 	}
 	return b.String()
 }

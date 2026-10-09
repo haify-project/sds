@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 
-	"github.com/haify-project/sds/pkg/util"
+	"github.com/haify-project/haify/pkg/util"
 )
 
 // I/O limits for a volume (StorageClass parameters readBytesPerSecond,
@@ -50,7 +50,7 @@ func parseQoS(p map[string]string) (map[string]string, error) {
 		var n uint64
 		var err error
 		if strings.HasSuffix(key, "bps") {
-			// Kubernetes quantities ("100Mi") as well as sds sizes ("100MiB").
+			// Kubernetes quantities ("100Mi") as well as haify sizes ("100MiB").
 			if strings.HasSuffix(raw, "i") {
 				raw += "B"
 			}

@@ -9,13 +9,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // Self-healing commands: moving a replica, rebalancing by plan, and dealing
 // with a node after it was evicted (docs/user-guide.md, "Self-healing").
 
-func withController(timeout time.Duration, fn func(ctx context.Context, c sdspb.SDSControllerClient) error) error {
+func withController(timeout time.Duration, fn func(ctx context.Context, c haifypb.HaifyControllerClient) error) error {
 	c, conn, err := newResourceGRPCClient()
 	if err != nil {
 		return err
@@ -44,8 +44,8 @@ func resourceMoveReplicaCommand() *cobra.Command {
 			if from == "" || to == "" {
 				return fmt.Errorf("--from and --to are required")
 			}
-			return withController(30*time.Minute, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-				r, err := c.MoveReplica(ctx, &sdspb.MoveReplicaRequest{Resource: args[0], From: from, To: to})
+			return withController(30*time.Minute, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+				r, err := c.MoveReplica(ctx, &haifypb.MoveReplicaRequest{Resource: args[0], From: from, To: to})
 				if err != nil {
 					return err
 				}
@@ -65,8 +65,8 @@ func rebalanceCommand() *cobra.Command {
 		Use:   "rebalance",
 		Short: "Propose (or with --apply, run) replica moves from the fullest node",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withController(time.Minute, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-				r, err := c.PlanRebalance(ctx, &sdspb.PlanRebalanceRequest{Apply: apply, MaxMoves: maxMoves})
+			return withController(time.Minute, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+				r, err := c.PlanRebalance(ctx, &haifypb.PlanRebalanceRequest{Apply: apply, MaxMoves: maxMoves})
 				if err != nil {
 					return err
 				}
@@ -96,8 +96,8 @@ func nodeLostCommand() *cobra.Command {
 		Short: "Remove every replica of a node that will not come back, and keep it evicted",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withController(30*time.Minute, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-				r, err := c.MarkNodeLost(ctx, &sdspb.MarkNodeLostRequest{Node: args[0]})
+			return withController(30*time.Minute, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+				r, err := c.MarkNodeLost(ctx, &haifypb.MarkNodeLostRequest{Node: args[0]})
 				if err != nil {
 					return err
 				}
@@ -117,8 +117,8 @@ func nodeRestoreCommand() *cobra.Command {
 		Short: "Clean what a returned node holds of resources it left, and let it take replicas again",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withController(30*time.Minute, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-				r, err := c.RestoreNode(ctx, &sdspb.RestoreNodeRequest{Node: args[0], DryRun: dryRun})
+			return withController(30*time.Minute, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+				r, err := c.RestoreNode(ctx, &haifypb.RestoreNodeRequest{Node: args[0], DryRun: dryRun})
 				if err != nil {
 					return err
 				}
@@ -141,8 +141,8 @@ func haSetPreferredCommand() *cobra.Command {
 		Short: "Order where drbd-reactor starts the resource (a preference, not a fence)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withController(time.Minute, func(ctx context.Context, c sdspb.SDSControllerClient) error {
-				r, err := c.SetHaPreferredNodes(ctx, &sdspb.SetHaPreferredNodesRequest{Resource: args[0], Nodes: nodes, Policy: policy})
+			return withController(time.Minute, func(ctx context.Context, c haifypb.HaifyControllerClient) error {
+				r, err := c.SetHaPreferredNodes(ctx, &haifypb.SetHaPreferredNodesRequest{Resource: args[0], Nodes: nodes, Policy: policy})
 				if err != nil {
 					return err
 				}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // Quotas ([quota]).

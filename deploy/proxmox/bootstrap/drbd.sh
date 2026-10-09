@@ -6,18 +6,18 @@
 # on a node without a replica attaches as a diskless DRBD client, which needs
 # the kernel module and drbdadm there too.
 
-LINBIT_KEY_URL=${SDS_LINBIT_KEY_URL:-https://packages.linbit.com/package-signing-pubkey.asc}
-LINBIT_KEY_FINGERPRINT=${SDS_LINBIT_KEY_FINGERPRINT:-}
+LINBIT_KEY_URL=${HAIFY_LINBIT_KEY_URL:-https://packages.linbit.com/package-signing-pubkey.asc}
+LINBIT_KEY_FINGERPRINT=${HAIFY_LINBIT_KEY_FINGERPRINT:-}
 LINBIT_KEYRING=/etc/apt/keyrings/linbit.asc
 LINBIT_LIST=/etc/apt/sources.list.d/linbit.list
 
 DRBD_PACKAGES=(drbd-dkms drbd-utils drbd-reactor sudo)
 
-# linbit_repo_line <pve major>: the APT source line. SDS_LINBIT_REPO replaces
+# linbit_repo_line <pve major>: the APT source line. HAIFY_LINBIT_REPO replaces
 # it whole, e.g. for a mirror or LINBIT's customer repository.
 linbit_repo_line() {
-	if [ -n "${SDS_LINBIT_REPO:-}" ]; then
-		printf '%s' "$SDS_LINBIT_REPO"
+	if [ -n "${HAIFY_LINBIT_REPO:-}" ]; then
+		printf '%s' "$HAIFY_LINBIT_REPO"
 	else
 		printf 'deb [signed-by=%s] https://packages.linbit.com/public proxmox-%s drbd-9' "$LINBIT_KEYRING" "$1"
 	fi
@@ -50,7 +50,7 @@ linbit_repo_present() {
 add_linbit_repo() {
 	local node="$1" major="$2" line tmp fpr_check=""
 	line=$(linbit_repo_line "$major")
-	tmp=/tmp/.sds-bootstrap-linbit.asc
+	tmp=/tmp/.haify-bootstrap-linbit.asc
 	if [ -n "$LINBIT_KEY_FINGERPRINT" ]; then
 		# Pinning the fingerprint is what turns an HTTPS download into a key
 		# the operator actually vouched for; gpg is needed only to read it.
@@ -102,7 +102,7 @@ ensure_drbd_reactor_config() {
 	if ! check_on "$node" "test -f /etc/drbd-reactor.toml" >/dev/null; then
 		run_on "$node" "mkdir -p /etc/drbd-reactor.d && printf '%s\\n' 'snippets = \"/etc/drbd-reactor.d\"' '' '[[log]]' 'level = \"info\"' > /etc/drbd-reactor.toml"
 	elif ! check_on "$node" "grep -Eq '^[[:space:]]*snippets[[:space:]]*=' /etc/drbd-reactor.toml" >/dev/null; then
-		die "$node: /etc/drbd-reactor.toml has no 'snippets = \"/etc/drbd-reactor.d\"' line; add it (sds writes its promoters there) and rerun with --from-step 2"
+		die "$node: /etc/drbd-reactor.toml has no 'snippets = \"/etc/drbd-reactor.d\"' line; add it (haify writes its promoters there) and rerun with --from-step 2"
 	fi
 	if check_on "$node" "systemctl is-enabled --quiet drbd-reactor && systemctl is-active --quiet drbd-reactor" >/dev/null; then
 		note "$node: drbd-reactor enabled and running"
@@ -112,7 +112,7 @@ ensure_drbd_reactor_config() {
 }
 
 # ensure_drbd9_loaded: the DKMS module must be the one in the kernel. PVE's
-# kernel carries an in-tree DRBD 8.4, which sds cannot use.
+# kernel carries an in-tree DRBD 8.4, which haify cannot use.
 ensure_drbd9_loaded() {
 	local node="$1" ver
 	ver=$(check_on "$node" "cat /sys/module/drbd/version 2>/dev/null" || true)
@@ -128,7 +128,7 @@ ensure_drbd9_loaded() {
 			# 8.4 that nothing uses is swapped for 9 here. One with devices
 			# configured or held open is someone's, and is left alone.
 			if [ "$(check_on "$node" "echo \$(cat /sys/module/drbd/refcnt) \$(grep -cE '^ *[0-9]+:' /proc/drbd)" || true)" != "0 0" ]; then
-				die "$node: DRBD $ver is loaded and in use; sds needs 9. Stop what uses it, 'rmmod drbd', and rerun with --from-step 2"
+				die "$node: DRBD $ver is loaded and in use; haify needs 9. Stop what uses it, 'rmmod drbd', and rerun with --from-step 2"
 			fi
 			note "$node: DRBD $ver is loaded but unused: replacing it with the DKMS module"
 			run_on "$node" "rmmod drbd"
@@ -147,14 +147,14 @@ step_drbd() {
 	step 2 "LINBIT repository and DRBD 9 / drbd-utils / drbd-reactor on every node"
 	local node major missing headers hdr kernel
 	if [ -z "$LINBIT_KEY_FINGERPRINT" ]; then
-		note "SDS_LINBIT_KEY_FINGERPRINT is not set: a node that lacks the LINBIT key trusts the one"
+		note "HAIFY_LINBIT_KEY_FINGERPRINT is not set: a node that lacks the LINBIT key trusts the one"
 		note "downloaded over HTTPS from $LINBIT_KEY_URL"
 	fi
 	for node in "${NODES[@]}"; do
 		major=$(pve_major "$node")
 		case "$major" in
 			8 | 9) ;;
-			*) die "$node runs PVE $major; the LINBIT public repository has suites for proxmox-8 and proxmox-9 only (set SDS_LINBIT_REPO to override)" ;;
+			*) die "$node runs PVE $major; the LINBIT public repository has suites for proxmox-8 and proxmox-9 only (set HAIFY_LINBIT_REPO to override)" ;;
 		esac
 		log "$node: PVE $major"
 		local repo_added=0

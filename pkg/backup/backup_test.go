@@ -57,7 +57,7 @@ func failResult(hosts []string, out string) *Result {
 
 func s3Target() TargetSpec {
 	return TargetSpec{
-		Name: "offsite", Kind: KindS3, Bucket: "sds-backups", Prefix: "clusterA",
+		Name: "offsite", Kind: KindS3, Bucket: "haify-backups", Prefix: "clusterA",
 		Endpoint: "https://s3.example.com", User: "AKIAEXAMPLE", Secret: "s3cr3t-key",
 	}
 }
@@ -130,20 +130,20 @@ func TestRemotePathLayout(t *testing.T) {
 	s3, err := NewRclone().Prepare(context.Background(), dep, "h", s3Target())
 	require.NoError(t, err)
 	assert.Contains(t, s3.PullCmd("data/b1/volume-0.img"),
-		"'sdsbackup:sds-backups/clusterA/data/b1/volume-0.img'")
+		"'haifybackup:haify-backups/clusterA/data/b1/volume-0.img'")
 
 	smb, err := NewRclone().Prepare(context.Background(), dep, "h", TargetSpec{
 		Name: "nas", Kind: KindSMB, Host: "nas.lan", Share: "backups", User: "u", Secret: "p",
 	})
 	require.NoError(t, err)
 	assert.Contains(t, smb.PullCmd("data/b1/volume-0.img"),
-		"'sdsbackup:backups/data/b1/volume-0.img'")
+		"'haifybackup:backups/data/b1/volume-0.img'")
 
 	dav, err := NewRclone().Prepare(context.Background(), dep, "h", TargetSpec{
 		Name: "dav", Kind: KindWebDAV, Endpoint: "https://nas.lan/dav", User: "u", Secret: "p",
 	})
 	require.NoError(t, err)
-	assert.Contains(t, dav.PullCmd("data/b1/volume-0.img"), "'sdsbackup:data/b1/volume-0.img'")
+	assert.Contains(t, dav.PullCmd("data/b1/volume-0.img"), "'haifybackup:data/b1/volume-0.img'")
 }
 
 func TestSizeBytesReadsRcloneJSON(t *testing.T) {

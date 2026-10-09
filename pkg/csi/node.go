@@ -13,7 +13,7 @@ import (
 
 type nodeServer struct {
 	csi.UnimplementedNodeServer
-	backend  SDSBackend
+	backend  HaifyBackend
 	mounter  Mounter
 	nodeName string
 	log      *zap.Logger
@@ -27,7 +27,7 @@ type nodeServer struct {
 }
 
 // NewNodeServer returns the CSI Node service for this node.
-func NewNodeServer(b SDSBackend, m Mounter, nodeName string, log *zap.Logger) csi.NodeServer {
+func NewNodeServer(b HaifyBackend, m Mounter, nodeName string, log *zap.Logger) csi.NodeServer {
 	return &nodeServer{backend: b, mounter: m, nodeName: nodeName, log: log,
 		singleWriter: map[string]string{}}
 }

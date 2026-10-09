@@ -4,9 +4,9 @@ import http from 'node:http';
 
 // Create an HTTP/1-only agent for the proxy
 // Where `npm run dev` sends API and Copilot calls: a running controller's REST
-// gateway and UI port. Override with SDS_DEV_REST / SDS_DEV_UI.
-const devREST = process.env.SDS_DEV_REST ?? 'http://127.0.0.1:3375';
-const devUI = process.env.SDS_DEV_UI ?? 'http://127.0.0.1:3376';
+// gateway and UI port. Override with HAIFY_DEV_REST / HAIFY_DEV_UI.
+const devREST = process.env.HAIFY_DEV_REST ?? 'http://127.0.0.1:3375';
+const devUI = process.env.HAIFY_DEV_UI ?? 'http://127.0.0.1:3376';
 
 const httpAgent = new http.Agent({
   keepAlive: false,

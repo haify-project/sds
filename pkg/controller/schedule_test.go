@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 func TestParseSnapNameRoundTrip(t *testing.T) {
@@ -143,8 +143,8 @@ func TestRunScheduleSnapshotsDiskfulNodesOnly(t *testing.T) {
 		Name: "r1", Port: 7000, Nodes: "orange1,orange2", DisklessNodes: "orange3", Replicas: 2,
 	}))
 	require.NoError(t, db.SaveVolume(context.Background(), &database.Volume{
-		ResourceName: "r1", VolumeName: "r1_data", VolumeID: 0, Pool: "sds_vg0",
-		Device: "/dev/sds_vg0/r1_data", SizeGB: 1,
+		ResourceName: "r1", VolumeName: "r1_data", VolumeID: 0, Pool: "haify_vg0",
+		Device: "/dev/haify_vg0/r1_data", SizeGB: 1,
 	}))
 	require.NoError(t, db.SaveSnapshotSchedule(context.Background(), &database.SnapshotSchedule{
 		Name: "r1", Resource: "r1", Cron: "0 * * * *", Enabled: true,
@@ -157,7 +157,7 @@ func TestRunScheduleSnapshotsDiskfulNodesOnly(t *testing.T) {
 	hosts := map[string]bool{}
 	for _, s := range dep.snaps {
 		hosts[s.host] = true
-		assert.Equal(t, "sds_vg0", s.vg)
+		assert.Equal(t, "haify_vg0", s.vg)
 		_, _, ok := parseSnapName(s.name)
 		assert.True(t, ok, "snapshot name should be scheduler-managed: %s", s.name)
 	}

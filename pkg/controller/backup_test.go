@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/backup"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/backup"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 // Backup shipping is the layer that has to be right when everything else has
@@ -65,7 +65,7 @@ func (s *backupExecStub) exec(hosts []string, cmd string) (*deployment.ExecResul
 		if strings.Contains(cmd, "sudo dd if=") {
 			// The image pipeline reports the compressed bytes it sent; the
 			// fixture's target stores storedBytes of them.
-			return successExecResult(hosts, fmt.Sprintf("SDS_SENT=%d\n", backupVolumeBytes)), nil
+			return successExecResult(hosts, fmt.Sprintf("HAIFY_SENT=%d\n", backupVolumeBytes)), nil
 		}
 		return successExecResult(hosts, ""), nil
 	case strings.Contains(cmd, "/sys/class/block/"):

@@ -22,7 +22,7 @@ const MAX_KEPT = 200;
 // Which id the operator has already seen. Per-workstation, so it belongs in
 // localStorage rather than on the server: two people watching the same cluster
 // have separately read (or not read) the same alerts.
-const READ_KEY = 'sds.notifications.lastReadId';
+const READ_KEY = 'haify.notifications.lastReadId';
 
 // An event replayed from the controller's history on reconnect is not news.
 // Only something that happened in the last half-minute earns a toast, so

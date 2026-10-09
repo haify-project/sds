@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
-	"github.com/haify-project/sds/pkg/database"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // The VIP is the last thing up and the first thing down, as in every gateway:
@@ -38,7 +38,7 @@ func TestNonlocalBindIsPersisted(t *testing.T) {
 	calls := execCmdsMatching(dep, "base64 -d")
 	require.Len(t, calls, 1)
 	script := decodeB64Script(t, calls[0].cmd)
-	assert.Contains(t, script, "/etc/sysctl.d/90-sds-ha-vip.conf")
+	assert.Contains(t, script, "/etc/sysctl.d/90-haify-ha-vip.conf")
 	assert.Contains(t, script, "net.ipv4.ip_nonlocal_bind = 1")
 }
 
@@ -62,7 +62,7 @@ func TestHaConfigRecordKeepsAgentsAndOrder(t *testing.T) {
 	require.Len(t, info.StartItems, 2)
 	assert.Equal(t, "a.service", info.StartItems[0].GetSystemdUnit())
 	assert.Equal(t, "IPaddr2", info.StartItems[1].GetOcf().GetName())
-	assert.IsType(t, &sdspb.HaStartItem_Ocf{}, info.StartItems[1].Item)
+	assert.IsType(t, &haifypb.HaStartItem_Ocf{}, info.StartItems[1].Item)
 }
 
 // decodeB64Script returns the script an "echo <b64> | base64 -d | ..." command runs.

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -23,7 +23,7 @@ func newSelfHaTestController(t *testing.T, dep *fakeDeploymentClient) (*Controll
 	t.Helper()
 
 	ctrl := newBasicTestController(dep)
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "haify.db")}, zap.NewNop())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	ctrl.db = db
@@ -44,9 +44,9 @@ func withSelfHaFixtureFiles(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "controller.toml")
-	unit := filepath.Join(dir, "sds-controller.service")
+	unit := filepath.Join(dir, "haify-controller.service")
 	require.NoError(t, os.WriteFile(cfg, []byte("[server]\nport = 3374\n"), 0o644))
-	require.NoError(t, os.WriteFile(unit, []byte("[Service]\nExecStart=/opt/sds/bin/sds-controller\n"), 0o644))
+	require.NoError(t, os.WriteFile(unit, []byte("[Service]\nExecStart=/opt/haify/bin/haify-controller\n"), 0o644))
 
 	disp := filepath.Join(dir, "dispatch.toml")
 	require.NoError(t, os.WriteFile(disp, []byte("[ssh]\nkey_path = \"/root/.ssh/id_ed25519\"\n"), 0o600))
@@ -94,7 +94,7 @@ func TestEnableSelfHaValidation(t *testing.T) {
 func TestEnableSelfHaRequiresTwoNodes(t *testing.T) {
 	dep := selfHaFakeDeployment()
 	ctrl := newBasicTestController(dep)
-	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "sds.db")}, zap.NewNop())
+	db, err := database.Open(&database.Config{Path: filepath.Join(t.TempDir(), "haify.db")}, zap.NewNop())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	ctrl.db = db
@@ -119,7 +119,7 @@ func TestEnableSelfHaRejectsExistingResource(t *testing.T) {
 
 	// Left behind by a disable: the error must say how to go on.
 	_, err := ctrl.resources.EnableSelfHa(context.Background(), "10.0.0.50/24", "p0", 0, 0, nil)
-	assert.ErrorContains(t, err, "sds resource delete "+SelfHaResource)
+	assert.ErrorContains(t, err, "haify resource delete "+SelfHaResource)
 
 	// With the HA record present it is simply already enabled.
 	require.NoError(t, ctrl.db.SaveHaConfig(context.Background(), &database.HaConfig{Resource: SelfHaResource}))
@@ -159,29 +159,29 @@ func TestEnableSelfHaOrchestration(t *testing.T) {
 	// failover moves the VIP to a node where nothing answers.
 	assert.Equal(t, []string{"10.0.0.2"}, dispatchHosts, "the dispatch config must reach every standby")
 	assert.ElementsMatch(t, []string{selfAddr, "10.0.0.2"}, reactorHosts)
-	assert.Contains(t, reactorCfg, "var-lib-sds.mount")
+	assert.Contains(t, reactorCfg, "var-lib-haify.mount")
 	assert.Contains(t, reactorCfg, "service-ip@10.0.0.50-24.service")
-	assert.Contains(t, reactorCfg, "sds-controller.service")
+	assert.Contains(t, reactorCfg, "haify-controller.service")
 	assert.Contains(t, reactorCfg, "[promoter.resources."+SelfHaResource+"]")
 
 	// The handoff script must copy the DB before enabling reactor configs,
 	// enable locally before the standbys, and roll back on failure.
 	require.NotEmpty(t, handoffScript, "handoff script not distributed")
-	dbCopy := strings.Index(handoffScript, "cp -a \"$DB_DIR/sds.db\"")
+	dbCopy := strings.Index(handoffScript, "cp -a \"$DB_DIR/haify.db\"")
 	localEnable := strings.Index(handoffScript, "mv \"$REACTOR_CONF.disabled\" \"$REACTOR_CONF\"")
 	standbyEnable := strings.Index(handoffScript, selfHaSSHOpts+" 10.0.0.2 'sudo mv")
 	require.Greater(t, dbCopy, 0)
 	require.Greater(t, localEnable, dbCopy, "DB must be copied before enabling reactor management")
 	require.Greater(t, standbyEnable, localEnable, "local node must take over before standbys are enabled")
 	assert.Contains(t, handoffScript, "rollback()")
-	assert.Contains(t, handoffScript, "systemctl stop sds-controller")
+	assert.Contains(t, handoffScript, "systemctl stop haify-controller")
 	// Failover means the script may run on a node with empty known_hosts.
 	assert.Contains(t, handoffScript, "StrictHostKeyChecking=accept-new")
 
 	// The mount unit must reach every node.
 	foundMountUnit := false
 	for _, dc := range dep.distributedConfigs {
-		if dc.remotePath == "/etc/systemd/system/var-lib-sds.mount" {
+		if dc.remotePath == "/etc/systemd/system/var-lib-haify.mount" {
 			foundMountUnit = true
 			assert.ElementsMatch(t, []string{selfAddr, "10.0.0.2"}, dc.hosts)
 			assert.Contains(t, dc.content, "/dev/drbd/by-res/"+SelfHaResource+"/0")
@@ -189,7 +189,7 @@ func TestEnableSelfHaOrchestration(t *testing.T) {
 	}
 	assert.True(t, foundMountUnit, "mount unit not distributed")
 
-	// HA config must be persisted for `ha status sds-meta`.
+	// HA config must be persisted for `ha status haify-meta`.
 	haCfg, err := ctrl.db.GetHaConfig(context.Background(), SelfHaResource)
 	require.NoError(t, err)
 	require.NotNil(t, haCfg)
@@ -199,7 +199,7 @@ func TestEnableSelfHaOrchestration(t *testing.T) {
 	// The detached handoff must be launched via systemd-run on this node.
 	foundLaunch := false
 	for _, call := range dep.execCalls {
-		if strings.Contains(call.cmd, "systemd-run --unit=sds-selfha-handoff") {
+		if strings.Contains(call.cmd, "systemd-run --unit=haify-selfha-handoff") {
 			foundLaunch = true
 			assert.Equal(t, []string{selfAddr}, call.hosts)
 		}
@@ -212,7 +212,7 @@ func TestEnableSelfHaPreflightRejectsRunningStandbyController(t *testing.T) {
 	dep := selfHaFakeDeployment()
 	base := dep.execFunc
 	dep.execFunc = func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
-		if strings.Contains(cmd, "systemctl is-active --quiet sds-controller &&") {
+		if strings.Contains(cmd, "systemctl is-active --quiet haify-controller &&") {
 			return successExecResult(hosts, "RUNNING\n"), nil
 		}
 		return base(ctx, hosts, cmd, opts...)
@@ -254,7 +254,7 @@ func TestDisableSelfHa(t *testing.T) {
 	require.NotEmpty(t, script, "disable script not distributed")
 	assert.Contains(t, script, "rm -f \"$REACTOR_CONF\"")
 	assert.Contains(t, script, selfHaSSHOpts+" 10.0.0.2 \"$restore_cmds\"")
-	assert.Contains(t, script, "systemctl enable --now sds-controller")
+	assert.Contains(t, script, "systemctl enable --now haify-controller")
 	// Passive nodes lose their configs BEFORE the active node tears down
 	// local management, so partial failures leave the controller running.
 	remoteRm := strings.Index(script, selfHaSSHOpts+" 10.0.0.2 'sudo rm -f")
@@ -270,7 +270,7 @@ func TestDisableSelfHa(t *testing.T) {
 
 	foundLaunch := false
 	for _, call := range dep.execCalls {
-		if strings.Contains(call.cmd, "systemd-run --unit=sds-selfha-disable") {
+		if strings.Contains(call.cmd, "systemd-run --unit=haify-selfha-disable") {
 			foundLaunch = true
 		}
 	}
@@ -302,7 +302,7 @@ func TestDisableSelfHaRetryWithoutHaConfig(t *testing.T) {
 
 	foundLaunch := false
 	for _, call := range dep.execCalls {
-		if strings.Contains(call.cmd, "systemd-run --unit=sds-selfha-disable") {
+		if strings.Contains(call.cmd, "systemd-run --unit=haify-selfha-disable") {
 			foundLaunch = true
 		}
 	}
@@ -349,21 +349,21 @@ func TestSelfHaDisableScriptLocalTarget(t *testing.T) {
 // the whole promote/mount/VIP chain back up.
 func TestSelfHaDisableScriptCleansReactorDropins(t *testing.T) {
 	script := generateSelfHaDisableScript([]string{"10.0.0.2"}, "10.0.0.2", "10.0.0.1", "10.0.0.50/24")
-	assert.Contains(t, script, "/run/systemd/system/sds-controller.service.d")
-	assert.Contains(t, script, "/run/systemd/system/var-lib-sds.mount.d")
-	assert.Contains(t, script, `drbd-promote@sds\x2dmeta.service.d`)
-	assert.Contains(t, script, `drbd-services@sds\x2dmeta.target.d`)
+	assert.Contains(t, script, "/run/systemd/system/haify-controller.service.d")
+	assert.Contains(t, script, "/run/systemd/system/var-lib-haify.mount.d")
+	assert.Contains(t, script, `drbd-promote@haify\x2dmeta.service.d`)
+	assert.Contains(t, script, `drbd-services@haify\x2dmeta.target.d`)
 	assert.Contains(t, script, "service-ip@10.0.0.50-24.service.d")
-	assert.Contains(t, script, "rm -f /etc/systemd/system/var-lib-sds.mount")
+	assert.Contains(t, script, "rm -f /etc/systemd/system/var-lib-haify.mount")
 	assert.Contains(t, script, "systemctl daemon-reload")
 	// Remote nodes get the same cleanup over SSH.
-	assert.Contains(t, script, "sudo rm -rf /run/systemd/system/sds-controller.service.d")
+	assert.Contains(t, script, "sudo rm -rf /run/systemd/system/haify-controller.service.d")
 
 	// Without a known VIP (disable retry), the VIP drop-in is skipped but
 	// everything else is still cleaned.
 	script = generateSelfHaDisableScript([]string{"10.0.0.2"}, "10.0.0.2", "10.0.0.1", "")
 	assert.NotContains(t, script, "service-ip@10.0.0.50-24.service.d")
-	assert.Contains(t, script, "/run/systemd/system/sds-controller.service.d")
+	assert.Contains(t, script, "/run/systemd/system/haify-controller.service.d")
 }
 
 // TestAutoSelectPool covers the no-pool-given path of resource creation:
@@ -375,13 +375,13 @@ func TestAutoSelectPool(t *testing.T) {
 	_, err := ctrl.resources.autoSelectPool(context.Background())
 	assert.ErrorContains(t, err, "no pools are registered")
 
-	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0", Node: "node1"}))
-	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_vg0", Node: "node2"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "haify_vg0", Node: "node1"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "haify_vg0", Node: "node2"}))
 	name, err := ctrl.resources.autoSelectPool(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "sds_vg0", name)
+	assert.Equal(t, "haify_vg0", name)
 
-	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "sds_other", Node: "node1"}))
+	require.NoError(t, ctrl.db.SavePool(context.Background(), &database.Pool{Name: "haify_other", Node: "node1"}))
 	_, err = ctrl.resources.autoSelectPool(context.Background())
 	assert.ErrorContains(t, err, "multiple pools")
 }

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +27,7 @@ const xplatBeforeStateVolume = `resource xplat {
 
     volume 0 {
         device    minor 24;
-        disk      /dev/sds_vg0/xplat_data;
+        disk      /dev/haify_vg0/xplat_data;
         meta-disk internal;
     }
 
@@ -170,7 +170,7 @@ func TestAddVolumeReachesTheTiebreaker(t *testing.T) {
 // a peer's volume once that peer has connected as diskless.
 func TestRepairReconcilesTheTiebreakerAndAdjustsItFirst(t *testing.T) {
 	broken := strings.Replace(xplatBeforeStateVolume, "    on orange1 {",
-		"    volume 1 {\n        device    minor 25;\n        disk      /dev/sds_vg0/xplat_state1;\n        meta-disk internal;\n    }\n\n    on orange1 {", 1)
+		"    volume 1 {\n        device    minor 25;\n        disk      /dev/haify_vg0/xplat_state1;\n        meta-disk internal;\n    }\n\n    on orange1 {", 1)
 	dep := &fakeDeploymentClient{
 		execFunc: func(ctx context.Context, hosts []string, cmd string, opts ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			if strings.HasPrefix(cmd, "cat /etc/drbd.d/xplat.res") {
@@ -295,7 +295,7 @@ func TestConfigVolumesAreTheTopLevelOnesNotPerHostOverrides(t *testing.T) {
 	cfg := `resource r5 {
     volume 0 {
         device    minor 4;
-        disk      /dev/sds_tp/r5_data;
+        disk      /dev/haify_tp/r5_data;
         meta-disk internal;
     }
     on sdt1 {
@@ -316,16 +316,16 @@ func TestConfigVolumesAreTheTopLevelOnesNotPerHostOverrides(t *testing.T) {
     }
     volume 1 {
         device    minor 5;
-        disk      /dev/sds_tp/r5_extra;
+        disk      /dev/haify_tp/r5_extra;
         meta-disk internal;
     }
 }
 `
 	vols := parseResourceConfigVolumes(cfg)
 	require.Len(t, vols, 2)
-	assert.Equal(t, "/dev/sds_tp/r5_data", vols[0].DiskPath)
+	assert.Equal(t, "/dev/haify_tp/r5_data", vols[0].DiskPath)
 	assert.Equal(t, 1, vols[1].VolumeID)
-	assert.Equal(t, "/dev/sds_tp/r5_extra", vols[1].DiskPath, "not the tiebreaker's disk none")
+	assert.Equal(t, "/dev/haify_tp/r5_extra", vols[1].DiskPath, "not the tiebreaker's disk none")
 
 	// A resource written per host, with no top-level volumes, is still read.
 	perHost := `resource old {

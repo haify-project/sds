@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -42,7 +42,7 @@ func parseSnapshotID(id string) (resource, node, snapshotName string, err error)
 // `<pool>/<lv>` path of its first volume, and a node that holds a diskful
 // replica (GetNodes reports diskful nodes only, so a diskless client is never
 // chosen — it has no local storage to snapshot).
-func snapshotSource(res *sdspb.ResourceInfo) (volumePath, node string, err error) {
+func snapshotSource(res *haifypb.ResourceInfo) (volumePath, node string, err error) {
 	vols := res.GetVolumes()
 	if len(vols) == 0 {
 		return "", "", fmt.Errorf("resource %q has no volumes", res.GetName())
@@ -60,7 +60,7 @@ func snapshotSource(res *sdspb.ResourceInfo) (volumePath, node string, err error
 
 // snapshotSizeBytes reports the source volume's size, which is what the CO
 // records as the snapshot's restore size.
-func snapshotSizeBytes(res *sdspb.ResourceInfo) int64 {
+func snapshotSizeBytes(res *haifypb.ResourceInfo) int64 {
 	if vols := res.GetVolumes(); len(vols) > 0 {
 		return int64(vols[0].GetSizeGb()) * giB
 	}

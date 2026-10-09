@@ -113,7 +113,7 @@ export function placeNodes(resource: Resource, status: ResourceStatus) {
   // Two independent facts about a WAN leg, and they can disagree.
   //
   // `replicating` is DRBD's own verdict on the DR peer — Established means bytes
-  // are crossing, whatever anything else claims. `proxy` is the sds-proxy
+  // are crossing, whatever anything else claims. `proxy` is the haify-proxy
   // process probe at both ends; reporting the near end alone would call a tunnel
   // healthy while the far side is dead.
   //

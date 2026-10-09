@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func profileOut(profile *sdspb.ResourceProfile) resourceProfileOut {
+func profileOut(profile *haifypb.ResourceProfile) resourceProfileOut {
 	if profile == nil {
 		return resourceProfileOut{}
 	}
@@ -53,7 +53,7 @@ type profileMaxSizeOut struct {
 	Thin      bool     `json:"thin"`
 }
 
-func membersOut(ms []*sdspb.ProfileMemberResult) []profileMemberOut {
+func membersOut(ms []*haifypb.ProfileMemberResult) []profileMemberOut {
 	out := make([]profileMemberOut, 0, len(ms))
 	for _, m := range ms {
 		out = append(out, profileMemberOut{Resource: m.Resource, OK: m.Success, Message: m.Message})
@@ -65,15 +65,15 @@ func membersOut(ms []*sdspb.ProfileMemberResult) []profileMemberOut {
 // of resources created from or attached to it.
 func (s *Server) registerProfileGroupTools(srv *mcp.Server) {
 	c, supported := s.client.(interface {
-		SetResourceProfileOptions(context.Context, string, map[string]string) (*sdspb.SetResourceProfileOptionsResponse, error)
-		AdjustResourceProfile(context.Context, string, bool) (*sdspb.AdjustResourceProfileResponse, error)
-		GetResourceProfileMaxSize(context.Context, string) (*sdspb.GetResourceProfileMaxSizeResponse, error)
+		SetResourceProfileOptions(context.Context, string, map[string]string) (*haifypb.SetResourceProfileOptionsResponse, error)
+		AdjustResourceProfile(context.Context, string, bool) (*haifypb.AdjustResourceProfileResponse, error)
+		GetResourceProfileMaxSize(context.Context, string) (*haifypb.GetResourceProfileMaxSizeResponse, error)
 		SetResourceProfile(context.Context, string, string) error
 	})
 	if !supported {
 		return
 	}
-	addRead(s, srv, readOnlyTool("sds_resource_profile_max_size", "Largest volume for a profile",
+	addRead(s, srv, readOnlyTool("haify_resource_profile_max_size", "Largest volume for a profile",
 		"The largest volume a new resource in this profile could get now, given its pool, replica count and label constraints, and the nodes it would land on."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceProfileNameIn) (*mcp.CallToolResult, profileMaxSizeOut, error) {
 			resp, err := c.GetResourceProfileMaxSize(ctx, in.Name)
@@ -82,7 +82,7 @@ func (s *Server) registerProfileGroupTools(srv *mcp.Server) {
 			}
 			return nil, profileMaxSizeOut{MaxSizeGB: resp.MaxSizeGb, Nodes: resp.Nodes, Thin: resp.Thin}, nil
 		})
-	addWrite(s, srv, writeTool("sds_resource_profile_set_options", "Set profile DRBD options",
+	addWrite(s, srv, writeTool("haify_resource_profile_set_options", "Set profile DRBD options",
 		"Record DRBD options on a resource profile and apply them to every resource in it. Returns each member's outcome."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in profileOptionsIn) (*mcp.CallToolResult, profileGroupOut, error) {
 			resp, err := c.SetResourceProfileOptions(ctx, in.Name, in.Options)
@@ -91,7 +91,7 @@ func (s *Server) registerProfileGroupTools(srv *mcp.Server) {
 			}
 			return nil, profileGroupOut{OK: resp.Success, Message: resp.Message, Members: membersOut(resp.Members)}, nil
 		})
-	addWrite(s, srv, writeTool("sds_resource_profile_adjust", "Adjust profile members",
+	addWrite(s, srv, writeTool("haify_resource_profile_adjust", "Adjust profile members",
 		"Bring every resource in a profile into line with it: apply its DRBD options and add replicas to members with fewer than it asks for. Never removes a replica. Use dry_run first."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in profileAdjustIn) (*mcp.CallToolResult, profileGroupOut, error) {
 			resp, err := c.AdjustResourceProfile(ctx, in.Name, in.DryRun)
@@ -100,7 +100,7 @@ func (s *Server) registerProfileGroupTools(srv *mcp.Server) {
 			}
 			return nil, profileGroupOut{OK: resp.Success, Message: resp.Message, Members: membersOut(resp.Members)}, nil
 		})
-	addWrite(s, srv, writeTool("sds_resource_set_profile", "Set a resource's profile",
+	addWrite(s, srv, writeTool("haify_resource_set_profile", "Set a resource's profile",
 		"Make a resource a member of a profile, applying the profile's DRBD options to it; an empty profile takes it out of the one it is in."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in setProfileIn) (*mcp.CallToolResult, opResult, error) {
 			if err := c.SetResourceProfile(ctx, in.Resource, in.Profile); err != nil {

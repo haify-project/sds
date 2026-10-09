@@ -64,9 +64,9 @@ func TestHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	// Check that sds_controller_up metric is present
+	// Check that haify_controller_up metric is present
 	body := rec.Body.String()
-	assert.Contains(t, body, "sds_controller_up")
+	assert.Contains(t, body, "haify_controller_up")
 }
 
 func TestRecordOperation(t *testing.T) {
@@ -81,7 +81,7 @@ func TestRecordOperation(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, "sds_controller_operations_total")
+	assert.Contains(t, body, "haify_controller_operations_total")
 	assert.Contains(t, body, `operation="create_pool"`)
 	assert.Contains(t, body, `result="success"`)
 }
@@ -92,8 +92,8 @@ func TestRecordResourceCount(t *testing.T) {
 	m.RecordResourceCount("healthy", 5)
 	m.RecordResourceCount("degraded", 2)
 
-	assert.Equal(t, 5.0, requireGauge(t, m, "sds_controller_resources", labels{"state": "healthy"}))
-	assert.Equal(t, 2.0, requireGauge(t, m, "sds_controller_resources", labels{"state": "degraded"}))
+	assert.Equal(t, 5.0, requireGauge(t, m, "haify_controller_resources", labels{"state": "healthy"}))
+	assert.Equal(t, 2.0, requireGauge(t, m, "haify_controller_resources", labels{"state": "degraded"}))
 }
 
 func TestSetPoolCapacitiesExportsTotalUsedAndFree(t *testing.T) {
@@ -162,8 +162,8 @@ func TestRecordNodeState(t *testing.T) {
 	m.RecordNodeState("online", 3)
 	m.RecordNodeState("offline", 1)
 
-	assert.Equal(t, 3.0, requireGauge(t, m, "sds_controller_nodes", labels{"state": "online"}))
-	assert.Equal(t, 1.0, requireGauge(t, m, "sds_controller_nodes", labels{"state": "offline"}))
+	assert.Equal(t, 3.0, requireGauge(t, m, "haify_controller_nodes", labels{"state": "online"}))
+	assert.Equal(t, 1.0, requireGauge(t, m, "haify_controller_nodes", labels{"state": "offline"}))
 }
 
 func TestSetGatewayCounts(t *testing.T) {
@@ -195,8 +195,8 @@ func TestSetGatewayCountsDropsStatesMissingFromTheNewView(t *testing.T) {
 func TestRecordGRPCRequest(t *testing.T) {
 	m := getTestMetrics(t)
 
-	m.RecordGRPCRequest("/v1.SDSController/ListPools", "OK", 0.05)
-	m.RecordGRPCRequest("/v1.SDSController/CreatePool", "Unknown", 0.1)
+	m.RecordGRPCRequest("/v1.HaifyController/ListPools", "OK", 0.05)
+	m.RecordGRPCRequest("/v1.HaifyController/CreatePool", "Unknown", 0.1)
 
 	handler := m.Handler()
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
@@ -204,9 +204,9 @@ func TestRecordGRPCRequest(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, "sds_controller_grpc_requests_total")
-	assert.Contains(t, body, "sds_controller_grpc_request_duration_seconds")
-	assert.Contains(t, body, `method="/v1.SDSController/ListPools"`)
+	assert.Contains(t, body, "haify_controller_grpc_requests_total")
+	assert.Contains(t, body, "haify_controller_grpc_request_duration_seconds")
+	assert.Contains(t, body, `method="/v1.HaifyController/ListPools"`)
 	assert.Contains(t, body, `status="OK"`)
 	assert.Contains(t, body, `status="Unknown"`)
 }
@@ -255,7 +255,7 @@ func TestResetMetrics(t *testing.T) {
 
 	body := rec.Body.String()
 	// The up metric should still be present
-	assert.Contains(t, body, "sds_controller_up")
+	assert.Contains(t, body, "haify_controller_up")
 }
 
 func TestGetRegistry(t *testing.T) {
@@ -276,7 +276,7 @@ func TestUpMetric(t *testing.T) {
 
 	body := rec.Body.String()
 	// The up gauge should be 1
-	assert.True(t, strings.Contains(body, "sds_controller_up 1"))
+	assert.True(t, strings.Contains(body, "haify_controller_up 1"))
 }
 
 func TestConcurrentAccess(t *testing.T) {
@@ -318,9 +318,9 @@ func TestConcurrentAccess(t *testing.T) {
 // vacuously against gaugeValue's "not exported" answer, so the names live here
 // rather than being retyped per test.
 const (
-	capacityMetric = "sds_controller_storage_capacity_bytes"
-	gatewayMetric  = "sds_controller_gateways"
-	observedMetric = "sds_controller_last_observation_timestamp_seconds"
+	capacityMetric = "haify_controller_storage_capacity_bytes"
+	gatewayMetric  = "haify_controller_gateways"
+	observedMetric = "haify_controller_last_observation_timestamp_seconds"
 )
 
 // labels is a shorthand for the label sets these assertions are made of.

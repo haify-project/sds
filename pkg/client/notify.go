@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // NotifyChannelSpec is one alert delivery channel as a caller supplies it.
@@ -26,8 +26,8 @@ type NotifyChannelSpec struct {
 
 // ListNotifyChannels returns every channel (without secrets) and the message
 // formats this controller can render.
-func (c *SDSClient) ListNotifyChannels(ctx context.Context) ([]*sdspb.NotifyChannelInfo, []string, error) {
-	resp, err := c.client.ListNotifyChannels(ctx, &sdspb.ListNotifyChannelsRequest{})
+func (c *HaifyClient) ListNotifyChannels(ctx context.Context) ([]*haifypb.NotifyChannelInfo, []string, error) {
+	resp, err := c.client.ListNotifyChannels(ctx, &haifypb.ListNotifyChannelsRequest{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -38,8 +38,8 @@ func (c *SDSClient) ListNotifyChannels(ctx context.Context) ([]*sdspb.NotifyChan
 }
 
 // SaveNotifyChannel creates a channel or replaces one with the same name.
-func (c *SDSClient) SaveNotifyChannel(ctx context.Context, spec NotifyChannelSpec) (*sdspb.NotifyChannelInfo, error) {
-	resp, err := c.client.SaveNotifyChannel(ctx, &sdspb.SaveNotifyChannelRequest{
+func (c *HaifyClient) SaveNotifyChannel(ctx context.Context, spec NotifyChannelSpec) (*haifypb.NotifyChannelInfo, error) {
+	resp, err := c.client.SaveNotifyChannel(ctx, &haifypb.SaveNotifyChannelRequest{
 		Name:        spec.Name,
 		Kind:        spec.Kind,
 		Url:         spec.URL,
@@ -60,8 +60,8 @@ func (c *SDSClient) SaveNotifyChannel(ctx context.Context, spec NotifyChannelSpe
 }
 
 // DeleteNotifyChannel removes a channel.
-func (c *SDSClient) DeleteNotifyChannel(ctx context.Context, name string) error {
-	resp, err := c.client.DeleteNotifyChannel(ctx, &sdspb.DeleteNotifyChannelRequest{Name: name})
+func (c *HaifyClient) DeleteNotifyChannel(ctx context.Context, name string) error {
+	resp, err := c.client.DeleteNotifyChannel(ctx, &haifypb.DeleteNotifyChannelRequest{Name: name})
 	if err != nil {
 		return err
 	}
@@ -74,8 +74,8 @@ func (c *SDSClient) DeleteNotifyChannel(ctx context.Context, name string) error 
 // TestNotifyChannel sends one message to a single channel and reports what the
 // far end said. The error carries the service's own rejection text, which is
 // the part that says what to fix.
-func (c *SDSClient) TestNotifyChannel(ctx context.Context, name string) (string, error) {
-	resp, err := c.client.TestNotifyChannel(ctx, &sdspb.TestNotifyChannelRequest{Name: name})
+func (c *HaifyClient) TestNotifyChannel(ctx context.Context, name string) (string, error) {
+	resp, err := c.client.TestNotifyChannel(ctx, &haifypb.TestNotifyChannelRequest{Name: name})
 	if err != nil {
 		return "", err
 	}

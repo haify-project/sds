@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 // ocfRoot is the OCF root ($OCF_ROOT); ocfResourceDir is the standard on-node
@@ -327,7 +327,7 @@ func (rm *ResourceManager) GetResourceAgentMetadata(ctx context.Context, provide
 		return nil, fmt.Errorf("no nodes available to read OCF meta-data")
 	}
 	agentPath := fmt.Sprintf("%s/%s/%s", ocfResourceDir, provider, name)
-	cmd := fmt.Sprintf("if [ -x %s ]; then OCF_ROOT=%s %s meta-data; else echo __SDS_OCF_MISSING__; fi",
+	cmd := fmt.Sprintf("if [ -x %s ]; then OCF_ROOT=%s %s meta-data; else echo __HAIFY_OCF_MISSING__; fi",
 		agentPath, ocfRoot, agentPath)
 
 	var lastErr error
@@ -342,7 +342,7 @@ func (rm *ResourceManager) GetResourceAgentMetadata(ctx context.Context, provide
 			lastErr = fmt.Errorf("no result from node %s", host)
 			continue
 		}
-		if strings.Contains(hr.Output, "__SDS_OCF_MISSING__") {
+		if strings.Contains(hr.Output, "__HAIFY_OCF_MISSING__") {
 			lastErr = fmt.Errorf("OCF resource agent %s:%s not found at %s", provider, name, agentPath)
 			continue
 		}
@@ -374,7 +374,7 @@ func (rm *ResourceManager) GetHaToml(ctx context.Context, resource string) (path
 	if err != nil {
 		return "", "", err
 	}
-	cmd := fmt.Sprintf("if [ -f %s ]; then cat %s; else echo __SDS_HA_TOML_MISSING__; fi", path, path)
+	cmd := fmt.Sprintf("if [ -f %s ]; then cat %s; else echo __HAIFY_HA_TOML_MISSING__; fi", path, path)
 	var lastErr error
 	for _, host := range hosts {
 		result, execErr := rm.deployment.Exec(ctx, []string{host}, cmd)
@@ -387,7 +387,7 @@ func (rm *ResourceManager) GetHaToml(ctx context.Context, resource string) (path
 			lastErr = fmt.Errorf("failed to read %s on node %s", path, host)
 			continue
 		}
-		if strings.Contains(hr.Output, "__SDS_HA_TOML_MISSING__") {
+		if strings.Contains(hr.Output, "__HAIFY_HA_TOML_MISSING__") {
 			lastErr = fmt.Errorf("no HA config for resource %q: %s not found", resource, path)
 			continue
 		}
@@ -436,5 +436,5 @@ func (rm *ResourceManager) SyncHaToml(ctx context.Context, resource, content str
 
 // haTomlPath is the on-node path of a resource's HA promoter config.
 func haTomlPath(resource string) string {
-	return fmt.Sprintf("/etc/drbd-reactor.d/sds-ha-%s.toml", resource)
+	return fmt.Sprintf("/etc/drbd-reactor.d/haify-ha-%s.toml", resource)
 }

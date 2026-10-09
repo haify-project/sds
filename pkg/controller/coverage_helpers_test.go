@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	sdsui "github.com/haify-project/sds/ui"
+	"github.com/haify-project/haify/pkg/database"
+	haifyui "github.com/haify-project/haify/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -255,7 +255,7 @@ func TestUIServerServeHTTP(t *testing.T) {
 // extension and returns its path relative to dist ("" if none exists).
 func findEmbeddedAsset(t *testing.T, ext string) string {
 	t.Helper()
-	distFS, err := fs.Sub(sdsui.FS, "dist")
+	distFS, err := fs.Sub(haifyui.FS, "dist")
 	require.NoError(t, err)
 	var found string
 	_ = fs.WalkDir(distFS, ".", func(p string, d fs.DirEntry, err error) error {

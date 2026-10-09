@@ -6,7 +6,7 @@ import (
 	"hash/crc32"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/gateway"
+	"github.com/haify-project/haify/pkg/gateway"
 )
 
 // Directory quotas for NFS exports.

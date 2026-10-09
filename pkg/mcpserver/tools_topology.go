@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -136,11 +136,11 @@ type haStatusOut struct {
 
 // registerTopologyTools adds replica, DR, drain, label and HA-config tools.
 func (s *Server) registerTopologyTools(srv *mcp.Server) {
-	addWrite(s, srv, writeTool("sds_resource_add_replica", "Add a replica",
+	addWrite(s, srv, writeTool("haify_resource_add_replica", "Add a replica",
 		"Add a full (diskful) copy of a running resource on another node. The new copy syncs in the background; "+
-			"the resource stays usable throughout, and it is not a redundant copy until sds_resource_status shows "+
+			"the resource stays usable throughout, and it is not a redundant copy until haify_resource_status shows "+
 			"it UpToDate. The node's pool needs room for the whole volume. Refused if the node already holds a "+
-			"replica, is the resource's quorum tiebreaker (remove it with sds_resource_set_tiebreaker first) or "+
+			"replica, is the resource's quorum tiebreaker (remove it with haify_resource_set_tiebreaker first) or "+
 			"is a diskless client (detach it first)."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in replicaIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.AddReplica(ctx, in.Resource, in.Node); err != nil {
@@ -149,7 +149,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok("replica of " + in.Resource + " added on " + in.Node), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_resource_remove_replica", "Remove a replica",
+	addWrite(s, srv, destructiveTool("haify_resource_remove_replica", "Remove a replica",
 		"Take a full copy of a resource out permanently. Refused when the node is Primary, when it is the quorum "+
 			"tiebreaker or the off-site DR, or when fewer than two diskful copies would remain. Unlike a conversion, "+
 			"whose reduced-redundancy window closes when the resync finishes, this does not close — confirm before use."),
@@ -160,7 +160,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok("replica of " + in.Resource + " removed from " + in.Node), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_attach_diskless", "Attach a diskless client",
+	addWrite(s, srv, writeTool("haify_resource_attach_diskless", "Attach a diskless client",
 		"Let a node use a resource over the DRBD network without storing a local copy. This is how a workload runs "+
 			"on a node that holds no replica."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in replicaIn) (*mcp.CallToolResult, opResult, error) {
@@ -170,7 +170,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok(in.Node + " attached as a diskless client of " + in.Resource), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_detach_diskless", "Detach a diskless client",
+	addWrite(s, srv, writeTool("haify_resource_detach_diskless", "Detach a diskless client",
 		"Stop a node using a resource over the network. Does not touch any stored copy."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in replicaIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.DetachDisklessClient(ctx, in.Resource, in.Node); err != nil {
@@ -179,7 +179,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok(in.Node + " detached from " + in.Resource), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_set_tiebreaker", "Set a quorum tiebreaker",
+	addWrite(s, srv, writeTool("haify_resource_set_tiebreaker", "Set a quorum tiebreaker",
 		"Add a diskless node that only votes in quorum and stores no data. A two-replica resource cannot keep "+
 			"serving I/O when either node fails, because the survivor has no majority; a tiebreaker fixes that. "+
 			"Note that a node attached as a diskless CLIENT does not vote — only a tiebreaker does. Naming a node "+
@@ -202,7 +202,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok(msg), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_resource_add_dr", "Add off-site DR replication",
+	addWrite(s, srv, writeTool("haify_resource_add_dr", "Add off-site DR replication",
 		"Add an asynchronous off-site replica reached over a WAN tunnel. The DR copy replicates under protocol A "+
 			"and never takes over automatically."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in addDRIn) (*mcp.CallToolResult, addDROut, error) {
@@ -213,7 +213,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, addDROut{Status: "ok", WANPort: port}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_wan_repair", "Repair WAN replication tunnels",
+	addWrite(s, srv, writeTool("haify_wan_repair", "Repair WAN replication tunnels",
 		"Reconcile a WAN resource's tunnels with the controller's current node list: re-provision the legs that "+
 			"should exist, remove instances left behind by a node that was renumbered or removed. It converges, so "+
 			"running it on a healthy resource does nothing. Always run with dry_run first — a repair restarts tunnels."),
@@ -232,9 +232,9 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 		})
 
 	if c, supported := s.client.(interface {
-		DRFailback(context.Context, string, string, uint32) (*sdspb.DRFailbackResponse, error)
+		DRFailback(context.Context, string, string, uint32) (*haifypb.DRFailbackResponse, error)
 	}); supported {
-		addWrite(s, srv, destructiveTool("sds_resource_dr_failback", "Fail a WAN resource back to the primary site",
+		addWrite(s, srv, destructiveTool("haify_resource_dr_failback", "Fail a WAN resource back to the primary site",
 			"After a DR failover, move a WAN resource back to its primary site. Run it again until phase is done: it "+
 				"rejoins the primary-site nodes, DISCARDING what they wrote after the failover, waits for them to resync "+
 				"from the DR, then makes the primary site Primary. Needs each primary-site node, then the DR, unmounted."),
@@ -250,7 +250,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	if c, supported := s.client.(interface {
 		RepairResource(context.Context, string) error
 	}); supported {
-		addWrite(s, srv, writeTool("sds_resource_repair", "Repair a resource's DRBD config",
+		addWrite(s, srv, writeTool("haify_resource_repair", "Repair a resource's DRBD config",
 			"Bring every participant's copy of a resource's DRBD config back into agreement and apply it: a diskless "+
 				"tiebreaker missing a volume, a node's address left over from a renumbering. It converges, so running it on a "+
 				"healthy resource changes nothing. It rewrites /etc/drbd.d/<resource>.res on the nodes and runs drbdadm adjust."),
@@ -263,16 +263,16 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	}
 
 	if c, supported := s.client.(interface {
-		VerifyResource(context.Context, *sdspb.VerifyResourceRequest) (*sdspb.VerifyResourceResponse, error)
+		VerifyResource(context.Context, *haifypb.VerifyResourceRequest) (*haifypb.VerifyResourceResponse, error)
 	}); supported {
-		addWrite(s, srv, writeTool("sds_resource_verify", "Verify a resource's replicas hold the same data",
+		addWrite(s, srv, writeTool("haify_resource_verify", "Verify a resource's replicas hold the same data",
 			"Compare a resource's replicas block by block (DRBD online verify) from node, default the Primary. It reads "+
 				"every replica in full, so it loads the disks while it runs. Call again while phase is running to follow "+
 				"it. Marks left by earlier verifies, interrupted resyncs or reconnects count in out_of_sync_kib even when the copies "+
 				"are identical; found_kib is what this verify itself found. Call with resync to copy node's data over the marked "+
 				"blocks: harmless when the copies are identical, and it clears the marks."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in verifyIn) (*mcp.CallToolResult, verifyOut, error) {
-				resp, err := c.VerifyResource(ctx, &sdspb.VerifyResourceRequest{
+				resp, err := c.VerifyResource(ctx, &haifypb.VerifyResourceRequest{
 					Name: in.Resource, Node: in.Node, WaitSeconds: in.WaitSeconds, Resync: in.Resync,
 				})
 				if err != nil {
@@ -287,14 +287,14 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 	}
 
 	if c, supported := s.client.(interface {
-		SetWanEndpoint(context.Context, *sdspb.SetWanEndpointRequest) (*sdspb.SetWanEndpointResponse, error)
+		SetWanEndpoint(context.Context, *haifypb.SetWanEndpointRequest) (*haifypb.SetWanEndpointResponse, error)
 	}); supported {
-		addWrite(s, srv, writeTool("sds_wan_set_endpoint", "Change a WAN resource's DR endpoint",
+		addWrite(s, srv, writeTool("haify_wan_set_endpoint", "Change a WAN resource's DR endpoint",
 			"Change the DR site's address a WAN resource's primary dials (IP or host name, no port) and/or the source "+
 				"address it dials from, and rebuild the tunnels on it. A new DR endpoint that does not answer is refused "+
 				"and the old one kept, unless skip_check is set for a DR site not reachable yet."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in wanEndpointIn) (*mcp.CallToolResult, opResult, error) {
-				resp, err := c.SetWanEndpoint(ctx, &sdspb.SetWanEndpointRequest{
+				resp, err := c.SetWanEndpoint(ctx, &haifypb.SetWanEndpointRequest{
 					Name: in.Resource, DrEndpoint: in.DREndpoint, EgressAddress: in.EgressAddress,
 					ClearEgress: in.ClearEgress, SkipReachabilityCheck: in.SkipCheck,
 				})
@@ -305,10 +305,10 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			})
 	}
 
-	addWrite(s, srv, destructiveTool("sds_node_drain", "Drain a node",
+	addWrite(s, srv, destructiveTool("haify_node_drain", "Drain a node",
 		"Mark the node maintenance (no new replicas or tiebreakers land on it until undrain) and move every "+
-			"resource that is Primary on it. HA resources, gateways and sds-meta are evicted through drbd-reactor, as "+
-			"sds_ha_evict does. Others are demoted and promoted on a replica that is diskful, UpToDate, connected, "+
+			"resource that is Primary on it. HA resources, gateways and haify-meta are evicted through drbd-reactor, as "+
+			"haify_ha_evict does. Others are demoted and promoted on a replica that is diskful, UpToDate, connected, "+
 			"and not drained, offline or a WAN DR node; if that promote fails the node is promoted back. A resource "+
 			"that cannot move (no such replica, held open, eviction failed) stays Primary on the node and is named "+
 			"in the error with the reason; the rest still move. Returns the resources it moved; undrain does not "+
@@ -321,7 +321,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, drainOut{Status: "ok", Evacuated: moved}, nil
 		})
 
-	addWrite(s, srv, writeTool("sds_node_undrain", "Undrain a node",
+	addWrite(s, srv, writeTool("haify_node_undrain", "Undrain a node",
 		"Mark a drained node eligible to hold resources again. Does not move anything back on its own."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeNameIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.UndrainNode(ctx, in.Node); err != nil {
@@ -330,7 +330,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok("node " + in.Node + " is schedulable again"), nil
 		})
 
-	addWrite(s, srv, writeTool("sds_node_set_labels", "Set node labels",
+	addWrite(s, srv, writeTool("haify_node_set_labels", "Set node labels",
 		"Set key/value labels on a node. Labels drive placement — which nodes a resource's replicas may land on."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeLabelsIn) (*mcp.CallToolResult, opResult, error) {
 			if _, err := s.client.SetNodeLabels(ctx, in.Node, in.Labels, in.Replace); err != nil {
@@ -344,21 +344,21 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 		})
 
 	if c, supported := s.client.(interface {
-		SetNodeAddress(context.Context, string, string, string) (*sdspb.SetNodeAddressResponse, error)
-		SetNodeAddresses(context.Context, []*sdspb.NodeAddressMove) (*sdspb.SetNodeAddressResponse, error)
+		SetNodeAddress(context.Context, string, string, string) (*haifypb.SetNodeAddressResponse, error)
+		SetNodeAddresses(context.Context, []*haifypb.NodeAddressMove) (*haifypb.SetNodeAddressResponse, error)
 	}); supported {
-		addWrite(s, srv, destructiveTool("sds_node_set_address", "Renumber a node",
+		addWrite(s, srv, destructiveTool("haify_node_set_address", "Renumber a node",
 			"Move a registered node to a new IP address everywhere Haify records it: the node registry, /etc/hosts on the nodes, "+
 				"and the DRBD config of every resource it takes part in, each of which reconnects on the new address. "+
 				"The node must already answer on the new address as the same machine. When several nodes changed "+
 				"address at once, pass them all in moves: one at a time cannot work then."),
 			func(ctx context.Context, _ *mcp.CallToolRequest, in nodeAddressIn) (*mcp.CallToolResult, nodeAddressOut, error) {
-				var resp *sdspb.SetNodeAddressResponse
+				var resp *haifypb.SetNodeAddressResponse
 				var err error
 				if len(in.Moves) > 0 {
-					moves := make([]*sdspb.NodeAddressMove, 0, len(in.Moves))
+					moves := make([]*haifypb.NodeAddressMove, 0, len(in.Moves))
 					for _, m := range in.Moves {
-						moves = append(moves, &sdspb.NodeAddressMove{Node: m.Node, Address: m.Address, ReplicationAddress: m.ReplicationAddress})
+						moves = append(moves, &haifypb.NodeAddressMove{Node: m.Node, Address: m.Address, ReplicationAddress: m.ReplicationAddress})
 					}
 					resp, err = c.SetNodeAddresses(ctx, moves)
 				} else {
@@ -371,7 +371,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			})
 	}
 
-	addWrite(s, srv, destructiveTool("sds_pool_convert_thin", "Convert a pool to thin",
+	addWrite(s, srv, destructiveTool("haify_pool_convert_thin", "Convert a pool to thin",
 		"Rebuild an LVM volume group as a thin pool in place. A thick pool reserves a fixed copy-on-write area per "+
 			"snapshot and so cannot hold a snapshot history. Every resource on the pool is rebuilt one copy at a "+
 			"time, which reduces redundancy while it runs; it is refused when fewer than two diskful copies remain."),
@@ -382,7 +382,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok("pool " + in.Pool + " on " + in.Node + " converted to thin"), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_ha_get_toml", "Read an HA promoter config",
+	addRead(s, srv, readOnlyTool("haify_ha_get_toml", "Read an HA promoter config",
 		"Read the drbd-reactor promoter TOML for an HA resource — the file that decides what starts, in what order, "+
 			"on whichever node holds the resource."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haTomlIn) (*mcp.CallToolResult, haTomlOut, error) {
@@ -393,7 +393,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, haTomlOut{Resource: in.Resource, Content: resp.Content, Path: resp.Path}, nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_ha_sync_toml", "Write an HA promoter config",
+	addWrite(s, srv, destructiveTool("haify_ha_sync_toml", "Write an HA promoter config",
 		"Write a promoter TOML to every node and reload drbd-reactor. A malformed file can stop the resource from "+
 			"starting anywhere, so read the current one first and change only what is needed."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haTomlSyncIn) (*mcp.CallToolResult, opResult, error) {
@@ -407,7 +407,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, ok(msg), nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_ha_promoter_status", "Show promoter status",
+	addRead(s, srv, readOnlyTool("haify_ha_promoter_status", "Show promoter status",
 		"Show drbd-reactor promoter state per HA resource: where it is Primary and whether its services are up."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in haStatusIn) (*mcp.CallToolResult, haStatusOut, error) {
 			sts, err := s.client.GetHaStatus(ctx, in.Resource)
@@ -425,7 +425,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_ocf_agent_list", "List OCF resource agents",
+	addRead(s, srv, readOnlyTool("haify_ocf_agent_list", "List OCF resource agents",
 		"List the OCF resource agents installed on the cluster. These are what an HA promoter can start — "+
 			"Filesystem, IPaddr2, nfsserver and so on."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, agentListOut, error) {
@@ -440,7 +440,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
-	addRead(s, srv, readOnlyTool("sds_ocf_agent_metadata", "Describe an OCF agent",
+	addRead(s, srv, readOnlyTool("haify_ocf_agent_metadata", "Describe an OCF agent",
 		"Fetch an OCF agent's metadata, which lists every parameter it accepts. Read this before composing a "+
 			"promoter start list, rather than guessing parameter names."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in agentMetaIn) (*mcp.CallToolResult, agentMetaOut, error) {

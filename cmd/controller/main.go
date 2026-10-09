@@ -10,9 +10,9 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/controller"
-	"github.com/haify-project/sds/pkg/logbuf"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/controller"
+	"github.com/haify-project/haify/pkg/logbuf"
 )
 
 var (

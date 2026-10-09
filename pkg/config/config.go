@@ -41,7 +41,7 @@ type Config struct {
 // WANConfig tunes opt-in WAN replication.
 //
 // PKIDir is where the controller caches the shared CA + leaf used for the
-// sds-proxy mTLS link. It defaults to /var/lib/sds/wanproxy-pki, which only a
+// haify-proxy mTLS link. It defaults to /var/lib/haify/wanproxy-pki, which only a
 // root controller can create; point it somewhere writable when the controller
 // runs as an ordinary user (development, a test harness, or a packaged service
 // with its own state directory).
@@ -153,7 +153,7 @@ type SelfHAConfig struct {
 	// ExtraServices are additional systemd units started/stopped alongside the
 	// controller on the active node (appended to the Self-HA promoter start
 	// list), so they follow the controller across failover. Empty by default;
-	// e.g. ["sds-ai.service"] to make the AI Copilot follow the controller.
+	// e.g. ["haify-ai.service"] to make the AI Copilot follow the controller.
 	ExtraServices []string `mapstructure:"extra_services"`
 }
 
@@ -237,7 +237,7 @@ type ServerConfig struct {
 
 // DatabaseConfig represents database configuration
 type DatabaseConfig struct {
-	Path string `mapstructure:"path"` // Database file path (default: /var/lib/sds/sds.db)
+	Path string `mapstructure:"path"` // Database file path (default: /var/lib/haify/haify.db)
 }
 
 // TLSConfig controls transport security for the gRPC API (and, through the
@@ -294,7 +294,7 @@ func (t TLSConfig) Validate() error {
 		return fmt.Errorf("tls: ca_cert/client_cert/client_key name a *client's* material and are no longer read; " +
 			"the controller needs its own certificate — set tls.cert_file and tls.key_file, " +
 			"and tls.client_ca_file to require client certificates. " +
-			"(sds keeps --tls-ca/--tls-cert/--tls-key for the client side.)")
+			"(haify keeps --tls-ca/--tls-cert/--tls-key for the client side.)")
 	}
 	if !t.Enabled {
 		if t.REST {
@@ -393,13 +393,13 @@ func Load(configPath string) (*Config, error) {
 		viper.SetConfigFile(configPath)
 	} else {
 		viper.SetConfigName("controller")
-		viper.AddConfigPath("/etc/sds/")
+		viper.AddConfigPath("/etc/haify/")
 		viper.AddConfigPath("./configs/")
 		viper.AddConfigPath(".")
 	}
 
 	// Enable environment variable override
-	viper.SetEnvPrefix("SDS")
+	viper.SetEnvPrefix("HAIFY")
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -422,7 +422,7 @@ func Load(configPath string) (*Config, error) {
 // Validate validates the configuration
 // validPoolTypeDefaults are the values storage.default_pool_type may take.
 //
-// ZFS is deliberately absent even though `sds pool create --type zfs` works:
+// ZFS is deliberately absent even though `haify pool create --type zfs` works:
 // a zpool is built from vdevs by a separate RPC, so an unspecified type never
 // resolves to one. Accepting "zfs" here would produce a controller that starts
 // cleanly and then fails every pool creation that omits a type, with an error
@@ -500,7 +500,7 @@ func setDefaults() {
 	viper.SetDefault("server.listen_address", "0.0.0.0")
 	viper.SetDefault("server.port", 3374)
 	viper.SetDefault("server.rest_port", 3375)
-	viper.SetDefault("database.path", "/var/lib/sds/sds.db")
+	viper.SetDefault("database.path", "/var/lib/haify/haify.db")
 	viper.SetDefault("auth.enabled", false)
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("log.level", "info")

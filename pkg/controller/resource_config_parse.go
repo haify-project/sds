@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
+	"github.com/haify-project/haify/pkg/database"
 )
 
 type resourceConfigVolume struct {

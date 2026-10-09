@@ -18,7 +18,7 @@ import (
 
 func TestDistributeSecretRefusesAnAbsolutePath(t *testing.T) {
 	c := &Client{logger: zap.NewNop()}
-	_, err := c.DistributeSecret(context.Background(), []string{"10.0.0.1"}, "secret", "/etc/sds/creds.conf")
+	_, err := c.DistributeSecret(context.Background(), []string{"10.0.0.1"}, "secret", "/etc/haify/creds.conf")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "relative to the login user's home")
 }
@@ -35,11 +35,11 @@ func TestDistributeSecretWritesAPrivateFileLocally(t *testing.T) {
 		t.Skip("no non-loopback local address to exercise the local-host branch")
 	}
 
-	res, err := c.DistributeSecret(context.Background(), []string{localIPs[0]}, "s3cr3t", ".sds-backup/x.conf")
+	res, err := c.DistributeSecret(context.Background(), []string{localIPs[0]}, "s3cr3t", ".haify-backup/x.conf")
 	require.NoError(t, err)
 	require.True(t, res.Success)
 
-	dest := filepath.Join(home, ".sds-backup", "x.conf")
+	dest := filepath.Join(home, ".haify-backup", "x.conf")
 	data, err := os.ReadFile(dest)
 	require.NoError(t, err)
 	assert.Equal(t, "s3cr3t", string(data))

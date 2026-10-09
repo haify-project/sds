@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
-// The default used to live in sds, so the CLI created thin pools while the
+// The default used to live in haify, so the CLI created thin pools while the
 // REST gateway, MCP and the web UI created thick ones from the same omitted
 // field — and storage.default_pool_type, the setting that exists to decide it,
 // was read by nobody. Pin the resolution here, where every client shares it.

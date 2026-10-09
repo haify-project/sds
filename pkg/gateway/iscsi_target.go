@@ -30,7 +30,7 @@ func (i *iSCSIManager) AddLUN(ctx context.Context, resource string, lunNumber in
 		zap.Int("lun", lunNumber),
 		zap.String("device", device))
 
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -78,7 +78,7 @@ func (i *iSCSIManager) RemoveLUN(ctx context.Context, resource string, lunNumber
 		zap.String("resource", resource),
 		zap.Int("lun", lunNumber))
 
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func (i *iSCSIManager) RemoveLUN(ctx context.Context, resource string, lunNumber
 
 // ListLUNs lists all configured LUNs for an iSCSI gateway.
 func (i *iSCSIManager) ListLUNs(ctx context.Context, resource string) ([]map[string]string, error) {
-	pluginID := fmt.Sprintf("sds-iscsi-%s", resource)
+	pluginID := fmt.Sprintf("haify-iscsi-%s", resource)
 	cfg, err := i.readGatewayConfig(ctx, resource, pluginID)
 	if err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (i *iSCSIManager) DeleteTarget(ctx context.Context, resource string) error 
 // gateway node. host is unused: a target's config lives on every diskful node
 // of its resource, so the union over all nodes is the answer.
 func (i *iSCSIManager) ListTargets(ctx context.Context, host string) ([]string, error) {
-	contents, err := i.readAllNodeConfigs(ctx, "sds-iscsi-*.toml")
+	contents, err := i.readAllNodeConfigs(ctx, "haify-iscsi-*.toml")
 	if err != nil {
 		return nil, err
 	}

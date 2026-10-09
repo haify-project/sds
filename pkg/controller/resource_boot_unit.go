@@ -13,15 +13,15 @@ import (
 // Default-Start header is empty, so `systemctl enable drbd.service` fails with
 // "Default-Start contains no runlevels, aborting" and the unit can never be
 // enabled. Our own native unit sidesteps that entirely.
-const drbdBootUnit = "sds-drbd-up.service"
+const drbdBootUnit = "haify-drbd-up.service"
 
 // drbdBootUnitPath is where the generated unit is written on each node.
-const drbdBootUnitPath = "/etc/systemd/system/sds-drbd-up.service"
+const drbdBootUnitPath = "/etc/systemd/system/haify-drbd-up.service"
 
 // drbdBootScriptPath is the helper script ExecStart runs. Keeping the logic in
 // a script (rather than an inline ExecStart) lets it activate LVM first and
 // reconcile each resource tolerantly at boot.
-const drbdBootScriptPath = "/usr/local/sbin/sds-drbd-up.sh"
+const drbdBootScriptPath = "/usr/local/sbin/haify-drbd-up.sh"
 
 // drbdBootUnitInstallCmd renders the single shell command that (idempotently)
 // installs and enables the DRBD boot bring-up on a node: a helper script plus a
@@ -84,7 +84,7 @@ sudo systemctl enable ` + drbdBootUnit
 // reboot and re-sync without manual intervention; drbd-reactor then promotes
 // once the resources are up. `adjust all` (not `up all`) is used deliberately:
 // it is idempotent and reconciles config->running state, so it attaches backing
-// disks AND tolerates a resource that is already up (e.g. a non-sds DRBD
+// disks AND tolerates a resource that is already up (e.g. a non-haify DRBD
 // resource on the same node) instead of aborting with a "minor exists" error
 // and leaving later resources half-up (Diskless). Writing the same unit file and
 // re-enabling it are idempotent, so repeated calls across resource creations are

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 
 	"github.com/spf13/cobra"
 )
@@ -42,7 +42,7 @@ func backupScheduleCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create or replace the schedule backing a resource up to a target",
-		Example: `  sds backup schedule create --resource db --target offsite \
+		Example: `  haify backup schedule create --resource db --target offsite \
       --cron "30 2 * * *" --keep-daily 7 --keep-weekly 4 --keep-monthly 6`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if resource == "" || target == "" || cronExpr == "" {
@@ -50,14 +50,14 @@ func backupScheduleCreateCommand() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
 			defer closeClient(c)
-			sc, err := c.CreateBackupSchedule(ctx, &sdspb.CreateBackupScheduleRequest{
+			sc, err := c.CreateBackupSchedule(ctx, &haifypb.CreateBackupScheduleRequest{
 				Resource: resource, Target: target, Cron: cronExpr, Enabled: !disabled,
-				Keep: &sdspb.GFSRetention{Hourly: int32(hourly), Daily: int32(daily), Weekly: int32(weekly),
+				Keep: &haifypb.GFSRetention{Hourly: int32(hourly), Daily: int32(daily), Weekly: int32(weekly),
 					Monthly: int32(monthly), Yearly: int32(yearly)},
 			})
 			if err != nil {
@@ -87,7 +87,7 @@ func backupScheduleListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -133,7 +133,7 @@ func backupScheduleDeleteCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -156,7 +156,7 @@ func backupScheduleRunCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
@@ -197,14 +197,14 @@ someone with the target's credentials deleted the backups — on a versioned S3
 bucket a delete only hides them — and restores of what it imports read those
 same versions.
 
-  sds backup import --target vault --as-of 2026-10-01T00:00:00Z`,
+  haify backup import --target vault --as-of 2026-10-01T00:00:00Z`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if target == "" {
 				return fmt.Errorf("--target is required")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
-			c, err := newSDSClient()
+			c, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}

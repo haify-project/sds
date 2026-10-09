@@ -7,9 +7,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/deployment"
-	"github.com/haify-project/sds/pkg/gateway"
-	"github.com/haify-project/sds/pkg/wanproxy"
+	"github.com/haify-project/haify/pkg/deployment"
+	"github.com/haify-project/haify/pkg/gateway"
+	"github.com/haify-project/haify/pkg/wanproxy"
 )
 
 // GatewayResourceManager adapts ResourceManager to gateway.ResourceManager interface

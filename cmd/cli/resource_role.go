@@ -22,13 +22,13 @@ func resourcePrimary() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.SetPrimary(ctx, resource, node, force)
+			err = haifyClient.SetPrimary(ctx, resource, node, force)
 			if err != nil {
 				return fmt.Errorf("failed to set primary: %w", err)
 			}
@@ -55,13 +55,13 @@ func resourceSecondary() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.SetSecondary(ctx, resource, node)
+			err = haifyClient.SetSecondary(ctx, resource, node)
 			if err != nil {
 				return fmt.Errorf("failed to set secondary: %w", err)
 			}
@@ -104,19 +104,19 @@ func resourceDualPrimary() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.SetDualPrimary(ctx, resource, enable); err != nil {
+			if err := haifyClient.SetDualPrimary(ctx, resource, enable); err != nil {
 				return fmt.Errorf("failed to set dual-primary: %w", err)
 			}
 
 			if enable {
 				fmt.Printf("Dual-primary window OPEN on '%s'.\n", resource)
-				fmt.Printf("Close it as soon as the migration finishes: sds resource dual-primary %s off\n", resource)
+				fmt.Printf("Close it as soon as the migration finishes: haify resource dual-primary %s off\n", resource)
 			} else {
 				fmt.Printf("Dual-primary window closed on '%s'.\n", resource)
 			}
@@ -139,13 +139,13 @@ func resourcePromote() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.SetPrimary(ctx, resource, node, force)
+			err = haifyClient.SetPrimary(ctx, resource, node, force)
 			if err != nil {
 				return fmt.Errorf("failed to promote resource: %w", err)
 			}
@@ -172,13 +172,13 @@ func resourceDemote() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), nodeOpTimeout)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.SetSecondary(ctx, resource, node)
+			err = haifyClient.SetSecondary(ctx, resource, node)
 			if err != nil {
 				return fmt.Errorf("failed to demote resource: %w", err)
 			}

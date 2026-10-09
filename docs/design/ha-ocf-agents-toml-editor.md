@@ -12,7 +12,7 @@ the Haify controller:
    nodes, pick one, fill in a parameter form generated from its OCF meta-data,
    and place it in an HA config's drbd-reactor promoter `start = [ ... ]` list.
 2. **Promoter TOML editor** — view and edit the raw promoter TOML of an HA
-   config (`/etc/drbd-reactor.d/sds-ha-<res>.toml`) and sync it to the
+   config (`/etc/drbd-reactor.d/haify-ha-<res>.toml`) and sync it to the
    resource's nodes.
 
 DRBD-HA's profiles model, SSE event stream and per-node enable/disable were not

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/haify-project/sds/api/proto/v1"
+	pb "github.com/haify-project/haify/api/proto/v1"
 )
 
 func peerConn(name, role string, oos uint64, repl, disk string) drbdConnection {

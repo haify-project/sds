@@ -11,12 +11,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 // Taking a disk out of a pool, or swapping it for another, while the pool
-// stays in use (`sds pool remove-disk`, `sds pool replace-disk`).
+// stays in use (`haify pool remove-disk`, `haify pool replace-disk`).
 //
 // The data on the disk moves first (pvmove), and only then does the disk
 // leave the volume group. Moving a full disk takes hours, so the work runs on
@@ -26,7 +26,7 @@ import (
 
 const (
 	diskJobPoll   = 15 * time.Second
-	diskJobStatus = "/var/lib/sds-jobs"
+	diskJobStatus = "/var/lib/haify-jobs"
 )
 
 // pvInfo is one physical volume of a group.
@@ -172,13 +172,13 @@ func containsPV(pvs []pvInfo, name string) bool {
 
 func (sm *StorageManager) launchDiskJob(ctx context.Context, host string, j *database.StorageJob) error {
 	script := base64Std(diskJobScript(j))
-	cmd := fmt.Sprintf("sudo systemd-run --unit=sds-disk-%s --collect /bin/bash -c 'echo %s | base64 -d | /bin/bash'", j.ID, script)
+	cmd := fmt.Sprintf("sudo systemd-run --unit=haify-disk-%s --collect /bin/bash -c 'echo %s | base64 -d | /bin/bash'", j.ID, script)
 	return execFailure(sm.controller.deployment.Exec(ctx, []string{host}, cmd))
 }
 
 // diskJobState reads a job's status file and progress on its node.
 func (sm *StorageManager) diskJobState(ctx context.Context, host string, j *database.StorageJob) (status, progress string, err error) {
-	cmd := fmt.Sprintf("cat %s/%s.status 2>/dev/null; echo '--'; systemctl is-active sds-disk-%s 2>/dev/null; echo '--'; "+
+	cmd := fmt.Sprintf("cat %s/%s.status 2>/dev/null; echo '--'; systemctl is-active haify-disk-%s 2>/dev/null; echo '--'; "+
 		"sudo lvs -a --noheadings -o lv_name,copy_percent,sync_percent %s 2>/dev/null | awk '$1 ~ /pvmove/ {print \"moving \" $2 \"%%\"} $3 != \"\" && $3 != \"100.00\" {print $1 \" syncing \" $3 \"%%\"}' | head -3",
 		diskJobStatus, j.ID, j.ID, j.Pool)
 	res, err := sm.controller.deployment.Exec(ctx, []string{host}, cmd)
@@ -195,7 +195,7 @@ func (sm *StorageManager) diskJobState(ctx context.Context, host string, j *data
 	}
 	status = strings.TrimSpace(parts[0])
 	if status == "" && strings.TrimSpace(parts[1]) != "active" {
-		status = "failed: the job stopped without finishing; see `journalctl -u sds-disk-" + j.ID + "` on " + j.Node
+		status = "failed: the job stopped without finishing; see `journalctl -u haify-disk-" + j.ID + "` on " + j.Node
 	}
 	return status, strings.Join(strings.Fields(strings.ReplaceAll(strings.TrimSpace(parts[2]), "\n", "; ")), " "), nil
 }

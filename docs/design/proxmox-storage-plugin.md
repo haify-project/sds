@@ -18,10 +18,10 @@ qcow2 on DRBD, renaming volumes, activating a snapshot.
 
 - **The plugin is Perl.** `pvedaemon` loads storage plugins in-process as Perl
   modules subclassing `PVE::Storage::Plugin`; there is no non-Perl plugin API.
-- **Thin Perl → sds REST.** The plugin speaks HTTP+JSON to the controller's
+- **Thin Perl → haify REST.** The plugin speaks HTTP+JSON to the controller's
   grpc-gateway (default port 3375) with `HTTP::Tiny` and `JSON::PP`, both of
-  which ship with PVE. A PVE node needs no sds binaries. The rejected
-  alternative, shelling out to `sds`, would need a version-matched Go binary
+  which ship with PVE. A PVE node needs no haify binaries. The rejected
+  alternative, shelling out to `haify`, would need a version-matched Go binary
   on every PVE node and a stable machine-readable CLI output. LINSTOR's plugin
   takes the same REST route.
 - **HA reuses the quorum-guarded promote** (`PromoteForNode`), built for the
@@ -31,7 +31,7 @@ qcow2 on DRBD, renaming volumes, activating a snapshot.
 - **Compute-only PVE nodes are first-class.** `activate_volume` on a node that
   holds no replica attaches it as a diskless client first.
 - **The PVE node needs DRBD locally** (DRBD 9 module, `drbd-utils`, `sudo`,
-  registration as an sds node under its PVE node name), because it must see
+  registration as an haify node under its PVE node name), because it must see
   `/dev/drbdN`. `deploy/proxmox/preflight.sh` checks this before the first
   `alloc_image`.
 
@@ -40,9 +40,9 @@ qcow2 on DRBD, renaming volumes, activating a snapshot.
 ```
 Proxmox node (pvedaemon)                         Haify storage cluster
  ┌─────────────────────────────┐                 ┌───────────────────────────┐
- │ PVE::Storage::Custom::       │  HTTP/REST      │ sds-controller (:3375)    │
- │   SDSPlugin.pm  ──────────── │ ───────────────▶│   grpc-gateway REST       │
- │   SDS/Client.pm, SDS/Naming.pm│  (JSON)         │   └─ DRBD/LVM/reactor     │
+ │ PVE::Storage::Custom::       │  HTTP/REST      │ haify-controller (:3375)    │
+ │   HaifyPlugin.pm  ──────────── │ ───────────────▶│   grpc-gateway REST       │
+ │   Haify/Client.pm, Haify/Naming.pm│  (JSON)         │   └─ DRBD/LVM/reactor     │
  └─────────────────────────────┘                 └───────────────────────────┘
 ```
 
@@ -52,17 +52,17 @@ VM on another node.
 
 ## Components (`deploy/proxmox/`)
 
-- `SDSPlugin.pm` — storage type `sds`, `PVE::Storage::Custom::SDSPlugin`.
-- `PVE/Storage/Custom/SDS/Client.pm` — REST client; bearer token when set;
+- `HaifyPlugin.pm` — storage type `haify`, `PVE::Storage::Custom::HaifyPlugin`.
+- `PVE/Storage/Custom/Haify/Client.pm` — REST client; bearer token when set;
   several controller addresses (moves on only when a connection is refused)
   and `https://` with certificate verification.
-- `PVE/Storage/Custom/SDS/Naming.pm` — volume ↔ resource naming and size
+- `PVE/Storage/Custom/Haify/Naming.pm` — volume ↔ resource naming and size
   conversions.
-- `PVE/Storage/Custom/SDS/Capacity.pm` — turns `GET /v1/pools` into the
+- `PVE/Storage/Custom/Haify/Capacity.pm` — turns `GET /v1/pools` into the
   storage's total/free.
-- `PVE/Storage/Custom/SDS/Migration.pm` — whether another node's Primary is a
+- `PVE/Storage/Custom/Haify/Migration.pm` — whether another node's Primary is a
   live migration (and so may get the dual-primary window) or a leftover.
-- `PVE/Storage/Custom/SDS/Activation.pm` — `activate_volume` and
+- `PVE/Storage/Custom/Haify/Activation.pm` — `activate_volume` and
   `deactivate_volume`: the migration window on two nodes, detaching a diskless
   client on deactivate, and promoting or demoting with local `drbdadm` when no
   controller answers.
@@ -74,12 +74,12 @@ VM on another node.
 | --- | --- |
 | `controller` (fixed) | comma-separated `host`/`host:port`, optionally `https://`; REST port defaults to 3375 |
 | `controllerca` | CA bundle for `https://` addresses; default the system store |
-| `sdspool` | sds pool for new volumes |
-| `sdsnodes` | comma-separated replica nodes; unset = auto-place by free space |
-| `replicas` | replica count for auto-placement (ignored with `sdsnodes`) |
+| `haifypool` | haify pool for new volumes |
+| `haifynodes` | comma-separated replica nodes; unset = auto-place by free space |
+| `replicas` | replica count for auto-placement (ignored with `haifynodes`) |
 | `storagetype` | `lvm`, `lvm-thin` or `zfs` |
-| `resourceprefix` | resource name prefix, default `pve`; give each PVE cluster sharing one sds cluster its own |
-| `apitoken` | bearer token when sds `[auth]`/`[rbac]` is enabled |
+| `resourceprefix` | resource name prefix, default `pve`; give each PVE cluster sharing one haify cluster its own |
+| `apitoken` | bearer token when haify `[auth]`/`[rbac]` is enabled |
 | `onnoquorum` | `suspend-io` (default) or `io-error`, sent as `on-no-quorum` and `on-no-data-accessible` for new disks |
 
 The plugin declares storage API version 11. On a PVE release whose accepted
@@ -87,7 +87,7 @@ window does not include 11, `api()` reports the nearest accepted version.
 
 ## Volume model
 
-- One PVE disk = one sds DRBD resource.
+- One PVE disk = one haify DRBD resource.
 - `vm-<vmid>-disk-<n>` ↔ `<prefix>-<vmid>-<n>`. VM ids are unique per PVE
   cluster, so the mapping is collision-free and reversible; `list_images`
   needs no side table.
@@ -95,14 +95,14 @@ window does not include 11, `api()` reports the nearest accepted version.
   RAM `vm-<vmid>-state-<snap>`, a backup's `vm-<vmid>-fleece-<n>` — map to
   `<prefix>-<vmid>-<name>`. `<name>` starts with a letter, so it can never read
   back as a disk number, and `<prefix>-<vmid>-disk-<n>` maps to nothing.
-- Every resource carries the label `sds.pve/managed-by=pve`: PVE decides where
-  it is Primary, so sds refuses a drbd-reactor promoter on it (`ha create`, a
+- Every resource carries the label `haify.pve/managed-by=pve`: PVE decides where
+  it is Primary, so haify refuses a drbd-reactor promoter on it (`ha create`, a
   gateway) and does not alarm when a stopped VM's disk has no Primary.
 - Format `raw` only.
 
-## PVE method → sds REST
+## PVE method → haify REST
 
-| PVE method | sds REST | notes |
+| PVE method | haify REST | notes |
 | --- | --- | --- |
 | `alloc_image` | `POST /v1/resources` | protocol C; pool, storage type, nodes or replicas from `storage.cfg` |
 | `free_image` | `DELETE /v1/resources/{name}` | controller cascades teardown |
@@ -111,7 +111,7 @@ window does not include 11, `api()` reports the nearest accepted version.
 | `path` | `GET /v1/resources/{name}` | `/dev/drbdN`; without a controller, the local by-res link of a volume up here |
 | `volume_resize` | `PATCH /v1/resources/{name}/volumes/0` | |
 | `list_images` | `GET /v1/resources` | filtered by naming |
-| `status` | `GET /v1/pools` | the smallest node's total/free for `sdspool`, since a replica must fit on every node; for a thin pool, the thin pool's own size and data usage rather than the VG's |
+| `status` | `GET /v1/pools` | the smallest node's total/free for `haifypool`, since a replica must fit on every node; for a thin pool, the thin pool's own size and data usage rather than the VG's |
 | `volume_snapshot` / `_rollback` / `_delete` | `POST /v1/volumes/{pool/lv}/snapshots`, `…/{snap}/restore`, `DELETE …/{snap}?node=` | run on a diskful node, preferring the Primary |
 | `activate_storage` / `check_connection` | `GET /v1/resources` | fail fast on an unreachable controller |
 
@@ -129,7 +129,7 @@ snapshot node travels as a query parameter.
   If the promote fails or the device does not appear, it closes the window
   before failing. A Primary elsewhere with no migration under way is a
   leftover from a failed deactivate; activation refuses it rather than run the
-  guest with two writers allowed (`SDS/Migration.pm`).
+  guest with two writers allowed (`Haify/Migration.pm`).
 - `deactivate_volume` on the source demotes and then always disables
   dual-primary, whether or not a window was opened.
 - Offline migration and HA restart never open the window: only one node
@@ -158,16 +158,16 @@ reboot or `drbdadm adjust` returns the resource to single-primary even if the
   command failures, then verifies with `drbdsetup show` and returns an error if
   any node still has `allow-two-primaries`.
 
-Exposed over gRPC, REST and the MCP tool `sds_resource_dual_primary`;
-`sds resource dual-primary` toggles it by hand.
+Exposed over gRPC, REST and the MCP tool `haify_resource_dual_primary`;
+`haify resource dual-primary` toggles it by hand.
 
 ## Validation
 
-On a single PVE 8.4.11 host against a three-node sds cluster: `alloc_image` (2-node
+On a single PVE 8.4.11 host against a three-node haify cluster: `alloc_image` (2-node
 auto-placed resource), `list_images`, `volume_resize`, `volume_snapshot`,
 `volume_snapshot_delete`, `path`, `free_image`, `status`.
 
-On a two-node PVE 9.2.5 cluster (`pve1`/`pve2`, nested VMs, both diskless sds
+On a two-node PVE 9.2.5 cluster (`pve1`/`pve2`, nested VMs, both diskless haify
 nodes):
 
 - `activate_volume` / `deactivate_volume` on compute-only nodes; the guest boots
@@ -198,5 +198,5 @@ Defects found by this validation and fixed:
 ## Not built
 
 Whole-VM migration off VMware is not part of this plugin. PVE 8.2+ ships an
-ESXi import wizard that copies disks into any target storage, including `sds`;
+ESXi import wizard that copies disks into any target storage, including `haify`;
 Haify does not reimplement it.

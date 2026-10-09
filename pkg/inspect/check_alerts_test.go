@@ -36,7 +36,7 @@ func TestDeadWebhookAndUndeliveredCritical(t *testing.T) {
 		{ID: 12, Type: "resource.no_primary", Severity: "critical", Resource: "blk", At: t0.Add(-90 * time.Minute)},
 	}
 	checks := checkAlerts(in)
-	if c := only(t, checks, "alerts.channel_failing"); c.Subject != "ops" || c.Fix != "sds channel test ops" {
+	if c := only(t, checks, "alerts.channel_failing"); c.Subject != "ops" || c.Fix != "haify channel test ops" {
 		t.Errorf("got %+v", c)
 	}
 	c := only(t, checks, "alerts.undelivered")

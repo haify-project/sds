@@ -1,6 +1,6 @@
 // Package mcpserver exposes the Haify controller as a Model Context Protocol
 // (MCP) server so AI assistants can inspect and manage storage through the
-// same gRPC API used by sds.
+// same gRPC API used by haify.
 //
 // Tools are grouped by domain (cluster, resource, snapshot, gateway, HA) and
 // carry MCP annotations: read-only tools are always registered, mutating
@@ -74,12 +74,12 @@ type Server struct {
 	// reported instead of silently doing nothing.
 	writeToolNames map[string]bool
 	version        string
-	// apps and k8s make this the sds-k8s server (see NewK8s).
+	// apps and k8s make this the haify-k8s server (see NewK8s).
 	apps AppManager
 	k8s  bool
 }
 
-// New creates a Server. The client is typically *client.SDSClient; tests
+// New creates a Server. The client is typically *client.HaifyClient; tests
 // pass a mock. The logger must write to stderr only — stdout carries the
 // MCP stdio protocol.
 func New(c ControllerClient, logger *zap.Logger, opts Options) *Server {
@@ -128,7 +128,7 @@ func (s *Server) MCPServer() *mcp.Server {
 		return s.k8sMCPServer()
 	}
 	srv := mcp.NewServer(&mcp.Implementation{
-		Name:    "sds",
+		Name:    "haify",
 		Title:   "Haify Software Defined Storage",
 		Version: s.version,
 	}, nil)

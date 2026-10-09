@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/event"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/event"
 )
 
 func auditEntries(t *testing.T, db *database.DB, methods ...string) {
@@ -64,7 +64,7 @@ func TestAuditShipsToSyslogOverTCP(t *testing.T) {
 		select {
 		case line := <-lines:
 			assert.True(t, strings.HasPrefix(line, "<110>1 "), line) // log audit, informational
-			assert.Contains(t, line, " sds-controller - audit - ")
+			assert.Contains(t, line, " haify-controller - audit - ")
 			body := line[strings.Index(line, "{"):]
 			var rec database.AuditRecord
 			require.NoError(t, json.Unmarshal([]byte(body), &rec))

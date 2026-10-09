@@ -76,11 +76,11 @@ func haCreate() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Parse services
 			var serviceList []string
@@ -88,7 +88,7 @@ func haCreate() *cobra.Command {
 				serviceList = strings.Split(services, ",")
 			}
 
-			configPath, err := sdsClient.MakeHa(ctx, resource, serviceList, mountPoint, fsType, vip, nil, nil)
+			configPath, err := haifyClient.MakeHa(ctx, resource, serviceList, mountPoint, fsType, vip, nil, nil)
 			if err != nil {
 				return fmt.Errorf("failed to create HA config: %w", err)
 			}
@@ -130,13 +130,13 @@ func haDelete() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.DeleteHa(ctx, resource)
+			err = haifyClient.DeleteHa(ctx, resource)
 			if err != nil {
 				return fmt.Errorf("failed to delete HA config: %w", err)
 			}
@@ -162,13 +162,13 @@ func haEvict() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			if err := sdsClient.EvictHa(ctx, resource); err != nil {
+			if err := haifyClient.EvictHa(ctx, resource); err != nil {
 				return fmt.Errorf("failed to evict HA resource: %w", err)
 			}
 
@@ -190,13 +190,13 @@ func haList() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			configs, err := sdsClient.ListHa(ctx)
+			configs, err := haifyClient.ListHa(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list HA configs: %w", err)
 			}
@@ -207,13 +207,13 @@ func haList() *cobra.Command {
 			}
 
 			// Fetch reactor status via the controller so we always query the
-			// primary node, not the machine running sds.
+			// primary node, not the machine running haify.
 			type promoterInfo struct {
 				status, primaryOn        string
 				targetName, targetStatus string
 			}
 			pm := make(map[string]promoterInfo)
-			haStatuses, statusErr := sdsClient.GetHaStatus(ctx, "")
+			haStatuses, statusErr := haifyClient.GetHaStatus(ctx, "")
 			if statusErr == nil {
 				for _, p := range haStatuses {
 					pi := promoterInfo{
@@ -240,7 +240,7 @@ func haList() *cobra.Command {
 						fmt.Printf("      Target:    %s (%s)\n", p.targetName, p.targetStatus)
 					}
 				}
-				if status, err := sdsClient.ResourceStatus(ctx, cfg.GetResource()); err == nil {
+				if status, err := haifyClient.ResourceStatus(ctx, cfg.GetResource()); err == nil {
 					activeNode := ""
 					for node, nodeState := range status.GetNodeStates() {
 						if nodeState.GetRole() == "Primary" {
@@ -287,21 +287,21 @@ func haStatus() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			cfg, err := sdsClient.GetHa(ctx, resource)
+			cfg, err := haifyClient.GetHa(ctx, resource)
 			if err != nil {
 				return fmt.Errorf("failed to get HA config: %w", err)
 			}
 
-			resourceStatus, statusErr := sdsClient.ResourceStatus(ctx, resource)
+			resourceStatus, statusErr := haifyClient.ResourceStatus(ctx, resource)
 
 			// Fetch reactor status from the primary node via the controller.
-			haStatuses, haStatusErr := sdsClient.GetHaStatus(ctx, resource)
+			haStatuses, haStatusErr := haifyClient.GetHaStatus(ctx, resource)
 			var promoter interface {
 				GetStatus() string
 				GetPrimaryOn() string
@@ -432,8 +432,8 @@ suspends I/O.
 The change is config-only: nothing resyncs and a promoted resource keeps
 serving through it.
 
-  sds ha set-tiebreaker data --node node-e     # move it
-  sds ha set-tiebreaker data --remove          # drop it (accepts the quorum risk)`,
+  haify ha set-tiebreaker data --node node-e     # move it
+  haify ha set-tiebreaker data --remove          # drop it (accepts the quorum risk)`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resource := args[0]
@@ -446,13 +446,13 @@ serving through it.
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			previous, message, err := sdsClient.SetTiebreaker(ctx, resource, node)
+			previous, message, err := haifyClient.SetTiebreaker(ctx, resource, node)
 			if err != nil {
 				return fmt.Errorf("failed to set tiebreaker: %w", err)
 			}

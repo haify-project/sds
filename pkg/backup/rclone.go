@@ -15,7 +15,7 @@ import (
 // remoteName is the rclone remote defined in every config this package renders.
 // It is fixed because the config file is written per operation and holds
 // exactly one remote.
-const remoteName = "sdsbackup"
+const remoteName = "haifybackup"
 
 // nodeSecretDir is where a rendered rclone config lives on the node, relative
 // to the SSH login user's home.
@@ -25,7 +25,7 @@ const remoteName = "sdsbackup"
 // home is both writable without a privilege escalation and unreadable by
 // anyone else. The directory is created 0700 first, so the file is never
 // exposed even for the instant between create and chmod.
-const nodeSecretDir = ".sds-backup"
+const nodeSecretDir = ".haify-backup"
 
 // s3MaxParts is the number of multipart chunks S3 allows for one object.
 // `rclone rcat` streams an object of unknown length, so it cannot grow the

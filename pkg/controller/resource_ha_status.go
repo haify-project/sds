@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"go.uber.org/zap"
 )
 
@@ -53,7 +53,7 @@ func (rm *ResourceManager) findActiveNode(ctx context.Context, resource string, 
 		rm.controller.logger.Info("Local hostname", zap.String("hostname", localHostname))
 
 		// Check if local node is Primary
-		// No need for sudo since sds-controller runs as root
+		// No need for sudo since haify-controller runs as root
 		checkCmd := exec.Command("drbdsetup", "status", resource)
 		output, err := checkCmd.Output()
 		if err != nil {

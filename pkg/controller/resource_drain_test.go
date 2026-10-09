@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -125,7 +125,7 @@ func TestDrainNodeStateIsAuthoritative(t *testing.T) {
 // Auto-placement never puts a new replica on a drained node.
 func TestSelectPlacementNodesSkipsDrainedNode(t *testing.T) {
 	ctx := context.Background()
-	ctrl := newPlacementTestCluster(t, "  sds_vg0|214748364800|214748364800|/dev/vdb", "")
+	ctrl := newPlacementTestCluster(t, "  haify_vg0|214748364800|214748364800|/dev/vdb", "")
 
 	_, err := ctrl.resources.DrainNode(ctx, "n1")
 	require.NoError(t, err)
@@ -238,6 +238,6 @@ func TestDrainNodeEvictsReactorManagedResources(t *testing.T) {
 	moved, err := c.ctrl.resources.DrainNode(ctx, "n1")
 	require.Error(t, err)
 	assert.Empty(t, moved)
-	assert.Contains(t, err.Error(), "run `sds ha evict res1`")
+	assert.Contains(t, err.Error(), "run `haify ha evict res1`")
 	assert.Empty(t, c.secondary)
 }

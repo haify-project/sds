@@ -50,7 +50,7 @@ func (m *recordingMounter) EnsureFile(target string) error {
 func (m *recordingMounter) FSStats(string) (FSStats, error) { return m.stats, m.statsErr }
 func (m *recordingMounter) BlockSize(string) (int64, error) { return m.blockSize, nil }
 
-func newTestNode(b SDSBackend, m Mounter) *nodeServer {
+func newTestNode(b HaifyBackend, m Mounter) *nodeServer {
 	return NewNodeServer(b, m, "n1", zap.NewNop()).(*nodeServer)
 }
 

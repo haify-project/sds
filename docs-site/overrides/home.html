@@ -4,37 +4,37 @@
 {{ super() }}
 {% import "partials/cases.html" as cases %}
 {% import "partials/hero.html" as hero %}
-<div class="sds-home">
+<div class="haify-home">
 
-  <section class="sds-hero">
-    <div class="sds-wrap">
+  <section class="haify-hero">
+    <div class="haify-wrap">
       <div>
         <h1>Storage that keeps working when a server fails.</h1>
-        <p class="sds-lede">
+        <p class="haify-lede">
           Haify turns the disks in your own Linux servers into shared storage for files,
           virtual machines, containers and databases. Lose a server and your applications
           keep their data and carry on.
         </p>
-        <div class="sds-actions">
-          <a class="sds-btn sds-btn--primary" href="{{ 'deployment-guide/' | url }}">Get started</a>
-          <a class="sds-btn sds-btn--plain" href="https://github.com/haify-project/sds">Source on GitHub</a>
+        <div class="haify-actions">
+          <a class="haify-btn haify-btn--primary" href="{{ 'deployment-guide/' | url }}">Get started</a>
+          <a class="haify-btn haify-btn--plain" href="https://github.com/haify-project/haify">Source on GitHub</a>
         </div>
       </div>
 
-      <figure class="sds-stage">
+      <figure class="haify-stage">
         {{ hero.scene() }}
         <figcaption>
-          <span id="sds-hero-caption" aria-live="polite"></span>
-          <button type="button" class="sds-replay" id="sds-replay">Replay</button>
+          <span id="haify-hero-caption" aria-live="polite"></span>
+          <button type="button" class="haify-replay" id="haify-replay">Replay</button>
         </figcaption>
       </figure>
     </div>
   </section>
 
-  <section class="sds-section">
-    <div class="sds-wrap">
+  <section class="haify-section">
+    <div class="haify-wrap">
       <h2>What people use it for</h2>
-      <div class="sds-cases">
+      <div class="haify-cases">
         <article>
           {{ cases.share() }}
           <h3>A shared folder that never goes down</h3>
@@ -75,10 +75,10 @@
     </div>
   </section>
 
-  <section class="sds-section">
-    <div class="sds-wrap">
+  <section class="haify-section">
+    <div class="haify-wrap">
       <h2>Why Haify</h2>
-      <dl class="sds-scope">
+      <dl class="haify-scope">
         <dt>No single point of failure</dt>
         <dd>Every write is on more than one server, and services move on their own when one fails.</dd>
         <dt>Your hardware</dt>
@@ -93,28 +93,28 @@
     </div>
   </section>
 
-  <section class="sds-section">
-    <div class="sds-wrap">
+  <section class="haify-section">
+    <div class="haify-wrap">
       <h2>From disks to a shared folder</h2>
-      <p class="sds-intro">Four commands, once Haify is installed.</p>
-      <ol class="sds-steps">
+      <p class="haify-intro">Four commands, once Haify is installed.</p>
+      <ol class="haify-steps">
         <li><p>Add your servers.</p>
-          <code>sds node register <span>--name node1</span> <span>--address 192.0.2.11</span>
-sds node register <span>--name node2</span> <span>--address 192.0.2.12</span></code></li>
+          <code>haify node register <span>--name node1</span> <span>--address 192.0.2.11</span>
+haify node register <span>--name node2</span> <span>--address 192.0.2.12</span></code></li>
         <li><p>Give Haify a disk on each one.</p>
-          <code>sds pool create <span>--name pool0</span> <span>--type lvm-thin</span> <span>--nodes node1,node2</span> <span>--devices /dev/sdb</span></code></li>
+          <code>haify pool create <span>--name pool0</span> <span>--type lvm-thin</span> <span>--nodes node1,node2</span> <span>--devices /dev/sdb</span></code></li>
         <li><p>Create a 10 GiB volume kept on both.</p>
-          <code>sds resource create <span>--name data</span> <span>--port 7001</span> <span>--size 10G</span> <span>--nodes node1,node2</span> <span>--pool pool0</span></code></li>
+          <code>haify resource create <span>--name data</span> <span>--port 7001</span> <span>--size 10G</span> <span>--nodes node1,node2</span> <span>--pool pool0</span></code></li>
         <li><p>Share it over NFS.</p>
-          <code>sds gateway nfs create <span>--resource data</span> <span>--service-ip 192.0.2.200/24</span> <span>--export-path /data</span></code></li>
+          <code>haify gateway nfs create <span>--resource data</span> <span>--service-ip 192.0.2.200/24</span> <span>--export-path /data</span></code></li>
       </ol>
     </div>
   </section>
 
-  <section class="sds-section">
-    <div class="sds-wrap">
+  <section class="haify-section">
+    <div class="haify-wrap">
       <h2>Documentation</h2>
-      <nav class="sds-links" aria-label="Documentation">
+      <nav class="haify-links" aria-label="Documentation">
         <a href="{{ 'deployment-guide/' | url }}"><strong>Getting started</strong><span>Install Haify and set up a cluster.</span></a>
         <a href="{{ 'user-guide/' | url }}"><strong>User guide</strong><span>Everyday tasks, step by step.</span></a>
         <a href="{{ 'node-prerequisites/' | url }}"><strong>Server requirements</strong><span>What each server needs.</span></a>

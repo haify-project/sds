@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haify-project/sds/pkg/database"
-	"github.com/haify-project/sds/pkg/deployment"
+	"github.com/haify-project/haify/pkg/database"
+	"github.com/haify-project/haify/pkg/deployment"
 )
 
 func resourceSnapshotFixture(t *testing.T, failOn string) (*Controller, *[]string, *[]string) {
@@ -45,12 +45,12 @@ func TestResourceSnapshotOnEveryReplica(t *testing.T) {
 	assert.ElementsMatch(t, []string{"10.0.0.1: vg0/db_data->db_data_snap_before", "10.0.0.2: vg0/db_data->db_data_snap_before"}, *thin)
 	joined := strings.Join(*cmds, "\n")
 	for _, h := range []string{"10.0.0.1", "10.0.0.2"} {
-		assert.Contains(t, joined, h+": sudo systemd-run --unit=sds-snapshot-resume-db-")
+		assert.Contains(t, joined, h+": sudo systemd-run --unit=haify-snapshot-resume-db-")
 		assert.Contains(t, joined, "--on-active=60 drbdadm resume-io db && sudo drbdadm suspend-io db")
 	}
 	last := (*cmds)[len(*cmds)-1]
 	assert.Contains(t, last, ": sudo drbdadm resume-io db;", "I/O resumes last")
-	assert.Regexp(t, `sudo systemctl stop sds-snapshot-resume-db-\d+\.timer`, last, "and the watchdog is disarmed")
+	assert.Regexp(t, `sudo systemctl stop haify-snapshot-resume-db-\d+\.timer`, last, "and the watchdog is disarmed")
 
 	assert.Error(t, ctrl.resources.CreateResourceSnapshot(context.Background(), "db", "bad name"))
 }

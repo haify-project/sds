@@ -15,7 +15,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/haify-project/sds/pkg/config"
+	"github.com/haify-project/haify/pkg/config"
 )
 
 // tlsSetup is everything transport security needs once [tls] is enabled: the
@@ -191,7 +191,7 @@ func newLoopbackIdentity() (tls.Certificate, *x509.Certificate, error) {
 	}
 	caTemplate := &x509.Certificate{
 		SerialNumber:          caSerial,
-		Subject:               pkix.Name{CommonName: "sds-controller-loopback-ca"},
+		Subject:               pkix.Name{CommonName: "haify-controller-loopback-ca"},
 		NotBefore:             now,
 		NotAfter:              now.Add(loopbackIdentityValidity),
 		IsCA:                  true,
@@ -217,7 +217,7 @@ func newLoopbackIdentity() (tls.Certificate, *x509.Certificate, error) {
 	}
 	leafTemplate := &x509.Certificate{
 		SerialNumber: leafSerial,
-		Subject:      pkix.Name{CommonName: "sds-controller-rest-gateway"},
+		Subject:      pkix.Name{CommonName: "haify-controller-rest-gateway"},
 		NotBefore:    now,
 		NotAfter:     now.Add(loopbackIdentityValidity),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

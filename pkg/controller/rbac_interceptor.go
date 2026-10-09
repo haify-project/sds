@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/config"
-	"github.com/haify-project/sds/pkg/rbac"
+	"github.com/haify-project/haify/pkg/config"
+	"github.com/haify-project/haify/pkg/rbac"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

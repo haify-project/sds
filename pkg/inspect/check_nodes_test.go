@@ -74,7 +74,7 @@ func TestAddressDriftAndIdentity(t *testing.T) {
 	in.Probes["n2"].Hostname = "someone-else"
 	checks := checkNodes(in)
 	c := only(t, checks, "nodes.address")
-	if c.Subject != "n1" || c.Fix != "sds node set-address n1 10.0.0.41" {
+	if c.Subject != "n1" || c.Fix != "haify node set-address n1 10.0.0.41" {
 		t.Errorf("got %+v", c)
 	}
 	if c := only(t, checks, "nodes.identity"); c.Subject != "n2" || c.Status != StatusFail {
@@ -99,13 +99,13 @@ func TestDRBDStackAndVersions(t *testing.T) {
 
 func TestControllerBinariesDiffer(t *testing.T) {
 	in := cluster()
-	in.Probes["n1"].CtlSHA, in.Probes["n1"].CtlBin = "aaa", "/opt/sds/bin/sds-controller"
-	in.Probes["n2"].CtlSHA, in.Probes["n2"].CtlBin = "bbb", "/opt/sds/bin/sds-controller"
+	in.Probes["n1"].CtlSHA, in.Probes["n1"].CtlBin = "aaa", "/opt/haify/bin/haify-controller"
+	in.Probes["n2"].CtlSHA, in.Probes["n2"].CtlBin = "bbb", "/opt/haify/bin/haify-controller"
 	c := only(t, checkNodes(in), "nodes.controller_binary")
 	if c.Status != StatusWarn {
 		t.Errorf("without Self-HA a difference is a warning: %+v", c)
 	}
-	in.SelfHA = &SelfHAInput{Resource: "sds-meta", Nodes: []string{"n1", "n2"}}
+	in.SelfHA = &SelfHAInput{Resource: "haify-meta", Nodes: []string{"n1", "n2"}}
 	c = only(t, checkNodes(in), "nodes.controller_binary")
 	if c.Status != StatusFail || c.Fix != "./scripts/deploy-all.sh n1,n2" {
 		t.Errorf("under Self-HA it fails: %+v", c)

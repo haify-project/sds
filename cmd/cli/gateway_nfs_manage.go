@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/haify-project/sds/pkg/gateway"
+	"github.com/haify-project/haify/pkg/gateway"
 	"github.com/spf13/cobra"
 )
 
@@ -63,13 +63,13 @@ func nfsExportAdd() *cobra.Command {
 		Use:   "add --resource <name> --path <path>",
 		Short: "Add an export to an NFS gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.AddNFSExport(cmd.Context(), resource, exportPath, fsid, clientSpec, exportOptions)
+			err = haifyClient.AddNFSExport(cmd.Context(), resource, exportPath, fsid, clientSpec, exportOptions)
 			if err != nil {
 				return fmt.Errorf("failed to add NFS export: %w", err)
 			}
@@ -97,13 +97,13 @@ func nfsExportRemove() *cobra.Command {
 		Use:   "remove --resource <name> --path <path>",
 		Short: "Remove an export from an NFS gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			err = sdsClient.RemoveNFSExport(cmd.Context(), resource, exportPath)
+			err = haifyClient.RemoveNFSExport(cmd.Context(), resource, exportPath)
 			if err != nil {
 				return fmt.Errorf("failed to remove NFS export: %w", err)
 			}
@@ -128,13 +128,13 @@ func nfsExportList() *cobra.Command {
 		Use:   "list --resource <name>",
 		Short: "List exports on an NFS gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			exports, err := sdsClient.ListNFSExports(cmd.Context(), resource)
+			exports, err := haifyClient.ListNFSExports(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to list NFS exports: %w", err)
 			}
@@ -172,13 +172,13 @@ func nfsMount() *cobra.Command {
 		Short: "Mount an NFS gateway on the local machine",
 		Long:  "Mount the selected NFS gateway on the local machine where this CLI command is executed.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			gw, err := sdsClient.GetGateway(cmd.Context(), resource)
+			gw, err := haifyClient.GetGateway(cmd.Context(), resource)
 			if err != nil {
 				return fmt.Errorf("failed to get gateway: %w", err)
 			}

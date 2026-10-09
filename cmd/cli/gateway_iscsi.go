@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	v1 "github.com/haify-project/sds/api/proto/v1"
+	v1 "github.com/haify-project/haify/api/proto/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -45,11 +45,11 @@ func iscsiCreate() *cobra.Command {
 			}
 
 			// Create Haify client
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
 			// Create iSCSI gateway
 			req := &v1.CreateISCSIGatewayRequest{
@@ -66,7 +66,7 @@ func iscsiCreate() *cobra.Command {
 				req.Implementation = "lio"
 			}
 
-			resp, err := sdsClient.CreateISCSIGateway(ctx, req)
+			resp, err := haifyClient.CreateISCSIGateway(ctx, req)
 			if err != nil {
 				return fmt.Errorf("failed to create iSCSI gateway: %w", err)
 			}
@@ -80,7 +80,7 @@ func iscsiCreate() *cobra.Command {
 			fmt.Printf("  IQN:          %s\n", iqn)
 			fmt.Printf("  Service IP:   %s\n", serviceIP)
 			fmt.Printf("  Config Path:  %s\n", resp.ConfigPath)
-			fmt.Printf("\nCheck gateway status: sds gateway list\n")
+			fmt.Printf("\nCheck gateway status: haify gateway list\n")
 
 			return nil
 		},
@@ -108,13 +108,13 @@ func iscsiList() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			sdsClient, err := newSDSClient()
+			haifyClient, err := newHaifyClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
 			}
-			defer closeClient(sdsClient)
+			defer closeClient(haifyClient)
 
-			gateways, err := sdsClient.ListGateways(ctx)
+			gateways, err := haifyClient.ListGateways(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list gateways: %w", err)
 			}
@@ -134,7 +134,7 @@ func iscsiList() *cobra.Command {
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 			// Writes to the command's own output stream are best-effort. The only ways
-			// they fail are a closed pipe (`sds ... | head`) or a full disk, neither of
+			// they fail are a closed pipe (`haify ... | head`) or a full disk, neither of
 			// which this command can report anywhere the operator is still looking, and
 			// treating them as errors would report a successful operation as failed.
 			_, _ = fmt.Fprintln(w, "ID\tTYPE\tRESOURCE\tSTATE")

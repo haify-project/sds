@@ -269,7 +269,7 @@ func (rm *ResourceManager) withoutGoneMembers(ctx context.Context, resource, con
 		out = without(out, g.addr)
 		rm.controller.logger.Warn("Member is gone; it keeps its old config until removed",
 			zap.String("resource", resource), zap.String("member", g.drbdName),
-			zap.String("then", "sds resource remove-replica "+resource+" --node <node> --lost --yes"))
+			zap.String("then", "haify resource remove-replica "+resource+" --node <node> --lost --yes"))
 	}
 	return out, nil
 }

@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 )
 
 // managedPoolPrefix mirrors the controller's normalizeManagedName: Haify-managed
-// pools are stored with an "sds_" prefix, so a StorageClass pool of "vg0"
-// matches the stored pool "sds_vg0".
-const managedPoolPrefix = "sds_"
+// pools are stored with an "haify_" prefix, so a StorageClass pool of "vg0"
+// matches the stored pool "haify_vg0".
+const managedPoolPrefix = "haify_"
 
 // nodeStateMaintenance is the state the controller reports for a node an
 // operator drained (controller.NodeStateMaintenance).
@@ -55,7 +55,7 @@ type replicaCandidate struct {
 // free_bytes is preferred over free_gb because it is exact, but it is not
 // always populated: a pool the controller serves from its database carries only
 // the rounded gibibyte counts. Hence the fallback rather than a single field.
-func poolFreeBytes(p *sdspb.PoolInfo) uint64 {
+func poolFreeBytes(p *haifypb.PoolInfo) uint64 {
 	if p.GetThinPoolLv() != "" && p.GetThinSizeBytes() > 0 {
 		used := float64(p.GetThinSizeBytes()) * p.GetThinDataPercent() / 100
 		if free := float64(p.GetThinSizeBytes()) - used; free > 0 {
@@ -75,7 +75,7 @@ func poolFreeBytes(p *sdspb.PoolInfo) uint64 {
 // node — matched by address or name, since the controller reports pools keyed
 // by node address. This keeps replica placement pool-aware so volumes never
 // land on a node lacking the backing pool.
-func nodesWithPool(nodes []*sdspb.NodeInfo, pools []*sdspb.PoolInfo, pool, domainLabel string) []replicaCandidate {
+func nodesWithPool(nodes []*haifypb.NodeInfo, pools []*haifypb.PoolInfo, pool, domainLabel string) []replicaCandidate {
 	want := managedPoolName(pool)
 	freeByKey := map[string]uint64{}
 	for _, p := range pools {
@@ -89,7 +89,7 @@ func nodesWithPool(nodes []*sdspb.NodeInfo, pools []*sdspb.PoolInfo, pool, domai
 	}
 	var out []replicaCandidate
 	for _, n := range nodes {
-		// A drained node (sds node drain) takes no new replicas.
+		// A drained node (haify node drain) takes no new replicas.
 		if n.GetState() == nodeStateMaintenance {
 			continue
 		}
@@ -150,7 +150,7 @@ func (c replicaCandidate) fits(needBytes uint64) bool {
 // a clone or restore) are seated first, in the order given. The remaining slots
 // go to the candidates with the most free space, so a fresh volume lands on the
 // emptiest nodes instead of on whatever ListNodes happened to return first —
-// the behaviour `sds resource create` has always had. Equal free space
+// the behaviour `haify resource create` has always had. Equal free space
 // breaks on node name so two provisioners racing over identical cluster state
 // reach the same answer. Nodes in a fault domain no replica uses yet are taken
 // before any that would share one: two copies on one physical host are one

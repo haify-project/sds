@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	sdspb "github.com/haify-project/sds/api/proto/v1"
+	haifypb "github.com/haify-project/haify/api/proto/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -14,7 +14,7 @@ import (
 // device on a specific node, which the new volume's placement must therefore
 // include so the copy can run locally.
 type volumeSource struct {
-	// device is the path to copy from, e.g. /dev/sds_vg0/sdssnap_foo.
+	// device is the path to copy from, e.g. /dev/haify_vg0/haifysnap_foo.
 	device string
 	// node holds device locally and must end up holding a replica of the new
 	// volume, since PopulateVolume runs the copy there.
@@ -128,7 +128,7 @@ func contentSourceOf(cs *csi.VolumeContentSource) *csi.VolumeContentSource {
 
 // sourceSizeGiB reports the source resource's size in whole GiB, used to reject
 // a restore into a volume smaller than the data it must hold.
-func sourceSizeGiB(res *sdspb.ResourceInfo) uint32 {
+func sourceSizeGiB(res *haifypb.ResourceInfo) uint32 {
 	if vols := res.GetVolumes(); len(vols) > 0 {
 		return uint32(vols[0].GetSizeGb())
 	}
@@ -148,7 +148,7 @@ func sourceSizeGiB(res *sdspb.ResourceInfo) uint32 {
 //
 // wantGiB of 0 means the caller stated no capacity; there is nothing to compare
 // against, so the copy is left to decide.
-func checkSourceFits(res *sdspb.ResourceInfo, wantGiB uint32) error {
+func checkSourceFits(res *haifypb.ResourceInfo, wantGiB uint32) error {
 	srcGiB := sourceSizeGiB(res)
 	if wantGiB == 0 || srcGiB == 0 || srcGiB <= wantGiB {
 		return nil

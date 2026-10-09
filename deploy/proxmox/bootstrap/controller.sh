@@ -3,7 +3,7 @@
 # writing controller.toml), on every node that can run the controller.
 
 DISPATCH_CONFIG=/root/.dispatch/config.toml
-CONTROLLER_TOML=/etc/sds/controller.toml
+CONTROLLER_TOML=/etc/haify/controller.toml
 
 # dispatch_key_path: the root key PVE created on the controller node. dispatch
 # is given the path explicitly because Self-HA checks that the same path is
@@ -26,10 +26,10 @@ dispatch_key_path() {
 write_dispatch_config() {
 	local file="$1" key="$2" n ip
 	{
-		printf '# How sds-controller reaches the PVE nodes over SSH (dispatch library).\n'
+		printf '# How haify-controller reaches the PVE nodes over SSH (dispatch library).\n'
 		printf "# Written by deploy/proxmox/bootstrap.sh; it reuses the root SSH trust PVE\n"
 		printf '# keeps between cluster members. Hosts are keyed by the address each node\n'
-		printf '# is registered with in sds.\n\n'
+		printf '# is registered with in haify.\n\n'
 		printf '[ssh]\nuser = "root"\nport = 22\nkey_path = "%s"\n' "$key"
 		# dispatch records host keys in root'"'"'s known_hosts and adds an
 		# unknown one on first contact, as the controller always has.
@@ -105,7 +105,7 @@ toml_set() {
 # example's defaults.
 write_controller_toml() {
 	local file="$1" example="$CONFIG_DIR/controller.toml.example"
-	[ -r "$example" ] || die "$example not found; set SDS_CONFIG_DIR to the directory holding controller.toml.example"
+	[ -r "$example" ] || die "$example not found; set HAIFY_CONFIG_DIR to the directory holding controller.toml.example"
 	cp "$example" "$file"
 	# Every PVE node's storage plugin talks to the controller's REST port, and
 	# under Self-HA the VIP moves between nodes: listen on every address.
@@ -131,30 +131,30 @@ install_file_if_changed() {
 install_from_binaries() {
 	local node="$1" units
 	INSTALLED=""
-	if ! check_on "$node" "test -d /etc/sds && test -d /var/lib/sds && test -d /var/log/sds" >/dev/null; then
-		run_on "$node" "mkdir -p /etc/sds /var/lib/sds /var/log/sds"
+	if ! check_on "$node" "test -d /etc/haify && test -d /var/lib/haify && test -d /var/log/haify" >/dev/null; then
+		run_on "$node" "mkdir -p /etc/haify /var/lib/haify /var/log/haify"
 	fi
-	install_file_if_changed "$node" "$CONFIG_DIR/sds-controller.service" /etc/systemd/system/sds-controller.service 0644
+	install_file_if_changed "$node" "$CONFIG_DIR/haify-controller.service" /etc/systemd/system/haify-controller.service 0644
 	install_file_if_changed "$node" "$CONFIG_DIR/service-ip@.service" /etc/systemd/system/service-ip@.service 0644
 	units="$INSTALLED"
-	install_file_if_changed "$node" "$BIN_DIR/sds-controller" /opt/sds/bin/sds-controller 0755
-	install_file_if_changed "$node" "$BIN_DIR/service-ip" /opt/sds/bin/service-ip 0755
+	install_file_if_changed "$node" "$BIN_DIR/haify-controller" /opt/haify/bin/haify-controller 0755
+	install_file_if_changed "$node" "$BIN_DIR/service-ip" /opt/haify/bin/service-ip 0755
 	install_file_if_changed "$node" "$BIN_DIR/service-ip" /usr/local/bin/service-ip 0755
-	install_file_if_changed "$node" "$BIN_DIR/sds" /usr/local/bin/sds 0755
-	if ! check_on "$node" "test -L /usr/local/bin/sds-cli" >/dev/null; then
+	install_file_if_changed "$node" "$BIN_DIR/haify" /usr/local/bin/haify 0755
+	if ! check_on "$node" "test -L /usr/local/bin/haify-cli" >/dev/null; then
 		# Older scripts call the CLI by its former name.
-		run_on "$node" "ln -sf sds /usr/local/bin/sds-cli"
+		run_on "$node" "ln -sf haify /usr/local/bin/haify-cli"
 	fi
 	if [ -n "$units" ]; then
 		run_on "$node" "systemctl daemon-reload"
 	fi
 	if [ -z "$INSTALLED" ]; then
-		note "$node: sds binaries and units already up to date"
-	elif check_on "$node" "systemctl is-active --quiet sds-controller" >/dev/null; then
+		note "$node: haify binaries and units already up to date"
+	elif check_on "$node" "systemctl is-active --quiet haify-controller" >/dev/null; then
 		# Restarting here would be an unplanned failover under Self-HA; the
 		# operator picks the moment (scripts/deploy.sh does it Self-HA aware).
 		warn "$node: the running controller was updated on disk; restart it when convenient:"
-		warn "  systemctl restart sds-controller   (under Self-HA, only on the active node)"
+		warn "  systemctl restart haify-controller   (under Self-HA, only on the active node)"
 	fi
 }
 
@@ -166,12 +166,12 @@ install_from_deb() {
 		install_deb "$node" "$CONTROLLER_DEB"
 	fi
 	[ "$DRY_RUN" = 1 ] && return 0
-	check_on "$node" "systemctl cat sds-controller >/dev/null 2>&1 && command -v sds >/dev/null" >/dev/null ||
-		die "$node: after installing $CONTROLLER_DEB there is no sds-controller unit or no sds on PATH"
+	check_on "$node" "systemctl cat haify-controller >/dev/null 2>&1 && command -v haify >/dev/null" >/dev/null ||
+		die "$node: after installing $CONTROLLER_DEB there is no haify-controller unit or no haify on PATH"
 }
 
 step_controller_install() {
-	step 4 "install sds-controller and /etc/sds/controller.toml (${CONTROLLER_NODES[*]})"
+	step 4 "install haify-controller and /etc/haify/controller.toml (${CONTROLLER_NODES[*]})"
 	local n toml="$WORK_DIR/controller.toml"
 	if [ -n "$CONTROLLER_DEB" ]; then
 		log "installing from package $CONTROLLER_DEB"
@@ -199,17 +199,17 @@ step_controller_install() {
 # install is actually here.
 check_artifacts() {
 	if [ -n "$CONTROLLER_DEB" ]; then
-		[ -r "$CONTROLLER_DEB" ] || die "SDS_CONTROLLER_DEB=$CONTROLLER_DEB is not readable"
+		[ -r "$CONTROLLER_DEB" ] || die "HAIFY_CONTROLLER_DEB=$CONTROLLER_DEB is not readable"
 		deb_field "$CONTROLLER_DEB" Package >/dev/null 2>&1 || die "$CONTROLLER_DEB is not a Debian package"
 		return 0
 	fi
 	local f
-	for f in sds-controller service-ip sds; do
+	for f in haify-controller service-ip haify; do
 		[ -x "$BIN_DIR/$f" ] || die "$BIN_DIR/$f not found or not executable.
-Point SDS_BIN_DIR at linux binaries for the nodes (GOOS=linux make build puts them in bin/),
-or SDS_CONTROLLER_DEB at an sds-controller_<version>_<arch>.deb."
+Point HAIFY_BIN_DIR at linux binaries for the nodes (GOOS=linux make build puts them in bin/),
+or HAIFY_CONTROLLER_DEB at an haify-controller_<version>_<arch>.deb."
 	done
-	for f in sds-controller.service service-ip@.service controller.toml.example; do
-		[ -r "$CONFIG_DIR/$f" ] || die "$CONFIG_DIR/$f not found; set SDS_CONFIG_DIR to the repository's configs/ directory"
+	for f in haify-controller.service service-ip@.service controller.toml.example; do
+		[ -r "$CONFIG_DIR/$f" ] || die "$CONFIG_DIR/$f not found; set HAIFY_CONFIG_DIR to the repository's configs/ directory"
 	done
 }
