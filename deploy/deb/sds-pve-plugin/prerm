@@ -10,6 +10,10 @@ set -e
 
 case "$1" in
 remove|deconfigure)
+    # Stop loading the storage dialog before its script goes with the package.
+    if [ -x /usr/share/sds-pve-plugin/gui-patch.sh ]; then
+        /usr/share/sds-pve-plugin/gui-patch.sh --remove || true
+    fi
     if [ -f /etc/pve/storage.cfg ] && grep -q '^sds:' /etc/pve/storage.cfg; then
         echo "WARNING: /etc/pve/storage.cfg still has SDS storage entries:" >&2
         grep '^sds:' /etc/pve/storage.cfg >&2 || true

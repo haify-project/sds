@@ -42,14 +42,15 @@ sds: sds0
 #        shared 1
 
 # --- With sds auth/RBAC enabled --------------------------------------------
-# storage.cfg is replicated to every node of the PVE cluster, so scope the
-# token to what the plugin needs rather than reusing an admin token.
+# Give the token with `pvesm set sds0 --apitoken <token>` (or in the web
+# interface), not in this file: PVE hands it to the plugin, which keeps it in
+# /etc/pve/priv/storage/sds0.sds-token, readable by root only. Scope it to what
+# the plugin needs rather than reusing an admin token.
 #
 #sds: sds0
 #        controller 192.168.1.10
 #        sdspool vg0
 #        replicas 2
-#        apitoken <token>
 #        content images
 #        shared 1
 
@@ -64,7 +65,6 @@ sds: sds0
 #        controller https://sds1,https://sds2,https://sds3
 #        controllerca /etc/pve/sds-ca.pem
 #        sdspool vg0
-#        apitoken <token>
 #        content images
 #        shared 1
 
@@ -77,7 +77,8 @@ sds: sds0
 #   replicas        replica count for auto-placement; ignored with sdsnodes.
 #   storagetype     lvm | lvm-thin | zfs. Defaults to the controller's default.
 #   resourceprefix  prefix for generated resource names (default "pve").
-#   apitoken        bearer token when sds [auth]/[rbac] is enabled.
+#   apitoken        bearer token when sds [auth]/[rbac] is enabled; set it with
+#                   pvesm or the web interface so it is kept under /etc/pve/priv.
 #   onnoquorum      suspend-io (default) | io-error, for disks created later.
 #
 # Note: sds allocates in whole gigabytes, so a disk size is rounded UP to the

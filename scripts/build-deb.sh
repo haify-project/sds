@@ -155,8 +155,13 @@ build_pve_plugin() {
     install -d "$root/DEBIAN" "$custom/SDS" "$doc" "$share"
     install -m 0644 "$PVE_SRC/SDSPlugin.pm" "$custom/SDSPlugin.pm"
     install -m 0644 "$PVE_SRC"/PVE/Storage/Custom/SDS/*.pm "$custom/SDS/"
-    install -m 0755 "$PVE_SRC/lvm-filter.sh" "$PVE_SRC/preflight.sh" "$share/"
+    install -m 0755 "$PVE_SRC/lvm-filter.sh" "$PVE_SRC/preflight.sh" "$PVE_SRC/gui/gui-patch.sh" "$share/"
     install -m 0644 "$PVE_SRC/storage.cfg.example" "$doc/"
+    # The web interface's dialog for the sds type, and the apt hook that puts
+    # it back after a pve-manager upgrade replaces the page template.
+    install -D -m 0644 "$PVE_SRC/gui/sds-storage.js" "$root/usr/share/pve-manager/js/sds-storage.js"
+    install -D -m 0644 "$PVE_SRC/gui/90sds-pve-gui" "$root/etc/apt/apt.conf.d/90sds-pve-gui"
+    echo /etc/apt/apt.conf.d/90sds-pve-gui > "$root/DEBIAN/conffiles"
     copyright "$doc/copyright"
 
     finish_package sds-pve-plugin "$root" "$OUT_DIR/sds-pve-plugin_${DEB_VERSION}_all.deb" <<EOF

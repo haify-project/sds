@@ -51,8 +51,10 @@ sub parse_controllers {
     return @out;
 }
 
+# new builds a client for a storage; $token, when given, is its API token
+# (SDS/Token.pm), else the one storage.cfg carries.
 sub new {
-    my ($class, $scfg) = @_;
+    my ($class, $scfg, $token) = @_;
 
     my $controller = $scfg->{controller}
         or die "sds storage: 'controller' is not configured\n";
@@ -71,7 +73,7 @@ sub new {
     my $self = {
         key       => $controller,
         endpoints => \@endpoints,
-        token     => $scfg->{apitoken},
+        token     => $token // $scfg->{apitoken},
         ua        => HTTP::Tiny->new(%ua_opts),
     };
 

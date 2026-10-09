@@ -41,6 +41,9 @@ configure)
         fi
     fi
 
+    # The sds type in the web interface's storage dialogs (gui-patch.sh).
+    "$SHARE/gui-patch.sh" || echo "WARNING: SDS was not added to the web interface's storage dialogs" >&2
+
     restart_pve
 
     if [ -z "$2" ]; then

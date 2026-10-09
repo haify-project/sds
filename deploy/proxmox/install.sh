@@ -20,7 +20,13 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Custom/ as a storage plugin, so they must not sit next to SDSPlugin.pm.
 HELPER_DIR="$PLUGIN_DIR/SDS"
 HELPER_SRC_DIR="$SRC_DIR/PVE/Storage/Custom/SDS"
-HELPER_NAMES=(Activation.pm Capacity.pm Client.pm Migration.pm Naming.pm Snapshots.pm Templates.pm)
+HELPER_NAMES=(Activation.pm Api.pm Capacity.pm Client.pm Migration.pm Naming.pm Snapshots.pm Templates.pm Token.pm)
+
+# The web interface's dialog for the sds storage type (gui/), and what keeps
+# it loaded across pve-manager upgrades.
+GUI_JS=/usr/share/pve-manager/js/sds-storage.js
+GUI_PATCH=/usr/share/sds-pve-plugin/gui-patch.sh
+APT_HOOK=/etc/apt/apt.conf.d/90sds-pve-gui
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "install.sh must run as root" >&2
@@ -50,6 +56,9 @@ if [ "${1:-}" = "--uninstall" ]; then
         echo "Removed $HELPER_DIR/$name"
     done
     rmdir "$HELPER_DIR" 2>/dev/null || true
+    [ -x "$GUI_PATCH" ] && "$GUI_PATCH" --remove
+    rm -f "$GUI_JS" "$GUI_PATCH" "$APT_HOOK"
+    echo "Removed the SDS storage dialog from the web interface"
     echo "Remove any 'sds:' entries from /etc/pve/storage.cfg before reloading."
     reload_pve
     exit 0
@@ -83,6 +92,12 @@ done
 install -m 0644 "$SRC_DIR/$PLUGIN_NAME" "$PLUGIN_DIR/$PLUGIN_NAME"
 echo "Installed $PLUGIN_DIR/$PLUGIN_NAME"
 
+install -D -m 0644 "$SRC_DIR/gui/sds-storage.js" "$GUI_JS"
+install -D -m 0755 "$SRC_DIR/gui/gui-patch.sh" "$GUI_PATCH"
+install -m 0644 "$SRC_DIR/gui/90sds-pve-gui" "$APT_HOOK"
+"$GUI_PATCH"
+echo "Added SDS to the web interface's storage dialogs"
+
 # Keep the host's LVM off the DRBD devices that carry guest disks (see
 # lvm-filter.sh). SDS_SKIP_LVM_FILTER=1 leaves lvm.conf to you.
 if [ "${SDS_SKIP_LVM_FILTER:-0}" != "1" ]; then
@@ -96,7 +111,8 @@ echo "Restarted $PVE_DAEMONS"
 
 cat <<'EOF'
 
-Next: add a storage entry to /etc/pve/storage.cfg (cluster-wide, edit once), e.g.
+Next: add the storage once for the cluster, in the web interface under
+Datacenter -> Storage -> Add -> SDS, or in /etc/pve/storage.cfg, e.g.
 
   sds: sds0
         controller 192.168.1.10

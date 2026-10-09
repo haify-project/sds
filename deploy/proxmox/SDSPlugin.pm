@@ -24,16 +24,14 @@ use PVE::Storage::Custom::SDS::Naming qw(sds_resource_name volname_from_resource
     parse_vm_volname kib_to_gb bytes_to_gb gb_to_bytes volume_size_bytes);
 use PVE::Storage::Custom::SDS::Activation qw(activate deactivate controller_unreachable local_device_path);
 use PVE::Storage::Custom::SDS::Templates ();
+use PVE::Storage::Custom::SDS::Api qw(negotiate_apiver);
+use PVE::Storage::Custom::SDS::Token ();
 use PVE::Storage::Custom::SDS::Snapshots ();
 
 use base qw(PVE::Storage::Plugin);
 
 our $VERSION = '0.1.0';
 
-# The storage API version this plugin was written against.
-my $PLUGIN_APIVER     = 11;
-# The newest storage API version checked against PVE's ApiChangeLog.
-my $PLUGIN_APIVER_MAX = 16;
 
 # How long to wait for /dev/drbdN to appear after a promote, and how often to
 # look. A promote returns once DRBD accepted the role change, but udev needs a
@@ -58,26 +56,11 @@ sub api {
     return negotiate_apiver(PVE::Storage::APIVER(), PVE::Storage::APIAGE());
 }
 
-# negotiate_apiver picks the storage API version to declare to a PVE that
-# speaks $apiver and still accepts versions down to $apiver - $apiage.
-#
-# Every version from $PLUGIN_APIVER to $PLUGIN_APIVER_MAX has been checked
-# against PVE's ApiChangeLog and is implemented, so the plugin declares PVE's
-# own version when it falls in that range: declaring an older one makes PVE
-# print "implementing an older storage API" on every command. A PVE newer than
-# anything checked gets $PLUGIN_APIVER_MAX, and one whose window excludes the
-# whole range the nearest version it accepts, so the plugin still loads and a
-# real incompatibility surfaces as a concrete method error rather than the
-# storage silently disappearing from the UI.
-sub negotiate_apiver {
-    my ($apiver, $apiage) = @_;
-    my $oldest = $apiver - $apiage;
-    my $want   = $apiver < $PLUGIN_APIVER_MAX ? $apiver : $PLUGIN_APIVER_MAX;
-    $want = $PLUGIN_APIVER if $want < $PLUGIN_APIVER;
-    return $oldest if $want < $oldest;
-    return $apiver if $want > $apiver;
-    return $want;
-}
+# PVE hands a sensitive property (apitoken) to these hooks instead of writing
+# it to storage.cfg; SDS/Token.pm keeps it under /etc/pve/priv.
+sub on_add_hook    { my ($class, $storeid, $scfg, %p) = @_; return PVE::Storage::Custom::SDS::Token::on_add($storeid, \%p); }
+sub on_update_hook { my ($class, $storeid, $scfg, %p) = @_; return PVE::Storage::Custom::SDS::Token::on_update($storeid, \%p); }
+sub on_delete_hook { my ($class, $storeid, $scfg) = @_; return PVE::Storage::Custom::SDS::Token::on_delete($storeid); }
 
 sub type { return 'sds'; }
 
@@ -171,7 +154,7 @@ sub options {
 sub _client {
     my ($class, $scfg) = @_;
     return $CLIENT_FACTORY->($scfg) if $CLIENT_FACTORY;
-    return PVE::Storage::Custom::SDS::Client->new($scfg);
+    return PVE::Storage::Custom::SDS::Client->new($scfg, PVE::Storage::Custom::SDS::Token::token_for($scfg));
 }
 
 sub _nodename { return PVE::INotify::nodename(); }

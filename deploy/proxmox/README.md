@@ -197,8 +197,9 @@ removing the `sds:` entries from `storage.cfg`.
 
 ### Storage entry
 
-With the plugin on every node, add a storage entry once (`/etc/pve/storage.cfg`
-is cluster-wide):
+With the plugin on every node, add the storage once for the cluster: in the web
+interface under **Datacenter → Storage → Add → SDS**, or as an entry in
+`/etc/pve/storage.cfg` (cluster-wide):
 
 ```
 sds: sds0
@@ -212,6 +213,14 @@ sds: sds0
 `shared 1` is what makes PVE treat the disk as reachable from every node, so
 live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 
+The dialog has every option below; the controller list is fixed once the
+storage exists. PVE has no way for a storage plugin to add itself to its
+interface, so the plugin adds `sds-storage.js` to the page template
+(`/usr/share/pve-manager/index.html.tpl`, one script tag after
+`pvemanagerlib.js`), and an apt hook (`/etc/apt/apt.conf.d/90sds-pve-gui`) adds
+it again after a `pve-manager` upgrade replaces the template. Uninstalling
+removes the tag, the script and the hook.
+
 ### Options
 
 | Option | Meaning |
@@ -223,7 +232,7 @@ live migration copies only RAM and `ha-manager` may restart a guest anywhere.
 | `replicas` | Replica count for auto-placement by free space (1-16) |
 | `storagetype` | `lvm`, `lvm-thin` or `zfs`. Unset: the controller's default |
 | `resourceprefix` | Prefix for generated resource names (default `pve`). Give each PVE cluster its own when several share one sds cluster: VM ids are only unique within a PVE cluster |
-| `apitoken` | Bearer token when sds `[auth]`/`[rbac]` is enabled. `storage.cfg` is readable cluster-wide, so use a token scoped to what the plugin needs rather than an admin token |
+| `apitoken` | Bearer token when sds `[auth]`/`[rbac]` is enabled. Set it in the web interface or with `pvesm add/set --apitoken`: PVE treats it as sensitive and the plugin keeps it in `/etc/pve/priv/storage/<id>.sds-token` (root only, every node), not in `storage.cfg`. A token written into `storage.cfg` by hand still works, but that file is readable cluster-wide |
 | `onnoquorum` | What a new disk does when its node loses quorum or every UpToDate copy: `suspend-io` (default; the guest's I/O freezes and carries on when quorum returns) or `io-error` (the guest sees I/O errors and typically remounts read-only). Applies to disks created from then on; change an existing one with `sds resource set-options <resource> --drbd-options on-no-quorum=<value>,on-no-data-accessible=<value>` |
 | `exactsize` | `1` (the default) gives each new or resized disk exactly the size PVE asks for, rounded up to a 512-byte sector (the backing volume is still allocated in GiB; the DRBD device is capped at the exact size). `0` rounds up to the next whole GiB instead, and then restoring a vzdump backup and online Move Disk onto this storage both fail: they refuse a disk that is not byte-for-byte the source's size. Default `1` |
 

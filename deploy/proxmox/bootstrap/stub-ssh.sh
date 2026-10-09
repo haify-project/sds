@@ -47,6 +47,7 @@ done_sha() {
 			;;
 		*/Custom/SDSPlugin.pm) src="$STUB_PLUGIN_SRC/SDSPlugin.pm" ;;
 		*/Custom/SDS/*.pm) src="$STUB_PLUGIN_SRC/PVE/Storage/Custom/SDS/${1##*/}" ;;
+		*/pve-manager/js/sds-storage.js) src="$STUB_PLUGIN_SRC/gui/sds-storage.js" ;;
 	esac
 	[ -n "$src" ] && [ -r "$src" ] && sha256sum "$src" | cut -d' ' -f1
 }

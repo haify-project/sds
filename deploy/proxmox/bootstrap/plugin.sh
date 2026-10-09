@@ -29,6 +29,8 @@ plugin_up_to_date() {
 		rel="${f#"$SCRIPT_DIR"/PVE/Storage/Custom/}"
 		[ "$(remote_sha256 "$node" "$PLUGIN_DIR/$rel")" = "$(local_sha256 "$f")" ] || return 1
 	done
+	# The web interface's storage dialog ships with the plugin.
+	[ "$(remote_sha256 "$node" /usr/share/pve-manager/js/sds-storage.js)" = "$(local_sha256 "$SCRIPT_DIR/gui/sds-storage.js")" ] || return 1
 	return 0
 }
 
@@ -50,8 +52,8 @@ step_plugin() {
 			install_deb "$n" "$PLUGIN_DEB"
 		else
 			# install.sh also adds the LVM filter that keeps the host off guest
-			# volume groups, and restarts pvedaemon/pveproxy (running guests
-			# are not affected).
+			# volume groups and the storage dialog to the web interface, and
+			# restarts the PVE daemons (running guests are not affected).
 			run_on "$n" "cd $(q "$PLUGIN_STAGING") && ./install.sh"
 		fi
 		run_on "$n" "rm -rf $(q "$PLUGIN_STAGING")"
