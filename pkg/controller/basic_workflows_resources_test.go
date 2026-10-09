@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -446,7 +447,8 @@ func TestResourceManagerResizeVolumeUpdatesBackendAndMetadata(t *testing.T) {
 	require.NoError(t, err)
 	var sawLVResize, sawDRBDResize bool
 	for _, call := range dep.execCalls {
-		if call.cmd == "sudo lvresize -L 50G -y /dev/sds_data-pool/res1_logs" {
+		// The LV grows by DRBD's metadata too, so the device reaches 50 GiB.
+		if call.cmd == fmt.Sprintf("sudo lvresize -L %dB -y /dev/sds_data-pool/res1_logs", backingVolumeSizeBytes(50, 1, false)) {
 			sawLVResize = true
 		}
 		if call.cmd == "sudo drbdadm resize res1/1" {

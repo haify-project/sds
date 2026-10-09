@@ -127,12 +127,11 @@ func (rm *ResourceManager) resizeVolume(ctx context.Context, resource string, vo
 	if err != nil {
 		return err
 	}
-	sizeArg := fmt.Sprintf("%dG", newSizeGB)
-	if exactBytes > 0 {
-		// An exact device must fit with DRBD's metadata beside it, which a
-		// plain "<n>G" backing volume does not leave room for.
-		sizeArg = fmt.Sprintf("%dB", backingVolumeSizeBytes(uint32(newSizeGB), len(hosts)-1, false))
-	}
+	// The backing volume grows to the size creation would have given it: the
+	// data plus DRBD's internal metadata. A plain "<n>G" leaves the DRBD device
+	// short of <n> GiB, and a hypervisor that then asks for exactly <n> GiB
+	// (QEMU's block_resize after a Proxmox disk resize) is refused.
+	sizeArg := fmt.Sprintf("%dB", backingVolumeSizeBytes(uint32(newSizeGB), len(hosts)-1, false))
 	if strings.HasPrefix(target.DiskPath, "/dev/zvol/") {
 		volumePath := strings.TrimPrefix(target.DiskPath, "/dev/zvol/")
 		zfsRes, err := rm.deployment.ZFSResizeVolume(ctx, hosts, volumePath, sizeArg)
@@ -156,10 +155,7 @@ func (rm *ResourceManager) resizeVolume(ctx context.Context, resource string, vo
 			// The crypt header lives at the front of the LV and is not part of
 			// the mapping, so the LV must be grown by that much more for the
 			// DRBD device to reach the requested size.
-			sizeArg = fmt.Sprintf("%dB", newSizeGB*1024*1024*1024+luksHeaderBytes)
-			if exactBytes > 0 {
-				sizeArg = fmt.Sprintf("%dB", backingVolumeSizeBytes(uint32(newSizeGB), len(hosts)-1, true))
-			}
+			sizeArg = fmt.Sprintf("%dB", backingVolumeSizeBytes(uint32(newSizeGB), len(hosts)-1, true))
 		}
 		resizeCmd := fmt.Sprintf("sudo lvresize -L %s -y %s", sizeArg, lvPath)
 		lvRes, err := rm.deployment.Exec(ctx, hosts, resizeCmd)
