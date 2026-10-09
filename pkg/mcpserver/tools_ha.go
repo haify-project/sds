@@ -57,7 +57,7 @@ type selfHaDisableIn struct {
 // registerHATools adds HA failover and controller self-HA tools.
 func (s *Server) registerHATools(srv *mcp.Server) {
 	addRead(s, srv, readOnlyTool("sds_ha_list", "List HA configs",
-		"List all drbd-reactor HA configurations managed by SDS."),
+		"List all drbd-reactor HA configurations managed by Haify."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, haListOut, error) {
 			configs, err := s.client.ListHa(ctx)
 			if err != nil {
@@ -118,7 +118,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 		"Planned switchover of one HA resource: its active node stops the services and another node takes over. "+
 			"It moves exactly the resource named and nothing else on the node — sds-meta is the controller with its "+
 			"VIP and the AI Copilot, any other name is that resource's own service. For sds-meta the call returns as "+
-			"soon as the switchover is launched, and when this server runs in the same chain (as SDS sets it up) it "+
+			"soon as the switchover is launched, and when this server runs in the same chain (as Haify sets it up) it "+
 			"moves too: expect this connection to drop for several seconds, which is not a failure; check "+
 			"sds_ha_promoter_status for where it landed. For any other resource the call returns once another node "+
 			"has taken over, and fails if none did. Never stop or restart a drbd-reactor-managed service by hand "+
@@ -141,7 +141,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 		})
 
 	addRead(s, srv, readOnlyTool("sds_self_ha_status", "Controller self-HA status",
-		"Show whether the SDS controller itself runs highly available and which node is active."),
+		"Show whether the Haify controller itself runs highly available and which node is active."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, selfHaStatusOut, error) {
 			st, err := s.client.GetSelfHaStatus(ctx)
 			if err != nil {
@@ -157,7 +157,7 @@ func (s *Server) registerHATools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, destructiveTool("sds_self_ha_enable", "Enable controller self-HA",
-		"Make the SDS controller itself highly available: creates a small DRBD resource for the controller "+
+		"Make the Haify controller itself highly available: creates a small DRBD resource for the controller "+
 			"database, distributes the controller to all nodes, and hands management to drbd-reactor behind a VIP. "+
 			"The controller restarts during the handoff — reconnect to the VIP afterwards."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in selfHaEnableIn) (*mcp.CallToolResult, opResult, error) {

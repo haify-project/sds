@@ -14,7 +14,7 @@ import (
 
 // AddReplica adds a diskful local replica to a resource that is already running.
 //
-// SDS could grow a resource sideways — a diskless client, a quorum tiebreaker,
+// Haify could grow a resource sideways — a diskless client, a quorum tiebreaker,
 // an off-site DR — but not the thing an operator most often wants: one more real
 // copy, here, on a node that was not in the cluster when the resource was made.
 // The only route was to destroy the resource and rebuild it, which for anything

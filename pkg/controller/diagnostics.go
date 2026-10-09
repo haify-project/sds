@@ -121,7 +121,7 @@ var diagCollectors = []diagCollector{
 	},
 	{
 		Name: "sds_journal",
-		What: "the SDS units' own journal — the controller and the Copilot as systemd saw them",
+		What: "the Haify units' own journal — the controller and the Copilot as systemd saw them",
 		cmd: func(since, max int) string {
 			return fmt.Sprintf(
 				"journalctl -u sds-controller -u sds-ai --since '-%dmin' --no-pager -o short-iso 2>&1 | tail -n %d",

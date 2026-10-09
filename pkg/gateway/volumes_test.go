@@ -86,7 +86,7 @@ resource test {
 
 // The gateway must export the operator's volume, not its own scratch volume.
 //
-// SDS creates the data volume first ("<res>_data", volume 0) and APPENDS the
+// Haify creates the data volume first ("<res>_data", volume 0) and APPENDS the
 // cluster-private state volume afterwards, which is the opposite of the
 // linstor-gateway layout the templates were written against. Choosing by
 // position therefore exported the 1 GiB state volume and formatted the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the SDS Debian packages into dist/ with plain dpkg-deb:
+# Build the Haify Debian packages into dist/ with plain dpkg-deb:
 #
 #   sds-controller_<version>_<arch>.deb   per architecture (amd64, arm64)
 #   sds-pve-plugin_<version>_all.deb      the Proxmox VE storage plugin
@@ -71,7 +71,7 @@ if [ -z "${MAINTAINER:-}" ]; then
     else
         name=$(git config user.name 2>/dev/null || true)
         email=$(git config user.email 2>/dev/null || true)
-        MAINTAINER="${name:-SDS local build} <${email:-root@localhost}>"
+        MAINTAINER="${name:-Haify local build} <${email:-root@localhost}>"
     fi
 fi
 
@@ -173,7 +173,7 @@ Depends: libpve-storage-perl, drbd-utils, lvm2
 Section: admin
 Priority: optional
 Homepage: $HOMEPAGE
-Description: SDS storage plugin for Proxmox VE
+Description: Haify storage plugin for Proxmox VE
  Storage type "sds": backs Proxmox VE guest disks with DRBD resources managed
  by sds-controller, giving synchronous replication, HA restart on a surviving
  node and live migration that copies only RAM.
@@ -192,7 +192,7 @@ EOF
 prepare_ui() {
     if [ "${SKIP_UI_BUILD:-0}" = "1" ]; then
         [ -f ui/dist/index.html ] || die "SKIP_UI_BUILD=1 but ui/dist/index.html is missing"
-        if grep -q 'SDS UI placeholder' ui/dist/index.html; then
+        if grep -q 'Haify UI placeholder' ui/dist/index.html; then
             echo "build-deb: WARNING: ui/dist holds the placeholder page; the packaged controller serves no web UI" >&2
         fi
         return

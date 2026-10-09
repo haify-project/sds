@@ -34,7 +34,7 @@ func managedBy(labels map[string]string) bool { return labels[managedByKey] == m
 // happens to match must not take someone else's workload or volume with it.
 //
 // The Deployment goes first, so its pod releases the volume before the claim
-// (with DeleteData) is deleted; the SDS StorageClass's reclaim policy then
+// (with DeleteData) is deleted; the Haify StorageClass's reclaim policy then
 // decides what happens to the DRBD resource behind it.
 func (m *Manager) Delete(ctx context.Context, r DeleteRequest) (*Deleted, error) {
 	r.Namespace = strings.TrimSpace(r.Namespace)
@@ -67,7 +67,7 @@ func (m *Manager) Delete(ctx context.Context, r DeleteRequest) (*Deleted, error)
 			return fmt.Errorf("get %s %s: %w", kind, name, err)
 		}
 		if !managedBy(labels) {
-			out.Kept = append(out.Kept, fmt.Sprintf("%s %s (not created by SDS)", kind, name))
+			out.Kept = append(out.Kept, fmt.Sprintf("%s %s (not created by Haify)", kind, name))
 			return nil
 		}
 		if err := remove(); err != nil && !apierrors.IsNotFound(err) {

@@ -1,3 +1,3 @@
 // A pve-manager upgrade replaces the web interface's page template; put the
-// SDS storage dialog back into it afterwards (sds-pve-plugin, gui-patch.sh).
+// Haify storage dialog back into it afterwards (sds-pve-plugin, gui-patch.sh).
 DPkg::Post-Invoke { "if [ -x /usr/share/sds-pve-plugin/gui-patch.sh ]; then /usr/share/sds-pve-plugin/gui-patch.sh || true; fi"; };

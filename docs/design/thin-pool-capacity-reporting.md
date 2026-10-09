@@ -174,7 +174,7 @@ to the delta is what made 91% the normal state on `app0`.
 When the thin pool takes every free extent of the VG, LVM's
 `thin_pool_autoextend_threshold` cannot help, because there is nothing left to
 extend into. Leaving VG headroom and enabling autoextend is the LVM-side
-safeguard; the alerts above are the SDS-side one.
+safeguard; the alerts above are the Haify-side one.
 
 `sds pool add` on a thin-backed group extends the thin pool with
 `lvextend -l +95%FREE` after `vgextend` (metadata first, sized at 1% of the

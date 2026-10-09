@@ -1,6 +1,6 @@
 import { getApiToken } from '@/services/api';
 
-// aiClient — talks to the `oss-agent serve` NDJSON stream that backs the SDS AI
+// aiClient — talks to the `oss-agent serve` NDJSON stream that backs the Haify AI
 // Copilot. The agent runs as a separate process (see ai/README.md); this client
 // only speaks its wire protocol over HTTP.
 //

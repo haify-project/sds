@@ -1,9 +1,9 @@
-# SDS · 软件定义存储 — robots.txt
+# Haify · 软件定义存储 — robots.txt
 # Allow all standard crawlers.
 User-agent: *
 Allow: /
 
-# Explicitly allow AI search / answer-engine crawlers so SDS can be cited.
+# Explicitly allow AI search / answer-engine crawlers so Haify can be cited.
 User-agent: GPTBot
 Allow: /
 User-agent: ChatGPT-User

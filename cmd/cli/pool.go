@@ -254,7 +254,7 @@ func poolGet() *cobra.Command {
 				fmt.Printf("  Compression: %s%s\n", pool.Compression, ratio)
 			}
 			// For a thin pool Total and Free are the thin pool's own. The
-			// volume group around it is left with only the extents SDS did not
+			// volume group around it is left with only the extents Haify did not
 			// give the thin pool, which is worth knowing when growing it and
 			// misleading as a measure of how full the pool is.
 			if pool.ThinPoolLv != "" {
@@ -342,7 +342,7 @@ func poolList() *cobra.Command {
 					}
 				}
 				// Likewise the pool's own fullness: "0/19 GB free" is true of
-				// the volume group and true of every SDS pool ever created, so
+				// the volume group and true of every Haify pool ever created, so
 				// on its own it tells an operator nothing.
 				usage := ""
 				if p.ThinPoolLv != "" {
@@ -450,7 +450,7 @@ func poolConvertThin() *cobra.Command {
 		Long: `Rebuild one node's LVM pool as a thin pool without recreating its resources.
 
 A thick pool cannot hold a snapshot history. LVM makes every snapshot reserve a
-copy-on-write area up front — SDS reserves 20% of the origin — so a 10 GiB pool
+copy-on-write area up front — Haify reserves 20% of the origin — so a 10 GiB pool
 backing a 6 GiB volume fits two snapshots whether or not anything ever changes.
 A thin snapshot costs only the blocks that diverge.
 

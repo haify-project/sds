@@ -1,4 +1,4 @@
-# SDS storage plugin for Proxmox VE
+# Haify storage plugin for Proxmox VE
 
 Back Proxmox VM disks with DRBD resources managed by sds-controller. Guests
 get synchronous replication, HA restart on a surviving node, and RAM-only live
@@ -104,7 +104,7 @@ release accepts, so the storage still loads.
 
 ## Requirements
 
-Each PVE node that will run guests off SDS storage needs:
+Each PVE node that will run guests off Haify storage needs:
 
 - **DRBD 9 kernel module + `drbd-utils`.** The hypervisor has to see
   `/dev/drbdN` locally to back a VM disk. Install LINBIT's `drbd-dkms` and
@@ -198,7 +198,7 @@ removing the `sds:` entries from `storage.cfg`.
 ### Storage entry
 
 With the plugin on every node, add the storage once for the cluster: in the web
-interface under **Datacenter → Storage → Add → SDS**, or as an entry in
+interface under **Datacenter → Storage → Add → Haify**, or as an entry in
 `/etc/pve/storage.cfg` (cluster-wide):
 
 ```
@@ -217,7 +217,7 @@ The dialog has every option below. On **Add** it fills in the controller list
 with the cluster nodes' addresses, and **Pool** lists the sds volume groups
 this node holds; the controller list is fixed once the storage exists.
 
-Each sds storage's page (a node → the storage) has an **SDS** tab: every disk
+Each sds storage's page (a node → the storage) has an **Haify** tab: every disk
 with the nodes holding a replica and their state, the node the guest runs on,
 and whether the replicas are in step, read from that node's own DRBD every 10
 seconds. The plugin adds these as `sds-*` fields to the volumes PVE's storage
@@ -271,7 +271,7 @@ also accepted. `content` may be `images` and `rootdir`; the only format is
 One disk per resource means each disk resizes, snapshots and deletes
 independently, the same model the CSI driver uses for a PVC.
 
-The SDS web interface shows the same disks from the storage side, under
+The Haify web interface shows the same disks from the storage side, under
 **Proxmox VE**: one card per guest, with each disk's replicas and whether they
 are in step, the node the guest runs on, and a link to it in the PVE interface.
 
@@ -401,7 +401,7 @@ ha-manager set vm:100 --group sds-pve1-pve2
 
 In the web interface, **Datacenter → HA** shows each HA guest's replica nodes
 (a warning sign when it runs on a node without one), and **Prefer nodes with
-SDS replicas** writes such a non-strict rule, `sds-vm-<id>`, for every HA guest
+Haify replicas** writes such a non-strict rule, `sds-vm-<id>`, for every HA guest
 with disks on sds, or updates it (PVE 9; on PVE 8 the column only). A rule takes effect at once: a guest
 running on another node is migrated to a replica node right away.
 
@@ -427,13 +427,13 @@ qm set 103 --scsi0 sds0:vm-103-disk-0,discard=on
 Measured on a 3-node PVE 9.2 cluster: one `fstrim` in a guest that had deleted
 3 GiB took its replicas' pools from 79% to 41% and from 68% to 42%. The
 controller's daily trim (`[storage.thin] trim_schedule`) covers filesystems
-SDS mounts itself, not guest disks; Discard is what covers those.
+Haify mounts itself, not guest disks; Discard is what covers those.
 
 ## I/O limits
 
 PVE limits a VM disk's I/O itself: the disk options `mbps_rd`, `mbps_wr`,
 `iops_rd`, `iops_wr` (and their `_max` bursts) are enforced by QEMU on the
-guest's requests, whatever the storage. They work on SDS disks as on any
+guest's requests, whatever the storage. They work on Haify disks as on any
 other; set them in the VM's hardware tab or with
 `qm set <vmid> --scsi0 sds0:vm-<vmid>-disk-0,iops_wr=2000`. sds adds nothing on
 top.

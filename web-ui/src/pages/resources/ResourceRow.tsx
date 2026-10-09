@@ -21,7 +21,7 @@ type NodeChip = {
 // list. They are four separate fields on the API but one column here, and an
 // operator scanning the column wants the node that takes the writes first.
 export function nodeChips(resource: Resource, status?: ResourceStatus): NodeChip[] {
-  // The state map is keyed by DRBD host name; each entry carries the SDS node
+  // The state map is keyed by DRBD host name; each entry carries the Haify node
   // name so it can be paired back to the node list.
   const roleOf = new Map<string, string>();
   for (const [host, st] of Object.entries(status?.nodeStates ?? {}))

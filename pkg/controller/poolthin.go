@@ -115,7 +115,7 @@ func parseThinReport(output string) map[string]*PoolThinInfo {
 		}
 		// A volume group holding more than one thin pool keeps the fullest, on
 		// the grounds that the pool closest to failing is the one worth
-		// reporting. SDS creates exactly one, so this is a tiebreak for
+		// reporting. Haify creates exactly one, so this is a tiebreak for
 		// adopted groups rather than a normal path.
 		if existing, ok := byVG[row.VG]; ok && existing.DataPercent >= row.DataPercent {
 			continue

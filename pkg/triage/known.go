@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Known failure modes: the ones SDS knows the cause of.
+// Known failure modes: the ones Haify knows the cause of.
 //
 // Everything else in this package groups evidence and stops. These nine state
 // a cause and give steps, and the bar for joining them is high: the match has

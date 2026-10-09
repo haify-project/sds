@@ -19,8 +19,8 @@ type AdoptResult struct {
 }
 
 // AdoptResource imports an already-existing (foreign) DRBD resource — one
-// created outside SDS, e.g. a hand-configured resource — into SDS management by
-// writing its metadata into the SDS database. It lets subsequent SDS operations
+// created outside Haify, e.g. a hand-configured resource — into Haify management by
+// writing its metadata into the Haify database. It lets subsequent Haify operations
 // (MakeHa, gateways, ...) that require db.GetResource work against it.
 //
 // It NEVER creates or modifies the DRBD resource, its backing devices, or any
@@ -83,7 +83,7 @@ func (rm *ResourceManager) AdoptResource(ctx context.Context, name string, nodes
 		protocol = "C"
 	}
 
-	// Persist SDS metadata only — the DRBD resource and its data are left
+	// Persist Haify metadata only — the DRBD resource and its data are left
 	// exactly as they are.
 	resRecord := &database.Resource{
 		Name:     name,
@@ -134,7 +134,7 @@ func (rm *ResourceManager) AdoptResource(ctx context.Context, name string, nodes
 		savedVolumes++
 	}
 
-	rm.controller.logger.Info("Adopted foreign DRBD resource into SDS management",
+	rm.controller.logger.Info("Adopted foreign DRBD resource into Haify management",
 		zap.String("resource", name),
 		zap.Strings("nodes", adoptNodes),
 		zap.Uint32("port", port),

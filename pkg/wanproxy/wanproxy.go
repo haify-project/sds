@@ -141,7 +141,7 @@ func NodeMetricsPath(resource string) string {
 // before DRBD tries to connect to it (the same ordering Provision enforces at
 // create time).
 const unitTemplate = `[Unit]
-Description=SDS WAN replication proxy for %i
+Description=Haify WAN replication proxy for %i
 Documentation=https://github.com/haify-project/sds
 After=network-online.target
 Wants=network-online.target

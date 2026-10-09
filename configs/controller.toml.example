@@ -1,4 +1,4 @@
-# SDS Controller Configuration
+# Haify Controller Configuration
 
 [server]
 listen_address = "0.0.0.0"
@@ -58,7 +58,7 @@ format = "json"  # json or text
 # What `pool create` builds when no --type is given, for every client: sds,
 # the REST gateway, MCP and the web UI alike. Thin is the default because a
 # thick pool cannot hold a snapshot history — LVM reserves a fixed COW area per
-# snapshot (SDS takes 20% of the origin), so a 10 GiB pool holding a 6 GiB
+# snapshot (Haify takes 20% of the origin), so a 10 GiB pool holding a 6 GiB
 # volume fits two of them. Set "vg" for thick pools everywhere.
 #
 # Only LVM types belong here (vg, lvm, lvm-thin, thin-pool, thin_pool). A ZFS

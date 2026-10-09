@@ -45,7 +45,7 @@ const (
 	backupIDLayout = "20060102T150405Z"
 
 	// manifestObject is the self-describing index written alongside the images.
-	// It exists for the disaster the backups are for: when the SDS database is
+	// It exists for the disaster the backups are for: when the Haify database is
 	// gone too, `sds backup import` rebuilds the backup records, chains
 	// included, from these files alone (backup_import.go).
 	manifestObject = "manifest.json"

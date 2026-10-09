@@ -214,13 +214,13 @@ func (k Kind) CheckResponse(body []byte) error {
 func subject(e Event) string {
 	switch {
 	case e.Resource != "" && e.Node != "":
-		return fmt.Sprintf("SDS %s: %s on %s", e.Type, e.Resource, e.Node)
+		return fmt.Sprintf("Haify %s: %s on %s", e.Type, e.Resource, e.Node)
 	case e.Resource != "":
-		return fmt.Sprintf("SDS %s: %s", e.Type, e.Resource)
+		return fmt.Sprintf("Haify %s: %s", e.Type, e.Resource)
 	case e.Node != "":
-		return fmt.Sprintf("SDS %s: %s", e.Type, e.Node)
+		return fmt.Sprintf("Haify %s: %s", e.Type, e.Node)
 	default:
-		return fmt.Sprintf("SDS %s", e.Type)
+		return fmt.Sprintf("Haify %s", e.Type)
 	}
 }
 

@@ -44,7 +44,7 @@ func serveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve MCP over HTTP with token authentication, for Claude Code, ChatGPT and other remote clients",
-		Long: "Serves the SDS tools at /mcp. Every request needs a token made with `sds-mcp token create`;\n" +
+		Long: "Serves the Haify tools at /mcp. Every request needs a token made with `sds-mcp token create`;\n" +
 			"the token's role decides which tools exist for that connection: read (inspect only), operate\n" +
 			"(plus create/grow/snapshot/start/mount) or admin (everything, including delete and evict).\n\n" +
 			"With --public-url the server also runs the OAuth flow that ChatGPT and claude.ai use to add a\n" +

@@ -9,7 +9,7 @@ import (
 	sdspb "github.com/haify-project/sds/api/proto/v1"
 )
 
-// managedPoolPrefix mirrors the controller's normalizeManagedName: SDS-managed
+// managedPoolPrefix mirrors the controller's normalizeManagedName: Haify-managed
 // pools are stored with an "sds_" prefix, so a StorageClass pool of "vg0"
 // matches the stored pool "sds_vg0".
 const managedPoolPrefix = "sds_"
@@ -45,7 +45,7 @@ type replicaCandidate struct {
 // poolFreeBytes is how much room a pool has left on its node, or 0 when the
 // controller reported nothing usable.
 //
-// Which field answers that depends on the pool. SDS builds a thin pool out of
+// Which field answers that depends on the pool. Haify builds a thin pool out of
 // nearly all of its volume group, so free_bytes/free_gb read near zero for
 // the whole life of a thin pool however empty it is — rank on those and every
 // thin node looks equally full, and reject on them and every thin-provisioned

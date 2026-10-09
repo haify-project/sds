@@ -321,7 +321,7 @@ func TestBackingLVForResolvesThroughTheVolumeRecord(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot be identified")
 
 	// An ADOPTED foreign resource may live under /dev/mapper for reasons of its
-	// own — multipath, someone else's dm stack, someone else's LUKS. SDS has no
+	// own — multipath, someone else's dm stack, someone else's LUKS. Haify has no
 	// key for it and must not start re-plumbing it, so the recorded flag and
 	// not the path prefix is what decides.
 	require.NoError(t, ctrl.db.SaveResource(ctx, &database.Resource{Name: "foreign"}))

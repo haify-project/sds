@@ -1,13 +1,13 @@
-# Evacuating VMware vSAN to Proxmox VE on SDS
+# Evacuating VMware vSAN to Proxmox VE on Haify
 
 A runbook for moving virtual machines off a VMware vSAN cluster onto Proxmox VE
-(PVE) whose guest disks live on SDS through the
-[SDS storage plugin](../deploy/proxmox/README.md). It strings together
-documented behavior of vSphere, PVE and SDS; it is not a product feature, and
+(PVE) whose guest disks live on Haify through the
+[Haify storage plugin](../deploy/proxmox/README.md). It strings together
+documented behavior of vSphere, PVE and Haify; it is not a product feature, and
 nothing in it automates the move.
 
 **Read this first.** The steps marked **[verify]** have not been validated end
-to end on a real vSAN-to-PVE migration by the SDS project. Each is listed again
+to end on a real vSAN-to-PVE migration by the Haify project. Each is listed again
 in [What to verify on your cluster](#what-to-verify-on-your-cluster). Rehearse
 the whole procedure with a VM you can lose before you move one you cannot.
 
@@ -21,13 +21,13 @@ optionally as a *live import* that starts the VM in PVE while its disks are
 still being copied. The wizard cannot import disks that live on vSAN.
 
 The workaround is to take the disks off vSAN first, onto a datastore the wizard
-can read. SDS can provide that datastore itself, as an NFS export:
+can read. Haify can provide that datastore itself, as an NFS export:
 
 ```
  vSAN datastore
      │  Storage vMotion (vCenter), VM keeps running
      ▼
- NFS datastore "sds-staging"  ◄── SDS NFS gateway (one resource, floating service IP)
+ NFS datastore "sds-staging"  ◄── Haify NFS gateway (one resource, floating service IP)
      │  PVE ESXi import wizard, or qm disk import
      ▼
  PVE storage "sds0" (type sds) ── one DRBD resource per guest disk
@@ -40,37 +40,37 @@ it is unmounted and its resource deleted.
 
 The common small layout is **two storage nodes plus one tiebreaker**:
 
-- **Two storage nodes** hold the replicas (an SDS pool on each) and usually
+- **Two storage nodes** hold the replicas (a Haify pool on each) and usually
   are the two PVE nodes running the guests. Separate compute-only PVE nodes also
   work: they attach to each disk as diskless DRBD clients
   (`deploy/proxmox/README.md`).
-- **A third machine** runs DRBD 9 and is registered as an SDS node, without a
-  pool. SDS makes it the diskless tiebreaker of every two-replica resource
+- **A third machine** runs DRBD 9 and is registered as a Haify node, without a
+  pool. Haify makes it the diskless tiebreaker of every two-replica resource
   (`[resource] auto_tiebreaker`, on by default), so one storage node can fail
   without the survivor losing quorum. It can also be the corosync QDevice that
   gives a two-node PVE cluster its third vote. It has to be both: **a QDevice
   alone gives DRBD no quorum vote.** Without DRBD on the third machine, the
   unplanned loss of one storage node leaves every disk without quorum.
 
-What SDS deliberately leaves to PVE, because PVE already does it:
+What Haify deliberately leaves to PVE, because PVE already does it:
 
 | Concern | Who does it |
 | ------- | ----------- |
-| Restarting a guest on a surviving node (VM-level HA) | PVE `ha-manager`. SDS only makes the disk promotable there, quorum-guarded |
+| Restarting a guest on a surviving node (VM-level HA) | PVE `ha-manager`. Haify only makes the disk promotable there, quorum-guarded |
 | Fencing a node that stopped responding | PVE HA's fencing |
 | Backing up guests | PVE `vzdump` to Proxmox Backup Server |
-| Replicated disks, quorum, live migration without copying data | SDS |
+| Replicated disks, quorum, live migration without copying data | Haify |
 
-Do not put guest disks under `sds ha create` or an SDS gateway; the plugin's
+Do not put guest disks under `sds ha create` or a Haify gateway; the plugin's
 README explains why both refuse them.
 
 ## Prerequisites
 
 - [ ] **PVE 8.2 or later** on every PVE node; source ESXi hosts **6.5 to 8.0**.
-- [ ] **An SDS cluster**, set up per the [deployment guide](deployment-guide.md):
+- [ ] **A Haify cluster**, set up per the [deployment guide](deployment-guide.md):
       controller running, the two storage nodes and the tiebreaker registered,
       a pool on both storage nodes. `sds node list`, `sds pool list`.
-- [ ] **The SDS plugin on every PVE node** ([plugin README](../deploy/proxmox/README.md),
+- [ ] **The Haify plugin on every PVE node** ([plugin README](../deploy/proxmox/README.md),
       preferably the `sds-pve-plugin` package) and one `sds:` storage entry in
       `/etc/pve/storage.cfg`, here called `sds0`, with `content images` and
       `shared 1`. `preflight.sh` passes on every PVE node.
@@ -136,7 +136,7 @@ Do these on ESXi, before the VM's cut-over window:
 Proxmox's "Migrate to Proxmox VE" guide covers the guest side (VMware Tools,
 drivers, network) in more depth.
 
-## Step 1: Staging resource and NFS gateway (SDS)
+## Step 1: Staging resource and NFS gateway (Haify)
 
 Create one resource on the two storage nodes, then an NFS gateway on it. One
 gateway per resource; give the resource nothing else to do (no `ha create`, no
@@ -343,16 +343,16 @@ After the window:
   replication link; spread waves out.
 - **Staging capacity** limits the size of a wave.
 - **Plugin limits** apply to imported VMs: raw only, no templates or linked
-  clones, snapshots taken by SDS on one node (plugin README,
+  clones, snapshots taken by Haify on one node (plugin README,
   [Limitations](../deploy/proxmox/README.md#limitations)).
-- **Out of scope for SDS**: VM-level HA, fencing and PBS backups are PVE's.
+- **Out of scope for Haify**: VM-level HA, fencing and PBS backups are PVE's.
 
 ## What to verify on your cluster
 
 These steps follow from how the parts are documented to behave but have not
-been exercised end to end by the SDS project:
+been exercised end to end by the Haify project:
 
-1. ESXi keeps an NFS 3 datastore on the SDS gateway accessible across a
+1. ESXi keeps an NFS 3 datastore on the Haify gateway accessible across a
    gateway switchover (`sds ha evict`), and through it a running Storage
    vMotion.
 2. NFS 4.1 mounts from ESXi (this runbook uses NFS 3).

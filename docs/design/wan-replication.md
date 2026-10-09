@@ -1,4 +1,4 @@
-# SDS × sds-proxy — optional WAN replication (design)
+# Haify × sds-proxy — optional WAN replication (design)
 
 Date: 2026-07-04 (updated to match the current implementation)
 Status: **Implemented. Opt-in only; the LAN path is untouched.**

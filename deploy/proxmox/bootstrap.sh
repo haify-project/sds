@@ -1,5 +1,5 @@
 #!/bin/bash
-# Bootstrap SDS on an existing Proxmox VE cluster, from any one of its nodes.
+# Bootstrap Haify on an existing Proxmox VE cluster, from any one of its nodes.
 #
 # Run as root on a PVE node. It reuses PVE's own root SSH trust between the
 # members and, step by step, on every node:
@@ -42,7 +42,7 @@ usage() {
 	cat <<EOF
 Usage: $0 --devices DEV[,DEV...] [options]
 
-Sets up SDS on the PVE cluster this node belongs to. Run as root.
+Sets up Haify on the PVE cluster this node belongs to. Run as root.
 
 Storage:
   --devices DEVS          Blank disk(s) for the pool on every storage node, comma-separated

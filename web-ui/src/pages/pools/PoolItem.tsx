@@ -20,7 +20,7 @@ export function PoolItem({ pool }: { pool: Pool }) {
   const total = Number(pool.totalGb);
   const free = Number(pool.freeGb);
 
-  // A thin pool's capacity is not its volume group's capacity. SDS builds the
+  // A thin pool's capacity is not its volume group's capacity. Haify builds the
   // pool from every free extent, so vgFree is zero from the moment the pool
   // exists and stays there — a bar driven by it reads 100% full whether the
   // pool is empty or about to refuse writes, which is exactly what it did

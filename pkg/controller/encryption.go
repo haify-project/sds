@@ -231,7 +231,7 @@ true`, nil
 // affected one as Diskless, which is a far more legible symptom than a boot
 // unit that failed.
 func luksBootOpenSnippet() string {
-	return `# Open SDS LUKS containers before DRBD attaches: a Secondary needs its
+	return `# Open Haify LUKS containers before DRBD attaches: a Secondary needs its
 # backing device just as much as a Primary, so this is not a promote-time job.
 for ptr in ` + luksKeyDir + `/*.dev; do
   [ -e "$ptr" ] || continue
@@ -383,13 +383,13 @@ func (rm *ResourceManager) closeBackingVolumeOn(ctx context.Context, hosts []str
 	}
 }
 
-// resourceIsEncrypted reports whether SDS built this resource's backing volumes
+// resourceIsEncrypted reports whether Haify built this resource's backing volumes
 // as crypt containers.
 //
 // The recorded flag is the authority, not the /dev/mapper/ prefix on its own. A
-// resource ADOPTED from outside SDS may perfectly well be reached through
+// resource ADOPTED from outside Haify may perfectly well be reached through
 // /dev/mapper (multipath, an operator's own dm stack, someone else's LUKS), and
-// treating that as ours would have SDS try to resize a mapping it has no key
+// treating that as ours would have Haify try to resize a mapping it has no key
 // for and report an encryption guarantee it did not provide.
 func (rm *ResourceManager) resourceIsEncrypted(ctx context.Context, resource string) bool {
 	if rm.controller.db == nil {

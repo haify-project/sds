@@ -1,10 +1,19 @@
-# CLAUDE.md - SDS Controller Development Guide
+# CLAUDE.md - Haify Controller Development Guide
 
-This file provides guidance to Claude Code when working on the SDS (Software Defined Storage) controller project.
+This file provides guidance to Claude Code when working on the Haify (Software Defined Storage) controller project.
 
 ## Project Overview
 
-SDS is a DRBD-based storage management system built in Go. It provides centralized management for storage pools, DRBD resources, snapshots, backups, storage gateways (NFS, iSCSI, NVMe-oF, SMB), and HA, with a CSI driver, a Proxmox VE plugin, an MCP server and an embedded web UI on top.
+Haify is a DRBD-based storage management system built in Go. It provides centralized management for storage pools, DRBD resources, snapshots, backups, storage gateways (NFS, iSCSI, NVMe-oF, SMB), and HA, with a CSI driver, a Proxmox VE plugin, an MCP server and an embedded web UI on top.
+
+**Naming**: the product is called Haify; it was called SDS until 2026-10-09.
+Every name a person reads (UI, docs, site, help text, PVE labels) says
+Haify. Identifiers keep `sds`, because renaming them would break existing
+clusters and storage.cfg entries. That covers the `sds` command, the
+`sds-controller`/`sds-mcp` binaries, the PVE storage type `sds`, the `sds_`
+volume group prefix, the `sds.*` labels, the `sds-*.toml` reactor files, the
+`sds_*` MCP tools, the `SDS_*` environment variables, the Perl
+`PVE::Storage::Custom::SDS*` modules and the Go module path.
 
 **Architecture:**
 
@@ -202,7 +211,7 @@ Other sections: `[wan]`, `[auth]`, `[tls]`, `[audit]`, `[rbac]`,
 | `pkg/inspect`    | Cluster inspection (`sds inspect`, `[inspect]`): the per-node probe script and pure pass/warn/fail checks over what the controller gathers (`pkg/controller/inspect*.go`), run on a schedule or on demand and stored as reports |
 | `pkg/mcpserver`  | MCP tools over the controller API (`sds-mcp`, stdio and HTTP)                          |
 | `pkg/mcpauth`    | Tokens and OAuth for the remote MCP server                                             |
-| `pkg/k8sapp`     | Databases on Kubernetes backed by SDS volumes (`sds-mcp k8s`, `sds_k8s_*` tools)        |
+| `pkg/k8sapp`     | Databases on Kubernetes backed by Haify volumes (`sds-mcp k8s`, `sds_k8s_*` tools)        |
 | `pkg/csi`        | CSI driver (controller and node services)                                              |
 | `pkg/serviceip`  | Floating IP add/remove and announcement, used by `service-ip`                          |
 | `pkg/util`       | Size parsing and formatting                                                            |

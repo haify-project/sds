@@ -1,11 +1,11 @@
-# SDS Storage Node Prerequisites
+# Haify Storage Node Prerequisites
 
 What each node needs, and what goes wrong without it. Most of these failures do
 not surface where the command was run: a drbd-reactor promoter config is
 accepted whether or not the agents and units it names exist, so a missing piece
 shows up later as a promoter that never starts.
 
-SDS checks some of this itself — gateway creation checks OCF agents,
+Haify checks some of this itself — gateway creation checks OCF agents,
 `targetcli` and the NFS server, `ha self enable` checks drbd-reactor and SSH, backups check
 `rclone`, `replication-tls setup` checks TLS support — but installs none of the
 packages. `sds health-check` reports DRBD, drbd-reactor (installed, running)
@@ -57,7 +57,7 @@ exist. Otherwise dpkg stops at the conffile prompt, fails over SSH with
 the node is left with drbdadm but no kernel module (`drbdadm --version` shows
 `DRBD_KERNEL_VERSION=0`).
 
-### Boot-time bring-up: installed by SDS
+### Boot-time bring-up: installed by Haify
 
 Nothing in the packages brings DRBD resources up at boot. The packaged
 `drbd.service` on Ubuntu 24.04 is an LSB script with an empty `Default-Start`, so
@@ -108,7 +108,7 @@ Gateway creation checks, on the resource's diskful nodes, under
 - **iSCSI**: `sudo apt-get install -y targetcli-fb python3-rtslib-fb`. The
   `iSCSITarget` agent (`implementation=lio-t`) needs the LIO userspace; without
   it `ocf.rs@target_<res>.service` exits `5/NOTINSTALLED`. LIO is the only
-  implementation SDS accepts; `--implementation tgt` and `iet` are refused.
+  implementation Haify accepts; `--implementation tgt` and `iet` are refused.
 - **NFS**: `sudo apt-get install -y nfs-kernel-server` (EL: `nfs-utils`).
   Creation fails with `missing: rpc.nfsd exportfs` without it; otherwise the
   gateway would be created and never start, with `ocf.rs@nfsserver_*` logging
@@ -180,7 +180,7 @@ node: `ssh-keygen -R <ip> -f /root/.ssh/known_hosts`.
 
 ---
 
-## 7. SDS binaries
+## 7. Haify binaries
 
 | Binary | Where | Notes |
 | --- | --- | --- |

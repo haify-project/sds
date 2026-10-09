@@ -39,7 +39,7 @@ func nodeList() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			// Create SDS client
+			// Create Haify client
 			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
@@ -103,7 +103,7 @@ func nodeGet() *cobra.Command {
 			ctx := cmd.Context()
 			nodeRef := args[0]
 
-			// Create SDS client
+			// Create Haify client
 			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
@@ -217,7 +217,7 @@ func nodeRegister() *cobra.Command {
 
 			ctx := cmd.Context()
 
-			// Create SDS client
+			// Create Haify client
 			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)
@@ -385,7 +385,7 @@ func nodeSetAddress() *cobra.Command {
 	var replication string
 	cmd := &cobra.Command{
 		Use:   "set-address <node> <new-address> | <node>=<address> [<node>=<address> ...]",
-		Short: "Renumber nodes: move them to new IPs everywhere SDS records one",
+		Short: "Renumber nodes: move them to new IPs everywhere Haify records one",
 		Long: "Each node must already answer on its new address. The registry, /etc/hosts on\n" +
 			"the nodes and the DRBD config of every resource they take part in are rewritten;\n" +
 			"each resource reconnects on the new addresses.\n\n" +

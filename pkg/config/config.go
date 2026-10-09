@@ -506,7 +506,7 @@ func setDefaults() {
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
 	// Thin by default. A thick pool cannot hold a snapshot history: LVM makes
-	// every snapshot reserve a fixed COW area up front (SDS reserves 20% of the
+	// every snapshot reserve a fixed COW area up front (Haify reserves 20% of the
 	// origin), so a 10 GiB pool holding a 6 GiB volume fits two snapshots —
 	// which is not a retention policy. Thin snapshots cost only the blocks that
 	// diverge. Set "vg" here for the thick behaviour on every client at once.

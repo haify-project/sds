@@ -16,7 +16,7 @@ import (
 //
 // Three decisions shape the feature.
 //
-// 1. The cache is per pool, not per volume. SDS already treats a pool as the
+// 1. The cache is per pool, not per volume. Haify already treats a pool as the
 //    unit an operator allocates from — resources name a pool, not an LV — and a
 //    per-LV cache would have to be re-split by hand every time a resource is
 //    added. LVM makes that cheap for a thin pool: caching the pool's data LV

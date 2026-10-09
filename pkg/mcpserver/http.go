@@ -82,7 +82,7 @@ func ServeHTTP(ctx context.Context, c ControllerClient, logger *zap.Logger, base
 			errc <- primarySrv.ListenAndServe()
 		}
 	}()
-	logger.Info("SDS MCP server listening",
+	logger.Info("Haify MCP server listening",
 		zap.String("addr", h.Listen), zap.Bool("tls", h.TLSCert != ""),
 		zap.Bool("oauth", primary.publicURL != ""), zap.String("max_role", string(h.MaxRole)),
 		zap.String("version", base.Version))
@@ -98,7 +98,7 @@ func ServeHTTP(ctx context.Context, c ControllerClient, logger *zap.Logger, base
 				errc <- adminSrv.ListenAndServe()
 			}
 		}()
-		logger.Info("SDS MCP admin listener (local network, not capped, no OAuth)",
+		logger.Info("Haify MCP admin listener (local network, not capped, no OAuth)",
 			zap.String("addr", h.AdminListen), zap.Bool("tls", h.TLSCert != ""))
 	}
 

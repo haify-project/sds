@@ -11,7 +11,7 @@
       <div>
         <h1>Storage that keeps working when a server fails.</h1>
         <p class="sds-lede">
-          SDS turns the disks in your own Linux servers into shared storage for files,
+          Haify turns the disks in your own Linux servers into shared storage for files,
           virtual machines, containers and databases. Lose a server and your applications
           keep their data and carry on.
         </p>
@@ -77,7 +77,7 @@
 
   <section class="sds-section">
     <div class="sds-wrap">
-      <h2>Why SDS</h2>
+      <h2>Why Haify</h2>
       <dl class="sds-scope">
         <dt>No single point of failure</dt>
         <dd>Every write is on more than one server, and services move on their own when one fails.</dd>
@@ -96,12 +96,12 @@
   <section class="sds-section">
     <div class="sds-wrap">
       <h2>From disks to a shared folder</h2>
-      <p class="sds-intro">Four commands, once SDS is installed.</p>
+      <p class="sds-intro">Four commands, once Haify is installed.</p>
       <ol class="sds-steps">
         <li><p>Add your servers.</p>
           <code>sds node register <span>--name node1</span> <span>--address 192.0.2.11</span>
 sds node register <span>--name node2</span> <span>--address 192.0.2.12</span></code></li>
-        <li><p>Give SDS a disk on each one.</p>
+        <li><p>Give Haify a disk on each one.</p>
           <code>sds pool create <span>--name pool0</span> <span>--type lvm-thin</span> <span>--nodes node1,node2</span> <span>--devices /dev/sdb</span></code></li>
         <li><p>Create a 10 GiB volume kept on both.</p>
           <code>sds resource create <span>--name data</span> <span>--port 7001</span> <span>--size 10G</span> <span>--nodes node1,node2</span> <span>--pool pool0</span></code></li>
@@ -115,13 +115,13 @@ sds node register <span>--name node2</span> <span>--address 192.0.2.12</span></c
     <div class="sds-wrap">
       <h2>Documentation</h2>
       <nav class="sds-links" aria-label="Documentation">
-        <a href="{{ 'deployment-guide/' | url }}"><strong>Getting started</strong><span>Install SDS and set up a cluster.</span></a>
+        <a href="{{ 'deployment-guide/' | url }}"><strong>Getting started</strong><span>Install Haify and set up a cluster.</span></a>
         <a href="{{ 'user-guide/' | url }}"><strong>User guide</strong><span>Everyday tasks, step by step.</span></a>
         <a href="{{ 'node-prerequisites/' | url }}"><strong>Server requirements</strong><span>What each server needs.</span></a>
         <a href="{{ 'kubernetes/' | url }}"><strong>Kubernetes</strong><span>Volumes for containers.</span></a>
         <a href="{{ 'proxmox/' | url }}"><strong>Proxmox VE</strong><span>Volumes for virtual machines.</span></a>
         <a href="{{ 'vsan-evacuation/' | url }}"><strong>Leaving vSAN</strong><span>Move VMware VMs to Proxmox VE.</span></a>
-        <a href="{{ 'mcp/' | url }}"><strong>AI assistants</strong><span>Manage SDS by asking.</span></a>
+        <a href="{{ 'mcp/' | url }}"><strong>AI assistants</strong><span>Manage Haify by asking.</span></a>
       </nav>
     </div>
   </section>

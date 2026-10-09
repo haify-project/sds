@@ -14,7 +14,7 @@ import { PlacementMatrix } from './proxmox/PlacementMatrix';
 
 type Filter = 'all' | 'running' | 'attention' | 'templates';
 
-// The disks Proxmox VE keeps on SDS, by guest: which nodes hold a replica of
+// The disks Proxmox VE keeps on Haify, by guest: which nodes hold a replica of
 // each, whether the replicas are in step, and whether the guest runs on a node
 // that holds its disks or reaches them over the network.
 export function ProxmoxPage() {
@@ -62,7 +62,7 @@ export function ProxmoxPage() {
     <div>
       <PageHeader
         title="Proxmox VE"
-        description="Guest disks on SDS: the nodes holding each replica, and the node each guest runs on."
+        description="Guest disks on Haify: the nodes holding each replica, and the node each guest runs on."
       />
 
       {isLoading ? (
@@ -75,7 +75,7 @@ export function ProxmoxPage() {
           <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <Monitor className="h-8 w-8 text-muted-foreground" />
             <p className="max-w-md text-sm text-muted-foreground">
-              No Proxmox VE disks on SDS yet. Connect a PVE cluster by running this on one of its nodes, then
+              No Proxmox VE disks on Haify yet. Connect a PVE cluster by running this on one of its nodes, then
               create disks on the storage it adds:
             </p>
             <code className="rounded bg-muted px-3 py-2 font-mono text-xs">
@@ -148,7 +148,7 @@ export function ProxmoxPage() {
                   all: '',
                   running: 'No guest is running.',
                   attention: 'Every running guest is on a replica node and every replica is in step.',
-                  templates: 'No templates on SDS.',
+                  templates: 'No templates on Haify.',
                 }[filter]
               }
             </p>

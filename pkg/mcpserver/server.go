@@ -1,4 +1,4 @@
-// Package mcpserver exposes the SDS controller as a Model Context Protocol
+// Package mcpserver exposes the Haify controller as a Model Context Protocol
 // (MCP) server so AI assistants can inspect and manage storage through the
 // same gRPC API used by sds.
 //
@@ -61,7 +61,7 @@ type Options struct {
 	Version string
 }
 
-// Server bridges MCP tool calls to the SDS controller client.
+// Server bridges MCP tool calls to the Haify controller client.
 type Server struct {
 	client        ControllerClient
 	logger        *zap.Logger
@@ -129,7 +129,7 @@ func (s *Server) MCPServer() *mcp.Server {
 	}
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "sds",
-		Title:   "SDS Software Defined Storage",
+		Title:   "Haify Software Defined Storage",
 		Version: s.version,
 	}, nil)
 	s.registerClusterTools(srv)
@@ -168,7 +168,7 @@ func (s *Server) Run(ctx context.Context) error {
 		allowed = append(allowed, name)
 	}
 	sort.Strings(allowed)
-	s.logger.Info("starting SDS MCP server on stdio",
+	s.logger.Info("starting Haify MCP server on stdio",
 		zap.Bool("read_only", s.readOnly),
 		zap.Strings("allowed_write_tools", allowed),
 		zap.String("version", s.version),

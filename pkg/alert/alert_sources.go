@@ -123,7 +123,7 @@ type NodeLister interface {
 // PoolStatusInfo is one storage pool's capacity as the monitor needs it.
 //
 // Only thin pool utilisation is here, and deliberately not the volume group's
-// free space: SDS creates a thin pool from nearly all of its group, so vg_free
+// free space: Haify creates a thin pool from nearly all of its group, so vg_free
 // is near zero from the moment the pool exists and alerting on it would fire
 // permanently for every pool in the cluster.
 type PoolStatusInfo struct {
@@ -142,7 +142,7 @@ type PoolStatusInfo struct {
 	// ThinSizeBytes the data capacity of the thin pool inside it — the figure
 	// DataPercent is a percentage of.
 	//
-	// No condition here reads them, for the reason in the type comment: SDS
+	// No condition here reads them, for the reason in the type comment: Haify
 	// drives vg_free to near zero on purpose, so alerting on it would fire forever.
 	// They are carried for Observer, which charts capacity rather than judging
 	// it, and for which a thick group's group-level figures are the only ones

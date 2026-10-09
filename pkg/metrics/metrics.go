@@ -1,4 +1,4 @@
-// Package metrics provides Prometheus metrics support for the SDS controller.
+// Package metrics provides Prometheus metrics support for the Haify controller.
 //
 // Two families live here. The `sds_controller_*` family describes the
 // controller itself and the inventory it manages; the `sds_drbd_*` family
@@ -33,7 +33,7 @@ const (
 	drbdSubsystem = "drbd"
 )
 
-// Metrics holds all Prometheus metrics for the SDS controller
+// Metrics holds all Prometheus metrics for the Haify controller
 type Metrics struct {
 	logger   *zap.Logger
 	registry *prometheus.Registry
@@ -174,12 +174,12 @@ func New(logger *zap.Logger) (*Metrics, error) {
 				Namespace: namespace,
 				Subsystem: subsystem,
 				Name:      "up",
-				Help:      "Indicates the SDS controller instance is available (always 1)",
+				Help:      "Indicates the Haify controller instance is available (always 1)",
 			},
 		),
 	}
 
-	// The pool label is not unique on its own: every node in an SDS cluster
+	// The pool label is not unique on its own: every node in a Haify cluster
 	// tends to carry a volume group of the same name, so without the node the
 	// second pool's capacity silently overwrites the first's.
 	m.storageCapacity = newSeriesSet(auto.NewGaugeVec(

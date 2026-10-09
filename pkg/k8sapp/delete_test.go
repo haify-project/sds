@@ -86,7 +86,7 @@ func TestDeleteRefusesWhatSDSDidNotCreate(t *testing.T) {
 	require.NoError(t, err)
 	got, err := m.Delete(ctx, DeleteRequest{Name: "db", DeleteData: true})
 	require.NoError(t, err)
-	assert.Contains(t, got.Kept, "claim db-data (not created by SDS)")
+	assert.Contains(t, got.Kept, "claim db-data (not created by Haify)")
 	_, err = m.kube.CoreV1().PersistentVolumeClaims("default").Get(ctx, "db-data", metav1.GetOptions{})
 	assert.NoError(t, err)
 }

@@ -1,4 +1,4 @@
-# Lets the SDS Copilot (sds-ai) create databases on SDS volumes through the
+# Lets the Haify Copilot (sds-ai) create databases on Haify volumes through the
 # sds_k8s_app_create tool (served by `sds-mcp k8s`). sds-ai runs outside the
 # cluster, next to sds-controller, and reaches the API server with this
 # ServiceAccount's token (kubeconfig in SDS_AI_KUBECONFIG); see

@@ -1,4 +1,4 @@
-# SDS HA: OCF Agent builder + drbd-reactor TOML editor
+# Haify HA: OCF Agent builder + drbd-reactor TOML editor
 
 Date: 2026-07-03
 Status: Implemented
@@ -6,7 +6,7 @@ Status: Implemented
 ## Goal
 
 Two HA-config editing capabilities, taken from the DRBD-HA project and wired to
-the SDS controller:
+the Haify controller:
 
 1. **OCF agent builder** — browse the OCF resource agents installed on the
    nodes, pick one, fill in a parameter form generated from its OCF meta-data,
@@ -16,7 +16,7 @@ the SDS controller:
    resource's nodes.
 
 DRBD-HA's profiles model, SSE event stream and per-node enable/disable were not
-taken over. SDS keeps its own `HaConfig` model.
+taken over. Haify keeps its own `HaConfig` model.
 
 ## Backend API
 

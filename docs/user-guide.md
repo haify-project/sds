@@ -1,6 +1,6 @@
-# SDS user guide
+# Haify user guide
 
-This is the day-to-day guide: how to think about SDS, and how to carry out the
+This is the day-to-day guide: how to think about Haify, and how to carry out the
 things you will actually do with it. It assumes a cluster that is already up —
 see [deployment-guide.md](deployment-guide.md) to build one and
 [node-prerequisites.md](node-prerequisites.md) for what each node needs
@@ -43,7 +43,7 @@ assistants, through [`sds-mcp`](mcp.md).
 Four things, stacked:
 
 ```
-node          a Linux machine SDS reaches over SSH
+node          a Linux machine Haify reaches over SSH
  └─ pool      an LVM volume group or ZFS pool on that node's disks
      └─ resource   a replicated block device: the same bytes on several nodes
          └─ volume     one block device inside the resource (usually just one)
@@ -55,10 +55,10 @@ one node and the bytes land on every replica synchronously. One replica is
 mountable). Exactly one node may be Primary at a time — that is what stops two
 machines from writing to the same filesystem and destroying it.
 
-Three ideas explain most of SDS's behaviour:
+Three ideas explain most of Haify's behaviour:
 
 **Quorum.** A replica set decides by majority who is allowed to serve I/O. Two
-diskful replicas cannot form a majority when one is lost, so SDS adds a third
+diskful replicas cannot form a majority when one is lost, so Haify adds a third
 member with no disk — a **tiebreaker** — that votes but stores nothing. Without
 it, losing either node suspends I/O on both.
 
@@ -125,7 +125,7 @@ sds node list
 sds node get node1
 ```
 
-`--address` is the management IP SDS uses for SSH. If replication should run
+`--address` is the management IP Haify uses for SSH. If replication should run
 over a different network — a dedicated 10G link, say — name it separately:
 
 ```bash
@@ -395,7 +395,7 @@ What to know before choosing it:
 - VDO costs memory (roughly 1 GB per TB of physical space for its index and
   block map, more with a larger index) and CPU on every write.
 
-This is new in SDS; validate it on your hardware and kernel before production.
+This is new in Haify; validate it on your hardware and kernel before production.
 
 An SSD or NVMe cache in front of a thin pool (`pool add-cache`,
 `pool remove-cache`) is covered in [Storage tiering](#14-storage-tiering).
@@ -445,7 +445,7 @@ never to a WAN resource, and only while `[resource] auto_tiebreaker` is on (the
 default). With no spare node the resource is created without one and
 `resource list` marks it `⚠quorum-risk`.
 
-**Placement.** Omit `--nodes` and SDS picks by free space:
+**Placement.** Omit `--nodes` and Haify picks by free space:
 
 ```bash
 sds resource create --name db --size 100G --port 7000 --replicas 2
@@ -461,7 +461,7 @@ sds resource create --name db --size 100G --port 7000 --replicas 3 \
 requested pool and have room for the volume in it.
 
 **Fault domains.** Nodes that fail together — VMs on one physical host, servers
-in one rack — should not hold two copies of the same data. Tell SDS which
+in one rack — should not hold two copies of the same data. Tell Haify which
 nodes share a machine with a `host` label:
 
 ```bash
@@ -721,7 +721,7 @@ the resource's promoters on exactly its primary-site replicas, as
 `add-replica` does: use it after an older version added or removed a replica,
 or gave a DR node a promoter.
 
-**Adopting** an existing DRBD resource that SDS did not create:
+**Adopting** an existing DRBD resource that Haify did not create:
 
 ```bash
 sds resource adopt legacy-vol --nodes node1,node2
@@ -969,7 +969,7 @@ the node that becomes active picks them up.
 
 ## 9. Backups — the only copy that survives losing the cluster
 
-A backup is a compressed image of a resource shipped somewhere SDS cannot reach
+A backup is a compressed image of a resource shipped somewhere Haify cannot reach
 from the cluster. Targets are S3-compatible object stores, SMB shares, or WebDAV.
 The node that reads a backup runs `rclone` to talk to the target, so install it
 on every storage node (`apt install rclone`); a node without it is refused
@@ -1177,7 +1177,7 @@ Know the limits before you build a policy on this:
 
 ## 10. Gateways — exporting to clients
 
-A gateway turns a resource into something a non-SDS machine can mount: NFS,
+A gateway turns a resource into something a non-Haify machine can mount: NFS,
 iSCSI or NVMe-oF. It is a drbd-reactor promoter config, so it fails over with
 the resource — clients keep talking to a floating service IP.
 
@@ -1276,10 +1276,10 @@ nodes that differ, and the write makes them identical again.
 
 drbd-reactor itself cannot apply a changed promoter config to a running
 gateway: on `systemctl reload drbd-reactor` it stops the old promoter and
-starts a new one, and SDS promoters are written with
+starts a new one, and Haify promoters are written with
 `stop-services-on-exit = true`, so a reload with a changed config stops the
 whole gateway on that node and lets every node race to promote it again.
-SDS therefore never reloads drbd-reactor on the node running the gateway for
+Haify therefore never reloads drbd-reactor on the node running the gateway for
 an edit: that node keeps the `.toml` its drbd-reactor loaded and gets the
 edited one as `sds-<type>-<res>.toml.pending`, which drbd-reactor ignores.
 The unit drop-ins in `/run/systemd/system` are rewritten to the edited chain,
@@ -1565,7 +1565,7 @@ with the data:
 ```
 
 Tune the engine in its config on the volume, on the node running it. For
-PostgreSQL, edit `data/postgresql.conf`; the few settings SDS relies on (port,
+PostgreSQL, edit `data/postgresql.conf`; the few settings Haify relies on (port,
 listen address, socket directory, `hba_file`) are in `conf/postgresql.sds.conf`,
 included last. Apply a change the engine's own way (`SELECT pg_reload_conf()`,
 `SET GLOBAL`, `CONFIG SET`) or with `sds app failover`, which restarts it on
@@ -1967,7 +1967,7 @@ answering has no `sds_drbd_disk_state`, and `sds_drbd_resource_up` says why.
 (controller down, stale observations, unreachable node, lost quorum, unreadable
 resource, replica not UpToDate, out of sync, thin pool near full and full,
 backup older than two days, one-failure-domain risk), and `deploy/monitoring`
-a Docker Compose stack (Prometheus plus a Grafana with an "SDS" dashboard) that
+a Docker Compose stack (Prometheus plus a Grafana with an "Haify" dashboard) that
 uses them.
 
 ### Inspection
@@ -2000,7 +2000,7 @@ Each node is probed once over SSH per run; a node that does not answer is a
 | alerts | `[alert]` enabled; at least one enabled channel; each channel's last deliveries succeeded; every warning or critical raised in the last 24 h was accepted by a channel that delivered it. No test message is sent |
 | selfha | at least two UpToDate copies of `sds-meta`; its promoter config active on every diskful candidate (and noted on a diskless one); exactly one `sds-controller` active, on the `sds-meta` Primary; a controller binary on every candidate |
 | tls | API server certificate, replication CA and every node's replication certificate: warn under 30 days, fail under 7 or expired |
-| hygiene | `/etc/drbd.d/*.res` and SDS-named volumes (`<res>_data`, `<res>_volN`, `<res>_state*`, `_sched_` snapshots) of resources the controller no longer has. Listed, never deleted |
+| hygiene | `/etc/drbd.d/*.res` and Haify-named volumes (`<res>_data`, `<res>_volN`, `<res>_state*`, `_sched_` snapshots) of resources the controller no longer has. Listed, never deleted |
 
 ```toml
 [inspect]
@@ -2167,7 +2167,7 @@ you run elsewhere, or a collector writing to an object store with Object Lock.
 
 ## 18. Kubernetes
 
-SDS ships a CSI driver. Volumes are DRBD resources; a pod moving between nodes
+Haify ships a CSI driver. Volumes are DRBD resources; a pod moving between nodes
 gets its storage promoted on the new one.
 
 ```yaml
@@ -2199,7 +2199,7 @@ per StorageClass: change one by moving the volume to another class.
 The manifests are in `deploy/k8s` (see its README); the CSI section of
 [deployment-guide.md](deployment-guide.md) covers installation.
 
-A database on Kubernetes with its data on an SDS volume — the counterpart of
+A database on Kubernetes with its data on a Haify volume — the counterpart of
 [`sds app`](#12-database-applications) — is one MCP call: `sds-mcp k8s` serves
 `sds_k8s_app_create`, `sds_k8s_app_list` and `sds_k8s_app_delete`
 ([mcp.md](mcp.md#kubernetes-tools)). Deleting keeps the volume claim and the
@@ -2207,7 +2207,7 @@ password secret unless `delete_data` is set, and creating the app again with
 the same name and template runs it on them.
 
 **Proxmox VE** has the counterpart: a storage plugin (type `sds`) that backs VM
-disks with SDS resources over the controller's REST API. It is in
+disks with Haify resources over the controller's REST API. It is in
 `deploy/proxmox`, with its requirements and install steps in that README.
 `deploy/proxmox/bootstrap.sh`, run on one PVE node, does those steps for an
 existing PVE cluster: DRBD from LINBIT's repository on every node, the
@@ -2391,7 +2391,7 @@ interrupted before that step, promote once by hand with
 `sds resource secondary <res> <node>`.
 
 **`StandAlone` after a split brain.** Two copies diverged. Decide which one is
-authoritative — SDS will not guess — then discard the other's changes and
+authoritative — Haify will not guess — then discard the other's changes and
 reconnect it. Anything written to the discarded side is lost, so look at both
 before choosing.
 
@@ -2405,7 +2405,7 @@ ssh <node> sudo journalctl -u "ocf.rs@*<resource>*" -n 50
 The usual causes are a missing package (`nfs-kernel-server`, `targetcli-fb`, the
 `nvmet-tcp` module) and a service IP already in use.
 
-**A node is unreachable but the machine is up.** SDS reaches nodes over SSH
+**A node is unreachable but the machine is up.** Haify reaches nodes over SSH
 from the controller node. After a node is rebuilt its host key changes and
 every operation fails with an empty error; clear the stale key and restart the
 controller.
@@ -2427,7 +2427,7 @@ controller's recent log lines from memory, `GET /v1/audit` who changed what,
 and `POST /v1/diagnostics/collect` runs a fixed set of named, read-only
 collectors on the nodes (`{"nodes": [...], "collectors": [...]}`, both
 defaulting to all) — DRBD status, config and kernel state, kernel errors, the
-drbd-reactor, promoter and SDS journals, failed units, storage, mounts —
+drbd-reactor, promoter and Haify journals, failed units, storage, mounts —
 without anyone logging in. The web UI's Logs page shows the first two;
 `sds-mcp` has all three (`sds_log_list`, `sds_audit_list`, `sds_diagnose`).
 

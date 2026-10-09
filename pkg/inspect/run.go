@@ -89,7 +89,7 @@ func Headline(r *Report, max int) string {
 	return line + ". Details: sds inspect show " + r.ID
 }
 
-// managedVG reports whether a volume group is an SDS pool.
+// managedVG reports whether a volume group is a Haify pool.
 func managedVG(vg string) bool { return strings.HasPrefix(vg, "sds_") }
 
 func pass(id string, area Area, msg string, args ...any) Check {

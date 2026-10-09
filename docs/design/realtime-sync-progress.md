@@ -63,7 +63,7 @@ simply shows no percentage.
 DRBD; only then is it exported to metrics and alerts.
 
 Proto `NodeResourceState`: `role = 1`, `disk_state = 2`,
-`replication_state = 3`, `sync_percent = 4`, `node = 5` (the SDS node name;
+`replication_state = 3`, `sync_percent = 4`, `node = 5` (the Haify node name;
 the map key is the DRBD host name).
 
 ## Web UI

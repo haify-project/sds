@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy SDS Controller - first time install or update.
+# Deploy Haify Controller - first time install or update.
 #
 # Self-HA aware: when the controller is managed by drbd-reactor (the sds-meta
 # resource exists), the binary is pushed to every node but the service is only

@@ -256,7 +256,7 @@ func (rm *ResourceManager) CreateResourceWithVolumesMetadata(ctx context.Context
 	}
 
 	// Pre-flight: reject a port already bound by another DRBD resource on the
-	// nodes (including ones SDS does not manage) with a clear message, rather
+	// nodes (including ones Haify does not manage) with a clear message, rather
 	// than letting `drbdadm create-md` fail later with an opaque error.
 	if conflict, err := rm.findPortConflict(ctx, nodeIPs[0], port, name); err != nil {
 		rm.controller.logger.Warn("port conflict pre-check failed; continuing",

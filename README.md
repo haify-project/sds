@@ -1,10 +1,10 @@
-# SDS - Software Defined Storage
+# Haify
 
 A lightweight DRBD 9 storage controller written in Go. It manages storage pools, replicated volumes, iSCSI / NFS / NVMe-oF gateways and high availability, and plugs into Kubernetes (CSI), Proxmox VE and AI assistants (MCP).
 
 English | [简体中文](README_cn.md) | [Documentation site](https://haify-project.github.io/sds/)
 
-![SDS architecture](docs/img/architecture-en.png)
+![Haify architecture](docs/img/architecture-en.png)
 
 No agent runs on the storage nodes: one controller drives them over SSH and keeps its state in an embedded BoltDB. The controller itself can run behind a floating VIP (Self-HA).
 

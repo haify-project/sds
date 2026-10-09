@@ -182,7 +182,7 @@ func (o *metricsObserver) observePools(pools alert.PoolObservation) {
 // a pool will succeed.
 //
 // For a thin pool that is the thin pool's own data capacity and utilisation,
-// not the volume group's: SDS gives its thin pool 95% of the group's free
+// not the volume group's: Haify gives its thin pool 95% of the group's free
 // extents at create (all of them on convert-thin), so vg_free is near zero from
 // the moment the pool exists and a chart of it would show every pool in the
 // cluster permanently full.

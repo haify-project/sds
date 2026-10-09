@@ -19,7 +19,7 @@ var (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "sds",
-		Short: "HA-SDS CLI - Software Defined Storage Management",
+		Short: "Haify CLI - Software Defined Storage Management",
 		// main prints the error, once.
 		SilenceErrors: true,
 		// Usage is for a command line that did not parse. Once a command runs,

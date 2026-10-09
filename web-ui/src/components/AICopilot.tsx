@@ -493,7 +493,7 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold tracking-tight">SDS Copilot</span>
+          <span className="text-sm font-semibold tracking-tight">Haify Copilot</span>
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
           <X className="h-4 w-4" />
@@ -571,7 +571,7 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask the SDS Copilot…"
+            placeholder="Ask the Haify Copilot…"
             disabled={busy}
           />
           <Button type="submit" size="icon" disabled={busy || !input.trim()}>

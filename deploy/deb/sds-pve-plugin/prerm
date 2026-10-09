@@ -15,7 +15,7 @@ remove|deconfigure)
         /usr/share/sds-pve-plugin/gui-patch.sh --remove || true
     fi
     if [ -f /etc/pve/storage.cfg ] && grep -q '^sds:' /etc/pve/storage.cfg; then
-        echo "WARNING: /etc/pve/storage.cfg still has SDS storage entries:" >&2
+        echo "WARNING: /etc/pve/storage.cfg still has Haify storage entries:" >&2
         grep '^sds:' /etc/pve/storage.cfg >&2 || true
         echo "  Without the plugin this node cannot start guests whose disks are on them." >&2
         echo "  Remove the entries once no node uses them; the volumes are not touched." >&2

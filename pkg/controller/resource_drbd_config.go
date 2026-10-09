@@ -230,7 +230,7 @@ func (rm *ResourceManager) generateDrbdConfig(name string, port uint32, volumes 
 
 		// `on <name>` must be the node's real hostname: drbdadm only applies a
 		// resource to a host that finds itself in one of these sections. The
-		// SDS node name is an operator-chosen label and may differ.
+		// Haify node name is an operator-chosen label and may differ.
 		fmt.Fprintf(&config, "\n    on %s {\n", rm.controller.nodes.GetDRBDNameByRef(node))
 		if wan.multiPrimary() {
 			// Multi-replica primary site: the per-node `address` is the LAN

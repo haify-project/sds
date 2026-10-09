@@ -8,7 +8,7 @@ import (
 	"github.com/haify-project/sds/pkg/client"
 )
 
-// controllerConn is how sds-mcp reaches the SDS controller: the bearer token
+// controllerConn is how sds-mcp reaches the Haify controller: the bearer token
 // and the transport security matching the controller's [auth] and [tls].
 // Without the TLS half sds-mcp could not talk to a controller with
 // `[tls] enabled = true` at all.
@@ -24,7 +24,7 @@ type controllerConn struct {
 // listener's certificate.
 func (c *controllerConn) register(cmd *cobra.Command, prefix string) {
 	f := cmd.Flags()
-	f.StringVarP(&c.addr, "controller", "c", "127.0.0.1:3374", "SDS controller address")
+	f.StringVarP(&c.addr, "controller", "c", "127.0.0.1:3374", "Haify controller address")
 	f.StringVar(&c.token, prefix+"token", "",
 		"API token for the controller (default: SDS_TOKEN env, ~/.sds/token, /etc/sds/token)")
 	f.BoolVar(&c.tls.Enabled, prefix+"tls", false,

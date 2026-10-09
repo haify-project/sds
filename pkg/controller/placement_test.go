@@ -165,7 +165,7 @@ func TestSelectConstrained_ReplicasValidated(t *testing.T) {
 const testThinPoolBytes = 100 << 30 // 100GiB of thin pool data space
 
 // thinPoolInfo builds the pool report of a thin pool as ListPools produces it:
-// the volume group reports no free space (SDS gave every extent to the pool)
+// the volume group reports no free space (Haify gave every extent to the pool)
 // and the utilisation carries the only usable figure.
 func thinPoolInfo(dataPct, metaPct float64) *PoolInfo {
 	return &PoolInfo{

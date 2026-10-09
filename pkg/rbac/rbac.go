@@ -1,8 +1,8 @@
 // Package rbac provides a configurable, Casbin-backed authorization engine for
-// the SDS controller. The model is embedded and identities are resolved from
+// the Haify controller. The model is embedded and identities are resolved from
 // per-user bearer tokens. Runtime changes (admins adding users or changing
 // roles) are persisted through a Store, which the controller backs with the
-// same BBolt database as the rest of SDS — so RBAC needs no extra service or
+// same BBolt database as the rest of Haify — so RBAC needs no extra service or
 // datastore and the system still ships as a handful of static binaries.
 package rbac
 
@@ -98,7 +98,7 @@ type Snapshot struct {
 }
 
 // Store persists and restores the RBAC Snapshot. The controller backs it with
-// the same BBolt database the rest of SDS uses, so RBAC needs no extra store.
+// the same BBolt database the rest of Haify uses, so RBAC needs no extra store.
 type Store interface {
 	Load() (*Snapshot, error)
 	Save(*Snapshot) error

@@ -22,6 +22,6 @@ if [ "${1:-}" = "--remove" ]; then
 fi
 
 grep -qF "$MARK" "$TPL" && exit 0
-grep -q 'pvemanagerlib.js' "$TPL" || { echo "gui-patch.sh: no pvemanagerlib.js in $TPL; SDS is not added to the web interface" >&2; exit 0; }
+grep -q 'pvemanagerlib.js' "$TPL" || { echo "gui-patch.sh: no pvemanagerlib.js in $TPL; Haify is not added to the web interface" >&2; exit 0; }
 # The marker sits on the same line, so --remove takes exactly what this added.
 sed -i "\|pvemanagerlib.js|a\\    $TAG $MARK" "$TPL"

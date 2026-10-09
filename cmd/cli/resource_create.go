@@ -264,9 +264,9 @@ func resourceAdopt() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "adopt <name>",
-		Short: "Adopt an existing (foreign) DRBD resource into SDS management",
-		Long: "Import an already-existing DRBD resource (created outside SDS) into\n" +
-			"SDS management by recording its metadata. This never creates or\n" +
+		Short: "Adopt an existing (foreign) DRBD resource into Haify management",
+		Long: "Import an already-existing DRBD resource (created outside Haify) into\n" +
+			"Haify management by recording its metadata. This never creates or\n" +
 			"modifies the DRBD resource or its data — it only reads the live\n" +
 			"/etc/drbd.d/<name>.res and records what it finds. Nodes, port and\n" +
 			"protocol are auto-discovered from the config when not supplied.",
@@ -293,7 +293,7 @@ func resourceAdopt() *cobra.Command {
 				return fmt.Errorf("failed to adopt resource: %w", err)
 			}
 
-			fmt.Printf("Resource '%s' adopted into SDS management\n", name)
+			fmt.Printf("Resource '%s' adopted into Haify management\n", name)
 			fmt.Printf("  Nodes:    %v\n", resp.Nodes)
 			fmt.Printf("  Port:     %d\n", resp.Port)
 			fmt.Printf("  Protocol: %s\n", resp.Protocol)

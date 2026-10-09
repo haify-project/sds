@@ -151,7 +151,7 @@ func TestPoolOutOfSpaceFiresRegardlessOfThresholds(t *testing.T) {
 }
 
 func TestThickPoolRaisesNothing(t *testing.T) {
-	// A group with no thin pool reports vg_free honestly, and SDS drives that
+	// A group with no thin pool reports vg_free honestly, and Haify drives that
 	// to zero on purpose. Alerting on it would fire permanently for every pool
 	// in the cluster — the un-clearable wall the package comment warns about.
 	mon, drain := poolHarness(t, &mockPoolLister{list: []PoolStatusInfo{

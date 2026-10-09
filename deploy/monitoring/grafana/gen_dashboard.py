@@ -105,7 +105,7 @@ table("Backups", 0, y, 24, 6, [
   {"resource":"Resource","target":"Target","Value #A":"Last backup","Value #B":"Shipped"},
   ["Resource","Target","Last backup","Shipped"],
   [col("Last backup",[{"id":"unit","value":"dateTimeFromNow"}]),col("Shipped",[{"id":"unit","value":"bytes"}])], nodata="No backups yet")
-dash={"uid":"sds-overview","title":"SDS","tags":["sds"],"timezone":"browser","schemaVersion":41,"refresh":"30s",
+dash={"uid":"sds-overview","title":"Haify","tags":["sds"],"timezone":"browser","schemaVersion":41,"refresh":"30s",
  "time":{"from":"now-24h","to":"now"},"graphTooltip":1,
  "templating":{"list":[{"name":"cluster","label":"Cluster","type":"query","datasource":DS,
    "query":{"query":"label_values(up{job=\"sds\"}, cluster)","refId":"q"},"definition":"label_values(up{job=\"sds\"}, cluster)",

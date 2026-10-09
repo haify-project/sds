@@ -366,7 +366,7 @@ func checkHaMountPoint(mountPoint string) error {
 	cleaned := filepath.Clean(mountPoint)
 	for _, taken := range []string{selfHaMountPoint, gateway.DefaultClusterPrivateMountPath} {
 		if cleaned == taken || strings.HasPrefix(cleaned, taken+"/") {
-			return fmt.Errorf("mount point %s is inside %s, which SDS mounts itself; choose another directory", cleaned, taken)
+			return fmt.Errorf("mount point %s is inside %s, which Haify mounts itself; choose another directory", cleaned, taken)
 		}
 	}
 	return nil

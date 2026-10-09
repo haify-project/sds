@@ -1,4 +1,4 @@
-# SDS CSI Driver
+# Haify CSI Driver
 
 Driver name: `sds.csi.liliang-cn.com`. Everything is deployed into
 `kube-system` except the optional Copilot RBAC (`60-sds-ai-apps-rbac.yaml`,
@@ -13,19 +13,19 @@ namespace `sds-ai`).
 | `30-node.yaml` | DaemonSet `sds-csi-node`: node-driver-registrar, plugin (`csi-node`, privileged) |
 | `40-storageclass.yaml` | StorageClass `sds-drbd` |
 | `50-volumesnapshotclass.yaml` | VolumeSnapshotClass `sds-drbd-snapshot` (needs the snapshot CRDs, see below) |
-| `60-sds-ai-apps-rbac.yaml` | ServiceAccount + token Secret for the SDS Copilot's `sds_k8s_app_create` tool |
+| `60-sds-ai-apps-rbac.yaml` | ServiceAccount + token Secret for the Haify Copilot's `sds_k8s_app_create` tool |
 
 ## Prerequisites
 
-- Every Kubernetes node that runs volumes is a registered SDS node with the
+- Every Kubernetes node that runs volumes is a registered Haify node with the
   DRBD 9 kernel module and `drbd-utils`, and LVM or ZFS. **The Kubernetes node
-  name must equal the SDS node name**: the node plugin reports
+  name must equal the Haify node name**: the node plugin reports
   `spec.nodeName` as its topology, and the controller plugin matches it against
   `sds node list`. At startup the node plugin registers its node with the
   controller under that name and `status.hostIP` (`--node-name`/`--node-ip`,
   from `NODE_NAME`/`NODE_IP`); registration is idempotent, and the controller
   still needs SSH to that address.
-- The SDS pool named in the StorageClass exists on at least `replicas` of
+- The Haify pool named in the StorageClass exists on at least `replicas` of
   those nodes (`sds pool create --name vg0 ...`).
 
 ## Build the image
@@ -70,13 +70,13 @@ Then:
 
 | Parameter | Default | Meaning |
 | --------- | ------- | ------- |
-| `pool` | required unless `resourceProfile` sets it | SDS pool name as given to `sds pool create --name` (`vg0` and `sds_vg0` both match) |
+| `pool` | required unless `resourceProfile` sets it | Haify pool name as given to `sds pool create --name` (`vg0` and `sds_vg0` both match) |
 | `replicas` | `2` | Diskful copies |
 | `storageType` | `lvm` | `lvm` or `zfs` |
 | `allowRemoteVolumeAccess` | `false` | `true` lets a Pod run on a node with no replica: the node plugin attaches a diskless DRBD client there at stage time and detaches it at unstage. Without it, Pods are pinned to replica nodes |
-| `faultDomainLabel` | `host` | SDS node label whose values replicas are spread across (`sds node label <node> host=<name>`); nodes without the label count as their own domain |
-| `resourceProfile` | none | SDS resource profile; its pool, replica count and storage type apply unless the StorageClass sets them explicitly |
-| `resourceLabels` | none | `key=value,key=value` labels put on the SDS resource. `sds.csi/managed-by=csi` is always added |
+| `faultDomainLabel` | `host` | Haify node label whose values replicas are spread across (`sds node label <node> host=<name>`); nodes without the label count as their own domain |
+| `resourceProfile` | none | Haify resource profile; its pool, replica count and storage type apply unless the StorageClass sets them explicitly |
+| `resourceLabels` | none | `key=value,key=value` labels put on the Haify resource. `sds.csi/managed-by=csi` is always added |
 
 Placement: the node the scheduler picked (`WaitForFirstConsumer` with
 `--strict-topology`) is seated first, the rest go to the nodes whose pool has
@@ -109,7 +109,7 @@ The filesystem is `ext4` unless the StorageClass sets
 ## Volume snapshots
 
 The driver implements `CREATE_DELETE_SNAPSHOT` and `LIST_SNAPSHOTS`: a
-`VolumeSnapshot` of an SDS volume becomes an LVM/ZFS snapshot of that volume's
+`VolumeSnapshot` of a Haify volume becomes an LVM/ZFS snapshot of that volume's
 backing store, which is what Kubernetes backup tools (Velero, Kasten)
 orchestrate.
 
@@ -196,7 +196,7 @@ consistency.
 Measured on a three-node k3s (2026-09-30): the VM was powered off, Kubernetes
 took about 75 seconds to declare the node lost, and the replacement pod was
 running on a surviving replica node about 9 seconds after that: 80 seconds of
-outage for a Deployment, data intact, nothing to clean up on the SDS side. The
+outage for a Deployment, data intact, nothing to clean up on the Haify side. The
 old node's replica resynchronised on its own when it came back, with no
 split-brain.
 
@@ -212,9 +212,9 @@ tolerations:
 Only controller-managed pods (Deployment, StatefulSet) are recreated. A bare
 `Pod` on a dead node is deleted and stays gone; its volume is kept.
 
-## SDS Copilot access (optional)
+## Haify Copilot access (optional)
 
-`60-sds-ai-apps-rbac.yaml` lets `sds-ai` create databases on SDS volumes
+`60-sds-ai-apps-rbac.yaml` lets `sds-ai` create databases on Haify volumes
 (the `sds_k8s_app_create` tool). It may create namespaces, Secrets, PVCs, Services
 and Deployments and read Pods, PVs and StorageClasses; it cannot update or
 delete anything. sds-ai runs outside the cluster and reads its kubeconfig from
@@ -227,7 +227,7 @@ KUBECONFIG=sds-ai.kubeconfig kubectl config set-credentials sds-ai --token="$TOK
 KUBECONFIG=sds-ai.kubeconfig kubectl config set-context --current --user=sds-ai
 ```
 
-Without `storageClass` in the request, it picks an SDS StorageClass that does
+Without `storageClass` in the request, it picks a Haify StorageClass that does
 not set `allowRemoteVolumeAccess: "true"`, falling back to one that does.
 
 ## When registry.k8s.io is unreachable

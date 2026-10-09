@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// sdsLVName matches the backing volumes SDS creates — <res>_data, <res>_volN,
+// sdsLVName matches the backing volumes Haify creates — <res>_data, <res>_volN,
 // <res>_state[N] — and scheduled snapshots of them. Backup snapshots (_bk_)
 // are judged by the backups area, against the backup records.
 var sdsLVName = regexp.MustCompile(`^(.+)_(data|vol[0-9]+|state[0-9]*)(_sched_.+)?$`)
@@ -52,13 +52,13 @@ func checkHygiene(in *Input) []Check {
 		}
 		if len(orphans) > 0 {
 			out = append(out, Check{ID: "hygiene.orphan_lv", Area: AreaHygiene, Subject: node, Status: StatusWarn,
-				Message:  fmt.Sprintf("%s named like an SDS volume of a resource that no longer exists", plural(len(orphans), "logical volume", "logical volumes")),
+				Message:  fmt.Sprintf("%s named like a Haify volume of a resource that no longer exists", plural(len(orphans), "logical volume", "logical volumes")),
 				Evidence: orphans,
 				Fix:      fmt.Sprintf("ssh %s sudo lvremove %s", addr, strings.Join(orphans, " "))})
 		}
 	}
 	if len(out) == 0 {
-		out = append(out, pass("hygiene.leftovers", AreaHygiene, "no DRBD configs or SDS-named volumes left by deleted resources"))
+		out = append(out, pass("hygiene.leftovers", AreaHygiene, "no DRBD configs or Haify-named volumes left by deleted resources"))
 	}
 	return out
 }

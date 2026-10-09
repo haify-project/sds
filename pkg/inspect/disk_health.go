@@ -13,11 +13,11 @@ import (
 // pending sectors climb, an SSD wears out — and the warning is only useful if
 // someone reads it before the pool loses the disk.
 
-// managedPrefix marks the volume groups SDS manages; the node's own (its
+// managedPrefix marks the volume groups Haify manages; the node's own (its
 // root VG, a hypervisor's) are not pools and are left alone.
 const managedPrefix = "sds_"
 
-// DiskProbeScript prints one line per physical volume of an SDS pool:
+// DiskProbeScript prints one line per physical volume of a Haify pool:
 // pv|vg|size|used|disk|<base64 smartctl json, or NOSMARTCTL>. The disk is the
 // PV's parent when the PV is a partition.
 const DiskProbeScript = `pvs --noheadings --units b --nosuffix --separator '|' -o pv_name,vg_name,pv_size,pv_used 2>/dev/null |

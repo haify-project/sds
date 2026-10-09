@@ -1,6 +1,6 @@
-# SDS MCP server (for AI agents)
+# Haify MCP server (for AI agents)
 
-`sds-mcp` (in `cmd/mcp`) exposes the SDS controller as a
+`sds-mcp` (in `cmd/mcp`) exposes the Haify controller as a
 [Model Context Protocol](https://modelcontextprotocol.io) server, so an AI
 agent can inspect and operate the cluster through tools. It talks to the
 controller's gRPC API, the same one `sds` uses. It runs in three ways:
@@ -71,7 +71,7 @@ Flags:
 ### Kubernetes tools
 
 `sds-mcp k8s` serves `sds_k8s_app_list`, `sds_k8s_app_create` and
-`sds_k8s_app_delete` (a database on Kubernetes whose data lives on an SDS
+`sds_k8s_app_delete` (a database on Kubernetes whose data lives on a Haify
 volume). Delete removes the Deployment and Service and keeps the volume claim
 and password secret unless `delete_data` is set; it touches only objects
 `sds_k8s_app_create` made. It uses `--kubeconfig`

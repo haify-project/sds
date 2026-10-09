@@ -57,7 +57,7 @@ func (rm *ResourceManager) drHost(ctx context.Context, resource string) string {
 	return rm.controller.ResolveHost(dbRes.DRNode)
 }
 
-// SyncPromoters makes every SDS promoter of resource — its `ha create` config,
+// SyncPromoters makes every Haify promoter of resource — its `ha create` config,
 // its gateway or its app — present on the nodes failoverHosts names and absent from
 // every other node. former names nodes that held a replica until just now,
 // which are retired even when they are not registered nodes.

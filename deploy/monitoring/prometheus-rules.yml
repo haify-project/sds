@@ -1,4 +1,4 @@
-# Prometheus alerting rules for an SDS controller's /metrics endpoint
+# Prometheus alerting rules for a Haify controller's /metrics endpoint
 # ([metrics] enabled = true in controller.toml). The controller raises its own
 # events too (sds event list); these are for clusters already watched by
 # Prometheus and Alertmanager.
@@ -10,21 +10,21 @@ groups:
         for: 2m
         labels: {severity: critical}
         annotations:
-          summary: "SDS controller {{ $labels.instance }} is not answering"
+          summary: "Haify controller {{ $labels.instance }} is not answering"
 
       - alert: SDSObservationStale
         expr: time() - sds_controller_last_observation_timestamp_seconds > 600
         for: 5m
         labels: {severity: warning}
         annotations:
-          summary: "SDS has not read {{ $labels.source }} for over 10 minutes; its series are frozen"
+          summary: "Haify has not read {{ $labels.source }} for over 10 minutes; its series are frozen"
 
       - alert: SDSNodeUnreachable
         expr: sds_controller_node_reachable == 0
         for: 2m
         labels: {severity: critical}
         annotations:
-          summary: "SDS cannot reach node {{ $labels.node }}"
+          summary: "Haify cannot reach node {{ $labels.node }}"
 
       - alert: SDSQuorumLost
         expr: sds_drbd_quorum == 0

@@ -91,7 +91,7 @@ export interface NodeResourceState {
   role: string;
   diskState: string;
   replicationState: string;
-  // The SDS node name this state belongs to. The map is keyed by DRBD host
+  // The Haify node name this state belongs to. The map is keyed by DRBD host
   // name (the machine's real hostname), which is generally not the node name
   // the rest of the API uses.
   node?: string;

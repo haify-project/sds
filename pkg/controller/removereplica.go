@@ -10,7 +10,7 @@ import (
 
 // RemoveReplica takes a diskful replica out of a running resource.
 //
-// The inverse of AddReplica, and missing until now: SDS could grow a resource
+// The inverse of AddReplica, and missing until now: Haify could grow a resource
 // and never shrink it, so every removal meant hand-editing DRBD config on every
 // node. On the volume that carries the controller's own database, with the
 // controller running on it, that is not a comfortable place to be careful.

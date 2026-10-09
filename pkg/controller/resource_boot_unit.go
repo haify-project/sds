@@ -29,7 +29,7 @@ const drbdBootScriptPath = "/usr/local/sbin/sds-drbd-up.sh"
 //   - activates LVM volume groups (`vgchange -ay`) so DRBD backing devices
 //     exist before attach — otherwise a resource comes up Diskless because its
 //     backing LV was not yet active at boot;
-//   - opens any LUKS containers SDS has registered on the node, between those
+//   - opens any LUKS containers Haify has registered on the node, between those
 //     two steps: an encrypted resource's backing device is the crypt mapping,
 //     which cannot exist before the LV does and must exist before DRBD
 //     attaches. Doing it inside this one script is what makes that ordering
@@ -62,7 +62,7 @@ EOSCRIPT
 sudo chmod +x ` + drbdBootScriptPath + `
 sudo tee ` + drbdBootUnitPath + ` > /dev/null <<'EOF'
 [Unit]
-Description=Bring up all SDS DRBD resources at boot
+Description=Bring up all Haify DRBD resources at boot
 After=network-online.target lvm2-monitor.service local-fs.target
 Wants=network-online.target
 Before=drbd-reactor.service

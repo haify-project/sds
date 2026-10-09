@@ -153,7 +153,7 @@ func (sm *StorageManager) ListZFSpools(ctx context.Context) ([]*PoolInfo, error)
 				fields := strings.Fields(line)
 				if len(fields) >= 4 {
 					poolName := fields[0]
-					// Only show SDS-managed pools (with sds_ prefix)
+					// Only show Haify-managed pools (with sds_ prefix)
 					if !strings.HasPrefix(poolName, "sds_") {
 						continue
 					}

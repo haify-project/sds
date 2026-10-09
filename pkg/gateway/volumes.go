@@ -123,10 +123,10 @@ const stateVolumeSuffix = "_state"
 // This is not a free choice, and getting it backwards is silent. The gateway
 // templates were written against linstor-gateway's convention — volume 0 is
 // cluster-private, volume 1 is the payload — which holds when the gateway
-// creates the resource itself and reserves volume 0. SDS does the opposite:
+// creates the resource itself and reserves volume 0. Haify does the opposite:
 // `resource create --size` puts the operator's data on volume 0 as
 // "<resource>_data", and the state volume is APPENDED afterwards by
-// EnsureGatewayVolumes. Following the template's convention on an SDS resource
+// EnsureGatewayVolumes. Following the template's convention on a Haify resource
 // therefore exports the 1 GiB scratch volume and formats the operator's data
 // volume as gateway scratch — a share that comes up, mounts, and is both the
 // wrong size and not their storage.

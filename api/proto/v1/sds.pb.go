@@ -607,7 +607,7 @@ type PoolInfo struct {
 	// cannot be flushed, so it cannot be detached without discarding data.
 	CacheDegraded bool `protobuf:"varint,16,opt,name=cache_degraded,json=cacheDegraded,proto3" json:"cache_degraded,omitempty"`
 	// Thin pool utilisation. total_gb/free_gb above describe the VOLUME GROUP,
-	// and SDS gives its thin pool 95% of the group's free extents at create (all
+	// and Haify gives its thin pool 95% of the group's free extents at create (all
 	// of them on convert-thin), so free_gb stays near zero for the whole life of
 	// such a pool however empty it is. These fields are the ones that say
 	// whether the next write will succeed.
@@ -3885,7 +3885,7 @@ func (x *CreateResourceResponse) GetMessage() string {
 }
 
 // AdoptResourceRequest imports an already-existing (foreign) DRBD resource into
-// SDS management by recording its metadata in the SDS database. It never
+// Haify management by recording its metadata in the Haify database. It never
 // creates or modifies the actual DRBD resource or its data. Every field except
 // name is optional and auto-discovered from the live .res on a node when
 // omitted; a provided value overrides discovery.
@@ -11473,7 +11473,7 @@ type NodeResourceState struct {
 	// resyncing. Only meaningful for a peer whose replication_state is a resync
 	// state (SyncSource/SyncTarget/PausedSync*).
 	SyncPercent float64 `protobuf:"fixed64,4,opt,name=sync_percent,json=syncPercent,proto3" json:"sync_percent,omitempty"`
-	// node is the SDS node name this state belongs to. The map itself is keyed by
+	// node is the Haify node name this state belongs to. The map itself is keyed by
 	// DRBD host name, which is the machine's real hostname and generally is NOT
 	// the node name the rest of the API uses — so without this a caller cannot
 	// pair a state with the entry of `nodes` it describes.

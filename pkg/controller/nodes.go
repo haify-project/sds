@@ -332,7 +332,7 @@ func (nm *NodeManager) GetNodeAddressByName(name string) string {
 // This exists because a DRBD `.res` file only applies to a host whose hostname
 // matches one of its `on <name>` sections — drbdadm otherwise fails the whole
 // resource with "'<res>' not defined in your config (for this host)". Writing
-// the SDS node *name* there silently works only while operators happen to
+// the Haify node *name* there silently works only while operators happen to
 // register nodes under their hostname (node1, node2, ...); register the
 // same host as "node-a" while it calls itself "vm-node-a" and every resource
 // create fails.

@@ -10,7 +10,7 @@
 // This package does the connecting, and it does it deterministically. It is
 // not a model and it does not guess: it normalises lines into signatures so
 // four hundred occurrences of one problem are one finding, and it matches a
-// small table of failure modes SDS actually knows the cause of. Everything
+// small table of failure modes Haify actually knows the cause of. Everything
 // else comes back as evidence, grouped and ranked, for something that can
 // reason to read. What it must never do is state a cause it cannot show the
 // line for — a confident wrong diagnosis of a storage cluster is worse than
@@ -159,7 +159,7 @@ type Finding struct {
 	// Known says a failure mode in the table matched. Only a known finding
 	// carries Cause and Advice; everything else carries evidence and stops.
 	Known bool `json:"known"`
-	// Cause is why this happens, stated only where SDS knows.
+	// Cause is why this happens, stated only where Haify knows.
 	Cause string `json:"cause,omitempty"`
 	// Advice is the exact steps, in order. Commands are literal — a step
 	// somebody has to adapt is a step they will adapt wrongly at 3am.

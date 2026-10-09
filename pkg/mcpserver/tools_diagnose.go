@@ -21,7 +21,7 @@ import (
 //
 // This tool does the reading and the correlating, and returns problems instead
 // of lines. What it will not do is decide what to say — a finding it cannot
-// show the line for is not returned, and only the failure modes SDS actually
+// show the line for is not returned, and only the failure modes Haify actually
 // knows the cause of carry a cause and steps. The rest arrives as grouped
 // evidence for the model to reason over, which is the honest division: the
 // deterministic part is deterministic and the judgement is visibly judgement.
@@ -45,7 +45,7 @@ type diagnoseFinding struct {
 	Count    int                `json:"count" jsonschema:"how many lines collapsed into this finding; a large number means a loop, not a blip"`
 	Nodes    []string           `json:"nodes,omitempty"`
 	Resource string             `json:"resource,omitempty"`
-	Known    bool               `json:"known" jsonschema:"true when this matched a failure mode SDS knows the cause of; only then are cause and advice present, and they are then reliable enough to repeat verbatim"`
+	Known    bool               `json:"known" jsonschema:"true when this matched a failure mode Haify knows the cause of; only then are cause and advice present, and they are then reliable enough to repeat verbatim"`
 	Cause    string             `json:"cause,omitempty"`
 	Advice   []string           `json:"advice,omitempty" jsonschema:"exact steps in order; commands are literal and can be given to an operator as written"`
 	Caution  string             `json:"caution,omitempty" jsonschema:"present only when a step is destructive or irreversible; when present it must be repeated to the operator, not summarised away"`
@@ -100,7 +100,7 @@ func (s *Server) registerDiagnoseTools(srv *mcp.Server) {
 			"problems rather than the lines. This is the tool to reach for when asked what is wrong, why something "+
 			"broke, or why a resource will not start; the individual sds_event_list / sds_audit_list / sds_log_list "+
 			"tools are for when you already know what you are looking for.\n\n"+
-			"Findings marked known:true carry a cause and exact steps that SDS is sure of — repeat those verbatim, "+
+			"Findings marked known:true carry a cause and exact steps that Haify is sure of — repeat those verbatim, "+
 			"including any caution, rather than rewording them. Findings without it are grouped evidence and nothing "+
 			"more: reason over them, cite the lines, and say plainly when the evidence does not settle the question. "+
 			"Do not invent a cause for a finding that has none.\n\n"+

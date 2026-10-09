@@ -18,7 +18,7 @@ import (
 //
 // At the DRBD `.res` level a diskless client is identical to a quorum
 // tiebreaker — an `on <node>` block whose every volume overrides `disk none`.
-// The distinction is purely in SDS semantics: a tiebreaker is never promoted or
+// The distinction is purely in Haify semantics: a tiebreaker is never promoted or
 // mounted (DisklessNodes), whereas a client is (DisklessClients). Attach/detach
 // therefore reuse the same config surgery the tiebreaker path relies on, but
 // track the node separately and never treat it as a mere vote.
@@ -341,7 +341,7 @@ func lastVoteBesidesTwoReplicas(dbRes *database.Resource, node string) bool {
 
 // tiebreakerToClient reclassifies a resource's tiebreaker as a diskless
 // client. Nothing changes in DRBD: both are `disk none` participants. What
-// changes is that SDS lets this node be promoted and mount the resource.
+// changes is that Haify lets this node be promoted and mount the resource.
 func (rm *ResourceManager) tiebreakerToClient(ctx context.Context, dbRes *database.Resource, node string) error {
 	ip := resolveToIP(rm.controller.ResolveHost(node))
 	if _, err := rm.deployment.DRBDUp(ctx, []string{ip}, dbRes.Name); err != nil {

@@ -68,7 +68,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			GetResourceProfile(context.Context, string) (*sdspb.ResourceProfile, error)
 		})
 		if !ok {
-			return nil, status.Error(codes.Internal, "SDS backend does not support resource profiles")
+			return nil, status.Error(codes.Internal, "Haify backend does not support resource profiles")
 		}
 		profile, profileErr := profileClient.GetResourceProfile(ctx, params.ResourceProfile)
 		if profileErr != nil {
@@ -153,7 +153,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			Labels:      labels,
 		})
 	} else if params.ResourceProfile != "" || len(params.ResourceLabels) > 0 {
-		return nil, status.Error(codes.Internal, "SDS backend does not support resource profiles or labels")
+		return nil, status.Error(codes.Internal, "Haify backend does not support resource profiles or labels")
 	} else {
 		err = s.backend.CreateResourceWithPoolAndType(ctx, name, 0, replicaNodes, "C", sizeGB, params.Pool, params.StorageType, nil)
 	}

@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-SDS is a Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`sds-controller`), a CLI (`sds`, installed with an `sds-cli` link), a Kubernetes CSI driver, an MCP server (`sds-mcp`) and an AI Copilot backend (`sds-ai`). `CLAUDE.md` has the architecture and the gateway package's layout.
+Haify is a Software Defined Storage controller written in Go, built on DRBD and LVM/ZFS. It consists of a gRPC controller (`sds-controller`), a CLI (`sds`, installed with an `sds-cli` link), a Kubernetes CSI driver, an MCP server (`sds-mcp`) and an AI Copilot backend (`sds-ai`). `CLAUDE.md` has the architecture and the gateway package's layout.
 
 ## Project Structure
 
@@ -18,7 +18,7 @@ sds/
 │   ├── mcpserver/    # MCP tools and runbooks (runbooks/*.md, embedded)
 │   ├── mcpauth/      # Tokens and OAuth for `sds-mcp serve`
 │   ├── csi/          # Kubernetes CSI driver
-│   ├── k8sapp/       # Databases on Kubernetes backed by SDS volumes (`sds-mcp k8s`, sds_k8s_* tools)
+│   ├── k8sapp/       # Databases on Kubernetes backed by Haify volumes (`sds-mcp k8s`, sds_k8s_* tools)
 │   ├── alert/        # Health detector: cluster state to events
 │   ├── event/        # Notification bus, history, webhook delivery
 │   ├── triage/       # Turns recorded events into a short problem list

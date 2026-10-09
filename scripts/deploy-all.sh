@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and deploy SDS to the given hosts.
+# Build and deploy Haify to the given hosts.
 # Usage: ./scripts/deploy-all.sh node1,node2,node3
 #
 # Cross-compiles for each node's own architecture (TARGET_ARCH forces one),

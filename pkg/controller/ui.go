@@ -24,7 +24,7 @@ import (
 // .gitkeep, so a plain `go build` produces a controller with no UI assets. Say
 // so plainly instead of answering every request with a bare 404.
 const uiNotBuiltPage = `<!DOCTYPE html>
-<html><head><title>SDS — UI not built</title></head>
+<html><head><title>Haify — UI not built</title></head>
 <body style="font-family:sans-serif;max-width:40em;margin:4em auto">
 <h1>Web UI not built</h1>
 <p>This <code>sds-controller</code> was compiled without the web UI assets.

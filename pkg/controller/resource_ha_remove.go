@@ -97,12 +97,12 @@ func (rm *ResourceManager) EvictHa(ctx context.Context, resource string) error {
 	return nil
 }
 
-// evictPromoterConfigs are the promoter configs SDS writes for a resource, in
+// evictPromoterConfigs are the promoter configs Haify writes for a resource, in
 // the order evictScript tries them.
 var evictPromoterConfigs = []string{"sds-ha-%s", "sds-nfs-%s", "sds-iscsi-%s", "sds-nvmeof-%s", "sds-smb-%s"}
 
 // evictScript evicts the resource from the node it runs on through whichever
-// SDS promoter config for it exists there, and fails when none does — or when
+// Haify promoter config for it exists there, and fails when none does — or when
 // no other node took the resource over. drbd-reactorctl exits 0 either way:
 // when the local services do not stop in time it re-enables the resource
 // where it was and says so only in its output.

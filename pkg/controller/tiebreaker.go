@@ -115,7 +115,7 @@ func (rm *ResourceManager) SetTiebreaker(ctx context.Context, resource, newNode 
 	newConfig := originalConfig
 
 	// Drop the outgoing tiebreaker's stanza. Match on the DRBD host name, which
-	// is the node's real hostname, not the SDS node name.
+	// is the node's real hostname, not the Haify node name.
 	oldHosts := make([]string, 0, len(current))
 	for _, old := range current {
 		drbdName := rm.controller.nodes.GetDRBDNameByRef(old)

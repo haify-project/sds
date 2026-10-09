@@ -91,7 +91,7 @@ export function HAPage() {
     );
     const nodeStates = status?.nodeStates ?? {};
     // Keyed by DRBD host name, which is what evict and the failover poll
-    // compare against — resolving it to an SDS node name here would break both.
+    // compare against — resolving it to a Haify node name here would break both.
     const primaryNode = Object.keys(nodeStates).find(
       (n) => nodeStates[n]?.role === 'Primary'
     );

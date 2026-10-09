@@ -11,13 +11,13 @@ import (
 )
 
 // The Kubernetes (CSI) tools are a separate MCP server, sds-k8s, from the
-// bare-metal ones: they talk to a Kubernetes API server rather than the SDS
+// bare-metal ones: they talk to a Kubernetes API server rather than the Haify
 // controller, need a kubeconfig the bare-metal server has no use for, and act
 // on Kubernetes objects. Keeping them apart lets a client mount either one, and
 // every tool here is named sds_k8s_* so the model can tell which side a call
 // lands on.
 
-// AppManager creates, lists and deletes databases on Kubernetes backed by SDS
+// AppManager creates, lists and deletes databases on Kubernetes backed by Haify
 // volumes. *k8sapp.Manager implements it.
 type AppManager interface {
 	Create(ctx context.Context, r k8sapp.Request) (*k8sapp.Created, error)
@@ -30,7 +30,7 @@ type appCreateIn struct {
 	Name         string `json:"name,omitempty" jsonschema:"name of the Deployment, Service and claim (default: the template name)"`
 	Namespace    string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace, created if missing (default: default)"`
 	Size         string `json:"size,omitempty" jsonschema:"volume size as a Kubernetes quantity, e.g. 10Gi (default 5Gi)"`
-	StorageClass string `json:"storage_class,omitempty" jsonschema:"SDS StorageClass (default: one that keeps data on the database's node)"`
+	StorageClass string `json:"storage_class,omitempty" jsonschema:"Haify StorageClass (default: one that keeps data on the database's node)"`
 	Image        string `json:"image,omitempty" jsonschema:"container image override (default mysql:8.4 or postgres:17)"`
 }
 
@@ -56,7 +56,7 @@ func NewK8s(apps AppManager, logger *zap.Logger, opts Options) *Server {
 func (s *Server) k8sMCPServer() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "sds-k8s",
-		Title:   "SDS on Kubernetes (CSI)",
+		Title:   "Haify on Kubernetes (CSI)",
 		Version: s.version,
 	}, nil)
 	s.registerAppTools(srv)
@@ -65,7 +65,7 @@ func (s *Server) k8sMCPServer() *mcp.Server {
 
 // registerAppTools adds the Kubernetes application tools.
 func (s *Server) registerAppTools(srv *mcp.Server) {
-	addRead(s, srv, readOnlyTool("sds_k8s_app_list", "List SDS-backed apps",
+	addRead(s, srv, readOnlyTool("sds_k8s_app_list", "List Haify-backed apps",
 		"List databases on Kubernetes created by sds_k8s_app_create: namespace, name, template, "+
 			"whether it is ready, the node it runs on, its Service address and the DRBD resource "+
 			"holding its data. Also lists the templates available."),
@@ -78,7 +78,7 @@ func (s *Server) registerAppTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, writeTool("sds_k8s_app_create", "Create an HA database on Kubernetes",
-		"Run MySQL or PostgreSQL on Kubernetes with its data on an SDS volume: DRBD keeps a "+
+		"Run MySQL or PostgreSQL on Kubernetes with its data on a Haify volume: DRBD keeps a "+
 			"replica on two nodes and a tiebreaker on a third. One database pod; if its node fails, "+
 			"Kubernetes restarts it on the other replica node after about 30 seconds plus the "+
 			"database's start-up, with every committed write intact. It is storage failover, not "+
@@ -100,7 +100,7 @@ func (s *Server) registerAppTools(srv *mcp.Server) {
 			return nil, ok(created.Message), nil
 		})
 
-	addWrite(s, srv, destructiveTool("sds_k8s_app_delete", "Delete an SDS-backed app",
+	addWrite(s, srv, destructiveTool("sds_k8s_app_delete", "Delete a Haify-backed app",
 		"Delete a database created by sds_k8s_app_create: its Deployment and Service. The volume claim "+
 			"<name>-data and the secret <name>-auth are kept, so creating the app again with the same name and "+
 			"template runs it on the same data with the same password, unless delete_data is set, which deletes "+

@@ -38,13 +38,13 @@ func thickPool(t *testing.T, node string) *thinConversionInput {
 }
 
 // NodeStates is keyed by whatever name DRBD reports, which is the node's
-// hostname — "sds-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — not the name SDS knows it by.
-// Looking it up with the SDS name found nothing for every node whose two names
+// hostname — "sds-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — not the name Haify knows it by.
+// Looking it up with the Haify name found nothing for every node whose two names
 // differ, and the planner refused every one of them with "no live DRBD state".
 // It failed closed, so nothing was damaged; the feature simply never worked.
 func TestFindsLiveStateWhenDRBDKnowsTheNodeByAnotherName(t *testing.T) {
 	in := thickPool(t, "node-e")
-	// Re-key exactly as a real cluster does: DRBD hostnames, not SDS names.
+	// Re-key exactly as a real cluster does: DRBD hostnames, not Haify names.
 	states := in.Resources[0].NodeStates
 	in.Resources[0].NodeStates = map[string]*ResourceNodeState{
 		"lima-sds-a": states["node-a"],

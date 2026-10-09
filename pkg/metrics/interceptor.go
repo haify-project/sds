@@ -1,4 +1,4 @@
-// Package metrics provides Prometheus metrics support for the SDS controller
+// Package metrics provides Prometheus metrics support for the Haify controller
 package metrics
 
 import (

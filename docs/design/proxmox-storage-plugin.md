@@ -1,4 +1,4 @@
-# SDS Proxmox VE Storage Plugin — Design
+# Haify Proxmox VE Storage Plugin — Design
 
 Date: 2026-07-02 (revised 2026-07-28, 2026-10-02)
 Status: **Implemented** (`deploy/proxmox/`). Installation and usage:
@@ -6,7 +6,7 @@ Status: **Implemented** (`deploy/proxmox/`). Installation and usage:
 
 ## Goal
 
-Let Proxmox VE provision VM disks on SDS/DRBD storage so that guests get
+Let Proxmox VE provision VM disks on Haify (DRBD) storage so that guests get
 replication, HA restart and RAM-only live migration — the Proxmox-side
 counterpart of the Kubernetes CSI driver. Snapshots are a secondary
 convenience.
@@ -38,7 +38,7 @@ qcow2 on DRBD, renaming volumes, activating a snapshot.
 ## Architecture
 
 ```
-Proxmox node (pvedaemon)                         SDS storage cluster
+Proxmox node (pvedaemon)                         Haify storage cluster
  ┌─────────────────────────────┐                 ┌───────────────────────────┐
  │ PVE::Storage::Custom::       │  HTTP/REST      │ sds-controller (:3375)    │
  │   SDSPlugin.pm  ──────────── │ ───────────────▶│   grpc-gateway REST       │
@@ -199,4 +199,4 @@ Defects found by this validation and fixed:
 
 Whole-VM migration off VMware is not part of this plugin. PVE 8.2+ ships an
 ESXi import wizard that copies disks into any target storage, including `sds`;
-SDS does not reimplement it.
+Haify does not reimplement it.

@@ -145,7 +145,7 @@ function SidebarContent({
         {!collapsed && (
           <div className="leading-tight">
             <h1 className="text-[13.5px] font-semibold tracking-tight">
-              SDS Controller
+              Haify
             </h1>
             <p className="text-[11px] text-muted-foreground">
               Software Defined Storage

@@ -417,9 +417,9 @@ func (s *Server) registerResourceTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, writeTool("sds_resource_adopt", "Adopt resource",
-		"Adopt a pre-existing/foreign DRBD resource into SDS management. Auto-discovers "+
+		"Adopt a pre-existing/foreign DRBD resource into Haify management. Auto-discovers "+
 			"nodes/port/volumes from the resource's .res on a node when omitted. Writes only "+
-			"SDS metadata — never touches the DRBD device or data."),
+			"Haify metadata — never touches the DRBD device or data."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resourceAdoptIn) (*mcp.CallToolResult, resourceAdoptOut, error) {
 			if in.Resource == "" {
 				return nil, resourceAdoptOut{}, fmt.Errorf("resource is required")

@@ -24,7 +24,7 @@ ui-ensure:
 		else \
 			echo "web-ui/dist not found; writing placeholder ui/dist (run 'make build' for the real UI)"; \
 			mkdir -p ui/dist; \
-			echo '<!DOCTYPE html><html><body>SDS UI placeholder - run make build to embed the real UI</body></html>' > ui/dist/index.html; \
+			echo '<!DOCTYPE html><html><body>Haify UI placeholder - run make build to embed the real UI</body></html>' > ui/dist/index.html; \
 		fi \
 	fi
 	@touch ui/dist/.gitkeep

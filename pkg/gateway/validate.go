@@ -186,14 +186,14 @@ func validateISCSIImplementation(implementation string) (string, error) {
 	case "", "lio", "lio-t":
 		return "lio-t", nil
 	case "tgt":
-		return "", fmt.Errorf("iSCSI implementation \"tgt\" is not supported: SDS gateways run on LIO (targetcli) only; " +
+		return "", fmt.Errorf("iSCSI implementation \"tgt\" is not supported: Haify gateways run on LIO (targetcli) only; " +
 			"with tgt the iSCSITarget agent ignores the service-IP portal and needs a tgtd daemon the promoter chain " +
 			"does not start. Use --implementation lio")
 	case "iet":
-		return "", fmt.Errorf("iSCSI implementation \"iet\" is not supported: SDS gateways run on LIO (targetcli) only; " +
+		return "", fmt.Errorf("iSCSI implementation \"iet\" is not supported: Haify gateways run on LIO (targetcli) only; " +
 			"with iet the iSCSITarget agent ignores the service-IP portal, and IET is not packaged by current " +
 			"distributions. Use --implementation lio")
 	default:
-		return "", fmt.Errorf("unknown iSCSI implementation %q: SDS gateways run on LIO (targetcli) only; use --implementation lio", implementation)
+		return "", fmt.Errorf("unknown iSCSI implementation %q: Haify gateways run on LIO (targetcli) only; use --implementation lio", implementation)
 	}
 }

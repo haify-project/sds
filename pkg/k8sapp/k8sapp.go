@@ -1,4 +1,4 @@
-// Package k8sapp creates databases on Kubernetes whose data lives on an SDS
+// Package k8sapp creates databases on Kubernetes whose data lives on a Haify
 // volume. sds-mcp exposes it as the sds_k8s_app_create, sds_k8s_app_list and
 // sds_k8s_app_delete tools.
 package k8sapp
@@ -27,7 +27,7 @@ import (
 )
 
 // "I want an HA MySQL" becomes one tool call: a database on Kubernetes whose
-// data lives on an SDS volume.
+// data lives on a Haify volume.
 //
 // High availability here comes from the storage, not from database
 // replication. The volume is a DRBD resource with a replica on two nodes and a
@@ -282,7 +282,7 @@ func NewManager(path string) (*Manager, error) {
 }
 
 // storageClassFor picks the StorageClass: the one asked for, which must be
-// served by the SDS driver, or else an SDS class that keeps data on the node
+// served by the Haify driver, or else a Haify class that keeps data on the node
 // running the database — a class allowing remote access would let the pod land
 // on a node whose every read and write crosses the network.
 func (m *Manager) storageClassFor(ctx context.Context, want string) (string, error) {
@@ -294,7 +294,7 @@ func (m *Manager) storageClassFor(ctx context.Context, want string) (string, err
 	for _, sc := range list.Items {
 		if sc.Provisioner != sdsDriverName {
 			if sc.Name == want {
-				return "", fmt.Errorf("storage class %q is served by %s, not SDS", want, sc.Provisioner)
+				return "", fmt.Errorf("storage class %q is served by %s, not Haify", want, sc.Provisioner)
 			}
 			continue
 		}
@@ -318,7 +318,7 @@ func (m *Manager) storageClassFor(ctx context.Context, want string) (string, err
 	if len(remote) > 0 {
 		return remote[0], nil
 	}
-	return "", errors.New("no StorageClass uses the SDS CSI driver; install deploy/k8s first")
+	return "", errors.New("no StorageClass uses the Haify CSI driver; install deploy/k8s first")
 }
 
 // Created is what POST /ai/apps returns.
@@ -462,7 +462,7 @@ func (m *Manager) List(ctx context.Context) ([]Status, error) {
 }
 
 // InvalidError is a request that failed validation before anything was
-// created: an unknown template, a bad name, a StorageClass that is not SDS, an
+// created: an unknown template, a bad name, a StorageClass that is not Haify, an
 // app that already exists.
 type InvalidError struct{ err error }
 

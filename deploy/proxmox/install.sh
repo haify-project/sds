@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install the SDS storage plugin on this Proxmox VE node.
+# Install the Haify storage plugin on this Proxmox VE node.
 #
 # The plugin is a Perl module plus its helpers under SDS/, with no dependencies
 # beyond what PVE already ships, so installing is a copy plus a daemon reload.
@@ -58,7 +58,7 @@ if [ "${1:-}" = "--uninstall" ]; then
     rmdir "$HELPER_DIR" 2>/dev/null || true
     [ -x "$GUI_PATCH" ] && "$GUI_PATCH" --remove
     rm -f "$GUI_JS" "$GUI_PATCH" "$APT_HOOK"
-    echo "Removed the SDS storage dialog from the web interface"
+    echo "Removed the Haify storage dialog from the web interface"
     echo "Remove any 'sds:' entries from /etc/pve/storage.cfg before reloading."
     reload_pve
     exit 0
@@ -96,7 +96,7 @@ install -D -m 0644 "$SRC_DIR/gui/sds-storage.js" "$GUI_JS"
 install -D -m 0755 "$SRC_DIR/gui/gui-patch.sh" "$GUI_PATCH"
 install -m 0644 "$SRC_DIR/gui/90sds-pve-gui" "$APT_HOOK"
 "$GUI_PATCH"
-echo "Added SDS to the web interface's storage dialogs"
+echo "Added Haify to the web interface's storage dialogs"
 
 # Keep the host's LVM off the DRBD devices that carry guest disks (see
 # lvm-filter.sh). SDS_SKIP_LVM_FILTER=1 leaves lvm.conf to you.
@@ -112,7 +112,7 @@ echo "Restarted $PVE_DAEMONS"
 cat <<'EOF'
 
 Next: add the storage once for the cluster, in the web interface under
-Datacenter -> Storage -> Add -> SDS, or in /etc/pve/storage.cfg, e.g.
+Datacenter -> Storage -> Add -> Haify, or in /etc/pve/storage.cfg, e.g.
 
   sds: sds0
         controller 192.168.1.10

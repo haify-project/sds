@@ -1,4 +1,4 @@
-# SDS — Installation & Deployment Guide
+# Haify — Installation & Deployment Guide
 
 From raw storage nodes to a working DRBD-backed cluster with gateways, HA,
 Kubernetes CSI, the AI Copilot, and optional WAN replication.
@@ -27,7 +27,7 @@ sds / web UI / sds-mcp / sds-ai
 
 - **Control plane:** one `sds-controller` process with a BBolt database
   (`[database] path`, default `/var/lib/sds/sds.db`). It drives every node over
-  SSH through the `dispatch` library; there is no per-node SDS agent. Commands
+  SSH through the `dispatch` library; there is no per-node Haify agent. Commands
   aimed at the controller's own address run locally without SSH.
 - **Listeners:** gRPC on `[server] port` (default `3374`); the REST gateway on
   `[server] rest_port` (default `3375`, bound to `[server] listen_address`); the web UI on `[ui] port`

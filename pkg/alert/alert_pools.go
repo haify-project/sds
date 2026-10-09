@@ -45,7 +45,7 @@ func (m *Monitor) checkPools(ctx context.Context, sc *pollScope, obs *Observatio
 		sc.livePools[poolKey(p.Name, p.Node)] = true
 
 		// A group with no thin pool has no utilisation to judge. Its vg_free is
-		// a real number, but it is also the number SDS drives to zero on
+		// a real number, but it is also the number Haify drives to zero on
 		// purpose, so there is nothing here to alert on.
 		if p.ThinPool == "" {
 			continue

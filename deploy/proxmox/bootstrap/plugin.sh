@@ -37,7 +37,7 @@ plugin_up_to_date() {
 step_plugin() {
 	local controllers n
 	controllers=$(controller_list)
-	step 7 "preflight and install the SDS storage plugin on every node"
+	step 7 "preflight and install the Haify storage plugin on every node"
 	for n in "${NODES[@]}"; do
 		if plugin_up_to_date "$n"; then
 			note "$n: plugin already installed and current"

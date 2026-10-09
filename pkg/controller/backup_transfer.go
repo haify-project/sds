@@ -67,7 +67,7 @@ func (bm *BackupManager) uploadVolumes(ctx context.Context, sess backup.Session,
 		}
 		// Compressed on the way out. A thin volume holding 1 GiB of data in a
 		// 100 GiB device used to upload — and store, and bill for — all 100
-		// GiB, most of it zeros. gzip is on every node SDS supports, so the
+		// GiB, most of it zeros. gzip is on every node Haify supports, so the
 		// restoring node never lacks the tool to read it back.
 		object := backup.ObjectPath(rec.Prefix, fmt.Sprintf("volume-%d.img.gz", v.VolumeID))
 		source, closeSource, err := backupSnapshotSource(v.Pool, v.BackingVolume, snaps[v.VolumeID], encrypted[v.VolumeID])

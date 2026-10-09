@@ -30,7 +30,7 @@ func TestMySQLAppFailsOverWithTheVolume(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.StorageClass != "sds-drbd" {
-		t.Errorf("storage class = %q, want the SDS class that keeps data local", got.StorageClass)
+		t.Errorf("storage class = %q, want the Haify class that keeps data local", got.StorageClass)
 	}
 	if got.Service != "orders.shop.svc:3306" {
 		t.Errorf("service = %q", got.Service)
@@ -106,12 +106,12 @@ func TestCreateNeverReplacesAnExistingApp(t *testing.T) {
 func TestStorageClassMustBeSDS(t *testing.T) {
 	m := sdsCluster()
 	_, err := m.Create(context.Background(), Request{Template: "postgres", StorageClass: "local-path"})
-	if err == nil || !strings.Contains(err.Error(), "not SDS") {
+	if err == nil || !strings.Contains(err.Error(), "not Haify") {
 		t.Fatalf("err = %v", err)
 	}
 	empty := &Manager{kube: fake.NewClientset()}
 	if _, err := empty.Create(context.Background(), Request{Template: "mysql"}); err == nil {
-		t.Fatal("created an app on a cluster without the SDS driver")
+		t.Fatal("created an app on a cluster without the Haify driver")
 	}
 }
 

@@ -1,4 +1,4 @@
-// Package controller provides the SDS controller
+// Package controller provides the Haify controller
 package controller
 
 import (
@@ -25,7 +25,7 @@ import (
 	"github.com/haify-project/sds/pkg/wanproxy"
 )
 
-// Controller represents the SDS controller
+// Controller represents the Haify controller
 type Controller struct {
 	config     *config.Config
 	logger     *zap.Logger
@@ -245,7 +245,7 @@ func (c *Controller) loadHostsFromDatabase(ctx context.Context) error {
 
 // Start starts the controller
 func (c *Controller) Start() error {
-	c.logger.Info("Starting SDS controller")
+	c.logger.Info("Starting Haify controller")
 
 	// Load hosts from registered nodes in database
 	if c.db != nil {
@@ -321,7 +321,7 @@ func (c *Controller) Start() error {
 		}
 	}
 
-	c.logger.Info("SDS controller started",
+	c.logger.Info("Haify controller started",
 		zap.String("address", c.config.Server.ListenAddress),
 		zap.Int("port", c.config.Server.Port),
 		zap.Strings("hosts", c.hosts))
@@ -334,7 +334,7 @@ func (c *Controller) Events() *event.Bus { return c.events }
 
 // Stop stops the controller
 func (c *Controller) Stop() {
-	c.logger.Info("Stopping SDS controller")
+	c.logger.Info("Stopping Haify controller")
 
 	c.cancel()
 
@@ -381,7 +381,7 @@ func (c *Controller) Stop() {
 		}
 	}
 
-	c.logger.Info("SDS controller stopped")
+	c.logger.Info("Haify controller stopped")
 }
 
 // GetHosts returns the list of hosts

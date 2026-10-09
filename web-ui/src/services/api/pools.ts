@@ -21,7 +21,7 @@ export interface Pool {
   cacheDevice?: string;
   cacheDegraded?: boolean;
   // Thin pool utilisation. totalGb/freeGb above describe the VOLUME GROUP, and
-  // SDS builds its thin pool from every free extent, so freeGb is zero for the
+  // Haify builds its thin pool from every free extent, so freeGb is zero for the
   // whole life of such a pool however empty it is. These are the fields that
   // say whether the next write will succeed.
   //

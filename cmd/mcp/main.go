@@ -1,4 +1,4 @@
-// Command sds-mcp exposes the SDS controller as a Model Context Protocol
+// Command sds-mcp exposes the Haify controller as a Model Context Protocol
 // (MCP) server over stdio, so AI assistants (Claude Code, Claude Desktop,
 // and other MCP clients) can inspect and manage storage.
 //
@@ -34,8 +34,8 @@ func main() {
 
 	rootCmd := &cobra.Command{
 		Use:           "sds-mcp",
-		Short:         "MCP server for the SDS storage controller",
-		Long:          "Serves SDS storage management tools over the Model Context Protocol (stdio transport).",
+		Short:         "MCP server for the Haify storage controller",
+		Long:          "Serves Haify storage management tools over the Model Context Protocol (stdio transport).",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -92,7 +92,7 @@ func newStderrLogger(debug bool) (*zap.Logger, error) {
 }
 
 // k8sCmd serves the Kubernetes (CSI) tools as their own MCP server, sds-k8s.
-// It talks to a Kubernetes API server, not the SDS controller.
+// It talks to a Kubernetes API server, not the Haify controller.
 func k8sCmd() *cobra.Command {
 	var (
 		kubeconfig string
@@ -102,7 +102,7 @@ func k8sCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "k8s",
-		Short: "MCP server for SDS on Kubernetes (sds_k8s_* tools)",
+		Short: "MCP server for Haify on Kubernetes (sds_k8s_* tools)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger, err := newStderrLogger(debug)
 			if err != nil {

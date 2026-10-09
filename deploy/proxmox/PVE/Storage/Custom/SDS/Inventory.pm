@@ -4,7 +4,7 @@ package PVE::Storage::Custom::SDS::Inventory;
 # the node running the guest, and whether the replicas are in step.
 #
 # list_images adds these fields to each volume it returns, and PVE's storage
-# content API passes them to the browser unchanged; the web interface's SDS
+# content API passes them to the browser unchanged; the web interface's Haify
 # views (gui/sds-storage.js) read them from there. The live state comes from
 # this node's own DRBD (one `drbdsetup status --json`, a few milliseconds), so
 # no controller call is made per disk. A resource that is not up on this node

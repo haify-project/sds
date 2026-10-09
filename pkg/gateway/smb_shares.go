@@ -101,7 +101,7 @@ func (sh SMBShare) section(resource string) string {
 // renderSMBShares renders a whole shares.conf.
 func renderSMBShares(resource string, shares []SMBShare) string {
 	var b strings.Builder
-	b.WriteString("# SDS SMB gateway shares (managed by sds gateway smb share)\n")
+	b.WriteString("# Haify SMB gateway shares (managed by sds gateway smb share)\n")
 	for _, sh := range shares {
 		b.WriteString("\n" + sh.section(resource))
 	}

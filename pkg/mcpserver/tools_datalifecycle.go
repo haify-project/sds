@@ -160,7 +160,7 @@ func (s *Server) registerDataLifecycleTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, destructiveTool("sds_backup_target_delete", "Delete a backup target",
-		"Remove a backup destination. Backups already shipped there become unrestorable through SDS."),
+		"Remove a backup destination. Backups already shipped there become unrestorable through Haify."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in struct {
 			Name  string `json:"name"`
 			Force bool   `json:"force,omitempty"`

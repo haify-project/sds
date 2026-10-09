@@ -126,7 +126,7 @@ func (nm *NotifyManager) Test(ctx context.Context, name string) error {
 		Type:     event.TypeChannelTest,
 		Severity: event.SeverityInfo,
 		Status:   event.StatusInfo,
-		Message: fmt.Sprintf("Test message from SDS for channel %q. "+
+		Message: fmt.Sprintf("Test message from Haify for channel %q. "+
 			"Alerts about this cluster will arrive here.", ch.Name),
 		Details:   map[string]string{"channel": ch.Name, "kind": ch.Kind},
 		Timestamp: time.Now().UTC(),

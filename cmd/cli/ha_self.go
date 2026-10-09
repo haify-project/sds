@@ -15,7 +15,7 @@ import (
 func haSelfCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "self",
-		Short: "Manage high availability of the SDS controller itself",
+		Short: "Manage high availability of the Haify controller itself",
 	}
 
 	cmd.AddCommand(haSelfEnable())
@@ -34,7 +34,7 @@ func haSelfEnable() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "enable",
-		Short: "Make the SDS controller highly available on its own DRBD + drbd-reactor machinery",
+		Short: "Make the Haify controller highly available on its own DRBD + drbd-reactor machinery",
 		Long: `Provisions a small DRBD resource (sds-meta) for the controller database,
 distributes the controller to all nodes, and hands management over to
 drbd-reactor: the node holding the DRBD Primary mounts the database, brings

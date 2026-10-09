@@ -1,4 +1,4 @@
-"""MkDocs hooks for the SDS site.
+"""MkDocs hooks for the Haify site.
 
 The site is built from docs/, but some documentation lives next to what it
 describes (deploy/k8s/README.md, deploy/proxmox/README.md, ...). Those files

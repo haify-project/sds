@@ -400,7 +400,7 @@ func TestUnreachableNodeIsItsOwnFinding(t *testing.T) {
 }
 
 // A peer the resource's own configuration names is a replica, not a leftover
-// slot — here a Proxmox host SDS never registered, powered off. It was
+// slot — here a Proxmox host Haify never registered, powered off. It was
 // reported as a phantom with forget-peer as the fix, which would have thrown
 // away a recoverable replica.
 func TestAConfiguredPeerThatIsDownIsNotAPhantom(t *testing.T) {

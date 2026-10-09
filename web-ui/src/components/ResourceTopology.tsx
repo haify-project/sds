@@ -61,7 +61,7 @@ const MAX_UPSCALE = 1.6;
  * diagram and the 3D one, so the two cannot classify a node differently.
  */
 export function placeNodes(resource: Resource, status: ResourceStatus) {
-  // The state map is keyed by DRBD host name; each entry carries the SDS node
+  // The state map is keyed by DRBD host name; each entry carries the Haify node
   // name so it can be paired back to the node list.
   const stateByNode = new Map<string, NodeResourceState>();
   for (const [host, st] of Object.entries(status.nodeStates ?? {})) {

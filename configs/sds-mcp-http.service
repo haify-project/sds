@@ -1,5 +1,5 @@
 [Unit]
-Description=drbd-reactor controlled sds-mcp (SDS MCP server over HTTP)
+Description=drbd-reactor controlled sds-mcp (Haify MCP server over HTTP)
 After=network-online.target sds-controller.service
 Wants=network-online.target
 

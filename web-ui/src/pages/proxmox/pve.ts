@@ -98,7 +98,7 @@ export interface PlacementCell {
   title: string;
 }
 
-/** The live state of `node` for a resource, matched by SDS node name. */
+/** The live state of `node` for a resource, matched by Haify node name. */
 export function stateOn(status: ResourceStatus | undefined, node: string): NodeResourceState | undefined {
   return Object.entries(status?.nodeStates ?? {}).find(([host, st]) => (st.node || host) === node)?.[1];
 }

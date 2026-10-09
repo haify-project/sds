@@ -15,7 +15,7 @@ import (
 	"github.com/haify-project/sds/pkg/database"
 )
 
-// encryptFixture marks the fixture's resource as SDS-encrypted, the way
+// encryptFixture marks the fixture's resource as Haify-encrypted, the way
 // resource create records it: the flag on the resource and the crypt mapping
 // as the volume's device.
 func encryptFixture(t *testing.T, ctrl *Controller) {

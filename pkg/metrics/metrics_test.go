@@ -109,7 +109,7 @@ func TestSetPoolCapacitiesExportsTotalUsedAndFree(t *testing.T) {
 	assert.Equal(t, 624.0, requireGauge(t, m, capacityMetric, id("free")))
 }
 
-// Every node in an SDS cluster tends to carry a volume group of the same name,
+// Every node in a Haify cluster tends to carry a volume group of the same name,
 // so the pool name alone does not identify a series. Without the node label the
 // second node's capacity overwrote the first's, and the cluster read as half
 // its real size.

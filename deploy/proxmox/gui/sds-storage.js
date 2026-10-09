@@ -1,5 +1,5 @@
 // The sds storage type in the Proxmox VE web interface: Datacenter → Storage →
-// Add → SDS, and the same dialog to edit an existing sds storage.
+// Add → Haify, and the same dialog to edit an existing sds storage.
 //
 // PVE builds its storage dialogs from PVE.Utils.storageSchema, a table its
 // own code fills in; a storage plugin has no way to add itself. This file is
@@ -58,7 +58,7 @@ Ext.define('PVE.storage.SDSInputPanel', {
     initComponent: function () {
         let me = this;
 
-        // The pools SDS made on this node are its sds_* volume groups, which
+        // The pools Haify made on this node are its sds_* volume groups, which
         // PVE's own LVM scan lists; on a node that holds no replica the list is
         // empty and the name can still be typed.
         me.poolStore = Ext.create('Ext.data.Store', { fields: ['pool', 'text'], data: [] });
@@ -210,7 +210,7 @@ Ext.define('PVE.storage.SDSInputPanel', {
 });
 
 PVE.Utils.storageSchema.sds = {
-    name: 'SDS',
+    name: 'Haify',
     ipanel: 'SDSInputPanel',
     faIcon: 'database',
     backups: false,
@@ -368,7 +368,7 @@ Ext.define('PVE.sds.DisksView', {
     },
 });
 
-// The SDS tab on an sds storage's page (Datacenter tree → node → storage).
+// The Haify tab on an sds storage's page (Datacenter tree → node → storage).
 // PVE.storage.Browser builds its tab list and hands it to PVE.panel.Config,
 // so the tab is added there, for sds storages only.
 Ext.define('PVE.sds.StorageBrowserOverride', {
@@ -381,7 +381,7 @@ Ext.define('PVE.sds.StorageBrowserOverride', {
             if (rec && rec.data.plugintype === 'sds') {
                 me.items.push({
                     xtype: 'pveSDSDisksView',
-                    title: 'SDS',
+                    title: 'Haify',
                     iconCls: 'fa fa-database',
                     itemId: 'sdsReplicas',
                     pveSelNode: me.pveSelNode,
@@ -440,7 +440,7 @@ Ext.define('PVE.sds.HAResourcesOverride', {
         };
 
         me.headerCt.insert(3, Ext.create('Ext.grid.column.Column', {
-            header: gettext('SDS replicas'),
+            header: gettext('Haify replicas'),
             width: 170,
             sortable: false,
             renderer: (v, md, rec) => {
@@ -460,7 +460,7 @@ Ext.define('PVE.sds.HAResourcesOverride', {
         // Node affinity rules are PVE 9's; PVE 8 has HA groups instead.
         if (PVE.ha.NodeAffinityRulesView) {
             me.down('toolbar').add('-', {
-                text: gettext('Prefer nodes with SDS replicas'),
+                text: gettext('Prefer nodes with Haify replicas'),
                 iconCls: 'fa fa-database',
                 handler: () => PVE.sds.preferReplicas(me.sdsReplicas, () => me.rstore.load()),
             });
@@ -484,12 +484,12 @@ PVE.sds.preferReplicas = function (replicasByVm, done) {
                 .filter((m) => m && replicasByVm[m[1]] && replicasByVm[m[1]].length)
                 .map((m) => ({ vmid: m[1], nodes: replicasByVm[m[1]] }));
             if (!targets.length) {
-                Ext.Msg.alert(gettext('SDS'), gettext('No HA-managed VM has disks on an SDS storage.'));
+                Ext.Msg.alert(gettext('Haify'), gettext('No HA-managed VM has disks on a Haify storage.'));
                 return;
             }
             let list = targets.map((t) => `VM ${t.vmid}: ${t.nodes.join(', ')}`).join('<br>');
             Ext.Msg.confirm(
-                gettext('Prefer nodes with SDS replicas'),
+                gettext('Prefer nodes with Haify replicas'),
                 gettext('HA keeps each VM on a node that holds a replica of its disks: a VM running on another node is migrated now, and after a failure it starts on one of them, or on any node when none is up.') +
                     `<br><br>${list}`,
                 (btn) => {
@@ -503,7 +503,7 @@ PVE.sds.preferReplicas = function (replicasByVm, done) {
                             resources: `vm:${t.vmid}`,
                             nodes: t.nodes.join(','),
                             strict: 0,
-                            comment: 'Nodes holding an SDS replica of the disks',
+                            comment: 'Nodes holding a Haify replica of the disks',
                         };
                         let finish = () => { if (--pending === 0) { done(); } };
                         Proxmox.Utils.API2Request({

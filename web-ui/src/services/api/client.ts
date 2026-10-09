@@ -46,7 +46,7 @@ async function promptForToken(): Promise<boolean> {
     return authPromptHandler();
   }
   const entered = window.prompt(
-    'SDS API token required (controller has authentication enabled):',
+    'Haify API token required (controller has authentication enabled):',
     getApiToken()
   );
   if (entered === null) return false;

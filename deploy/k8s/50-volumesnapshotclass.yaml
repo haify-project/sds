@@ -1,4 +1,4 @@
-# VolumeSnapshotClass for SDS volumes.
+# VolumeSnapshotClass for Haify volumes.
 #
 # PREREQUISITE (cluster-wide, install once — k3s and most distros do NOT ship
 # these): the VolumeSnapshot CRDs and the snapshot-controller from

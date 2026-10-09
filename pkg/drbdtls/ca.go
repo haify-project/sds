@@ -80,7 +80,7 @@ func newCA() (*CA, []byte, error) {
 	now := time.Now().Add(-time.Hour)
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "SDS DRBD replication CA"},
+		Subject:               pkix.Name{CommonName: "Haify DRBD replication CA"},
 		NotBefore:             now,
 		NotAfter:              now.Add(caValidity),
 		IsCA:                  true,

@@ -158,7 +158,7 @@ echo "state=initialized"
 `
 
 // postgresInit runs initdb with the password from a file, puts the settings
-// SDS relies on in conf/postgresql.sds.conf (included last from
+// Haify relies on in conf/postgresql.sds.conf (included last from
 // postgresql.conf, so they win), and starts the server once with no TCP
 // listener to prove it runs — creating pgvector while it is up.
 func postgresInit(s Spec) string {
@@ -179,7 +179,7 @@ rc=$?
 rm -f "$M/conf/.initpw"
 [ $rc -eq 0 ] || fail "initdb failed: $(tail -n 5 "$run/init.log")"
 cat > "$M/conf/postgresql.sds.conf" <<'SDSEOF'
-# Written by sds app create: the settings SDS relies on. Tune anything else
+# Written by sds app create: the settings Haify relies on. Tune anything else
 # in ../data/postgresql.conf; both live on the DRBD volume and fail over
 # with the data.
 listen_addresses = '*'
@@ -212,7 +212,7 @@ const postgresStop = `  runuser -u "$u" -- @PGCTL@ -D "$M/data" -m fast -w -t 12
 // mysqlInit initializes the data directory the way the installed flavor
 // wants (mariadb-install-db, or mysqld --initialize-insecure), starts the
 // server without networking, sets the root password over the socket through
-// stdin, and leaves a root-only client.cnf for the tools SDS runs later
+// stdin, and leaves a root-only client.cnf for the tools Haify runs later
 // (health probe, snapshot lock).
 func mysqlInit(b Binaries) string {
 	initdb := `@INIT@ --defaults-file="$M/conf/my.cnf" --user="$u" >"$run/init.log" 2>&1 \

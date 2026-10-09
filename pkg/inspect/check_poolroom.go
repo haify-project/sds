@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// cowBytes is the copy-on-write area SDS reserves for a snapshot of a thick
+// cowBytes is the copy-on-write area Haify reserves for a snapshot of a thick
 // volume: 20% of the origin, at least 256 MiB. It matches cowBytes in
 // pkg/controller, which sizes it from the volume's whole GiB.
 func cowBytes(sizeBytes uint64) uint64 {

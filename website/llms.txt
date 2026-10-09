@@ -1,8 +1,8 @@
-# SDS · 软件定义存储
+# Haify · 软件定义存储
 
-> SDS 是一套基于 DRBD 的软件定义存储控制面,支持国产 CPU(鲲鹏、飞腾、龙芯)与国产操作系统(麒麟、统信 UOS)。它提供强一致同步复制、智能副本放置、自动高可用故障切换、多协议网关(NFS/iSCSI/NVMe-oF)与 Kubernetes CSI,源码自主可控。
+> Haify 是一套基于 DRBD 的软件定义存储控制面,支持国产 CPU(鲲鹏、飞腾、龙芯)与国产操作系统(麒麟、统信 UOS)。它提供强一致同步复制、智能副本放置、自动高可用故障切换、多协议网关(NFS/iSCSI/NVMe-oF)与 Kubernetes CSI,源码自主可控。
 
-SDS(Software-Defined Storage)面向国产化 / 信创场景,把生产环境的块存储运行在国产芯片与国产操作系统上。控制面通过 SSH 直接编排存储节点,不在数据路径上,也不在存储节点常驻 Agent。
+Haify(Software-Defined Storage)面向国产化 / 信创场景,把生产环境的块存储运行在国产芯片与国产操作系统上。控制面通过 SSH 直接编排存储节点,不在数据路径上,也不在存储节点常驻 Agent。
 
 ## 核心能力
 
@@ -23,8 +23,8 @@ SDS(Software-Defined Storage)面向国产化 / 信创场景,把生产环境的�
 
 ## 与其他方案的区别
 
-- **vs Ceph**:SDS 运维更轻,单一控制面 + SSH,无需 MON/OSD/MGR。
-- **vs LINSTOR**:同为 DRBD 编排,但 SDS 原生适配国产 CPU/OS 并提供本地化交付;LINSTOR 是国外项目,未适配国产平台。
+- **vs Ceph**:Haify 运维更轻,单一控制面 + SSH,无需 MON/OSD/MGR。
+- **vs LINSTOR**:同为 DRBD 编排,但 Haify 原生适配国产 CPU/OS 并提供本地化交付;LINSTOR 是国外项目,未适配国产平台。
 - **vs 商业存储**:源码可控、可审计,无厂商锁定。
 
 ## 链接

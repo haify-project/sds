@@ -1,5 +1,5 @@
 [Unit]
-Description=SDS Controller
+Description=Haify Controller
 Documentation=https://github.com/haify-project/sds
 After=network-online.target
 Wants=network-online.target

@@ -207,7 +207,7 @@ button{margin-top:.8rem;padding:.55rem 1.1rem;font:inherit;border:0;border-radiu
 @media(prefers-color-scheme:dark){body{background:#111;color:#eee}input{background:#222;color:#eee}.dim{color:#aaa}}
 </style></head><body>
 <h1>Authorize {{.Client}}</h1>
-<p>{{.Client}} wants to use the SDS cluster at {{.Host}}.</p>
+<p>{{.Client}} wants to use the Haify cluster at {{.Host}}.</p>
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <form method="post">
 {{range $k, $v := .Hidden}}<input type="hidden" name="{{$k}}" value="{{$v}}">{{end}}

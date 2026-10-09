@@ -42,11 +42,11 @@ type poolOut struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 	Node string `json:"node"`
-	// TotalGB and FreeGB describe the VOLUME GROUP. SDS builds its thin pool
+	// TotalGB and FreeGB describe the VOLUME GROUP. Haify builds its thin pool
 	// from nearly all of it, so FreeGB is near zero for the whole life of such
 	// a pool however empty it is — do not read it as "the pool is full".
 	TotalGB uint64   `json:"total_gb" jsonschema:"volume group size; not the thin pool's"`
-	FreeGB  uint64   `json:"free_gb" jsonschema:"UNALLOCATED extents in the volume group. Structurally zero for any pool SDS created, whatever its utilisation. Judge fullness from thin_data_percent, not from this"`
+	FreeGB  uint64   `json:"free_gb" jsonschema:"UNALLOCATED extents in the volume group. Structurally zero for any pool Haify created, whatever its utilisation. Judge fullness from thin_data_percent, not from this"`
 	Devices []string `json:"devices,omitempty"`
 	// Thin is the pool type recorded when the pool was created, which is not a
 	// reliable test for whether a thin pool exists today: a group adopted or
@@ -108,7 +108,7 @@ type poolAddDiskIn struct {
 // registerClusterTools adds node, health, and pool tools.
 func (s *Server) registerClusterTools(srv *mcp.Server) {
 	addRead(s, srv, readOnlyTool("sds_node_list", "List nodes",
-		"List all storage nodes registered with the SDS controller, including their state and version."),
+		"List all storage nodes registered with the Haify controller, including their state and version."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, nodeListOut, error) {
 			nodes, err := s.client.ListNodes(ctx)
 			if err != nil {
@@ -163,7 +163,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, writeTool("sds_node_register", "Register node",
-		"Register a storage node with the SDS controller. The controller must reach the node over SSH."),
+		"Register a storage node with the Haify controller. The controller must reach the node over SSH."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeRegisterIn) (*mcp.CallToolResult, opResult, error) {
 			node, err := s.client.RegisterNode(ctx, in.Name, in.Address)
 			if err != nil {
@@ -173,7 +173,7 @@ func (s *Server) registerClusterTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, destructiveTool("sds_node_unregister", "Unregister node",
-		"Unregister a storage node from the SDS controller. Resources on the node are not touched."),
+		"Unregister a storage node from the Haify controller. Resources on the node are not touched."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in nodeUnregisterIn) (*mcp.CallToolResult, opResult, error) {
 			if err := s.client.UnregisterNode(ctx, in.Address); err != nil {
 				return nil, opResult{}, err

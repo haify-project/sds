@@ -69,13 +69,13 @@ func Unit(s Spec, b Binaries) string {
 	case Redis:
 		exec = fmt.Sprintf("%s %s", b.Server, path.Join(l.Conf, "redis.conf"))
 	}
-	return fmt.Sprintf(`# SDS app %[1]s: %[2]s on DRBD resource %[3]s.
+	return fmt.Sprintf(`# Haify app %[1]s: %[2]s on DRBD resource %[3]s.
 # Written by sds-controller (sds app create). drbd-reactor starts and stops
 # this unit through the promoter %[4]s, on the node where %[3]s is
 # Primary; never enable or start it by hand.
 
 [Unit]
-Description=SDS app %[1]s (%[2]s)
+Description=Haify app %[1]s (%[2]s)
 After=network-online.target
 
 [Service]
@@ -104,7 +104,7 @@ func PromoterConfig(s Spec, device string) (string, error) {
 		return "", err
 	}
 	l := LayoutFor(s.Name)
-	return fmt.Sprintf(`# drbd-reactor promoter for the SDS app %[1]s (%[2]s).
+	return fmt.Sprintf(`# drbd-reactor promoter for the Haify app %[1]s (%[2]s).
 # Written by sds-controller (sds app create); remove it with sds app delete.
 
 [[promoter]]

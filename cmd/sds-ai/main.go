@@ -1,5 +1,5 @@
-// Command sds-ai hosts the SDS AI Copilot backend. It imports the steward
-// library, wires it to the read-only sds-mcp cluster tools and the SDS
+// Command sds-ai hosts the Haify AI Copilot backend. It imports the steward
+// library, wires it to the read-only sds-mcp cluster tools and the Haify
 // knowledge base, and serves a single NDJSON streaming endpoint the sds web-ui
 // Copilot sidebar talks to.
 //
@@ -11,7 +11,7 @@
 //
 //	SDS_AI_ADDR           listen address (default "127.0.0.1:7634")
 //	SDS_AI_KNOWLEDGE_DB   path to the cortexdb knowledge store (required)
-//	SDS_AI_SHARED_KNOWLEDGE_DB  the SDS shared knowledge base (`make kb`), searched
+//	SDS_AI_SHARED_KNOWLEDGE_DB  the Haify shared knowledge base (`make kb`), searched
 //	                      alongside it read-only; built with the same embedder
 //	SDS_AI_DOMAIN         path to ai/domain.toml (default "ai/domain.toml")
 //	SDS_AI_CONTROLLER     sds controller addr for sds-mcp (default "127.0.0.1:3374")

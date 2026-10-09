@@ -18,7 +18,7 @@ import (
 // reports it as an error — the phantom simply sits in `Connecting` forever,
 // which is also what a peer that is merely down looks like.
 //
-// The registry alone cannot tell a phantom from a replica on a host SDS never
+// The registry alone cannot tell a phantom from a replica on a host Haify never
 // registered — a Proxmox node, say — that is merely powered off: both are
 // unregistered and both sit in Connecting. Reading the first as the second
 // told an operator to forget-peer a real, recoverable replica. The resource's
@@ -96,7 +96,7 @@ func matchPhantomPeer(in Input) []Finding {
 				Resource: p.resource,
 				Known:    true,
 				Cause: fmt.Sprintf("%q is a replica in %s's configuration, on a host that is not a "+
-					"registered SDS node. It has not connected: the host is down, unreachable, or not "+
+					"registered Haify node. It has not connected: the host is down, unreachable, or not "+
 					"running DRBD. The resource runs on fewer copies until it returns.", p.peer, res),
 				Advice: []string{
 					fmt.Sprintf("Bring %s back (power it on, or fix its network) and it resyncs on its own", p.peer),

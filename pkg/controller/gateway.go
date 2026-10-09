@@ -1,4 +1,4 @@
-// Package controller provides the SDS controller
+// Package controller provides the Haify controller
 package controller
 
 import (

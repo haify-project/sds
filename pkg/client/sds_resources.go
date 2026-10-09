@@ -138,7 +138,7 @@ func (c *SDSClient) CreateResourceWAN(ctx context.Context, name string, port uin
 	return nil
 }
 
-// AdoptResource imports an already-existing (foreign) DRBD resource into SDS
+// AdoptResource imports an already-existing (foreign) DRBD resource into Haify
 // management by recording its metadata. nodes/port/protocol may be left empty
 // (nil/0/"") to auto-discover them from the live .res on a node. It never
 // creates or modifies the DRBD resource or its data. Returns the metadata that

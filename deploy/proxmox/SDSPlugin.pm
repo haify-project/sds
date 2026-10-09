@@ -1,6 +1,6 @@
 package PVE::Storage::Custom::SDSPlugin;
 
-# SDS storage plugin for Proxmox VE.
+# Haify storage plugin for Proxmox VE.
 #
 # Backs VM/CT disks with DRBD resources managed by sds-controller, so guests get
 # synchronous replication, HA restart on a surviving node, and RAM-only live

@@ -15,7 +15,7 @@ const httpAgent = new http.Agent({
 export default defineConfig({
   plugins: [pluginReact()],
   html: {
-    title: 'SDS UI',
+    title: 'Haify UI',
     favicon: './src/assets/favicon.svg',
   },
   resolve: {

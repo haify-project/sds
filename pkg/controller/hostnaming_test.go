@@ -13,7 +13,7 @@ import (
 
 // A DRBD .res file only applies to a host that finds itself in one of its
 // `on <name>` sections. Those names must be the nodes' real hostnames, not the
-// operator-chosen SDS node names — otherwise drbdadm rejects the whole resource
+// operator-chosen Haify node names — otherwise drbdadm rejects the whole resource
 // with "'<res>' not defined in your config (for this host)" and every create
 // fails on a cluster where the two happen to differ.
 func TestGenerateDrbdConfigUsesHostnamesNotNodeNames(t *testing.T) {
@@ -40,8 +40,8 @@ func TestGenerateDrbdConfigUsesHostnamesNotNodeNames(t *testing.T) {
 
 	assert.Contains(t, cfg, "on lima-sds-a {", "must key the section by hostname")
 	assert.Contains(t, cfg, "on sds-b {", "must key the section by hostname")
-	assert.NotContains(t, cfg, "on node-a {", "SDS node name must not reach DRBD")
-	assert.NotContains(t, cfg, "on node-b {", "SDS node name must not reach DRBD")
+	assert.NotContains(t, cfg, "on node-a {", "Haify node name must not reach DRBD")
+	assert.NotContains(t, cfg, "on node-b {", "Haify node name must not reach DRBD")
 }
 
 // The connection-mesh lists DRBD host names for the same reason the `on`

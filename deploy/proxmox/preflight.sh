@@ -1,9 +1,9 @@
 #!/bin/bash
-# Preflight for the SDS Proxmox VE storage plugin.
+# Preflight for the Haify Proxmox VE storage plugin.
 #
 # Checks the things whose absence would otherwise surface as an inscrutable
 # failure on the first VM disk creation. Run on every PVE node that should run
-# guests off SDS storage.
+# guests off Haify storage.
 #
 #   ./preflight.sh <controller>[,<controller>...]
 #
@@ -46,7 +46,7 @@ ok()   { echo "  OK    $*"; }
 bad()  { echo "  FAIL  $*"; FAIL=1; }
 warn() { echo "  WARN  $*"; }
 
-echo "SDS Proxmox plugin preflight on $(hostname)"
+echo "Haify Proxmox plugin preflight on $(hostname)"
 echo
 
 # 1. This must be a Proxmox node at all.
@@ -105,7 +105,7 @@ for entry in "${ENTRIES[@]}"; do
 done
 [ -n "$BASE" ] || bad "no sds-controller REST address in '${CONTROLLER}' answered"
 
-# 5. This node must be registered with SDS under its PVE node name, because the
+# 5. This node must be registered with Haify under its PVE node name, because the
 #    plugin promotes/attaches by node name. A mismatch is the subtlest failure
 #    mode here, so it is checked explicitly.
 NODENAME=$(hostname)

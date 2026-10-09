@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SDS could grow a resource but never shrink it: add-replica existed, its
+// Haify could grow a resource but never shrink it: add-replica existed, its
 // inverse did not. Every removal was therefore hand-editing DRBD config on
 // every node — on, in this cluster's case, the volume holding the controller's
 // own database while the controller ran on it.

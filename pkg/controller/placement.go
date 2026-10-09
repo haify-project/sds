@@ -10,7 +10,7 @@ import (
 )
 
 // Auto-placement: when a resource is created without an explicit node list, the
-// controller picks where its replicas go. This is the SDS equivalent of
+// controller picks where its replicas go. This is the Haify equivalent of
 // LINSTOR's autoplace. Placement is capacity-first (most free space in the
 // target pool wins) and honours a set of label/affinity constraints:
 //

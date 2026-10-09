@@ -81,7 +81,7 @@ func gatewayDelete() *cobra.Command {
 				return fmt.Errorf("--resource is required")
 			}
 
-			// Create SDS client
+			// Create Haify client
 			sdsClient, err := newSDSClient()
 			if err != nil {
 				return fmt.Errorf("failed to connect to controller: %w", err)

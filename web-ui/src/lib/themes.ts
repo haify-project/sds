@@ -3,7 +3,7 @@
  * tokens (primary / ring) for light and dark; the background, borders and text
  * come from index.css and stay put — which is now warm paper and blue-tinted
  * ink, not monochrome, so "Neutral" no longer reproduces black & white and is
- * no longer the default. "SDS" is: it restates the shipped accent, so picking
+ * no longer the default. "Haify" is: it restates the shipped accent, so picking
  * it always returns the console to the designed look.
  */
 
@@ -31,7 +31,7 @@ const INK = 'oklch(0.205 0 0)';
 export const BASE_COLORS: ColorTheme[] = [
   {
     name: 'sds',
-    label: 'SDS',
+    label: 'Haify',
     light: {
       primary: 'oklch(0.46 0.115 255)',
       primaryForeground: 'oklch(0.99 0 0)',

@@ -18,7 +18,7 @@ import (
 //
 // A full thin pool is not a slow failure: writes to it error out, DRBD takes
 // the disk away, and the resource carries on degraded or not at all. A pool
-// created by SDS leaves reserve_percent of its volume group free, and this
+// created by Haify leaves reserve_percent of its volume group free, and this
 // observer grows the pool into that room once data or metadata use reaches
 // the threshold — the job LVM's own autoextend does, but done here so it is
 // visible as an event, and does not depend on dmeventd running on the node.

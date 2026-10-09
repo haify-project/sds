@@ -1,4 +1,4 @@
-# Example /etc/pve/storage.cfg entries for the SDS plugin.
+# Example /etc/pve/storage.cfg entries for the Haify plugin.
 #
 # storage.cfg lives on the PVE cluster filesystem, so edit it on ONE node and
 # every node picks it up. The plugin module itself must be installed on each

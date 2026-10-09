@@ -11,7 +11,7 @@ import (
 )
 
 // A representative .res for a foreign, hand-configured DRBD resource ("kaiwudb")
-// that SDS does not yet know about. Two diskful nodes, port 7789, one volume
+// that Haify does not yet know about. Two diskful nodes, port 7789, one volume
 // backed by an LVM logical volume.
 const foreignKaiwudbRes = `resource kaiwudb {
     net {
@@ -63,7 +63,7 @@ func TestResourceManagerAdoptResourceAutoDiscovers(t *testing.T) {
 	assert.Equal(t, "C", result.Protocol)
 	assert.Equal(t, 1, result.Volumes)
 
-	// The SDS database now carries the resource record so ops like MakeHa work.
+	// The Haify database now carries the resource record so ops like MakeHa work.
 	stored, err := ctrl.db.GetResource(context.Background(), "kaiwudb")
 	require.NoError(t, err)
 	assert.Equal(t, "node1,node2", stored.Nodes)

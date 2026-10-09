@@ -1,4 +1,4 @@
-// Package client provides SDS controller gRPC client
+// Package client provides Haify controller gRPC client
 package client
 
 import (
@@ -10,15 +10,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// SDSClient wraps SDS controller gRPC client
+// SDSClient wraps Haify controller gRPC client
 type SDSClient struct {
 	conn   *grpc.ClientConn
 	client sdspb.SDSControllerClient
 	addr   string
 }
 
-// NewSDSClient creates a new SDS controller client
-// Option customizes the SDS client connection.
+// NewSDSClient creates a new Haify controller client
+// Option customizes the Haify client connection.
 type Option func(*clientOptions)
 
 type clientOptions struct {
@@ -80,7 +80,7 @@ func NewSDSClient(addr string, opts ...Option) (*SDSClient, error) {
 
 	conn, err := grpc.NewClient(addr, dialOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to SDS controller at %s: %w", addr, err)
+		return nil, fmt.Errorf("failed to connect to Haify controller at %s: %w", addr, err)
 	}
 
 	return &SDSClient{

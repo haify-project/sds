@@ -41,7 +41,7 @@ func main() {
 	}
 	defer func() { _ = logger.Sync() }()
 
-	logger.Info("Starting SDS controller",
+	logger.Info("Starting Haify controller",
 		zap.String("version", version),
 		zap.String("config", *configPath),
 		zap.Bool("metrics_enabled", cfg.Metrics.Enabled),

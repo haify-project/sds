@@ -1,6 +1,6 @@
 # drbd-reactor 网关配置
 
-SDS 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-reactor promoter 配置。
+Haify 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-reactor promoter 配置。
 配置由 controller 生成并下发，**不需要手写**；本文说明它生成的是什么，便于排障。
 
 节点上 `/etc/drbd-reactor.d/` 里的实际文件就是权威样例。
@@ -31,7 +31,7 @@ SDS 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-react
 ### 编辑运行中的网关：何时生效
 
 drbd-reactor 无法把改动过的 promoter 配置应用到正在运行的网关上（src/plugin.rs `start_from_config`）：
-reload 时配置没变的 plugin 原样保留，变了的就把旧 plugin 停掉、再按新配置起一个新的。SDS 生成的配置都带
+reload 时配置没变的 plugin 原样保留，变了的就把旧 plugin 停掉、再按新配置起一个新的。Haify 生成的配置都带
 `stop-services-on-exit = true`，所以停旧 plugin 会 `systemctl stop drbd-services@<r>.target`——整条链
 （文件系统、target、LUN、service IP）停掉并降级，各节点再重新抢提升（实测：一次 initiator 修改触发
 切换，最后没有任何节点是 Primary）。reactor 也不监视目录：snippet monitor 只在日志里提示

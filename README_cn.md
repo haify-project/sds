@@ -1,10 +1,10 @@
-# SDS - 软件定义存储
+# Haify - 软件定义存储
 
 用 Go 编写的轻量级 DRBD 9 存储控制器。管理存储池、复制卷、iSCSI / NFS / NVMe-oF 网关和高可用,并接入 Kubernetes(CSI)、Proxmox VE 和 AI 助手(MCP)。
 
 [English](README.md) | 简体中文 | [文档站](https://haify-project.github.io/sds/)
 
-![SDS 架构](docs/img/architecture-cn.png)
+![Haify 架构](docs/img/architecture-cn.png)
 
 存储节点上不跑 agent:一个控制器通过 SSH 驱动所有节点,状态存在内嵌的 BoltDB 里。控制器自己也可以跑在浮动 VIP 后面(Self-HA)。
 

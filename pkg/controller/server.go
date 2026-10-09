@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Server implements the SDS controller gRPC service
+// Server implements the Haify controller gRPC service
 type Server struct {
 	sdspb.UnimplementedSDSControllerServer
 	ctrl      *Controller

@@ -206,7 +206,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// SDS Controller Service
+// Haify Controller Service
 type SDSControllerClient interface {
 	// Pool operations
 	CreatePool(ctx context.Context, in *CreatePoolRequest, opts ...grpc.CallOption) (*CreatePoolResponse, error)
@@ -2371,7 +2371,7 @@ func (c *sDSControllerClient) SnapshotApp(ctx context.Context, in *SnapshotAppRe
 // All implementations must embed UnimplementedSDSControllerServer
 // for forward compatibility.
 //
-// SDS Controller Service
+// Haify Controller Service
 type SDSControllerServer interface {
 	// Pool operations
 	CreatePool(context.Context, *CreatePoolRequest) (*CreatePoolResponse, error)

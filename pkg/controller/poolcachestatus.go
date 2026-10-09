@@ -123,8 +123,8 @@ func parseCacheDevice(field string) string {
 // summarizeCache turns one volume group's rows into the cache an operator sees,
 // or nil when the group has none.
 //
-// The cache is found by segment type rather than by name. SDS names the volume
-// it creates, but a group could have been cached by hand before SDS met it, and
+// The cache is found by segment type rather than by name. Haify names the volume
+// it creates, but a group could have been cached by hand before Haify met it, and
 // reporting "no cache" for a pool that plainly has one is the more expensive
 // mistake — it is the answer that would let a second cache be attached.
 func summarizeCache(rows []lvsCacheRow) *PoolCacheInfo {

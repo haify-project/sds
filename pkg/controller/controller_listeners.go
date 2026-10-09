@@ -131,7 +131,7 @@ func (c *Controller) startGRPCServer() error {
 	grpc_health_v1.RegisterHealthServer(c.server, healthServer)
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
-	// Register SDS controller service
+	// Register Haify controller service
 	sdsServer := NewServer(c)
 	sdspb.RegisterSDSControllerServer(c.server, sdsServer)
 	// Reflection lets grpcurl and similar tools discover the API without a copy
@@ -139,7 +139,7 @@ func (c *Controller) startGRPCServer() error {
 	// through the same auth interceptors.
 	reflection.Register(c.server)
 
-	c.logger.Info("Registered SDS controller service")
+	c.logger.Info("Registered Haify controller service")
 
 	// Start gRPC server
 	go func() {

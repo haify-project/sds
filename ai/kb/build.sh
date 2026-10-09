@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Builds the SDS shared knowledge base: the knowledge that is the same on every
-# cluster SDS runs on. One file, versioned with the code, installed on every
+# Builds the Haify shared knowledge base: the knowledge that is the same on every
+# cluster Haify runs on. One file, versioned with the code, installed on every
 # node and attached to sds-ai read-only (SDS_AI_SHARED_KNOWLEDGE_DB). What a
 # cluster learns about itself — incident notes, what was tried on which machine
 # — goes into that cluster's own knowledge base, never into this one.
 #
 # Contents:
-#   - SDS documentation (docs/, README) and the operations runbooks
-#   - the SDS code graph (.understand-anything/knowledge-graph.json, not in the
+#   - Haify documentation (docs/, README) and the operations runbooks
+#   - the Haify code graph (.understand-anything/knowledge-graph.json, not in the
 #     repository: generate it with Understand-Anything first, or the step is
 #     skipped) and source
 #   - the sds reference, generated from the binary this commit builds, so
@@ -131,22 +131,22 @@ ingest_each() {
 	return $failed
 }
 
-step "SDS documentation"
+step "Haify documentation"
 docs=$(flatten "$root/docs" sds-docs -name '*.md')
 cp "$root/README.md" "$docs/sds-docs__README.md"
 ingest_each "$docs"
 
 # The operations runbooks the MCP server serves to agents: the same text, so
 # the Copilot answers a procedure question with the procedure it would be given.
-step "SDS runbooks"
+step "Haify runbooks"
 ingest_each "$(flatten "$root/pkg/mcpserver/runbooks" sds-runbooks -name '*.md')"
 
 if [ -f "$root/.understand-anything/knowledge-graph.json" ]; then
-	step "SDS code graph"
+	step "Haify code graph"
 	once step:sds-code-graph "$od" import-graph "$root/.understand-anything/knowledge-graph.json"
 fi
 
-step "SDS source"
+step "Haify source"
 once step:sds-source "$od" ingest-repo "$root"
 
 step "sds reference (built from this commit)"
@@ -161,7 +161,7 @@ fi
 
 step "DRBD 9 documentation"
 ingest_each "$(flatten "$corpus/linbit-blog-kb" linbit-kb -name '*.md')"
-# DRBD 9 only: the 8.4 guide describes behaviour SDS does not have.
+# DRBD 9 only: the 8.4 guide describes behaviour Haify does not have.
 ingest_each "$(flatten "$corpus/linbit-documentation/UG9/en" drbd9-guide -name '*.adoc')"
 ingest_each "$(flatten "$corpus/ai-assistants" drbd-ai-notes -name '*.md')"
 

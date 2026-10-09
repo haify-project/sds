@@ -15,7 +15,7 @@ import (
 
 // The floating IP of an HA resource and of the controller itself is brought up
 // by the service-ip@ systemd template, which runs the service-ip helper. Both
-// ship with SDS (cmd/service-ip, configs/service-ip@.service). A node without
+// ship with Haify (cmd/service-ip, configs/service-ip@.service). A node without
 // them used to be refused with "service-ip is not installed" and left to the
 // operator; the controller now installs them from its own copy.
 const (
@@ -178,7 +178,7 @@ func hostFailure(hr *deployment.HostResult) string {
 // keeps it; the IPv6 knob is set where the kernel has it.
 func (rm *ResourceManager) ensureNonlocalBind(ctx context.Context, hosts []string) error {
 	script := `f=/etc/sysctl.d/90-sds-ha-vip.conf
-want='# SDS HA: services may bind to the VIP, which starts after them.
+want='# Haify HA: services may bind to the VIP, which starts after them.
 net.ipv4.ip_nonlocal_bind = 1
 net.ipv6.ip_nonlocal_bind = 1'
 [ "$(cat "$f" 2>/dev/null)" = "$want" ] || printf '%s\n' "$want" > "$f"

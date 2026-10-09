@@ -366,7 +366,7 @@ func ResolveNFSExportPath(resource, exportPath string) (string, error) {
 		return "", fmt.Errorf("export path must not be the filesystem root")
 	}
 	// The export directory becomes a mount point owned by the gateway;
-	// refuse paths that would shadow system directories or SDS state.
+	// refuse paths that would shadow system directories or Haify state.
 	forbidden := []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/proc", "/root", "/run", "/sbin", "/sys", "/usr", "/var/lib/sds", DefaultClusterPrivateMountPath}
 	for _, prefix := range forbidden {
 		if cleaned == prefix || strings.HasPrefix(cleaned, prefix+"/") {

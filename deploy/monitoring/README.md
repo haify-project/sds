@@ -1,6 +1,6 @@
 # Monitoring
 
-Prometheus and Grafana for one or more SDS clusters.
+Prometheus and Grafana for one or more Haify clusters.
 
 The controller serves Prometheus metrics on `[metrics] listen_address:port`
 in `controller.toml` (defaults: enabled, `0.0.0.0`, port `9433`). Point
@@ -23,7 +23,7 @@ Cluster selector is built from `up{job="sds"}`'s `cluster` values.
 | | Host port | Notes |
 | --- | --- | --- |
 | Prometheus | 39417 | 90 days retention, `--web.enable-lifecycle` (reload with `POST /-/reload`) |
-| Grafana | 41863 | Home dashboard "SDS" in folder SDS |
+| Grafana | 41863 | Home dashboard "Haify" in folder Haify |
 
 Anyone who can reach Grafana can view dashboards without logging in
 (anonymous Viewer); editing needs the admin login from `.env`. Remove the

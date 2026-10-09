@@ -86,7 +86,7 @@ func registerKBRoutes(mux *http.ServeMux, ag *steward.Agent) {
 	//
 	// Every check corresponds to a failure that produced no error anywhere on
 	// this cluster — a stale HTTP_PROXY in front of the embedder while chat kept
-	// working, a vector index capping recall below the requested k, the SDS code
+	// working, a vector index capping recall below the requested k, the Haify code
 	// graph outnumbering the runbooks ten to one, and the extractor inventing a
 	// "StorageClass" node type the domain never declared. The copilot answered
 	// through all of them; it just answered worse.

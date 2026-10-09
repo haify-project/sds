@@ -1,17 +1,17 @@
-# SDS AI Copilot — steward domain config.
+# Haify AI Copilot — steward domain config.
 #
 # Read by sds-ai (cmd/sds-ai, path from SDS_AI_DOMAIN, default ai/domain.toml)
-# and by ai/kb/build.sh (STEWARD_DOMAIN_FILE). Defines the SDS/DRBD persona, the
+# and by ai/kb/build.sh (STEWARD_DOMAIN_FILE). Defines the Haify/DRBD persona, the
 # ontology vocabulary, destructive-command red-lines, and read-only probes.
 # Live cluster state comes from the `sds-mcp` tools (wired in cmd/sds-ai, not
 # from this file); knowledge grounding comes from the cluster's knowledge base
 # (SDS_AI_KNOWLEDGE_DB) and the shared one (SDS_AI_SHARED_KNOWLEDGE_DB).
 
-name = "SDS storage/HA domain"
-title = "SDS Copilot"
+name = "Haify storage/HA domain"
+title = "Haify Copilot"
 
 persona = '''
-You are an expert SRE copilot for SDS, a DRBD-based software-defined storage
+You are an expert SRE copilot for Haify, a DRBD-based software-defined storage
 controller managing storage pools, DRBD resources, snapshots, HA (drbd-reactor
 promoter configs + floating VIPs), and gateways (NFS / iSCSI / NVMe-oF) across a
 Linux cluster.
@@ -27,8 +27,8 @@ How you work:
   into one resource when the list is insufficient for that specific resource.
   Never re-call a tool you already called with the same arguments.
 - What the knowledge base holds, so you know what is worth asking it for. Two
-  parts, searched together: the SDS shared base, identical on every cluster —
-  SDS's documentation, its source as a graph (files, functions, classes and
+  parts, searched together: the Haify shared base, identical on every cluster —
+  Haify's documentation, its source as a graph (files, functions, classes and
   their calls/imports edges across pkg/controller, pkg/gateway, pkg/csi, cmd/*
   and the Proxmox plugin), the sds reference generated from
   the installed version's own --help, and the DRBD 9 manuals and LINBIT
@@ -45,7 +45,7 @@ Proposing changes (guarded):
   tools you have (create, add, start, mount, grow, set options, snapshot) and
   the sds_k8s_* tools for Kubernetes. The sds_* tools act on the bare-metal
   cluster through the controller; the sds_k8s_* tools act on Kubernetes objects
-  (Deployments, PVCs) whose volumes SDS provides through CSI. Anything that deletes, restores, evicts, drains or stops is
+  (Deployments, PVCs) whose volumes Haify provides through CSI. Anything that deletes, restores, evicts, drains or stops is
   not in your toolset: for those, call the
   `suggest_action` tool with a structured proposal (action, params, reason,
   severity). The operator reviews and approves it in the UI; only then does the
@@ -75,7 +75,7 @@ Databases on Kubernetes (sds_k8s_app_create):
 Safety (non-negotiable):
 - A deterministic red-line wall, independent of you, flags data-destroying
   operations (wipefs, dd to a device, mkfs, lvremove/vgremove, zfs/zpool destroy,
-  and destructive SDS verbs like deleting a pool/resource/gateway). Never present
+  and destructive Haify verbs like deleting a pool/resource/gateway). Never present
   such an operation as a one-liner to run; explain the risk, the affected
   volumes, and the backup precondition, and defer to explicit operator approval.
 '''
@@ -93,7 +93,7 @@ Safety (non-negotiable):
 # interface is what retrieval asks for: a node whose type is declared here is
 # offered as a graph seed before an imported code node, and takes a neighbour
 # slot before one. A type NOT declared here — invented by the extracting model,
-# or imported from the SDS code graph — is still stored and still reachable,
+# or imported from the Haify code graph — is still stored and still reachable,
 # just behind. `/ai/kb/doctor` names the invented ones; a live base carried a
 # "StorageClass" nobody declared for months without anyone noticing.
 #
@@ -109,7 +109,7 @@ Safety (non-negotiable):
 # deliberately NOT a type here is any *variant* of one: a pool's lvm/lvm-thin/zfs
 # kind, a gateway's NFS/iSCSI/NVMe-oF protocol, a replica's Primary/Secondary
 # role or its diskless tiebreaker duty. Those are properties of an instance, and
-# promoting them would both grow this list with every enum SDS gains and force
+# promoting them would both grow this list with every enum Haify gains and force
 # the model to choose between two types that mean the same thing. "Cluster" is
 # gone for the opposite reason: there is one, every chunk is about it, so it
 # became a hub that connected everything and distinguished nothing.
@@ -197,7 +197,7 @@ repos = []
 #
 # What a list is NOT is a shrug. Every type in it is asserted to belong there,
 # and a node type outside it is reported as misdirected exactly like a reversed
-# edge. So the lists below are the types SDS actually puts on each end, not
+# edge. So the lists below are the types Haify actually puts on each end, not
 # every type that could conceivably appear.
 #
 # The two ends must be disjoint or identical, never partly overlapping. An
@@ -209,7 +209,7 @@ repos = []
 # Still not declared: `contains`, `depends_on`, `deploys`, `triggers`,
 # `related` and `caches`. The first five are the generic edges the extractor
 # reaches for when nothing more specific fits, and their ends are whatever the
-# paragraph happened to be about; `caches` has no settled meaning in SDS yet.
+# paragraph happened to be about; `caches` has no settled meaning in Haify yet.
 # Declaring ends is an assertion, and one made wrong makes doctor report drift
 # that is not there — a warning that cries wolf is worse than none.
 # ---------------------------------------------------------------------------
@@ -402,7 +402,7 @@ severity = "CRITICAL"
 pattern = '\bdrbdadm\b.*\b(wipe-md|create-md)\b'
 reason = "wipe-md/create-md rewrites DRBD metadata; can lose the replica"
 
-# Destructive SDS control verbs. These map to controller operations that delete
+# Destructive Haify control verbs. These map to controller operations that delete
 # managed objects — recoverable only from backups/snapshots, so flag before approve.
 [[red_lines]]
 id = "sds-pool-delete"

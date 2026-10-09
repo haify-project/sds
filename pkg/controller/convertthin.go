@@ -14,7 +14,7 @@ import (
 // Converting a thick LVM pool to a thin one, in place, one node at a time.
 //
 // A thick pool cannot really do snapshots: LVM makes the caller reserve a COW
-// area per snapshot (SDS reserves 20% of the origin), so a 6 GiB volume costs
+// area per snapshot (Haify reserves 20% of the origin), so a 6 GiB volume costs
 // 1.2 GiB per snapshot whether anything changes or not. On a 10 GiB pool that
 // is two snapshots, which is not a retention policy. A thin snapshot costs only
 // the blocks that diverge — measured on 2026-08-02, three snapshots of a 6 GiB
@@ -61,8 +61,8 @@ type thinConversionInput struct {
 	// "<pool>_thin" and one this code creates is named thinPoolName, and
 	// assuming either would build a second pool beside the first.
 	ExistingThinPool string
-	// DRBDName maps an SDS node name to the name DRBD reports it by. The two
-	// differ on most clusters — SDS knows "node-b", DRBD says "sds-b" — and
+	// DRBDName maps a Haify node name to the name DRBD reports it by. The two
+	// differ on most clusters — Haify knows "node-b", DRBD says "sds-b" — and
 	// live resource state is keyed by the latter.
 	DRBDName map[string]string
 }
@@ -249,8 +249,8 @@ func isResyncing(replication string) bool {
 //
 // NodeStates comes from `drbdadm status`, so it is keyed by the hostname DRBD
 // knows — "sds-b", "iZ2vca1rjuuxbqtpm9hy7zZ" — while the caller holds the name
-// SDS registered, "node-b". On a cluster where those two happen to match the
-// difference is invisible, which is how looking up only the SDS name survived
+// Haify registered, "node-b". On a cluster where those two happen to match the
+// difference is invisible, which is how looking up only the Haify name survived
 // review and then refused every node on a real cluster.
 func liveState(res *ResourceInfo, node, drbdName string) (*ResourceNodeState, bool) {
 	if st, ok := res.NodeStates[node]; ok {

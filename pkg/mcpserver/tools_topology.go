@@ -348,7 +348,7 @@ func (s *Server) registerTopologyTools(srv *mcp.Server) {
 		SetNodeAddresses(context.Context, []*sdspb.NodeAddressMove) (*sdspb.SetNodeAddressResponse, error)
 	}); supported {
 		addWrite(s, srv, destructiveTool("sds_node_set_address", "Renumber a node",
-			"Move a registered node to a new IP address everywhere SDS records it: the node registry, /etc/hosts on the nodes, "+
+			"Move a registered node to a new IP address everywhere Haify records it: the node registry, /etc/hosts on the nodes, "+
 				"and the DRBD config of every resource it takes part in, each of which reconnects on the new address. "+
 				"The node must already answer on the new address as the same machine. When several nodes changed "+
 				"address at once, pass them all in moves: one at a time cannot work then."),

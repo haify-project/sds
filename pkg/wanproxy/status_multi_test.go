@@ -52,7 +52,7 @@ func unitRow(legID string, active bool) string {
 	if active {
 		state = "active running"
 	}
-	return "sds-proxy@" + legID + ".service loaded " + state + " SDS WAN replication proxy"
+	return "sds-proxy@" + legID + ".service loaded " + state + " Haify WAN replication proxy"
 }
 
 // openclawSpec mirrors the shape that exposed the bug in production: three
@@ -220,8 +220,8 @@ func TestStatusMultiValidates(t *testing.T) {
 
 func TestParseActiveUnits(t *testing.T) {
 	got := parseActiveUnits(strings.Join([]string{
-		"sds-proxy@a.service loaded active running SDS WAN replication proxy for a",
-		"sds-proxy@b.service loaded inactive dead SDS WAN replication proxy for b",
+		"sds-proxy@a.service loaded active running Haify WAN replication proxy for a",
+		"sds-proxy@b.service loaded inactive dead Haify WAN replication proxy for b",
 		"  ", // blank rows and legend leftovers must be ignored
 		"short row",
 	}, "\n"))

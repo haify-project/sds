@@ -1,5 +1,5 @@
 // Package apptemplate generates what it takes to run a single-instance
-// database on an SDS resource, failed over by drbd-reactor: the systemd unit,
+// database on a Haify resource, failed over by drbd-reactor: the systemd unit,
 // the promoter config, the one-time initialization script, the health probe,
 // the freeze/thaw pair for consistent snapshots and the prerequisite probe.
 //

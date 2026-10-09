@@ -3,26 +3,26 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SDS · 软件定义存储 · 支持国产芯片</title>
-<meta name="description" content="SDS 是一套基于 DRBD 的软件定义存储,支持国产 CPU(鲲鹏/飞腾/龙芯)与国产操作系统(麒麟/统信):强一致同步复制、智能放置、自动高可用、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI,源码自主可控。" />
+<title>Haify · 软件定义存储 · 支持国产芯片</title>
+<meta name="description" content="Haify 是一套基于 DRBD 的软件定义存储,支持国产 CPU(鲲鹏/飞腾/龙芯)与国产操作系统(麒麟/统信):强一致同步复制、智能放置、自动高可用、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI,源码自主可控。" />
 <meta name="robots" content="index, follow, max-image-preview:large" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="mask-icon" href="/favicon.svg" color="#44e0ad" />
 <link rel="apple-touch-icon" href="/favicon.svg" />
 <meta name="theme-color" content="#0a0e15" media="(prefers-color-scheme: dark)" />
 <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" />
-<meta name="keywords" content="软件定义存储,SDS,DRBD,国产CPU,信创,鲲鹏,飞腾,龙芯,麒麟,统信,Kubernetes CSI,高可用,块存储,自主可控" />
+<meta name="keywords" content="软件定义存储,Haify,DRBD,国产CPU,信创,鲲鹏,飞腾,龙芯,麒麟,统信,Kubernetes CSI,高可用,块存储,自主可控" />
 <link rel="canonical" href="https://sds.superleo.cn/" />
 <!-- Open Graph -->
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="SDS 软件定义存储" />
+<meta property="og:site_name" content="Haify 软件定义存储" />
 <meta property="og:locale" content="zh_CN" />
-<meta property="og:title" content="SDS · 支持国产芯片的软件定义存储" />
+<meta property="og:title" content="Haify · 支持国产芯片的软件定义存储" />
 <meta property="og:description" content="基于 DRBD 的软件定义存储:强一致同步复制、智能放置、自动高可用、多协议网关与 Kubernetes CSI,全栈运行在国产 CPU 与国产操作系统上。" />
 <meta property="og:url" content="https://sds.superleo.cn/" />
 <meta property="og:image" content="https://sds.superleo.cn/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="SDS · 支持国产芯片的软件定义存储" />
+<meta name="twitter:title" content="Haify · 支持国产芯片的软件定义存储" />
 <meta name="twitter:description" content="基于 DRBD 的软件定义存储:强一致同步复制、自动高可用、多协议网关与 Kubernetes CSI,支持国产 CPU 与国产 OS。" />
 <meta name="twitter:image" content="https://sds.superleo.cn/og.png" />
 <script>
@@ -222,13 +222,13 @@
   "@graph": [
     {
       "@type": "SoftwareApplication",
-      "name": "SDS",
-      "alternateName": "SDS 软件定义存储",
+      "name": "Haify",
+      "alternateName": "Haify 软件定义存储",
       "applicationCategory": "StorageApplication",
       "applicationSubCategory": "Software-Defined Storage",
       "operatingSystem": "Linux (Kylin, UnionTech UOS)",
       "processorRequirements": "aarch64 (鲲鹏/飞腾), loongarch (龙芯), x86_64",
-      "description": "SDS 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI,全栈运行在国产 CPU 与国产操作系统上,源码自主可控。",
+      "description": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI,全栈运行在国产 CPU 与国产操作系统上,源码自主可控。",
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY", "description": "私有化 · 源码交付" },
       "featureList": [
         "基于 DRBD 的强一致同步多副本复制",
@@ -245,12 +245,12 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        { "@type": "Question", "name": "SDS 是什么?", "acceptedAnswer": { "@type": "Answer", "text": "SDS 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。它全栈运行在国产 CPU 与国产操作系统上,源码自主可控。" } },
-        { "@type": "Question", "name": "SDS 支持哪些国产 CPU 和操作系统?", "acceptedAnswer": { "@type": "Answer", "text": "SDS 已在鲲鹏、飞腾(aarch64)与龙芯(loongarch)等国产 CPU 上端到端验证,操作系统覆盖麒麟(Kylin)与统信 UOS。从内核复制到控制面的整条链路,均可在完全离线的国产化环境中独立运行。" } },
-        { "@type": "Question", "name": "SDS 和 Ceph、LINSTOR 有什么区别?", "acceptedAnswer": { "@type": "Answer", "text": "与 Ceph 相比,SDS 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,SDS 原生适配国产 CPU 与操作系统并提供本地化交付,而 LINSTOR 是国外项目、未适配国产平台。" } },
-        { "@type": "Question", "name": "SDS 的高可用如何工作?故障切换多快?", "acceptedAnswer": { "@type": "Answer", "text": "SDS 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。" } },
-        { "@type": "Question", "name": "SDS 支持 Kubernetes 吗?", "acceptedAnswer": { "@type": "Answer", "text": "支持。SDS 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。该能力已在国产芯片(arm64)k3s 集群上端到端验证。" } },
-        { "@type": "Question", "name": "SDS 的数据是怎么复制的?会丢数据吗?", "acceptedAnswer": { "@type": "Answer", "text": "SDS 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。" } }
+        { "@type": "Question", "name": "Haify 是什么?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。它全栈运行在国产 CPU 与国产操作系统上,源码自主可控。" } },
+        { "@type": "Question", "name": "Haify 支持哪些国产 CPU 和操作系统?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 已在鲲鹏、飞腾(aarch64)与龙芯(loongarch)等国产 CPU 上端到端验证,操作系统覆盖麒麟(Kylin)与统信 UOS。从内核复制到控制面的整条链路,均可在完全离线的国产化环境中独立运行。" } },
+        { "@type": "Question", "name": "Haify 和 Ceph、LINSTOR 有什么区别?", "acceptedAnswer": { "@type": "Answer", "text": "与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 原生适配国产 CPU 与操作系统并提供本地化交付,而 LINSTOR 是国外项目、未适配国产平台。" } },
+        { "@type": "Question", "name": "Haify 的高可用如何工作?故障切换多快?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。" } },
+        { "@type": "Question", "name": "Haify 支持 Kubernetes 吗?", "acceptedAnswer": { "@type": "Answer", "text": "支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。该能力已在国产芯片(arm64)k3s 集群上端到端验证。" } },
+        { "@type": "Question", "name": "Haify 的数据是怎么复制的?会丢数据吗?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。" } }
       ]
     }
   ]
@@ -267,7 +267,7 @@
         <path d="M9 12h14M9 16h14M9 20h9" class="s-arrow" stroke-width="1.6" stroke-linecap="round"/>
         <circle cx="23" cy="20" r="1.6" class="s-amber" stroke="none"/>
       </svg>
-      SDS
+      Haify
     </div>
     <div class="nav-right">
       <div class="nav-links">
@@ -293,7 +293,7 @@
     <p class="eyebrow rv">软件定义存储 · <b>支持国产 CPU 与国产 OS</b> · 源码自主可控</p>
     <h1 class="rv" style="transition-delay:.05s">把块存储,<br>建在<span class="em">国产芯片</span>上。</h1>
     <p class="lede rv" style="transition-delay:.12s">
-      SDS 是一套基于 DRBD 的软件定义存储控制面。<b>强一致同步复制、智能放置、自动故障切换、多协议网关与 Kubernetes CSI</b>——
+      Haify 是一套基于 DRBD 的软件定义存储控制面。<b>强一致同步复制、智能放置、自动故障切换、多协议网关与 Kubernetes CSI</b>——
       全栈运行在国产 CPU 与国产操作系统上。
     </p>
     <div class="cta-row rv" style="transition-delay:.18s">
@@ -310,11 +310,11 @@
 
     <div class="schematic rv" style="transition-delay:.3s">
       <div class="cap"><b>topology</b> / 控制面浮动 VIP · 数据面多副本同步 · 单节点故障不丢数据</div>
-      <svg viewBox="0 0 1100 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SDS 拓扑示意图:一个浮动 VIP 的控制器通过 SSH 编排三个存储节点,node-1 与 node-2 在机架 A、node-3 在机架 B,三个节点均为 UpToDate 并进行 DRBD 同步复制,副本跨机架分布。">
+      <svg viewBox="0 0 1100 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Haify 拓扑示意图:一个浮动 VIP 的控制器通过 SSH 编排三个存储节点,node-1 与 node-2 在机架 A、node-3 在机架 B,三个节点均为 UpToDate 并进行 DRBD 同步复制,副本跨机架分布。">
         <defs><marker id="arw" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
           <path d="M0,0 L6,3 L0,6" class="s-arrow" stroke-width="1"/></marker></defs>
         <rect x="470" y="28" width="160" height="52" rx="3" class="s-box"/>
-        <text x="550" y="50" class="s-ink" font-size="14" text-anchor="middle" font-weight="600">SDS 控制器</text>
+        <text x="550" y="50" class="s-ink" font-size="14" text-anchor="middle" font-weight="600">Haify 控制器</text>
         <text x="550" y="68" class="s-jade" font-size="11" text-anchor="middle">VIP 192.168.1.250 · Self-HA</text>
         <path d="M500 80 C 400 130, 250 150, 200 190" class="s-line"/>
         <path d="M550 82 L550 190" class="s-line"/>
@@ -360,7 +360,7 @@
     <div class="band rv">
       <i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i>
       <h3>国产 CPU × 国产 OS,全栈端到端验证。</h3>
-      <p>SDS 不依赖任何境外托管服务或专有云组件。DRBD 内核复制 + 用户态控制器,已在 aarch64 全栈跑通;龙芯平台通过更换加密后端适配。存储、复制、故障切换、网关、CSI——每一层都可在完全离线的国产环境里独立运行。</p>
+      <p>Haify 不依赖任何境外托管服务或专有云组件。DRBD 内核复制 + 用户态控制器,已在 aarch64 全栈跑通;龙芯平台通过更换加密后端适配。存储、复制、故障切换、网关、CSI——每一层都可在完全离线的国产环境里独立运行。</p>
       <div class="stack">
         <div><div class="k">CPU</div><div class="v">鲲鹏 · 飞腾 · 龙芯</div><div class="s">aarch64 / loongarch</div></div>
         <div><div class="k">OS</div><div class="v">麒麟 · 统信 UOS</div><div class="s">Kylin / UnionTech</div></div>
@@ -434,7 +434,7 @@
     </div>
     <div class="schematic rv" style="margin-top:0">
       <div class="cap"><b>architecture</b> / control plane ⟶ dispatch/SSH ⟶ storage nodes · data plane = DRBD + drbd-reactor</div>
-      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SDS 架构分层图:控制面(sds/Web/CSI → sds-controller gRPC → dispatch/SSH)下发到数据面存储节点(DRBD 内核模块、drbd-reactor promoter、网关 OCF 代理)。">
+      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Haify 架构分层图:控制面(sds/Web/CSI → sds-controller gRPC → dispatch/SSH)下发到数据面存储节点(DRBD 内核模块、drbd-reactor promoter、网关 OCF 代理)。">
         <text x="40" y="40" class="s-mute" font-size="11">CONTROL PLANE</text>
         <rect x="40" y="52" width="200" height="46" rx="3" class="s-box"/>
         <text x="140" y="80" class="s-ink" font-size="13" text-anchor="middle">sds · Web · CSI</text>
@@ -478,7 +478,7 @@
     </div>
     <div class="rv cmp-scroll">
       <table class="cmp">
-        <thead><tr><th></th><th class="us">SDS</th><th>Ceph</th><th>LINSTOR</th><th>商业存储</th></tr></thead>
+        <thead><tr><th></th><th class="us">Haify</th><th>Ceph</th><th>LINSTOR</th><th>商业存储</th></tr></thead>
         <tbody>
           <tr><td class="feat">国产芯片 / OS 支持</td><td class="us yes">原生适配 · 已验证</td><td class="no">可跑但重</td><td class="no">国外项目 · 未适配国产平台</td><td class="no">少数支持 · 闭源</td></tr>
           <tr><td class="feat">运维复杂度</td><td class="us">轻 · 单控制面 + SSH</td><td class="no">高 · MON/OSD/MGR</td><td class="us">中</td><td class="no">黑盒</td></tr>
@@ -527,21 +527,21 @@ sds <span class="p">gateway nfs create</span> <span class="f">--resource</span> 
     <div class="sec-head rv">
       <span class="sec-no">06</span>
       <h2>常见问题</h2>
-      <p>关于 SDS 的定义、国产化支持、高可用与 Kubernetes 的直接回答。</p>
+      <p>关于 Haify 的定义、国产化支持、高可用与 Kubernetes 的直接回答。</p>
     </div>
     <div class="faq">
-      <div class="faq-item rv"><h3>SDS 是什么?</h3>
-        <p>SDS 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。它全栈运行在国产 CPU 与国产操作系统上,源码自主可控。</p></div>
-      <div class="faq-item rv"><h3>SDS 支持哪些国产 CPU 和操作系统?</h3>
-        <p>SDS 已在鲲鹏、飞腾(aarch64)与龙芯(loongarch)等国产 CPU 上端到端验证,操作系统覆盖麒麟(Kylin)与统信 UOS。从内核复制到控制面的整条链路,均可在完全离线的国产化环境中独立运行。</p></div>
-      <div class="faq-item rv"><h3>SDS 和 Ceph、LINSTOR 有什么区别?</h3>
-        <p>与 Ceph 相比,SDS 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,SDS 原生适配国产 CPU 与操作系统并提供本地化交付,而 LINSTOR 是国外项目、未适配国产平台。</p></div>
-      <div class="faq-item rv"><h3>SDS 的高可用如何工作?故障切换多快?</h3>
-        <p>SDS 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。</p></div>
-      <div class="faq-item rv"><h3>SDS 支持 Kubernetes 吗?</h3>
-        <p>支持。SDS 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。该能力已在国产芯片(arm64)k3s 集群上端到端验证。</p></div>
-      <div class="faq-item rv"><h3>SDS 的数据是怎么复制的?会丢数据吗?</h3>
-        <p>SDS 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。</p></div>
+      <div class="faq-item rv"><h3>Haify 是什么?</h3>
+        <p>Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。它全栈运行在国产 CPU 与国产操作系统上,源码自主可控。</p></div>
+      <div class="faq-item rv"><h3>Haify 支持哪些国产 CPU 和操作系统?</h3>
+        <p>Haify 已在鲲鹏、飞腾(aarch64)与龙芯(loongarch)等国产 CPU 上端到端验证,操作系统覆盖麒麟(Kylin)与统信 UOS。从内核复制到控制面的整条链路,均可在完全离线的国产化环境中独立运行。</p></div>
+      <div class="faq-item rv"><h3>Haify 和 Ceph、LINSTOR 有什么区别?</h3>
+        <p>与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 原生适配国产 CPU 与操作系统并提供本地化交付,而 LINSTOR 是国外项目、未适配国产平台。</p></div>
+      <div class="faq-item rv"><h3>Haify 的高可用如何工作?故障切换多快?</h3>
+        <p>Haify 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。</p></div>
+      <div class="faq-item rv"><h3>Haify 支持 Kubernetes 吗?</h3>
+        <p>支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。该能力已在国产芯片(arm64)k3s 集群上端到端验证。</p></div>
+      <div class="faq-item rv"><h3>Haify 的数据是怎么复制的?会丢数据吗?</h3>
+        <p>Haify 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。</p></div>
     </div>
   </div>
 </section>
@@ -549,7 +549,7 @@ sds <span class="p">gateway nfs create</span> <span class="f">--resource</span> 
 
 <footer>
   <div class="wrap foot">
-    <div>SDS · 软件定义存储 · 支持国产芯片 &nbsp;/&nbsp; DRBD-based Software Defined Storage</div>
+    <div>Haify · 软件定义存储 · 支持国产芯片 &nbsp;/&nbsp; DRBD-based Software Defined Storage</div>
     <div style="display:flex;gap:26px">
       <a href="#features">能力</a><a href="#arch">架构</a><a href="#start">快速开始</a>
     </div>
