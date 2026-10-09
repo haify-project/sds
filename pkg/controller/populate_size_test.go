@@ -26,7 +26,7 @@ func TestParseLaSizeSectors(t *testing.T) {
 // its partition into the last MiB of the device cloned into a disk that did
 // not boot.
 func TestFitTargetToSource(t *testing.T) {
-	run := func(laSize, targetBytes string) (uint64, error, []string) {
+	run := func(laSize, targetBytes string) (uint64, []string, error) {
 		dep := &fakeDeploymentClient{}
 		dep.execFunc = func(_ context.Context, hosts []string, cmd string, _ ...deployment.ExecOption) (*deployment.ExecResult, error) {
 			switch {
@@ -44,22 +44,22 @@ func TestFitTargetToSource(t *testing.T) {
 		for _, c := range dep.execCalls {
 			cmds = append(cmds, c.cmd)
 		}
-		return got, err, cmds
+		return got, cmds, err
 	}
 
-	got, err, _ := run("10491632", "5368709120")
+	got, _, err := run("10491632", "5368709120")
 	require.Error(t, err, "a 5 GiB target cannot take a 5 GiB + 3 MiB source without growing")
 	assert.Contains(t, err.Error(), "growing it failed")
 	assert.Zero(t, got)
 
-	got, err, cmds := run("10485760", "5368709120")
+	got, cmds, err := run("10485760", "5368709120")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(5368709120), got, "the source's data region is what gets copied")
 	for _, c := range cmds {
 		assert.NotContains(t, c, "lvresize", "a target that fits is not grown")
 	}
 
-	got, err, _ = run("", "5368709120")
+	got, _, err = run("", "5368709120")
 	require.NoError(t, err)
 	assert.Zero(t, got, "a source without DRBD metadata leaves the target's size in charge")
 }
