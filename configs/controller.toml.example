@@ -145,7 +145,10 @@ port = 3376
 # web UI's notification bell over GET /v1/events/stream, and followed with
 # `sds event watch`.
 [alert]
-enabled = false
+# The health poll: events, the storage and DRBD gauges in /metrics, the
+# write-anomaly guard and thin pool autoextend all read it. Nothing is sent
+# anywhere until a notification channel is set up. false stops all of them.
+enabled = true
 check_interval_sec = 30
 # SSH-probe every registered node on each poll. This is what produces
 # node.unreachable events, and the only check that costs a round trip per node.

@@ -525,7 +525,7 @@ func setDefaults() {
 	viper.SetDefault("resource.auto_tiebreaker", true)
 	viper.SetDefault("resource.fault_domain_label", "host")
 	viper.SetDefault("schedule.enabled", true)
-	viper.SetDefault("alert.enabled", false)
+	viper.SetDefault("alert.enabled", true)
 	viper.SetDefault("alert.warning_hold_sec", 30)
 	viper.SetDefault("alert.check_interval_sec", 30)
 	viper.SetDefault("alert.check_nodes", true)

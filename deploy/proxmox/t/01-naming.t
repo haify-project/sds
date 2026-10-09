@@ -9,7 +9,7 @@ use FindBin;
 use lib "$FindBin::Bin/lib", "$FindBin::Bin/..";
 
 use PVEStub;
-use Test::More tests => 31;
+use Test::More tests => 36;
 
 require "$FindBin::Bin/../SDSPlugin.pm";
 my $P = 'PVE::Storage::Custom::SDSPlugin';
@@ -86,3 +86,9 @@ is(PVE::Storage::Custom::SDSPlugin::gb_to_bytes(3), 3221225472, 'gb to bytes');
 # PVE::Storage stub reports APIVER 11 / APIAGE 2, so 11 is inside the window.
 
 is($P->api(), 11, 'declares the version it was built against when supported');
+my $neg = \&PVE::Storage::Custom::SDSPlugin::negotiate_apiver;
+is($neg->(16, 7), 16, "PVE 9.2 (16/7): its own version, so it prints no 'older storage API' warning");
+is($neg->(13, 4), 13, 'PVE 9.1 (13/4): its own version');
+is($neg->(17, 8), 16, 'a newer PVE: the newest version checked');
+is($neg->(10, 1), 10, 'an older PVE: the nearest version it accepts');
+is($neg->(30, 2), 28, 'a PVE whose window left 16 behind: the oldest it accepts');

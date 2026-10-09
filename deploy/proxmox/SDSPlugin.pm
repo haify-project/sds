@@ -31,7 +31,9 @@ use base qw(PVE::Storage::Plugin);
 our $VERSION = '0.1.0';
 
 # The storage API version this plugin was written against.
-my $PLUGIN_APIVER = 11;
+my $PLUGIN_APIVER     = 11;
+# The newest storage API version checked against PVE's ApiChangeLog.
+my $PLUGIN_APIVER_MAX = 16;
 
 # How long to wait for /dev/drbdN to appear after a promote, and how often to
 # look. A promote returns once DRBD accepted the role change, but udev needs a
@@ -53,17 +55,28 @@ sub api {
     # Fully qualified with parens: PVE::Storage loads this plugin, so the
     # constants exist at call time without us use'ing it (which would be a
     # circular dependency).
-    my $apiver = PVE::Storage::APIVER();
-    my $apiage = PVE::Storage::APIAGE();
+    return negotiate_apiver(PVE::Storage::APIVER(), PVE::Storage::APIAGE());
+}
+
+# negotiate_apiver picks the storage API version to declare to a PVE that
+# speaks $apiver and still accepts versions down to $apiver - $apiage.
+#
+# Every version from $PLUGIN_APIVER to $PLUGIN_APIVER_MAX has been checked
+# against PVE's ApiChangeLog and is implemented, so the plugin declares PVE's
+# own version when it falls in that range: declaring an older one makes PVE
+# print "implementing an older storage API" on every command. A PVE newer than
+# anything checked gets $PLUGIN_APIVER_MAX, and one whose window excludes the
+# whole range the nearest version it accepts, so the plugin still loads and a
+# real incompatibility surfaces as a concrete method error rather than the
+# storage silently disappearing from the UI.
+sub negotiate_apiver {
+    my ($apiver, $apiage) = @_;
     my $oldest = $apiver - $apiage;
-
-    # Inside this PVE's compatibility window: declare what we were built for.
-    return $PLUGIN_APIVER if $PLUGIN_APIVER >= $oldest && $PLUGIN_APIVER <= $apiver;
-
-    # Outside it: claim the nearest version this PVE still accepts so the plugin
-    # loads and any real incompatibility surfaces as a concrete method error
-    # rather than the storage silently disappearing from the UI.
-    return $PLUGIN_APIVER < $oldest ? $oldest : $apiver;
+    my $want   = $apiver < $PLUGIN_APIVER_MAX ? $apiver : $PLUGIN_APIVER_MAX;
+    $want = $PLUGIN_APIVER if $want < $PLUGIN_APIVER;
+    return $oldest if $want < $oldest;
+    return $apiver if $want > $apiver;
+    return $want;
 }
 
 sub type { return 'sds'; }
@@ -508,7 +521,11 @@ sub deactivate_volume {
 # ---------------------------------------------------------------------------
 
 sub volume_resize {
-    my ($class, $scfg, $storeid, $volname, $size, $running) = @_;
+    my ($class, $scfg, $storeid, $volname, $size, $running, $snapname) = @_;
+
+    # API 15: PVE resizes a snapshot only for storages with
+    # snapshot-as-volume-chain, which sds snapshots are not.
+    die "resizing a snapshot is not supported by the sds storage plugin\n" if defined $snapname;
 
     my ($vtype, $name) = $class->parse_volname($volname);
     my $resname = sds_resource_name($scfg, $name);

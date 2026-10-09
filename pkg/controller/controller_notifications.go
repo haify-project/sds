@@ -76,6 +76,9 @@ func (c *Controller) startNotifications() {
 		if c.config.Metrics.Enabled {
 			c.logger.Warn("Metrics are enabled but alerts are not; the pool, gateway and DRBD replication gauges stay empty because they are fed by the health poll. Set [alert] enabled = true to populate them.")
 		}
+		if c.config.Storage.Thin.AutoextendThreshold > 0 {
+			c.logger.Warn("[storage.thin] autoextend is set but alerts are not enabled; thin pools will NOT be grown before they fill, because autoextend reads the health poll. Set [alert] enabled = true.")
+		}
 		return
 	}
 
