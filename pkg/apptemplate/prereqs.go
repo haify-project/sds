@@ -50,9 +50,15 @@ func ProbeScript(s Spec) string {
 		engine = mysqlProbe
 	case Redis:
 		engine = redisProbe
+	case RustFS:
+		engine = rustfsProbe
 	}
-	return strings.NewReplacer("@USER@", OSUser(s.Engine), "@PORT@", strconv.Itoa(s.Port), "@ENGINE@", engine).
-		Replace(probeFrame)
+	// Two passes: a Replacer does not rescan what it inserted, and the engine
+	// part carries placeholders of its own.
+	script := strings.Replace(probeFrame, "@ENGINE@", engine, 1)
+	return strings.NewReplacer("@USER@", OSUser(s.Engine),
+		"@PORT@", strconv.Itoa(s.Port), "@CONSOLE@", strconv.Itoa(ConsolePort(s))).
+		Replace(script)
 }
 
 const probeFrame = `#!/bin/bash
@@ -126,6 +132,21 @@ else
   if [ "$flavor" = mariadb ]; then
     if c=$(pick mariadb-install-db mysql_install_db); then echo "init=$c"; else missing="$missing mariadb-install-db"; fi
   fi
+fi
+`
+
+// rustfsProbe finds the server, the curl its health probe uses, and whether
+// the console port, the one after the S3 port, is free too.
+const rustfsProbe = `if c=$(pick rustfs); then
+  echo "server=$c"
+  echo "version=$("$c" --version 2>/dev/null | head -n1)"
+else
+  missing="$missing rustfs"
+fi
+if c=$(pick curl); then echo "client=$c"; else missing="$missing curl"; fi
+if have ss; then
+  busy=$(ss -Hltn "sport = :@CONSOLE@" 2>/dev/null | head -n1)
+  [ -z "$busy" ] || echo "portbusy=$busy (the console port)"
 fi
 `
 
@@ -229,7 +250,7 @@ func CheckNodes(s Spec, nodes []NodeResult) (Agreed, error) {
 	}
 	if len(missing) > 0 {
 		problems = append(problems, fmt.Sprintf("%s (install %s; the OCF agents come from "+
-			"resource-agents-extra on Debian/Ubuntu or resource-agents on EL)", strings.Join(missing, "; "), Packages(s.Engine)))
+			"resource-agents-extra on Ubuntu, resource-agents on Debian and EL)", strings.Join(missing, "; "), Packages(s.Engine)))
 	}
 	for _, n := range nodes {
 		if n.Probe.PortBusy != "" {

@@ -43,6 +43,7 @@ func scriptVars(s Spec, b Binaries, extra ...string) *strings.Replacer {
 		"@INIT@", b.Init,
 		"@PGCTL@", b.pgCtl(),
 		"@USER@", OSUser(s.Engine),
+		"@ADMINUSER@", AdminUser(s.Engine),
 		"@HOLD@", strconv.Itoa(int(FreezeWatchdog.Seconds())),
 		"@LOCKUNIT@", LockUnit(s.Name),
 	}
@@ -61,6 +62,8 @@ func InitScript(s Spec, b Binaries, device, staged string) string {
 		body, stop, selinuxType = mysqlInit(b), mysqlStop, "mysqld_db_t"
 	case Redis:
 		body, stop, selinuxType = redisInit, redisStop, "redis_var_lib_t"
+	case RustFS:
+		body, stop, selinuxType = rustfsInit, rustfsStop, "var_lib_t"
 	}
 	r := scriptVars(s, b, "@DEV@", device, "@STAGED@", staged, "@SETYPE@", selinuxType)
 	return r.Replace(strings.NewReplacer("@ENGINE_INIT@", body, "@STOP_TEMP@", stop).Replace(initFrame))
@@ -307,4 +310,27 @@ stop_temp
 temp_started=`
 
 const redisStop = `  REDISCLI_AUTH="$pw" @CLIENT@ -s "$run/redis.sock" shutdown >/dev/null 2>&1 || kill "$srvpid" 2>/dev/null
+  wait "$srvpid" 2>/dev/null`
+
+// rustfsInit writes the keys (the fixed access key, the generated password as
+// the secret key) into files only the rustfs user reads, and starts the store
+// once on loopback to prove it runs and to let it lay out its own metadata
+// (.rustfs.sys) in the data directory.
+const rustfsInit = `install -d -m 0750 -o "$u" -g "$u" "$M/data" "$M/conf"
+(umask 077; printf '%s' "@ADMINUSER@" > "$M/conf/access_key"; printf '%s' "$pw" > "$M/conf/secret_key")
+chown "$u:$u" "$M/conf/access_key" "$M/conf/secret_key"
+setpriv --reuid="$u" --regid="$u" --init-groups @SERVER@ server --address 127.0.0.1:@PORT@ \
+  --access-key-file "$M/conf/access_key" --secret-key-file "$M/conf/secret_key" "$M/data" >"$run/init.log" 2>&1 &
+srvpid=$!
+temp_started=1
+i=0
+until @CLIENT@ -fsS -o /dev/null --max-time 5 http://127.0.0.1:@PORT@/health/ready 2>/dev/null; do
+  kill -0 "$srvpid" 2>/dev/null || fail "rustfs exited: $(tail -n 5 "$run/init.log")"
+  i=$((i+1)); [ $i -lt 120 ] || fail "rustfs did not answer within 120s"
+  sleep 1
+done
+stop_temp
+temp_started=`
+
+const rustfsStop = `  kill "$srvpid" 2>/dev/null
   wait "$srvpid" 2>/dev/null`

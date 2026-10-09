@@ -1464,7 +1464,7 @@ stops the AI Copilot with the controller.
 
 ---
 
-## 12. Database applications
+## 12. Database and object-store applications
 
 > **Status: new.** The generated files and scripts, the prerequisite checks and
 > the controller's create, status, failover, snapshot and delete flows are
@@ -1475,7 +1475,8 @@ stops the AI Copilot with the controller.
 > it, test on yours — the list is at the end of this section.
 
 `haify app` runs one database instance — PostgreSQL (optionally with pgvector),
-MySQL or MariaDB, or Redis — on a resource's DRBD volume, the way `ha create`
+MySQL or MariaDB, or Redis — or an S3-compatible object store (RustFS) on a
+resource's DRBD volume, the way `ha create`
 runs a service and a gateway runs an export. drbd-reactor mounts the volume,
 starts the database and raises a service IP on the node where the resource is
 Primary; when that node fails, another replica does the same. It is storage
@@ -1490,6 +1491,7 @@ haify app create --name orders --engine postgres --service-ip 192.0.2.220/24
 haify app create --name embeddings --engine postgres --vector --resource emb --service-ip 192.0.2.221/24
 haify app create --name sessions --engine redis --port 6380 --service-ip 192.0.2.222/24
 haify app create --name shop --engine mysql --service-ip 192.0.2.223/24
+haify app create --name objects --engine rustfs --service-ip 192.0.2.224/24
 
 haify app list
 haify app status orders
@@ -1499,7 +1501,7 @@ haify app delete orders                              # stops it; the resource an
 haify app delete orders --delete-data --yes          # and deletes the resource
 ```
 
-`--resource` defaults to the app's name; `--port` to 5432, 3306 or 6379.
+`--resource` defaults to the app's name; `--port` to 5432, 3306, 6379 or 9000.
 `create` prints the generated password once.
 
 ### What `create` does
@@ -1578,6 +1580,38 @@ unit as a failure and fails the app over.
 `/var/lib/haify-app/<name>/haify/password`, readable by root on the node running the
 app. It never appears in a command line or a log: it reaches the node over the
 SSH stream as a 0600 file. The MCP tool `haify_app_create` does not return it.
+
+### S3 object store (RustFS)
+
+`--engine rustfs` runs [RustFS](https://github.com/rustfs/rustfs) on the volume
+as a single-node, single-disk store. Its redundancy is the resource's DRBD
+replicas, not erasure coding, so it is meant for an S3 endpoint that has to
+stay up — application uploads, backups of other systems, artifacts — not for
+capacity that grows past one volume: the store is as large as the resource and
+as fast as the node serving it. To grow it, grow the volume with `haify
+resource resize-volume`, then, on the node serving it, `resize2fs /dev/drbd/by-res/<resource>/0` (ext4
+grows while mounted).
+
+- **On every diskful replica:** the `rustfs` binary on the `PATH` in the same
+  version (the musl build from the RustFS releases runs on any distribution),
+  `curl`, and a system user `rustfs` with the same uid and gid everywhere:
+  `useradd --system -u <uid> -U -M -s /usr/sbin/nologin rustfs`.
+- **Credentials:** the access key is `admin`; the generated password is the
+  secret key, printed once by `create` and kept as described above. RustFS reads
+  both from files on the volume, owned by `rustfs`, so neither appears in a
+  command line. Users, policies and buckets created through the S3 or admin API
+  live in the data directory (`.rustfs.sys`) and fail over with the objects.
+- **Endpoints:** S3 at `http://<service IP>:<port>`, path-style (set
+  `force_path_style` / `s3_use_path_style` in the client); the web console at
+  `http://<service IP>:<port+1>/rustfs/console/`. `create` checks that both
+  ports are free. Traffic is plain HTTP: put a TLS proxy in front when clients
+  are outside a trusted network.
+- **Snapshots** freeze the filesystem for their few seconds, as for the other
+  engines; objects being uploaded at that moment wait.
+
+Measured on a three-node cluster: a 5 MiB object written through the service
+IP read back identically after `drbd-reactorctl evict`, and the service IP
+answered again within about 3 seconds.
 
 ### Failover
 

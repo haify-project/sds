@@ -101,7 +101,7 @@ type gatewayPrereqs struct {
 
 // ocfAgentsInstall is where every gateway's agents come from. Ubuntu's
 // resource-agents-base lacks Filesystem, which every chain starts with.
-const ocfAgentsInstall = "resource-agents-extra (Debian/Ubuntu) or resource-agents (EL)"
+const ocfAgentsInstall = "resource-agents-extra (Ubuntu) or resource-agents (Debian, EL)"
 
 // nfsPrereqs: the nfsserver agent starts the distribution's NFS server and the
 // exportfs agent drives exportfs(8). Without the server package the agents are

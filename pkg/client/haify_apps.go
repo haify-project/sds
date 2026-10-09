@@ -11,7 +11,7 @@ import (
 // Name and Port to the engine's own.
 type AppCreateRequest struct {
 	Name      string
-	Engine    string // postgres, mysql or redis
+	Engine    string // postgres, mysql, redis or rustfs
 	Resource  string
 	ServiceIP string // CIDR
 	Port      uint32

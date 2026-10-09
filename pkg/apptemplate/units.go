@@ -14,6 +14,7 @@ import (
 //	postgres  pg_isready on the unix socket (no credentials needed)
 //	mysql     mysqladmin ping, which answers 0 whenever the server is up
 //	redis     redis-cli PING, expecting PONG
+//	rustfs    /health/ready on loopback, which answers once the store can serve
 func HealthCommand(s Spec, b Binaries) string {
 	l := LayoutFor(s.Name)
 	switch s.Engine {
@@ -24,6 +25,8 @@ func HealthCommand(s Spec, b Binaries) string {
 	case Redis:
 		return fmt.Sprintf(`REDISCLI_AUTH="$(cat %s)" %s -s %s ping 2>/dev/null | grep -qx PONG`,
 			l.Password, b.Client, path.Join(l.Runtime, "redis.sock"))
+	case RustFS:
+		return fmt.Sprintf("%s -fsS -o /dev/null --max-time 5 http://127.0.0.1:%d/health/ready", b.Client, s.Port)
 	}
 	return "false"
 }
@@ -68,6 +71,12 @@ func Unit(s Spec, b Binaries) string {
 		exec = fmt.Sprintf("%s --defaults-file=%s", b.Server, path.Join(l.Conf, "my.cnf"))
 	case Redis:
 		exec = fmt.Sprintf("%s %s", b.Server, path.Join(l.Conf, "redis.conf"))
+	case RustFS:
+		// The keys are read from files on the volume, owned by the rustfs
+		// user, so they never appear in a command line.
+		exec = fmt.Sprintf("%s server --address :%d --access-key-file %s --secret-key-file %s "+
+			"--console-enable --console-address :%d %s", b.Server, s.Port,
+			path.Join(l.Conf, "access_key"), path.Join(l.Conf, "secret_key"), ConsolePort(s), l.Data)
 	}
 	return fmt.Sprintf(`# Haify app %[1]s: %[2]s on DRBD resource %[3]s.
 # Written by haify-controller (haify app create). drbd-reactor starts and stops
@@ -134,6 +143,9 @@ func ConnectionHint(s Spec) string {
 		return fmt.Sprintf("mysql -h %s -P %d -u %s -p", ip, s.Port, AdminUser(s.Engine))
 	case Redis:
 		return fmt.Sprintf("redis-cli -h %s -p %d --askpass", ip, s.Port)
+	case RustFS:
+		return fmt.Sprintf("http://%s:%d (path-style S3; console http://%s:%d/rustfs/console/)",
+			ip, s.Port, ip, ConsolePort(s))
 	}
 	return ""
 }

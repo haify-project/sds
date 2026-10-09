@@ -22,10 +22,10 @@ import (
 
 type dbAppCreateIn struct {
 	Name      string `json:"name" jsonschema:"app name: 1-40 lower-case letters, digits and inner hyphens"`
-	Engine    string `json:"engine" jsonschema:"database engine: postgres, mysql (MySQL or MariaDB, whichever the nodes have) or redis"`
+	Engine    string `json:"engine" jsonschema:"engine: postgres, mysql (MySQL or MariaDB, whichever the nodes have), redis, or rustfs (an S3-compatible object store)"`
 	Resource  string `json:"resource,omitempty" jsonschema:"existing resource with at least two diskful replicas (default: the app name)"`
 	ServiceIP string `json:"service_ip" jsonschema:"service IP clients connect to, IPv4 in CIDR notation, e.g. 192.168.1.60/24"`
-	Port      uint32 `json:"port,omitempty" jsonschema:"TCP port (default 5432, 3306 or 6379)"`
+	Port      uint32 `json:"port,omitempty" jsonschema:"TCP port (default 5432, 3306, 6379 or 9000; rustfs also takes the next port for its console)"`
 	Vector    bool   `json:"vector,omitempty" jsonschema:"postgres only: install the pgvector extension"`
 }
 
@@ -78,7 +78,7 @@ func dbAppFrom(a *haifypb.AppInfo) dbAppOut {
 // registerDBAppTools adds the database application tools.
 func (s *Server) registerDBAppTools(srv *mcp.Server) {
 	addRead(s, srv, readOnlyTool("haify_app_list", "List database apps",
-		"List the database applications (haify app): single-instance PostgreSQL, MySQL/MariaDB or Redis "+
+		"List the apps (haify app): single-instance PostgreSQL, MySQL/MariaDB, Redis or RustFS (S3) "+
 			"on a resource's DRBD volume, failed over by drbd-reactor. Shows engine, resource, service IP and port."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dbAppListOut, error) {
 			apps, err := s.client.ListApps(ctx)
@@ -94,7 +94,8 @@ func (s *Server) registerDBAppTools(srv *mcp.Server) {
 
 	addRead(s, srv, readOnlyTool("haify_app_status", "Database app status",
 		"Where a database app runs (the node its resource is Primary on), whether its unit is active "+
-			"there and whether the database answers its health probe (pg_isready, mysqladmin ping, redis PING)."),
+			"there and whether the service answers its health probe (pg_isready, mysqladmin ping, redis PING, "+
+			"rustfs /health/ready)."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in dbAppNameIn) (*mcp.CallToolResult, dbAppStatusOut, error) {
 			st, err := s.client.GetAppStatus(ctx, in.Name)
 			if err != nil {
@@ -105,13 +106,15 @@ func (s *Server) registerDBAppTools(srv *mcp.Server) {
 		})
 
 	addWrite(s, srv, writeTool("haify_app_create", "Create a database app",
-		"Run PostgreSQL (optionally with pgvector), MySQL/MariaDB or Redis on an existing resource with at "+
+		"Run PostgreSQL (optionally with pgvector), MySQL/MariaDB, Redis or RustFS (an S3-compatible object "+
+			"store, single-node: its redundancy is the DRBD replicas) on an existing resource with at "+
 			"least two diskful replicas. Checks every replica first (engine installed in the same version and "+
 			"place, same daemon uid/gid, OCF agents, port free) and refuses with the reason; then formats the "+
 			"volume if blank, initializes the database once, and hands it to drbd-reactor: mount, database, "+
 			"service IP last. Failover keeps every acknowledged write (DRBD protocol C); clients reconnect to "+
-			"the service IP. The generated password is NOT returned here: it is kept root-only on the volume "+
-			"(credentials_file), and the CLI's `haify app create` prints it once."),
+			"the service IP. The generated password (for rustfs: the secret key of access key admin) is NOT "+
+			"returned here: it is kept root-only on the volume (credentials_file), and the CLI's `haify app "+
+			"create` prints it once."),
 		func(ctx context.Context, _ *mcp.CallToolRequest, in dbAppCreateIn) (*mcp.CallToolResult, opResult, error) {
 			resp, err := s.client.CreateApp(ctx, client.AppCreateRequest{Name: in.Name, Engine: in.Engine,
 				Resource: in.Resource, ServiceIP: in.ServiceIP, Port: in.Port, Vector: in.Vector})

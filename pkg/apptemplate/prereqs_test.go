@@ -133,4 +133,12 @@ func TestProbeScript(t *testing.T) {
 	require.NoError(t, redis.Normalize())
 	assert.Contains(t, ProbeScript(redis), "id -u redis")
 	assert.NotContains(t, ProbeScript(redis), "vector")
+
+	rustfs := Spec{Name: "objects", Engine: RustFS, ServiceIP: "10.0.0.50/24"}
+	require.NoError(t, rustfs.Normalize())
+	script = ProbeScript(rustfs)
+	assert.Contains(t, script, "id -u rustfs")
+	assert.Contains(t, script, "pick rustfs")
+	assert.Contains(t, script, "pick curl")
+	assert.Contains(t, script, `ss -Hltn "sport = :9001"`, "the console port must be free too")
 }

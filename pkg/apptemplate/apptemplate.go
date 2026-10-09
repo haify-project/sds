@@ -1,5 +1,6 @@
 // Package apptemplate generates what it takes to run a single-instance
-// database on a Haify resource, failed over by drbd-reactor: the systemd unit,
+// service on a Haify resource — a database, or an S3 object store — failed
+// over by drbd-reactor: the systemd unit,
 // the promoter config, the one-time initialization script, the health probe,
 // the freeze/thaw pair for consistent snapshots and the prerequisite probe.
 //
@@ -51,7 +52,7 @@ const (
 	ReadyTimeout = 300
 )
 
-// Engine is a database the app templates know how to run.
+// Engine is a service the app templates know how to run.
 type Engine string
 
 const (
@@ -61,6 +62,9 @@ const (
 	MySQL Engine = "mysql"
 	// Redis is Redis (or a drop-in compatible server providing redis-server).
 	Redis Engine = "redis"
+	// RustFS is an S3-compatible object store, run single-node on one volume:
+	// its redundancy is the resource's DRBD replicas, not erasure coding.
+	RustFS Engine = "rustfs"
 )
 
 // ErrInvalid marks a request rejected before anything was done on a node.
@@ -86,6 +90,11 @@ var engines = map[Engine]engineInfo{
 		packages: "mariadb-server (Debian/Ubuntu, EL) or mysql-server, the same version on every node"},
 	Redis: {user: "redis", adminUser: "default", defaultPort: 6379,
 		packages: "redis-server (Debian/Ubuntu) or redis (EL), the same version on every node"},
+	// The access key is fixed; the generated password is the secret key.
+	RustFS: {user: "rustfs", adminUser: "admin", defaultPort: 9000,
+		packages: "the rustfs binary on the PATH (a musl build from github.com/rustfs/rustfs releases " +
+			"runs on any distribution), the same version on every node, plus curl and a system user rustfs " +
+			"with the same uid on every node (useradd --system -u <uid> -U -M -s /usr/sbin/nologin rustfs)"},
 }
 
 // Engines lists the engine names an app can be created with.
@@ -109,6 +118,10 @@ func AdminUser(e Engine) string { return engines[e].adminUser }
 
 // DefaultPort is the engine's usual TCP port.
 func DefaultPort(e Engine) int { return engines[e].defaultPort }
+
+// ConsolePort is where RustFS serves its web console: the port after the S3
+// one, as RustFS itself does by default (9000 and 9001).
+func ConsolePort(s Spec) int { return s.Port + 1 }
 
 // Spec is one app as the caller asked for it.
 type Spec struct {
@@ -158,6 +171,9 @@ func (s *Spec) Normalize() error {
 	}
 	if s.Port < 1 || s.Port > 65535 {
 		return invalid("port %d is outside 1-65535", s.Port)
+	}
+	if s.Engine == RustFS && ConsolePort(*s) > 65535 {
+		return invalid("port %d leaves no room for the console on the next port", s.Port)
 	}
 	if _, _, err := ParseServiceIP(s.ServiceIP); err != nil {
 		return err
@@ -254,7 +270,7 @@ func DataDevice(resource string, volume int) string {
 // Binaries are where an engine's programs live on the nodes. The probe finds
 // them, and every node must agree, because one unit file is written to all.
 type Binaries struct {
-	Server string // postgres, mariadbd/mysqld or redis-server
+	Server string // postgres, mariadbd/mysqld, redis-server or rustfs
 	Client string // psql, mariadb/mysql or redis-cli
 	Admin  string // pg_isready or mariadb-admin/mysqladmin
 	Init   string // initdb or mariadb-install-db; MySQL initializes through the server

@@ -12,13 +12,13 @@ import (
 	"github.com/haify-project/haify/pkg/client"
 )
 
-// `haify app`: a single-instance PostgreSQL, MySQL/MariaDB or Redis on a
+// `haify app`: a single-instance PostgreSQL, MySQL/MariaDB, Redis or RustFS on a
 // resource's DRBD volume, failed over by drbd-reactor like a gateway.
 
 func appCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "app",
-		Short: "Highly available databases on a resource (postgres, mysql, redis)",
+		Short: "Highly available databases and object stores on a resource (postgres, mysql, redis, rustfs)",
 		Long: `Run one database instance on a resource's DRBD volume. drbd-reactor mounts the
 volume, starts the database and raises the service IP on the node where the
 resource is Primary, and does the same on another replica when that node fails,
@@ -90,10 +90,15 @@ func appCreate() *cobra.Command {
 				fmt.Printf("  Resource:    %s (initialized on %s)\n", a.GetResource(), resp.PrimaryNode)
 				fmt.Printf("  Service IP:  %s port %d\n", a.GetServiceIp(), a.GetPort())
 				fmt.Printf("  Connect:     %s\n", a.GetConnection())
-				if resp.Password != "" {
+				if resp.Password != "" && a.GetEngine() == "rustfs" {
+					fmt.Printf("  Access key:  %s\n", a.GetAdminUser())
+					fmt.Printf("  Secret key:  %s\n", resp.Password)
+				} else if resp.Password != "" {
 					fmt.Printf("  User:        %s\n", a.GetAdminUser())
 					fmt.Printf("  Password:    %s\n", resp.Password)
-					fmt.Printf("\nThe password is shown once. It is also kept, root-only, in %s on the\n"+
+				}
+				if resp.Password != "" {
+					fmt.Printf("\nShown once. It is also kept, root-only, in %s on the\n"+
 						"node running the app.\n", a.GetCredentialsFile())
 				}
 				fmt.Printf("\nFollow it with: haify app status %s\n", a.GetName())
@@ -102,7 +107,7 @@ func appCreate() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&req.Name, "name", "", "App name (lower case, digits, hyphens)")
-	cmd.Flags().StringVar(&req.Engine, "engine", "", "Database engine: postgres, mysql or redis")
+	cmd.Flags().StringVar(&req.Engine, "engine", "", "Engine: postgres, mysql, redis or rustfs (S3; its console takes the port after --port)")
 	cmd.Flags().StringVar(&req.Resource, "resource", "", "Resource to run it on (default: the app's name)")
 	cmd.Flags().StringVar(&req.ServiceIP, "service-ip", "", "Service IP clients connect to, in CIDR notation")
 	cmd.Flags().IntVar(&port, "port", 0, "TCP port (default: 5432, 3306 or 6379)")

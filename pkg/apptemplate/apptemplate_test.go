@@ -24,6 +24,10 @@ func TestNormalize(t *testing.T) {
 			want: Spec{Name: "db", Engine: MySQL, Resource: "r1", ServiceIP: "10.0.0.50/24", Port: 3306}},
 		{name: "redis custom port", in: Spec{Name: "cache", Engine: "redis", ServiceIP: "10.0.0.50/24", Port: 7000},
 			want: Spec{Name: "cache", Engine: Redis, Resource: "cache", ServiceIP: "10.0.0.50/24", Port: 7000}},
+		{name: "rustfs default port", in: Spec{Name: "objects", Engine: "rustfs", ServiceIP: "10.0.0.50/24"},
+			want: Spec{Name: "objects", Engine: RustFS, Resource: "objects", ServiceIP: "10.0.0.50/24", Port: 9000}},
+		{name: "rustfs console needs the next port", in: Spec{Name: "objects", Engine: "rustfs", ServiceIP: "10.0.0.50/24", Port: 65535},
+			wantErr: "console"},
 		{name: "vector", in: Spec{Name: "emb", Engine: "postgres", ServiceIP: "10.0.0.50/24", Vector: true},
 			want: Spec{Name: "emb", Engine: Postgres, Resource: "emb", ServiceIP: "10.0.0.50/24", Port: 5432, Vector: true}},
 		{name: "upper case name", in: Spec{Name: "Orders", Engine: "postgres", ServiceIP: "10.0.0.50/24"}, wantErr: "name"},
@@ -86,6 +90,8 @@ func binariesFor(e Engine, flavor string) Binaries {
 				Init: "/usr/bin/mariadb-install-db", Flavor: "mariadb"}
 		}
 		return Binaries{Server: "/usr/sbin/mysqld", Client: "/usr/bin/mysql", Admin: "/usr/bin/mysqladmin", Flavor: "mysql"}
+	case RustFS:
+		return Binaries{Server: "/usr/local/bin/rustfs", Client: "/usr/bin/curl"}
 	}
 	return Binaries{Server: "/usr/bin/redis-server", Client: "/usr/bin/redis-cli"}
 }
@@ -94,7 +100,7 @@ func binariesFor(e Engine, flavor string) Binaries {
 // clients only reach a node whose database answers, and lose the address
 // before the database stops.
 func TestPromoterConfigStartsTheServiceIPLast(t *testing.T) {
-	for _, e := range []Engine{Postgres, MySQL, Redis} {
+	for _, e := range []Engine{Postgres, MySQL, Redis, RustFS} {
 		t.Run(string(e), func(t *testing.T) {
 			s := specFor(t, e)
 			cfg, err := PromoterConfig(s, DataDevice("res1", 0))
@@ -131,6 +137,10 @@ func TestUnit(t *testing.T) {
 			"/usr/bin/mariadb-admin --defaults-extra-file=/var/lib/haify-app/orders/haify/client.cnf ping"},
 		{Redis, "", "ExecStart=/usr/bin/redis-server /var/lib/haify-app/orders/conf/redis.conf", "redis",
 			`REDISCLI_AUTH="$$(cat /var/lib/haify-app/orders/haify/password)" /usr/bin/redis-cli -s /run/haify-app-orders/redis.sock ping`},
+		{RustFS, "", "ExecStart=/usr/local/bin/rustfs server --address :9000 " +
+			"--access-key-file /var/lib/haify-app/orders/conf/access_key --secret-key-file /var/lib/haify-app/orders/conf/secret_key " +
+			"--console-enable --console-address :9001 /var/lib/haify-app/orders/data", "rustfs",
+			"/usr/bin/curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:9000/health/ready"},
 	}
 	for _, tc := range tests {
 		t.Run(string(tc.engine), func(t *testing.T) {
@@ -161,6 +171,8 @@ func TestHealthCommand(t *testing.T) {
 	assert.Contains(t, redis, "redis-cli -s /run/haify-app-orders/redis.sock ping")
 	assert.Contains(t, redis, "grep -qx PONG")
 	assert.NotContains(t, redis, " -a ", "a password on the command line is visible in ps")
+	assert.Equal(t, "/usr/bin/curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:9000/health/ready",
+		HealthCommand(specFor(t, RustFS), binariesFor(RustFS, "")))
 }
 
 // Every generated script must at least parse; a syntax error would only show
@@ -176,7 +188,7 @@ func TestScriptsParse(t *testing.T) {
 		vector bool
 	}
 	for _, v := range []variant{{Postgres, "", false}, {Postgres, "", true}, {MySQL, "mariadb", false},
-		{MySQL, "mysql", false}, {Redis, "", false}} {
+		{MySQL, "mysql", false}, {Redis, "", false}, {RustFS, "", false}} {
 		s := specFor(t, v.engine)
 		s.Vector = v.vector
 		b := binariesFor(v.engine, v.flavor)
@@ -233,6 +245,12 @@ func TestInitScript(t *testing.T) {
 	assert.Contains(t, redis, "requirepass $pw")
 	assert.Contains(t, redis, "appendonly yes")
 	assert.Contains(t, redis, "setpriv --reuid=\"$u\"")
+
+	rustfs := InitScript(specFor(t, RustFS), binariesFor(RustFS, ""), dev, staged)
+	assert.Contains(t, rustfs, `printf '%s' "admin" > "$M/conf/access_key"`)
+	assert.Contains(t, rustfs, `printf '%s' "$pw" > "$M/conf/secret_key"`)
+	assert.Contains(t, rustfs, "--address 127.0.0.1:9000", "the smoke test listens on loopback only")
+	assert.NotContains(t, rustfs, "--secret-key ", "the secret key never goes on a command line")
 }
 
 func TestFreezeArmsTheWatchdogBeforeFreezing(t *testing.T) {
@@ -278,4 +296,6 @@ func TestConnectionHint(t *testing.T) {
 	assert.Equal(t, "postgresql://postgres@10.0.0.50:5432/postgres", ConnectionHint(specFor(t, Postgres)))
 	assert.Contains(t, ConnectionHint(specFor(t, MySQL)), "-h 10.0.0.50 -P 3306 -u root")
 	assert.Contains(t, ConnectionHint(specFor(t, Redis)), "-h 10.0.0.50 -p 6379")
+	assert.Equal(t, "http://10.0.0.50:9000 (path-style S3; console http://10.0.0.50:9001/rustfs/console/)",
+		ConnectionHint(specFor(t, RustFS)))
 }
