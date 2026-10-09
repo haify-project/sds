@@ -127,11 +127,18 @@ class HaifyDriver(driver.VolumeDriver):
         self.backend = haify_backend.Backend(haify_client.Client(c.haify_controller, token=token), settings,
                                              log=self._log)
 
-    @translated
     def check_for_setup_error(self):
+        """Fails only on configuration. A controller that does not answer now
+        must not fail it: Cinder never initializes a driver whose setup
+        failed again until cinder-volume restarts, and the controller is
+        briefly away whenever Self-HA moves it. Until it answers, the backend
+        reports itself down and each operation fails with the reason."""
         if not self.configuration.haify_controller:
             raise exception.InvalidConfigurationValue(option="haify_controller", value="")
-        self.backend.client.pools()
+        try:
+            self.backend.client.pools()
+        except haify_client.HaifyError as e:
+            LOG.warning("haify: the controller does not answer yet (%s); the backend is down until it does", e)
 
     # Volumes
 

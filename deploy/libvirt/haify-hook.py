@@ -132,10 +132,16 @@ def reactor_managed(resource, reactor_dir=None):
     return False
 
 
+# The controller is on the storage network, so it is reached directly: a host
+# with http_proxy set would otherwise send every call to the proxy, as urllib
+# honours no_proxy host names but not CIDR ranges.
+direct_open = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
+
+
 class Controller:
     """haify-controller's REST gateway, tried address by address."""
 
-    def __init__(self, cfg, opener=urllib.request.urlopen):
+    def __init__(self, cfg, opener=direct_open):
         self.urls = []
         for entry in (cfg.get("CONTROLLER") or "").split(","):
             entry = entry.strip().rstrip("/")

@@ -39,11 +39,18 @@ def endpoints(addresses):
     return urls
 
 
+# The controller is on the storage network, so it is reached directly. A host
+# with http_proxy set for the internet would otherwise send every call to the
+# proxy: urllib honours no_proxy host names but not the CIDR ranges
+# (192.168.0.0/16) such hosts usually list.
+direct_open = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
+
+
 class Client:
     """Calls the controller, trying each address until one answers. Under
     Self-HA only the node running the controller does; the others refuse."""
 
-    def __init__(self, addresses, token=None, timeout=60, opener=urllib.request.urlopen):
+    def __init__(self, addresses, token=None, timeout=60, opener=direct_open):
         self.urls = endpoints(addresses)
         self.token = token
         self.timeout = timeout

@@ -118,6 +118,16 @@ class Driver(unittest.TestCase):
         with self.assertRaisesRegex(sys.modules["cinder.exception"].VolumeBackendAPIException, "pool full"):
             d.create_volume(types.SimpleNamespace(id="v1", size=1))
 
+    def test_setup_survives_an_absent_controller(self):
+        # Cinder never retries a driver whose setup check failed, so a
+        # controller away during a Self-HA move must not fail it.
+        d, c = make_driver()
+        c.fail["pools"] = HaifyError("haify controller unreachable")
+        d.check_for_setup_error()
+        d.configuration.haify_controller = []
+        with self.assertRaises(sys.modules["cinder.exception"].InvalidConfigurationValue):
+            d.check_for_setup_error()
+
     def test_stats(self):
         d, c = make_driver()
         c.pool_list = [{"name": "haify_p", "thinPoolLv": "t", "thinSizeBytes": str(10 * 1024 ** 3),

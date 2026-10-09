@@ -42,6 +42,43 @@ class Endpoints(unittest.TestCase):
         self.assertEqual(endpoints(["", "x"]), ["http://x:3375"])
 
 
+class Proxy(unittest.TestCase):
+    def test_controller_is_reached_directly(self):
+        import http.server
+        import threading
+
+        seen = []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen.append(self.path)
+                body = b'{"success": true, "pools": []}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        old = {k: os.environ.get(k) for k in ("http_proxy", "no_proxy", "HTTP_PROXY", "NO_PROXY")}
+        # A proxy that does not exist: going through it would fail.
+        os.environ.update(http_proxy="http://127.0.0.1:9", HTTP_PROXY="http://127.0.0.1:9",
+                          no_proxy="10.0.0.0/8", NO_PROXY="10.0.0.0/8")
+        try:
+            self.assertEqual(Client(f"127.0.0.1:{srv.server_port}").pools(), [])
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            srv.shutdown()
+        self.assertEqual(seen, ["/v1/pools"])
+
+
 class Request(unittest.TestCase):
     def test_next_address_when_one_refuses(self):
         op, seen = opener({"http://b:3375": {"success": True, "resources": [{"name": "r"}]}})
