@@ -46,6 +46,9 @@ const LogsPage = lazy(() =>
 const TwinPage = lazy(() =>
   import('./pages/twin/TwinPage').then((m) => ({ default: m.TwinPage })),
 );
+const ProxmoxPage = lazy(() =>
+  import('./pages/ProxmoxPage').then((m) => ({ default: m.ProxmoxPage })),
+);
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );
@@ -81,6 +84,7 @@ function App() {
               <Route path="nodes" element={<NodesPage />} />
               <Route path="pools" element={<PoolsPage />} />
               <Route path="resources" element={<ResourcesPage />} />
+              <Route path="proxmox" element={<ProxmoxPage />} />
               {/* Profiles moved under Resources; keep the old path working
                   rather than 404ing links and bookmarks that already exist. */}
               <Route

@@ -31,6 +31,9 @@ export interface Volume {
   // operate on.
   pool?: string;
   backingVolume?: string;
+  // The device's exact size when it was given one (a Proxmox disk); 0 or
+  // absent means sizeGb whole GiB. A 64-bit integer, so it arrives as a string.
+  sizeBytes?: string;
 }
 
 export interface NodeState {

@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   BellRing,
   Rotate3d,
+  Monitor,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/UserMenu';
@@ -87,6 +88,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { name: 'Resources', href: '/resources', icon: Box },
       { name: 'Gateways', href: '/gateways', icon: Network },
       { name: 'HA', href: '/ha', icon: ShieldCheck },
+      { name: 'Proxmox VE', href: '/proxmox', icon: Monitor },
     ],
   },
   {

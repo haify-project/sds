@@ -261,6 +261,10 @@ also accepted. `content` may be `images` and `rootdir`; the only format is
 One disk per resource means each disk resizes, snapshots and deletes
 independently, the same model the CSI driver uses for a PVC.
 
+The SDS web interface shows the same disks from the storage side, under
+**Proxmox VE**: one card per guest, with each disk's replicas and whether they
+are in step, the node the guest runs on, and a link to it in the PVE interface.
+
 Capacity is the smallest node's because a replica must fit on every node that
 holds one; the sum would let PVE accept a disk that cannot be placed. On a thin
 pool it is the thin pool's own size and unused data space (`thinSizeBytes`,
