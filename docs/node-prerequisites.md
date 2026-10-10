@@ -377,8 +377,8 @@ docker save $(for t in csi-provisioner:v5.1.0 csi-resizer:v1.13.2 csi-snapshotte
 
 ### Deploy
 
-Edit `deploy/k8s/00-haify-controller-endpoint.yaml` so its Endpoints carry the
-controller IP/VIP (a selectorless Service plus manual Endpoints makes
+Edit `deploy/k8s/00-haify-controller-endpoint.yaml` so its EndpointSlice carries
+the controller IP/VIP (a selectorless Service plus a manual EndpointSlice makes
 `haify-controller:3374` resolve to the external controller), set `pool` in
 `40-storageclass.yaml`, then `kubectl apply -f deploy/k8s/`.
 `50-volumesnapshotclass.yaml` needs the snapshot CRDs (`deploy/k8s/README.md`).

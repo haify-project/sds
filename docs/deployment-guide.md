@@ -491,7 +491,7 @@ reached at an IP or VIP on port 3374.
    `30-node.yaml`, and import them the same way.
 
 2. Edit `deploy/k8s/00-haify-controller-endpoint.yaml` (the controller IP/VIP in
-   the manual Endpoints) and the StorageClass `pool` in `40-storageclass.yaml`,
+   the manual EndpointSlice) and the StorageClass `pool` in `40-storageclass.yaml`,
    then `kubectl apply -f deploy/k8s/`. `50-volumesnapshotclass.yaml` needs the
    snapshot CRDs (`deploy/k8s/README.md`).
 

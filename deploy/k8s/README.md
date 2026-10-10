@@ -7,7 +7,7 @@ namespace `haify-ai`).
 | File | What it creates |
 | ---- | --------------- |
 | `00-csidriver.yaml` | `CSIDriver` (`attachRequired: false`, `storageCapacity: true`, `fsGroupPolicy: File`) |
-| `00-haify-controller-endpoint.yaml` | Selectorless `Service` + manual `Endpoints` pointing at the external haify-controller |
+| `00-haify-controller-endpoint.yaml` | Selectorless `Service` + manual `EndpointSlice` pointing at the external haify-controller |
 | `10-rbac.yaml` | ServiceAccounts `haify-csi-controller`, `haify-csi-node`; ClusterRoles for provisioner, snapshotter, resizer and the health reporter |
 | `20-controller.yaml` | Deployment `haify-csi-controller`: csi-provisioner, csi-resizer, csi-snapshotter, plugin (`csi-controller`), livenessprobe |
 | `30-node.yaml` | DaemonSet `haify-csi-node`: node-driver-registrar, plugin (`csi-node`, privileged) |
@@ -45,8 +45,12 @@ in `20-controller.yaml` / `30-node.yaml`:
 The haify-controller runs **outside** the cluster on the storage hosts, HA'd
 behind a floating VIP. `00-haify-controller-endpoint.yaml` ships a selectorless
 `Service` named `haify-controller` (port `3374`, named `grpc`) plus a manual
-`Endpoints` carrying the VIP, so the in-cluster name `haify-controller:3374`
+`EndpointSlice` carrying the VIP, so the in-cluster name `haify-controller:3374`
 reaches the external controller.
+
+Upgrading from a manifest that shipped a v1 `Endpoints` instead: delete it
+(`kubectl -n kube-system delete endpoints haify-controller`) after applying the
+new file, or Kubernetes keeps mirroring it into a second slice.
 
 **You must set the VIP.** Replace the `192.0.2.10` placeholder (marked
 `# CHANGE ME`) with your real VIP, shown as `VIP:` in:
