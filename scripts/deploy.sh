@@ -150,14 +150,25 @@ for host in ${HOSTS//,/ }; do
     if [ "$CLI_ONLY" = false ]; then
         ssh "$host" "sudo mkdir -p /etc/haify /opt/haify/bin /var/log/haify /var/lib/haify"
         scp -q "$(bin_dir "$host")/haify-controller" "$host:/tmp/haify-controller"
-        ssh "$host" "sudo install -m755 /tmp/haify-controller $REMOTE_CONTROLLER && rm -f /tmp/haify-controller"
+        # A node's unit may run the controller from elsewhere (an older install
+        # under /usr/local/bin): install it there too, or the restart below
+        # brings the old binary back up and the deploy silently does nothing.
+        unit_bin=$(ssh "$host" "systemctl show -p ExecStart --value haify-controller 2>/dev/null" | sed -n 's/.*path=\([^ ;]*\).*/\1/p')
+        ssh "$host" "sudo install -m755 /tmp/haify-controller $REMOTE_CONTROLLER"
+        if [ -n "$unit_bin" ] && [ "$unit_bin" != "$REMOTE_CONTROLLER" ]; then
+            log_info "$host: its unit runs $unit_bin; installing there as well"
+            ssh "$host" "sudo install -m755 /tmp/haify-controller $unit_bin"
+        fi
+        ssh "$host" "rm -f /tmp/haify-controller"
     fi
 
     scp -q "$(bin_dir "$host")/haify" "$host:/tmp/haify"
     ssh "$host" "sudo install -m755 /tmp/haify $REMOTE_CLI && sudo ln -sf haify /usr/local/bin/haify-cli && rm -f /tmp/haify"
 
     if [ "$CLI_ONLY" = false ]; then
-        if [ -f "$SERVICE_FILE" ]; then
+        # Install the unit only if absent: a node's unit may carry local
+        # settings, and drbd-reactor manages the service under Self-HA.
+        if [ -f "$SERVICE_FILE" ] && ! ssh "$host" "test -f $REMOTE_SERVICE"; then
             scp -q "$SERVICE_FILE" "$host:/tmp/haify-controller.service"
             ssh "$host" "sudo mv /tmp/haify-controller.service $REMOTE_SERVICE && sudo systemctl daemon-reload"
         fi
