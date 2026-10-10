@@ -224,6 +224,21 @@ func TestANodeWithoutThePoolHasNoCapacity(t *testing.T) {
 	assert.Zero(t, resp.AvailableCapacity)
 }
 
+// With remote access a Pod may run on a node that holds no replica. Reporting
+// 0 there kept the scheduler off every such node, so the option did nothing
+// for a Pod that was not already on a replica node.
+func TestARemoteAccessNodeHasThePoolsRoom(t *testing.T) {
+	b := newFakeBackend("n1", "n2", "n3")
+	b.pools = []*haifypb.PoolInfo{thinPool("10.0.0.1", 20, 10), thinPool("10.0.0.2", 20, 50)}
+	resp, err := newTestController(b).GetCapacity(context.Background(), &csi.GetCapacityRequest{
+		Parameters:         map[string]string{"pool": "vg0", "replicas": "2", paramAllowRemoteVolumeAccess: "true"},
+		AccessibleTopology: &csi.Topology{Segments: map[string]string{TopologyKeyNode: "n3"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(10*giB), resp.MaximumVolumeSize.GetValue(), "bounded by the second-roomiest replica node")
+	assert.Equal(t, int64(28*giB), resp.AvailableCapacity)
+}
+
 // Without a topology the biggest volume that fits is bounded by the node that
 // would hold its last replica, not by the roomiest one.
 func TestCapacityWithoutTopologyBoundsTheVolumeByItsReplicas(t *testing.T) {

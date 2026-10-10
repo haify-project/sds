@@ -19,6 +19,9 @@ import (
 const (
 	managedByLabel = "haify.csi/managed-by"
 	managedByValue = "csi"
+	// pvcLabel names the claim the volume was provisioned for, as
+	// namespace/name.
+	pvcLabel = "haify.csi/pvc"
 )
 
 func isCSIVolume(r *haifypb.ResourceInfo) bool {
@@ -88,6 +91,13 @@ func (s *controllerServer) GetCapacity(ctx context.Context, req *csi.GetCapacity
 						"pool %q on node %q reports no capacity figure", params.Pool, node)
 				}
 			}
+			if params.AllowRemoteVolumeAccess {
+				// A Pod here reaches its volume as a diskless client, so what
+				// limits it is the room on the nodes that would hold the
+				// replicas. Reporting 0 would keep the scheduler away from
+				// exactly the nodes this class lets Pods run on.
+				return poolWide(capacity, params.Replicas), nil
+			}
 			// The node does not host the pool: it can take none of this class.
 			return &csi.GetCapacityResponse{AvailableCapacity: 0, MaximumVolumeSize: wrapperspb.Int64(0)}, nil
 		}
@@ -97,9 +107,14 @@ func (s *controllerServer) GetCapacity(ctx context.Context, req *csi.GetCapacity
 		}, nil
 	}
 
-	// No topology: the room in the pool as a whole, and the biggest volume
-	// that fits on the nodes it would need. A volume takes `replicas` nodes,
-	// so the largest one that fits is bounded by the replicas-th roomiest.
+	return poolWide(capacity, params.Replicas), nil
+}
+
+// poolWide is the room in a pool as a whole, given each node's free bytes, and
+// the biggest volume that fits on the nodes it would need. A volume takes
+// `replicas` nodes, so the largest one that fits is bounded by the
+// replicas-th roomiest.
+func poolWide(capacity map[string]uint64, replicas int) *csi.GetCapacityResponse {
 	var total uint64
 	frees := make([]uint64, 0, len(capacity))
 	for _, f := range capacity {
@@ -108,13 +123,13 @@ func (s *controllerServer) GetCapacity(ctx context.Context, req *csi.GetCapacity
 	}
 	sort.Slice(frees, func(i, j int) bool { return frees[i] > frees[j] })
 	var maxVol uint64
-	if params.Replicas > 0 && len(frees) >= params.Replicas {
-		maxVol = frees[params.Replicas-1]
+	if replicas > 0 && len(frees) >= replicas {
+		maxVol = frees[replicas-1]
 	}
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: int64(total),
 		MaximumVolumeSize: wrapperspb.Int64(int64(maxVol)),
-	}, nil
+	}
 }
 
 // csiVolume renders a resource as the CSI Volume a list or get returns.
