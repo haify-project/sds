@@ -4,35 +4,35 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Haify · 软件定义存储</title>
-<meta name="description" content="Haify 是一套软件定义存储:每份数据同时写在多台服务器上,坏一台机器不丢数据、一分钟左右自动接管;提供 NFS/iSCSI/NVMe-oF 网关、Proxmox VE 存储插件与 Kubernetes CSI。" />
+<meta name="description" content="Haify 是一套软件定义存储：每份数据同时写在多台服务器上，坏一台机器不丢数据、一分钟左右自动接管；共享文件夹、虚拟机（Proxmox VE、KVM、OpenStack）、Kubernetes 和数据库都能用。" />
 <meta name="robots" content="index, follow, max-image-preview:large" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="mask-icon" href="/favicon.svg" color="#44e0ad" />
 <link rel="apple-touch-icon" href="/favicon.svg" />
 <meta name="theme-color" content="#0a0e15" media="(prefers-color-scheme: dark)" />
 <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" />
-<meta name="keywords" content="软件定义存储,Haify,DRBD,高可用,块存储,同步复制,Proxmox VE,Kubernetes CSI,NFS,iSCSI,NVMe-oF" />
+<meta name="keywords" content="软件定义存储,Haify,DRBD,高可用,块存储,同步复制,Proxmox VE,KVM,OpenStack,Kubernetes CSI,NFS,iSCSI,NVMe-oF" />
 <link rel="canonical" href="https://sds.superleo.cn/" />
 <!-- Open Graph -->
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Haify 软件定义存储" />
 <meta property="og:locale" content="zh_CN" />
-<meta property="og:title" content="Haify · 坏一台机器,数据不丢" />
-<meta property="og:description" content="每份数据同时写在多台服务器上:坏一台机器不丢数据,一分钟左右自动接管。多协议网关、Proxmox VE 与 Kubernetes CSI。" />
+<meta property="og:title" content="Haify · 坏一台机器，数据不丢" />
+<meta property="og:description" content="每份数据同时写在多台服务器上：坏一台机器不丢数据，一分钟左右自动接管。共享文件夹、虚拟机、Kubernetes 和数据库都能用。" />
 <meta property="og:url" content="https://sds.superleo.cn/" />
 <meta property="og:image" content="https://sds.superleo.cn/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Haify · 坏一台机器,数据不丢" />
-<meta name="twitter:description" content="每份数据同时写在多台服务器上:坏一台机器不丢数据,一分钟左右自动接管。多协议网关、Proxmox VE 与 Kubernetes CSI。" />
+<meta name="twitter:title" content="Haify · 坏一台机器，数据不丢" />
+<meta name="twitter:description" content="每份数据同时写在多台服务器上：坏一台机器不丢数据，一分钟左右自动接管。共享文件夹、虚拟机、Kubernetes 和数据库都能用。" />
 <meta name="twitter:image" content="https://sds.superleo.cn/og.png" />
 <script>
   (function(){try{var t=localStorage.getItem('haify-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
 <!--
-  没有网络字体,故意的。这个页面的读者在国内,而 fonts.googleapis.com 那条
-  <link rel=stylesheet> 是阻塞渲染的 —— 它连不上时不是"字体退化",是整页白屏
-  等到超时。同一个道理也适用于客户内网里的演示机:这里不应该有任何外链。
-  下面的字体栈按 麒麟/统信 → Windows → macOS 的顺序排,每一档都是系统自带。
+  没有网络字体，故意的。这个页面的读者在国内，而 fonts.googleapis.com 那条
+  <link rel=stylesheet> 是阻塞渲染的 —— 它连不上时不是"字体退化"，是整页白屏
+  等到超时。同一个道理也适用于客户内网里的演示机：这里不应该有任何外链。
+  下面的字体栈按 麒麟/统信 → Windows → macOS 的顺序排，每一档都是系统自带。
 -->
 <style>
   :root{
@@ -155,6 +155,9 @@
   .card .ic{margin:16px 0 14px; color:var(--jade)}
   .card h4{font-family:var(--serif); font-weight:700; font-size:19px}
   .card p{margin-top:9px; color:var(--fg-dim); font-size:14.5px}
+  .card .go{margin-top:14px; display:flex; flex-wrap:wrap; gap:6px 18px; font-family:var(--mono); font-size:12.5px}
+  .card .go a{color:var(--jade); text-decoration:none}
+  .card .go a:hover{text-decoration:underline}
   .card .tag{margin-top:14px; font-family:var(--mono); font-size:11px; color:var(--fg-mute); letter-spacing:.04em}
   @media(max-width:900px){.grid{grid-template-columns:1fr}}
 
@@ -228,28 +231,27 @@
       "applicationSubCategory": "Software-Defined Storage",
       "operatingSystem": "Linux (Kylin, UnionTech UOS)",
       "processorRequirements": "x86_64, aarch64, loongarch64",
-      "description": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。",
+      "description": "Haify 是一套开源的软件定义存储：把你自己 Linux 服务器上的硬盘变成共享存储，给文件、虚拟机、容器和数据库用。每份数据同时写在多台服务器上，坏一台机器不丢数据，一分钟左右自动接管。",
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY", "description": "私有化 · 源码交付" },
       "featureList": [
-        "基于 DRBD 的强一致同步多副本复制",
-        "容量与机架感知的智能副本放置 (replicas-on-different / -same, do-not-place-with)",
-        "drbd-reactor promoter 自动高可用与浮动 VIP 故障切换",
-        "无盘客户端 (diskless) 算存分离",
-        "NFS / iSCSI / NVMe-oF 多协议网关",
-        "Kubernetes CSI 动态供给与拓扑感知调度",
-        "卷快照与定时快照",
-        "WAN 跨数据中心异步复制容灾"
+        "永不掉线的共享文件夹 (NFS / SMB)",
+        "虚拟机磁盘多机冗余与热迁移（Proxmox VE、KVM、OpenStack）",
+        "Kubernetes 持久卷 (CSI)",
+        "数据库与任意服务的自动故障切换",
+        "定时备份到 S3 / SMB / WebDAV 与异地实时副本",
+        "iSCSI / NVMe-oF 块共享，替代存储阵列"
       ]
     },
     {
       "@type": "FAQPage",
       "mainEntity": [
-        { "@type": "Question", "name": "Haify 是什么?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。" } },
-        { "@type": "Question", "name": "Haify 能跑在哪些平台上?", "acceptedAnswer": { "@type": "Answer", "text": "CPU 支持 x86_64、aarch64(含鲲鹏、飞腾)与 loongarch64(龙芯);操作系统支持 Debian、Ubuntu、RHEL 系以及麒麟、统信 UOS。可在完全离线的环境中部署。" } },
-        { "@type": "Question", "name": "Haify 和 Ceph、LINSTOR 有什么区别?", "acceptedAnswer": { "@type": "Answer", "text": "与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 不需要在每个存储节点上常驻代理进程,控制面通过 SSH 直接管理节点。" } },
-        { "@type": "Question", "name": "Haify 的高可用如何工作?故障切换多快?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。" } },
-        { "@type": "Question", "name": "Haify 支持 Kubernetes 吗?", "acceptedAnswer": { "@type": "Answer", "text": "支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。已在 x86_64 与 aarch64 的 k3s 集群上端到端验证。" } },
-        { "@type": "Question", "name": "Haify 的数据是怎么复制的?会丢数据吗?", "acceptedAnswer": { "@type": "Answer", "text": "Haify 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。" } }
+        { "@type": "Question", "name": "Haify 是什么？", "acceptedAnswer": { "@type": "Answer", "text": "Haify 是一套开源的软件定义存储：把你自己 Linux 服务器上的硬盘变成共享存储，给文件、虚拟机、容器和数据库用。每份数据同时写在多台服务器上，坏一台机器不丢数据，一分钟左右自动接管。底层用的是 Linux 内核里成熟的 DRBD 复制。" } },
+        { "@type": "Question", "name": "Haify 能跑在哪些平台上？", "acceptedAnswer": { "@type": "Answer", "text": "CPU 支持 x86_64、aarch64（含鲲鹏、飞腾）与 loongarch64（龙芯）；操作系统支持 Debian、Ubuntu、RHEL 系以及麒麟、统信 UOS。可在完全离线的环境中部署。" } },
+        { "@type": "Question", "name": "Haify 和 Ceph、LINSTOR 有什么区别？", "acceptedAnswer": { "@type": "Answer", "text": "与 Ceph 相比更轻：一个控制器管理全部节点，不用维护 MON/OSD/MGR 等多种守护进程。与 LINSTOR 相比，存储节点上不需要常驻代理进程。" } },
+        { "@type": "Question", "name": "服务器坏了会怎样？多久恢复？", "acceptedAnswer": { "@type": "Answer", "text": "存储和跑在上面的服务，连同对外访问的地址，会自动转到另一台健康的服务器上，大约 70 秒；客户端始终访问同一个地址，不用改配置。仲裁机制防止两台服务器同时写同一份数据（脑裂）。" } },
+        { "@type": "Question", "name": "支持哪些虚拟化平台？", "acceptedAnswer": { "@type": "Answer", "text": "Proxmox VE（存储插件，PVE 网页里带 Haify 面板）、普通 KVM/libvirt，以及 OpenStack（Cinder 驱动，Horizon 里带面板）。三者都支持虚拟机热迁移；宿主机坏了，虚拟机能带着数据在另一台上重新启动。" } },
+        { "@type": "Question", "name": "Haify 支持 Kubernetes 吗？", "acceptedAnswer": { "@type": "Answer", "text": "支持。Haify 提供 CSI 驱动：动态创建持久卷，支持快照、克隆和扩容；Pod 换到别的节点，数据跟着过去。已在 x86_64 与 aarch64 的 k3s 集群上验证。" } },
+        { "@type": "Question", "name": "会丢数据吗？", "acceptedAnswer": { "@type": "Answer", "text": "写入返回时，数据已经在多台服务器上，所以坏一台不丢数据。另外可以定时备份到 S3、SMB 或 WebDAV，或在另一个机房保留一份实时副本，整个集群没了也能恢复。" } }
       ]
     }
   ]
@@ -270,17 +272,18 @@
     </div>
     <div class="nav-right">
       <div class="nav-links">
-        <a href="#features">能力</a>
-        <a href="#arch">架构</a>
+        <a href="#scenes">场景</a>
+        <a href="#why">为什么</a>
         <a href="#compare">对比</a>
-        <a href="#faq">问答</a>
         <a href="#start">快速开始</a>
+        <a href="#faq">问答</a>
+        <a href="https://github.com/haify-project/haify">GitHub</a>
       </div>
       <button id="theme" class="btn theme-btn" aria-label="切换明暗主题" title="切换明暗主题">
         <svg class="i-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         <svg class="i-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke-linecap="round"/></svg>
       </button>
-      <a class="btn" href="#start">部署指南</a>
+      <a class="btn" href="https://haify-project.github.io/haify/">文档</a>
     </div>
   </div>
 </nav>
@@ -289,14 +292,14 @@
 <header>
   <div class="wrap">
     <p class="eyebrow rv">软件定义存储 · <b>同步复制 · 自动接管</b> · 开源</p>
-    <h1 class="rv" style="transition-delay:.05s">坏一台机器,<br>数据<span class="em">一点不丢</span>。</h1>
+    <h1 class="rv" style="transition-delay:.05s">坏一台机器，<br>数据<span class="em">一点不丢</span>。</h1>
     <p class="lede rv" style="transition-delay:.12s">
-      Haify 把每份数据同时写在多台服务器上。一台坏了,另一台在一分钟左右接手,
+      Haify 把每份数据同时写在多台服务器上。一台坏了，另一台在一分钟左右接手，
       <b>虚拟机、数据库和 Kubernetes 应用</b>接着跑。
     </p>
     <div class="cta-row rv" style="transition-delay:.18s">
-      <a class="btn btn-solid" href="#start">▸ 快速部署</a>
-      <a class="btn" href="#arch">查看架构</a>
+      <a class="btn btn-solid" href="#start">▸ 快速开始</a>
+      <a class="btn" href="#scenes">看看能做什么</a>
     </div>
 
     <div class="facts rv" style="transition-delay:.24s">
@@ -307,8 +310,8 @@
     </div>
 
     <div class="schematic rv" style="transition-delay:.3s">
-      <div class="cap"><b>topology</b> / 控制面浮动 VIP · 数据面多副本同步 · 单节点故障不丢数据</div>
-      <svg viewBox="0 0 1100 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Haify 拓扑示意图:一个浮动 VIP 的控制器通过 SSH 编排三个存储节点,node-1 与 node-2 在机架 A、node-3 在机架 B,三个节点均为 UpToDate 并进行 DRBD 同步复制,副本跨机架分布。">
+      <div class="cap"><b>topology</b> / 每份数据在多台服务器上 · 坏一台不丢数据</div>
+      <svg viewBox="0 0 1100 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Haify 拓扑示意图：一个浮动 VIP 的控制器通过 SSH 编排三个存储节点，node-1 与 node-2 在机架 A、node-3 在机架 B，三个节点均为 UpToDate 并进行 DRBD 同步复制，副本跨机架分布。">
         <defs><marker id="arw" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
           <path d="M0,0 L6,3 L0,6" class="s-arrow" stroke-width="1"/></marker></defs>
         <rect x="470" y="28" width="160" height="52" rx="3" class="s-box"/>
@@ -348,101 +351,71 @@
   </div>
 </header>
 
-<section id="features">
+<section id="scenes">
   <div class="wrap">
     <div class="sec-head rv">
       <span class="sec-no">01</span>
-      <h2>一套控制面,块 · 文件 · 对象接入全覆盖。</h2>
+      <h2>大家拿它做什么。</h2>
     </div>
     <div class="grid">
       <div class="card rv"><div class="no">/01</div>
-        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12h4l2 5 4-10 2 5h6"/></svg></div>
-        <h4>强一致同步复制</h4><p>基于 DRBD 的同步多副本,写入返回即已落盘多节点。quorum 仲裁防脑裂,单节点故障零数据丢失。</p>
-        <div class="tag">DRBD 9 · synchronous · quorum</div></div>
-
-      <div class="card rv" style="transition-delay:.05s"><div class="no">/02</div>
-        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 17.5h7"/></svg></div>
-        <h4>智能放置</h4><p>不指定节点时按剩余容量自动选盘;支持跨机架打散、同域约束、跨资源反亲和——与 LINSTOR autoplace 对等。</p>
-        <div class="tag">replicas-on-different / -same · do-not-place-with</div></div>
-
-      <div class="card rv" style="transition-delay:.1s"><div class="no">/03</div>
-        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v6M12 22v-6M4 12H2M22 12h-2"/><circle cx="12" cy="12" r="4"/></svg></div>
-        <h4>自动高可用</h4><p>drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移,硬故障约 70 秒自动接管,应用无感。</p>
-        <div class="tag">promoter · floating VIP · ~70s failover</div></div>
-
-      <div class="card rv"><div class="no">/04</div>
-        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="6" rx="1"/><path d="M7 14h.01M7 18h10" stroke-linecap="round"/><rect x="3" y="14" width="18" height="6" rx="1" stroke-dasharray="2 2"/></svg></div>
-        <h4>无盘客户端</h4><p>算存分离:无本地副本的节点通过网络接入并被提升为主,即可读写卷。Kubernetes Pod 可调度到无盘计算节点。</p>
-        <div class="tag">diskless client · 网络挂载</div></div>
-
-      <div class="card rv" style="transition-delay:.05s"><div class="no">/05</div>
         <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="1.4" fill="currentColor"/><circle cx="14" cy="12" r="1.4" fill="currentColor"/><circle cx="10" cy="17" r="1.4" fill="currentColor"/></svg></div>
-        <h4>多协议网关</h4><p>把一个 DRBD 资源导出为 NFS / iSCSI / NVMe-oF。网关即"资源 + promoter 配置",天生高可用。</p>
-        <div class="tag">NFS · iSCSI · NVMe-oF</div></div>
-
-      <div class="card rv" style="transition-delay:.1s"><div class="no">/06</div>
+        <h4>永不掉线的共享文件夹</h4><p>团队文件、媒体库、构建产物。客户端始终连同一个地址，一台服务器坏了也不算故障。</p>
+        <div class="go">
+          <a href="https://haify-project.github.io/haify/user-guide/#10-gateways--exporting-to-clients">设置共享 ›</a>
+        </div></div>
+      <div class="card rv" style="transition-delay:0.05s"><div class="no">/02</div>
+        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4" stroke-linecap="round"/></svg></div>
+        <h4>虚拟机，换台机器接着跑</h4><p>虚拟机磁盘同时存在两台服务器上：运行中的虚拟机可以在两台之间热迁移，宿主机坏了就在另一台上带着数据重新启动。</p>
+        <div class="go">
+          <a href="https://haify-project.github.io/haify/proxmox/">Proxmox VE ›</a>
+          <a href="https://haify-project.github.io/haify/libvirt/">KVM ›</a>
+          <a href="https://haify-project.github.io/haify/openstack/">OpenStack ›</a>
+        </div></div>
+      <div class="card rv" style="transition-delay:0.1s"><div class="no">/03</div>
         <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 20V11M12 11l8-4.5M12 11L4 6.5"/></svg></div>
-        <h4>Kubernetes CSI</h4><p>动态供给持久卷,拓扑感知调度;节点硬故障后由 node 插件安全提升本地副本并接管,数据完好。arm64 k3s 已验证。</p>
-        <div class="tag">CSI · dynamic provisioning · topology-aware</div></div>
-
-      <div class="card rv"><div class="no">/07</div>
-        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
-        <h4>快照与定时快照</h4><p>秒级卷快照、按计划自动打快照与保留策略,用于备份窗口与快速回滚。</p>
-        <div class="tag">snapshot · schedule · retention</div></div>
-
-      <div class="card rv" style="transition-delay:.05s"><div class="no">/08</div>
+        <h4>Kubernetes 上的数据库和应用</h4><p>持久卷不再绑死在一个节点上。Pod 被调度到别的节点，数据跟着过去。</p>
+        <div class="go">
+          <a href="https://haify-project.github.io/haify/kubernetes/">用在 Kubernetes ›</a>
+        </div></div>
+      <div class="card rv"><div class="no">/04</div>
+        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg></div>
+        <h4>自己会切换的数据库</h4><p>PostgreSQL、MySQL 或任何服务：数据、访问地址和服务本身一起搬到健康的服务器上，应用不用改。</p>
+        <div class="go">
+          <a href="https://haify-project.github.io/haify/user-guide/#11-high-availability">让服务高可用 ›</a>
+        </div></div>
+      <div class="card rv" style="transition-delay:0.05s"><div class="no">/05</div>
         <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><path d="M9 12h6" stroke-dasharray="2 2"/></svg></div>
-        <h4>跨地域容灾</h4><p>可选的 WAN 复制:经每资源专属代理走 TCP,穿越 NAT 跨数据中心异步复制,支撑两地三中心。</p>
-        <div class="tag">WAN replication · 异步 · 跨 DC</div></div>
-
-      <div class="card rv" style="transition-delay:.1s"><div class="no">/09</div>
-        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 21h8" stroke-linecap="round"/></svg></div>
-        <h4>控制台 + AI Copilot</h4><p>内置 React Web 控制台管理池、资源、网关与 HA;AI Copilot 用自然语言运维。控制器自身也 Self-HA。</p>
-        <div class="tag">Web UI · AI Copilot · Self-HA</div></div>
+        <h4>备份和第二个机房</h4><p>定时备份到 S3、SMB 或 WebDAV，另一个机房还有一份实时副本。整个集群没了也能恢复。</p>
+        <div class="go">
+          <a href="https://haify-project.github.io/haify/user-guide/#9-backups--the-only-copy-that-survives-losing-the-cluster">保护数据 ›</a>
+        </div></div>
+      <div class="card rv" style="transition-delay:0.1s"><div class="no">/06</div>
+        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="6" rx="1"/><path d="M7 14h.01M7 18h10" stroke-linecap="round"/><rect x="3" y="14" width="18" height="6" rx="1" stroke-dasharray="2 2"/></svg></div>
+        <h4>不再依赖存储阵列</h4><p>用普通服务器和硬盘，得到以前花钱买阵列才有的可用性；iSCSI、NVMe-oF 块共享，现有主机直接能用。</p>
+        <div class="go">
+          <a href="https://haify-project.github.io/haify/deployment-guide/">规划集群 ›</a>
+        </div></div>
     </div>
   </div>
 </section>
 
-<section id="arch">
+<section id="why">
   <div class="wrap">
     <div class="sec-head rv">
       <span class="sec-no">02</span>
-      <h2>控制面下发,数据面同步。清晰分层。</h2>
-      <p>控制器通过 SSH 直接编排存储节点,不在数据路径上,也不常驻 Agent。</p>
+      <h2>为什么选 Haify。</h2>
     </div>
-    <div class="schematic rv" style="margin-top:0">
-      <div class="cap"><b>architecture</b> / control plane ⟶ dispatch/SSH ⟶ storage nodes · data plane = DRBD + drbd-reactor</div>
-      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Haify 架构分层图:控制面(haify/Web/CSI → haify-controller gRPC → dispatch/SSH)下发到数据面存储节点(DRBD 内核模块、drbd-reactor promoter、网关 OCF 代理)。">
-        <text x="40" y="40" class="s-mute" font-size="11">CONTROL PLANE</text>
-        <rect x="40" y="52" width="200" height="46" rx="3" class="s-box"/>
-        <text x="140" y="80" class="s-ink" font-size="13" text-anchor="middle">haify · Web · CSI</text>
-        <path d="M240 75 L300 75" class="s-line" marker-end="url(#arw2)"/>
-        <rect x="300" y="52" width="220" height="46" rx="3" class="s-box"/>
-        <text x="410" y="80" class="s-ink" font-size="13" text-anchor="middle">haify-controller (gRPC)</text>
-        <path d="M520 75 L590 75" class="s-line" marker-end="url(#arw2)"/>
-        <rect x="590" y="52" width="200" height="46" rx="3" class="s-panel"/>
-        <text x="690" y="80" class="s-dim" font-size="13" text-anchor="middle">dispatch · SSH</text>
-        <defs><marker id="arw2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="s-arrow" stroke-width="1"/></marker></defs>
-
-        <text x="40" y="150" class="s-mute" font-size="11">DATA PLANE · storage nodes</text>
-        <g font-size="12">
-          <rect x="40" y="164" width="330" height="96" rx="3" class="s-panel"/>
-          <text x="58" y="188" class="s-ink">DRBD 内核模块</text>
-          <text x="58" y="210" class="s-dim" font-size="11">LVM / ZFS 后端 · 同步复制</text>
-          <text x="58" y="232" class="s-jade" font-size="11">disk:UpToDate</text>
-          <rect x="390" y="164" width="330" height="96" rx="3" class="s-panel"/>
-          <text x="408" y="188" class="s-ink">drbd-reactor</text>
-          <text x="408" y="210" class="s-dim" font-size="11">promoter · 有序 start[] · VIP</text>
-          <text x="408" y="232" class="s-jade" font-size="11">自动故障切换</text>
-          <rect x="740" y="164" width="320" height="96" rx="3" class="s-panel"/>
-          <text x="758" y="188" class="s-ink">网关 OCF 代理</text>
-          <text x="758" y="210" class="s-dim" font-size="11">Filesystem · IPaddr2 · nfsserver</text>
-          <text x="758" y="232" class="s-jade" font-size="11">NFS / iSCSI / NVMe-oF</text>
-        </g>
-        <path d="M410 98 L200 164" class="s-line" stroke-dasharray="3 3"/>
-        <path d="M690 98 L540 164" class="s-line" stroke-dasharray="3 3"/>
-        <path d="M690 98 L890 164" class="s-line" stroke-dasharray="3 3"/>
-      </svg>
+    <div class="grid">
+      <div class="card rv"><h4>没有单点故障</h4><p>每次写入都落在不止一台服务器上；一台坏了，服务自己挪到健康的机器上。</p></div>
+      <div class="card rv" style="transition-delay:0.05s"><h4>用你自己的硬件</h4><p>普通 Linux 服务器和本地硬盘就够，不需要存储阵列，也不需要专用网络。</p></div>
+      <div class="card rv" style="transition-delay:0.1s"><h4>好管</h4><p>网页控制台、命令行，或者直接问 AI 助手。</p></div>
+      <div class="card rv"><h4>问题早发现</h4><p>出问题时推送到飞书、企业微信、钉钉或 Slack；每天自动巡检，告诉你怎么修。</p></div>
+      <div class="card rv" style="transition-delay:0.05s"><h4>从 VMware 搬过来</h4><p>有一步步的指南，把 vSAN 上的虚拟机迁到 Proxmox VE + Haify。</p>
+        <div class="go">
+          <a href="https://haify-project.github.io/haify/vsan-evacuation/">迁移指南 ›</a>
+        </div></div>
+      <div class="card rv" style="transition-delay:0.1s"><h4>开源</h4><p>Apache 2.0，免费使用、修改，可直接上生产。</p></div>
     </div>
   </div>
 </section>
@@ -451,15 +424,15 @@
   <div class="wrap">
     <div class="sec-head rv">
       <span class="sec-no">03</span>
-      <h2>为什么不用现成的?</h2>
-      <p>同为软件定义存储,在运维复杂度、集成与源码可控上的直接对照。</p>
+      <h2>为什么不用现成的？</h2>
+      <p>同为软件定义存储，在运维、集成和源码可控上的直接对照。</p>
     </div>
     <div class="rv cmp-scroll">
       <table class="cmp">
         <thead><tr><th></th><th class="us">Haify</th><th>Ceph</th><th>LINSTOR</th><th>商业存储</th></tr></thead>
         <tbody>
-          <tr><td class="feat">Proxmox VE 集成</td><td class="us yes">存储插件 · 含界面</td><td class="yes">内置</td><td class="yes">linstor-proxmox</td><td class="no">看厂商</td></tr>
-          <tr><td class="feat">运维复杂度</td><td class="us">轻 · 单控制面 + SSH</td><td class="no">高 · MON/OSD/MGR</td><td class="us">中</td><td class="no">黑盒</td></tr>
+          <tr><td class="feat">虚拟化平台</td><td class="us yes">Proxmox VE · KVM · OpenStack，都带管理界面</td><td class="yes">Proxmox VE · KVM · OpenStack</td><td class="yes">Proxmox VE · OpenStack 等</td><td class="no">看厂商</td></tr>
+          <tr><td class="feat">运维复杂度</td><td class="us">轻 · 一个控制器</td><td class="no">高 · MON/OSD/MGR</td><td class="us">中</td><td class="no">黑盒</td></tr>
           <tr><td class="feat">块存储强一致</td><td class="us yes">DRBD 同步</td><td class="yes">RBD</td><td class="yes">DRBD 同步</td><td class="yes">是</td></tr>
           <tr><td class="feat">源码可控 / 可审计</td><td class="us yes">是</td><td class="yes">是</td><td class="yes">是</td><td class="no">否</td></tr>
           <tr><td class="feat">Kubernetes CSI</td><td class="us yes">已验证</td><td class="yes">是</td><td class="yes">Piraeus</td><td class="no">看厂商</td></tr>
@@ -474,28 +447,28 @@
   <div class="wrap">
     <div class="sec-head rv">
       <span class="sec-no">04</span>
-      <h2>三条命令,建起一套高可用块存储。</h2>
-      <p>从裸盘到跨机架三副本 + NFS 高可用导出。</p>
+      <h2>三条命令，建起一个高可用共享。</h2>
+      <p>装好 Haify、注册好服务器之后，从空盘到一个坏一台也不断的 NFS 共享。</p>
     </div>
     <div class="code rv">
-      <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>root@node-1 — haify</span></div>
-<pre><span class="c"># 1 · 用裸盘建存储池</span>
-haify <span class="p">pool create</span> <span class="f">--name</span> vg0 <span class="f">--node</span> node1 <span class="f">--disks</span> /dev/vdb
+      <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>root@node1 — haify</span></div>
+<pre><span class="c"># 1 · 用三台服务器的空盘建存储池</span>
+haify <span class="p">pool create</span> <span class="f">--name</span> pool0 <span class="f">--type</span> lvm-thin \
+  <span class="f">--nodes</span> node1,node2,node3 <span class="f">--devices</span> /dev/sdb
 
-<span class="c"># 2 · 建 DRBD 资源:自动放置,三副本强制跨机架</span>
-haify <span class="p">resource create</span> <span class="f">--name</span> data <span class="f">--size</span> 100G \
-  <span class="f">--replicas</span> <span class="s">3</span> <span class="f">--replicas-on-different</span> <span class="s">rack</span>
+<span class="c"># 2 · 建一个 100G 的卷，自动放到最空的两台上</span>
+haify <span class="p">resource create</span> <span class="f">--name</span> data <span class="f">--port</span> 7001 <span class="f">--size</span> 100G <span class="f">--pool</span> pool0
 
-<span class="c"># 3 · 导出为高可用 NFS(浮动 VIP 自动跟随主节点)</span>
+<span class="c"># 3 · 导出为高可用 NFS</span>
 haify <span class="p">gateway nfs create</span> <span class="f">--resource</span> data \
   <span class="f">--service-ip</span> 192.168.1.200/24 <span class="f">--export-path</span> /data
 
-<span class="c"># 就绪 —— 客户端始终访问 VIP,故障时约 70s 自动接管</span>
+<span class="c"># 就绪 —— 客户端始终访问同一个地址，服务器坏了约 70 秒自动接管</span>
 <span class="p">mount</span> -t nfs 192.168.1.200:/data /mnt</pre>
     </div>
     <div class="cta-row rv" style="margin-top:34px">
-      <a class="btn btn-solid" href="#">▸ 阅读部署指南</a>
-      <a class="btn" href="#">docs/deployment-guide.md</a>
+      <a class="btn btn-solid" href="https://haify-project.github.io/haify/deployment-guide/">▸ 阅读部署指南</a>
+      <a class="btn" href="https://github.com/haify-project/haify">GitHub</a>
     </div>
   </div>
 </section>
@@ -505,21 +478,23 @@ haify <span class="p">gateway nfs create</span> <span class="f">--resource</span
     <div class="sec-head rv">
       <span class="sec-no">05</span>
       <h2>常见问题</h2>
-      <p>关于 Haify 的定义、平台、高可用与 Kubernetes 的直接回答。</p>
+      <p>关于 Haify 能做什么、跑在哪、坏了怎么办的直接回答。</p>
     </div>
     <div class="faq">
-      <div class="faq-item rv"><h3>Haify 是什么?</h3>
-        <p>Haify 是一套基于 DRBD 的软件定义存储控制面,提供强一致同步复制、智能副本放置、自动故障切换、NFS/iSCSI/NVMe-oF 网关与 Kubernetes CSI。</p></div>
-      <div class="faq-item rv"><h3>Haify 能跑在哪些平台上?</h3>
-        <p>CPU 支持 x86_64、aarch64(含鲲鹏、飞腾)与 loongarch64(龙芯);操作系统支持 Debian、Ubuntu、RHEL 系以及麒麟、统信 UOS。可在完全离线的环境中部署。</p></div>
-      <div class="faq-item rv"><h3>Haify 和 Ceph、LINSTOR 有什么区别?</h3>
-        <p>与 Ceph 相比,Haify 运维更轻——单一控制面经 SSH 编排,无需 MON/OSD/MGR 组件。与 LINSTOR 相比,Haify 不需要在每个存储节点上常驻代理进程,控制面通过 SSH 直接管理节点。</p></div>
-      <div class="faq-item rv"><h3>Haify 的高可用如何工作?故障切换多快?</h3>
-        <p>Haify 用 drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移。节点硬故障后约 70 秒自动接管;quorum 仲裁防止脑裂,DRBD 同步复制保证单节点故障零数据丢失,客户端始终访问同一个 VIP。</p></div>
-      <div class="faq-item rv"><h3>Haify 支持 Kubernetes 吗?</h3>
-        <p>支持。Haify 提供 Kubernetes CSI 驱动,可动态供给持久卷并做拓扑感知调度。节点硬故障后由 node 插件安全提升本地副本接管,数据完好。已在 x86_64 与 aarch64 的 k3s 集群上端到端验证。</p></div>
-      <div class="faq-item rv"><h3>Haify 的数据是怎么复制的?会丢数据吗?</h3>
-        <p>Haify 基于 DRBD 做同步多副本复制,写入返回时数据已落盘多个节点。可按容量自动放置,或强制副本跨机架分布。配合 quorum 仲裁,单节点故障不丢数据;还可选 WAN 异步复制做跨数据中心容灾。</p></div>
+      <div class="faq-item rv"><h3>Haify 是什么？</h3>
+        <p>Haify 是一套开源的软件定义存储：把你自己 Linux 服务器上的硬盘变成共享存储，给文件、虚拟机、容器和数据库用。每份数据同时写在多台服务器上，坏一台机器不丢数据，一分钟左右自动接管。底层用的是 Linux 内核里成熟的 DRBD 复制。</p></div>
+      <div class="faq-item rv"><h3>Haify 能跑在哪些平台上？</h3>
+        <p>CPU 支持 x86_64、aarch64（含鲲鹏、飞腾）与 loongarch64（龙芯）；操作系统支持 Debian、Ubuntu、RHEL 系以及麒麟、统信 UOS。可在完全离线的环境中部署。</p></div>
+      <div class="faq-item rv"><h3>Haify 和 Ceph、LINSTOR 有什么区别？</h3>
+        <p>与 Ceph 相比更轻：一个控制器管理全部节点，不用维护 MON/OSD/MGR 等多种守护进程。与 LINSTOR 相比，存储节点上不需要常驻代理进程。</p></div>
+      <div class="faq-item rv"><h3>服务器坏了会怎样？多久恢复？</h3>
+        <p>存储和跑在上面的服务，连同对外访问的地址，会自动转到另一台健康的服务器上，大约 70 秒；客户端始终访问同一个地址，不用改配置。仲裁机制防止两台服务器同时写同一份数据（脑裂）。</p></div>
+      <div class="faq-item rv"><h3>支持哪些虚拟化平台？</h3>
+        <p>Proxmox VE（存储插件，PVE 网页里带 Haify 面板）、普通 KVM/libvirt，以及 OpenStack（Cinder 驱动，Horizon 里带面板）。三者都支持虚拟机热迁移；宿主机坏了，虚拟机能带着数据在另一台上重新启动。</p></div>
+      <div class="faq-item rv"><h3>Haify 支持 Kubernetes 吗？</h3>
+        <p>支持。Haify 提供 CSI 驱动：动态创建持久卷，支持快照、克隆和扩容；Pod 换到别的节点，数据跟着过去。已在 x86_64 与 aarch64 的 k3s 集群上验证。</p></div>
+      <div class="faq-item rv"><h3>会丢数据吗？</h3>
+        <p>写入返回时，数据已经在多台服务器上，所以坏一台不丢数据。另外可以定时备份到 S3、SMB 或 WebDAV，或在另一个机房保留一份实时副本，整个集群没了也能恢复。</p></div>
     </div>
   </div>
 </section>
@@ -529,7 +504,7 @@ haify <span class="p">gateway nfs create</span> <span class="f">--resource</span
   <div class="wrap foot">
     <div>Haify · 软件定义存储 &nbsp;/&nbsp; Replicated block storage</div>
     <div style="display:flex;gap:26px">
-      <a href="#features">能力</a><a href="#arch">架构</a><a href="#start">快速开始</a>
+      <a href="#scenes">场景</a><a href="#start">快速开始</a><a href="https://haify-project.github.io/haify/">文档</a><a href="https://github.com/haify-project/haify">GitHub</a>
     </div>
   </div>
 </footer>
@@ -546,12 +521,12 @@ haify <span class="p">gateway nfs create</span> <span class="f">--resource</span
   requestAnimationFrame(()=>document.querySelectorAll('header .rv').forEach(el=>el.classList.add('in')));
 </script>
 <!--
-  自建 Plausible(stats.superleo.cn,跑在 dell VM 104 的 docker 里)。
-  统计域名和站点同在 superleo.cn 下,是刻意的:埋点脚本要被国内访客的浏览器
-  加载才算数,挂在境外域名上等于统计不到人 —— 而这种故障不会报错,页面照常
-  显示,只有数字一直是 0。同域也顺带绕开了大部分拦截名单。
+  自建 Plausible（stats.superleo.cn，跑在 dell VM 104 的 docker 里）。
+  统计域名和站点同在 superleo.cn 下，是刻意的：埋点脚本要被国内访客的浏览器
+  加载才算数，挂在境外域名上等于统计不到人 —— 而这种故障不会报错，页面照常
+  显示，只有数字一直是 0。同域也顺带绕开了大部分拦截名单。
 
-  defer 而不是 async:它不阻塞解析,又保证在 DOM 就绪后才跑,顺序可预期。
+  defer 而不是 async：它不阻塞解析，又保证在 DOM 就绪后才跑，顺序可预期。
 -->
 <script defer data-domain="sds.superleo.cn" src="https://stats.superleo.cn/js/script.js"></script>
 </body>

@@ -1,34 +1,40 @@
 # Haify · 软件定义存储
 
-> Haify 是一套基于 DRBD 的软件定义存储控制面。它提供强一致同步复制、智能副本放置、自动高可用故障切换、多协议网关(NFS/iSCSI/NVMe-oF)、Proxmox VE 存储插件与 Kubernetes CSI,开源。
+> Haify 是一套开源的软件定义存储：把你自己 Linux 服务器上的硬盘变成共享存储，给文件、虚拟机、容器和数据库用。每份数据同时写在多台服务器上，坏一台机器不丢数据，一分钟左右自动接管。
 
-Haify 把每份数据同时写在多台服务器上,坏一台机器不丢数据,一分钟左右自动接管。控制面通过 SSH 直接编排存储节点,不在数据路径上,也不在存储节点常驻 Agent。
+## 典型场景
 
-## 核心能力
+- **永不掉线的共享文件夹**：NFS / SMB 共享，客户端始终连同一个地址，一台服务器坏了也不算故障。
+- **虚拟机**：Proxmox VE（存储插件，PVE 网页里带 Haify 面板）、普通 KVM/libvirt、OpenStack（Cinder 驱动，Horizon 里带面板）。虚拟机磁盘在两台服务器上，可热迁移；宿主机坏了，在另一台上带着数据重新启动。
+- **Kubernetes**：CSI 驱动动态创建持久卷，支持快照、克隆、扩容；Pod 换节点，数据跟着过去。
+- **自己会切换的数据库**：PostgreSQL、MySQL 或任何服务，数据、访问地址和服务一起搬到健康的服务器上。
+- **备份和第二个机房**：定时备份到 S3、SMB 或 WebDAV，另一个机房保留实时副本。
+- **替代存储阵列**：iSCSI、NVMe-oF 块共享，用普通服务器和硬盘。
 
-- **强一致同步复制**:基于 DRBD 的同步多副本,写入返回即已落盘多节点;quorum 仲裁防脑裂,单节点故障零数据丢失。
-- **智能放置**:按剩余容量自动选盘,支持跨机架打散(replicas-on-different)、同域约束(replicas-on-same)、跨资源反亲和(do-not-place-with),与 LINSTOR autoplace 对等。
-- **自动高可用**:drbd-reactor promoter 编排有序启动栈,浮动 VIP 跟随主节点漂移,硬故障约 70 秒自动接管。
-- **无盘客户端**:无本地副本的节点通过网络接入并提升为主,算存分离;Kubernetes Pod 可调度到无盘计算节点。
-- **多协议网关**:把一个 DRBD 资源导出为 NFS / iSCSI / NVMe-oF。
-- **Kubernetes CSI**:动态供给持久卷、拓扑感知调度;节点硬故障后 node 插件安全提升本地副本接管。已在 x86_64 与 aarch64 的 k3s 集群上端到端验证。
-- **快照 / 跨地域容灾**:秒级快照与定时快照;可选 WAN 异步复制做两地三中心。
-- **控制台 + AI Copilot**:内置 React Web 控制台与自然语言运维;控制器自身也 Self-HA。
+## 为什么选 Haify
+
+- 没有单点故障：每次写入都落在不止一台服务器上，一台坏了服务自动转移（约 70 秒）。
+- 用自己的硬件：普通 Linux 服务器和本地硬盘，不需要存储阵列或专用网络。
+- 好管：网页控制台、命令行，或用 AI 助手（MCP）。
+- 问题早发现：告警推送到飞书、企业微信、钉钉、Slack；每天自动巡检。
+- 开源：Apache 2.0。
 
 ## 平台
 
-- CPU:x86_64、aarch64(含鲲鹏、飞腾)、loongarch64(龙芯)
-- OS:Debian、Ubuntu、RHEL 系、麒麟(Kylin)、统信 UOS
+- CPU：x86_64、aarch64（含鲲鹏、飞腾）、loongarch64（龙芯）
+- OS：Debian、Ubuntu、RHEL 系、麒麟（Kylin）、统信 UOS
 - 可在完全离线的环境中部署
 
 ## 与其他方案的区别
 
-- **vs Ceph**:Haify 运维更轻,单一控制面 + SSH,无需 MON/OSD/MGR。
-- **vs LINSTOR**:同为 DRBD 编排,Haify 不需要在每个存储节点上常驻代理进程,控制面通过 SSH 直接管理节点。
-- **vs 商业存储**:源码可控、可审计,无厂商锁定。
+- **vs Ceph**：更轻，一个控制器管理全部节点，无需 MON/OSD/MGR。
+- **vs LINSTOR**：同样基于 DRBD 复制，存储节点上不需要常驻代理进程。
+- **vs 商业存储**：源码可控、可审计，无厂商锁定。
 
 ## 链接
 
-- 官网 / Landing: https://sds.superleo.cn/
-- 部署指南: https://sds.superleo.cn/#start
-- 常见问题 (FAQ): https://sds.superleo.cn/#faq
+- 官网：https://sds.superleo.cn/
+- 文档：https://haify-project.github.io/haify/
+- 部署指南：https://haify-project.github.io/haify/deployment-guide/
+- 源码：https://github.com/haify-project/haify
+- 常见问题（FAQ）：https://sds.superleo.cn/#faq
