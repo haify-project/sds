@@ -43,9 +43,13 @@
         </article>
         <article>
           {{ cases.vm() }}
-          <h3>Virtual machines on Proxmox VE</h3>
-          <p>VM disks kept on two servers, so you can move a running VM between them and restart it on the other one if its host dies.</p>
-          <a href="{{ 'proxmox/' | url }}">Use with Proxmox VE</a>
+          <h3>Virtual machines that outlive their host</h3>
+          <p>VM disks kept on two servers, so you can move a running VM between them and restart it on the other one if its host dies. On Proxmox VE, plain KVM or OpenStack.</p>
+          <span class="haify-case-links">
+            <a href="{{ 'proxmox/' | url }}">Proxmox VE</a>
+            <a href="{{ 'libvirt/' | url }}">KVM</a>
+            <a href="{{ 'openstack/' | url }}">OpenStack</a>
+          </span>
         </article>
         <article>
           {{ cases.k8s() }}
@@ -120,6 +124,8 @@ haify node register <span>--name node2</span> <span>--address 192.0.2.12</span><
         <a href="{{ 'node-prerequisites/' | url }}"><strong>Server requirements</strong><span>What each server needs.</span></a>
         <a href="{{ 'kubernetes/' | url }}"><strong>Kubernetes</strong><span>Volumes for containers.</span></a>
         <a href="{{ 'proxmox/' | url }}"><strong>Proxmox VE</strong><span>Volumes for virtual machines.</span></a>
+        <a href="{{ 'libvirt/' | url }}"><strong>KVM</strong><span>VM disks under libvirt, with failover.</span></a>
+        <a href="{{ 'openstack/' | url }}"><strong>OpenStack</strong><span>Cinder volumes, and a panel in Horizon.</span></a>
         <a href="{{ 'vsan-evacuation/' | url }}"><strong>Leaving vSAN</strong><span>Move VMware VMs to Proxmox VE.</span></a>
         <a href="{{ 'mcp/' | url }}"><strong>AI assistants</strong><span>Manage Haify by asking.</span></a>
       </nav>

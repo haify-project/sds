@@ -1,6 +1,6 @@
 # Haify - 软件定义存储
 
-用 Go 编写的轻量级 DRBD 9 存储控制器。管理存储池、复制卷、iSCSI / NFS / NVMe-oF 网关和高可用,并接入 Kubernetes(CSI)、Proxmox VE 和 AI 助手(MCP)。
+用 Go 编写的轻量级 DRBD 9 存储控制器。管理存储池、复制卷、iSCSI / NFS / NVMe-oF 网关和高可用,并接入 Kubernetes(CSI)、Proxmox VE、KVM(libvirt)、OpenStack(Cinder、Horizon)和 AI 助手(MCP)。
 
 [English](README.md) | 简体中文 | [文档站](https://haify-project.github.io/haify/)
 
@@ -17,6 +17,7 @@
 - **跨站点**:通过可穿透 NAT 的 TCP 隧道做异步容灾副本。
 - **数据完整性**:定时 DRBD verify 并可重同步,对副本降级、Primary 丢失、数据不同步、存储池写满发出告警。
 - **Kubernetes**:CSI 驱动,支持快照、克隆、扩容、原始块设备和远程(无盘)访问。
+- **虚拟机**:Proxmox VE 存储插件(PVE 网页里带 Haify 面板);普通 KVM 用 libvirt 钩子;OpenStack 有 Cinder 驱动和 Horizon 面板。三者都支持热迁移。
 - **AI**:面向 Claude Code、ChatGPT 等的 MCP 服务(本地,或带角色令牌和 OAuth 的远程),以及 Web UI 里的 Copilot。
 - **运维**:令牌认证、RBAC、审计日志、TLS、Prometheus 指标,通知可发到飞书 / Slack / 企业微信 / 钉钉 / Webhook。
 
@@ -114,7 +115,7 @@ Web UI 地址是 `http://node1:3376`。控制器 Self-HA、WAN 容灾副本、�
 
 ## 集成
 
-Kubernetes:把控制器地址填进 `deploy/k8s/00-haify-controller-endpoint.yaml`,`kubectl apply -f deploy/k8s/`,然后使用 `haify-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。Proxmox VE 见 [deploy/proxmox/README.md](deploy/proxmox/README.md),Prometheus 和 Grafana 见 [deploy/monitoring/README.md](deploy/monitoring/README.md)。
+Kubernetes:把控制器地址填进 `deploy/k8s/00-haify-controller-endpoint.yaml`,`kubectl apply -f deploy/k8s/`,然后使用 `haify-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。Proxmox VE 见 [deploy/proxmox/README.md](deploy/proxmox/README.md),KVM(libvirt)见 [deploy/libvirt/README.md](deploy/libvirt/README.md),OpenStack(Cinder、Horizon)见 [deploy/openstack/README.md](deploy/openstack/README.md),Prometheus 和 Grafana 见 [deploy/monitoring/README.md](deploy/monitoring/README.md)。
 
 AI 助手:
 

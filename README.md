@@ -1,6 +1,6 @@
 # Haify
 
-A lightweight DRBD 9 storage controller written in Go. It manages storage pools, replicated volumes, iSCSI / NFS / NVMe-oF gateways and high availability, and plugs into Kubernetes (CSI), Proxmox VE and AI assistants (MCP).
+A lightweight DRBD 9 storage controller written in Go. It manages storage pools, replicated volumes, iSCSI / NFS / NVMe-oF gateways and high availability, and plugs into Kubernetes (CSI), Proxmox VE, KVM (libvirt), OpenStack (Cinder, Horizon) and AI assistants (MCP).
 
 English | [简体中文](README_cn.md) | [Documentation site](https://haify-project.github.io/haify/)
 
@@ -17,6 +17,7 @@ No agent runs on the storage nodes: one controller drives them over SSH and keep
 - **Cross-site**: asynchronous DR replicas over a TCP tunnel that works through NAT.
 - **Integrity**: scheduled DRBD verify with resync, alerts on degraded replicas, lost Primaries, out-of-sync data and full pools.
 - **Kubernetes**: CSI driver with snapshots, clones, expansion, raw block and remote (diskless) access.
+- **Virtual machines**: Proxmox VE storage plugin with a panel in the PVE web UI; a libvirt hook for plain KVM; an OpenStack Cinder driver with a Horizon panel. Live migration works on all three.
 - **AI**: MCP server for Claude Code, ChatGPT and others (local or remote with role-scoped tokens and OAuth), plus a Copilot in the web UI.
 - **Operations**: token auth, RBAC, audit log, TLS, Prometheus metrics, notifications to Feishu / Slack / WeCom / DingTalk / webhooks.
 
@@ -114,7 +115,7 @@ The web UI is at `http://node1:3376`. Self-HA for the controller, WAN replicas, 
 
 ## Integrations
 
-Kubernetes: put the controller address in `deploy/k8s/00-haify-controller-endpoint.yaml`, `kubectl apply -f deploy/k8s/`, then use the `haify-drbd` StorageClass ([deploy/k8s/README.md](deploy/k8s/README.md)). Proxmox VE: [deploy/proxmox/README.md](deploy/proxmox/README.md); `deploy/proxmox/bootstrap.sh` sets up an existing PVE cluster (DRBD, controller, Self-HA, plugin, storage entry) in one command. Prometheus and Grafana: [deploy/monitoring/README.md](deploy/monitoring/README.md).
+Kubernetes: put the controller address in `deploy/k8s/00-haify-controller-endpoint.yaml`, `kubectl apply -f deploy/k8s/`, then use the `haify-drbd` StorageClass ([deploy/k8s/README.md](deploy/k8s/README.md)). Proxmox VE: [deploy/proxmox/README.md](deploy/proxmox/README.md); `deploy/proxmox/bootstrap.sh` sets up an existing PVE cluster (DRBD, controller, Self-HA, plugin, storage entry) in one command. KVM (libvirt): [deploy/libvirt/README.md](deploy/libvirt/README.md). OpenStack (Cinder, Horizon): [deploy/openstack/README.md](deploy/openstack/README.md). Prometheus and Grafana: [deploy/monitoring/README.md](deploy/monitoring/README.md).
 
 AI assistants:
 

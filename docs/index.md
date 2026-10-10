@@ -15,5 +15,7 @@ hide:
 - [Node prerequisites](node-prerequisites.md): what each server needs
 - [Kubernetes (CSI)](../deploy/k8s/README.md): volumes for containers
 - [Proxmox VE](../deploy/proxmox/README.md): volumes for virtual machines
+- [KVM (libvirt)](../deploy/libvirt/README.md): VM disks under libvirt, with failover
+- [OpenStack](../deploy/openstack/README.md): Cinder volumes, and a panel in Horizon
 - [Evacuating VMware vSAN](vsan-evacuation.md): move VMware VMs to Proxmox VE on Haify
 - [AI assistants (MCP)](mcp.md): manage Haify by asking

@@ -171,6 +171,7 @@ body:has(.haify-home) .md-main__inner { display: none; }
 .haify-cases p { margin: 0 0 0.8rem; font-size: 0.8rem; color: var(--haify-muted); flex: 1; }
 .haify-cases a { font-size: 0.78rem; font-weight: 600; color: var(--haify-ok); text-decoration: none; align-self: flex-start; }
 .haify-cases a:hover { text-decoration: underline; }
+.haify-case-links { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; }
 
 /* Use-case illustrations: drawn in the page's own colours, so they follow the theme. */
 .haify-ill { display: block; width: 100%; height: auto; margin: 0 0 0.9rem; background: var(--haify-surface);
