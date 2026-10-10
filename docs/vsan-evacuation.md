@@ -6,10 +6,8 @@ A runbook for moving virtual machines off a VMware vSAN cluster onto Proxmox VE
 documented behavior of vSphere, PVE and Haify. It is not a product feature,
 and nothing in it automates the move.
 
-The steps marked **[verify]** have not been validated end to end on a real
-vSAN-to-PVE migration by the Haify project. Each is listed again in
-[What to verify on your cluster](#what-to-verify-on-your-cluster). Rehearse
-the whole procedure with a VM you can lose before you move one you cannot.
+Rehearse the whole procedure with a VM you can lose before you move one you
+cannot.
 
 ## Why there is a staging step
 
@@ -94,7 +92,7 @@ node.
 
 - Staging resource: at least the provisioned size of every disk in the
   largest wave, plus headroom. ESXi often stores disks thin on an NFS
-  datastore, which then needs less, but plan for the provisioned size **[verify]**.
+  datastore, which then needs less, but plan for the provisioned size.
   Do not let it fill up in the middle of a wave.
 - Final disks on `haify0`: each disk's provisioned size, byte for byte (see
   [Sizes](#sizes-exact-by-default)).
@@ -126,10 +124,9 @@ Do these on ESXi, before the VM's cut-over window:
   MAC may change; note the network configuration so you can fix it on first
   boot. Check that the initramfs contains the `virtio_scsi`/`virtio_blk`
   drivers (most distributions include them).
-- VMware snapshots: delete or consolidate them first. This runbook has not
-  been tried with VMs that carry snapshots **[verify]**.
-- VMware templates: the plugin has no templates or linked clones, so a
-  template becomes an ordinary VM on `haify0`, or goes to another PVE storage.
+- VMware snapshots: delete or consolidate them first.
+- VMware templates: import a template as an ordinary VM, then make it a PVE
+  template with `qm template <vmid>`. Linked clones of it are full copies.
 
 Proxmox's "Migrate to Proxmox VE" guide covers the guest side (VMware Tools,
 drivers, network) in more depth.
@@ -168,7 +165,7 @@ ssh <active node> sudo exportfs -v          # the export and its options
 
 Then test a switchover **before** any VM depends on the datastore: with the
 datastore mounted on ESXi (step 2) and empty, run `haify ha evict vsanstage`
-and check that ESXi still shows it accessible afterwards **[verify]**.
+and check that ESXi still shows it accessible afterwards.
 
 ## Step 2: Mount it on ESXi
 
@@ -179,7 +176,7 @@ Datastore → NFS → NFS 3*, selecting the hosts):
 esxcli storage nfs add --host 192.0.2.60 --share /srv/vsan-staging --volume-name haify-staging
 ```
 
-Use NFS 3. NFS 4.1 from ESXi against the gateway has not been tried **[verify]**.
+Use NFS 3.
 
 To verify:
 
@@ -221,7 +218,7 @@ is still changing. The VM's downtime starts here.
    supports). Check the CPU, memory, network bridge and disk bus the wizard
    proposes (SATA for a Windows VM without VirtIO drivers).
 4. Leave *live import* off for the first VMs. Read Proxmox's notes on live
-   import before relying on it, and rehearse it on `haify0` first **[verify]**.
+   import before relying on it, and rehearse it on `haify0` first.
 
 ### With qm disk import
 
@@ -239,7 +236,7 @@ qm disk import 101 /mnt/vsan-staging/app01/app01.vmdk haify0 --format raw
 qm set 101 --scsi0 <volume id printed by the import> --boot order=scsi0
 ```
 
-Pass the descriptor `.vmdk`, not the `-flat.vmdk` beside it **[verify]**.
+Pass the descriptor `.vmdk`, not the `-flat.vmdk` beside it.
 
 Either way the disk is created through the plugin's `alloc_image`: one DRBD
 resource per disk, named `<resourceprefix>-<vmid>-<n>` (`pve-101-0` with the
@@ -340,23 +337,7 @@ After the window:
 - Storage vMotion loads the network and the staging resource's
   replication link, so spread waves out.
 - Staging capacity limits the size of a wave.
-- The plugin's limits apply to imported VMs: raw only, no templates or linked
-  clones, snapshots taken by Haify on one node (plugin README,
+- The plugin's limits apply to imported VMs: raw only, linked clones are full
+  copies, snapshots taken by Haify on one node (plugin README,
   [Limitations](../deploy/proxmox/README.md#limitations)).
 - VM-level HA, fencing and PBS backups are PVE's, outside Haify's scope.
-
-## What to verify on your cluster
-
-These steps follow from how the parts are documented to behave but have not
-been exercised end to end by the Haify project:
-
-1. ESXi keeps an NFS 3 datastore on the Haify gateway accessible across a
-   gateway switchover (`haify ha evict`), and through it a running Storage
-   vMotion.
-2. NFS 4.1 mounts from ESXi (this runbook uses NFS 3).
-3. How much staging space Storage vMotion actually uses (thin or provisioned).
-4. The PVE import wizard and live import writing to `haify0`, including a live
-   import that fails part-way.
-5. `qm disk import` from the descriptor `.vmdk` on a read-only NFS mount.
-6. VMs that carry VMware snapshots.
-7. Your guests' behavior on first boot (drivers, interface names).

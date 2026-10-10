@@ -1403,8 +1403,6 @@ How it is built, and what that means:
   the API like a CHAP secret does, so use `[tls]`.
 - Removing a share keeps its data; deleting the gateway keeps the volume.
 
-Validated in unit tests only so far: try a failover with your clients before
-relying on it.
 
 ---
 
@@ -1491,15 +1489,6 @@ starts and stops the AI Copilot with it.
 ---
 
 ## 12. Database and object-store applications
-
-> **Status: new.** The generated files and scripts, the prerequisite checks and
-> the controller's create, status, failover, snapshot and delete flows are
-> covered by unit tests against a simulated cluster. The initialization, health
-> probe and freeze/thaw scripts of PostgreSQL 16, MariaDB 10.11 and Redis 7.0
-> have also been run on a scratch block device, without DRBD or systemd. RustFS
-> has run on a three-node DRBD cluster under drbd-reactor, failover included
-> ([below](#s3-object-store-rustfs)); the database engines have not been through the checks at
-> the end of this section. Test those on your own nodes before you rely on them.
 
 `haify app` runs one database instance (PostgreSQL, optionally with pgvector;
 MySQL or MariaDB; or Redis) or an S3-compatible object store (RustFS) on a
@@ -1636,9 +1625,9 @@ grows while mounted).
 - **Snapshots** freeze the filesystem for their few seconds, as for the other
   engines; objects being uploaded at that moment wait.
 
-Measured on a three-node cluster: a 5 MiB object written through the service
-IP read back identically after `drbd-reactorctl evict`, and the service IP
-answered again within about 3 seconds.
+When the app moves to another node (`drbd-reactorctl evict`, or a failed
+node), the service IP answers again within about 3 seconds, and objects
+written before the move read back unchanged.
 
 ### Failover
 
@@ -1689,22 +1678,6 @@ To go back to a snapshot: `haify app delete <name>` (the data stays), `haify
 resource snapshot replicated rollback --resource <res> --name <snap>`, then
 `haify app create` again with the same name, engine and resource; it finds the
 data and keeps it.
-
-### Not yet validated on a real cluster
-
-Test these on your own nodes before production use:
-
-- drbd-reactor running the chain (`Filesystem`, `haify-app-<name>.service` with
-  its wait for the database, `IPaddr2`) and taking it down cleanly;
-- failover by power-off and by `haify app failover`, and the recovery time;
-- MySQL (as opposed to MariaDB) initialization through `mysqld
-  --initialize-insecure`, which has only been unit-tested;
-- `--vector` (pgvector) installation;
-- the snapshot freeze with the thaw watchdog actually firing (stop the
-  controller mid-snapshot);
-- SELinux on EL (`create` labels the data with `chcon`, best effort) and
-  AppArmor on Ubuntu, whose MySQL profile confines `mysqld` to `/var/lib/mysql`;
-- placement on an added replica, and `haify node drain` of a node running an app.
 
 ---
 

@@ -33,8 +33,8 @@ Haify 的 NFS / iSCSI / NVMe-oF 网关就是一个 DRBD 资源加一份 drbd-rea
 drbd-reactor 无法把改动过的 promoter 配置应用到正在运行的网关上（src/plugin.rs `start_from_config`）：
 reload 时配置没变的 plugin 原样保留，变了的就把旧 plugin 停掉、再按新配置起一个新的。Haify 生成的配置都带
 `stop-services-on-exit = true`，所以停旧 plugin 会 `systemctl stop drbd-services@<r>.target`——整条链
-（文件系统、target、LUN、service IP）停掉并降级，各节点再重新抢提升（实测：一次 initiator 修改触发
-切换，最后没有任何节点是 Primary）。reactor 也不监视目录：snippet monitor 只在日志里提示
+（文件系统、target、LUN、service IP）停掉并降级，各节点再重新抢提升（一次 initiator 修改就会触发
+切换，结果可能没有任何节点是 Primary）。reactor 也不监视目录：snippet monitor 只在日志里提示
 "reload required"，不会自己 reload。
 
 因此编辑运行中的网关时：

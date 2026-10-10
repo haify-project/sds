@@ -250,7 +250,7 @@
         { "@type": "Question", "name": "Haify 和 Ceph、LINSTOR 有什么区别？", "acceptedAnswer": { "@type": "Answer", "text": "与 Ceph 相比更轻：一个控制器管理全部节点，不用维护 MON/OSD/MGR 等多种守护进程。与 LINSTOR 相比，存储节点上不需要常驻代理进程。" } },
         { "@type": "Question", "name": "服务器坏了会怎样？多久恢复？", "acceptedAnswer": { "@type": "Answer", "text": "存储和跑在上面的服务，连同对外访问的地址，会自动转到另一台健康的服务器上，大约 70 秒；客户端始终访问同一个地址，不用改配置。仲裁机制防止两台服务器同时写同一份数据（脑裂）。" } },
         { "@type": "Question", "name": "支持哪些虚拟化平台？", "acceptedAnswer": { "@type": "Answer", "text": "Proxmox VE（存储插件，PVE 网页里带 Haify 面板）、普通 KVM/libvirt，以及 OpenStack（Cinder 驱动，Horizon 里带面板）。三者都支持虚拟机热迁移；宿主机坏了，虚拟机能带着数据在另一台上重新启动。" } },
-        { "@type": "Question", "name": "Haify 支持 Kubernetes 吗？", "acceptedAnswer": { "@type": "Answer", "text": "支持。Haify 提供 CSI 驱动：动态创建持久卷，支持快照、克隆和扩容；Pod 换到别的节点，数据跟着过去。已在 x86_64 与 aarch64 的 k3s 集群上验证。" } },
+        { "@type": "Question", "name": "Haify 支持 Kubernetes 吗？", "acceptedAnswer": { "@type": "Answer", "text": "支持。Haify 提供 CSI 驱动：动态创建持久卷，支持快照、克隆和扩容；Pod 换到别的节点，数据跟着过去。" } },
         { "@type": "Question", "name": "会丢数据吗？", "acceptedAnswer": { "@type": "Answer", "text": "写入返回时，数据已经在多台服务器上，所以坏一台不丢数据。另外可以定时备份到 S3、SMB 或 WebDAV，或在另一个机房保留一份实时副本，整个集群没了也能恢复。" } }
       ]
     }
@@ -435,7 +435,7 @@
           <tr><td class="feat">运维复杂度</td><td class="us">轻 · 一个控制器</td><td class="no">高 · MON/OSD/MGR</td><td class="us">中</td><td class="no">黑盒</td></tr>
           <tr><td class="feat">块存储强一致</td><td class="us yes">DRBD 同步</td><td class="yes">RBD</td><td class="yes">DRBD 同步</td><td class="yes">是</td></tr>
           <tr><td class="feat">源码可控 / 可审计</td><td class="us yes">是</td><td class="yes">是</td><td class="yes">是</td><td class="no">否</td></tr>
-          <tr><td class="feat">Kubernetes CSI</td><td class="us yes">已验证</td><td class="yes">是</td><td class="yes">Piraeus</td><td class="no">看厂商</td></tr>
+          <tr><td class="feat">Kubernetes CSI</td><td class="us yes">是</td><td class="yes">是</td><td class="yes">Piraeus</td><td class="no">看厂商</td></tr>
           <tr><td class="feat">本地化交付与支持</td><td class="us yes">私有化 · 中文</td><td class="no">社区为主</td><td class="no">德国厂商</td><td class="us">是 · 但锁定</td></tr>
         </tbody>
       </table>
@@ -492,7 +492,7 @@ haify <span class="p">gateway nfs create</span> <span class="f">--resource</span
       <div class="faq-item rv"><h3>支持哪些虚拟化平台？</h3>
         <p>Proxmox VE（存储插件，PVE 网页里带 Haify 面板）、普通 KVM/libvirt，以及 OpenStack（Cinder 驱动，Horizon 里带面板）。三者都支持虚拟机热迁移；宿主机坏了，虚拟机能带着数据在另一台上重新启动。</p></div>
       <div class="faq-item rv"><h3>Haify 支持 Kubernetes 吗？</h3>
-        <p>支持。Haify 提供 CSI 驱动：动态创建持久卷，支持快照、克隆和扩容；Pod 换到别的节点，数据跟着过去。已在 x86_64 与 aarch64 的 k3s 集群上验证。</p></div>
+        <p>支持。Haify 提供 CSI 驱动：动态创建持久卷，支持快照、克隆和扩容；Pod 换到别的节点，数据跟着过去。</p></div>
       <div class="faq-item rv"><h3>会丢数据吗？</h3>
         <p>写入返回时，数据已经在多台服务器上，所以坏一台不丢数据。另外可以定时备份到 S3、SMB 或 WebDAV，或在另一个机房保留一份实时副本，整个集群没了也能恢复。</p></div>
     </div>

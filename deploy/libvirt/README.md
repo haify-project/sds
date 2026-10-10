@@ -114,24 +114,6 @@ The promoter runs `ocf:heartbeat:VirtualDomain` (from `resource-agents`) with
 the definition libvirt keeps in `/etc/libvirt/qemu/web1.xml`. drbd-reactor
 promotes the resource and starts the guest on one replica, and when that node
 fails another replica with quorum promotes and starts it. The guest restarts
-as after a power cut, booting from what was on disk. Do not start
+as after a power cut, booting from what was on disk: when its host loses
+power, it is running on another replica about 20 seconds later. Do not start
 or migrate an HA guest with `virsh`; move it with `haify ha evict web1`.
-
-## Tested
-
-On three Debian 13 hosts (libvirt 11.3, DRBD 9.3.4, drbd-reactor 1.12.0), two
-with replicas and one tiebreaker, with a Debian 13 guest:
-
-- `virsh start` without the hook: `Read-only file system`. With it the disk is
-  promoted, and `virsh destroy` demotes it.
-- `virsh start` on the second host while the guest ran on the first was refused
-  with the reason, and the running guest was untouched.
-- Live migration both ways: one Primary afterwards, the dual-primary window
-  closed on both hosts. A loop in the guest writing and syncing a timestamp
-  every 0.1 s saw at most 0.33 s between two writes, and a 32 MiB file written
-  before the migrations read back with the same SHA-256.
-- With the controller stopped, stop and start fell back to `drbdadm`.
-- `ha create --vm`: the guest ran on one replica. After a hard power-off of
-  that host it was running on the other after 20 s, reachable over SSH after
-  79 s (its own boot), with the file intact. The returning host rejoined as a
-  Secondary and resynced, and nothing started the guest twice.

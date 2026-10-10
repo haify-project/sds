@@ -66,6 +66,10 @@ guest is gone and DRBD comes back up Secondary there.
   example after the host rebooted, because Nova does not ask Cinder at that
   point. The hook is also the libvirt-side half of live migration.
 
+Live migration needs SSH from root on each compute host to the user in
+`live_migration_uri` on the others: Nova migrates peer to peer, so libvirt's
+daemon, running as root, makes the connection.
+
 ## Install
 
 On the cinder-volume host, into the Python environment Cinder runs from:
@@ -149,58 +153,6 @@ systemctl reload apache2
 
 The panel asks the controller for the volumes' statuses eight at a time. When
 the controller is unavailable, the panel says so and lists nothing.
-
-## Tested
-
-Setup:
-
-- devstack master (2027.1) on Ubuntu 24.04, with two compute hosts (os1 runs
-  the control plane and cinder-volume as well).
-- Both hosts are Haify storage nodes. A third node runs haify-controller and
-  is the tiebreaker.
-- DRBD 9.3.4 and an LVM thin pool.
-- A cirros instance booted from a Haify volume, with a second Haify volume
-  attached.
-
-Results:
-
-- Basic operations: a bootable volume created from an image, a boot from it,
-  and a hot-plugged data volume all worked. The guest's disks were the
-  `/dev/drbd/by-res/…` devices, Primary on its host.
-- Data checked in the guest: in each of these cases the guest read the data
-  back and its SHA-256 matched:
-  - a snapshot of the in-use volume;
-  - a volume created from that snapshot, which held the data as at the
-    snapshot;
-  - a clone of the in-use volume, which held its current data;
-  - extend;
-  - revert to snapshot.
-- Live migration, os1 → os2 → os1, with the guest writing:
-  - Both disks were Primary on both hosts during each move.
-  - Afterwards only the destination was Primary, and two-primaries was off on
-    both hosts.
-  - The guest did not restart, and its data was unchanged.
-- A live migration that failed (libvirt's own SSH to the destination was
-  refused): Nova rolled back, the destination was made Secondary again and the
-  window closed. The guest kept running on the source.
-- Horizon:
-  - The panel and the tab showed the replicas, roles and health that Haify
-    reported.
-  - A replica taken down showed its volume as degraded, and as healthy again
-    once it came back.
-  - A volume on Cinder's own LVM backend had no tab and was not listed.
-  - The demo user had no panel; opening its URL directly returned 403.
-  - With the controller stopped, both pages showed the reason instead of an
-    error page.
-  - The links to the volume, the instance, the snapshot and Haify's UI opened
-    the right page.
-- cinder-volume restarted while the controller was stopped: the driver
-  initialized. Once the controller was back, a volume was created and deleted
-  without restarting cinder-volume.
-
-Live migration needs SSH from root on each compute host to the user in
-`live_migration_uri` on the others. Nova migrates peer to peer, so libvirt's
-daemon, running as root, makes the connection.
 
 ## Tests
 

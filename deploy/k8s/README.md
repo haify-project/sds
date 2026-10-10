@@ -199,12 +199,10 @@ quiesce it).
 
 ## When a node dies
 
-Measured on a three-node k3s cluster (2026-09-30), with the VM powered off:
-Kubernetes took about 75 seconds to declare the node lost, and the replacement
-pod was running on a surviving replica node about 9 seconds after that. A
-Deployment was out for 80 seconds, its data was intact, and nothing needed
-cleaning up on the Haify side. The old node's replica resynchronised on its
-own when it came back, with no split-brain.
+When a node loses power, Kubernetes takes about 75 seconds to declare it lost,
+and the replacement pod runs on a surviving replica node about 10 seconds
+later, with its data intact. Nothing needs cleaning up on the Haify side, and
+the old node's replica resynchronises on its own when it comes back.
 
 Almost all of that time is Kubernetes deciding the node is gone. To shorten it
 for a workload, lower the `not-ready` and `unreachable` tolerations on the pod:

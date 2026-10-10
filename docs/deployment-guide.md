@@ -7,7 +7,7 @@ The per-node package list, with the symptom each missing piece produces, is
 [`node-prerequisites.md`](./node-prerequisites.md). Day-to-day operation is
 covered in [`user-guide.md`](./user-guide.md).
 
-The steps were tested on Ubuntu 24.04 (amd64 and arm64). Package names below are
+The commands are for Ubuntu 24.04 (amd64 and arm64). Package names below are
 Ubuntu's; adjust them for other distributions.
 
 ---

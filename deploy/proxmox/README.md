@@ -434,9 +434,8 @@ DRBD, diskless clients included:
 qm set 103 --scsi0 haify0:vm-103-disk-0,discard=on
 ```
 
-Measured on a 3-node PVE 9.2 cluster: one `fstrim` in a guest that had deleted
-3 GiB took its replicas' pools from 79% to 41% and from 68% to 42%. The
-controller's daily trim (`[storage.thin] trim_schedule`) covers only
+With Discard on, an `fstrim` in the guest returns the space it deleted to the
+thin pools of every replica. The controller's daily trim (`[storage.thin] trim_schedule`) covers only
 filesystems Haify mounts itself. Guest disks need Discard.
 
 ## I/O limits
@@ -471,10 +470,7 @@ cd deploy/proxmox && prove t/
 ```
 
 The suite stubs the PVE modules and the REST client, so it runs on any machine
-with plain Perl. It covers the naming round trip, size rounding, allocation
-payloads, capacity reporting, the REST error semantics (the controller reports
-failures as HTTP 200 + `success=false`), and every path that opens or closes
-the dual-primary window.
+with plain Perl.
 
 ```bash
 ./deploy/proxmox/bootstrap/test.sh
@@ -482,6 +478,4 @@ the dual-primary window.
 
 runs `bootstrap.sh --dry-run` against a stub cluster (an `ssh` on `PATH` that
 answers the read-only checks as a fresh or a bootstrapped node would). It
-checks the planned commands, that a bootstrapped cluster gets none, and the
-refusals (offline member, no root SSH, unusable disks, missing `--devices` or
-`--vip`). It needs bash and perl, not PVE.
+needs bash and perl, not PVE.
