@@ -11,6 +11,16 @@
 // The fields mirror the plugin's properties (HaifyPlugin.pm); a change there
 // belongs here too.
 
+// The Haify mark, the same drawing as the web UI's and the site's, as an icon
+// class that works wherever PVE takes a Font Awesome one ("fa fa-haify").
+Ext.util.CSS.createStyleSheet(
+    '.fa-haify::before { content: ""; }' +
+    '.fa-haify { width: 1em; height: 1em; vertical-align: -0.125em;' +
+    ' background: center / contain no-repeat url("data:image/svg+xml,' +
+    encodeURIComponent('<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect fill="#0a0e15" height="100" rx="24" width="100"/><rect fill="none" height="70" rx="15" stroke="#44e0ad" stroke-width="5" width="70" x="15" y="15"/><path d="m31 41h38m-38 11h38m-38 11h24" stroke="#44e0ad" stroke-linecap="round" stroke-width="6.5"/><circle cx="70" cy="63" fill="#f2b45b" r="6"/></svg>') + '"); }',
+    'haify-mark',
+);
+
 Ext.define('PVE.storage.HaifyInputPanel', {
     extend: 'PVE.panel.StorageBase',
 
@@ -212,7 +222,7 @@ Ext.define('PVE.storage.HaifyInputPanel', {
 PVE.Utils.storageSchema.haify = {
     name: 'Haify',
     ipanel: 'HaifyInputPanel',
-    faIcon: 'database',
+    faIcon: 'haify',
     backups: false,
 };
 
@@ -382,7 +392,7 @@ Ext.define('PVE.haify.StorageBrowserOverride', {
                 me.items.push({
                     xtype: 'pveHaifyDisksView',
                     title: 'Haify',
-                    iconCls: 'fa fa-database',
+                    iconCls: 'fa fa-haify',
                     itemId: 'haifyReplicas',
                     pveSelNode: me.pveSelNode,
                 });
@@ -461,7 +471,7 @@ Ext.define('PVE.haify.HAResourcesOverride', {
         if (PVE.ha.NodeAffinityRulesView) {
             me.down('toolbar').add('-', {
                 text: gettext('Prefer nodes with Haify replicas'),
-                iconCls: 'fa fa-database',
+                iconCls: 'fa fa-haify',
                 handler: () => PVE.haify.preferReplicas(me.haifyReplicas, () => me.rstore.load()),
             });
         }

@@ -15,7 +15,7 @@ const httpAgent = new http.Agent({
 export default defineConfig({
   plugins: [pluginReact()],
   html: {
-    title: 'Haify UI',
+    title: 'Haify',
     favicon: './src/assets/favicon.svg',
   },
   resolve: {

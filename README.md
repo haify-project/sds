@@ -1,3 +1,5 @@
+![Haify](docs/assets/images/favicon.svg)
+
 # Haify
 
 Haify is storage that keeps working when a server fails. It replicates volumes across nodes with DRBD 9 and provides them to Kubernetes (CSI), Proxmox VE, KVM (libvirt) and OpenStack (Cinder, Horizon), or exports them through NFS / SMB / iSCSI / NVMe-oF gateways. It also manages storage pools and high availability, and AI assistants can operate it over MCP. The controller is a lightweight program written in Go.

@@ -1,3 +1,5 @@
+![Haify](docs/assets/images/favicon.svg)
+
 # Haify - 软件定义存储
 
 Haify 是一套坏一台服务器也照常工作的存储。它用 DRBD 9 把卷复制到多个节点，提供给 Kubernetes（CSI）、Proxmox VE、KVM（libvirt）和 OpenStack（Cinder、Horizon）使用，也可以通过 NFS / SMB / iSCSI / NVMe-oF 网关对外提供。它还管理存储池和高可用，AI 助手可以通过 MCP 操作它。控制器是一个用 Go 编写的轻量程序。

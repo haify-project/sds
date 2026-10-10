@@ -8,7 +8,6 @@ import {
   Box,
   Network,
   ShieldCheck,
-  HardDrive,
   Lock,
   Loader2,
   Sparkles,
@@ -27,6 +26,7 @@ import { isPveManaged } from '@/pages/proxmox/pve';
 import { libvirtDomainOf } from '@/pages/guests/libvirt';
 import { UserMenu } from '@/components/UserMenu';
 import { NotificationBell } from '@/components/NotificationBell';
+import { HaifyMark } from '@/components/HaifyMark';
 
 // Collapsing the sidebar is a per-workstation preference, so it is remembered
 // across reloads. Storage can throw (private mode, disabled cookies); the
@@ -155,7 +155,7 @@ function SidebarContent({
           collapsed ? 'justify-center' : 'gap-2.5 px-2.5',
         )}
       >
-        <HardDrive className="size-5 shrink-0 text-primary" />
+        <HaifyMark />
         {!collapsed && (
           <div className="leading-tight">
             <h1 className="text-[13.5px] font-semibold tracking-tight">
