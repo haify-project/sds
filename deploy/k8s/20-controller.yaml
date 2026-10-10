@@ -79,6 +79,12 @@ spec:
           args:
             - "--endpoint=unix:///csi/csi.sock"
             - "--haify-controller=haify-controller:3374"
+          env:
+            # The controller's API token, when it has [auth] or [rbac] on.
+            # Optional: without the Secret the plugin connects without one.
+            - name: HAIFY_TOKEN
+              valueFrom:
+                secretKeyRef: { name: haify-api-token, key: token, optional: true }
           volumeMounts:
             - { name: socket-dir, mountPath: /csi }
         - name: liveness-probe

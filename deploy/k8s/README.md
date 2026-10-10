@@ -68,6 +68,14 @@ The controller Deployment and the node DaemonSet both run with
 lets the controller pod reach a VIP that lives on its own node, and the DNS
 policy keeps the Service name resolvable.
 
+With `[auth]` or `[rbac]` on the controller, give the plugins its API token
+before applying, from a node that holds it:
+
+    kubectl -n kube-system create secret generic haify-api-token --from-file=token=/etc/haify/token
+
+Without that Secret the plugins connect without a token, which only a
+controller with authentication off accepts.
+
 Then:
 
     kubectl apply -f deploy/k8s/

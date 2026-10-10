@@ -42,6 +42,11 @@ spec:
           securityContext:
             privileged: true
           env:
+            # The controller's API token, when it has [auth] or [rbac] on.
+            # Optional: without the Secret the plugin connects without one.
+            - name: HAIFY_TOKEN
+              valueFrom:
+                secretKeyRef: { name: haify-api-token, key: token, optional: true }
             - name: NODE_NAME
               valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
             - name: NODE_IP

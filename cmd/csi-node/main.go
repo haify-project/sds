@@ -26,7 +26,10 @@ func main() {
 		log.Fatal("node-name and node-ip are required (set via downward API NODE_NAME / NODE_IP)")
 	}
 
-	haify, err := client.NewHaifyClient(*haifyAddr)
+	// With [auth] or [rbac] on the controller, every call needs a token:
+	// HAIFY_TOKEN (the manifests fill it from the haify-api-token Secret),
+	// else ~/.haify/token or /etc/haify/token.
+	haify, err := client.NewHaifyClient(*haifyAddr, client.WithToken(client.ResolveToken("")))
 	if err != nil {
 		log.Fatal("connect haify-controller", zap.Error(err))
 	}
