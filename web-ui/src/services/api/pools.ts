@@ -40,6 +40,10 @@ export interface Pool {
   // Exact capacity. totalGb/freeGb are rounded to whole gibibytes.
   totalBytes?: string;
   freeBytes?: string;
+  // What new volumes can actually get: the thin pool's own size and room for
+  // a thin pool, the volume group's otherwise.
+  capacityBytes?: string;
+  availableBytes?: string;
 }
 
 export interface PoolsResponse extends ApiResponse {
@@ -87,3 +91,18 @@ export const poolsApi = (request: RequestFn) => ({
       body: JSON.stringify({ disk, node }),
     }),
 });
+
+const GIB = 1024 ** 3;
+
+/** A pool's size and the room left in it for new volumes, in GiB. Prefers the
+ *  controller's capacity figures, which count a thin pool rather than its
+ *  volume group (whose free space is zero once the thin pool takes it all). */
+export function poolRoomGiB(pool: Pool): { total: number; free: number } {
+  if (pool.capacityBytes && Number(pool.capacityBytes) > 0) {
+    return {
+      total: Number(pool.capacityBytes) / GIB,
+      free: Number(pool.availableBytes ?? 0) / GIB,
+    };
+  }
+  return { total: Number(pool.totalGb), free: Number(pool.freeGb) };
+}

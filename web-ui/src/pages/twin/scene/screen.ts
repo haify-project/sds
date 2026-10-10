@@ -94,9 +94,9 @@ export function drawScreen(g: CanvasRenderingContext2D, n: TwinNode, p: Palette)
   const primaries = n.replicas.filter((r) => r.primary).length;
   const trouble = n.replicas.filter((r) => r.health === 'bad' || r.health === 'warn');
   const stats: [string, string][] = [
-    [String(n.replicas.length), 'replicas'],
+    [String(n.replicas.length), n.replicas.length === 1 ? 'replica' : 'replicas'],
     [String(primaries), 'primary'],
-    [String(n.gateways.length), 'gateways'],
+    [String(n.gateways.length), n.gateways.length === 1 ? 'gateway' : 'gateways'],
   ];
   stats.forEach(([v, k], i) => {
     const x = 36 + i * 196;

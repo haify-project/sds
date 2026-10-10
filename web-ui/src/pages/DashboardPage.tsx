@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Plus, RefreshCw, Server, ShieldCheck } from 'lucide-react';
-import { api } from '@/services/api';
-import { eventTime, type ClusterEvent } from '@/services/events';
+import { api, poolRoomGiB } from '@/services/api';
+import { eventTime, eventTitle, type ClusterEvent } from '@/services/events';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 import { StatBand, StatBandItem } from '@/components/StatBand';
@@ -114,10 +114,9 @@ export function DashboardPage() {
     ? nodeNameByAddr.get(selfHa.activeNode) ?? selfHa.activeNode
     : '';
 
-  const totalStorage =
-    pools?.pools.reduce((acc, p) => acc + Number(p.totalGb), 0) ?? 0;
-  const freeStorage =
-    pools?.pools.reduce((acc, p) => acc + Number(p.freeGb), 0) ?? 0;
+  const rooms = (pools?.pools ?? []).map(poolRoomGiB);
+  const totalStorage = Math.round(rooms.reduce((acc, r) => acc + r.total, 0));
+  const freeStorage = Math.round(rooms.reduce((acc, r) => acc + r.free, 0));
   const usedStorage = Math.max(totalStorage - freeStorage, 0);
   const usagePct = totalStorage > 0 ? (usedStorage / totalStorage) * 100 : 0;
 
@@ -317,10 +316,11 @@ export function DashboardPage() {
               </div>
             ) : selfHa?.enabled ? (
               <div className="space-y-[18px]">
-                {/* Three columns of ~90px cannot hold a CIDR: the VIP ran
-                    past the card's edge. Two columns on a phone, and the VIP —
-                    the only long value here — takes both. */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-3">
+                {/* The VIP, the only long value here, needs about 160px: three
+                    columns only once the card itself is wide enough for that,
+                    else it takes a row of its own. */}
+                <div className="@container">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 @lg:grid-cols-3">
                   <div className="min-w-0">
                     <div className="eyebrow">Active node</div>
                     <div className="mt-1.5 font-mono text-sm break-words">
@@ -333,12 +333,13 @@ export function DashboardPage() {
                       {selfHa.resource || '-'}
                     </div>
                   </div>
-                  <div className="col-span-2 min-w-0 sm:col-span-1">
+                  <div className="col-span-2 min-w-0 @lg:col-span-1">
                     <div className="eyebrow">VIP</div>
-                    <div className="mt-1.5 font-mono text-sm break-all tabular-nums">
+                    <div className="mt-1.5 font-mono text-sm whitespace-nowrap tabular-nums">
                       {selfHa.vip || '-'}
                     </div>
                   </div>
+                </div>
                 </div>
                 {selfHa.nodes && selfHa.nodes.length > 0 && (
                   <>
@@ -548,7 +549,8 @@ function RecentEvents() {
         ) : (
           <div className="flex flex-col">
             {events.map((event, i) => {
-              const tone = EVENT_TONE[event.severity] ?? 'idle';
+              const tone =
+                event.status === 'resolved' ? 'ok' : EVENT_TONE[event.severity] ?? 'idle';
               return (
                 <div
                   key={event.id}
@@ -565,9 +567,7 @@ function RecentEvents() {
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] leading-snug">{event.message}</p>
                     <p className="mt-1 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-                      <span className={cn('capitalize', TONE_TEXT[tone])}>{event.severity}</span>
-                      <span aria-hidden>·</span>
-                      <span className="font-mono tabular-nums">{event.type}</span>
+                      <span className={TONE_TEXT[tone]}>{eventTitle(event)}</span>
                       <span aria-hidden>·</span>
                       <span className="font-mono tabular-nums">
                         {eventClock(event)}

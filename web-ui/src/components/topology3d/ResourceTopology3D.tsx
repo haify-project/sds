@@ -1,7 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
@@ -11,6 +10,9 @@ import type { Resource, ResourceStatus } from '@/services/api';
 import { DARK, LIGHT, materials, type Palette } from '@/pages/twin/kit';
 import { placeNodes, railTone, type PlacedNode } from '../ResourceTopology';
 import { MiniComputer, towerTopOf } from './MiniComputer';
+import { boxCorners, viewFrom } from './fit';
+import { createViewChannel, OrbitRig } from './OrbitRig';
+import { ViewControls } from './ViewControls';
 
 // The replication topology of one resource as a little room of computers:
 // its members side by side, the Primary's case glowing, dashed lines running
@@ -20,6 +22,10 @@ import { MiniComputer, towerTopOf } from './MiniComputer';
 const SPACING = 7.2;
 const DR_GAP = 4.5;
 const WAN = '#a78bfa';
+const FOV = 22;
+const DIR = viewFrom(0.36);
+/** Clear of the 3D/2D switch above, the camera buttons to the right, the caption below. */
+const INSETS = { top: 30, right: 48, bottom: 22, left: 4 };
 
 interface Arc {
   key: string;
@@ -84,28 +90,6 @@ function Environment() {
   return null;
 }
 
-function Controls({ target }: { target: THREE.Vector3 }) {
-  const camera = useThree((s) => s.camera);
-  const gl = useThree((s) => s.gl);
-  const controls = useMemo(() => {
-    const c = new OrbitControls(camera, gl.domElement);
-    // Rotate only: the wheel keeps scrolling the page this sits in.
-    c.enableZoom = false;
-    c.enablePan = false;
-    c.enableDamping = true;
-    c.dampingFactor = 0.08;
-    c.minPolarAngle = 0.35;
-    c.maxPolarAngle = 1.3;
-    c.minAzimuthAngle = -1.1;
-    c.maxAzimuthAngle = 1.1;
-    c.target.copy(target);
-    return c;
-  }, [camera, gl, target]);
-  useEffect(() => () => controls.dispose(), [controls]);
-  useFrame(() => controls.update());
-  return null;
-}
-
 function arcsFor(
   members: { node: PlacedNode; x: number }[],
   dr: { node: PlacedNode; x: number }[],
@@ -161,7 +145,27 @@ function arcsFor(
   return arcs;
 }
 
-export default function ResourceTopology3D({ resource, status }: { resource: Resource; status: ResourceStatus }) {
+/** Tells the page the first frame is on screen, so it can drop its placeholder. */
+function FirstFrame({ onReady }: { onReady?: () => void }) {
+  const done = useRef(false);
+  useFrame(() => {
+    if (done.current) return;
+    done.current = true;
+    // After this frame has been drawn, not before.
+    requestAnimationFrame(() => onReady?.());
+  });
+  return null;
+}
+
+export default function ResourceTopology3D({
+  resource,
+  status,
+  onReady,
+}: {
+  resource: Resource;
+  status: ResourceStatus;
+  onReady?: () => void;
+}) {
   const { resolvedTheme } = useTheme();
   const palette = resolvedTheme === 'dark' ? DARK : LIGHT;
   const mats = useMemo(() => materials(palette), [palette]);
@@ -176,53 +180,71 @@ export default function ResourceTopology3D({ resource, status }: { resource: Res
   const arcs = arcsFor(members, dr, (n) => legState(n).replicating, palette);
 
   const width = span + 6;
-  const d = Math.max(14, width * 0.85 + 4);
-  const target = useMemo(() => new THREE.Vector3(0, 1.75, 0), []);
+  // Every desk, and the crest of every arc, in the home view.
+  const points = useMemo(() => {
+    const pts = [...members, ...dr].flatMap((m) => boxCorners([m.x - 2.8, 0, -1.9], [m.x + 2.8, 3.4, 1.9]));
+    for (const a of arcs) {
+      const from = new THREE.Vector3(...a.from);
+      const to = new THREE.Vector3(...a.to);
+      const crest = from.clone().lerp(to, 0.5);
+      crest.y += (1.4 + from.distanceTo(to) * 0.16) / 2 + 0.3;
+      pts.push(crest);
+    }
+    return pts;
+    // Positions only change with the membership.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members.map((m) => `${m.node.name}@${m.x}`).join(), dr.map((m) => `${m.node.name}@${m.x}`).join(), arcs.map((a) => a.key).join()]);
+  const channel = useMemo(createViewChannel, []);
 
   return (
-    <Canvas
-      className="!absolute inset-0"
-      shadows={{ type: THREE.PCFShadowMap }}
-      dpr={[1, 2]}
-      camera={{ fov: 22, near: 0.5, far: 500, position: [0, d * 0.38, d * 0.95] }}
-      onCreated={({ gl, camera }) => {
-        gl.toneMapping = THREE.NeutralToneMapping;
-        camera.lookAt(target);
-      }}
-    >
-      <Environment />
-      <hemisphereLight args={[palette.dark ? '#c8d4ff' : '#ffffff', palette.dark ? '#2a2f3a' : '#c9cfe6', palette.dark ? 1.6 : 1.6]} />
-      <directionalLight
-        castShadow
-        intensity={palette.dark ? 2.0 : 2.2}
-        position={[-8, 22, 14]}
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-width}
-        shadow-camera-right={width}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
-      />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[width * 4, 60]} />
-        <shadowMaterial opacity={palette.dark ? 0.35 : 0.12} />
-      </mesh>
-      {dr.length > 0 && (
-        // The DR site: its own platform, apart from the primary site.
-        <mesh position={[(dr[0].x + dr[dr.length - 1].x) / 2, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[dr.length * SPACING, 5.4]} />
-          <meshBasicMaterial color={WAN} transparent opacity={0.12} depthWrite={false} />
-        </mesh>
-      )}
-      <Controls target={target} />
-      {members.map((m) => (
-        <MiniComputer key={m.node.name} node={m.node} backing={backing} x={m.x} mats={mats} palette={palette} />
-      ))}
-      {dr.map((m) => (
-        <MiniComputer key={m.node.name} node={m.node} backing={backing} x={m.x} mats={mats} palette={palette} />
-      ))}
-      {arcs.map((a) => (
-        <DashedArc key={a.key} arc={a} />
-      ))}
-    </Canvas>
+    <>
+      <div className="absolute inset-0" role="img" aria-label={`Replication topology for ${resource.name}`}>
+        <Canvas
+          className="!absolute inset-0"
+          shadows={{ type: THREE.PCFShadowMap }}
+          dpr={[1, 2]}
+          camera={{ fov: FOV, near: 0.5, far: 500, position: [0, width * 0.4, width * 1.1] }}
+          onCreated={({ gl }) => {
+            gl.toneMapping = THREE.NeutralToneMapping;
+          }}
+        >
+          <FirstFrame onReady={onReady} />
+          <Environment />
+          <hemisphereLight args={[palette.dark ? '#c8d4ff' : '#ffffff', palette.dark ? '#2a2f3a' : '#c9cfe6', palette.dark ? 1.6 : 1.6]} />
+          <directionalLight
+            castShadow
+            intensity={palette.dark ? 2.0 : 2.2}
+            position={[-8, 22, 14]}
+            shadow-mapSize={[1024, 1024]}
+            shadow-camera-left={-width}
+            shadow-camera-right={width}
+            shadow-camera-top={10}
+            shadow-camera-bottom={-10}
+          />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <planeGeometry args={[width * 4, 60]} />
+            <shadowMaterial opacity={palette.dark ? 0.35 : 0.12} />
+          </mesh>
+          {dr.length > 0 && (
+            // The DR site: its own platform, apart from the primary site.
+            <mesh position={[(dr[0].x + dr[dr.length - 1].x) / 2, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[dr.length * SPACING, 5.4]} />
+              <meshBasicMaterial color={WAN} transparent opacity={0.12} depthWrite={false} />
+            </mesh>
+          )}
+          <OrbitRig points={points} dir={DIR} insets={INSETS} channel={channel} />
+          {members.map((m) => (
+            <MiniComputer key={m.node.name} node={m.node} backing={backing} x={m.x} mats={mats} palette={palette} />
+          ))}
+          {dr.map((m) => (
+            <MiniComputer key={m.node.name} node={m.node} backing={backing} x={m.x} mats={mats} palette={palette} />
+          ))}
+          {arcs.map((a) => (
+            <DashedArc key={a.key} arc={a} />
+          ))}
+        </Canvas>
+      </div>
+      <ViewControls onCamera={(op) => channel.send(op)} className="absolute right-0 bottom-6 z-10" />
+    </>
   );
 }

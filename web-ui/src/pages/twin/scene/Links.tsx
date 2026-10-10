@@ -6,7 +6,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import * as THREE from 'three';
 import type { TwinLink, TwinModel, TwinNode } from '../model';
 import type { Palette } from '../kit';
-import { anchors, useTwin } from '../store';
+import { anchors, labelSpots, useTwin } from '../store';
 import { pickHandlers } from './pick';
 import { TOWER } from './ComputerNode';
 
@@ -76,6 +76,13 @@ function Arc({ link, nodes, palette }: { link: TwinLink; nodes: Map<string, Twin
       anchors.delete(id);
     };
   }, [id]);
+  // The tag's places along the line, middle first, then outwards.
+  useEffect(() => {
+    labelSpots.set(id, [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78].map((t) => curve.getPointAt(t)));
+    return () => {
+      labelSpots.delete(id);
+    };
+  }, [id, curve]);
 
   // Which way writes go: from the end that is Primary for most resources.
   const fromA = link.resources.filter((r) => r.from === link.a).length;

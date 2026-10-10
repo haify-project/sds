@@ -197,3 +197,21 @@ export function eventTypeLabel(type: string): string {
       return type;
   }
 }
+
+// What a cleared fault is called. A recovery has to say so in its title:
+// otherwise a cleared fault and a fresh one both read "Degraded".
+const RESOLVED_TITLES: Record<string, string> = {
+  'resource.degraded': 'Recovered',
+  'resource.no_primary': 'Primary back',
+  'node.unreachable': 'Node reachable again',
+  'wan.degraded': 'WAN replication recovered',
+  'resource.out_of_sync': 'Replicas match again',
+};
+
+/** The title of an event row or toast: its type, or its recovery once cleared. */
+export function eventTitle(event: Pick<ClusterEvent, 'type' | 'status'>): string {
+  if (event.status === 'resolved') {
+    return RESOLVED_TITLES[event.type] ?? `${eventTypeLabel(event.type)} resolved`;
+  }
+  return eventTypeLabel(event.type);
+}

@@ -122,8 +122,6 @@ export function GatewaysPage() {
         title="Gateways"
         description={
           <>
-            A gateway is a DRBD resource plus a drbd-reactor promoter config, so
-            the export follows the resource on failover.{' '}
             <span className="font-mono text-foreground">{list.length}</span>{' '}
             configured,{' '}
             <span className="font-mono text-foreground">{running}</span> started.

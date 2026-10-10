@@ -100,7 +100,7 @@ export function NodeRows({
         <TableCell className="font-mono tabular-nums text-muted-foreground">
           {node.address}
         </TableCell>
-        <TableCell className="font-mono tabular-nums text-muted-foreground">
+        <TableCell className="hidden font-mono tabular-nums text-muted-foreground @min-[1000px]:table-cell">
           {node.version || '-'}
         </TableCell>
         <TableCell>
@@ -166,7 +166,9 @@ export function NodeRows({
             id={panelId}
             role="region"
             aria-label={`Detail for ${node.name}`}
-            className="h-auto bg-muted/50 p-0"
+            // whitespace-normal: TableCell's nowrap is for one-line data
+            // cells and would hold the panel's captions on one line.
+            className="h-auto bg-muted/50 p-0 whitespace-normal"
           >
             <div className="py-1 pr-6 pb-[22px] pl-[46px]">
               <NodeDetail

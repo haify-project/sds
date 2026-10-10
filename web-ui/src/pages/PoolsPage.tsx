@@ -31,11 +31,11 @@ export function PoolsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="@container space-y-6">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Storage Pools</h3>
         </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 @min-[680px]:grid-cols-2 @min-[1080px]:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <Card key={i}>
               <CardHeader>
@@ -64,9 +64,11 @@ export function PoolsPage() {
 
   const nodeEntries = Object.entries(poolsByNode);
 
+  // The page is a container so the columns of node cards follow the width it
+  // actually has, which the sidebar and a docked Copilot both take from.
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="@container space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">Storage Pools</h3>
         <div className="flex items-center gap-2">
           <TrimButton />
@@ -82,7 +84,7 @@ export function PoolsPage() {
           <p>No storage pools found. Create your first pool to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 @min-[680px]:grid-cols-2 @min-[1080px]:grid-cols-3">
           {nodeEntries.map(([nodeAddr, nodePools]) => {
             const nodeName = nodeMap[nodeAddr] || nodeAddr;
             return (

@@ -1,26 +1,22 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { TwinModel } from '../model';
 import { materials, type Palette } from '../kit';
-import { anchors, labelEls, twin } from '../store';
+import { twin } from '../store';
 import { ComputerNode } from './ComputerNode';
 import { Links } from './Links';
+import { CameraRig, framePoints, homeFraming } from './CameraRig';
+import { LabelProjector } from './LabelProjector';
 
+const FOV = 32;
 const coarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
 /** How far the nodes reach from the middle, which frames everything else. */
 function extent(model: TwinModel): number {
   return Math.max(8, ...model.nodes.map((n) => Math.hypot(n.x, n.z) + 4));
-}
-
-function homeView(r: number, aspect: number) {
-  // A narrow window needs to stand further back to fit the ring's width.
-  const k = aspect < 1 ? Math.min(2.8, 1.15 / Math.max(0.4, aspect)) : 1;
-  const d = (r * 1.75 + 8) * k;
-  return { target: new THREE.Vector3(0, 1.8, 0.5), pos: new THREE.Vector3(0, d * 0.58, d * 0.92) };
 }
 
 function Environment() {
@@ -39,7 +35,7 @@ function Environment() {
   return null;
 }
 
-function Controls({ radius }: { radius: number }) {
+function Controls({ radius, target }: { radius: number; target: THREE.Vector3 }) {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const set = useThree((s) => s.set);
@@ -51,8 +47,10 @@ function Controls({ radius }: { radius: number }) {
     c.maxPolarAngle = 1.32;
     c.screenSpacePanning = false;
     c.autoRotateSpeed = 0.6;
-    c.target.set(0, 1.8, 0.5);
+    c.target.copy(target);
     return c;
+    // The target is only where it starts; the camera rig moves it after.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera, gl]);
   useEffect(() => {
     set({ controls: controls as unknown as THREE.EventDispatcher });
@@ -75,99 +73,13 @@ function Controls({ radius }: { radius: number }) {
   return null;
 }
 
-interface Fly {
-  t: number;
-  dur: number;
-  fromT: THREE.Vector3;
-  fromP: THREE.Vector3;
-  toT: THREE.Vector3;
-  toP: THREE.Vector3;
-}
-const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-
-/** Scripted camera moves: home, zoom, and flying to whatever was double-clicked. */
-function CameraRig({ radius }: { radius: number }) {
-  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
-  const controls = useThree((s) => s.controls) as unknown as OrbitControls | null;
-  const fly = useRef<Fly | null>(null);
-  const seq = useRef(0);
-
-  useFrame((_, dt) => {
-    if (!controls) return;
-    const cam = twin.get().cam;
-    if (cam && cam.seq !== seq.current) {
-      seq.current = cam.seq;
-      const target = controls.target;
-      const sph = new THREE.Spherical().setFromVector3(camera.position.clone().sub(target));
-      const go = (toT: THREE.Vector3, toP: THREE.Vector3, dur: number) => {
-        fly.current = { t: 0, dur, fromT: target.clone(), fromP: camera.position.clone(), toT, toP };
-      };
-      const around = (t: THREE.Vector3) => t.clone().add(new THREE.Vector3().setFromSpherical(sph));
-      if (cam.op === 'home') {
-        const h = homeView(radius, camera.aspect);
-        go(h.target, h.pos, 1.1);
-      } else if (cam.op === 'in' || cam.op === 'out') {
-        sph.radius = THREE.MathUtils.clamp(sph.radius * (cam.op === 'in' ? 0.7 : 1.4), controls.minDistance, controls.maxDistance);
-        go(target.clone(), around(target), 0.45);
-      } else if (cam.op === 'focus' && cam.id) {
-        const a = anchors.get(cam.id);
-        if (a) {
-          const to = a.getWorldPosition(new THREE.Vector3());
-          to.y = Math.max(1.5, to.y - 2.5);
-          sph.radius = cam.id.startsWith('link:') ? 26 : 18;
-          sph.phi = Math.min(sph.phi, 1.0);
-          go(to, to.clone().add(new THREE.Vector3().setFromSpherical(sph)), 1.1);
-        }
-      }
-    }
-    const f = fly.current;
-    if (!f) return;
-    f.t += dt;
-    const k = ease(Math.min(1, f.t / f.dur));
-    controls.target.lerpVectors(f.fromT, f.toT, k);
-    camera.position.lerpVectors(f.fromP, f.toP, k);
-    if (f.t >= f.dur) fly.current = null;
-  });
-
-  useEffect(() => {
-    if (!controls) return;
-    const cancel = () => {
-      fly.current = null;
-    };
-    controls.addEventListener('start', cancel);
-    return () => controls.removeEventListener('start', cancel);
-  }, [controls]);
-  return null;
-}
-
-/** Moves each DOM name tag to where its thing is on screen, every frame. */
-function LabelProjector() {
-  const v = useMemo(() => new THREE.Vector3(), []);
-  useFrame(({ camera, size }) => {
-    for (const [id, el] of labelEls) {
-      const a = anchors.get(id);
-      if (!a) {
-        el.style.visibility = 'hidden';
-        continue;
-      }
-      a.getWorldPosition(v).project(camera);
-      const off = v.z > 1;
-      el.style.visibility = off ? 'hidden' : '';
-      if (off) continue;
-      const x = (v.x * 0.5 + 0.5) * size.width;
-      const y = (-v.y * 0.5 + 0.5) * size.height;
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%)`;
-      el.style.zIndex = String(Math.round((1 - v.z) * 1e4));
-    }
-  });
-  return null;
-}
-
 export function TwinScene({ model, palette }: { model: TwinModel; palette: Palette }) {
   const mats = useMemo(() => materials(palette), [palette]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
   const r = extent(model);
-  const home = homeView(r, typeof window === 'undefined' ? 1.6 : window.innerWidth / Math.max(1, window.innerHeight));
+  // A first guess from the window; the rig refits to the canvas on its first frame.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const home = useMemo(() => homeFraming(framePoints(model), FOV, window.innerWidth - 240, window.innerHeight - 56), []);
   const shadow = r + 8;
 
   return (
@@ -175,7 +87,7 @@ export function TwinScene({ model, palette }: { model: TwinModel; palette: Palet
       className="!absolute inset-0 touch-none"
       shadows={{ type: THREE.PCFShadowMap }}
       dpr={[1, coarse ? 1.5 : 2]}
-      camera={{ fov: 32, near: 0.5, far: 1200, position: home.pos.toArray() }}
+      camera={{ fov: FOV, near: 0.5, far: 1200, position: home.position.toArray() }}
       onCreated={({ gl, camera }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
         gl.toneMappingExposure = palette.dark ? 1.0 : 1.05;
@@ -210,9 +122,9 @@ export function TwinScene({ model, palette }: { model: TwinModel; palette: Palet
         args={[Math.ceil(r * 2.6 + 20), Math.ceil((r * 2.6 + 20) / 2), palette.dark ? '#2a303b' : '#d9dde8', palette.dark ? '#20252e' : '#e2e5ee']}
         position={[0, 0.005, 0]}
       />
-      <Controls radius={r} />
-      <CameraRig radius={r} />
-      <LabelProjector />
+      <Controls radius={r} target={home.target} />
+      <CameraRig model={model} radius={r} />
+      <LabelProjector model={model} />
       <Links model={model} palette={palette} />
       {model.nodes.map((n) => (
         <ComputerNode key={n.name} node={n} mats={mats} palette={palette} />

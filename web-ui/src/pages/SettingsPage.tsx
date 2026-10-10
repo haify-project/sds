@@ -179,11 +179,9 @@ function CopilotModelCard({
               {config.embDim} dimensions
             </span>
           </div>
-          {/* One line, because a field with no input and no reason reads as a
-              bug — and more than a line is a lecture. */}
+          {/* A field with no input and no reason reads as a bug. */}
           <p className="mt-2 text-[12px] text-muted-foreground">
-            Fixed at index time. Changing it would not re-index; it would make the
-            stored vectors unreadable.
+            Set when the knowledge base was built; it cannot be changed here.
           </p>
         </div>
       </CardContent>

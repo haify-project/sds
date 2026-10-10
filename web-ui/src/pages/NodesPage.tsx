@@ -172,8 +172,21 @@ export function NodesPage() {
     }
   };
 
+  // Opening the page runs the check once, so the Readiness column says
+  // something instead of "not checked" on every row.
+  const checkedOnOpen = useRef(false);
+  useEffect(() => {
+    if (checkedOnOpen.current || online.length === 0) return;
+    checkedOnOpen.current = true;
+    void checkAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online.length]);
+
   return (
-    <div>
+    // A container, so the table-or-cards switch below follows the width this
+    // page actually has: the sidebar and a docked Copilot take theirs from the
+    // viewport, and a viewport breakpoint cannot see either.
+    <div className="@container">
       <PageHeader
         title="Nodes"
         description={
@@ -240,97 +253,101 @@ export function NodesPage() {
         </Card>
       ) : (
         <>
-        {/* Phones get the same rows as cards — a six-column table puts
-            readiness and last-seen past the right edge at 375px. */}
-        <RecordCards>
-          {list.map((node) => {
-            const isOnline = node.state === 'online';
-            const isChecking = checking.includes(node.name);
-            const result = health[node.name];
-            const readiness = result ? readinessOf(result.info) : null;
-            const isOpen = expanded === node.name;
-            const panelId = `node-card-${node.name}`;
-            return (
-              <RecordCard
-                key={node.name}
-                status={node.state}
-                open={isOpen}
-                onToggle={() => setExpanded(isOpen ? null : node.name)}
-                detailId={panelId}
-                title={
-                  <>
-                    <span className="font-mono text-[14px] font-semibold">{node.name}</span>
-                    <span className="text-[11.5px] text-muted-foreground">{node.hostname}</span>
-                    {node.name === controllerNode ? <ControllerChip /> : null}
-                  </>
-                }
-                subtitle={
-                  <span className="font-mono tabular-nums">{node.address}</span>
-                }
-                actions={
-                  <NodeMenu
+        {/* Below 760px of content the same rows are cards — a six-column
+            table there puts readiness and last-seen past the right edge. The
+            switch is on the page's own width, not the viewport's; `md:flex`
+            undoes RecordCards' viewport-based hiding. */}
+        <div className="@min-[760px]:hidden">
+          <RecordCards className="md:flex">
+            {list.map((node) => {
+              const isOnline = node.state === 'online';
+              const isChecking = checking.includes(node.name);
+              const result = health[node.name];
+              const readiness = result ? readinessOf(result.info) : null;
+              const isOpen = expanded === node.name;
+              const panelId = `node-card-${node.name}`;
+              return (
+                <RecordCard
+                  key={node.name}
+                  status={node.state}
+                  open={isOpen}
+                  onToggle={() => setExpanded(isOpen ? null : node.name)}
+                  detailId={panelId}
+                  title={
+                    <>
+                      <span className="font-mono text-[14px] font-semibold">{node.name}</span>
+                      <span className="text-[11.5px] text-muted-foreground">{node.hostname}</span>
+                      {node.name === controllerNode ? <ControllerChip /> : null}
+                    </>
+                  }
+                  subtitle={
+                    <span className="font-mono tabular-nums">{node.address}</span>
+                  }
+                  actions={
+                    <NodeMenu
+                      node={node}
+                      isDeleting={
+                        unregisterMutation.isPending &&
+                        unregisterMutation.variables === node.address
+                      }
+                      isChecking={isChecking}
+                      isOnline={isOnline}
+                      onCheck={() => healthCheckMutation.mutate(node.name)}
+                      onCopyAddress={() => copyAddress(node.address)}
+                      onUnregister={() => setConfirmNode(node)}
+                    />
+                  }
+                  facts={[
+                    {
+                      label: 'State',
+                      value: (
+                        <span className={cn(isOnline ? TONE_TEXT.ok : TONE_TEXT.bad)}>
+                          {node.state}
+                        </span>
+                      ),
+                    },
+                    {
+                      label: 'Last seen',
+                      value: (
+                        <span className="font-mono tabular-nums">{formatAge(node.lastSeen)}</span>
+                      ),
+                    },
+                    {
+                      label: 'System',
+                      value: (
+                        <span className="font-mono text-muted-foreground">
+                          {node.version || '-'}
+                        </span>
+                      ),
+                    },
+                    {
+                      label: 'Readiness',
+                      value: readiness ? (
+                        <span className={cn(result?.stale ? 'text-muted-foreground' : TONE_TEXT[readiness.tone])}>
+                          {readiness.word}
+                          {result?.stale ? ' · stale' : ''}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">not checked</span>
+                      ),
+                    },
+                  ]}
+                >
+                  <NodeDetail
                     node={node}
-                    isDeleting={
-                      unregisterMutation.isPending &&
-                      unregisterMutation.variables === node.address
-                    }
-                    isChecking={isChecking}
                     isOnline={isOnline}
+                    isChecking={isChecking}
+                    result={result}
+                    error={healthErrors[node.name]}
                     onCheck={() => healthCheckMutation.mutate(node.name)}
-                    onCopyAddress={() => copyAddress(node.address)}
-                    onUnregister={() => setConfirmNode(node)}
                   />
-                }
-                facts={[
-                  {
-                    label: 'State',
-                    value: (
-                      <span className={cn(isOnline ? TONE_TEXT.ok : TONE_TEXT.bad)}>
-                        {node.state}
-                      </span>
-                    ),
-                  },
-                  {
-                    label: 'Last seen',
-                    value: (
-                      <span className="font-mono tabular-nums">{formatAge(node.lastSeen)}</span>
-                    ),
-                  },
-                  {
-                    label: 'System',
-                    value: (
-                      <span className="font-mono text-muted-foreground">
-                        {node.version || '-'}
-                      </span>
-                    ),
-                  },
-                  {
-                    label: 'Readiness',
-                    value: readiness ? (
-                      <span className={cn(result?.stale ? 'text-muted-foreground' : TONE_TEXT[readiness.tone])}>
-                        {readiness.word}
-                        {result?.stale ? ' · stale' : ''}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">not checked</span>
-                    ),
-                  },
-                ]}
-              >
-                <NodeDetail
-                  node={node}
-                  isOnline={isOnline}
-                  isChecking={isChecking}
-                  result={result}
-                  error={healthErrors[node.name]}
-                  onCheck={() => healthCheckMutation.mutate(node.name)}
-                />
-              </RecordCard>
-            );
-          })}
-        </RecordCards>
+                </RecordCard>
+              );
+            })}
+          </RecordCards>
+        </div>
 
-        <Card className="hidden overflow-hidden md:block">
+        <Card className="hidden overflow-hidden @min-[760px]:block">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -338,7 +355,10 @@ export function NodesPage() {
                   <StatusTickHead />
                   <TableHead>Node</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>System</TableHead>
+                  {/* The widest column and the one least read; under 1000px
+                      it gives its room to the rest, and the expanded row still
+                      shows it as Version. */}
+                  <TableHead className="hidden @min-[1000px]:table-cell">System</TableHead>
                   <TableHead>Readiness</TableHead>
                   <TableHead>Last seen</TableHead>
                   <TableHead className="pr-5 text-right">

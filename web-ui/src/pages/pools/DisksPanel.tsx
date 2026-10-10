@@ -25,6 +25,7 @@ import {
 import { StatusBadge } from '@/components/StatusBadge';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { formatBytes } from './format';
 
 // The disks under the pools, with their SMART / NVMe health, and the two ways
@@ -67,62 +68,118 @@ export function DisksPanel() {
         ) : disks.length === 0 ? (
           <p className="text-sm text-muted-foreground">No disks reported.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Node</TableHead>
-                  <TableHead>Pool</TableHead>
-                  <TableHead>Disk</TableHead>
-                  <TableHead className="text-right">Used / Size</TableHead>
-                  <TableHead>Health</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {disks.map((d) => {
-                  const blocked = removeBlocked(d);
-                  return (
-                    <TableRow key={`${d.node}-${d.device}`}>
-                      <TableCell>{d.node}</TableCell>
-                      <TableCell>{d.pool}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {d.device}
-                        {d.model && <div className="font-sans text-muted-foreground">{d.model}</div>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatBytes(d.usedBytes)} / {formatBytes(d.sizeBytes)}
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <StatusBadge status={d.health} />
-                        {d.healthDetail && d.health !== 'ok' && (
-                          <div className="mt-1 text-xs whitespace-normal text-muted-foreground">{d.healthDetail}</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="space-x-1 text-right whitespace-nowrap">
-                        <Button variant="outline" size="sm" onClick={() => setAction({ kind: 'replace', disk: d })}>
-                          Replace
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={!!blocked}
-                          title={blocked || 'Move its data to the other disks, then take it out'}
-                          onClick={() => setAction({ kind: 'remove', disk: d })}
-                        >
-                          Remove
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+          // Six columns need about 760px. Where the card has less, each disk
+          // is a stacked record instead of a table scrolled sideways.
+          <div className="@container">
+            <div className="space-y-2 @min-[760px]:hidden">
+              {disks.map((d) => (
+                <div key={`${d.node}-${d.device}`} className="rounded-lg border bg-muted/40 p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <span className="font-mono text-[13px] font-medium break-all">{d.device}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {d.node} · {d.pool}
+                    </span>
+                  </div>
+                  {d.model && <div className="mt-0.5 text-xs text-muted-foreground">{d.model}</div>}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+                    <StatusBadge status={d.health} />
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatBytes(d.usedBytes)} / {formatBytes(d.sizeBytes)}
+                    </span>
+                  </div>
+                  {d.healthDetail && d.health !== 'ok' && (
+                    <div className="mt-1 text-xs text-muted-foreground">{d.healthDetail}</div>
+                  )}
+                  <DiskButtons
+                    className="mt-2.5"
+                    blocked={removeBlocked(d)}
+                    onReplace={() => setAction({ kind: 'replace', disk: d })}
+                    onRemove={() => setAction({ kind: 'remove', disk: d })}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="hidden @min-[760px]:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Node</TableHead>
+                    <TableHead>Pool</TableHead>
+                    <TableHead>Disk</TableHead>
+                    <TableHead className="text-right">Used / Size</TableHead>
+                    <TableHead>Health</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {disks.map((d) => {
+                    const blocked = removeBlocked(d);
+                    return (
+                      <TableRow key={`${d.node}-${d.device}`}>
+                        <TableCell>{d.node}</TableCell>
+                        <TableCell>{d.pool}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {d.device}
+                          {d.model && <div className="font-sans text-muted-foreground">{d.model}</div>}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatBytes(d.usedBytes)} / {formatBytes(d.sizeBytes)}
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <StatusBadge status={d.health} />
+                          {d.healthDetail && d.health !== 'ok' && (
+                            <div className="mt-1 text-xs whitespace-normal text-muted-foreground">{d.healthDetail}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DiskButtons
+                            className="justify-end"
+                            blocked={blocked}
+                            onReplace={() => setAction({ kind: 'replace', disk: d })}
+                            onRemove={() => setAction({ kind: 'remove', disk: d })}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         )}
       </CardContent>
       {action && <DiskActionDialog action={action} onClose={() => setAction(null)} />}
     </Card>
+  );
+}
+
+/** Replace and Remove, shared by the table row and the stacked record. */
+function DiskButtons({
+  blocked,
+  onReplace,
+  onRemove,
+  className,
+}: {
+  blocked: string;
+  onReplace: () => void;
+  onRemove: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex gap-1', className)}>
+      <Button variant="outline" size="sm" onClick={onReplace}>
+        Replace
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={!!blocked}
+        title={blocked || 'Move its data to the other disks, then take it out'}
+        onClick={onRemove}
+      >
+        Remove
+      </Button>
+    </div>
   );
 }
 

@@ -93,15 +93,28 @@ export function AccessPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            RBAC is not enabled on this controller. Access is governed by a
-            single shared API token. Enable{' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-              [rbac]
-            </code>{' '}
-            in <span className="font-mono">controller.toml</span> for per-user
-            roles.
-          </p>
+          {whoami?.token_auth ? (
+            <p className="text-sm text-muted-foreground">
+              Every API call needs the one shared API token. Enable{' '}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                [rbac]
+              </code>{' '}
+              in <span className="font-mono">controller.toml</span> for per-user
+              roles.
+            </p>
+          ) : (
+            <div className="rounded-md border border-status-warn/40 bg-status-warn-soft px-3 py-2.5 text-sm text-status-warn-text">
+              <p className="font-medium">API authentication is off.</p>
+              <p className="mt-1">
+                Anyone who can reach this controller can change the cluster.
+                Turn on{' '}
+                <code className="rounded bg-background/60 px-1 py-0.5 font-mono text-xs">[auth]</code>{' '}
+                for one shared token, or{' '}
+                <code className="rounded bg-background/60 px-1 py-0.5 font-mono text-xs">[rbac]</code>{' '}
+                for per-user roles, in <span className="font-mono">controller.toml</span>.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     );

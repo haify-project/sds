@@ -1,30 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
-import { toast } from 'sonner';
-import {
-  Sparkles,
-  Send,
-  X,
-  Wrench,
-  ShieldAlert,
-  Check,
-  Loader2,
-  AlertTriangle,
-} from 'lucide-react';
+import { Sparkles, Send, X, Wrench, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { api } from '@/services/api';
 import {
-  ApprovalGoneError,
-  decideApproval,
   streamChat,
   type AIApproval,
   type AIEvent,
   type AIOutcome,
   type AISuggestion,
 } from '@/lib/aiClient';
+import { ApprovalCard, OutcomeStrip, SuggestionCard } from './AICopilotCards';
+
+// The panel docks beside the page only while the page keeps at least this much
+// width; below it the panel opens over the page instead. Squeezed any further,
+// the dashboard's figures stack one word per line.
+const MIN_MAIN_WIDTH = 720;
+
+// What the empty panel offers to ask. Questions an operator actually has, each
+// one answerable from the cluster's own state.
+const EXAMPLE_QUESTIONS = [
+  'Is any replica degraded?',
+  'Which pool is fullest?',
+  'What failed over today?',
+  'Why is a resource out of sync?',
+];
 
 interface ToolTrace {
   name: string;
@@ -75,249 +76,17 @@ function StreamingMarkdown({ text }: { text: string }) {
   );
 }
 
-// executeSuggestion maps a guarded action proposal onto the existing controller
-// REST the UI already uses. Only a small, explicit allowlist is executable from
-// the copilot (O3); everything else is surfaced as manual. Writes still go
-// through the same endpoints as the normal UI buttons.
-async function executeSuggestion(s: AISuggestion): Promise<string> {
-  const p = s.params as Record<string, string | undefined>;
-  switch (s.action) {
-    case 'ha.evict':
-    case 'ha.failover': {
-      // Evicting the current primary IS a failover (demote here, promote elsewhere).
-      if (!p.resource) throw new Error('missing resource');
-      return (await api.evictHa(p.resource)).message;
-    }
-    case 'ha.create': {
-      if (!p.resource) throw new Error('missing resource');
-      return (
-        await api.makeHa(p.resource, {
-          vip: p.vip,
-          mountPoint: p.mountPoint,
-          fstype: p.fstype,
-          services: p.services ? String(p.services).split(',').map((x) => x.trim()) : undefined,
-        })
-      ).message;
-    }
-    case 'snapshot.create': {
-      if (!p.volume || !p.snapshotName) throw new Error('missing volume/snapshotName');
-      return (await api.createSnapshot(p.volume, p.snapshotName, p.node)).message;
-    }
-    default:
-      throw new Error(`"${s.action}" is not auto-executable — do it manually`);
-  }
-}
-
-function severityClass(sev: string): string {
-  switch (sev) {
-    case 'high':
-      return 'border-red-500/40 text-red-500';
-    case 'low':
-      return 'border-muted-foreground/30 text-muted-foreground';
-    default:
-      return 'border-amber-500/40 text-amber-500';
-  }
-}
-
-function severityBorder(sev: string): string {
-  switch (sev) {
-    case 'high':
-      return 'border-l-red-500';
-    case 'low':
-      return 'border-l-muted-foreground/40';
-    default:
-      return 'border-l-amber-500';
-  }
-}
-
-function SuggestionCard({ suggestion }: { suggestion: AISuggestion }) {
-  const [state, setState] = useState<'idle' | 'running' | 'done' | 'failed' | 'dismissed'>('idle');
-  const [result, setResult] = useState('');
-  const blocked = suggestion.verdict?.blocked ?? false;
-
-  const approve = async () => {
-    setState('running');
-    try {
-      const msg = await executeSuggestion(suggestion);
-      setState('done');
-      setResult(msg || 'done');
-      toast.success(`${suggestion.action} executed`);
-    } catch (e) {
-      setState('failed');
-      setResult(e instanceof Error ? e.message : String(e));
-      toast.error(`${suggestion.action} failed`);
-    }
-  };
-
-  return (
-    <div className={cn('mt-2 rounded-md border border-l-2 border-border bg-card p-3 text-xs', severityBorder(suggestion.severity))}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[0.7rem] font-medium text-muted-foreground">Suggested action</span>
-        </div>
-        <Badge variant="outline" className={cn('text-[0.65rem]', severityClass(suggestion.severity))}>
-          {suggestion.severity}
-        </Badge>
-      </div>
-
-      <div className="mt-1.5 font-mono font-medium">{suggestion.action}</div>
-      <ArgChips args={suggestion.params} />
-      {suggestion.reason && <p className="mt-1.5 text-muted-foreground">{suggestion.reason}</p>}
-
-      {blocked && (
-        <div className="mt-2 flex items-start gap-1.5 rounded bg-red-500/10 p-1.5 text-red-500">
-          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            Blocked by red-line
-            {suggestion.verdict?.ruleId ? ` (${suggestion.verdict.ruleId})` : ''}
-            {suggestion.verdict?.reason ? `: ${suggestion.verdict.reason}` : ''}
-          </span>
-        </div>
-      )}
-
-      {state === 'done' || state === 'failed' ? (
-        <div
-          className={cn(
-            'mt-2 flex items-center gap-1.5',
-            state === 'done' ? 'text-emerald-500' : 'text-red-500',
-          )}
-        >
-          {state === 'done' ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-          <span className="break-all">{result}</span>
-        </div>
-      ) : state === 'dismissed' ? (
-        <div className="mt-2 flex items-center gap-1.5 text-muted-foreground">
-          <X className="h-3.5 w-3.5" />
-          <span>Dismissed</span>
-        </div>
-      ) : (
-        <div className="mt-2 flex gap-2">
-          <Button
-            size="sm"
-            className="h-7 px-2 text-xs"
-            disabled={blocked || state === 'running'}
-            onClick={approve}
-          >
-            {state === 'running' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Approve'}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs"
-            disabled={state === 'running'}
-            onClick={() => setState('dismissed')}
-          >
-            Dismiss
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ArgChips({ args }: { args: Record<string, unknown> }) {
-  if (Object.keys(args).length === 0) return null;
-  return (
-    <div className="mt-1.5 flex flex-wrap gap-1">
-      {Object.entries(args).map(([k, v]) => (
-        <span key={k} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">
-          {k}=<span className="text-foreground">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// ApprovalCard answers a write call the agent is holding. Nothing has run yet:
-// Approve runs exactly these arguments, Reject tells the agent it may not.
-function ApprovalCard({ approval }: { approval: AIApproval }) {
-  const [state, setState] = useState<'waiting' | 'sending' | 'approved' | 'rejected' | 'gone'>('waiting');
-
-  const decide = async (approve: boolean) => {
-    setState('sending');
-    try {
-      await decideApproval(approval.id, approve);
-      setState(approve ? 'approved' : 'rejected');
-    } catch (e) {
-      if (e instanceof ApprovalGoneError) {
-        setState('gone');
-        return;
-      }
-      setState('waiting');
-      toast.error(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  return (
-    <div className="mt-2 rounded-md border border-l-2 border-border border-l-amber-500 bg-card p-3 text-xs">
-      <div className="flex items-center gap-1.5">
-        <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-        <span className="text-[0.7rem] font-medium text-muted-foreground">Approval required</span>
-      </div>
-      <div className="mt-1.5 font-mono font-medium">{approval.name}</div>
-      <ArgChips args={approval.args} />
-
-      {state === 'approved' || state === 'rejected' || state === 'gone' ? (
-        <div
-          className={cn(
-            'mt-2 flex items-center gap-1.5',
-            state === 'approved' ? 'text-emerald-500' : 'text-muted-foreground',
-          )}
-        >
-          {state === 'approved' ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-          <span>{state === 'approved' ? 'Approved' : state === 'rejected' ? 'Rejected' : 'No longer pending'}</span>
-        </div>
-      ) : (
-        <div className="mt-2 flex gap-2">
-          <Button
-            size="sm"
-            className="h-7 px-2 text-xs"
-            disabled={state === 'sending'}
-            onClick={() => decide(true)}
-          >
-            {state === 'sending' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Approve'}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs"
-            disabled={state === 'sending'}
-            onClick={() => decide(false)}
-          >
-            Reject
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function OutcomeStrip({ outcome }: { outcome: AIOutcome }) {
-  const blocked = outcome.status === 'blocked';
-  return (
-    <div
-      className={cn(
-        'flex items-start gap-1.5 rounded-md border p-2 text-xs',
-        blocked
-          ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      )}
-    >
-      {blocked ? (
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      ) : (
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      )}
-      <span>
-        <span className="font-medium">{blocked ? 'Blocked' : 'Done'}</span>
-        {outcome.text && <span className="text-foreground/80"> — {outcome.text}</span>}
-      </span>
-    </div>
-  );
-}
-
-export function AICopilot({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AICopilot({
+  open,
+  onClose,
+  reservedWidth,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Width already taken beside the page — the sidebar — so the panel can
+   *  tell whether docking would leave the page enough room. */
+  reservedWidth: number;
+}) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -335,18 +104,19 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
     return Number.isFinite(n) ? n : 400;
   });
   // On phones (< md) the Copilot is a full-screen overlay, so the fixed pixel
-  // width (and the drag-to-resize handle) only apply from md up.
-  const [isDesktop, setIsDesktop] = useState<boolean>(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(min-width: 768px)').matches
-      : true,
+  // width (and the drag-to-resize handle) only apply from md up. From md up it
+  // docks beside the page when the page keeps MIN_MAIN_WIDTH, and otherwise
+  // opens over it at its own width.
+  const [viewport, setViewport] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1280,
   );
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)');
-    const onChange = () => setIsDesktop(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    const onResize = () => setViewport(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
+  const isDesktop = viewport >= 768;
+  const docked = isDesktop && viewport - reservedWidth - width >= MIN_MAIN_WIDTH;
   const dragging = useRef(false);
   useEffect(() => {
     const clamp = (w: number) => Math.min(Math.max(w, 320), Math.round(window.innerWidth * 0.7));
@@ -386,8 +156,26 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
       return copy;
     });
 
-  const send = async () => {
-    const q = input.trim();
+  // Over the page the panel is a dialog: Escape closes it, as the backdrop
+  // does. Docked it is part of the layout and Escape belongs to the page.
+  useEffect(() => {
+    if (!open || docked) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, docked, onClose]);
+
+  // Opening the panel is asking to type into it. Not on a phone, where the
+  // keyboard would cover the example questions before they were read.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (open && isDesktop) inputRef.current?.focus();
+  }, [open, isDesktop]);
+
+  const send = async (question?: string) => {
+    const q = (question ?? input).trim();
     if (!q || busy) return;
     setInput('');
     setBusy(true);
@@ -472,113 +260,154 @@ export function AICopilot({ open, onClose }: { open: boolean; onClose: () => voi
   if (!open) return null;
 
   return (
-    <aside
-      style={isDesktop ? { width } : undefined}
-      className={cn(
-        'flex shrink-0 flex-col border-l border-border bg-background',
-        // Phone: full-screen overlay. md+: in-flow resizable side panel.
-        'fixed inset-0 z-50 w-full md:relative md:inset-auto md:z-auto md:w-auto',
+    <>
+      {!docked && isDesktop && (
+        <button
+          type="button"
+          aria-label="Close Copilot"
+          tabIndex={-1}
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/30"
+        />
       )}
-    >
-      {/* Drag handle to resize the panel — desktop only. */}
-      <div
-        onMouseDown={() => {
-          dragging.current = true;
-          document.body.style.userSelect = 'none';
-          document.body.style.cursor = 'col-resize';
-        }}
-        title="Drag to resize"
-        className="absolute -left-1 top-0 z-10 hidden h-full w-2 cursor-col-resize hover:bg-primary/30 md:block"
-      />
-      <header className="flex h-14 items-center justify-between border-b border-border px-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold tracking-tight">Haify Copilot</span>
-        </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </header>
-
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-auto p-4">
-        {messages.length === 0 && (
-          <p className="mt-8 text-center text-sm text-muted-foreground">
-            Ask about the cluster, diagnose an issue, or request a guarded action.
-          </p>
+      <aside
+        role={docked ? 'complementary' : 'dialog'}
+        aria-modal={docked ? undefined : true}
+        aria-label="Haify Copilot"
+        // Never wider than the window, whatever width was dragged to before.
+        style={isDesktop ? { width: Math.min(width, viewport) } : undefined}
+        className={cn(
+          'flex shrink-0 flex-col border-l border-border bg-background',
+          docked
+            ? 'relative'
+            : // Over the page: full screen on a phone, a sheet from the right
+              // edge above that.
+              'fixed inset-y-0 right-0 z-40 w-full shadow-2xl md:w-auto',
         )}
-        {messages.map((m) => (
-          <div key={m.id} className={cn('text-sm', m.role === 'user' ? 'text-right' : '')}>
-            {m.role === 'user' ? (
-              <div className="inline-block rounded-lg bg-primary px-3 py-2 text-primary-foreground">
-                {m.text}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {m.tools.length > 0 && (
-                  <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2">
-                    {m.tools.map((t, i) => {
-                      const summary = argSummary(t.args);
-                      return (
-                        <div key={i} className="flex items-start gap-1.5 text-xs">
-                          {t.done ? (
-                            <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
-                          ) : (
-                            <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
-                          )}
-                          <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-                          <span className="font-mono text-foreground">{t.name}</span>
-                          {summary && (
-                            <span className="truncate font-mono text-muted-foreground" title={summary}>
-                              {summary}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {m.approvals.map((a) => (
-                  <ApprovalCard key={a.id} approval={a} />
-                ))}
-                {m.text && <StreamingMarkdown text={m.text} />}
-                {m.outcome && <OutcomeStrip outcome={m.outcome} />}
-                {m.suggestions.map((s, i) => (
-                  <SuggestionCard key={i} suggestion={s} />
-                ))}
-                {m.error && (
-                  <div className="flex items-start gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-500">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span className="break-all">{m.error}</span>
-                  </div>
-                )}
-                {busy && m === messages[messages.length - 1] && !m.text && m.tools.length === 0 && (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <footer className="border-t border-border p-3">
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send();
+      >
+        {/* Drag handle to resize the panel — desktop only. */}
+        <div
+          onMouseDown={() => {
+            dragging.current = true;
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
           }}
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask the Haify Copilot…"
-            disabled={busy}
-          />
-          <Button type="submit" size="icon" disabled={busy || !input.trim()}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          title="Drag to resize"
+          className="absolute -left-1 top-0 z-10 hidden h-full w-2 cursor-col-resize hover:bg-primary/30 md:block"
+        />
+        <header className="flex h-14 items-center justify-between border-b border-border px-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold tracking-tight">Haify Copilot</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onClose}
+            aria-label="Close Copilot"
+            title={docked ? 'Close' : 'Close (Esc)'}
+          >
+            <X className="h-4 w-4" />
           </Button>
-        </form>
-      </footer>
-    </aside>
+        </header>
+
+        <div ref={scrollRef} className="flex-1 space-y-4 overflow-auto p-4">
+          {messages.length === 0 && (
+            <div className="mt-8 flex flex-col items-center gap-4">
+              <p className="text-center text-sm text-muted-foreground">
+                Ask about the cluster, diagnose an issue, or request a guarded action.
+              </p>
+              <div className="flex w-full max-w-xs flex-col gap-1.5">
+                {EXAMPLE_QUESTIONS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => send(q)}
+                    className="rounded-md border border-border bg-card px-3 py-2 text-left text-[13px] transition-colors hover:border-ring/40 hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {messages.map((m) => (
+            <div key={m.id} className={cn('text-sm', m.role === 'user' ? 'text-right' : '')}>
+              {m.role === 'user' ? (
+                <div className="inline-block rounded-lg bg-primary px-3 py-2 text-primary-foreground">
+                  {m.text}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {m.tools.length > 0 && (
+                    <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2">
+                      {m.tools.map((t, i) => {
+                        const summary = argSummary(t.args);
+                        return (
+                          <div key={i} className="flex items-start gap-1.5 text-xs">
+                            {t.done ? (
+                              <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
+                            ) : (
+                              <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
+                            )}
+                            <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                            <span className="font-mono text-foreground">{t.name}</span>
+                            {summary && (
+                              <span className="truncate font-mono text-muted-foreground" title={summary}>
+                                {summary}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {m.approvals.map((a) => (
+                    <ApprovalCard key={a.id} approval={a} />
+                  ))}
+                  {m.text && <StreamingMarkdown text={m.text} />}
+                  {m.outcome && <OutcomeStrip outcome={m.outcome} />}
+                  {m.suggestions.map((s, i) => (
+                    <SuggestionCard key={i} suggestion={s} />
+                  ))}
+                  {m.error && (
+                    <div className="flex items-start gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-500">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span className="break-all">{m.error}</span>
+                    </div>
+                  )}
+                  {busy && m === messages[messages.length - 1] && !m.text && m.tools.length === 0 && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <footer className="border-t border-border p-3">
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send();
+            }}
+          >
+            <Input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask the Haify Copilot…"
+              disabled={busy}
+            />
+            <Button type="submit" size="icon" disabled={busy || !input.trim()}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </form>
+        </footer>
+      </aside>
+    </>
   );
 }

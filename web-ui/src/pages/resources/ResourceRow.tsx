@@ -189,14 +189,21 @@ export function ResourceRow({
             >
               <Chevron className="h-3.5 w-3.5" />
             </button>
-            <span className="font-mono text-[14px] font-semibold">{resource.name}</span>
-            <ResourceChips resource={resource} />
+            <div>
+              <div className="flex items-center gap-2.5">
+                <span className="font-mono text-[14px] font-semibold">{resource.name}</span>
+                <ResourceChips resource={resource} />
+              </div>
+              <div className="mt-0.5 font-mono text-[11.5px] tabular-nums text-muted-foreground @min-[1000px]:hidden">
+                port {resource.port} · protocol {resource.protocol}
+              </div>
+            </div>
           </div>
         </TableCell>
-        <TableCell className="font-mono tabular-nums text-muted-foreground">
+        <TableCell className="hidden font-mono tabular-nums text-muted-foreground @min-[1000px]:table-cell">
           {resource.port}
         </TableCell>
-        <TableCell className="font-mono text-muted-foreground">
+        <TableCell className="hidden font-mono text-muted-foreground @min-[1000px]:table-cell">
           {resource.protocol}
         </TableCell>
         <TableCell>
@@ -221,7 +228,9 @@ export function ResourceRow({
               one-line data cells, which would keep the panel's prose on one
               line and push it out of the card. */}
           <TableCell colSpan={8} className="bg-muted/40 p-0 whitespace-normal">
-            <ResourceDetail resource={resource} onOpenDialog={onOpenDialog} />
+            <div className="py-5 pr-6 pl-11">
+              <ResourceDetail resource={resource} onOpenDialog={onOpenDialog} />
+            </div>
           </TableCell>
         </TableRow>
       )}

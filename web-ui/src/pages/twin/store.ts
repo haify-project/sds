@@ -15,6 +15,8 @@ interface TwinUI {
   labels: boolean;
   spin: boolean;
   cam: CamOp | null;
+  /** Pixels at the top of the room covered by the health strip. */
+  insetTop: number;
   /** Things an event just touched, with when, so they pulse for a while. */
   flashes: Map<string, { at: number; severity: 'warning' | 'critical' | 'info' }>;
 }
@@ -22,7 +24,7 @@ interface TwinUI {
 // On a phone every tag at once buries the picture; alarms still show.
 const wide = typeof window === 'undefined' || window.innerWidth >= 768;
 
-let state: TwinUI = { selected: null, hovered: null, labels: wide, spin: false, cam: null, flashes: new Map() };
+let state: TwinUI = { selected: null, hovered: null, labels: wide, spin: false, cam: null, insetTop: 72, flashes: new Map() };
 const subs = new Set<() => void>();
 let camSeq = 0;
 
@@ -57,3 +59,8 @@ export function useTwin<T>(pick: (s: TwinUI) => T): T {
 export const anchors = new Map<string, THREE.Object3D>();
 /** The DOM name tags, moved every frame by the label projector. */
 export const labelEls = new Map<string, HTMLElement>();
+/**
+ * Where a tag may sit, best first, when it has more than one place: a
+ * replication tag can slide along its line to get out of another's way.
+ */
+export const labelSpots = new Map<string, THREE.Vector3[]>();

@@ -16,6 +16,7 @@ export { getApiToken, setApiToken, setAuthPromptHandler } from './api/client';
 export type { ApiResponse } from './api/client';
 export type { Node, NodesResponse, HealthInfo } from './api/nodes';
 export type { Pool, PoolsResponse } from './api/pools';
+export { poolRoomGiB } from './api/pools';
 export type {
   Resource,
   Volume,

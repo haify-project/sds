@@ -2,6 +2,8 @@ import { type RequestFn } from './client';
 
 export interface RbacWhoami {
   enabled: boolean;
+  // With RBAC off: whether [auth] (one shared API token) is on.
+  token_auth?: boolean;
   user?: string;
   role?: string;
   can_admin?: boolean;

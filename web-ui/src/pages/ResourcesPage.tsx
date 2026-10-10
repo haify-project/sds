@@ -151,7 +151,10 @@ export function ResourcesPage() {
   const offsiteCount = counts.offsite;
 
   return (
-    <div>
+    // A container, so the table-or-cards switch below follows the width this
+    // page actually has: the sidebar and a docked Copilot take theirs from the
+    // viewport, and a viewport breakpoint cannot see either.
+    <div className="@container">
       <PageHeader
         className="mb-5"
         title="Resources"
@@ -270,82 +273,88 @@ export function ResourcesPage() {
             </Card>
           ) : (
             <>
-              {/* An eight-column table at 375px puts nodes, volumes and
-                  replication past the right edge. Below `md` each row is a card
-                  built from the same derived values the row below uses. */}
-              <RecordCards>
-                {visible.map((resource) => {
-                  const rep = replication.get(resource.name) ?? UNKNOWN_REPLICATION;
-                  const isOpen = expanded.includes(resource.name);
-                  return (
-                    <RecordCard
-                      key={resource.name}
-                      tone={rep.tone}
-                      open={isOpen}
-                      onToggle={() => toggleExpanded(resource.name)}
-                      detailId={`resource-card-${resource.name}`}
-                      title={
-                        <>
-                          <span className="font-mono text-[14px] font-semibold break-all">
-                            {resource.name}
+              {/* Below 840px of content the table puts volumes and replication
+                  past the right edge, so each row is a card built from the same
+                  derived values the row below uses. The switch is on the
+                  page's own width; `md:flex` undoes RecordCards' viewport-based
+                  hiding. */}
+              <div className="@min-[840px]:hidden">
+                <RecordCards className="md:flex">
+                  {visible.map((resource) => {
+                    const rep = replication.get(resource.name) ?? UNKNOWN_REPLICATION;
+                    const isOpen = expanded.includes(resource.name);
+                    return (
+                      <RecordCard
+                        key={resource.name}
+                        tone={rep.tone}
+                        open={isOpen}
+                        onToggle={() => toggleExpanded(resource.name)}
+                        detailId={`resource-card-${resource.name}`}
+                        title={
+                          <>
+                            <span className="font-mono text-[14px] font-semibold break-all">
+                              {resource.name}
+                            </span>
+                            <ResourceChips resource={resource} />
+                          </>
+                        }
+                        subtitle={
+                          <span className="font-mono tabular-nums">
+                            port {resource.port} · protocol {resource.protocol}
                           </span>
-                          <ResourceChips resource={resource} />
-                        </>
-                      }
-                      subtitle={
-                        <span className="font-mono tabular-nums">
-                          port {resource.port} · protocol {resource.protocol}
-                        </span>
-                      }
-                      actions={
-                        <ResourceActionsMenu
+                        }
+                        actions={
+                          <ResourceActionsMenu
+                            resource={resource}
+                            onSelect={(kind) =>
+                              setDialog({ resource: resource.name, kind })
+                            }
+                          />
+                        }
+                        facts={[
+                          {
+                            label: 'Nodes',
+                            value: (
+                              <NodeChips
+                                chips={nodeChips(resource, statusOf.get(resource.name))}
+                                wrap
+                              />
+                            ),
+                          },
+                          {
+                            label: 'Volumes',
+                            value: (
+                              <span className="font-mono tabular-nums">
+                                {resource.volumes.length} · {totalGbOf(resource)} GB
+                              </span>
+                            ),
+                          },
+                          { label: 'Replication', value: <ReplicationCell replication={rep} /> },
+                        ]}
+                      >
+                        <ResourceDetail
                           resource={resource}
-                          onSelect={(kind) =>
+                          onOpenDialog={(kind) =>
                             setDialog({ resource: resource.name, kind })
                           }
                         />
-                      }
-                      facts={[
-                        {
-                          label: 'Nodes',
-                          value: (
-                            <NodeChips
-                              chips={nodeChips(resource, statusOf.get(resource.name))}
-                              wrap
-                            />
-                          ),
-                        },
-                        {
-                          label: 'Volumes',
-                          value: (
-                            <span className="font-mono tabular-nums">
-                              {resource.volumes.length} · {totalGbOf(resource)} GB
-                            </span>
-                          ),
-                        },
-                        { label: 'Replication', value: <ReplicationCell replication={rep} /> },
-                      ]}
-                    >
-                      <ResourceDetail
-                        resource={resource}
-                        onOpenDialog={(kind) =>
-                          setDialog({ resource: resource.name, kind })
-                        }
-                      />
-                    </RecordCard>
-                  );
-                })}
-              </RecordCards>
+                      </RecordCard>
+                    );
+                  })}
+                </RecordCards>
+              </div>
 
-              <Card className="hidden overflow-hidden md:block">
+              <Card className="hidden overflow-hidden @min-[840px]:block">
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <StatusTickHead />
                         <TableHead>Resource</TableHead>
-                        <TableHead>Port</TableHead>
-                        <TableHead>Protocol</TableHead>
+                        {/* Under 1000px port and protocol move beneath the
+                            name rather than holding two columns of their own. */}
+                        <TableHead className="hidden @min-[1000px]:table-cell">Port</TableHead>
+                        <TableHead className="hidden @min-[1000px]:table-cell">Protocol</TableHead>
                         <TableHead>Nodes</TableHead>
                         <TableHead>Volumes</TableHead>
                         <TableHead className="w-[200px]">Replication</TableHead>

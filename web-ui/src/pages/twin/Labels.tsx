@@ -26,6 +26,9 @@ const Tag = memo(function Tag({
   const all = useTwin((s) => s.labels);
   const show = all || always || selected || hovered;
   const alarm = health === 'bad';
+  // How hard the tag holds its place when tags collide (see LabelProjector):
+  // 2 and up always show, below that a tag steps aside.
+  const rank = selected || hovered ? 4 : always && health !== 'ok' ? 3 : id.startsWith('node:') ? 2 : id.startsWith('gw:') ? 1 : 0;
   return (
     <button
       type="button"
@@ -33,6 +36,9 @@ const Tag = memo(function Tag({
         if (el) labelEls.set(id, el);
         else labelEls.delete(id);
       }}
+      data-rank={rank}
+      // Hidden until the projector has placed it, so it never flashes at the corner.
+      style={{ visibility: 'hidden' }}
       onClick={() => twin.select(id)}
       onDoubleClick={() => twin.select(id, true)}
       className={cn(
@@ -58,7 +64,7 @@ export function Labels({ model }: { model: TwinModel }) {
           id={`node:${n.name}`}
           health={n.health}
           title={n.name}
-          detail={n.health !== 'ok' ? n.state : n.controller ? 'controller' : `${n.replicas.length} replicas`}
+          detail={n.health !== 'ok' ? n.state : n.controller ? 'controller' : `${n.replicas.length} replica${n.replicas.length === 1 ? '' : 's'}`}
           always
         />
       ))}

@@ -41,9 +41,10 @@ const subHead = 'px-3.5 pt-2.5 pb-2';
 const subCell = 'h-10 px-3.5 py-0 text-[12.5px]';
 
 /**
- * A sub-table row below `md`, where four columns inside a card that is itself
- * ~290px wide is not a table but a horizontal scroll. Same values, stacked:
- * the identifier on its own line, the rest as label/value pairs.
+ * A sub-table row where its section is narrower than the table needs — inside
+ * a phone card four columns are not a table but a horizontal scroll. Same
+ * values, stacked: the identifier on its own line, the rest as label/value
+ * pairs.
  */
 function StackedRecord({
   title,
@@ -71,7 +72,7 @@ function StackedRecord({
  *  in a stacked fact than in the table column it was drawn for. */
 function SyncBar({ percent }: { percent: number }) {
   return (
-    <div className="flex min-w-[105px] items-center gap-2 md:min-w-[140px]">
+    <div className="flex min-w-[105px] items-center gap-2 @min-[480px]:min-w-[140px]">
       <div className="h-1 flex-1 overflow-hidden rounded-[2px] bg-muted">
         <div
           className="h-1 bg-status-warn transition-all"
@@ -109,13 +110,13 @@ export function ResourceDetail({
 
   if (isLoading)
     return (
-      <div className="space-y-3 md:px-11 md:py-5">
+      <div className="space-y-3">
         <Skeleton className="h-24 w-full" />
       </div>
     );
   if (isError)
     return (
-      <p className="text-sm text-destructive md:px-11 md:py-5">{(error as Error).message}</p>
+      <p className="text-sm text-destructive">{(error as Error).message}</p>
     );
   if (!status) return null;
 
@@ -125,7 +126,8 @@ export function ResourceDetail({
   const backingOf = new Map(resource.volumes.map((v) => [v.volumeId, v]));
   const volumes = status.volumes?.length ? status.volumes : resource.volumes;
 
-  // Derived once, rendered as a table at `md` and up and as stacks below it.
+  // Derived once, rendered as a table where the section has room for one and
+  // as stacks where it does not.
   // Two hand-written copies of these cells would eventually disagree about what
   // a Diskless peer or a missing backing volume reads as.
   const nodeRows = nodeStates.map(([host, st]) => {
@@ -145,7 +147,12 @@ export function ResourceDetail({
         </span>
       ),
       replication: !st.replicationState ? (
-        <span className="text-muted-foreground">—</span>
+        <span
+          className="text-muted-foreground"
+          title="The status was read on this node; the other rows are its links to them"
+        >
+          reporting node
+        </span>
       ) : isPeerSyncing(st) ? (
         <SyncBar percent={st.syncPercent ?? 0} />
       ) : (
@@ -170,12 +177,15 @@ export function ResourceDetail({
     };
   });
 
+  // The panel is a container, and so is each section: the same panel opens
+  // under a table row and inside a phone card, and whether a sub-table fits
+  // depends on the section's width, not the viewport's. The caller pads it.
   return (
-    <div className="space-y-6 md:py-5 md:pr-6 md:pl-11">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section>
+    <div className="@container space-y-6">
+      <div className="grid gap-6 @4xl:grid-cols-2">
+        <section className="@container">
           <h4 className="eyebrow mb-2.5">Per-node state</h4>
-          <div className="hidden md:block">
+          <div className="hidden @min-[480px]:block">
             <SubTable
               head={
                 <>
@@ -204,7 +214,7 @@ export function ResourceDetail({
               )}
             </SubTable>
           </div>
-          <div className="space-y-2 md:hidden">
+          <div className="space-y-2 @min-[480px]:hidden">
             {nodeRows.length === 0 ? (
               <p className="text-[12.5px] text-muted-foreground">
                 No node states reported.
@@ -225,9 +235,9 @@ export function ResourceDetail({
           </div>
         </section>
 
-        <section>
+        <section className="@container">
           <h4 className="eyebrow mb-2.5">Volumes</h4>
-          <div className="hidden md:block">
+          <div className="hidden @min-[480px]:block">
             <SubTable
               head={
                 <>
@@ -262,7 +272,7 @@ export function ResourceDetail({
               )}
             </SubTable>
           </div>
-          <div className="space-y-2 md:hidden">
+          <div className="space-y-2 @min-[480px]:hidden">
             {volumeRows.length === 0 ? (
               <p className="text-[12.5px] text-muted-foreground">No volumes.</p>
             ) : (
@@ -311,7 +321,7 @@ export function ResourceDetail({
       </div>
 
       {(status.quorum || status.wan) && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 @4xl:grid-cols-2">
           {status.quorum && <QuorumPanel quorum={status.quorum} />}
           {status.wan && <WANPanel status={status} />}
         </div>

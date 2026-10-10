@@ -240,6 +240,9 @@ function Legend() {
         <span className="h-3 w-3 rounded-full border-2 border-muted-foreground/45" /> diskless, no replica
       </span>
       <span className={item}>
+        <span className="h-3 w-3 rounded-full border-2 border-status-warn" /> guest reads it over the network
+      </span>
+      <span className={item}>
         <span className="inline-flex h-3 w-5 items-center justify-center rounded-[3px] bg-primary/[0.12]">
           <Play className="h-2.5 w-2.5 fill-current text-primary" />
         </span>

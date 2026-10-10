@@ -418,7 +418,13 @@ export function MainLayout() {
 
       {aiRequested.current && (
         <Suspense fallback={null}>
-          <AICopilot open={aiOpen} onClose={() => setAiOpen(false)} />
+          <AICopilot
+            open={aiOpen}
+            onClose={() => setAiOpen(false)}
+            // The desktop sidebar's width (w-16 / w-[244px] above): the panel
+            // docks only if the page keeps enough room beside both.
+            reservedWidth={collapsed ? 64 : 244}
+          />
         </Suspense>
       )}
     </div>

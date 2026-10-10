@@ -189,8 +189,7 @@ export function NotificationsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
           <p className="text-sm text-muted-foreground">
-            Where this cluster's alerts are delivered. Changes take effect
-            immediately — the controller is not restarted.
+            Where this cluster's alerts are delivered.
           </p>
         </div>
         <Button onClick={openCreate}>
@@ -206,9 +205,7 @@ export function NotificationsPage() {
             Channels
           </CardTitle>
           <CardDescription>
-            Send a test after adding one. Feishu, WeCom and DingTalk reply
-            HTTP 200 even when they refuse a message, so a mistyped bot URL
-            looks like it is working until the day it matters.
+            Send a test after adding a channel.
           </CardDescription>
         </CardHeader>
         <CardContent>

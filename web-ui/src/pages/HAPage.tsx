@@ -51,7 +51,7 @@ export function HAPage() {
   // Self-HA reads the same query key the card uses, so this shares one fetch.
   // The page needs it to know which promoter IS the control plane — the two
   // used to be separate cards for the same resource.
-  const { data: selfHa } = useQuery({
+  const { data: selfHa, isLoading: selfHaLoading } = useQuery({
     queryKey: ['selfha'],
     queryFn: () => api.getSelfHaStatus(),
     refetchInterval: 15000,
@@ -237,8 +237,10 @@ export function HAPage() {
                       evictMutation.mutate({ resource: r, fromNode })
                     }
                     onDelete={(r) => deleteMutation.mutate(r)}
-                    isEvicting={evictMutation.isPending}
-                    isDeleting={deleteMutation.isPending}
+                    // Until Self-HA has answered, the control plane's card looks
+                    // like any other and would offer Delete: hold the actions.
+                    isEvicting={evictMutation.isPending || selfHaLoading}
+                    isDeleting={deleteMutation.isPending || selfHaLoading}
                   />
                 ))}
           </div>

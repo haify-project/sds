@@ -24,8 +24,10 @@ export function NodeDetail({
   error?: string;
   onCheck: () => void;
 }) {
+  // A container of its own: the same panel opens under a table row and inside
+  // a card, and its grids should follow the room it was given there.
   return (
-    <div className="flex flex-col gap-4">
+    <div className="@container flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <div className="eyebrow flex items-center gap-1.5">
                   Health check
@@ -64,7 +66,7 @@ export function NodeDetail({
               ) : null}
 
               {result ? (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 @xl:grid-cols-3">
                   <HealthTile label="DRBD" ok={result.info.drbdInstalled}>
                     {result.info.drbdInstalled
                       ? result.info.drbdVersion || 'installed'
@@ -89,7 +91,7 @@ export function NodeDetail({
                 // jumps a hundred pixels the moment the check lands, under
                 // whatever the reader had already moved on to.
                 <div
-                  className="grid grid-cols-1 gap-3 md:grid-cols-3"
+                  className="grid grid-cols-1 gap-3 @xl:grid-cols-3"
                   aria-busy={isChecking}
                 >
                   {['DRBD', 'drbd-reactor', 'Resource agents'].map((label) => (
@@ -118,7 +120,7 @@ export function NodeDetail({
                 </p>
               ) : null}
 
-              <div className="grid grid-cols-2 gap-3 border-t border-border/70 pt-3.5 md:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 border-t border-border/70 pt-3.5 @md:grid-cols-3 @3xl:grid-cols-5">
                 <Fact label="Hostname" value={node.hostname || '-'} />
                 <Fact label="Address" value={node.address} />
                 <Fact label="State" value={node.state} tone={toneOf(node.state)} />

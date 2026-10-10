@@ -1,9 +1,9 @@
-import { Home, Minus, Plus, RotateCw, Tag } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { RotateCw, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TONE_BG } from '@/components/status';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { eventTime, eventTypeLabel, type ClusterEvent } from '@/services/events';
+import { ViewControls, ViewTool } from '@/components/topology3d/ViewControls';
+import { eventTime, eventTitle, type ClusterEvent } from '@/services/events';
 import type { Health, TwinModel } from './model';
 import { GATEWAY_COLOR } from './kit';
 import { twin, useTwin } from './store';
@@ -30,10 +30,21 @@ export function HealthStrip({ model, live }: { model: TwinModel; live: boolean }
   const replicationHealth: Health = k.degraded ? 'bad' : k.syncing ? 'warn' : 'ok';
   // The value says what is wrong, the caption what it is out of.
   const replication = k.degraded ? `${k.degraded} degraded` : k.syncing ? `${k.syncing} syncing` : `${k.healthy}/${k.resources}`;
-  const replicationLabel = k.degraded || k.syncing ? `of ${k.resources} resources` : 'resources in sync';
+  const replicationLabel = k.degraded || k.syncing ? `of ${k.resources} resource${k.resources === 1 ? '' : 's'}` : k.resources === 1 ? 'resource in sync' : 'resources in sync';
   const fill = Math.round(k.fill * 100);
+  // The strip covers the top of the room; the camera frames the nodes below it.
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => twin.set({ insetTop: el.offsetTop + el.offsetHeight + 8 });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <div className={cn(card, 'absolute top-3 left-3 z-20 flex flex-wrap items-center divide-x divide-border/70 max-md:right-3')}>
+    <div ref={ref} className={cn(card, 'absolute top-3 left-3 z-20 flex flex-wrap items-center divide-x divide-border/70 max-md:right-3')}>
       <Stat value={`${k.nodesOnline}/${k.nodes}`} label="nodes online" health={k.nodesOnline === k.nodes ? 'ok' : 'bad'} />
       <Stat value={replication} label={replicationLabel} health={replicationHealth} />
       <Stat value={String(k.primaries)} label="serving (primary)" />
@@ -50,41 +61,22 @@ export function HealthStrip({ model, live }: { model: TwinModel; live: boolean }
   );
 }
 
-function Tool({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: React.ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant={active ? 'default' : 'ghost'} size="icon" className="size-8" aria-label={label} aria-pressed={active} onClick={onClick}>
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 export function Toolbar() {
   const labels = useTwin((s) => s.labels);
   const spin = useTwin((s) => s.spin);
   const panel = useTwin((s) => s.selected !== null);
   return (
-    <div className={cn(card, 'absolute right-3 bottom-3 z-20 flex flex-col gap-0.5 p-1', panel && 'md:right-[316px] max-md:hidden')}>
-      <Tool label="Reset view" onClick={() => twin.camera('home')}>
-        <Home className="size-4" />
-      </Tool>
-      <Tool label="Zoom in" onClick={() => twin.camera('in')}>
-        <Plus className="size-4" />
-      </Tool>
-      <Tool label="Zoom out" onClick={() => twin.camera('out')}>
-        <Minus className="size-4" />
-      </Tool>
-      <Tool label={spin ? 'Stop turning' : 'Turn slowly'} active={spin} onClick={() => twin.set({ spin: !spin })}>
+    <ViewControls
+      onCamera={(op) => twin.camera(op)}
+      className={cn('absolute right-3 bottom-3 z-20', panel && 'md:right-[316px] max-md:hidden')}
+    >
+      <ViewTool label={spin ? 'Stop turning' : 'Turn slowly'} active={spin} onClick={() => twin.set({ spin: !spin })}>
         <RotateCw className="size-4" />
-      </Tool>
-      <Tool label={labels ? 'Hide quiet labels' : 'Show all labels'} active={labels} onClick={() => twin.set({ labels: !labels })}>
+      </ViewTool>
+      <ViewTool label={labels ? 'Hide quiet labels' : 'Show all labels'} active={labels} onClick={() => twin.set({ labels: !labels })}>
         <Tag className="size-4" />
-      </Tool>
-    </div>
+      </ViewTool>
+    </ViewControls>
   );
 }
 
@@ -152,7 +144,7 @@ export function EventFeed({ events, model }: { events: ClusterEvent[]; model: Tw
               >
                 <i className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', TONE_BG[e.status === 'resolved' ? 'ok' : SEVERITY[e.severity] ?? 'idle'])} />
                 <span className="min-w-0 flex-1">
-                  <span className="font-medium">{eventTypeLabel(e.type)}</span>
+                  <span className="font-medium">{eventTitle(e)}</span>
                   <span className="block truncate text-muted-foreground" title={e.message}>{e.message}</span>
                 </span>
                 <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{ago(eventTime(e))}</span>

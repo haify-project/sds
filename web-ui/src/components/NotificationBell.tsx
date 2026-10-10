@@ -10,7 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   eventTime,
-  eventTypeLabel,
+  eventTitle,
   subscribeEvents,
   type ClusterEvent,
 } from '@/services/events';
@@ -43,14 +43,6 @@ function writeLastReadId(id: number) {
   } catch {
     /* the count simply resets on reload */
   }
-}
-
-// eventTitle labels a row and its toast identically. A recovery has to say so
-// in the title: otherwise a cleared fault and a fresh one are both "Degraded",
-// and telling them apart means reading the whole message.
-function eventTitle(event: ClusterEvent): string {
-  const label = eventTypeLabel(event.type);
-  return event.status === 'resolved' ? `${label} resolved` : label;
 }
 
 function severityIcon(event: ClusterEvent) {
@@ -146,6 +138,26 @@ export function NotificationBell() {
     () => events.filter((e) => e.id > lastReadId).length,
     [events, lastReadId],
   );
+  // The red count is for what needs a look: unread warnings and criticals
+  // that are still firing. A fault and its recovery share type, resource and
+  // node; only the newest of each pair says whether it still stands (events
+  // are newest first). Recoveries and information only mark the bell with a dot.
+  const unreadAlerts = useMemo(() => {
+    const seen = new Set<string>();
+    let n = 0;
+    for (const e of events) {
+      const key = `${e.type}|${e.resource ?? ''}|${e.node ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (
+        e.id > lastReadId &&
+        e.status !== 'resolved' &&
+        (e.severity === 'warning' || e.severity === 'critical')
+      )
+        n++;
+    }
+    return n;
+  }, [events, lastReadId]);
 
   const newestId = events.length > 0 ? events[0].id : 0;
 
@@ -171,15 +183,25 @@ export function NotificationBell() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+          aria-label={
+            unreadAlerts > 0
+              ? `Notifications, ${unreadAlerts} unread alerts`
+              : unread > 0
+                ? 'Notifications, unread'
+                : 'Notifications'
+          }
           title="Notifications"
           className="relative rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
         >
           <Bell className="h-4 w-4" />
-          {unread > 0 && (
+          {unreadAlerts > 0 ? (
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
-              {unread > 99 ? '99+' : unread}
+              {unreadAlerts > 99 ? '99+' : unreadAlerts}
             </span>
+          ) : (
+            unread > 0 && (
+              <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-muted-foreground/60" />
+            )
           )}
         </button>
       </PopoverTrigger>

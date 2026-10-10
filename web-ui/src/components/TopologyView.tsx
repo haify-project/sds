@@ -1,17 +1,26 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { Resource, ResourceStatus } from '@/services/api';
 import { ResourceTopology } from './ResourceTopology';
+import { TopologyPlaceholder } from './topology3d/Placeholder';
 
 // A resource's replication topology, as a 3D room of computers or as the flat
 // diagram. Which one is a per-workstation preference.
 //
 // Each 3D view is a WebGL context and a browser allows only a handful, while
 // the HA page lists one topology per promoter. So a 3D view exists only while
-// it is on screen, and three.js loads only when the first one does.
+// it is on screen (a plain placeholder of the same size stands in until its
+// first frame), and three.js is fetched while the browser is idle.
 
-const ResourceTopology3D = lazy(() => import('./topology3d/ResourceTopology3D'));
+const load3d = () => import('./topology3d/ResourceTopology3D');
+const ResourceTopology3D = lazy(load3d);
+
+function preload3d() {
+  const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+  const go = () => void load3d().catch(() => undefined);
+  if (w.requestIdleCallback) w.requestIdleCallback(go);
+  else setTimeout(go, 200);
+}
 
 const MODE_KEY = 'haify.topology.mode';
 type Mode = '3d' | '2d';
@@ -32,23 +41,35 @@ const webgl = (() => {
   }
 })();
 
+/** Whether the element is on screen (or nearly). A callback ref, so it also
+ * starts watching when the element first appears, as on a switch to 3D. */
 function useOnScreen<T extends Element>() {
-  const ref = useRef<T>(null);
+  const [el, setEl] = useState<T | null>(null);
   const [on, setOn] = useState(false);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([e]) => setOn(e.isIntersecting), { rootMargin: '200px 0px' });
+    if (!el) {
+      setOn(false);
+      return;
+    }
+    const io = new IntersectionObserver(([e]) => setOn(e.isIntersecting), { rootMargin: '150px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, []);
-  return [ref, on] as const;
+  }, [el]);
+  return [setEl, on] as const;
 }
 
 export function TopologyView({ resource, status }: { resource: Resource; status: ResourceStatus }) {
   const [mode, setMode] = useState<Mode>(readMode);
   const [ref, onScreen] = useOnScreen<HTMLDivElement>();
   const show3d = webgl && mode === '3d';
+  // The canvas has drawn its first frame; until then the placeholder shows.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!onScreen || !show3d) setReady(false);
+  }, [onScreen, show3d]);
+  useEffect(() => {
+    if (show3d) preload3d();
+  }, [show3d]);
 
   const choose = (m: Mode) => {
     setMode(m);
@@ -80,16 +101,13 @@ export function TopologyView({ resource, status }: { resource: Resource; status:
         </div>
       )}
       {show3d ? (
-        <div ref={ref} className="relative h-[300px] w-full sm:h-[340px]" role="img" aria-label={`Replication topology for ${resource.name}`}>
+        <div ref={ref} className="relative h-[300px] w-full sm:h-[340px]">
+          {!ready && <TopologyPlaceholder resource={resource} status={status} />}
           {onScreen && (
-            <Suspense
-              fallback={
-                <div className="flex h-full items-center justify-center">
-                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                </div>
-              }
-            >
-              <ResourceTopology3D resource={resource} status={status} />
+            <Suspense fallback={null}>
+              <div className={cn('absolute inset-0 transition-opacity duration-300', ready ? 'opacity-100' : 'opacity-0')}>
+                <ResourceTopology3D resource={resource} status={status} onReady={() => setReady(true)} />
+              </div>
             </Suspense>
           )}
           <p className="pointer-events-none absolute bottom-1 left-0 text-[11.5px] text-muted-foreground">

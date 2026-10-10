@@ -105,7 +105,7 @@ export function PromoterCard({
                 <>
                   active on{' '}
                   <span className="font-mono text-foreground">
-                    {primaryNode}
+                    {activeMember ?? primaryNode}
                   </span>
                 </>
               ) : (
