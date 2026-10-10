@@ -122,6 +122,10 @@ phase_storage() {
 			sdsthin) n=haifythin ;;
 			sds-meta_data) n=haify-meta_data ;;
 			sds_*) n="haify_${lv#sds_}" ;;
+			# CSI snapshots: the driver recognises its own by this prefix, and
+			# their IDs in Kubernetes carry the name (re-create the
+			# VolumeSnapshotContent with the new handle).
+			sdssnap_*) n="haifysnap_${lv#sdssnap_}" ;;
 			*) continue ;;
 			esac
 			lvrename "$vg" "$lv" "$n"
@@ -208,7 +212,23 @@ phase_reactor() {
 		mv "$f" "/root/$f.pre-haify"
 		echo "reactor $f -> $n"
 	done
-	systemctl reload drbd-reactor
+	# Gateways keep their content byte for byte: their mount directory
+	# (/var/lib/sds-gateway/<r>) and target names are what the running
+	# gateway and its clients use, and drbd-reactor restarts a promoter whose
+	# configuration changed. Only the file name moves to where the controller
+	# looks; the next change the controller makes regenerates it.
+	for f in sds-nfs-*.toml sds-iscsi-*.toml sds-nvmeof-*.toml sds-smb-*.toml; do
+		[ -f "$f" ] || continue
+		n="haify-${f#sds-}"
+		cp -a "$f" "/root/$f.pre-haify"
+		mv "$f" "$n"
+		echo "reactor $f -> $n (content unchanged)"
+	done
+	# A node that only holds diskless clients (a PVE host, say) may not run
+	# drbd-reactor at all.
+	if systemctl is-active -q drbd-reactor; then
+		systemctl reload drbd-reactor
+	fi
 }
 
 phase_boot() {
