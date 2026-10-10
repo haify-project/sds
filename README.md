@@ -1,6 +1,6 @@
 # Haify
 
-A lightweight DRBD 9 storage controller written in Go. It manages storage pools, replicated volumes, iSCSI / NFS / NVMe-oF gateways and high availability, and plugs into Kubernetes (CSI), Proxmox VE, KVM (libvirt), OpenStack (Cinder, Horizon) and AI assistants (MCP).
+Haify is storage that keeps working when a server fails. It replicates volumes across nodes with DRBD 9 and provides them to Kubernetes (CSI), Proxmox VE, KVM (libvirt) and OpenStack (Cinder, Horizon), or exports them through NFS / SMB / iSCSI / NVMe-oF gateways. It also manages storage pools and high availability, and AI assistants can operate it over MCP. The controller is a lightweight program written in Go.
 
 English | [简体中文](README_cn.md) | [Documentation site](https://haify-project.github.io/haify/)
 
@@ -12,7 +12,8 @@ No agent runs on the storage nodes: one controller drives them over SSH and keep
 
 - **Pools**: LVM, LVM-thin, ZFS. SSD caching for thin pools.
 - **Resources**: replicated DRBD volumes with automatic placement, online resize, diskless clients, quorum tiebreakers, LUKS2 encryption at rest, TLS-encrypted replication.
-- **Gateways**: iSCSI, NFS, NVMe-oF, each failing over with drbd-reactor and a floating IP.
+- **Gateways**: NFS, SMB, iSCSI, NVMe-oF, each failing over with drbd-reactor and a floating IP.
+- **Applications**: PostgreSQL, MySQL / MariaDB, Redis or an S3 object store (RustFS) run on a resource and fail over with it (`haify app`).
 - **Snapshots and backups**: LVM / ZFS snapshots with retention schedules; scheduled, incremental backups to S3, SMB or WebDAV, restorable on a rebuilt or different cluster.
 - **Cross-site**: asynchronous DR replicas over a TCP tunnel that works through NAT.
 - **Integrity**: scheduled DRBD verify with resync, alerts on degraded replicas, lost Primaries, out-of-sync data and full pools.

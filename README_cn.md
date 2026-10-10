@@ -1,44 +1,45 @@
 # Haify - 软件定义存储
 
-用 Go 编写的轻量级 DRBD 9 存储控制器。管理存储池、复制卷、iSCSI / NFS / NVMe-oF 网关和高可用,并接入 Kubernetes(CSI)、Proxmox VE、KVM(libvirt)、OpenStack(Cinder、Horizon)和 AI 助手(MCP)。
+Haify 是一套坏一台服务器也照常工作的存储。它用 DRBD 9 把卷复制到多个节点，提供给 Kubernetes（CSI）、Proxmox VE、KVM（libvirt）和 OpenStack（Cinder、Horizon）使用，也可以通过 NFS / SMB / iSCSI / NVMe-oF 网关对外提供。它还管理存储池和高可用，AI 助手可以通过 MCP 操作它。控制器是一个用 Go 编写的轻量程序。
 
 [English](README.md) | 简体中文 | [文档站](https://haify-project.github.io/haify/)
 
 ![Haify 架构](docs/img/architecture-cn.png)
 
-存储节点上不跑 agent:一个控制器通过 SSH 驱动所有节点,状态存在内嵌的 BoltDB 里。控制器自己也可以跑在浮动 VIP 后面(Self-HA)。
+存储节点上不跑 agent：一个控制器通过 SSH 驱动所有节点，状态存在内嵌的 BoltDB 里。控制器自己也可以跑在浮动 VIP 后面（Self-HA）。
 
 ## 功能
 
-- **存储池**:LVM、LVM-thin、ZFS,thin 池支持 SSD 缓存。
-- **资源**:DRBD 复制卷,自动放置、在线扩容、无盘客户端、仲裁 tiebreaker、LUKS2 静态加密、复制链路 TLS 加密。
-- **网关**:iSCSI、NFS、NVMe-oF,由 drbd-reactor 加浮动 IP 做故障转移。
-- **快照与备份**:LVM / ZFS 快照和保留策略;定时、增量备份到 S3、SMB 或 WebDAV,可在重建的或另一个集群上恢复。
-- **跨站点**:通过可穿透 NAT 的 TCP 隧道做异步容灾副本。
-- **数据完整性**:定时 DRBD verify 并可重同步,对副本降级、Primary 丢失、数据不同步、存储池写满发出告警。
-- **Kubernetes**:CSI 驱动,支持快照、克隆、扩容、原始块设备和远程(无盘)访问。
-- **虚拟机**:Proxmox VE 存储插件(PVE 网页里带 Haify 面板);普通 KVM 用 libvirt 钩子;OpenStack 有 Cinder 驱动和 Horizon 面板。三者都支持热迁移。
-- **AI**:面向 Claude Code、ChatGPT 等的 MCP 服务(本地,或带角色令牌和 OAuth 的远程),以及 Web UI 里的 Copilot。
-- **运维**:令牌认证、RBAC、审计日志、TLS、Prometheus 指标,通知可发到飞书 / Slack / 企业微信 / 钉钉 / Webhook。
+- **存储池**：LVM、LVM-thin、ZFS，thin 池支持 SSD 缓存。
+- **资源**：DRBD 复制卷，支持自动放置、在线扩容、无盘客户端、仲裁 tiebreaker、LUKS2 静态加密和复制链路 TLS 加密。
+- **网关**：NFS、SMB、iSCSI、NVMe-oF，由 drbd-reactor 加浮动 IP 做故障转移。
+- **应用**：PostgreSQL、MySQL / MariaDB、Redis 或 S3 对象存储（RustFS）跑在资源上，随资源一起故障转移（`haify app`）。
+- **快照与备份**：LVM / ZFS 快照和保留策略；定时、增量备份到 S3、SMB 或 WebDAV，可在重建的或另一个集群上恢复。
+- **跨站点**：通过能穿过 NAT 的 TCP 隧道做异步容灾副本。
+- **数据完整性**：定时 DRBD verify 并可重同步；副本降级、Primary 丢失、数据不同步、存储池写满时发出告警。
+- **Kubernetes**：CSI 驱动，支持快照、克隆、扩容、原始块设备和远程（无盘）访问。
+- **虚拟机**：Proxmox VE 存储插件（PVE 网页里带 Haify 面板）；普通 KVM 用 libvirt 钩子；OpenStack 有 Cinder 驱动和 Horizon 面板。三者都支持热迁移。
+- **AI**：给 Claude Code、ChatGPT 等用的 MCP 服务（本地，或带角色令牌和 OAuth 的远程），以及 Web UI 里的 Copilot。
+- **运维**：令牌认证、RBAC、审计日志、TLS、Prometheus 指标，通知可发到飞书 / Slack / 企业微信 / 钉钉 / Webhook。
 
 ## 环境要求
 
-存储节点:Linux,装有 DRBD 9(内核模块和 `drbd-utils`)、`drbd-reactor`、`resource-agents`,以及 LVM 和/或 ZFS。完整的节点清单,以及缺了每一项会出现什么现象,见 [docs/node-prerequisites.md](docs/node-prerequisites.md)。
+存储节点：Linux，装有 DRBD 9（内核模块和 `drbd-utils`）、`drbd-reactor`、`resource-agents`，以及 LVM 和/或 ZFS。完整的节点清单，以及缺了每一项会出现什么现象，见 [docs/node-prerequisites.md](docs/node-prerequisites.md)。
 
-控制器所在主机(存储节点或单独一台机器)需要能以 root 通过 SSH 登录每个节点。
+控制器所在主机（存储节点或单独一台机器）需要能以 root 通过 SSH 登录每个节点。
 
 ## 快速上手
 
-三个节点 `node1`..`node3`,地址 `10.0.0.11`..`10.0.0.13`,各有一块空盘 `/dev/sdb`。控制器跑在 `node1` 上。
+三个节点 `node1`..`node3`，地址 `10.0.0.11`..`10.0.0.13`，各有一块空盘 `/dev/sdb`。控制器跑在 `node1` 上。
 
-**1. 获取二进制。** Release 提供 linux/amd64 压缩包,内含 `haify-controller`、`haify`、`haify-mcp`、`service-ip`、systemd unit 和 `controller.toml.example`:
+**1. 获取二进制。** Release 提供 linux/amd64 压缩包，内含 `haify-controller`、`haify`、`haify-mcp`、`service-ip`、systemd unit 和 `controller.toml.example`：
 
 ```bash
 curl -LO https://github.com/haify-project/haify/releases/latest/download/haify-linux-amd64.tar.gz
 tar -xzf haify-linux-amd64.tar.gz
 ```
 
-或从源码构建(Go 1.26+,Node.js 用于内嵌的 Web UI),`make build` 把二进制写到 `bin/`:
+或从源码构建（Go 1.26+，Node.js 用于内嵌的 Web UI），`make build` 把二进制写到 `bin/`：
 
 ```bash
 git clone https://github.com/haify-project/haify.git && cd haify
@@ -47,13 +48,13 @@ git clone https://github.com/haify-project/haify.git && cd haify
 
 `make build` 按当前主机的系统和架构构建。在别的机器上构建 Linux 二进制见 [docs/deployment-guide.md](docs/deployment-guide.md#1-build-the-binaries)。
 
-**2. SSH 与 dispatch。** 控制器通过 [dispatch](https://github.com/liliang-cn/dispatch) 库经 SSH 在节点上执行命令。在 `node1` 上以 root 生成密钥,并把公钥追加到每个节点(包括 `node1` 自己)的 `/root/.ssh/authorized_keys`:
+**2. SSH 与 dispatch。** 控制器通过 [dispatch](https://github.com/liliang-cn/dispatch) 库经 SSH 在节点上执行命令。在 `node1` 上以 root 生成密钥，并把公钥追加到每个节点（包括 `node1` 自己）的 `/root/.ssh/authorized_keys`：
 
 ```bash
 ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519
 ```
 
-然后写 `/root/.dispatch/config.toml`:
+然后写 `/root/.dispatch/config.toml`：
 
 ```toml
 [ssh]
@@ -64,9 +65,9 @@ strict_host_key = false   # 首次连接时记录未知主机的 host key
 timeout = "30s"
 ```
 
-某个节点需要不同的用户、端口或密钥时,为它单独写一节,以 IP 地址为键(`[hosts."10.0.0.12"]`),见 [docs/deployment-guide.md](docs/deployment-guide.md#3-ssh-trust-and-dispatch-config)。
+某个节点需要不同的用户、端口或密钥时，为它单独写一节，以 IP 地址为键（`[hosts."10.0.0.12"]`），见 [docs/deployment-guide.md](docs/deployment-guide.md#3-ssh-trust-and-dispatch-config)。
 
-**3. 在 `node1` 上安装并启动控制器**,以下在解压后的目录里执行(源码构建时二进制在 `bin/`,unit 文件在 `configs/`):
+**3. 在 `node1` 上安装并启动控制器**，以下在解压后的目录里执行（源码构建时二进制在 `bin/`，unit 文件在 `configs/`）：
 
 ```bash
 install -d /opt/haify/bin /etc/haify
@@ -81,9 +82,9 @@ systemctl daemon-reload
 systemctl enable --now haify-controller
 ```
 
-其余配置项都有默认值,完整列表见 [`configs/controller.toml.example`](configs/controller.toml.example)。
+其余配置项都有默认值，完整列表见 [`configs/controller.toml.example`](configs/controller.toml.example)。
 
-**4. 注册节点并检查:**
+**4. 注册节点并检查：**
 
 ```bash
 haify node register --name node1 --address 10.0.0.11
@@ -92,20 +93,20 @@ haify node register --name node3 --address 10.0.0.13
 haify health-check
 ```
 
-**5. 创建存储池**(默认是 LVM thin 池,VG 名为 `haify_pool0`):
+**5. 创建存储池**（默认是 LVM thin 池，VG 名为 `haify_pool0`）：
 
 ```bash
 haify pool create --name pool0 --nodes node1,node2,node3 --devices /dev/sdb
 ```
 
-**6. 创建复制资源**并查看同步状态:
+**6. 创建复制资源**并查看同步状态：
 
 ```bash
 haify resource create --name data --port 7001 --size 10G --nodes node1,node2 --pool pool0
 haify resource status data
 ```
 
-两个节点上的卷都是 `/dev/drbd/by-res/data/0`。要对外提供,加一个网关:
+两个节点上的卷都是 `/dev/drbd/by-res/data/0`。要对外提供，加一个网关：
 
 ```bash
 haify gateway nfs create --resource data --service-ip 10.0.0.200/24 --export-path /data
@@ -115,9 +116,9 @@ Web UI 地址是 `http://node1:3376`。控制器 Self-HA、WAN 容灾副本、�
 
 ## 集成
 
-Kubernetes:把控制器地址填进 `deploy/k8s/00-haify-controller-endpoint.yaml`,`kubectl apply -f deploy/k8s/`,然后使用 `haify-drbd` StorageClass(见 [deploy/k8s/README.md](deploy/k8s/README.md))。Proxmox VE 见 [deploy/proxmox/README.md](deploy/proxmox/README.md),KVM(libvirt)见 [deploy/libvirt/README.md](deploy/libvirt/README.md),OpenStack(Cinder、Horizon)见 [deploy/openstack/README.md](deploy/openstack/README.md),Prometheus 和 Grafana 见 [deploy/monitoring/README.md](deploy/monitoring/README.md)。
+Kubernetes：把控制器地址填进 `deploy/k8s/00-haify-controller-endpoint.yaml`，`kubectl apply -f deploy/k8s/`，然后使用 `haify-drbd` StorageClass（见 [deploy/k8s/README.md](deploy/k8s/README.md)）。Proxmox VE 见 [deploy/proxmox/README.md](deploy/proxmox/README.md)；`deploy/proxmox/bootstrap.sh` 用一条命令在现有 PVE 集群上装好 DRBD、控制器、Self-HA、插件和存储条目。KVM（libvirt）见 [deploy/libvirt/README.md](deploy/libvirt/README.md)，OpenStack（Cinder、Horizon）见 [deploy/openstack/README.md](deploy/openstack/README.md)，Prometheus 和 Grafana 见 [deploy/monitoring/README.md](deploy/monitoring/README.md)。
 
-AI 助手:
+AI 助手：
 
 ```bash
 claude mcp add haify -- haify-mcp --controller node1:3374            # 本地
@@ -131,18 +132,18 @@ claude mcp add --transport http haify https://<host>/mcp \
 
 | 端口 | 服务 |
 | ---- | ---- |
-| 3374 | gRPC(`haify`、CSI、MCP) |
+| 3374 | gRPC（`haify`、CSI、MCP） |
 | 3375 | REST |
 | 3376 | Web UI |
 | 9433 | Prometheus |
 
-控制器配置:`/etc/haify/controller.toml`。
+控制器配置：`/etc/haify/controller.toml`。
 
 ## 文档
 
 | 文档 | 内容 |
 | ---- | ---- |
-| [docs/user-guide.md](docs/user-guide.md) | 日常使用和排障,从这里开始。 |
+| [docs/user-guide.md](docs/user-guide.md) | 日常使用和排障，从这里开始。 |
 | [docs/deployment-guide.md](docs/deployment-guide.md) | 从零搭建集群。 |
 | [docs/node-prerequisites.md](docs/node-prerequisites.md) | 每个节点需要装什么。 |
 | [docs/mcp.md](docs/mcp.md) | 本地和远程 MCP、令牌、运维手册。 |

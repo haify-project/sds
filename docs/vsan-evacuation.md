@@ -2,16 +2,14 @@
 
 A runbook for moving virtual machines off a VMware vSAN cluster onto Proxmox VE
 (PVE) whose guest disks live on Haify through the
-[Haify storage plugin](../deploy/proxmox/README.md). It strings together
-documented behavior of vSphere, PVE and Haify; it is not a product feature, and
-nothing in it automates the move.
+[Haify storage plugin](../deploy/proxmox/README.md). It combines the
+documented behavior of vSphere, PVE and Haify. It is not a product feature,
+and nothing in it automates the move.
 
-**Read this first.** The steps marked **[verify]** have not been validated end
-to end on a real vSAN-to-PVE migration by the Haify project. Each is listed again
-in [What to verify on your cluster](#what-to-verify-on-your-cluster). Rehearse
+The steps marked **[verify]** have not been validated end to end on a real
+vSAN-to-PVE migration by the Haify project. Each is listed again in
+[What to verify on your cluster](#what-to-verify-on-your-cluster). Rehearse
 the whole procedure with a VM you can lose before you move one you cannot.
-
----
 
 ## Why there is a staging step
 
@@ -20,8 +18,8 @@ PVE 8.2 and later ship an ESXi import wizard: PVE connects to an ESXi host
 optionally as a *live import* that starts the VM in PVE while its disks are
 still being copied. The wizard cannot import disks that live on vSAN.
 
-The workaround is to take the disks off vSAN first, onto a datastore the wizard
-can read. Haify can provide that datastore itself, as an NFS export:
+The workaround is to move the disks off vSAN first, onto a datastore the wizard
+can read. Haify can provide that datastore as an NFS export:
 
 ```
  vSAN datastore
@@ -38,13 +36,13 @@ it is unmounted and its resource deleted.
 
 ## Target layout
 
-The common small layout is **two storage nodes plus one tiebreaker**:
+The common small layout is two storage nodes plus one tiebreaker:
 
-- **Two storage nodes** hold the replicas (a Haify pool on each) and usually
-  are the two PVE nodes running the guests. Separate compute-only PVE nodes also
+- Two storage nodes hold the replicas (a Haify pool on each) and are usually
+  the two PVE nodes running the guests. Separate compute-only PVE nodes also
   work: they attach to each disk as diskless DRBD clients
   (`deploy/proxmox/README.md`).
-- **A third machine** runs DRBD 9 and is registered as a Haify node, without a
+- A third machine runs DRBD 9 and is registered as a Haify node, without a
   pool. Haify makes it the diskless tiebreaker of every two-replica resource
   (`[resource] auto_tiebreaker`, on by default), so one storage node can fail
   without the survivor losing quorum. It can also be the corosync QDevice that
@@ -52,7 +50,7 @@ The common small layout is **two storage nodes plus one tiebreaker**:
   alone gives DRBD no quorum vote.** Without DRBD on the third machine, the
   unplanned loss of one storage node leaves every disk without quorum.
 
-What Haify deliberately leaves to PVE, because PVE already does it:
+Haify leaves to PVE what PVE already does:
 
 | Concern | Who does it |
 | ------- | ----------- |
@@ -66,41 +64,41 @@ README explains why both refuse them.
 
 ## Prerequisites
 
-- [ ] **PVE 8.2 or later** on every PVE node; source ESXi hosts **6.5 to 8.0**.
-- [ ] **A Haify cluster**, set up per the [deployment guide](deployment-guide.md):
+- [ ] PVE 8.2 or later on every PVE node; source ESXi hosts 6.5 to 8.0.
+- [ ] A Haify cluster, set up per the [deployment guide](deployment-guide.md):
       controller running, the two storage nodes and the tiebreaker registered,
       a pool on both storage nodes. `haify node list`, `haify pool list`.
-- [ ] **The Haify plugin on every PVE node** ([plugin README](../deploy/proxmox/README.md),
+- [ ] The Haify plugin on every PVE node ([plugin README](../deploy/proxmox/README.md),
       preferably the `haify-pve-plugin` package) and one `haify:` storage entry in
       `/etc/pve/storage.cfg`, here called `haify0`, with `content images` and
       `shared 1`. `preflight.sh` passes on every PVE node.
-- [ ] **NFS gateway packages on both storage nodes**: `resource-agents-extra`
+- [ ] NFS gateway packages on both storage nodes: `resource-agents-extra`
       and `nfs-kernel-server` (deployment guide, section 2).
-- [ ] **A free IP address** for the gateway's service IP, in a subnet the ESXi
+- [ ] A free IP address for the gateway's service IP, in a subnet the ESXi
       hosts' NFS VMkernel interfaces reach, with NFSv3 allowed between them
       (2049, plus rpcbind 111 and mountd if a firewall sits in between).
-- [ ] **PVE nodes reach the ESXi hosts' management interface** (HTTPS) for the
+- [ ] PVE nodes reach the ESXi hosts' management interface (HTTPS) for the
       import wizard, and the staging service IP if you use `qm disk import`.
-- [ ] **vCenter able to run Storage vMotion** for running VMs. A powered-off VM
+- [ ] vCenter can run Storage vMotion for running VMs. A powered-off VM
       moves with the same "change storage only" migration without it.
-- [ ] **Windows guests: VirtIO drivers installed while still on ESXi** (see
-      [Guest preparation](#guest-preparation)).
-- [ ] A **list of VMs in waves**, each with its provisioned disk sizes, owner
+- [ ] Windows guests have the VirtIO drivers installed while still on ESXi
+      (see [Guest preparation](#guest-preparation)).
+- [ ] A list of VMs in waves, each with its provisioned disk sizes, owner
       and acceptable downtime.
 
 ## Capacity planning
 
 Two things hold data at the same time: the staging resource and the final
-guest disks. Both are replicated, so both cost their size on **each** storage
+guest disks. Both are replicated, so each costs its size on every storage
 node.
 
-- **Staging resource**: at least the provisioned size of every disk in the
+- Staging resource: at least the provisioned size of every disk in the
   largest wave, plus headroom. ESXi often stores disks thin on an NFS
   datastore, which then needs less, but plan for the provisioned size **[verify]**.
   Do not let it fill up in the middle of a wave.
-- **Final disks on `haify0`**: each disk's provisioned size, byte for byte (see
+- Final disks on `haify0`: each disk's provisioned size, byte for byte (see
   [Sizes](#sizes-exact-by-default)).
-- **Per storage node** during a wave: staging size + the final size of every
+- Per storage node during a wave: staging size + the final size of every
   VM imported so far. On a thin pool, written data is what counts, but an
   overcommitted thin pool that fills up stops writes on every volume in it;
   watch `haify pool list`.
@@ -119,18 +117,18 @@ import then reads it back from NFS and writes it again into a replicated
 
 Do these on ESXi, before the VM's cut-over window:
 
-- **Windows: install the VirtIO drivers** (`virtio-win`) while the VM still
+- Windows: install the VirtIO drivers (`virtio-win`) while the VM still
   runs on ESXi. A Windows guest whose boot disk sits on a VirtIO SCSI
   controller without the driver does not boot. If a VM was moved without them,
   give its disk a SATA bus in PVE first, boot, install the drivers, then switch
   to VirtIO SCSI.
-- **Linux**: the NIC changes from VMware's to VirtIO, so the interface name and
+- Linux: the NIC changes from VMware's to VirtIO, so the interface name and
   MAC may change; note the network configuration so you can fix it on first
   boot. Check that the initramfs contains the `virtio_scsi`/`virtio_blk`
   drivers (most distributions include them).
-- **VMware snapshots**: delete or consolidate them first. This runbook has not
+- VMware snapshots: delete or consolidate them first. This runbook has not
   been tried with VMs that carry snapshots **[verify]**.
-- **VMware templates**: the plugin has no templates or linked clones, so a
+- VMware templates: the plugin has no templates or linked clones, so a
   template becomes an ordinary VM on `haify0`, or goes to another PVE storage.
 
 Proxmox's "Migrate to Proxmox VE" guide covers the guest side (VMware Tools,
@@ -153,7 +151,7 @@ haify gateway nfs create --resource vsanstage \
 ```
 
 - The gateway adds its small state volume itself and formats the data volume
-  (`--fs-type`, default `ext4`; `xfs` is accepted).
+  (`--fs-type`, default `ext4`; `xfs` and `btrfs` are accepted).
 - `--export-path` must be a dedicated directory (`/srv/...`); it is both the
   mount point on the active node and the path ESXi mounts.
 - The export maps every client to root (`rw,all_squash,anonuid=0,anongid=0`),
@@ -161,7 +159,7 @@ haify gateway nfs create --resource vsanstage \
   subnet (and the PVE nodes, for `qm disk import`); without the flag every
   address may mount it.
 
-**Verify:**
+To verify:
 
 ```bash
 haify gateway status --resource vsanstage    # running, on which node
@@ -183,7 +181,7 @@ esxcli storage nfs add --host 192.0.2.60 --share /srv/vsan-staging --volume-name
 
 Use NFS 3. NFS 4.1 from ESXi against the gateway has not been tried **[verify]**.
 
-**Verify:**
+To verify:
 
 ```bash
 esxcli storage nfs list          # haify-staging: Accessible true, Mounted true, Read-Only false
@@ -199,7 +197,7 @@ of the wave (PowerCLI: `Move-VM -VM <name> -Datastore haify-staging`). Running
 VMs keep running. Move a few at a time and avoid production hours: see the
 network note under [Capacity planning](#capacity-planning).
 
-**Verify:**
+To verify:
 
 - the migration task completed, and the VM's *Datastores* tab lists only
   `haify-staging`;
@@ -212,14 +210,14 @@ This step is fully reversible: Storage vMotion the VM back to vSAN.
 ## Step 4: Import into Proxmox VE
 
 Shut the VM down in vSphere first: importing a running VM copies a disk that
-is still changing. From here on, the VM's downtime runs.
+is still changing. The VM's downtime starts here.
 
 ### With the import wizard
 
 1. *Datacenter → Storage → Add → ESXi*: the ESXi host that has `haify-staging`
    mounted, with its credentials.
 2. Select that storage, the VM, *Import*.
-3. Target storage **`haify0`**; format **raw** (the only format the plugin
+3. Target storage `haify0`, format raw (the only format the plugin
    supports). Check the CPU, memory, network bridge and disk bus the wizard
    proposes (SATA for a Windows VM without VirtIO drivers).
 4. Leave *live import* off for the first VMs. Read Proxmox's notes on live
@@ -249,13 +247,13 @@ default prefix).
 
 ### Sizes: exact by default
 
-The plugin gives every new disk **exactly the size PVE asks for**, so a VMware
-disk whose size is not a whole number of GiB arrives byte for byte, and online
-Move Disk and vzdump restore onto `haify0` both work: each refuses a disk that is
-not the source's exact size. A storage set to `exactsize 0` rounds disks up to
+The plugin gives every new disk exactly the size PVE asks for, so a VMware
+disk whose size is not a whole number of GiB arrives byte for byte. Online
+Move Disk and vzdump restore onto `haify0` both depend on this, since each
+refuses a disk that is not the source's exact size. A storage set to `exactsize 0` rounds disks up to
 whole GiB instead, and loses both.
 
-**Verify:**
+To verify:
 
 ```bash
 qm config 101                              # disks on haify0, sizes as expected
@@ -333,19 +331,19 @@ After the window:
 
 ## Known limitations
 
-- **vSAN disks cannot be imported directly**, which is why the staging
-  datastore exists; a VM already on a VMFS or NFS datastore can skip steps 1-3.
-- **A storage set to `exactsize 0`** cannot take an online Move Disk or a vzdump
+- vSAN disks cannot be imported directly, which is why the staging
+  datastore exists. A VM already on a VMFS or NFS datastore can skip steps 1-3.
+- A storage set to `exactsize 0` cannot take an online Move Disk or a vzdump
   restore: see [Sizes](#sizes-exact-by-default).
-- **Windows guests** need the VirtIO drivers before cut-over, or the SATA
+- Windows guests need the VirtIO drivers before cut-over, or the SATA
   workaround.
-- **Storage vMotion loads the network** and the staging resource's
-  replication link; spread waves out.
-- **Staging capacity** limits the size of a wave.
-- **Plugin limits** apply to imported VMs: raw only, no templates or linked
+- Storage vMotion loads the network and the staging resource's
+  replication link, so spread waves out.
+- Staging capacity limits the size of a wave.
+- The plugin's limits apply to imported VMs: raw only, no templates or linked
   clones, snapshots taken by Haify on one node (plugin README,
   [Limitations](../deploy/proxmox/README.md#limitations)).
-- **Out of scope for Haify**: VM-level HA, fencing and PBS backups are PVE's.
+- VM-level HA, fencing and PBS backups are PVE's, outside Haify's scope.
 
 ## What to verify on your cluster
 

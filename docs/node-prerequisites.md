@@ -1,28 +1,27 @@
-# Haify Storage Node Prerequisites
+# Storage node prerequisites
 
-What each node needs, and what goes wrong without it. Most of these failures do
-not surface where the command was run: a drbd-reactor promoter config is
-accepted whether or not the agents and units it names exist, so a missing piece
-shows up later as a promoter that never starts.
+This page lists what each node needs and what goes wrong without it. Most of
+these failures do not show up where the command was run. drbd-reactor accepts a
+promoter config whether or not the agents and units it names exist, so a
+missing piece shows up later as a promoter that never starts.
 
-Haify checks some of this itself — gateway creation checks OCF agents,
-`targetcli` and the NFS server, `ha self enable` checks drbd-reactor and SSH, backups check
-`rclone`, `replication-tls setup` checks TLS support — but installs none of the
-packages. `haify health-check` reports DRBD, drbd-reactor (installed, running)
-and resource-agents per node.
+Haify checks some of this itself but installs none of the packages. Gateway
+creation checks OCF agents, `targetcli` and the NFS server; `ha self enable` checks drbd-reactor and SSH; backups check
+`rclone`; `replication-tls setup` checks TLS support. `haify health-check`
+reports, per node, DRBD, drbd-reactor (installed, running) and resource-agents.
 
-Package names are Ubuntu 24.04's. Installation order and controller setup:
-[`deployment-guide.md`](./deployment-guide.md).
+Package names are Ubuntu 24.04's. For installation order and controller setup,
+see [`deployment-guide.md`](./deployment-guide.md).
 
 ---
 
 ## 1. DRBD and drbd-reactor (all nodes)
 
-- DRBD 9 kernel module (`cat /proc/drbd` → `version: 9.x`)
+- DRBD 9 kernel module (`cat /proc/drbd` shows `version: 9.x`)
 - `drbd-utils` (`drbdadm`, `drbdsetup`)
 - `drbd-reactor` (`drbd-reactorctl`), enabled and running
 
-Install from LINBIT's repositories or source builds.
+Install them from LINBIT's repositories or build them from source.
 
 **With the DKMS module, install the kernel headers metapackage**
 (`linux-headers-amd64` on Debian, `linux-headers-generic` on Ubuntu), not just
@@ -30,17 +29,18 @@ the headers of the running kernel. A routine upgrade installs a newer kernel;
 without its headers DKMS builds nothing for it, and after the next reboot the
 distribution's own DRBD 8.4 module loads instead. drbd-utils then rejects every
 resource file (`Parse error: 'an option keyword' expected, but got
-'auto-promote'`) and the node rejoins nothing. `dkms status drbd` lists the
+'auto-promote'`) and the node rejoins no resource. `dkms status drbd` lists the
 kernels a module was built for; `cat /proc/drbd` must say `version: 9.x`.
 
 **Keep drbd-utils and drbd-reactor versions matched.** drbd-reactor parses
 `drbdsetup status --json <res>`. A drbd-utils too old for the reactor emits JSON
 it cannot parse; reactor logs `IGNORING resource '<res>': expected ',' or '}' at
-line NN` and stops managing that resource, so it never fails over. Seen with
-drbd-utils 9.31.0 and drbd-reactor 1.11.0; drbd-utils 9.34.0 fixed it. A
-foreground reactor appears to work, which makes it look like a systemd problem.
+line NN` and stops managing that resource, so it never fails over. This was
+seen with drbd-utils 9.31.0 and drbd-reactor 1.11.0, and drbd-utils 9.34.0
+fixed it. Run in the foreground, reactor appears to work, which makes the
+problem look like a systemd one.
 
-**A working drbd-reactor install has three pieces besides the binary:**
+Besides the binary, a working drbd-reactor install has three pieces:
 - `/etc/drbd-reactor.toml`. Without it reactor does not start
   (`Could not read config file: /etc/drbd-reactor.toml`). Minimal content:
   ```toml
@@ -48,10 +48,10 @@ foreground reactor appears to work, which makes it look like a systemd problem.
   [[log]]
   level = "info"
   ```
-- `/lib/systemd/system/ocf.rs@.service`, the template reactor runs OCF agents
-  through. Missing → `Unit ocf.rs@<...>.service not found` and the promoter
+- `/lib/systemd/system/ocf.rs@.service`, the template unit reactor runs OCF
+  agents through. If it is missing, you get `Unit ocf.rs@<...>.service not found` and the promoter
   loops.
-- the `ocf-rs-wrapper` that unit executes. Its path depends on packaging
+- The `ocf-rs-wrapper` that the unit executes. Its path depends on packaging
   (`/usr/bin/ocf-rs-wrapper` with drbd-reactor 1.12 from LINBIT's PPA on Ubuntu
   24.04, `/usr/libexec/drbd-reactor/ocf-rs-wrapper` elsewhere); read it from
   `grep ExecStart /lib/systemd/system/ocf.rs@.service`.
@@ -102,8 +102,8 @@ promoter starts with `ocf:heartbeat:Filesystem` and raises its service IP with
 mount through a systemd `.mount` unit and raise the VIP through
 `service-ip@.service` (§4).
 
-Gateway creation checks, on the resource's diskful nodes, under
-`/usr/lib/ocf/resource.d/heartbeat/`:
+Gateway creation checks for the following on the resource's diskful nodes,
+looking for the agents under `/usr/lib/ocf/resource.d/heartbeat/`:
 
 | Gateway | Agents | Tools |
 | --- | --- | --- |
@@ -115,17 +115,19 @@ Gateway creation checks, on the resource's diskful nodes, under
 
 ## 3. Gateway userspace (nodes of the exported resource)
 
-- **iSCSI**: `sudo apt-get install -y targetcli-fb python3-rtslib-fb`. The
+- iSCSI: `sudo apt-get install -y targetcli-fb python3-rtslib-fb`. The
   `iSCSITarget` agent (`implementation=lio-t`) needs the LIO userspace; without
   it `ocf.rs@target_<res>.service` exits `5/NOTINSTALLED`. LIO is the only
   implementation Haify accepts; `--implementation tgt` and `iet` are refused.
-- **NFS**: `sudo apt-get install -y nfs-kernel-server` (EL: `nfs-utils`).
-  Creation fails with `missing: rpc.nfsd exportfs` without it; otherwise the
-  gateway would be created and never start, with `ocf.rs@nfsserver_*` logging
+- NFS: `sudo apt-get install -y nfs-kernel-server` (EL: `nfs-utils`).
+  Without it, gateway creation fails with `missing: rpc.nfsd exportfs`. Without
+  that check the gateway would be created and never start, with
+  `ocf.rs@nfsserver_*` logging
   "No init script or systemd unit file detected for nfs server".
-- **NVMe-oF**: the `nvmet-*` agents work through configfs
-  (`/sys/kernel/config/nvmet`); `nvmetcli` is not used. The kernel modules are:
-  Ubuntu cloud kernels ship `nvmet-tcp` only in `linux-modules-extra`.
+- NVMe-oF: the `nvmet-*` agents work through configfs
+  (`/sys/kernel/config/nvmet`); `nvmetcli` is not used. What matters is the
+  kernel modules, and Ubuntu cloud kernels ship `nvmet-tcp` only in
+  `linux-modules-extra`:
   ```bash
   sudo apt-get install -y linux-modules-extra-$(uname -r) nvme-cli
   ```
@@ -141,8 +143,8 @@ Gateway creation checks, on the resource's diskful nodes, under
 `ha create --vip` and Self-HA raise their VIP through `service-ip@<IP>-<MASK>.service`
 (e.g. `service-ip@192.168.1.210-24.service`), which executes
 `/usr/local/bin/service-ip up|down`: it adds or removes the address on the
-detected interface and sends gratuitous ARP. Sources: `cmd/service-ip`,
-`configs/service-ip@.service`.
+detected interface and sends gratuitous ARP. The sources are `cmd/service-ip`
+and `configs/service-ip@.service`.
 
 `ha create --vip` and `ha self enable` install both on nodes that lack them,
 copying the binary found next to the controller (or `/usr/local/bin/service-ip`
@@ -155,7 +157,8 @@ sudo install -m 755 service-ip /usr/local/bin/service-ip
 sudo cp configs/service-ip@.service /etc/systemd/system/ && sudo systemctl daemon-reload
 ```
 
-Missing on a node → `Unit service-ip@<vip>.service not found`, VIP never comes up.
+If they are missing on a node, the result is `Unit service-ip@<vip>.service not found`
+and the VIP never comes up.
 
 ---
 
@@ -163,8 +166,8 @@ Missing on a node → `Unit service-ip@<vip>.service not found`, VIP never comes
 
 - `lvm2` for LVM pools; `zfsutils-linux` for ZFS pools.
 - A data disk with no filesystem, partition table or mount. Pool creation on a
-  used disk fails with `Device or resource busy`; clear it with `umount`, remove
-  it from `/etc/fstab`, `wipefs -a <dev>`.
+  used disk fails with `Device or resource busy`. To clear the disk, `umount`
+  it, remove it from `/etc/fstab` and run `wipefs -a <dev>`.
 - `thin-provisioning-tools` on nodes whose resources are backed up from thin
   pools: incremental backups run `thin_delta`.
 
@@ -179,9 +182,9 @@ A diskless quorum tiebreaker node needs no pool.
 ## 6. SSH access (controller → all nodes)
 
 The controller runs node commands over SSH (dispatch) with `sudo`, so the login
-user is root or has passwordless sudo. With Self-HA, passwordless **root** SSH
+user must be root or have passwordless sudo. With Self-HA, passwordless **root** SSH
 must work between every pair of nodes, and the key named in the dispatch config
-must exist on every node. Key setup and the dispatch config:
+must exist on every node. Key setup and the dispatch config are covered in
 [`deployment-guide.md` §3](./deployment-guide.md#3-ssh-trust-and-dispatch-config).
 
 A node whose SSH host key changed (rebuilt, or a VM that regenerates keys) is
@@ -196,7 +199,7 @@ node: `ssh-keygen -R <ip> -f /root/.ssh/known_hosts`.
 | --- | --- | --- |
 | `haify-controller` | `/opt/haify/bin/` on the controller node; on every Self-HA node | unit `configs/haify-controller.service`, config `/etc/haify/controller.toml` |
 | `service-ip` | `/usr/local/bin/` | installed automatically where needed (§4) |
-| `haify` | `/usr/local/bin/` (any node or workstation) | |
+| `haify` | `/usr/local/bin/` (any node or workstation); `/usr/bin/` from the Debian package | |
 | `haify-ai`, `haify-mcp` | `/opt/haify/bin/` on every Self-HA node | only with the AI Copilot (§10) |
 | `haify-proxy` | `/usr/local/bin/` on WAN nodes | pushed by the controller when it has a matching binary |
 
@@ -204,9 +207,9 @@ Build for the node architecture (`GOOS=linux GOARCH=amd64|arm64 CGO_ENABLED=0`).
 
 With Self-HA, `ha self enable` copies the running controller binary to the path
 the unit's `ExecStart` names on the other nodes; a node of another architecture
-needs `haify-controller-<goarch>` beside the running binary. A new build has to be
-installed there on every node, then moved onto with `haify ha evict haify-meta`
-(`deployment-guide.md` §8).
+needs `haify-controller-<goarch>` beside the running binary. To ship a new
+build, install it at that path on every node, then move the controller onto it
+with `haify ha evict haify-meta` (`deployment-guide.md` §8).
 
 ---
 
@@ -221,16 +224,17 @@ installed there on every node, then moved onto with `haify ha evict haify-meta`
 per node, then creates a node key, issues a certificate from the controller's
 replication CA, adds that CA to the trust store, writes `/etc/tlshd.conf`
 (keeping the original as `/etc/tlshd.conf.haify-orig`), loads `tls` at boot and
-enables `tlshd`. `haify resource tls <resource> on` then switches a resource.
+enables `tlshd`. `haify resource tls <resource> on` then turns encrypted
+replication on for one resource.
 
 ## 9. Other optional features
 
-- **Backups**: `rclone` on every diskful node of a backed-up resource (the
-  transfer runs on a replica node). Checked before each backup:
-  `rclone is required on <node> and was not found`.
-- **Encryption at rest** (`resource create --encrypt`, LVM pools only):
-  `cryptsetup` and the `dm-crypt` module on every node of the resource; checked
-  before anything is created.
+- Backups need `rclone` on every diskful node of a backed-up resource (the
+  transfer runs on a replica node). Haify checks for it before each backup and
+  fails with `rclone is required on <node> and was not found`.
+- Encryption at rest (`resource create --encrypt`, LVM pools only) needs
+  `cryptsetup` and the `dm-crypt` module on every node of the resource. Haify
+  checks for both before it creates anything.
 
 ---
 
@@ -244,17 +248,18 @@ cd cmd/haify-ai && GOOS=linux GOARCH=<arch> CGO_ENABLED=0 go build -o haify-ai .
 GOOS=linux GOARCH=<arch> CGO_ENABLED=0 go build -o haify-mcp ./cmd/mcp   # from the repo root
 ```
 
-- Binaries: `/opt/haify/bin/haify-ai`, `/opt/haify/bin/haify-mcp` on every node.
-- Config on the Self-HA mount so it follows failover: `/var/lib/haify/ai/haify-ai.env`
-  and `domain.toml`. Environment variables: `deployment-guide.md` §10. Leave
+- Install the binaries as `/opt/haify/bin/haify-ai` and `/opt/haify/bin/haify-mcp` on every node.
+- Keep the configuration on the Self-HA mount so it follows failover:
+  `/var/lib/haify/ai/haify-ai.env` and `domain.toml`. The environment variables
+  are listed in `deployment-guide.md` §10. Leave
   `HAIFY_AI_ADDR` at its default `127.0.0.1:7634`: the controller's UI proxies
   `/ai/` to that address on its own node, and on a non-loopback address haify-ai
   refuses to start without a token.
-- Unit `/etc/systemd/system/haify-ai.service`, written by hand (the repository
-  ships none): `EnvironmentFile=/var/lib/haify/ai/haify-ai.env`,
-  `WorkingDirectory` and `HOME` = `/var/lib/haify/ai`,
-  `ExecStart=/opt/haify/bin/haify-ai`; on every node, **disabled**: only the
-  promoter starts it.
+- Write the unit `/etc/systemd/system/haify-ai.service` by hand (the repository
+  ships none) with `EnvironmentFile=/var/lib/haify/ai/haify-ai.env`,
+  `WorkingDirectory` and `HOME` set to `/var/lib/haify/ai`, and
+  `ExecStart=/opt/haify/bin/haify-ai`. Install it on every node and leave it
+  **disabled**: only the promoter starts it.
 - To make it follow the controller, set `[self_ha] extra_services =
   ["haify-ai.service"]` before `ha self enable`. On a cluster where Self-HA is
   already enabled, add `"haify-ai.service"` after `"haify-controller.service"` in
@@ -262,9 +267,9 @@ GOOS=linux GOARCH=<arch> CGO_ENABLED=0 go build -o haify-mcp ./cmd/mcp   # from 
   `systemctl reload drbd-reactor`.
 - **Restarting it is a failover.** drbd-reactor makes every service in the
   promoter `PartOf` the `haify-meta` target, so `systemctl restart haify-ai` on the
-  active node stops the whole target — VIP and controller included — and the
-  resource is promoted again wherever the race is won (a few seconds without
-  a controller). `systemctl stop haify-ai` tears the target down the same way.
+  active node stops the whole target, VIP and controller included, and the
+  resource is promoted again on whichever node wins the race (a few seconds
+  without a controller). `systemctl stop haify-ai` tears the target down the same way.
   Install a new binary on every node first (keep the old one as
   `/opt/haify/bin/haify-ai.prev`), then move deliberately with
   `haify ha evict haify-meta`.
@@ -285,39 +290,6 @@ ssh -N -L 3376:<vip>:3376 <any-node>
 
 Tunnelling to the VIP rather than a node address keeps the tunnel working after
 the controller fails over.
-
----
-
-## Per-node checklist
-
-| Item | All nodes | Controller / Self-HA nodes | iSCSI | NFS | NVMe-oF | HA with VIP |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| DRBD 9 + drbd-utils + drbd-reactor | yes | yes | yes | yes | yes | yes |
-| `resource-agents-extra` | | | yes | yes | yes | |
-| `targetcli-fb`, `python3-rtslib-fb` | | | yes | | | |
-| `nfs-kernel-server` | | | | yes | | |
-| `linux-modules-extra` (nvmet-tcp) | | | | | yes | |
-| `service-ip` + `service-ip@.service` | | yes (auto) | | | | yes (auto) |
-| `lvm2` + data disk | diskful only | | | | | |
-| SSH key + dispatch config | | yes | | | | |
-| `haify-controller` | | yes | | | | |
-
-Optional: `rclone` (backups), `thin-provisioning-tools` (incremental backups),
-`ktls-utils` + `openssl` (encrypted replication), `cryptsetup` (encryption at
-rest), `haify-ai` + `haify-mcp` (Copilot).
-
-```bash
-for p in \
-  /usr/lib/ocf/resource.d/heartbeat/Filesystem \
-  /usr/lib/ocf/resource.d/heartbeat/IPaddr2 \
-  /usr/lib/ocf/resource.d/heartbeat/iSCSITarget \
-  /lib/systemd/system/ocf.rs@.service \
-  /etc/drbd-reactor.toml \
-  /usr/local/bin/service-ip \
-  /etc/systemd/system/service-ip@.service; do
-  test -e "$p" && echo "ok   $p" || echo "MISS $p"
-done
-```
 
 ---
 
@@ -395,11 +367,44 @@ promotes the local replica and mounts it, so the data is already there.
 Volumes are RWO (one node at a time); `WaitForFirstConsumer` with
 `--strict-topology` schedules pods only onto replica nodes.
 
-A node failure is survived when the volume keeps quorum (two replicas plus the
-diskless tiebreaker) and the workload is a Deployment or StatefulSet; a bare Pod
-is not rescheduled. Kubernetes waits 300 s before evicting from an unreachable
+A workload survives a node failure when the volume keeps quorum (two replicas
+plus the diskless tiebreaker) and the workload is a Deployment or StatefulSet; a
+bare Pod is not rescheduled. Kubernetes waits 300 s before evicting from an unreachable
 node; set short `tolerationSeconds` for `node.kubernetes.io/unreachable` and
 `node.kubernetes.io/not-ready` to fail over sooner. For PostgreSQL, set
 `PGDATA` to a subdirectory of the mount (the volume root holds `lost+found`).
 
-Smoke test: `scripts/csi-e2e.sh`.
+For a smoke test, run `scripts/csi-e2e.sh`.
+
+---
+
+## Per-node checklist
+
+| Item | All nodes | Controller / Self-HA nodes | iSCSI | NFS | NVMe-oF | HA with VIP |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| DRBD 9 + drbd-utils + drbd-reactor | yes | yes | yes | yes | yes | yes |
+| `resource-agents-extra` | | | yes | yes | yes | |
+| `targetcli-fb`, `python3-rtslib-fb` | | | yes | | | |
+| `nfs-kernel-server` | | | | yes | | |
+| `linux-modules-extra` (nvmet-tcp) | | | | | yes | |
+| `service-ip` + `service-ip@.service` | | yes (auto) | | | | yes (auto) |
+| `lvm2` + data disk | diskful only | | | | | |
+| SSH key + dispatch config | | yes | | | | |
+| `haify-controller` | | yes | | | | |
+
+Optional: `rclone` (backups), `thin-provisioning-tools` (incremental backups),
+`ktls-utils` + `openssl` (encrypted replication), `cryptsetup` (encryption at
+rest), `haify-ai` + `haify-mcp` (Copilot).
+
+```bash
+for p in \
+  /usr/lib/ocf/resource.d/heartbeat/Filesystem \
+  /usr/lib/ocf/resource.d/heartbeat/IPaddr2 \
+  /usr/lib/ocf/resource.d/heartbeat/iSCSITarget \
+  /lib/systemd/system/ocf.rs@.service \
+  /etc/drbd-reactor.toml \
+  /usr/local/bin/service-ip \
+  /etc/systemd/system/service-ip@.service; do
+  test -e "$p" && echo "ok   $p" || echo "MISS $p"
+done
+```

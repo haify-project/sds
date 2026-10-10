@@ -1,37 +1,38 @@
-# Haify Proxmox VE Storage Plugin — Design
+# Haify Proxmox VE storage plugin (design)
 
 Date: 2026-07-02 (revised 2026-07-28, 2026-10-02)
-Status: **Implemented** (`deploy/proxmox/`). Installation and usage:
+Status: implemented (`deploy/proxmox/`). Installation and usage:
 `deploy/proxmox/README.md`.
 
 ## Goal
 
 Let Proxmox VE provision VM disks on Haify (DRBD) storage so that guests get
-replication, HA restart and RAM-only live migration — the Proxmox-side
+replication, HA restart and RAM-only live migration. The plugin is the Proxmox
 counterpart of the Kubernetes CSI driver. Snapshots are a secondary
 convenience.
 
-Not supported: linked clones / templates (`create_base`, `clone_image`),
-qcow2 on DRBD, renaming volumes, activating a snapshot.
+Not supported: qcow2 on DRBD. Templates and linked clones (`create_base`,
+`clone_image`), renaming volumes and activating a snapshot are implemented
+(`Haify/Templates.pm`, `Haify/Snapshots.pm`).
 
 ## Decisions
 
-- **The plugin is Perl.** `pvedaemon` loads storage plugins in-process as Perl
+- The plugin is Perl. `pvedaemon` loads storage plugins in-process as Perl
   modules subclassing `PVE::Storage::Plugin`; there is no non-Perl plugin API.
-- **Thin Perl → haify REST.** The plugin speaks HTTP+JSON to the controller's
-  grpc-gateway (default port 3375) with `HTTP::Tiny` and `JSON::PP`, both of
-  which ship with PVE. A PVE node needs no haify binaries. The rejected
-  alternative, shelling out to `haify`, would need a version-matched Go binary
-  on every PVE node and a stable machine-readable CLI output. LINSTOR's plugin
-  takes the same REST route.
-- **HA reuses the quorum-guarded promote** (`PromoteForNode`), built for the
-  CSI hard-failover path.
-- **The one new controller capability is `SetDualPrimary`**, for the
+- The Perl side is thin and calls the Haify REST API. The plugin speaks
+  HTTP+JSON to the controller's grpc-gateway (default port 3375) with
+  `HTTP::Tiny` and `JSON::PP`, both of which ship with PVE. A PVE node needs no
+  haify binaries. The rejected alternative, shelling out to `haify`, would need
+  a version-matched Go binary on every PVE node and a stable machine-readable
+  CLI output. LINSTOR's plugin takes the same REST route.
+- HA reuses the quorum-guarded promote (`PromoteForNode`) built for the CSI
+  hard-failover path.
+- The only new controller capability is `SetDualPrimary`, for the
   live-migration window.
-- **Compute-only PVE nodes are first-class.** `activate_volume` on a node that
-  holds no replica attaches it as a diskless client first.
-- **The PVE node needs DRBD locally** (DRBD 9 module, `drbd-utils`, `sudo`,
-  registration as an haify node under its PVE node name), because it must see
+- Compute-only PVE nodes are first-class: `activate_volume` on a node that
+  holds no replica first attaches it as a diskless client.
+- The PVE node needs DRBD locally (DRBD 9 module, `drbd-utils`, `sudo`,
+  registration as a Haify node under its PVE node name), because it must see
   `/dev/drbdN`. `deploy/proxmox/preflight.sh` checks this before the first
   `alloc_image`.
 
@@ -52,20 +53,27 @@ VM on another node.
 
 ## Components (`deploy/proxmox/`)
 
-- `HaifyPlugin.pm` — storage type `haify`, `PVE::Storage::Custom::HaifyPlugin`.
-- `PVE/Storage/Custom/Haify/Client.pm` — REST client; bearer token when set;
-  several controller addresses (moves on only when a connection is refused)
-  and `https://` with certificate verification.
-- `PVE/Storage/Custom/Haify/Naming.pm` — volume ↔ resource naming and size
+- `HaifyPlugin.pm`: storage type `haify`, `PVE::Storage::Custom::HaifyPlugin`.
+- `PVE/Storage/Custom/Haify/Client.pm`: the REST client. It sends a bearer
+  token when one is set, accepts several controller addresses (moving to the
+  next only when a connection is refused), and supports `https://` with
+  certificate verification.
+- `PVE/Storage/Custom/Haify/Naming.pm`: volume ↔ resource naming and size
   conversions.
-- `PVE/Storage/Custom/Haify/Capacity.pm` — turns `GET /v1/pools` into the
+- `PVE/Storage/Custom/Haify/Capacity.pm`: turns `GET /v1/pools` into the
   storage's total/free.
-- `PVE/Storage/Custom/Haify/Migration.pm` — whether another node's Primary is a
-  live migration (and so may get the dual-primary window) or a leftover.
-- `PVE/Storage/Custom/Haify/Activation.pm` — `activate_volume` and
-  `deactivate_volume`: the migration window on two nodes, detaching a diskless
-  client on deactivate, and promoting or demoting with local `drbdadm` when no
-  controller answers.
+- `PVE/Storage/Custom/Haify/Migration.pm`: decides whether another node's
+  Primary is a live migration (and so may get the dual-primary window) or a
+  leftover.
+- `PVE/Storage/Custom/Haify/Activation.pm`: `activate_volume` and
+  `deactivate_volume`, covering the migration window on two nodes, detaching a
+  diskless client on deactivate, and promoting or demoting with local
+  `drbdadm` when no controller answers.
+- `PVE/Storage/Custom/Haify/Api.pm`: which storage API version to declare.
+- `PVE/Storage/Custom/Haify/Snapshots.pm` and `Templates.pm`: snapshots,
+  activating a snapshot, templates and linked clones.
+- `PVE/Storage/Custom/Haify/Inventory.pm` and `Token.pm`: listing the
+  storage's volumes, and reading the API token.
 - `install.sh`, `preflight.sh`, `storage.cfg.example`, Perl tests in `t/`.
 
 `storage.cfg` options:
@@ -74,29 +82,31 @@ VM on another node.
 | --- | --- |
 | `controller` (fixed) | comma-separated `host`/`host:port`, optionally `https://`; REST port defaults to 3375 |
 | `controllerca` | CA bundle for `https://` addresses; default the system store |
-| `haifypool` | haify pool for new volumes |
+| `haifypool` | Haify pool for new volumes |
 | `haifynodes` | comma-separated replica nodes; unset = auto-place by free space |
 | `replicas` | replica count for auto-placement (ignored with `haifynodes`) |
 | `storagetype` | `lvm`, `lvm-thin` or `zfs` |
-| `resourceprefix` | resource name prefix, default `pve`; give each PVE cluster sharing one haify cluster its own |
-| `apitoken` | bearer token when haify `[auth]`/`[rbac]` is enabled |
+| `resourceprefix` | resource name prefix, default `pve`; give each PVE cluster sharing one Haify cluster its own |
+| `apitoken` | bearer token when Haify `[auth]`/`[rbac]` is enabled |
 | `onnoquorum` | `suspend-io` (default) or `io-error`, sent as `on-no-quorum` and `on-no-data-accessible` for new disks |
 
-The plugin declares storage API version 11. On a PVE release whose accepted
-window does not include 11, `api()` reports the nearest accepted version.
+The plugin implements storage API versions 11 to 16 and declares the version
+the PVE release speaks when it falls in that range, 16 on anything newer. On a
+release whose accepted window lies entirely outside 11 to 16, `api()` reports
+the accepted version nearest to that range, so the storage still loads.
 
 ## Volume model
 
-- One PVE disk = one haify DRBD resource.
+- One PVE disk is one Haify DRBD resource.
 - `vm-<vmid>-disk-<n>` ↔ `<prefix>-<vmid>-<n>`. VM ids are unique per PVE
   cluster, so the mapping is collision-free and reversible; `list_images`
   needs no side table.
-- The other per-VM volumes PVE allocates — `vm-<vmid>-cloudinit`, a snapshot's
-  RAM `vm-<vmid>-state-<snap>`, a backup's `vm-<vmid>-fleece-<n>` — map to
+- The other per-VM volumes PVE allocates (`vm-<vmid>-cloudinit`, a snapshot's
+  RAM `vm-<vmid>-state-<snap>`, a backup's `vm-<vmid>-fleece-<n>`) map to
   `<prefix>-<vmid>-<name>`. `<name>` starts with a letter, so it can never read
   back as a disk number, and `<prefix>-<vmid>-disk-<n>` maps to nothing.
 - Every resource carries the label `haify.pve/managed-by=pve`: PVE decides where
-  it is Primary, so haify refuses a drbd-reactor promoter on it (`ha create`, a
+  it is Primary, so Haify refuses a drbd-reactor promoter on it (`ha create`, a
   gateway) and does not alarm when a stopped VM's disk has no Primary.
 - Format `raw` only.
 
@@ -149,12 +159,12 @@ nodes. It is a runtime-only toggle, never written to the `.res` file, so a
 reboot or `drbdadm adjust` returns the resource to single-primary even if the
 "off" call is lost.
 
-- **enable** refuses WAN resources (protocol A; two Primaries over an async
-  link corrupts data) and fails if any node rejects the command. `nodes`
-  limits it to named participants: a migration names its source and target,
-  the ends of the only connection that carries two Primaries, so a host that
-  is down elsewhere in the resource does not block it.
-- **disable** is idempotent: it tolerates a missing resource and per-node
+- Enable refuses WAN resources (protocol A; two Primaries over an async link
+  corrupts data) and fails if any node rejects the command. `nodes` limits it
+  to named participants: a migration names its source and target, the ends of
+  the only connection that carries two Primaries, so a host that is down
+  elsewhere in the resource does not block it.
+- Disable is idempotent: it tolerates a missing resource and per-node
   command failures, then verifies with `drbdsetup show` and returns an error if
   any node still has `allow-two-primaries`.
 
@@ -163,11 +173,11 @@ Exposed over gRPC, REST and the MCP tool `haify_resource_dual_primary`;
 
 ## Validation
 
-On a single PVE 8.4.11 host against a three-node haify cluster: `alloc_image` (2-node
+On a single PVE 8.4.11 host against a three-node Haify cluster: `alloc_image` (2-node
 auto-placed resource), `list_images`, `volume_resize`, `volume_snapshot`,
 `volume_snapshot_delete`, `path`, `free_image`, `status`.
 
-On a two-node PVE 9.2.5 cluster (`pve1`/`pve2`, nested VMs, both diskless haify
+On a two-node PVE 9.2.5 cluster (`pve1`/`pve2`, nested VMs, both diskless Haify
 nodes):
 
 - `activate_volume` / `deactivate_volume` on compute-only nodes; the guest boots

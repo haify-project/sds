@@ -1,20 +1,20 @@
 # KVM with libvirt
 
 A Haify volume is a block device, `/dev/drbd/by-res/<resource>/<volume>`, and
-libvirt runs a guest on it like on any other disk. What libvirt does not know
-is that DRBD lets one node write at a time: the host running a guest must hold
+libvirt runs a guest on it like on any other disk. libvirt does not know
+that DRBD lets one node write at a time: the host running a guest must hold
 its disks Primary, every other host must not, and a live migration needs both
 for a moment. Haify resources are created with `auto-promote no`, so without
 help `virsh start` fails with `Read-only file system`.
 
-Two pieces cover that:
+Two pieces handle this:
 
-- **The libvirt hook** (`haify-hook.py`) promotes and demotes a guest's disks
+- The libvirt hook (`haify-hook.py`) promotes and demotes a guest's disks
   as libvirt starts, stops and migrates it. `virsh start`, `virsh shutdown`
   and `virsh migrate --live` then work as on shared storage.
-- **`haify ha create <resource> --vm <guest>`** hands a guest to drbd-reactor:
-  it runs where the resource is Primary and is restarted on another replica
-  when that node fails.
+- `haify ha create <resource> --vm <guest>` hands a guest to drbd-reactor,
+  which runs it where the resource is Primary and restarts it on another
+  replica when that node fails.
 
 ## What the hook does
 
@@ -83,15 +83,15 @@ not notice. The hook logs to the journal as `haify-libvirt-hook`.
     ...
 ```
 
-- **The disk source is the `by-res` path.** `/dev/drbdN` works for libvirt but
-  the hook does not recognise it.
-- **`cache='none'`** (or `directsync`): libvirt refuses to live-migrate a guest
+- Use the `by-res` path as the disk source. `/dev/drbdN` works for libvirt,
+  but the hook does not recognise it.
+- Set `cache='none'` (or `directsync`): libvirt refuses to live-migrate a guest
   on shared block storage with host caching.
-- **Define the guest on every host it may run on, with the same UUID.** Two
+- Define the guest on every host it may run on, with the same UUID. Two
   `virsh define` runs of an XML without `<uuid>` give two UUIDs, and a
   migration then fails on the destination's existing definition.
-- **Give the guest a display device.** A Debian 13 cloud kernel with no video
-  device hung before its first console line in testing; adding `<video>` fixed it.
+- Give the guest a display device. In testing, a Debian 13 cloud kernel with
+  no video device hung before its first console line; adding `<video>` fixed it.
 
 ## Live migration
 
@@ -113,8 +113,8 @@ haify ha create web1 --vm web1
 The promoter runs `ocf:heartbeat:VirtualDomain` (from `resource-agents`) with
 the definition libvirt keeps in `/etc/libvirt/qemu/web1.xml`. drbd-reactor
 promotes the resource and starts the guest on one replica, and when that node
-fails another replica with quorum promotes and starts it. That is a restart,
-like after a power cut: the guest boots from what was on disk. Do not start
+fails another replica with quorum promotes and starts it. The guest restarts
+as after a power cut, booting from what was on disk. Do not start
 or migrate an HA guest with `virsh`; move it with `haify ha evict web1`.
 
 ## Tested

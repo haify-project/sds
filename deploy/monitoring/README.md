@@ -4,7 +4,7 @@ Prometheus and Grafana for one or more Haify clusters.
 
 The controller serves Prometheus metrics on `[metrics] listen_address:port`
 in `controller.toml` (defaults: enabled, `0.0.0.0`, port `9433`). Point
-Prometheus at the controller VIP so it follows a self-HA failover.
+Prometheus at the controller VIP so it follows a Self-HA failover.
 
 ```bash
 # one target per cluster: <controller VIP>:<[metrics] port>, with a cluster label
@@ -57,7 +57,7 @@ editing the JSON. Grafana picks up the file from the provisioned directory.
 | `HaifyOutOfSync` | warning | out-of-sync bytes on an Established connection for 30m (run `haify resource verify`) |
 | `HaifyThinPoolNearFull` | warning | thin pool data or metadata over 85% for 10m |
 | `HaifyThinPoolFull` | critical | thin pool data or metadata over 95% for 1m |
-| `HaifyBackupStale` | warning | no completed backup of a resource to a target for over two days |
+| `HaifyBackupStale` | warning | no completed backup of a resource to a target for over two days, for 1h |
 | `HaifyOneFailureDomain` | info | losing one fault domain would take a resource down, for 1h |
 
 No Alertmanager is included. Add one if the controller's own notification

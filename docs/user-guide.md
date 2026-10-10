@@ -1,8 +1,8 @@
 # Haify user guide
 
-This is the day-to-day guide: how to think about Haify, and how to carry out the
-things you will actually do with it. It assumes a cluster that is already up —
-see [deployment-guide.md](deployment-guide.md) to build one and
+This guide explains how Haify is organised and how to do the day-to-day work
+with it. It assumes a cluster that is already up. See
+[deployment-guide.md](deployment-guide.md) to build one and
 [node-prerequisites.md](node-prerequisites.md) for what each node needs
 installed.
 
@@ -31,7 +31,7 @@ assistants, through [`haify-mcp`](mcp.md).
 15. [Encryption](#15-encryption)
 16. [Alerts and notifications](#16-alerts-and-notifications)
 17. [Access control](#17-access-control)
-18. [Kubernetes](#18-kubernetes)
+18. [Kubernetes and virtual machines](#18-kubernetes-and-virtual-machines)
 19. [The AI Copilot](#19-the-ai-copilot)
 20. [Routine operations](#20-routine-operations)
 21. [When something is wrong](#21-when-something-is-wrong)
@@ -40,7 +40,7 @@ assistants, through [`haify-mcp`](mcp.md).
 
 ## 1. The mental model
 
-Four things, stacked:
+Haify works with four layers, each inside the one above:
 
 ```
 node          a Linux machine Haify reaches over SSH
@@ -49,17 +49,17 @@ node          a Linux machine Haify reaches over SSH
          └─ volume     one block device inside the resource (usually just one)
 ```
 
-A **resource** is the unit that matters. It is a DRBD device: you write to it on
+The **resource** is the unit you work with. It is a DRBD device: you write to it on
 one node and the bytes land on every replica synchronously. One replica is
 **Primary** (mounted, writable); the others are **Secondary** (receiving, not
-mountable). Exactly one node may be Primary at a time — that is what stops two
-machines from writing to the same filesystem and destroying it.
+mountable). Only one node may be Primary at a time, which stops two machines
+from writing to the same filesystem and destroying it.
 
 Three ideas explain most of Haify's behaviour:
 
 **Quorum.** A replica set decides by majority who is allowed to serve I/O. Two
 diskful replicas cannot form a majority when one is lost, so Haify adds a third
-member with no disk — a **tiebreaker** — that votes but stores nothing. Without
+member with no disk, a **tiebreaker**, that votes but stores nothing. Without
 it, losing either node suspends I/O on both.
 
 **Promotion is automatic, by drbd-reactor.** You do not usually run `primary`
@@ -67,12 +67,12 @@ yourself. You declare what should run with the resource (a mount, a virtual IP,
 some services) and drbd-reactor promotes a node and starts them, moving the
 whole set elsewhere if that node dies. See [High availability](#11-high-availability).
 
-**Snapshots, replicas and backups are three different things**, and only one of
-them is a backup:
+**Snapshots, replicas and backups** protect against different failures, and only
+one of them is a backup:
 
 | | Protects against | Does not protect against |
 | --- | --- | --- |
-| Replica | Losing a machine | `rm -rf` — it replicates |
+| Replica | Losing a machine | `rm -rf` (it replicates) |
 | Snapshot | `rm -rf` | Losing the pool it lives in |
 | Backup | Losing the whole cluster | Nothing else, if it is verified |
 
@@ -108,7 +108,7 @@ up to 10, backups and pool rebuilds longer); listings and status give up after
 30 seconds. A command that gives up may still be completed by the controller,
 so check with the matching `list` or `status` before running it again.
 
-Two commands worth knowing before anything else:
+Two commands to learn first:
 
 ```bash
 haify health-check          # can the controller reach every node, and is the stack installed
@@ -126,7 +126,7 @@ haify node get node1
 ```
 
 `--address` is the management IP Haify uses for SSH. If replication should run
-over a different network — a dedicated 10G link, say — name it separately:
+over a different network, such as a dedicated 10G link, name it separately:
 
 ```bash
 haify node register --name node1 --address 192.0.2.11 \
@@ -143,10 +143,10 @@ haify node label node1 zone=west --replace   # drop every other label
 ```
 
 `haify.tiebreaker=false` keeps a node from ever being picked as a resource's
-quorum tiebreaker — set it on an off-site DR node, which is not on the
+quorum tiebreaker. Set it on an off-site DR node, which is not on the
 replication network.
 
-**Renumbering** a node — its IP changed, or it moved subnet — is one command
+**Renumbering** a node (its IP changed, or it moved subnet) takes one command
 once the node answers on the new address:
 
 ```bash
@@ -159,8 +159,9 @@ registry, rewrites its entry in every node's `/etc/hosts`, and rewrites the
 DRBD config of each resource it takes part in; each reconnects on the new
 address.
 
-When several nodes changed address — a DHCP server handed every node a new
-lease — renumber them in **one** command. One at a time cannot work then: each
+When several nodes changed address, for example because a DHCP server handed
+every node a new lease, renumber them in **one** command. Renumbering them one
+at a time cannot work in that case: each
 node's resources would be rewritten through peers the controller still knows
 only by their old addresses, and when two nodes trade addresses the configs
 pass through a state with both on one.
@@ -171,8 +172,8 @@ haify node set-address node1=192.0.2.21 node2=192.0.2.22 node3=192.0.2.23
 
 If every node moved, the controller cannot start at all: its database lives on
 a DRBD resource whose peers can no longer find each other. Bring that one
-resource back by hand first — map old to new in a single pass, since a plain
-chain of `sed` substitutions breaks when two nodes trade addresses:
+resource back by hand first. Map old to new addresses in a single pass, because
+a plain chain of `sed` substitutions breaks when two nodes trade addresses:
 
 ```bash
 # on every node, with each node's old → new address
@@ -189,7 +190,7 @@ resource's config, so a resource a renumbering could not reach (a node was
 down) is fixed by repairing it afterwards.
 
 **Draining** a node marks it `maintenance` and moves every resource that is
-Primary there to another replica — do this before maintenance, not after:
+Primary there to another replica. Drain before maintenance, not after:
 
 ```bash
 haify node drain node1
@@ -210,8 +211,8 @@ How each Primary moves:
   drained, offline, nor a WAN resource's DR node. If that promote fails, the
   original node is promoted back.
 
-A resource that cannot move — no qualifying replica, a mounted volume, a
-failed eviction — stays Primary where it is; the drain moves the rest and
+A resource that cannot move (no qualifying replica, a mounted volume, a
+failed eviction) stays Primary where it is; the drain moves the rest and
 names each one it left, with the reason. The node stays drained either way.
 
 Unregistering is for a node that is never coming back:
@@ -237,8 +238,8 @@ unregistering removes the node from the registry; it does not touch the node.
 
 ## 4. Pools
 
-A pool is the storage a node contributes. Three kinds (and a fourth, thin on
-VDO, below):
+A pool is the storage a node contributes. There are three kinds, plus a fourth,
+thin on VDO, described below:
 
 ```bash
 haify pool create --name data-pool --type lvm      --nodes node1,node2 --devices /dev/sdb
@@ -248,7 +249,7 @@ haify pool list
 haify pool get --name thin-pool --node node1
 ```
 
-On the nodes the volume group (or zpool) is named with an `haify_` prefix —
+On the nodes the volume group (or zpool) is named with an `haify_` prefix:
 `thin-pool` becomes `haify_thin-pool`. Commands accept either form except
 `pool convert-thin`, which takes the prefixed name.
 
@@ -258,7 +259,7 @@ A ZFS pool compresses: OpenZFS 2.2 and later default to `lz4`.
 inherits it; dedup costs RAM on every write and only pays off for data known to
 repeat. `pool get` (and the MCP pool listing) report the algorithm and the ratio
 ZFS achieves (`Compression: zstd, 1.85x achieved`). Encrypted resources are LVM
-only, so ciphertext — which does not compress — never lands on a ZFS pool.
+only, so ciphertext, which does not compress, never lands on a ZFS pool.
 
 Omitting `--type` gives the controller's `[storage] default_pool_type`, which
 is `thin_pool` unless changed. **Choose thin unless you have a reason not to.**
@@ -274,7 +275,7 @@ haify pool convert-thin --node node1 --pool haify_data-pool
 ```
 
 It destroys that node's copy and resyncs it in full from the peers. The resource
-keeps serving throughout — the node goes diskless for the duration. It refuses
+keeps serving throughout; the node is diskless for the duration. It refuses
 to start if the node holds a Primary, if a peer is not `UpToDate`, if a resync
 is already running, or if this is one of only two diskful copies.
 
@@ -322,7 +323,7 @@ the node, so they survive a controller restart or failover. When a job ends,
 it raises a `pool.disk_moved` event. A move takes about as long as reading the
 disk once.
 
-**Keeping thin pools from filling.** A full thin pool is not a slow failure:
+**Keeping thin pools from filling.** A full thin pool fails at once:
 writes to it fail, DRBD drops the disk, and the resource carries on with one
 replica fewer. Three things in `[storage.thin]` prevent that:
 
@@ -361,8 +362,8 @@ haify pool delete --name data-pool --node node1
 **Thin pools on VDO (`--type lvm-thin-vdo`).** The thin pool's data area sits
 on a VDO volume, so everything written to it is deduplicated and compressed;
 thin volumes, thin snapshots and DRBD above it behave as on a plain thin pool.
-It suits data that repeats — VM images built from the same template, backups,
-logs.
+It suits data that repeats, such as VM images built from the same template,
+backups and logs.
 
 ```bash
 haify pool create --name dedup --type lvm-thin-vdo --nodes node1,node2 --devices /dev/sdf
@@ -371,14 +372,14 @@ haify pool create --name dedup --type lvm-thin-vdo --nodes node1,node2 --devices
 Each node needs the dm-vdo kernel module (kernel 6.9 or later, or kmod-kvdo on
 EL), `vdoformat` from the `vdo` package, and lvm2 2.03.24 or later
 (`--pooldatavdo`); `pool create` checks for all three before it touches the
-disk. Ubuntu 24.04's GA kernel does not ship dm-vdo — use the HWE kernel.
+disk. Ubuntu 24.04's GA kernel does not ship dm-vdo; use the HWE kernel.
 
 What to know before choosing it:
 
 - **Physical space is the figure to watch.** The thin pool's usage is the
   logical space handed out; the VDO pool under it fills at whatever rate
   dedup and compression leave. When VDO runs out of physical space, writes
-  fail with I/O errors although the thin pool still shows room — and DRBD
+  fail with I/O errors although the thin pool still shows room, and DRBD
   drops the disk. `pool get` shows both (`VDO: 41% physical used, 63% saved`),
   and `pool.vdo_physical_near_full` / `pool.vdo_physical_full` fire at the
   same thresholds as the thin pool alerts.
@@ -408,9 +409,9 @@ its thin volumes, snapshots not counted) is refused there, and auto-placement
 passes the node over. 0, the default, leaves thin pools unlimited.
 
 Projects are resources sharing a label (`project=<name>` by default,
-`[quota] project_label`). A project's quota caps the total size of its
-resources — counted once each, as asked for, not per replica — and their
-number:
+`[quota] project_label`). A project's quota caps the number of its resources
+and their total size, each counted once at the size asked for, not per
+replica:
 
 ```toml
 [quota]
@@ -429,7 +430,7 @@ haify resource create --name a1 --size 100G --label project=team-a ...
 
 ## 5. Resources — your storage
 
-The minimum:
+The simplest form:
 
 ```bash
 haify resource create --name db --size 100G --port 7000 --nodes node1,node2
@@ -460,8 +461,8 @@ haify resource create --name db --size 100G --port 7000 --replicas 3 \
 `--nodes` is omitted. Placement considers only online nodes that host the
 requested pool and have room for the volume in it.
 
-**Fault domains.** Nodes that fail together — VMs on one physical host, servers
-in one rack — should not hold two copies of the same data. Tell Haify which
+**Fault domains.** Nodes that fail together (VMs on one physical host, servers
+in one rack) should not hold two copies of the same data. Tell Haify which
 nodes share a machine with a `host` label:
 
 ```bash
@@ -472,7 +473,7 @@ haify node label node3 host=hv2
 
 Automatic placement, `resource profile adjust` and the CSI driver then put
 replicas on different hosts before they look at free space, and the quorum
-tiebreaker goes to a host none of the replicas is on — a tiebreaker beside a
+tiebreaker goes to a host none of the replicas is on. A tiebreaker beside a
 replica falls with it and takes the survivor's quorum along. `add-replica` uses
 the node you name and does not check the label. When the cluster cannot spread
 (all VMs on one machine), the resource is still created and the CLI prints a
@@ -485,7 +486,7 @@ the label counts as its own domain, so an unlabelled cluster places exactly as
 before. `--replicas-on-different host` makes the spread a hard requirement.
 
 **Profiles** group resources that should be alike. A resource created with
-`--profile` — or attached later — is a member, and what is set on the profile
+`--profile`, or attached to it later, is a member, and what is set on the profile
 reaches every member:
 
 ```bash
@@ -545,7 +546,7 @@ A Kubernetes volume also carries `haify.csi/pvc=<namespace>/<name>`, its claim:
 the web UI shows it in place of the `kubernetes` tag, alerts name it after the
 resource, and the resource search finds the volume by it.
 
-**Storage type** follows the pool automatically for LVM — a thin pool gets a
+**Storage type** follows the pool automatically for LVM: a thin pool gets a
 thin volume without your having to say so. ZFS is the exception and must be
 named: `--storage-type zfs`.
 
@@ -577,8 +578,8 @@ haify resource secondary db node1
 `promote`/`demote` are the same as `primary`/`secondary`; `primary --force`
 promotes a node whose data DRBD does not consider up to date.
 
-For anything that should survive a node dying, do **not** mount it by hand —
-declare it as HA instead and let drbd-reactor do the mounting. See
+For anything that should survive a node dying, do **not** mount it by hand.
+Declare it as HA instead and let drbd-reactor do the mounting. See
 [High availability](#11-high-availability).
 
 To see what you have:
@@ -593,7 +594,7 @@ Read `status` like this: exactly one node should be `Primary`, every node's disk
 should be `UpToDate`, and replication should be `Established`. Anything else is
 covered in [When something is wrong](#21-when-something-is-wrong).
 
-**Diskless clients** let a node mount a resource without storing a copy — it
+**Diskless clients** let a node mount a resource without storing a copy; it
 reads and writes over the DRBD network:
 
 ```bash
@@ -604,7 +605,7 @@ haify resource mount db 0 /mnt/db --node node3
 haify resource diskless detach db node3
 ```
 
-Useful for a compute node that needs the data but has no disks to spare. It is
+This suits a compute node that needs the data but has no disks to spare. It is
 still bound by the one-Primary-at-a-time rule. Attaching the node that is the
 resource's tiebreaker turns it into a client; it keeps its quorum vote.
 
@@ -616,7 +617,7 @@ haify resource dual-primary db on
 haify resource dual-primary db off
 ```
 
-It is not a way to use one volume from two machines — an ordinary filesystem
+Do not use it to share one volume between two machines: an ordinary filesystem
 mounted twice is corrupted. WAN resources are refused. The setting is
 runtime-only: a reboot or `drbdadm adjust` returns the resource to
 single-primary.
@@ -677,7 +678,7 @@ be started again and continues from the nodes not yet moved. The volume's
 snapshots on the old pool are deleted with it, so take a backup first if you
 need them.
 
-A resource's promoters — its `ha create` config and its gateway — follow the
+A resource's promoters (its `ha create` config and its gateway) follow the
 replicas. `add-replica` first checks that the new node could run them (the OCF
 agents and services the chain starts, the gateway's tools) and refuses
 otherwise; once the replica is in, it gets a copy of each, plus the mount unit
@@ -699,8 +700,8 @@ the replica. After a failed removal, check that every node's
 md5sum /etc/drbd.d/db.res
 ```
 
-Mismatched files mean one node has a stale view — copy the correct one over and
-`drbdadm adjust db`. Removal also frees the leaver's bitmap slot on the
+Mismatched files mean one node has a stale view: copy the correct one over and
+run `drbdadm adjust db`. Removal also frees the leaver's bitmap slot on the
 survivors (`drbdsetup forget-peer`), which an add-replica later needs.
 
 **A node that is gone for good.** A normal removal has to reach the leaving
@@ -715,19 +716,19 @@ config without it, are adjusted, and forget its slot; the registry drops it.
 It is refused while node3 answers over SSH, while any survivor is still
 connected to it over DRBD (cut off from the controller is not gone), and
 unless the survivors still hold quorum and an UpToDate copy without it. One
-remaining diskful copy is enough, since node3's is already lost — add a
+remaining diskful copy is enough, since node3's is already lost; add a
 replica afterwards. node3 keeps its volume and its old config: if it ever
 comes back, run `drbdadm down db` there and delete
 `/etc/drbd.d/db.res`, its `haify-*-db.toml` promoters and its volume before it
 rejoins anything.
 
-If the survivors lost quorum with it — two replicas and no tiebreaker — give
+If the survivors lost quorum with it (two replicas and no tiebreaker), give
 them one first: `haify ha set-tiebreaker db <node>` works with a member that is
 gone (no SSH, and no survivor connected to it), skipping it. Then remove it
 with `--lost`.
 
-`resource repair <resource>` rewrites the config on every participant —
-replicas, tiebreaker, diskless clients — so they agree on the volumes and the
+`resource repair <resource>` rewrites the config on every participant
+(replicas, tiebreaker, diskless clients) so they agree on the volumes and the
 registry's node addresses, then runs `drbdadm adjust`. Use it when a tiebreaker
 or client of a multi-volume resource stays `Connecting` and its kernel log says
 a packet arrived "for volume N, which is not configured locally". It then puts
@@ -784,8 +785,8 @@ haify rebalance --apply          # run it, one move at a time
 each node waits a little longer the further down the list it is. With
 `--policy start-only` (drbd-reactor 1.9+) the order only picks where it
 starts; `always` also moves it back to a more preferred node that returns,
-which is a failover of its own. It is a preference, not a fence: DRBD quorum,
-not this, is what prevents split brain.
+which is a failover of its own. The order is only a preference: DRBD quorum is
+what prevents split brain.
 
 ```bash
 haify ha set-preferred db --nodes node1,node2 --policy start-only
@@ -801,7 +802,7 @@ do (`node.evicted` events). It acts only when all of this holds:
 - the node has been offline for `after_minutes` (default 60; the time is kept
   across controller failovers, and `haify node list` shows it);
 - at most `max_offline_percent` (default 34) of the nodes are offline, and the
-  controller reaches a majority — otherwise it may be the one cut off;
+  controller reaches a majority (otherwise it may be the one cut off);
 - for each resource, the `--lost` guard above: the node does not answer over
   SSH, no surviving member is connected to it over DRBD, and the survivors
   hold quorum and an UpToDate copy;
@@ -821,7 +822,7 @@ haify node lost node3                # or: it is not coming back
 ```
 
 `node restore` takes down, on that node only, every resource it is no longer a
-member of, and deletes its config, promoter configs and the volumes haify named
+member of, and deletes its config, promoter configs and the volumes Haify named
 after it. `node lost` removes every replica the node still holds the `--lost`
 way and keeps it evicted. Both are on the two-person approval list.
 
@@ -830,7 +831,7 @@ way and keeps it evicted. Both are on the two-person approval list.
 ## 8. Snapshots
 
 Snapshots live in the same pool as the resource. They are instant and cheap on a
-thin pool, and they are **not a backup** — losing the pool loses both.
+thin pool, and they are **not a backup**: losing the pool loses both.
 
 ```bash
 haify resource snapshot create --resource db --name before-upgrade
@@ -839,9 +840,9 @@ haify resource snapshot restore --resource db --name before-upgrade
 haify resource snapshot delete --resource db --name before-upgrade
 ```
 
-A manual snapshot is taken on **one node** — `--node`, by default the
-resource's first replica — of volume 0's backing volume, in the resource's own
-pool (`--pool` overrides). Use the same `--node` for `list`, `restore` and
+A manual snapshot covers volume 0's backing volume on **one node** (`--node`,
+by default the resource's first replica), in the resource's own pool (`--pool`
+overrides). Use the same `--node` for `list`, `restore` and
 `delete`. On a thin volume it is a thin snapshot; on a thick one it reserves a
 copy-on-write area of `--size` (default `1G`). A ZFS resource needs
 `--storage-type zfs` on each of these commands.
@@ -865,8 +866,8 @@ haify resource snapshot replicated rollback --resource db --name before-upgrade
 haify resource snapshot replicated delete   --resource db --name before-upgrade
 ```
 
-Each copy carries its replica's DRBD metadata, so a rollback — which needs the
-resource Secondary everywhere — restores every replica together and resyncs
+Each copy carries its replica's DRBD metadata, so a rollback (which needs the
+resource Secondary everywhere) restores every replica together and resyncs
 nothing. The backing snapshots are named `<backing>_snap_<name>`. The Proxmox
 plugin takes VM snapshots this way. Encrypted resources are snapshotted volume
 by volume.
@@ -895,7 +896,7 @@ every volume of the resource on every diskful node, named
 `<backing-volume>_sched_<UTC timestamp>`.
 
 The cron field is standard 5-field syntax. Retention is applied after each run,
-to that node's scheduled snapshots of that volume only — manual snapshots are
+to that node's scheduled snapshots of that volume only; manual snapshots are
 never touched. Each tier keeps the newest snapshot in each of its most recent
 periods: `--keep-hourly 24` keeps one per hour for the last 24 hours that have
 one, `--keep-daily 7` one per day, and so on through `--keep-yearly`. A
@@ -904,17 +905,16 @@ Deleting a schedule keeps the snapshots it already made.
 
 Retention counts snapshots; it does not look at the pool. On a thin pool each
 snapshot holds the blocks written since it was taken, so a busy volume's
-history can fill the pool while staying inside its policy — and a full pool
+history can fill the pool while staying inside its policy, and a full pool
 fails the replica's own writes. So after retention, if the pool is still past
 85% (data or metadata), the scheduler removes that volume's oldest scheduled
 snapshots on that node one at a time until it is below, always keeping the
 newest two. It logs each one it removes and raises a `pool.snapshots_removed`
 event.
 
-**Locked snapshots.** That near-full rule removes the *oldest* snapshots — and
-a volume being encrypted by ransomware rewrites every block, so it is exactly
-what fills a thin pool fast, and the oldest snapshots are the clean ones from
-before the attack. A schedule can lock what it takes:
+**Locked snapshots.** The near-full rule removes the *oldest* snapshots. A
+volume being encrypted by ransomware rewrites every block, so it fills a thin
+pool fast, and the oldest snapshots are the clean ones from before the attack. A schedule can lock what it takes:
 
 ```bash
 haify resource snapshot schedule create --resource db \
@@ -922,8 +922,8 @@ haify resource snapshot schedule create --resource db \
 ```
 
 Until a scheduled snapshot is `--lock-days` old (measured from the time in its
-name), haify does not delete it — not retention, not the near-full rule, not
-`snapshot delete`, and not a ZFS `restore` that would roll back past it. While
+name), Haify does not delete it: not through retention, the near-full rule,
+`snapshot delete`, or a ZFS `restore` that would roll back past it. While
 any snapshot of the resource is locked, the schedule cannot be deleted, the
 resource or one of its volumes cannot be deleted (not even with `--force`), and
 the lock can be raised but not lowered. Replacing the schedule without
@@ -932,8 +932,8 @@ and takes it again under the same name, so its lock is unchanged; a locked
 thick snapshot cannot be restored until its lock passes. The limit is 365 days.
 
 On ZFS, each locked snapshot also carries a `haify-lock` hold, so `zfs destroy`
-on the node — a cleanup script, a `zfs destroy -r` of the dataset — fails too
-until haify releases the hold when the lock has passed. Root can `zfs release`
+on the node (a cleanup script, a `zfs destroy -r` of the dataset) fails too
+until Haify releases the hold when the lock has passed. Root can `zfs release`
 it; it guards against mistakes, not against root.
 
 Locks are judged by the time the controller has counted since it started, not
@@ -944,14 +944,14 @@ answer) to end the locks early changes nothing, and raises a
 The cost is space: size the pool for `--lock-days` of change. A pool past the
 near-full line with nothing left but locked snapshots is not relieved; it
 raises a critical `pool.snapshots_locked` event, and if it fills, that
-replica's writes fail. And the lock binds haify and its API, not root on a
-storage node, who can `lvremove` anything — for that, back up to a target with
-S3 Object Lock (see [Backups](#9-backups--the-only-copy-that-survives-losing-the-cluster)).
+replica's writes fail. The lock also binds only Haify and its API, not root on
+a storage node, who can `lvremove` anything. To protect against root, back up to
+a target with S3 Object Lock (see [Backups](#9-backups--the-only-copy-that-survives-losing-the-cluster)).
 
 **Freezing a schedule.** A frozen schedule keeps taking snapshots but removes
-none — not by retention, not to relieve a full pool — and every scheduled
+none, neither by retention nor to relieve a full pool, and every scheduled
 snapshot of the resource is locked until the freeze ends: it cannot be deleted
-through haify, nor the schedule or resource deleted. A freeze can be extended,
+through Haify, nor the schedule or resource deleted. A freeze can be extended,
 not shortened, except by `unfreeze`, which needs a second person under
 [two-person approval](#17-access-control).
 
@@ -976,7 +976,7 @@ the same, and are what `unfreeze` is for. Encryption throttled to look normal
 does not trip it. It needs a snapshot schedule on the resource to have
 anything to freeze.
 
-Schedules live in the controller database and survive a restart or a failover —
+Schedules live in the controller database and survive a restart or a failover;
 the node that becomes active picks them up.
 
 ---
@@ -989,8 +989,8 @@ The node that reads a backup runs `rclone` to talk to the target, so install it
 on every storage node (`apt install rclone`); a node without it is refused
 before anything is snapshotted.
 
-**Define a target.** The secret is never a command-line flag — it would land in
-your shell history:
+**Define a target.** The secret is never a command-line flag, because it would
+land in your shell history:
 
 ```bash
 export HAIFY_BACKUP_SECRET='...'
@@ -1036,7 +1036,7 @@ What an incremental costs:
 
 - **A base snapshot stays on the node.** The snapshot of the last backup is kept
   (named `<volume>_bk_<time>`) and holds whatever the volume has overwritten
-  since — the space a scheduled snapshot of that age would hold. It moves
+  since, the same space a scheduled snapshot of that age would hold. It moves
   forward with each backup and goes when its backup is deleted.
 - **A chain restores as a whole.** Restoring an incremental writes its full
   backup and then every incremental after it, oldest first. None of them can be
@@ -1069,7 +1069,7 @@ haify backup schedule run db@offsite   # run now, retention included, and wait
 haify backup schedule delete db@offsite   # its backups stay
 ```
 
-The cron is in the controller's time zone — usually UTC on a server. A run
+The cron is in the controller's time zone, usually UTC on a server. A run
 still going when the next one is due skips that tick. A failed run raises a
 `backup.failed` event, delivered like any alert (it needs `[alert] enabled`),
 and resolves with the next completed run. Failed records older than the newest
@@ -1097,10 +1097,10 @@ images are raw block data, so a backup restores onto another architecture or
 pool type: a chain taken from an arm64 node's thin pool restores onto a thick
 LVM volume on x86.
 
-**Immutable backups: S3 Object Lock.** Whoever holds the cluster — a stolen haify
-token, root on a storage node — can delete ordinary backups, and ransomware
+**Immutable backups: S3 Object Lock.** Whoever holds the cluster (a stolen Haify
+token, root on a storage node) can delete ordinary backups, and ransomware
 does that first. A locked target stores every object under S3 Object Lock, so
-until its date neither haify nor anyone using haify's keys can delete or overwrite
+until its date neither Haify nor anyone using Haify's keys can delete or overwrite
 it:
 
 ```bash
@@ -1112,8 +1112,8 @@ haify backup target add --name vault --kind s3 --bucket haify-vault \
 - **The bucket** must be created with Object Lock enabled (which turns on
   versioning; it cannot be added later on most servers). AWS S3, MinIO, Ceph
   RGW, Backblaze B2 and Wasabi support it. Every backup reads each object's lock
-  back and is **failed** when the server stored it unlocked — some
-  S3-compatible servers accept the headers and ignore them.
+  back and is **failed** when the server stored it unlocked, because
+  some S3-compatible servers accept the headers and ignore them.
 - **rclone 1.74.0 or later** on the nodes; older ones upload unlocked, so the
   backup is refused before anything is snapshotted.
 - **Modes.** `governance` can be lifted by a principal holding
@@ -1143,7 +1143,7 @@ haify backup target add --name vault --kind s3 --bucket haify-vault \
   haify backup import --target vault --as-of 2026-10-01T00:00:00Z
   ```
 
-**The keys decide whether any of this holds.** haify's S3 credentials are on the
+**The keys decide whether any of this holds.** Haify's S3 credentials are on the
 storage nodes, so assume an attacker has them. They need only:
 
 ```json
@@ -1161,14 +1161,14 @@ storage nodes, so assume an attacker has them. They need only:
 
 and must **not** hold `s3:BypassGovernanceRetention`, `s3:DeleteObjectVersion`,
 `s3:PutBucketObjectLockConfiguration`, `s3:PutBucketVersioning` or
-`s3:PutLifecycleConfiguration` — any one of them makes the lock a formality.
+`s3:PutLifecycleConfiguration`: any one of them makes the lock a formality.
 `s3:DeleteObject` only adds delete markers on a versioned bucket. What each
 layer stops:
 
 | Attacker holds | Object Lock (compliance) | Object Lock (governance) |
 | --- | --- | --- |
-| an haify token or admin account | stopped | stopped |
-| root on a storage node (and so haify's S3 keys) | stopped | stopped, if the keys lack the bypass permission |
+| a Haify token or admin account | stopped | stopped |
+| root on a storage node (and so Haify's S3 keys) | stopped | stopped, if the keys lack the bypass permission |
 | root on the controller | stopped | same as above |
 | the object store account itself | stopped | not stopped |
 
@@ -1192,8 +1192,8 @@ Know the limits before you build a policy on this:
 ## 10. Gateways — exporting to clients
 
 A gateway turns a resource into something a non-Haify machine can mount: NFS,
-iSCSI or NVMe-oF. It is a drbd-reactor promoter config, so it fails over with
-the resource — clients keep talking to a floating service IP.
+SMB, iSCSI or NVMe-oF. It is a drbd-reactor promoter config, so it fails over with
+the resource while clients keep talking to a floating service IP.
 
 ```bash
 # NFS
@@ -1248,7 +1248,7 @@ An export directory's quota is an ext4 project quota on the gateway's
 filesystem, so one export cannot fill the volume for the others. Gateways
 created from this version on support it (the filesystem is made with the
 project feature and mounted with `prjquota`); an older one needs the feature
-added while unmounted — `tune2fs -O quota,project <device>` — and the gateway
+added while unmounted (`tune2fs -O quota,project <device>`) and the gateway
 recreated. The gateway nodes need the `quota` package (`setquota`).
 
 Gateways cannot limit a client's IOPS or bandwidth: their I/O is done by kernel
@@ -1257,7 +1257,7 @@ limits per LUN. Shape traffic to the service IP with `tc` on the gateway nodes
 if you must. DRBD's `c-max-rate` limits resync traffic only; it is not QoS.
 
 These edits read the gateway's promoter config from the resource's diskful
-nodes — not from the machine the controller runs on — and write the result
+nodes, not from the machine the controller runs on, and write the result
 back to all of them. If the nodes hold different copies, the one most of them
 hold is used (a tie goes to the first node by name), a warning names the
 nodes that differ, and the write makes them identical again.
@@ -1302,7 +1302,7 @@ so a unit restart or a later failback uses it, and a drop-in on
 `.pending` file into place before drbd-reactor next starts; the next edit made
 while another node runs the gateway replaces it too. **Do not run
 `systemctl reload drbd-reactor` on the running node by hand to "pick up" a
-gateway edit** — it restarts the gateway. If the live step fails, the command
+gateway edit**: it restarts the gateway. If the live step fails, the command
 says so: the config is saved everywhere and a failover uses it, and
 `haify gateway stop` then `haify gateway start` applies it now (interrupting
 clients).
@@ -1328,10 +1328,11 @@ loaded on the nodes at creation and added to
 **What clients need.** Windows has a built-in iSCSI initiator and a limited
 NFSv3 client; macOS has a built-in NFS client and no iSCSI initiator. Both
 have SMB built in (see [SMB](#smb-gateways) below). Pick the protocol by what
-the client can actually mount.
+the client can mount.
 
 **What creation checks.** Every gateway needs the OCF agents from
-`resource-agents-extra` (Debian/Ubuntu) or `resource-agents` (EL). On top:
+`resource-agents-extra` (Debian/Ubuntu) or `resource-agents` (EL). Each type
+also needs:
 
 | Gateway | Checked | Install |
 | ------- | ------- | ------- |
@@ -1373,14 +1374,14 @@ haify gateway smb share add projects --resource files --path projects --valid-us
 ```
 
 `share add` checks only the share being added; shares nested before this check
-existed are left as they are — compare `share list` paths and users.
+existed are left as they are, so compare `share list` paths and users.
 
 How it is built, and what that means:
 
-- **Everything Samba keeps is on the gateway's state volume** — `smb.conf`,
+- **Everything Samba keeps is on the gateway's state volume**: `smb.conf`,
   the shares (`shares.conf`), the user database and secrets, the lock and
-  state directories — so after a failover the next node serves the same users
-  and shares. Share and user changes go to the node serving the gateway and
+  state directories. After a failover the next node therefore serves the same
+  users and shares. Share and user changes go to the node serving the gateway and
   apply immediately (`smbcontrol reload-config`); a stopped gateway refuses
   them until it is started.
 - **Sessions do not survive a failover.** Without CTDB, Samba has no
@@ -1392,14 +1393,14 @@ How it is built, and what that means:
   IP only, so several SMB gateways can run on one node. The distribution's own
   `smbd` must not run on gateway nodes (it holds port 445 on every address);
   creation refuses while it does: `systemctl disable --now smbd nmbd`.
-- **Files are owned by one account, `haify-smb`,** on every share. Access is per
-  share — `--valid-users`, `--read-only` — not per-user Unix permissions. Each
+- **Files are owned by one account, `haify-smb`,** on every share. Access is set per
+  share (`--valid-users`, `--read-only`), not by per-user Unix permissions. Each
   SMB user also gets a local account (Samba requires one), created with the
   same uid on every node by the unit before smbd starts; a node where that uid
   is taken refuses to start the gateway and says why.
 - Users are not added through MCP: a password typed into a model conversation
   is stored in its transcript. Use the CLI or the web UI. The password crosses
-  the API like a CHAP secret does — use `[tls]`.
+  the API like a CHAP secret does, so use `[tls]`.
 - Removing a share keeps its data; deleting the gateway keeps the volume.
 
 Validated in unit tests only so far: try a failover with your clients before
@@ -1411,7 +1412,7 @@ relying on it.
 
 `ha create` declares what should run wherever the resource is Primary.
 drbd-reactor then picks a node, mounts the filesystem, starts the services,
-raises the VIP — and moves all of it if that node dies. The VIP comes last, so
+raises the VIP, and moves all of it if that node dies. The VIP comes last, so
 clients only reach a node whose services are up, and it is the first thing
 taken down; `ha create` sets `net.ipv4.ip_nonlocal_bind` on the nodes so a
 service that binds to the VIP itself can start before it. (Configs created
@@ -1450,14 +1451,14 @@ would fight for the role: a Proxmox VM disk (labelled `haify.pve/managed-by=pve`
 by the plugin, or named `pve-<vmid>-...` from before it labelled them), a CSI
 volume (`haify.csi/managed-by=csi`), and a resource with diskless clients.
 
-Move it deliberately — for maintenance, or to test that failover works:
+To move it deliberately, for maintenance or to test that failover works:
 
 ```bash
 haify ha evict db
 ```
 
-**Test your failover before you need it.** Evicting is the polite path; pulling
-power on the active node is the honest one.
+**Test your failover before you need it.** Evicting moves the resource
+gracefully; pulling power on the active node shows what a real failure does.
 
 ### The controller's own HA
 
@@ -1483,9 +1484,9 @@ command's connection drops; follow it with `ha self status` against the VIP.
 place for you to delete. `haify ha evict haify-meta` moves the controller to
 another node.
 
-Point clients at the VIP afterwards. Other services can be made to ride along —
-`[self_ha] extra_services = ["haify-ai.service"]` in `controller.toml` starts and
-stops the AI Copilot with the controller.
+Point clients at the VIP afterwards. Other services can move with the
+controller: `[self_ha] extra_services = ["haify-ai.service"]` in `controller.toml`
+starts and stops the AI Copilot with it.
 
 ---
 
@@ -1495,12 +1496,13 @@ stops the AI Copilot with the controller.
 > the controller's create, status, failover, snapshot and delete flows are
 > covered by unit tests against a simulated cluster. The initialization, health
 > probe and freeze/thaw scripts of PostgreSQL 16, MariaDB 10.11 and Redis 7.0
-> have also been run on a scratch block device, without DRBD or systemd. None of
-> it has yet run on a real DRBD cluster under drbd-reactor. Before you rely on
-> it, test on yours — the list is at the end of this section.
+> have also been run on a scratch block device, without DRBD or systemd. RustFS
+> has run on a three-node DRBD cluster under drbd-reactor, failover included
+> ([below](#s3-object-store-rustfs)); the database engines have not been through the checks at
+> the end of this section. Test those on your own nodes before you rely on them.
 
-`haify app` runs one database instance — PostgreSQL (optionally with pgvector),
-MySQL or MariaDB, or Redis — or an S3-compatible object store (RustFS) on a
+`haify app` runs one database instance (PostgreSQL, optionally with pgvector;
+MySQL or MariaDB; or Redis) or an S3-compatible object store (RustFS) on a
 resource's DRBD volume, the way `ha create`
 runs a service and a gateway runs an export. drbd-reactor mounts the volume,
 starts the database and raises a service IP on the node where the resource is
@@ -1532,7 +1534,7 @@ haify app delete orders --delete-data --yes          # and deletes the resource
 ### What `create` does
 
 1. **Refuses** before touching any node when the resource does not exist, has
-   fewer than two diskful replicas, or already has a promoter — an HA config, a
+   fewer than two diskful replicas, or already has a promoter: an HA config, a
    gateway or another app (on the nodes or in the controller's records). One
    resource runs one promoter; `ha create` and the gateways likewise refuse a
    resource that runs an app.
@@ -1560,8 +1562,8 @@ haify app delete orders --delete-data --yes          # and deletes the resource
    only when the database is up there, and lose the address first on the way
    out.
 
-A volume that already holds the same engine's app — one deleted without
-`--delete-data` — is kept as it is, data and credentials; `create` says so and
+A volume that already holds the same engine's app (one deleted without
+`--delete-data`) is kept as it is, data and credentials; `create` says so and
 prints no password. Anything else on the volume is refused.
 
 | Engine | Install on every diskful node | Runs as | Health probe | Freeze for a snapshot |
@@ -1611,7 +1613,7 @@ SSH stream as a 0600 file. The MCP tool `haify_app_create` does not return it.
 `--engine rustfs` runs [RustFS](https://github.com/rustfs/rustfs) on the volume
 as a single-node, single-disk store. Its redundancy is the resource's DRBD
 replicas, not erasure coding, so it is meant for an S3 endpoint that has to
-stay up — application uploads, backups of other systems, artifacts — not for
+stay up (application uploads, backups of other systems, artifacts), not for
 capacity that grows past one volume: the store is as large as the resource and
 as fast as the node serving it. To grow it, grow the volume with `haify
 resource resize-volume`, then, on the node serving it, `resize2fs /dev/drbd/by-res/<resource>/0` (ext4
@@ -1641,7 +1643,7 @@ answered again within about 3 seconds.
 ### Failover
 
 drbd-reactor fails the app over when its node is lost, and when the database
-itself dies — the unit is bound to the promoter's target and has no
+itself dies: the unit is bound to the promoter's target and has no
 `Restart=`, so a crash moves the app rather than restarting it in place. The
 replica taking over promotes the resource, mounts it, starts the database and
 raises the service IP.
@@ -1655,7 +1657,7 @@ raises the service IP.
   Redis is configured with `appendfsync everysec` and can lose up to a second
   of acknowledged writes; set `appendfsync always` in its `redis.conf` for none.
 - **Recovery time** is detection, promotion, the engine's crash recovery and the
-  service IP — usually seconds to tens of seconds; a large uncheckpointed log
+  service IP, usually seconds to tens of seconds; a large uncheckpointed log
   takes longer.
 - **Clients** lose their connections and must reconnect to the service IP; use
   a client or pool that retries.
@@ -1668,8 +1670,8 @@ fails when no other replica took over. `haify node drain` and `haify ha evict
 <resource>` move an app the same way.
 
 A replica added later (`haify resource add-replica`) gets the unit and promoter
-once it passes the same checks against what the app was created with — engine
-path, version, uid and gid — and nothing otherwise; `add-replica` then fails
+once it passes the same checks against what the app was created with (engine
+path, version, uid and gid), and nothing otherwise; `add-replica` then fails
 saying what differs, and `haify resource repair <resource>` places them once it
 is fixed. A replica removed loses them.
 
@@ -1685,15 +1687,15 @@ snapshotted without a freeze.
 
 To go back to a snapshot: `haify app delete <name>` (the data stays), `haify
 resource snapshot replicated rollback --resource <res> --name <snap>`, then
-`haify app create` again with the same name, engine and resource — it finds the
+`haify app create` again with the same name, engine and resource; it finds the
 data and keeps it.
 
 ### Not yet validated on a real cluster
 
 Test these on your own nodes before production use:
 
-- drbd-reactor running the chain — `Filesystem`, `haify-app-<name>.service` with
-  its wait for the database, `IPaddr2` — and taking it down cleanly;
+- drbd-reactor running the chain (`Filesystem`, `haify-app-<name>.service` with
+  its wait for the database, `IPaddr2`) and taking it down cleanly;
 - failover by power-off and by `haify app failover`, and the recovery time;
 - MySQL (as opposed to MariaDB) initialization through `mysqld
   --initialize-insecure`, which has only been unit-tested;
@@ -1751,13 +1753,13 @@ haify wan set-endpoint db --egress-address 203.0.113.20     # or --clear-egress
 ```
 
 The tunnels are rebuilt on the new address at once. A new endpoint that does
-not answer is refused and the old one kept — the old tunnel was working. For a
+not answer is refused and the old one kept, since the old tunnel was working. For a
 DR site whose firewall is not open yet, `--skip-check` saves it anyway; run
 `wan repair` once it answers. Renumbering the DR node with `node set-address`
 moves an endpoint that was that node's address by itself.
 
-DR is manual on purpose — an automatic cross-site promotion during a network
-partition is how you get two live copies:
+DR is manual on purpose: an automatic cross-site promotion during a network
+partition would produce two live copies:
 
 ```bash
 haify resource dr-failover db          # prints what it will do
@@ -1767,7 +1769,7 @@ haify resource dr-failover db --yes    # force-promotes the DR node
 Writes still buffered in the WAN link when the primary site died are lost.
 Mount the volumes on the DR node and resume there.
 
-Coming back is `dr-failback`, run repeatedly until it says done:
+To come back, run `dr-failback` repeatedly until it says done:
 
 ```bash
 haify resource dr-failback db --wait 30m
@@ -1802,8 +1804,8 @@ haify pool add-cache --node node1 --pool thin-pool --device /dev/nvme0n1
 haify pool remove-cache --node node1 --pool thin-pool
 ```
 
-The device is consumed whole and must be free — no filesystem signature, no
-partitions in use, not already a PV — and at least 4 GiB. A pool takes one
+The device is consumed whole and must be free (no filesystem signature, no
+partitions in use, not already a PV) and at least 4 GiB. A pool takes one
 cache. `haify pool get` shows the cache and how much of a writeback cache is
 dirty.
 
@@ -1816,7 +1818,7 @@ cannot be confirmed, rather than letting you pull a device with data on it.
 The cache is per node. DRBD replicates volumes, not the block layer beneath
 them, so caching one replica and not another is a legitimate end state.
 
-Requires a thin pool: a thick pool has no single LV that every volume passes
+Caching requires a thin pool: a thick pool has no single LV that every volume passes
 through.
 
 ---
@@ -1831,13 +1833,13 @@ haify resource create --name secrets --size 50G --port 7010 \
     --nodes node1,node2 --encrypt
 ```
 
-Understand exactly what this does and does not do:
+What it does and does not cover:
 
 - **At rest only.** DRBD sits above the crypt layer, so replication traffic
   between nodes is plaintext. Encrypt it with replication TLS, below.
 - **Each node generates and keeps its own key** under `/etc/haify/luks`, root-only.
   Nothing is sent anywhere and there is no central escrow. Lose a node's key and
-  that replica is gone — the others are unaffected.
+  that replica is gone; the others are unaffected.
 - **It cannot be enabled later.** Decide at creation.
 - LVM pools only.
 - **Backups are plaintext.** `haify backup` reads each snapshot through a
@@ -1906,7 +1908,7 @@ warning_hold_sec = 30         # default; see below
 
 A **warning** is raised only once its condition has lasted `warning_hold_sec`:
 a replica link that drops and reconnects within it is not reported. Critical
-conditions — a full pool, a lost Primary, an unreachable node — are never held.
+conditions (a full pool, a lost Primary, an unreachable node) are never held.
 
 With `watch_drbd_events` the controller keeps one `drbdsetup events2` stream
 open to each node. A DRBD state change is checked within a few seconds instead
@@ -1928,8 +1930,8 @@ under an `lvm-thin-vdo` pool),
 `resource.replica_moved`,
 `backup.failed` (a scheduled backup) and `inspection.completed` (see
 [Inspection](#inspection)). Each carries a severity
-(`info`/`warning`/`critical`) and a status — `firing` when a condition starts,
-`resolved` when it clears, `info` for a one-off such as an inspection — so a
+(`info`/`warning`/`critical`) and a status (`firing` when a condition starts,
+`resolved` when it clears, `info` for a one-off such as an inspection), so a
 receiver can pair an alert with its recovery instead of reading the recovery as
 a new fault.
 
@@ -1946,7 +1948,7 @@ and `--since-id` (resume after a disconnect).
 ### Sending them somewhere
 
 A chat service will not accept an arbitrary JSON document, so a channel has a
-**kind**. Worse, Feishu, WeCom and DingTalk report a refusal *inside an HTTP
+**kind**. Feishu, WeCom and DingTalk also report a refusal *inside an HTTP
 200*, so a misconfigured channel looks like it is working until an outage passes
 unnoticed.
 
@@ -1975,11 +1977,11 @@ Kinds: `generic` (the event JSON unchanged, for a receiver you wrote), `feishu`,
 `slack`, `wecom`, `dingtalk`. A well-known bot URL saved with the wrong kind is
 refused up front rather than at delivery time.
 
-**Always run `channel test` after adding one.** It is the only thing that
-distinguishes a working channel from a silent one.
+**Always run `channel test` after adding one.** It is the only way to tell
+a working channel from a silent one.
 
 Channels live in the controller database, so adding or muting one takes effect
-immediately — no restart. `--muted` stores a channel without delivering to it,
+immediately, without a restart. `--muted` stores a channel without delivering to it,
 which is how you silence a noisy pager during an incident without having to find
 the bot URL again afterwards.
 
@@ -2051,7 +2053,7 @@ Each node is probed once over SSH per run; a node that does not answer is a
 
 | Area | Checks |
 | ---- | ------ |
-| resources | a resource under `haify ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer — fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes) — judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a primary-site diskful node (warn), present on a diskless one (warn: it works as a diskless Primary, over the network) or present on a WAN resource's DR node (warn: it could fail over to the asynchronous copy unasked) |
+| resources | a resource under `haify ha create` has exactly one Primary; on every node: replica Outdated, Inconsistent with no resync, Diskless where it should hold data, not up, quorum lost; a peer StandAlone; a peer no node can reach, reported once per peer: fail for a diskful peer, warn for a tiebreaker or diskless client (the data is still fully redundant); a Connected peer stuck in WFBitMapS/WFBitMapT/WFSyncUUID (or Off between two diskful nodes), judged from every node's own view, because a handshake can be stuck on one side only; two-node quorum risk (warn); single-failure-domain risk (one warn per domain, listing its resources); an HA promoter config missing on a primary-site diskful node (warn), present on a diskless one (warn: it works as a diskless Primary, over the network) or present on a WAN resource's DR node (warn: it could fail over to the asynchronous copy unasked) |
 | gateways | every gateway not `stopped` has exactly one Primary; its promoter config on every diskful node (warn when missing, and when present on a diskless node) |
 | nodes | SSH reachable; clock skew against the controller (warn > 2 s, fail > 30 s; SSH latency is not counted), NTP synchronised; root filesystem (warn ≥ 85 %, fail ≥ 95 %); the registered address present on an interface (a public address answering as the registered host is taken as NAT, not drift), and the address answering as the registered host; drbd module loaded; drbd-reactor running; DRBD module, drbd-utils, drbd-reactor and `haify-controller` binary the same on every node, the binary compared only between nodes of one architecture (a differing binary fails under Self-HA); `/etc/hosts` mapping a node name to an address it is not registered at |
 | pools | thin pool data and metadata against `[alert] pool_near_full_percent` / `pool_full_percent`; growth since the previous report, warn when full within 14 days, fail within 3; on a thick pool, free space below the copy-on-write area a snapshot of a volume reserves (20 % of it, at least 256 MiB), naming the volumes whose snapshots and backups will fail (warn); each disk under a pool, by SMART or the NVMe health log: warn on wear past 90 %, media errors, reallocated or pending sectors, fail on a failed SMART verdict, an NVMe critical warning or uncorrectable sectors (`disk.health`; no check without `smartctl`) |
@@ -2069,7 +2071,7 @@ keep = 30                 # default; reports stored
 notify_min = "warn"       # default; pass | warn | fail
 ```
 
-The schedule rides the snapshot scheduler, so it runs on the active controller
+The schedule runs on the snapshot scheduler, so it runs on the active controller
 only and only while `[schedule] enabled = true`; `haify inspect run` works either
 way. Each run publishes one `inspection.completed` event when its worst finding
 is at least `notify_min`: severity `critical` for a fail, `warning` for a warn
@@ -2087,8 +2089,8 @@ what the `alerts` area reads.
 
 ## 17. Access control
 
-With nothing configured, the API accepts every caller. Two models, in
-`controller.toml`:
+With nothing configured, the API accepts every caller. There are two models,
+set in `controller.toml`:
 
 ```toml
 [auth]                  # one shared token for every caller
@@ -2127,7 +2129,7 @@ like every other command, so `--token` and the TLS options below apply to them.
 Tokens come from `--token`, `HAIFY_TOKEN`, `~/.haify/token` or `/etc/haify/token`.
 
 **Two-person approval.** A role says what a user may do, and an admin may do
-everything — so one stolen admin token could delete the backup target, the
+everything, so one stolen admin token could delete the backup target, the
 backups and the snapshots. With approval on, the calls that destroy data or
 weaken what protects it run only after a *different* user approved that exact
 call:
@@ -2151,23 +2153,23 @@ The approval covers the method and its exact arguments, so approving the
 removal of one target cannot be spent removing another. Who may approve: an
 admin, or a `security-officer`, who can read everything and approve, and change
 nothing. Each new request raises an `approval.requested` event, so approvers
-hear of it — and an unexpected one is a stolen token at work.
+hear of it; an unexpected one is a stolen token at work.
 
 The default list: deleting pools, ZFS pools and datasets, resources, volumes
 and snapshots; restoring snapshots and backups (both overwrite the volume);
 adding, replacing or removing a backup target; deleting backups and snapshot
 or backup schedules; replacing a snapshot or backup schedule with one that
-keeps fewer of any kind (its next run would prune the rest — creating one, or
+keeps fewer of any kind (its next run would prune the rest; creating one, or
 keeping as many, runs at once); deleting a database app (whose `--delete-data` deletes its
-resource from inside the controller); and adding users, removing them or changing roles — so
-the stolen token cannot create its own second approver. The web UI's user
+resource from inside the controller); and adding users, removing them or changing roles, so
+a stolen token cannot create its own second approver. The web UI's user
 management is held back the same way. Approval needs `[rbac]`; the controller
 refuses to start with one and not the other.
 
 Automation is held back too: the CSI driver deleting a PVC and the Proxmox
 plugin removing or rolling back a VM disk call `DeleteResource` and
 `RestoreSnapshot`, which then wait for an approver like anyone else. Where that
-is not wanted, list `methods` yourself without them — the snapshot and backup
+is not wanted, list `methods` yourself without them; the snapshot and backup
 locks still protect what they lock.
 
 **TLS.** `[tls] enabled = true` with `cert_file` and `key_file` puts the gRPC
@@ -2224,7 +2226,7 @@ you run elsewhere, or a collector writing to an object store with Object Lock.
 
 ---
 
-## 18. Kubernetes
+## 18. Kubernetes and virtual machines
 
 Haify ships a CSI driver. Volumes are DRBD resources; a pod moving between nodes
 gets its storage promoted on the new one.
@@ -2258,20 +2260,33 @@ per StorageClass: change one by moving the volume to another class.
 The manifests are in `deploy/k8s` (see its README); the CSI section of
 [deployment-guide.md](deployment-guide.md) covers installation.
 
-A database on Kubernetes with its data on a Haify volume — the counterpart of
-[`haify app`](#12-database-and-object-store-applications) — is one MCP call: `haify-mcp k8s` serves
+A database on Kubernetes with its data on a Haify volume, the counterpart of
+[`haify app`](#12-database-and-object-store-applications), is one MCP call: `haify-mcp k8s` serves
 `haify_k8s_app_create`, `haify_k8s_app_list` and `haify_k8s_app_delete`
 ([mcp.md](mcp.md#kubernetes-tools)). Deleting keeps the volume claim and the
 password secret unless `delete_data` is set, and creating the app again with
 the same name and template runs it on them.
 
-**Proxmox VE** has the counterpart: a storage plugin (type `haify`) that backs VM
+**Proxmox VE** has its own integration: a storage plugin (type `haify`) that backs VM
 disks with Haify resources over the controller's REST API. It is in
 `deploy/proxmox`, with its requirements and install steps in that README.
 `deploy/proxmox/bootstrap.sh`, run on one PVE node, does those steps for an
 existing PVE cluster: DRBD from LINBIT's repository on every node, the
 controller, node registration, the pool, Self-HA, the plugin and the
 `storage.cfg` entry.
+
+**KVM with libvirt** needs no plugin: a guest's disks are Haify devices
+(`/dev/drbd/by-res/<resource>/0`), and the qemu hook in `deploy/libvirt` makes
+them Primary when the guest starts and handles live migration.
+`haify ha create --vm <guest>` restarts the guest on another host when its host
+fails ([High availability](#11-high-availability)). See
+[deploy/libvirt/README.md](../deploy/libvirt/README.md).
+
+**OpenStack** uses the Cinder driver in `deploy/openstack`: each Cinder volume is
+a Haify resource, attached to the compute host as a local block device, or as a
+diskless client where the host holds no replica. The same package adds a Haify
+panel and a Replication tab to Horizon. See
+[deploy/openstack/README.md](../deploy/openstack/README.md).
 
 ---
 
@@ -2294,15 +2309,15 @@ any non-loopback address requires a token in `HAIFY_AI_TOKEN` or
 Two things determine how useful it is:
 
 - **Its knowledge base.** Check what it has: `GET /ai/kb/list`. A near-empty one
-  makes it fall back on the model's own memory, which for a specific question
-  about your cluster is how you get a confident wrong answer. Feed it with
+  makes it fall back on the model's own memory, and for a specific question
+  about your cluster that produces confident wrong answers. Feed it with
   `POST /ai/kb/ingest` (a directory on the node running `haify-ai`) or
   `POST /ai/kb/doc` (one document). `GET /ai/kb/doctor` checks that retrieval
   over the index still returns results.
 - **The embedder matching the index.** `HAIFY_AI_EMB_DIM` (default 768) must
   equal the width the index was built at. Change the embedder to one of a different width and every
-  search silently returns nothing — no error, just no results. `/ai/kb/list`
-  reports the width read back from the index, which is how you check.
+  search silently returns nothing, with no error. `/ai/kb/list`
+  reports the width read back from the index, so check it there.
 
 Send the same `session_id` across turns and it follows a conversation; omit it
 and every question starts from nothing.
@@ -2335,6 +2350,10 @@ replica back, and wait for the resync to finish before touching the next node.
 
 **Upgrading the controller**
 
+From a checkout, `./scripts/deploy-all.sh node1,node2,node3` builds for each
+node's architecture and installs `haify-controller` and `haify` on each one,
+with Self-HA taken into account. By hand:
+
 ```bash
 # build for the nodes, not for the machine you build on
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 make build
@@ -2355,8 +2374,9 @@ replace it on the node it left.
 
 **Checking that replicas really hold the same data**
 
-Every replica can say `UpToDate` and still differ — a disk that returned the
-wrong block, a write that never reached one copy. Only reading both finds it:
+Every replica can say `UpToDate` and still differ, for example after a disk
+returned the wrong block or a write never reached one copy. Only reading both
+finds that:
 
 ```bash
 haify resource verify db --wait 30m     # compare every replica with the Primary
@@ -2365,8 +2385,8 @@ haify resource verify db --resync       # make the copies identical
 ```
 
 DRBD records what may differ in an out-of-sync bitmap. A verify **adds** to it
-and never clears it, and marks outlive whatever made them — an earlier verify,
-an interrupted resync, a reconnect at equal generation. So a peer can show
+and never clears it, and marks outlive whatever made them (an earlier verify,
+an interrupted resync, a reconnect at equal generation). So a peer can show
 most of its volume "marked out of sync" while its data is in fact identical to
 the source. `verify` therefore reports the two apart: what it found itself, and
 what was already marked. `--resync` copies the source's data over every marked
@@ -2420,7 +2440,7 @@ ssh <node> sudo journalctl -u drbd-reactor -n 50
 | `role=Secondary` everywhere | Nobody is serving I/O. Normal for an idle resource; a problem if something should be mounted. |
 | `disk=UpToDate` | This replica has every byte. |
 | `disk=Inconsistent` | Mid-resync, or never synced. Wait. |
-| `disk=Outdated` | This copy is known stale — it will not be promoted, which is correct. |
+| `disk=Outdated` | This copy is known stale; it will not be promoted, which is correct. |
 | `disk=Diskless` | No local copy. Expected on a tiebreaker or a diskless client; a fault anywhere else. |
 | `peer-disk:DUnknown` (drbdadm) | Cannot see that peer at all. Network, or the peer is down. |
 | `repl=Established` | Healthy. |
@@ -2441,7 +2461,7 @@ sudo drbdsetup resource-options <res> --quorum=majority
 ```
 
 Change it on one node only. The peers keep `majority`, so a peer starting alone
-still cannot be promoted — which is what stops this from becoming a split brain.
+still cannot be promoted, which stops this from becoming a split brain.
 
 **A resource is stuck `Inconsistent` after creation.** A fresh DRBD device needs
 one copy declared authoritative. `resource create` does this itself; if it was
@@ -2450,7 +2470,7 @@ interrupted before that step, promote once by hand with
 `haify resource secondary <res> <node>`.
 
 **`StandAlone` after a split brain.** Two copies diverged. Decide which one is
-authoritative — Haify will not guess — then discard the other's changes and
+authoritative (Haify will not guess), then discard the other's changes and
 reconnect it. Anything written to the discarded side is lost, so look at both
 before choosing.
 
@@ -2484,10 +2504,10 @@ journalctl -u haify-controller -f    # on the controller node
 On the REST API (`[server] rest_port`, default 3375, with the same token): `GET /v1/logs` returns the
 controller's recent log lines from memory, `GET /v1/audit` who changed what,
 and `POST /v1/diagnostics/collect` runs a fixed set of named, read-only
-collectors on the nodes (`{"nodes": [...], "collectors": [...]}`, both
-defaulting to all) — DRBD status, config and kernel state, kernel errors, the
-drbd-reactor, promoter and Haify journals, failed units, storage, mounts —
-without anyone logging in. The web UI's Logs page shows the first two;
+collectors on the nodes without anyone logging in (`{"nodes": [...], "collectors": [...]}`,
+both defaulting to all). They cover DRBD status, config and kernel state, kernel
+errors, the drbd-reactor, promoter and Haify journals, failed units, storage and
+mounts. The web UI's Logs page shows the first two;
 `haify-mcp` has all three (`haify_log_list`, `haify_audit_list`, `haify_diagnose`).
 
 [Known failure modes](deployment-guide.md#13-known-failure-modes) in the

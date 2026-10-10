@@ -1,4 +1,4 @@
-# Haify CSI Driver
+# Haify CSI driver
 
 Driver name: `haify.csi.liliang-cn.com`. Everything is deployed into
 `kube-system` except the optional Copilot RBAC (`60-haify-ai-apps-rbac.yaml`,
@@ -31,8 +31,8 @@ namespace `haify-ai`).
 ## Build the image
 
 Both plugin containers use `haify-csi:latest` with `imagePullPolicy: IfNotPresent`,
-so the image must exist on every node or be pushed to a registry you then put
-in `20-controller.yaml` / `30-node.yaml`:
+so the image must exist on every node. Alternatively, push it to a registry and
+put that registry in `20-controller.yaml` / `30-node.yaml`:
 
     docker build -f Dockerfile.csi -t haify-csi:latest .
     docker save haify-csi:latest | sudo k3s ctr images import -    # on each k3s node
@@ -42,27 +42,29 @@ in `20-controller.yaml` / `30-node.yaml`:
 
 ## Point the CSI at your haify-controller VIP
 
-The haify-controller runs **outside** the cluster on the storage hosts, HA'd
-behind a floating VIP. `00-haify-controller-endpoint.yaml` ships a selectorless
+The haify-controller runs outside the cluster on the storage hosts, made highly
+available behind a floating VIP. `00-haify-controller-endpoint.yaml` ships a selectorless
 `Service` named `haify-controller` (port `3374`, named `grpc`) plus a manual
 `EndpointSlice` carrying the VIP, so the in-cluster name `haify-controller:3374`
 reaches the external controller.
 
-Upgrading from a manifest that shipped a v1 `Endpoints` instead: delete it
-(`kubectl -n kube-system delete endpoints haify-controller`) after applying the
-new file, or Kubernetes keeps mirroring it into a second slice.
+If you are upgrading from a manifest that shipped a v1 `Endpoints` instead,
+delete it (`kubectl -n kube-system delete endpoints haify-controller`) after
+applying the new file. Otherwise Kubernetes keeps mirroring it into a second
+slice.
 
 **You must set the VIP.** Replace the `192.0.2.10` placeholder (marked
-`# CHANGE ME`) with your real VIP, shown as `VIP:` in:
+`# CHANGE ME`) with your real VIP, which appears as `VIP:` in the output of:
 
     haify ha self status
 
 The plugins' `--haify-controller=haify-controller:3374` (also the binaries'
 default) then resolves without editing the Deployment or DaemonSet. An
-`ExternalName` Service will not work here: the target is an IP, not a DNS name.
+`ExternalName` Service does not work here, because the target is an IP rather
+than a DNS name.
 
-Both the controller Deployment and the node DaemonSet run with
-`hostNetwork: true` and `dnsPolicy: ClusterFirstWithHostNet`: host networking
+The controller Deployment and the node DaemonSet both run with
+`hostNetwork: true` and `dnsPolicy: ClusterFirstWithHostNet`. Host networking
 lets the controller pod reach a VIP that lives on its own node, and the DNS
 policy keeps the Service name resolvable.
 
@@ -82,9 +84,9 @@ Then:
 | `resourceProfile` | none | Haify resource profile; its pool, replica count and storage type apply unless the StorageClass sets them explicitly |
 | `resourceLabels` | none | `key=value,key=value` labels put on the Haify resource. `haify.csi/managed-by=csi` is always added, and `haify.csi/pvc=<namespace>/<name>` names the claim (external-provisioner passes it with `--extra-create-metadata`, which `20-controller.yaml` sets) |
 
-Placement: the node the scheduler picked (`WaitForFirstConsumer` with
-`--strict-topology`) is seated first, the rest go to the nodes whose pool has
-the most free space, preferring fault domains no replica uses yet. A volume
+The node the scheduler picked (`WaitForFirstConsumer` with
+`--strict-topology`) gets the first replica. The rest go to the nodes whose
+pool has the most free space, preferring fault domains no replica uses yet. A volume
 that cannot be placed fails with `ResourceExhausted`, which makes
 external-provisioner reschedule the Pod.
 
@@ -93,18 +95,18 @@ The filesystem is `ext4` unless the StorageClass sets
 
 ## What the driver supports
 
-- **Expansion.** `allowVolumeExpansion: true` plus the `csi-resizer` sidecar:
-  raise a PVC's request and the LV, DRBD device and filesystem grow online.
-- **Capacity-aware scheduling.** `storageCapacity: true` and the provisioner's
+- Expansion: with `allowVolumeExpansion: true` and the `csi-resizer` sidecar,
+  raising a PVC's request grows the LV, DRBD device and filesystem online.
+- Capacity-aware scheduling: `storageCapacity: true` and the provisioner's
   `--enable-capacity` publish one `CSIStorageCapacity` per node from its pool's
   free space, so the scheduler does not pick a node that cannot hold the volume.
-- **Usage metrics.** `NodeGetVolumeStats` feeds `kubelet_volume_stats_*` for
+- Usage metrics: `NodeGetVolumeStats` feeds `kubelet_volume_stats_*` for
   filesystem volumes. Kubelet does not collect usage for raw block volumes.
-- **Raw block.** `volumeMode: Block` hands the Pod the DRBD device itself.
-- **Access modes.** `ReadWriteOnce` and `ReadWriteOncePod`. `ReadWriteMany`
-  and the other multi-node modes are refused at provisioning: a DRBD resource
-  has one Primary.
-- **Replica health on the PVC.** The controller plugin checks each volume's
+- Raw block: `volumeMode: Block` hands the Pod the DRBD device itself.
+- Access modes: `ReadWriteOnce` and `ReadWriteOncePod`. `ReadWriteMany`
+  and the other multi-node modes are refused at provisioning, because a DRBD
+  resource has one Primary.
+- Replica health on the PVC: the controller plugin checks each volume's
   replicas every `--health-interval` (default `1m`) and posts
   `Warning VolumeDegraded` / `Normal VolumeRecovered` events on its PVC when a
   replica disconnects, loses its disk, falls out of date or resyncs. A new
@@ -112,19 +114,19 @@ The filesystem is `ext4` unless the StorageClass sets
 
 ## Volume snapshots
 
-The driver implements `CREATE_DELETE_SNAPSHOT` and `LIST_SNAPSHOTS`: a
+The driver implements `CREATE_DELETE_SNAPSHOT` and `LIST_SNAPSHOTS`. A
 `VolumeSnapshot` of a Haify volume becomes an LVM/ZFS snapshot of that volume's
-backing store, which is what Kubernetes backup tools (Velero, Kasten)
-orchestrate.
+backing store, and Kubernetes backup tools (Velero, Kasten) orchestrate these
+snapshots.
 
-Snapshots live on individual storage nodes with no cluster-wide index, so
+Snapshots live on individual storage nodes, with no cluster-wide index, so
 `ListSnapshots` walks the driver's volumes and asks each replica node. Only
 snapshots the driver created (`haifysnap_*`) are listed; the controller's own
 scheduled snapshots of the same LV are not.
 
 ### Cluster prerequisites (install once)
 
-k3s and most distributions do **not** ship the snapshot machinery. Install the
+k3s and most distributions do not ship the snapshot machinery. Install the
 CRDs and the snapshot-controller from
 [kubernetes-csi/external-snapshotter](https://github.com/kubernetes-csi/external-snapshotter)
 before applying `50-volumesnapshotclass.yaml`:
@@ -157,15 +159,15 @@ Kubernetes objects.
 
 ### What a snapshot is (and is not)
 
-A snapshot is taken on **one** node's local backing volume; it is not
-replicated by DRBD. It protects against logical faults (bad writes, accidental
-deletion, a failed migration), not against losing that node. DRBD replicates
-every write, including destructive ones, so replication is not a backup. For
-protection against losing the cluster, ship snapshots off-site.
+A snapshot is taken on one node's local backing volume, and DRBD does not
+replicate it. It protects against logical faults (bad writes, accidental
+deletion, a failed migration) but not against losing that node. DRBD replicates
+every write, including destructive ones, so replication is not a backup. To
+protect against losing the cluster, ship snapshots off-site.
 
 ### Restoring and cloning
 
-Both are supported via a PVC `dataSource`:
+Both work through a PVC `dataSource`:
 
 ```yaml
 # restore a snapshot into a new volume
@@ -177,32 +179,32 @@ spec:
   dataSource: { name: my-pvc, kind: PersistentVolumeClaim }
 ```
 
-The new volume is created empty, then filled by copying the source into its
-**DRBD device** on the node holding the source, so DRBD replicates the data to
-every peer through the normal write path. Placement is forced to include that
-node; if it cannot host a replica, provisioning fails with `ResourceExhausted`.
+The new volume is created empty. The source is then copied into the new
+volume's DRBD device on the node holding the source, so DRBD replicates the
+data to every peer through the normal write path. Placement always includes
+that node; if it cannot host a replica, provisioning fails with
+`ResourceExhausted`.
 
-- **Cloning snapshots the source first.** Reading a mounted volume's backing
-  store directly would capture a torn image, so a clone takes an internal
-  snapshot, copies from that, and drops it again.
-- **`CreateVolume` blocks for the duration of the copy.** The shipped
-  provisioner `--timeout` is `120s`; raise it for large volumes. If the copy
-  fails the half-written volume is destroyed so a retry starts clean; a
-  controller crash mid-copy is the one window that can leave an empty volume
-  behind.
+- A clone snapshots the source first. Reading a mounted volume's backing store
+  directly would capture a torn image, so a clone takes an internal snapshot,
+  copies from that, and drops it again.
+- `CreateVolume` blocks for the duration of the copy. The shipped provisioner
+  `--timeout` is `120s`; raise it for large volumes. If the copy fails, the
+  half-written volume is destroyed so a retry starts clean. A controller crash
+  mid-copy is the one case that can leave an empty volume behind.
 
-Application-level consistency is the application's job: snapshot a database
-after a `CHECKPOINT`/`FSYNC` (or quiesce it) if you need more than crash
-consistency.
+Application-level consistency is up to the application. If you need more than
+crash consistency, snapshot a database after a `CHECKPOINT`/`FSYNC` (or
+quiesce it).
 
 ## When a node dies
 
-Measured on a three-node k3s (2026-09-30): the VM was powered off, Kubernetes
-took about 75 seconds to declare the node lost, and the replacement pod was
-running on a surviving replica node about 9 seconds after that: 80 seconds of
-outage for a Deployment, data intact, nothing to clean up on the Haify side. The
-old node's replica resynchronised on its own when it came back, with no
-split-brain.
+Measured on a three-node k3s cluster (2026-09-30), with the VM powered off:
+Kubernetes took about 75 seconds to declare the node lost, and the replacement
+pod was running on a surviving replica node about 9 seconds after that. A
+Deployment was out for 80 seconds, its data was intact, and nothing needed
+cleaning up on the Haify side. The old node's replica resynchronised on its
+own when it came back, with no split-brain.
 
 Almost all of that time is Kubernetes deciding the node is gone. To shorten it
 for a workload, lower the `not-ready` and `unreachable` tolerations on the pod:
@@ -231,7 +233,7 @@ KUBECONFIG=haify-ai.kubeconfig kubectl config set-credentials haify-ai --token="
 KUBECONFIG=haify-ai.kubeconfig kubectl config set-context --current --user=haify-ai
 ```
 
-Without `storageClass` in the request, it picks a Haify StorageClass that does
+When the request has no `storageClass`, it picks a Haify StorageClass that does
 not set `allowRemoteVolumeAccess: "true"`, falling back to one that does.
 
 ## When registry.k8s.io is unreachable

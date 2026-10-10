@@ -47,26 +47,26 @@ The client reads the file once at startup: restart it after a change.
 
 Which address to use:
 
-- **Self-HA enabled:** the VIP. The controller moves between nodes on
-  failover; the VIP follows it. `haify ha self status` prints it.
-- **No Self-HA:** the controller node's own address.
-- **On the controller node itself:** nothing; the default `127.0.0.1:3374`
+- With Self-HA enabled, the VIP. The controller moves between nodes on
+  failover and the VIP follows it. `haify ha self status` prints it.
+- Without Self-HA, the controller node's own address.
+- On the controller node itself, nothing: the default `127.0.0.1:3374`
   reaches it.
 
 Flags:
 
-- `--controller, -c` — controller `host:port` (default `127.0.0.1:3374`).
-- `--token` — API token when the controller has `[auth]` enabled. Without the
+- `--controller, -c`: controller `host:port` (default `127.0.0.1:3374`).
+- `--token`: API token when the controller has `[auth]` enabled. Without the
   flag: `HAIFY_TOKEN`, then `~/.haify/token`, then `/etc/haify/token`.
 - `--tls`, `--tls-ca`, `--tls-cert`, `--tls-key`, `--tls-server-name`,
-  `--tls-insecure` — connect to a controller with `[tls]` enabled. Same
-  meaning and `HAIFY_TLS*` environment variables as the `haify` CLI
+  `--tls-insecure`: connect to a controller with `[tls]` enabled. They have the
+  same meaning and `HAIFY_TLS*` environment variables as in the `haify` CLI
   ([user guide §17](user-guide.md#17-access-control)).
-- `--read-only` — register only the read-only tools.
-- `--allow NAME[,NAME]` — register these mutating tools as well, e.g.
+- `--read-only`: register only the read-only tools.
+- `--allow NAME[,NAME]`: register these mutating tools as well, e.g.
   `--allow haify_ha_evict`. Implies `--read-only`. The server refuses to start
   on a name that is not a tool.
-- `--debug` — debug logging on stderr. stdout carries the protocol.
+- `--debug`: debug logging on stderr. stdout carries the protocol.
 
 ### Kubernetes tools
 
@@ -100,7 +100,7 @@ connection. A tool that is not registered cannot be called by name.
 | ---- | ----- |
 | `read` | the read-only tools: lists, status, health, diagnose, inspection reports and runs (`haify_inspect_run` changes nothing on the cluster), events, logs, audit, gateway exports/LUNs/ACLs/CHAP settings, runbooks |
 | `operate` | plus every mutating tool not marked destructive (the middle column below) |
-| `admin` | plus the destructive ones: delete, remove, restore, stop, evict, drain, renumber, role change, unmount, filesystem creation, thin-pool conversion, promoter TOML sync, schedule delete, Self-HA enable/disable, DR failback, and adding or removing gateway exports, LUNs and ACL entries |
+| `admin` | plus the destructive ones: delete, remove, restore, stop, evict, drain, renumber, role change, unmount, filesystem creation, thin-pool conversion, moving a volume to another pool, promoter TOML sync, schedule delete, Self-HA enable/disable, DR failback, and adding or removing gateway exports, LUNs and ACL entries |
 
 Anything that loses data, takes a volume away from the node serving it
 (role change, unmount, gateway stop, evict, drain), or stops future snapshots
@@ -132,16 +132,16 @@ warning, and refuses every request until a token exists.
 
 ### Clients
 
-**Claude Code** sends the token as a header:
+Claude Code sends the token as a header:
 
 ```bash
 claude mcp add --transport http haify https://mcp.example.com/mcp \
     --header "Authorization: Bearer haifymcp_..."
 ```
 
-**ChatGPT and claude.ai** add a server by URL and run OAuth, which the server
+ChatGPT and claude.ai add a server by URL and run OAuth, which the server
 offers only with `--public-url`. The client discovers the endpoints and
-registers itself; on the authorization page you paste a token made with
+registers itself, and on the authorization page you paste a token made with
 `token create`. The client gets an access token valid for one hour and a
 refresh token valid for 30 days, with the pasted token's role, capped by
 `--max-role`, or lower if it asked for a smaller scope. Only S256 PKCE is
@@ -181,8 +181,8 @@ promoter's start list: before `ha self enable`, through
 
 ## Runbooks
 
-The tools say what can be done; runbooks say in what order, and what fails
-halfway if the order is wrong. They are embedded from
+A runbook gives the order in which to call the tools for a task, and what
+fails halfway if the order is wrong. The runbooks are embedded from
 `pkg/mcpserver/runbooks/*.md` and served two ways:
 
 - as MCP prompts, which Claude Code offers as slash commands, with an optional
@@ -205,9 +205,9 @@ halfway if the order is wrong. They are embedded from
 | Area | read | operate adds | admin adds |
 | ---- | ---- | ------------ | ---------- |
 | Cluster, nodes | `haify_node_list`, `haify_node_health_check`, `haify_diagnose`, `haify_inspect_report`, `haify_inspect_run`, `haify_event_list`, `haify_log_list`, `haify_audit_list`, `haify_ocf_agent_list`, `haify_ocf_agent_metadata`, `haify_notify_channel_list`, `haify_replication_tls_status`, `haify_runbook` | `haify_node_register`, `haify_node_set_labels`, `haify_node_undrain`, `haify_notify_channel_test` | `haify_node_drain`, `haify_node_unregister`, `haify_node_set_address` |
-| LVM pools | `haify_pool_list` | `haify_pool_create`, `haify_pool_add_disk`, `haify_pool_add_cache` | `haify_pool_delete`, `haify_pool_remove_cache`, `haify_pool_convert_thin` |
+| LVM pools | `haify_pool_list`, `haify_pool_disks`, `haify_storage_jobs` | `haify_pool_create`, `haify_pool_add_disk`, `haify_pool_add_cache`, `haify_pool_remove_disk`, `haify_pool_replace_disk`, `haify_pool_trim` | `haify_pool_delete`, `haify_pool_remove_cache`, `haify_pool_convert_thin` |
 | ZFS | `haify_zfs_pool_list` | `haify_zfs_volume_create`, `haify_zfs_volume_resize`, `haify_zfs_dataset_create`, `haify_zfs_snapshot_clone` | `haify_zfs_pool_delete`, `haify_zfs_dataset_delete` |
-| Resources, volumes | `haify_resource_list`, `haify_resource_status` | `haify_resource_create`, `haify_resource_adopt`, `haify_resource_add_volume`, `haify_resource_resize_volume`, `haify_resource_set_options`, `haify_resource_mount`, `haify_resource_dual_primary`, `haify_resource_repair`, `haify_resource_verify`, `haify_resource_tls` | `haify_resource_delete`, `haify_resource_remove_volume`, `haify_resource_create_filesystem`, `haify_resource_set_role`, `haify_resource_unmount` |
+| Resources, volumes | `haify_resource_list`, `haify_resource_status` | `haify_resource_create`, `haify_resource_adopt`, `haify_resource_add_volume`, `haify_resource_resize_volume`, `haify_resource_set_options`, `haify_resource_mount`, `haify_resource_dual_primary`, `haify_resource_repair`, `haify_resource_verify`, `haify_resource_tls`, `haify_resource_set_labels` | `haify_resource_delete`, `haify_resource_remove_volume`, `haify_resource_move_volume`, `haify_resource_create_filesystem`, `haify_resource_set_role`, `haify_resource_unmount` |
 | Replicas, WAN | | `haify_resource_add_replica`, `haify_resource_attach_diskless`, `haify_resource_detach_diskless`, `haify_resource_set_tiebreaker`, `haify_resource_add_dr`, `haify_wan_repair`, `haify_wan_set_endpoint` | `haify_resource_remove_replica`, `haify_resource_dr_failback` |
 | Profiles | `haify_resource_profile_list`, `haify_resource_profile_get`, `haify_resource_profile_max_size` | `haify_resource_profile_create`, `haify_resource_profile_set_options`, `haify_resource_profile_adjust`, `haify_resource_set_profile` | `haify_resource_profile_delete` |
 | Snapshots | `haify_snapshot_list`, `haify_snapshot_schedule_list` | `haify_snapshot_create`, `haify_snapshot_schedule_create` | `haify_snapshot_delete`, `haify_snapshot_restore`, `haify_snapshot_schedule_delete` |

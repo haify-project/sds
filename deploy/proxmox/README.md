@@ -4,17 +4,17 @@ Back Proxmox VM disks with DRBD resources managed by haify-controller. Guests
 get synchronous replication, HA restart on a surviving node, and RAM-only live
 migration: the disk is already on every node, so migration copies no data.
 
-This is the Proxmox-side counterpart of the Kubernetes CSI driver in
-`deploy/k8s`. Design: `docs/design/proxmox-storage-plugin.md`. Moving VMs off
-VMware vSAN onto this storage:
+This is the Proxmox counterpart of the Kubernetes CSI driver in `deploy/k8s`.
+The design is in `docs/design/proxmox-storage-plugin.md`. For moving VMs off
+VMware vSAN onto this storage, see
 [Evacuating VMware vSAN](../../docs/vsan-evacuation.md).
 
 ## Bootstrap a cluster
 
 `bootstrap.sh` takes an existing PVE cluster to a working `haify` storage in one
-command. Run it as root on any one PVE node, from a checkout holding Linux
-binaries for the nodes (`GOOS=linux GOARCH=amd64 make build` puts them in
-`bin/`), or with `HAIFY_CONTROLLER_DEB` pointing at an
+command. Run it as root on any one PVE node, either from a checkout holding
+Linux binaries for the nodes (`GOOS=linux GOARCH=amd64 make build` puts them in
+`bin/`) or with `HAIFY_CONTROLLER_DEB` pointing at a
 `haify-controller_<version>_<arch>.deb`:
 
 ```bash
@@ -34,54 +34,60 @@ binaries for the nodes (`GOOS=linux GOARCH=amd64 make build` puts them in
 | 8 | `pvesm add haify <id> --controller <every controller-capable node> --haifypool <pool> --replicas <n> --storagetype <pool type> --content images,rootdir --shared 1` | the storage ID exists as type `haify` |
 | 9 | Reports a missing corosync QDevice (even vote count) and a missing DRBD tiebreaker (two replicas, fewer than three nodes) | never: it only reports |
 
-Disks are never guessed: `--devices` names them (the same path on every
-storage node; `--node-devices pve3=/dev/nvme1n1` for one that differs, and
-`/dev/disk/by-id/` paths are safest). All disks are checked before step 2, so a
-bad one stops the run before anything is installed. A disk with partitions or
-any signature `wipefs` reports is refused unless `--force-wipe`; a disk that is
-mounted or held by LVM/dm/md (a PVE system disk, `local-lvm`) is refused even
-then. `--storage-nodes` limits the pool to some nodes; the rest still get DRBD,
-registration and the plugin, and run guests as diskless DRBD clients.
+The script never guesses disks; `--devices` names them. The path must be the
+same on every storage node; use `--node-devices pve3=/dev/nvme1n1` for a node
+that differs. `/dev/disk/by-id/` paths are safest. All disks are checked before
+step 2, so a bad one stops the run before anything is installed. A disk with
+partitions or any signature `wipefs` reports is refused unless `--force-wipe`
+is given. A disk that is mounted or held by LVM/dm/md (a PVE system disk,
+`local-lvm`) is refused even then. `--storage-nodes` limits the pool to some
+nodes; the rest still get DRBD, registration and the plugin, and run guests as
+diskless DRBD clients.
 
-**Rerunning** is safe: each step checks before it changes, so on a
-bootstrapped cluster the run prints only what it found. **Dry run**
-(`--dry-run`) runs the read-only checks over SSH and prints each change, with
-its node, instead of making it. **Failure** stops at the first failed step
-and prints the command to resume, with `--from-step N`; step 1 always runs
-again, since every later step needs the member list. `--yes` skips the
-confirmation prompt; `--help` lists everything, including the environment
-variables (`HAIFY_BIN_DIR`, `HAIFY_CONFIG_DIR`, `HAIFY_CONTROLLER_DEB`,
+Rerunning the script is safe. Each step checks before it changes anything, so
+on a bootstrapped cluster the run prints only what it found. With `--dry-run`
+it runs the read-only checks over SSH and prints each change, with its node,
+instead of making it. On failure it stops at the first failed step and prints
+the command to resume with `--from-step N`; step 1 always runs again, since
+every later step needs the member list. `--yes` skips the confirmation prompt.
+`--help` lists every option, including the environment variables
+(`HAIFY_BIN_DIR`, `HAIFY_CONFIG_DIR`, `HAIFY_CONTROLLER_DEB`,
 `HAIFY_PLUGIN_DEB`, `HAIFY_LINBIT_REPO`, `HAIFY_LINBIT_KEY_URL`,
 `HAIFY_LINBIT_KEY_FINGERPRINT`).
 
-It does **not**: create the PVE cluster (`pvecm create` / `pvecm add` first; a
-one-node cluster is fine), set up a QDevice or PVE HA rules (see
-[HA](#ha)), turn on API auth or TLS (the controller's API is open on the
-network until `[auth]`/`[rbac]` and the storage's `apitoken` are set), put
-DRBD on a separate storage network, create ZFS pools (`--pool-type` is
-`lvm-thin` or `lvm`, because Self-HA's metadata volume is LVM), restart a
-controller whose binary it updated (it says so; restart it yourself), or
-remove anything.
+The script does not:
+
+- create the PVE cluster (run `pvecm create` / `pvecm add` first; a one-node
+  cluster is fine);
+- set up a QDevice or PVE HA rules (see [HA](#ha));
+- turn on API auth or TLS (the controller's API is open on the network until
+  `[auth]`/`[rbac]` and the storage's `apitoken` are set);
+- put DRBD on a separate storage network;
+- create ZFS pools (`--pool-type` is `lvm-thin` or `lvm`, because Self-HA's
+  metadata volume is LVM);
+- restart a controller whose binary it updated (it says so; restart it
+  yourself);
+- remove anything.
 
 Before running it on a real cluster:
 
 - **`apt-get update` must succeed on every node.** A node with the
   `pve-enterprise` repository and no subscription fails it; switch that node to
   the no-subscription repository first.
-- **The LINBIT key.** It is fetched over HTTPS and trusted as such unless
+- The LINBIT key is fetched over HTTPS and trusted on that basis unless
   `HAIFY_LINBIT_KEY_FINGERPRINT` is set, in which case a key with another
   fingerprint is refused. Take the fingerprint from LINBIT's documentation.
   If the public Proxmox suite lacks a package (`drbd-reactor` among them), set
   `HAIFY_LINBIT_REPO` to a source line that has it.
-- **Kernel upgrades rebuild DRBD.** It is a DKMS module; a PVE kernel newer
-  than the installed `drbd-dkms` supports leaves the node without DRBD after
-  the reboot. After every kernel upgrade, before rebooting, check
+- **Kernel upgrades rebuild DRBD.** DRBD is a DKMS module, and a PVE kernel
+  newer than the installed `drbd-dkms` supports leaves the node without DRBD
+  after the reboot. After every kernel upgrade, before rebooting, check that
   `dkms status drbd` lists the new kernel as installed.
   `proxmox-default-headers` is installed so new kernels get headers.
-- **Addresses.** Nodes are registered and reached at the address PVE lists for
-  them (the corosync link). To move DRBD traffic to a storage network
-  afterwards: `haify node set-address <node> <ip> --replication-address <ip>`.
-- **The VIP** must be a free address in the nodes' subnet. Self-HA moves the
+- Nodes are registered and reached at the address PVE lists for them (the
+  corosync link). To move DRBD traffic to a storage network afterwards, run
+  `haify node set-address <node> <ip> --replication-address <ip>`.
+- The VIP must be a free address in the nodes' subnet. Self-HA moves the
   controller's database onto DRBD, which takes a minute or two; its log is
   `/var/log/haify/selfha-handoff.log` on the node that ran it.
 - `install.sh` restarts the PVE daemons that load storage plugins (`pvedaemon`,
@@ -94,48 +100,50 @@ Before running it on a real cluster:
 
 A Perl module (`HaifyPlugin.pm`, storage type `haify`, with its REST client and
 naming helpers under `PVE/Storage/Custom/Haify/`) that translates Proxmox storage
-API calls into haify-controller REST calls. It holds no storage logic of its own.
+API calls into haify-controller REST calls and holds no storage logic of its own.
 It uses `HTTP::Tiny` + `JSON::PP`, both of which ship with Proxmox VE, so a PVE
-node needs no extra packages and no haify binaries.
+node needs no extra packages and no Haify binaries.
 
-The plugin is written against storage API version 11. On a PVE release whose
-accepted window does not include 11, `api()` reports the nearest version that
-release accepts, so the storage still loads.
+The plugin implements storage API versions 11 to 16 and declares the version
+the PVE release speaks when it falls in that range, 16 on anything newer. On a
+release whose accepted window lies entirely outside 11 to 16, `api()` reports
+the accepted version nearest to that range, so the storage still loads.
 
 ## Requirements
 
 Each PVE node that will run guests off Haify storage needs:
 
-- **DRBD 9 kernel module + `drbd-utils`.** The hypervisor has to see
+- The DRBD 9 kernel module and `drbd-utils`. The hypervisor has to see
   `/dev/drbdN` locally to back a VM disk. Install LINBIT's `drbd-dkms` and
   `drbd-utils`.
-- **`sudo`**, and SSH access from the controller: the controller runs
-  `drbdadm` and writes `/etc/drbd.d` on this node over SSH through `sudo`. A
-  minimal Debian/PVE install may not ship `sudo`.
-- **Registration as an haify node** under its PVE node name (`hostname`), e.g.
+- `sudo`, and SSH access from the controller. The controller runs `drbdadm`
+  and writes `/etc/drbd.d` on this node over SSH through `sudo`. A minimal
+  Debian/PVE install may not ship `sudo`.
+- Registration as a Haify node under its PVE node name (`hostname`), e.g.
   `haify node register --name pve1 --address <ip>`. The plugin attaches and
   promotes by node name.
-- **Network reach to the controller's REST port** (default 3375).
-
-A PVE node does **not** need to contribute any disks. A compute-only hypervisor
-attaches to each volume as a diskless client, which is the normal topology:
-storage nodes hold the replicas, PVE nodes run the guests.
-
-- **An LVM filter that skips DRBD devices.** A guest that uses LVM inside its
+- Network access to the controller's REST port (default 3375).
+- An LVM filter that skips DRBD devices. A guest that uses LVM inside its
   disk writes a PV header to it, and this host sees that disk as `/dev/drbdN`
   (and, for an encrypted resource, as the `/dev/mapper/haify_*` container under
-  it). Unfiltered, the host's LVM finds the guest's volume group and may
-  activate it, which holds the device open: the VM can then neither migrate nor
-  fail over. The package (or `install.sh`) prepends
+  it). Without the filter, the host's LVM finds the guest's volume group and may
+  activate it, which holds the device open, and the VM can then neither migrate
+  nor fail over. The package (or `install.sh`) prepends
   `"r|^/dev/drbd|", "r|^/dev/mapper/haify_|"` to `global_filter` in
   `/etc/lvm/lvm.conf`, keeping PVE's own entries (`lvm-filter.sh`;
   `HAIFY_SKIP_LVM_FILTER=1` skips it). It also needs `devices/scan_lvs = 0`, the
   default, so the backing LVs are not scanned.
 
-`preflight.sh <controller>[,<controller>...]` (the `controller` value from storage.cfg; `HAIFY_CA=<file>` for a private CA) checks all of the above except
-SSH, and exits non-zero if anything required is missing (a missing LVM filter
-is a warning: installing adds it). It is in this directory and, once the
-package is installed, in `/usr/share/haify-pve-plugin/`.
+A PVE node does not need to contribute any disks. In the normal topology,
+storage nodes hold the replicas and PVE nodes run the guests: a compute-only
+hypervisor attaches to each volume as a diskless client.
+
+`preflight.sh <controller>[,<controller>...]` (the `controller` value from
+storage.cfg; `HAIFY_CA=<file>` for a private CA) checks all of these
+requirements except SSH. It exits non-zero if anything required is missing; a
+missing LVM filter is only a warning, because installing adds it. The script is
+in this directory and, once the package is installed, in
+`/usr/share/haify-pve-plugin/`.
 
 ## Install
 
@@ -148,7 +156,7 @@ only `dpkg-deb` and Perl, not Go or Node.js):
 make deb-pve-plugin        # dist/haify-pve-plugin_<version>_all.deb
 ```
 
-`make deb` builds it together with the controller packages. Then, on every PVE
+`make deb` builds it along with the controller packages. Then, on every PVE
 node:
 
 ```bash
@@ -156,7 +164,7 @@ node:
 apt install ./haify-pve-plugin_*_all.deb       # the ./ makes apt install a local file
 ```
 
-The package replaces `install.sh` and installs exactly the same modules:
+The package replaces `install.sh` and installs the same modules:
 `HaifyPlugin.pm` in `/usr/share/perl5/PVE/Storage/Custom/` and the helpers in
 `.../Custom/Haify/`, plus `lvm-filter.sh` and `preflight.sh` in
 `/usr/share/haify-pve-plugin/`. It depends on `libpve-storage-perl`,
@@ -174,11 +182,11 @@ yours to install. On installation and on every upgrade it:
    not affect running guests.
 
 `apt remove haify-pve-plugin` removes the modules and restarts the same daemons.
-It changes nothing else: it warns if `storage.cfg` still has `haify:` entries,
-but leaves them (other nodes may still use them), and leaves the LVM filter in
-`lvm.conf`.
+It changes nothing else. It warns if `storage.cfg` still has `haify:` entries
+but leaves them in place (other nodes may still use them), and it leaves the
+LVM filter in `lvm.conf`.
 
-A node set up with `install.sh` can move to the package directly: dpkg
+A node set up with `install.sh` can move to the package directly, since dpkg
 replaces the files in place. Do not run `install.sh --uninstall` afterwards:
 it deletes files the package now owns.
 
@@ -210,24 +218,25 @@ haify: haify0
         shared 1
 ```
 
-`shared 1` is what makes PVE treat the disk as reachable from every node, so
-live migration copies only RAM and `ha-manager` may restart a guest anywhere.
+`shared 1` makes PVE treat the disk as reachable from every node, so live
+migration copies only RAM and `ha-manager` may restart a guest anywhere.
 
-The dialog has every option below. On **Add** it fills in the controller list
-with the cluster nodes' addresses, and **Pool** lists the haify volume groups
-this node holds; the controller list is fixed once the storage exists.
+The dialog has every option listed below. On **Add** it fills in the
+controller list with the cluster nodes' addresses, and **Pool** lists the Haify
+volume groups this node holds. The controller list is fixed once the storage
+exists.
 
-Each haify storage's page (a node → the storage) has an **Haify** tab: every disk
-with the nodes holding a replica and their state, the node the guest runs on,
-and whether the replicas are in step, read from that node's own DRBD every 10
-seconds. The plugin adds these as `haify-*` fields to the volumes PVE's storage
-content API returns, so `pvesh get /nodes/<node>/storage/<id>/content` shows
-them too.
+Each Haify storage's page (a node → the storage) has a **Haify** tab. It lists
+every disk with the nodes holding a replica and their state, the node the guest
+runs on, and whether the replicas are in step, read from that node's own DRBD
+every 10 seconds. The plugin adds these as `haify-*` fields to the volumes
+PVE's storage content API returns, so
+`pvesh get /nodes/<node>/storage/<id>/content` shows them too.
 
-PVE has no way for a storage plugin to add itself to its
-interface, so the plugin adds `haify-storage.js` to the page template
+PVE gives a storage plugin no way to add itself to its interface, so the plugin
+adds `haify-storage.js` to the page template
 (`/usr/share/pve-manager/index.html.tpl`, one script tag after
-`pvemanagerlib.js`), and an apt hook (`/etc/apt/apt.conf.d/90haify-pve-gui`) adds
+`pvemanagerlib.js`). An apt hook (`/etc/apt/apt.conf.d/90haify-pve-gui`) adds
 it again after a `pve-manager` upgrade replaces the template. Uninstalling
 removes the tag, the script and the hook.
 
@@ -237,12 +246,12 @@ removes the tag, the script and the hook.
 | ------ | ------- |
 | `controller` | Required. Comma-separated addresses, each `host`, `host:port` or `[v6]:port` (port defaults to 3375), optionally prefixed with `https://`. Under Self-HA list every node that can run the controller: an address that refuses the connection is skipped and the next tried; a request that reached a controller and then failed is never resent elsewhere. `pvesm set` cannot change it (it is a fixed option); edit `/etc/pve/storage.cfg` to add addresses |
 | `controllerca` | PEM CA bundle that signs the controller's certificate, for `https://` addresses, e.g. kept in `/etc/pve` so every node has it. Unset: the system trust store. The certificate is verified, names included, so it must cover the addresses listed. `https://` needs `[tls] rest = true` on the controller |
-| `haifypool` | haify pool new volumes are carved from, as `haify pool list` prints it (`haify_vg0`) or without the prefix (`vg0`) |
-| `haifynodes` | Comma-separated haify nodes to place replicas on. Takes precedence over `replicas` |
+| `haifypool` | Haify pool new volumes are carved from, as `haify pool list` prints it (`haify_vg0`) or without the prefix (`vg0`) |
+| `haifynodes` | Comma-separated Haify nodes to place replicas on. Takes precedence over `replicas` |
 | `replicas` | Replica count for auto-placement by free space (1-16) |
 | `storagetype` | `lvm`, `lvm-thin` or `zfs`. Unset: the controller's default |
-| `resourceprefix` | Prefix for generated resource names (default `pve`). Give each PVE cluster its own when several share one haify cluster: VM ids are only unique within a PVE cluster |
-| `apitoken` | Bearer token when haify `[auth]`/`[rbac]` is enabled. Set it in the web interface or with `pvesm add/set --apitoken`: PVE treats it as sensitive and the plugin keeps it in `/etc/pve/priv/storage/<id>.haify-token` (root only, every node), not in `storage.cfg`. A token written into `storage.cfg` by hand still works, but that file is readable cluster-wide |
+| `resourceprefix` | Prefix for generated resource names (default `pve`). Give each PVE cluster its own when several share one Haify cluster: VM ids are only unique within a PVE cluster |
+| `apitoken` | Bearer token when Haify `[auth]`/`[rbac]` is enabled. Set it in the web interface or with `pvesm add/set --apitoken`: PVE treats it as sensitive and the plugin keeps it in `/etc/pve/priv/storage/<id>.haify-token` (root only, every node), not in `storage.cfg`. A token written into `storage.cfg` by hand still works, but that file is readable cluster-wide |
 | `onnoquorum` | What a new disk does when its node loses quorum or every UpToDate copy: `suspend-io` (default; the guest's I/O freezes and carries on when quorum returns) or `io-error` (the guest sees I/O errors and typically remounts read-only). Applies to disks created from then on; change an existing one with `haify resource set-options <resource> --drbd-options on-no-quorum=<value>,on-no-data-accessible=<value>` |
 | `exactsize` | `1` (the default) gives each new or resized disk exactly the size PVE asks for, rounded up to a 512-byte sector (the backing volume is still allocated in GiB; the DRBD device is capped at the exact size). `0` rounds up to the next whole GiB instead, and then restoring a vzdump backup and online Move Disk onto this storage both fail: they refuse a disk that is not byte-for-byte the source's size. Default `1` |
 
@@ -252,7 +261,7 @@ also accepted. `content` may be `images` and `rootdir`; the only format is
 
 ## How it maps
 
-| Proxmox | haify REST call |
+| Proxmox | Haify REST call |
 | --- | --- |
 | one VM disk `vm-<vmid>-disk-<n>` | one DRBD resource `<prefix>-<vmid>-<n>` |
 | another volume of the VM: `vm-<vmid>-cloudinit`, `vm-<vmid>-state-<snap>` (a snapshot's RAM), `vm-<vmid>-fleece-<n>` (backup fleecing) | one DRBD resource `<prefix>-<vmid>-<name>` |
@@ -275,33 +284,33 @@ The Haify web interface shows the same disks from the storage side, under
 **Proxmox VE**: one card per guest, with each disk's replicas and whether they
 are in step, the node the guest runs on, and a link to it in the PVE interface.
 
-Capacity is the smallest node's because a replica must fit on every node that
-holds one; the sum would let PVE accept a disk that cannot be placed. On a thin
-pool it is the thin pool's own size and unused data space (`thinSizeBytes`,
-`thinDataPercent`), not the volume group's: the group is nearly all thin pool,
-so its free space reads ~0 however empty the pool is. A storage set to
-`storagetype lvm` allocates thick LVs from the group and reports the group.
+Capacity is reported for the smallest node, because a replica must fit on every
+node that holds one; reporting the sum would let PVE accept a disk that cannot
+be placed. On a thin pool the figure is the thin pool's own size and unused
+data space (`thinSizeBytes`, `thinDataPercent`). The volume group's free space
+would read ~0 however empty the pool is, since the group is nearly all thin
+pool. A storage set to `storagetype lvm` allocates thick LVs from the group and
+reports the group.
 
-Snapshots are taken on **every** diskful replica at once, with I/O suspended
+Snapshots are taken on every diskful replica at once, with I/O suspended
 across them for the moment it takes (a timer on each node resumes I/O after a
-minute whatever happens to the controller). Each copy carries its replica's
-DRBD metadata too, so rolling back restores every replica together and DRBD
-resyncs nothing. Losing a node loses one copy, not the snapshot. A snapshot
-taken by an earlier version of the plugin lives on one replica only and is
-rolled back the old way: that replica is restored and the others resync the
-whole disk from it.
+minute whatever happens to the controller). Each copy also carries its
+replica's DRBD metadata, so rolling back restores every replica together and
+DRBD resyncs nothing. Losing a node loses one copy of the snapshot, and the
+snapshot survives on the other replicas. A snapshot taken by an earlier version
+of the plugin lives on one replica only and is rolled back the old way: that
+replica is restored and the others resync the whole disk from it.
 
 A snapshot can be opened read-only on a node that holds a replica, which is
-what `vzdump` in snapshot mode needs for a container. On a node without one
-the backup fails, naming the replica nodes to run it on.
+what `vzdump` in snapshot mode needs for a container. On a node without a
+replica the backup fails, naming the replica nodes to run it on.
 
-**Templates and clones.** Converting a VM to a template renames its disks to
-`base-<vmid>-disk-<n>`; the data stays where it is. A linked clone of a
-template is a full copy — a DRBD device has no image-level copy-on-write — made
-on the template's replica nodes at the template's exact size, so it is
-independent of the template. **Reassigning** a disk to another VM renames it.
-Both renames need the disk stopped and without snapshots; the error says what
-is in the way.
+Converting a VM to a template renames its disks to `base-<vmid>-disk-<n>`; the
+data stays where it is. A linked clone of a template is a full copy, because a
+DRBD device has no image-level copy-on-write. The copy is made on the
+template's replica nodes at the template's exact size, so it is independent of
+the template. Reassigning a disk to another VM renames it. Both renames need
+the disk stopped and without snapshots; the error says what is in the way.
 
 ## Live migration and the dual-primary window
 
@@ -309,17 +318,17 @@ During a live migration the source and target both hold the disk open for a
 moment. DRBD forbids two Primaries unless `allow-two-primaries` is set, so the
 plugin brackets the hand-off:
 
-- `activate_volume` opens the window **only** when another node currently holds
-  Primary **and** PVE is live-migrating the VM from there: the VM's config still
-  sits on the source node with `lock: migrate`. Any other Primary is a leftover
-  (typically an earlier `deactivate_volume` that could not reach the
-  controller), and activation fails naming the node, instead of letting the
-  guest run with two writers allowed. Demote the leftover with
+- `activate_volume` opens the window only when another node currently holds
+  Primary and PVE is live-migrating the VM from there, which it detects by the
+  VM's config still sitting on the source node with `lock: migrate`. Any other
+  Primary is a leftover (typically an earlier `deactivate_volume` that could not
+  reach the controller). Activation then fails and names the node, instead of
+  letting the guest run with two writers allowed. Demote the leftover with
   `haify resource secondary <resource> <node>` and start the guest again.
-  Containers never qualify: they migrate by restart.
-- The window is opened on the migration's source and target only — the ends of
-  the one connection that carries two Primaries. A host that is down elsewhere
-  in the resource does not block the migration.
+  Containers never qualify, because they migrate by restart.
+- The window is opened only on the migration's source and target, the two ends
+  of the one connection that carries two Primaries. A host that is down
+  elsewhere in the resource does not block the migration.
 - The window is closed again on every exit path: a failed promote, a device that
   does not appear within 20 seconds, and `deactivate_volume` (which closes
   unconditionally, since the source deactivates after hand-off).
@@ -338,20 +347,20 @@ filesystem mounted twice will corrupt regardless of what DRBD permits.
 ## Diskless clients come and go
 
 A host with no replica of a disk attaches to it as a diskless client when the
-guest starts there, and detaches when the guest stops or migrates away. Hosts
-used to stay attached to every disk of every guest they had ever run, so one of
-them being down blocked operations on all of those disks. A detach that fails
-is logged and leaves the host attached, as before. A client that is a
-resource's last quorum vote besides two replicas is not removed but becomes its
-tiebreaker.
+guest starts there, and detaches when the guest stops or migrates away. In
+earlier versions hosts stayed attached to every disk of every guest they had
+ever run, so one of them being down blocked operations on all of those disks. A
+detach that fails is logged and leaves the host attached, as before. A client
+that is a resource's last quorum vote besides two replicas is kept as the
+resource's tiebreaker instead of being removed.
 
 ## When the controller is unreachable
 
-Starting and stopping a guest go through the controller, and an unreachable
-controller used to mean no guest could start and HA could restart none. Now,
-when no controller answers and the disk is **already up on this node**:
+Starting and stopping a guest go through the controller. In earlier versions an
+unreachable controller meant no guest could start and HA could restart none.
+Now, when no controller answers and the disk is already up on this node:
 
-- `activate_volume` promotes it with plain `drbdadm primary` — never
+- `activate_volume` promotes it with plain `drbdadm primary`, never with
   `--force`, so DRBD still refuses without quorum and an UpToDate copy within
   reach. It is refused while another node holds the disk Primary: only the
   controller can tell a live migration from a leftover.
@@ -367,25 +376,25 @@ bypassed.
 
 ## HA
 
-`ha-manager` restarting a guest elsewhere calls `activate_volume` on the new
-node, which promotes **quorum-guarded**: haify force-promotes only if that node
-holds DRBD quorum and refuses otherwise. A partitioned node therefore cannot
-take over, so HA failover cannot split-brain. The trade-off is deliberate: a
-resource that has lost quorum will not fail over automatically.
+When `ha-manager` restarts a guest elsewhere, it calls `activate_volume` on the
+new node, and the promotion there is quorum-guarded: Haify force-promotes only
+if that node holds DRBD quorum and refuses otherwise. A partitioned node
+therefore cannot take over, so HA failover cannot split-brain. The trade-off is
+deliberate: a resource that has lost quorum will not fail over automatically.
 
-PVE decides where a guest runs, and with it where its disks are Primary. So
-`haify ha create` and the haify gateways, which would put a drbd-reactor promoter
-on the disk to fight PVE for the role, refuse a disk the plugin created (it
-labels each `haify.pve/managed-by=pve`) and any resource with diskless clients.
-Use PVE HA for guests; do not use drbd-reactor for them.
+PVE decides where a guest runs, and with it where its disks are Primary.
+`haify ha create` and the Haify gateways would put a drbd-reactor promoter on
+the disk to fight PVE for the role, so both refuse a disk the plugin created
+(the plugin labels each one `haify.pve/managed-by=pve`) and any resource with
+diskless clients. Use PVE HA for guests; do not use drbd-reactor for them.
 
 ### Where HA should restart a guest
 
-A guest runs on any PVE node: one without a replica attaches as a diskless
-client and reads and writes over the network. That makes every node a valid HA
+A guest runs on any PVE node. A node without a replica attaches as a diskless
+client and reads and writes over the network, so every node is a valid HA
 target, but the replica nodes are the fast ones. Tell `ha-manager` to prefer
-them, without forbidding the rest (a strict rule would leave the guest down
-when both replica nodes are):
+them without forbidding the rest (a strict rule would leave the guest down
+when both replica nodes are down):
 
 ```bash
 haify resource list | grep pve-100-        # the guest's disks and their nodes
@@ -399,18 +408,19 @@ ha-manager groupadd haify-pve1-pve2 --nodes pve1:2,pve2:2,pve3:1
 ha-manager set vm:100 --group haify-pve1-pve2
 ```
 
-In the web interface, **Datacenter → HA** shows each HA guest's replica nodes
-(a warning sign when it runs on a node without one), and **Prefer nodes with
-Haify replicas** writes such a non-strict rule, `haify-vm-<id>`, for every HA guest
-with disks on haify, or updates it (PVE 9; on PVE 8 the column only). A rule takes effect at once: a guest
-running on another node is migrated to a replica node right away.
+In the web interface, **Datacenter → HA** shows each HA guest's replica nodes,
+with a warning sign when the guest runs on a node without one. On PVE 9,
+**Prefer nodes with Haify replicas** writes or updates such a non-strict rule,
+`haify-vm-<id>`, for every HA guest with disks on Haify; on PVE 8 only the
+column is shown. A rule takes effect at once: a guest running on another node
+is migrated to a replica node right away.
 
 Guests whose disks share replica nodes can share a rule or group. A guest
 whose disks sit on different replica pairs prefers the nodes common to all of
 them. In a "two storage nodes plus one tiebreaker" cluster, the third machine
-is a DRBD tiebreaker for haify and a QDevice for corosync — both roles, since a
-QDevice alone gives DRBD no quorum vote. It is usually not a PVE node at all;
-when it is one, give it the lowest priority.
+is both a DRBD tiebreaker for Haify and a QDevice for corosync. It needs both
+roles because a QDevice alone gives DRBD no quorum vote. It is usually not a
+PVE node at all; when it is one, give it the lowest priority.
 
 ## Thin pools and Discard
 
@@ -426,30 +436,32 @@ qm set 103 --scsi0 haify0:vm-103-disk-0,discard=on
 
 Measured on a 3-node PVE 9.2 cluster: one `fstrim` in a guest that had deleted
 3 GiB took its replicas' pools from 79% to 41% and from 68% to 42%. The
-controller's daily trim (`[storage.thin] trim_schedule`) covers filesystems
-Haify mounts itself, not guest disks; Discard is what covers those.
+controller's daily trim (`[storage.thin] trim_schedule`) covers only
+filesystems Haify mounts itself. Guest disks need Discard.
 
 ## I/O limits
 
-PVE limits a VM disk's I/O itself: the disk options `mbps_rd`, `mbps_wr`,
-`iops_rd`, `iops_wr` (and their `_max` bursts) are enforced by QEMU on the
-guest's requests, whatever the storage. They work on Haify disks as on any
-other; set them in the VM's hardware tab or with
-`qm set <vmid> --scsi0 haify0:vm-<vmid>-disk-0,iops_wr=2000`. haify adds nothing on
-top.
+PVE limits a VM disk's I/O itself: QEMU enforces the disk options `mbps_rd`,
+`mbps_wr`, `iops_rd`, `iops_wr` (and their `_max` bursts) on the guest's
+requests, whatever the storage. They work on Haify disks as on any other; set
+them in the VM's hardware tab or with
+`qm set <vmid> --scsi0 haify0:vm-<vmid>-disk-0,iops_wr=2000`. Haify adds no
+limits of its own.
 
 ## Limitations
 
-- **Raw only.** DRBD exports a raw block device; qcow2 is not supported and not
-  needed (snapshots come from haify, not the image format).
-- **Linked clones are full copies.** They take the template's full size and
-  the time to copy it.
-- **Volume names.** `vm-<vmid>-<name>` with `<name>` starting with a letter
+- The only format is raw. DRBD exports a raw block device; qcow2 is not
+  supported and not needed, since snapshots come from Haify rather than the
+  image format.
+- Linked clones are full copies. They take the template's full size and the
+  time to copy it.
+- Volume names are `vm-<vmid>-<name>`, with `<name>` starting with a letter
   and made of letters, digits, `_` and `-` (at most 64), and
-  `base-<vmid>-disk-<n>`; PVE's own names all fit.
-- **Snapshot access** only on a node holding a replica, and only for LVM.
-- **Whole-gigabyte allocation** with `exactsize 0`, which vzdump restore and Move Disk cannot use.
-- **WAN resources are refused for dual-primary**, so a guest cannot live-migrate
+  `base-<vmid>-disk-<n>`. PVE's own names all fit.
+- Snapshots can be accessed only on a node holding a replica, and only for LVM.
+- With `exactsize 0`, allocation is in whole gigabytes, which vzdump restore
+  and Move Disk cannot use.
+- WAN resources are refused for dual-primary, so a guest cannot live-migrate
   across a WAN-replicated (asynchronous) resource.
 
 ## Tests
@@ -459,7 +471,7 @@ cd deploy/proxmox && prove t/
 ```
 
 The suite stubs the PVE modules and the REST client, so it runs on any machine
-with a plain Perl. It covers the naming round trip, size rounding, allocation
+with plain Perl. It covers the naming round trip, size rounding, allocation
 payloads, capacity reporting, the REST error semantics (the controller reports
 failures as HTTP 200 + `success=false`), and every path that opens or closes
 the dual-primary window.
@@ -469,7 +481,7 @@ the dual-primary window.
 ```
 
 runs `bootstrap.sh --dry-run` against a stub cluster (an `ssh` on `PATH` that
-answers the read-only checks as a fresh or a bootstrapped node would) and
+answers the read-only checks as a fresh or a bootstrapped node would). It
 checks the planned commands, that a bootstrapped cluster gets none, and the
 refusals (offline member, no root SSH, unusable disks, missing `--devices` or
 `--vip`). It needs bash and perl, not PVE.
