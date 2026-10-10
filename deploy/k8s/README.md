@@ -80,7 +80,7 @@ Then:
 | `allowRemoteVolumeAccess` | `false` | `true` lets a Pod run on a node with no replica: the node plugin attaches a diskless DRBD client there at stage time and detaches it at unstage. Without it, Pods are pinned to replica nodes |
 | `faultDomainLabel` | `host` | Haify node label whose values replicas are spread across (`haify node label <node> host=<name>`); nodes without the label count as their own domain |
 | `resourceProfile` | none | Haify resource profile; its pool, replica count and storage type apply unless the StorageClass sets them explicitly |
-| `resourceLabels` | none | `key=value,key=value` labels put on the Haify resource. `haify.csi/managed-by=csi` is always added |
+| `resourceLabels` | none | `key=value,key=value` labels put on the Haify resource. `haify.csi/managed-by=csi` is always added, and `haify.csi/pvc=<namespace>/<name>` names the claim (external-provisioner passes it with `--extra-create-metadata`, which `20-controller.yaml` sets) |
 
 Placement: the node the scheduler picked (`WaitForFirstConsumer` with
 `--strict-topology`) is seated first, the rest go to the nodes whose pool has

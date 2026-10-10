@@ -138,7 +138,12 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	for key, value := range params.ResourceLabels {
 		labels[key] = value
 	}
-	labels["haify.csi/managed-by"] = "csi"
+	labels[managedByLabel] = managedByValue
+	if params.PVC != "" {
+		// So the volume is recognisable in Haify by its claim, not only by
+		// the generated pvc-<uid> name.
+		labels[pvcLabel] = params.PVC
+	}
 	if backend, ok := s.backend.(interface {
 		CreateResourceRequest(context.Context, *haifypb.CreateResourceRequest) error
 	}); ok {

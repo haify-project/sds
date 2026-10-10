@@ -155,6 +155,19 @@ func TestCreateVolumeProfileOverridesAndMetadata(t *testing.T) {
 	assert.Equal(t, "pvc_profile_overrides", resp.Volume.VolumeId)
 }
 
+func TestCreateVolumeLabelsTheClaim(t *testing.T) {
+	b := newFakeBackend("n1", "n2")
+	req := validCreateReq("pvc-claim")
+	req.Parameters = map[string]string{
+		"pool": "vg0", paramPVCName: "data-postgres-0", paramPVCNamespace: "db",
+	}
+	_, err := newTestController(b).CreateVolume(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, b.requestCalls, 1)
+	assert.Equal(t, "db/data-postgres-0", b.requestCalls[0].Labels[pvcLabel])
+	assert.Equal(t, "csi", b.requestCalls[0].Labels[managedByLabel])
+}
+
 func TestCreateVolumeProfileErrors(t *testing.T) {
 	tests := []struct {
 		name     string

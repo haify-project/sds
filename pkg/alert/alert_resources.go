@@ -75,8 +75,8 @@ func (m *Monitor) checkReplicas(res ResourceStatusInfo, sc *pollScope) {
 				"repl_state": state.ReplicationState,
 			},
 		}, sc, sourceResources, degraded,
-			fmt.Sprintf("resource %s on %s degraded: %s", res.Name, node, reason),
-			fmt.Sprintf("resource %s on %s recovered to normal state", res.Name, node))
+			fmt.Sprintf("resource %s on %s degraded: %s", res.Title(), node, reason),
+			fmt.Sprintf("resource %s on %s recovered to normal state", res.Title(), node))
 	}
 }
 
@@ -109,8 +109,8 @@ func (m *Monitor) checkOutOfSync(res ResourceStatusInfo, sc *pollScope) {
 			Node:     node,
 			Details:  map[string]string{"out_of_sync_kib": fmt.Sprint(state.OutOfSyncKiB)},
 		}, sc, sourceResources, active,
-			fmt.Sprintf("resource %s: %d KiB on %s are marked out of sync with its peer — the copies may differ, or the marks may be left over from a verify or an interrupted resync; resource verify %s --resync makes them identical and clears the marks", res.Name, state.OutOfSyncKiB, node, res.Name),
-			fmt.Sprintf("resource %s on %s holds the same data as its peer again", res.Name, node))
+			fmt.Sprintf("resource %s: %d KiB on %s are marked out of sync with its peer — the copies may differ, or the marks may be left over from a verify or an interrupted resync; resource verify %s --resync makes them identical and clears the marks", res.Title(), state.OutOfSyncKiB, node, res.Name),
+			fmt.Sprintf("resource %s on %s holds the same data as its peer again", res.Title(), node))
 	}
 }
 
@@ -164,8 +164,8 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 	partialView := !fullyConnected(res)
 
 	m.level(noPrimary, sc, sourceResources, expectPrimary && cur == "" && !partialView && !res.IdleWithoutPrimary,
-		fmt.Sprintf("resource %s has no Primary: %s was demoted and nothing took over", res.Name, demoted),
-		fmt.Sprintf("resource %s has a Primary again on %s", res.Name, cur))
+		fmt.Sprintf("resource %s has no Primary: %s was demoted and nothing took over", res.Title(), demoted),
+		fmt.Sprintf("resource %s has a Primary again on %s", res.Title(), cur))
 
 	// First sighting: record where the Primary is without claiming it just moved
 	// there. See the package comment.
@@ -190,7 +190,7 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 			Status:   event.StatusResolved,
 			Resource: res.Name,
 			Node:     cur,
-			Message:  fmt.Sprintf("resource %s promoted on %s", res.Name, cur),
+			Message:  fmt.Sprintf("resource %s promoted on %s", res.Title(), cur),
 			Details:  map[string]string{"to": cur},
 		})
 	case res.IdleWithoutPrimary:
@@ -205,7 +205,7 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 			Status:   event.StatusResolved,
 			Resource: res.Name,
 			Node:     cur,
-			Message:  fmt.Sprintf("resource %s moved: Primary on %s, was %s", res.Name, cur, prev),
+			Message:  fmt.Sprintf("resource %s moved: Primary on %s, was %s", res.Title(), cur, prev),
 			Details:  map[string]string{"from": prev, "to": cur},
 		})
 	default:
@@ -220,7 +220,7 @@ func (m *Monitor) checkPrimary(res ResourceStatusInfo, sc *pollScope) {
 			Status:   event.StatusInfo,
 			Resource: res.Name,
 			Node:     cur,
-			Message:  fmt.Sprintf("resource %s failed over: Primary moved from %s to %s", res.Name, prev, cur),
+			Message:  fmt.Sprintf("resource %s failed over: Primary moved from %s to %s", res.Title(), prev, cur),
 			Details:  map[string]string{"from": prev, "to": cur},
 		})
 	}
@@ -239,8 +239,8 @@ func (m *Monitor) checkWAN(res ResourceStatusInfo, sc *pollScope) {
 		Resource: res.Name,
 		Node:     "wan",
 	}, sc, sourceResources, !res.WANHealthy,
-		fmt.Sprintf("resource %s WAN replication degraded: %s", res.Name, res.WANMessage),
-		fmt.Sprintf("resource %s WAN replication recovered", res.Name))
+		fmt.Sprintf("resource %s WAN replication degraded: %s", res.Title(), res.WANMessage),
+		fmt.Sprintf("resource %s WAN replication recovered", res.Title()))
 }
 
 // fullyConnected reports whether every replica in this view was actually

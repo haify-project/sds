@@ -147,6 +147,28 @@ func TestManagedVolumeMovingIsNotAFailover(t *testing.T) {
 	assert.Equal(t, map[string]string{"from": "n1", "to": "n2"}, evs[0].Details)
 }
 
+// A message names a volume by its claim too: pvc-<uid> alone does not tell an
+// operator which application it is.
+func TestMessagesNameTheOwner(t *testing.T) {
+	lister := &mockLister{list: []ResourceStatusInfo{{
+		Name:               "pvc-1234",
+		Owner:              "PVC db/data-postgres-0",
+		IdleWithoutPrimary: true,
+		NodeStates:         map[string]NodeStateInfo{"n1": healthy("Primary"), "n2": healthy("Secondary")},
+	}}}
+	mon, drain := newHarness(t, Options{Resources: lister})
+	ctx := context.Background()
+	mon.Poll(ctx)
+	drain()
+
+	lister.list[0].NodeStates = map[string]NodeStateInfo{"n1": healthy("Secondary"), "n2": healthy("Primary")}
+	mon.Poll(ctx)
+	evs := drain()
+	require.Len(t, evs, 1)
+	assert.Equal(t, "pvc-1234", evs[0].Resource)
+	assert.Equal(t, "resource pvc-1234 (PVC db/data-postgres-0) moved: Primary on n2, was n1", evs[0].Message)
+}
+
 // A resource that has never had a Primary is Secondary by design, not in
 // trouble. Raising a critical for each of those would bury the real ones.
 func TestSecondaryEverywhereIsNotAnAlert(t *testing.T) {

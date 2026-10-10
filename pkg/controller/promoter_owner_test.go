@@ -59,3 +59,11 @@ func TestExternallyPromoted(t *testing.T) {
 	assert.Equal(t, "Proxmox VE", externallyPromoted("disk", map[string]string{pveManagedByLabel: "pve"}))
 	assert.Equal(t, "OpenStack Cinder", externallyPromoted("os-0d6f", map[string]string{cinderManagedByLabel: "cinder"}))
 }
+
+func TestResourceOwner(t *testing.T) {
+	assert.Equal(t, "PVC db/data-postgres-0",
+		resourceOwner(map[string]string{csiManagedByLabel: "csi", csiPVCLabel: "db/data-postgres-0"}))
+	assert.Empty(t, resourceOwner(map[string]string{csiManagedByLabel: "csi"}), "a volume from before the claim was recorded")
+	assert.Empty(t, resourceOwner(map[string]string{csiPVCLabel: "db/x"}), "a label the CSI driver did not set")
+	assert.Empty(t, resourceOwner(nil))
+}

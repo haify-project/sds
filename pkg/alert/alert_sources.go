@@ -86,6 +86,18 @@ type ResourceStatusInfo struct {
 	// as a critical and a move is not a failover; degrade, quorum and sync
 	// alerts still apply.
 	IdleWithoutPrimary bool
+	// Owner is what the resource is to the system that created it, such as
+	// "PVC db/data-postgres-0"; empty when nothing names it.
+	Owner string
+}
+
+// Title is how messages name the resource: with its owner when it has one,
+// because a generated name like pvc-<uid> tells an operator nothing.
+func (r ResourceStatusInfo) Title() string {
+	if r.Owner == "" {
+		return r.Name
+	}
+	return r.Name + " (" + r.Owner + ")"
 }
 
 // Degraded reports whether any replica of the resource is in a faulty state.

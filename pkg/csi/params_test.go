@@ -44,3 +44,16 @@ func TestParseVolumeParamsErrors(t *testing.T) {
 	_, err = ParseVolumeParams(map[string]string{"pool": "vg0", "resourceLabels": "missing-value"})
 	assert.Error(t, err, "bad resourceLabels")
 }
+
+func TestParseVolumeParamsPVC(t *testing.T) {
+	p, err := ParseVolumeParams(map[string]string{
+		"pool": "vg0", paramPVCName: "data-postgres-0", paramPVCNamespace: "db",
+		"csi.storage.k8s.io/pv/name": "pvc-1234",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "db/data-postgres-0", p.PVC)
+
+	p, err = ParseVolumeParams(map[string]string{"pool": "vg0", paramPVCName: "data"})
+	require.NoError(t, err)
+	assert.Empty(t, p.PVC, "a name without its namespace is not a claim")
+}

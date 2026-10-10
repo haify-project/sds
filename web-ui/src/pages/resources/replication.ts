@@ -59,8 +59,17 @@ const MANAGERS: { label: string; value: string; manager: ResourceManager }[] = [
   },
 ];
 
+// The claim a CSI volume was provisioned for, as namespace/name. Volumes
+// created before the driver recorded it do not have it.
+const PVC_LABEL = 'haify.csi/pvc';
+
 export function managerOf(resource: Resource): ResourceManager | null {
-  for (const m of MANAGERS) if (resource.labels?.[m.label] === m.value) return m.manager;
+  for (const m of MANAGERS) {
+    if (resource.labels?.[m.label] !== m.value) continue;
+    const pvc = m.value === 'csi' ? resource.labels?.[PVC_LABEL] : undefined;
+    // A pvc-<uid> name says nothing about which application it is; its claim does.
+    return pvc ? { ...m.manager, chip: `PVC ${pvc}` } : m.manager;
+  }
   return null;
 }
 

@@ -35,6 +35,9 @@ spec:
             - "--enable-capacity"
             - "--capacity-ownerref-level=2"
             - "--capacity-poll-interval=1m"
+            # Pass each claim's namespace and name to CreateVolume, which puts
+            # them on the Haify resource (label haify.csi/pvc).
+            - "--extra-create-metadata"
             - "--v=2"
           env:
             - name: NAMESPACE

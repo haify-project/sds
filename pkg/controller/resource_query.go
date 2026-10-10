@@ -297,6 +297,7 @@ func (rm *ResourceManager) GetResourceStatusList(ctx context.Context) ([]alert.R
 			// A CSI volume is promoted only while a pod has it mounted, and a
 			// Proxmox VM disk only while its VM runs.
 			IdleWithoutPrimary: externallyPromoted(dbRes.Name, dbRes.Labels) != "",
+			Owner:              resourceOwner(dbRes.Labels),
 		}
 		for node, st := range info.NodeStates {
 			state := alert.NodeStateInfo{

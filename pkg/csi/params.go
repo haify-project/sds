@@ -12,6 +12,13 @@ import (
 // non-replica node may attach the volume diskless instead of being rejected.
 const paramAllowRemoteVolumeAccess = "allowRemoteVolumeAccess"
 
+// The claim a volume is provisioned for, which external-provisioner adds to
+// the parameters when it runs with --extra-create-metadata.
+const (
+	paramPVCName      = "csi.storage.k8s.io/pvc/name"
+	paramPVCNamespace = "csi.storage.k8s.io/pvc/namespace"
+)
+
 // VolumeParams is the parsed StorageClass.parameters for CreateVolume.
 type VolumeParams struct {
 	Pool        string // VG (lvm) or zpool (zfs) name; required
@@ -29,6 +36,9 @@ type VolumeParams struct {
 	// QoS are the volume's I/O limits, carried to the node in the volume
 	// context (qos.go).
 	QoS map[string]string
+	// PVC is the claim the volume is for, as namespace/name; empty when the
+	// provisioner does not pass it.
+	PVC string
 }
 
 // ParseVolumeParams validates and defaults the StorageClass parameters.
@@ -72,6 +82,9 @@ func ParseVolumeParams(p map[string]string) (VolumeParams, error) {
 			}
 			out.ResourceLabels[key] = value
 		}
+	}
+	if name, ns := p[paramPVCName], p[paramPVCNamespace]; name != "" && ns != "" {
+		out.PVC = ns + "/" + name
 	}
 	qos, err := parseQoS(p)
 	if err != nil {

@@ -31,6 +31,8 @@ const (
 	pveManagedByLabel = "haify.pve/managed-by"
 	// csiManagedByLabel marks a resource the CSI driver created.
 	csiManagedByLabel = "haify.csi/managed-by"
+	// csiPVCLabel names the claim a CSI volume was provisioned for.
+	csiPVCLabel = "haify.csi/pvc"
 	// cinderManagedByLabel marks a resource the OpenStack Cinder driver created.
 	cinderManagedByLabel = "haify.openstack/managed-by"
 )
@@ -79,4 +81,13 @@ func (c *Controller) assertPromoterAllowed(ctx context.Context, resource, what s
 			what, resource, app.Engine, app.Name, app.Name)
 	}
 	return nil
+}
+
+// resourceOwner names the resource as the system that created it knows it,
+// for messages: the claim of a CSI volume. Empty when no label says.
+func resourceOwner(labels map[string]string) string {
+	if pvc := labels[csiPVCLabel]; pvc != "" && labels[csiManagedByLabel] == "csi" {
+		return "PVC " + pvc
+	}
+	return ""
 }
