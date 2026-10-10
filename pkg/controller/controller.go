@@ -321,6 +321,10 @@ func (c *Controller) Start() error {
 		}
 	}
 
+	if c.resources != nil {
+		c.resources.reconcileSelfHaServices(context.Background())
+	}
+
 	c.logger.Info("Haify controller started",
 		zap.String("address", c.config.Server.ListenAddress),
 		zap.Int("port", c.config.Server.Port),

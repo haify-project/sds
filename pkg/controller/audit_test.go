@@ -63,6 +63,25 @@ func TestAuditSkipsReadsByDefault(t *testing.T) {
 	}
 }
 
+// The web UI polls ResourceStatus; reads without a read verb in their name
+// must stay out of the trail too, or they bury every real change.
+func TestAuditSkipsReadsWithoutAReadVerb(t *testing.T) {
+	for _, m := range []string{"ResourceStatus", "GetAppStatus", "HealthCheck", "PlanRebalance", "CollectNodeDiagnostics"} {
+		log, logs := newObservedLogger()
+		invokeUnary(log, false, "/v1.HaifyController/"+m, nameReq{}, nil)
+		if n := logs.Len(); n != 0 {
+			t.Errorf("%s: expected read to be skipped, got %d entries", m, n)
+		}
+	}
+	for _, m := range []string{"SetPrimary", "RunInspection", "RepairResource"} {
+		log, logs := newObservedLogger()
+		invokeUnary(log, false, "/v1.HaifyController/"+m, nameReq{}, nil)
+		if n := logs.Len(); n != 1 {
+			t.Errorf("%s: expected a change to be audited, got %d entries", m, n)
+		}
+	}
+}
+
 func TestAuditIncludesReadsWhenConfigured(t *testing.T) {
 	log, logs := newObservedLogger()
 	invokeUnary(log, true, "/v1.HaifyController/ListPools", nameReq{}, nil)

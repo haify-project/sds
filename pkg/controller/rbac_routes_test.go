@@ -58,19 +58,25 @@ func doGet(h http.HandlerFunc, token string) (*httptest.ResponseRecorder, map[st
 }
 
 func TestWhoamiDisabledWhenNoEngine(t *testing.T) {
-	h := func(w http.ResponseWriter, r *http.Request) {
-		rbacWhoamiHandler(nil)(w, r, nil)
-	}
-	w, body := doGet(h, "")
-	if w.Code != http.StatusOK || body["enabled"] != false {
-		t.Errorf("got code=%d enabled=%v, want 200 enabled=false", w.Code, body["enabled"])
+	for _, tokenAuth := range []bool{false, true} {
+		h := func(w http.ResponseWriter, r *http.Request) {
+			rbacWhoamiHandler(nil, tokenAuth)(w, r, nil)
+		}
+		w, body := doGet(h, "")
+		if w.Code != http.StatusOK || body["enabled"] != false {
+			t.Errorf("got code=%d enabled=%v, want 200 enabled=false", w.Code, body["enabled"])
+		}
+		// The page tells a shared token apart from no authentication at all.
+		if body["token_auth"] != tokenAuth {
+			t.Errorf("token_auth = %v, want %v", body["token_auth"], tokenAuth)
+		}
 	}
 }
 
 func TestWhoamiReportsRole(t *testing.T) {
 	engine := routeEngine(t)
 	h := func(w http.ResponseWriter, r *http.Request) {
-		rbacWhoamiHandler(engine)(w, r, nil)
+		rbacWhoamiHandler(engine, false)(w, r, nil)
 	}
 	w, body := doGet(h, "alice-token-0123456789")
 	if w.Code != http.StatusOK {
@@ -84,7 +90,7 @@ func TestWhoamiReportsRole(t *testing.T) {
 func TestWhoamiRejectsUnknownToken(t *testing.T) {
 	engine := routeEngine(t)
 	h := func(w http.ResponseWriter, r *http.Request) {
-		rbacWhoamiHandler(engine)(w, r, nil)
+		rbacWhoamiHandler(engine, false)(w, r, nil)
 	}
 	w, _ := doGet(h, "nope")
 	if w.Code != http.StatusUnauthorized {

@@ -30,6 +30,16 @@ import (
 // write RPC is never silently excluded from the trail.
 var readOnlyPrefixes = []string{"List", "Get", "Describe", "Watch", "Stream", "Check"}
 
+// readOnlyMethods are reads whose names carry no read verb: a status query,
+// probes of the nodes, and a rebalance plan that only proposes moves. The web
+// UI polls ResourceStatus every few seconds, so leaving it here would bury
+// every real change in the trail.
+var readOnlyMethods = map[string]bool{
+	"HealthCheck":            true,
+	"PlanRebalance":          true,
+	"CollectNodeDiagnostics": true,
+}
+
 // shortMethod turns "/v1.HaifyController/CreatePool" into "CreatePool".
 func shortMethod(fullMethod string) string {
 	if i := strings.LastIndex(fullMethod, "/"); i >= 0 {
@@ -39,6 +49,10 @@ func shortMethod(fullMethod string) string {
 }
 
 func isReadOnly(method string) bool {
+	// Any *Status method is a read, as RBAC classifies it.
+	if readOnlyMethods[method] || strings.Contains(method, "Status") {
+		return true
+	}
 	for _, p := range readOnlyPrefixes {
 		if strings.HasPrefix(method, p) {
 			return true

@@ -54,7 +54,7 @@ func (c *Controller) registerRBACRoutes(mux *runtime.ServeMux, engine *rbac.Engi
 		method, path string
 		h            runtime.HandlerFunc
 	}{
-		{"GET", "/v1/rbac/whoami", rbacWhoamiHandler(engine)},
+		{"GET", "/v1/rbac/whoami", rbacWhoamiHandler(engine, c.config != nil && c.config.Auth.Enabled)},
 		{"GET", "/v1/rbac/policies", rbacPoliciesHandler(engine)},
 		{"GET", "/v1/rbac/roles", rbacRolesHandler(engine)},
 		{"POST", "/v1/rbac/users", rbacCreateUserHandler(engine, c.approvals)},
@@ -111,10 +111,12 @@ func bearerFromHeader(r *http.Request) string {
 }
 
 // rbacWhoamiHandler reports the caller's identity and role.
-func rbacWhoamiHandler(engine *rbac.Engine) runtime.HandlerFunc {
+// tokenAuth says whether [auth] is on, so a page can tell "one shared token"
+// apart from "no authentication at all" when RBAC is off.
+func rbacWhoamiHandler(engine *rbac.Engine, tokenAuth bool) runtime.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
 		if engine == nil {
-			writeJSON(w, http.StatusOK, map[string]interface{}{"enabled": false})
+			writeJSON(w, http.StatusOK, map[string]interface{}{"enabled": false, "token_auth": tokenAuth})
 			return
 		}
 		user, role, ok := engine.Whoami(bearerFromHeader(r))
